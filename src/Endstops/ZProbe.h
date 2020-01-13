@@ -91,8 +91,8 @@ protected:
 class MotorStallZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<MotorStallZProbe>(); }
-	void operator delete(void* p) noexcept { Release<MotorStallZProbe>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<MotorStallZProbe>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<MotorStallZProbe>(p); }
 
 	MotorStallZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::zMotorStall) { }
 	~MotorStallZProbe() noexcept override { }
@@ -108,8 +108,8 @@ private:
 class DummyZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<DummyZProbe>(); }
-	void operator delete(void* p) noexcept { Release<DummyZProbe>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<DummyZProbe>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<DummyZProbe>(p); }
 
 	DummyZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
 	~DummyZProbe() noexcept override { }

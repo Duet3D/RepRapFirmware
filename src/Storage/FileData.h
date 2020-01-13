@@ -23,6 +23,15 @@ public:
 
 	FileData() noexcept : f(nullptr) {}
 
+	FileData(const FileData& other) noexcept
+	{
+		f = other.f;
+		if (f != nullptr)
+		{
+			f->Duplicate();
+		}
+	}
+
 	// Set this to refer to a newly-opened file
 	void Set(FileStore* pfile) noexcept
 	{
@@ -99,17 +108,6 @@ public:
 		return f->Length();
 	}
 
-	// Assignment operator
-	void CopyFrom(const FileData& other) noexcept
-	{
-		Close();
-		f = other.f;
-		if (f != nullptr)
-		{
-			f->Duplicate();
-		}
-	}
-
 	// Move operator
 	void MoveFrom(FileData& other) noexcept
 	{
@@ -128,9 +126,6 @@ private:
 
 	// Private assignment operator to prevent us assigning these objects
 	FileData& operator=(const FileData&) noexcept;
-
-	// Private copy constructor to prevent us copying these objects
-	FileData(const FileData&) noexcept;
 };
 
 #endif

@@ -162,6 +162,14 @@ void GCodeBuffer::PutAndDecode(const char *str) noexcept
 	stringParser.PutAndDecode(str);
 }
 
+void GCodeBuffer::StartNewFile() noexcept
+{
+	if (!isBinaryBuffer)
+	{
+		stringParser.StartNewFile();
+	}
+}
+
 // Called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.
 bool GCodeBuffer::FileEnded() noexcept
 {
@@ -567,9 +575,8 @@ float GCodeBuffer::InverseConvertDistance(float distance) const noexcept
 	return (machineState->usingInches) ? distance/InchToMm : distance;
 }
 
-
 // Push state returning true if successful (i.e. stack not overflowed)
-bool GCodeBuffer::PushState(bool preserveLineNumber) noexcept
+bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 {
 	// Check the current stack depth
 	unsigned int depth = 0;
@@ -577,42 +584,17 @@ bool GCodeBuffer::PushState(bool preserveLineNumber) noexcept
 	{
 		++depth;
 	}
-	if (depth >= MaxStackDepth + 1)				// the +1 is to allow for the initial state record
+	if (depth >= MaxStackDepth + 1)					// the +1 is to allow for the initial state record
 	{
 		return false;
 	}
 
-	GCodeMachineState * const ms = GCodeMachineState::Allocate();
-	ms->previous = machineState;
-	ms->feedRate = machineState->feedRate;
-#if HAS_LINUX_INTERFACE
-	ms->fileId = machineState->fileId;
-	ms->isFileFinished = machineState->isFileFinished;
-#endif
-#if HAS_MASS_STORAGE
-	ms->fileState.CopyFrom(machineState->fileState);
-#endif
-	ms->lockedResources = machineState->lockedResources;
-	ms->lineNumber = (preserveLineNumber) ? machineState->lineNumber : 0;
-	ms->compatibility = machineState->compatibility;
-	ms->drivesRelative = machineState->drivesRelative;
-	ms->axesRelative = machineState->axesRelative;
-	ms->usingInches = machineState->usingInches;
-	ms->doingFileMacro = machineState->doingFileMacro;
-	ms->waitWhileCooling = machineState->waitWhileCooling;
-	ms->runningM501 = machineState->runningM501;
-	ms->runningM502 = machineState->runningM502;
-	ms->volumetricExtrusion = false;
-	ms->g53Active = false;
-	ms->runningSystemMacro = machineState->runningSystemMacro;
-	ms->messageAcknowledged = false;
-	ms->waitingForAcknowledgement = false;
-	machineState = ms;
+	machineState = new GCodeMachineState(*machineState, withinSameFile);
 	return true;
 }
 
 // Pop state returning true if successful (i.e. no stack underrun)
-bool GCodeBuffer::PopState(bool preserveLineNumber) noexcept
+bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 {
 	GCodeMachineState * const ms = machineState;
 	if (ms->previous == nullptr)
@@ -623,11 +605,11 @@ bool GCodeBuffer::PopState(bool preserveLineNumber) noexcept
 	}
 
 	machineState = ms->previous;
-	if (preserveLineNumber)
+	if (withinSameFile)
 	{
 		machineState->lineNumber = ms->lineNumber;
 	}
-	GCodeMachineState::Release(ms);
+	delete ms;
 
 #if HAS_LINUX_INTERFACE
 	reportStack = true;

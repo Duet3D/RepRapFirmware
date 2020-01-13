@@ -14,8 +14,8 @@
 class StallDetectionEndstop final : public Endstop
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<StallDetectionEndstop>(); }
-	void operator delete(void* p) noexcept { Release<StallDetectionEndstop>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<StallDetectionEndstop>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<StallDetectionEndstop>(p); }
 
 	StallDetectionEndstop(uint8_t axis, EndStopPosition pos, bool p_individualMotors) noexcept;		// for creating axis endstops
 	StallDetectionEndstop() noexcept;							// for creating the single extruders endstop

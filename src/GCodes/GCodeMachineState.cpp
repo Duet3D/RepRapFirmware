@@ -10,25 +10,71 @@
 
 #include <limits>
 
-GCodeMachineState *GCodeMachineState::freeList = nullptr;
-unsigned int GCodeMachineState::numAllocated = 0;
-
 #if HAS_LINUX_INTERFACE
 static unsigned int LastFileId = 1;
 #endif
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState() noexcept
-	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes), lockedResources(0), errorMessage(nullptr),
-	  lineNumber(0), compatibility(Compatibility::reprapFirmware), drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false),
-	  runningM502(false), volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
+	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes),
+#if HAS_LINUX_INTERFACE
+	  fileId(0),
+#endif
+	  lockedResources(0), errorMessage(nullptr),
+	  lineNumber(0),
+	  compatibility(Compatibility::reprapFirmware), drivesRelative(false), axesRelative(false),
+#if HAS_LINUX_INTERFACE
+	  isFileFinished(false), fileError(false),
+#endif
+	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
+	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
 	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting(0), state(GCodeState::normal)
 {
-#if HAS_LINUX_INTERFACE
-	fileId = 0;
-	isFileFinished = fileError = false;
-#endif
 	blockStates[0].SetPlainBlock(0);
+}
+
+// Copy constructor. This chains the new one to the previous one.
+GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept
+	: previous(&prev), feedRate(prev.feedRate),
+#if HAS_MASS_STORAGE
+	  fileState(prev.fileState),
+#endif
+#if HAS_LINUX_INTERFACE
+	  fileId(prev.fileId),
+#endif
+	  lockedResources(prev.lockedResources), errorMessage(nullptr),
+	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
+	  compatibility(prev.compatibility), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
+#if HAS_LINUX_INTERFACE
+	  isFileFinished(prev.isFileFinished), fileError(false),
+#endif
+	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501),  runningM502(prev.runningM502),
+	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting((withinSameFile) ? prev.blockNesting : 0), state(GCodeState::normal)
+{
+	if (withinSameFile)
+	{
+		for (size_t i = 0; i <= blockNesting; ++i)
+		{
+			blockStates[i] = prev.blockStates[i];
+		}
+	}
+	else
+	{
+		blockStates[0].SetPlainBlock(0);
+	}
+}
+
+GCodeMachineState::~GCodeMachineState() noexcept
+{
+#if HAS_MASS_STORAGE
+# if HAS_LINUX_INTERFACE
+	if (!reprap.UsingLinuxInterface())
+# endif
+	{
+		fileState.Close();
+	}
+#endif
 }
 
 #if HAS_LINUX_INTERFACE
@@ -95,54 +141,6 @@ void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 	feedRate = other.feedRate;
 	volumetricExtrusion = other.volumetricExtrusion;
 	usingInches = other.usingInches;
-}
-
-// Allocate a new GCodeMachineState
-/*static*/ GCodeMachineState *GCodeMachineState::Allocate() noexcept
-{
-	GCodeMachineState *ms = freeList;
-	if (ms != nullptr)
-	{
-		freeList = ms->previous;
-		ms->lockedResources = 0;
-		ms->errorMessage = nullptr;
-		ms->state = GCodeState::normal;
-	}
-	else
-	{
-		ms = new GCodeMachineState();
-		++numAllocated;
-	}
-	return ms;
-}
-
-/*static*/ void GCodeMachineState::Release(GCodeMachineState *ms) noexcept
-{
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		ms->fileId = 0;
-		ms->isFileFinished = false;
-	}
-	else
-#endif
-	{
-#if HAS_MASS_STORAGE
-		ms->fileState.Close();
-#endif
-	}
-	ms->previous = freeList;
-	freeList = ms;
-}
-
-/*static*/ unsigned int GCodeMachineState::GetNumInUse() noexcept
-{
-	unsigned int inUse = numAllocated;
-	for (GCodeMachineState *ms = freeList; ms != nullptr; ms = ms->previous)
-	{
-		--inUse;
-	}
-	return inUse;
 }
 
 GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState() noexcept

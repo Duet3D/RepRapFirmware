@@ -14,8 +14,8 @@
 class LocalZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<LocalZProbe>(); }
-	void operator delete(void* p) noexcept { Release<LocalZProbe>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<LocalZProbe>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<LocalZProbe>(p); }
 
 	LocalZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
 	~LocalZProbe() noexcept override;

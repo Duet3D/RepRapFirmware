@@ -1434,7 +1434,6 @@ void GCodes::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "=== GCodes ===\n");
 	platform.MessageF(mtype, "Segments left: %u\n", segmentsLeft);
-	platform.MessageF(mtype, "Stack records: %u allocated, %u in use\n", GCodeMachineState::GetNumAllocated(), GCodeMachineState::GetNumInUse());
 	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
 	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetIdentity());
 
@@ -1477,9 +1476,9 @@ bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb)
 }
 
 // Save (some of) the state of the machine for recovery in the future.
-bool GCodes::Push(GCodeBuffer& gb, bool preserveLineNumber)
+bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile)
 {
-	const bool ok = gb.PushState(preserveLineNumber);
+	const bool ok = gb.PushState(withinSameFile);
 	if (!ok)
 	{
 		platform.Message(ErrorMessage, "Push(): stack overflow\n");
@@ -1488,9 +1487,9 @@ bool GCodes::Push(GCodeBuffer& gb, bool preserveLineNumber)
 }
 
 // Recover a saved state
-void GCodes::Pop(GCodeBuffer& gb, bool preserveLineNumber)
+void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile)
 {
-	if (!gb.PopState(preserveLineNumber))
+	if (!gb.PopState(withinSameFile))
 	{
 		platform.Message(ErrorMessage, "Pop(): stack underflow\n");
 	}
@@ -2442,6 +2441,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			return true;
 		}
 		gb.MachineState().fileState.Set(f);
+		gb.StartNewFile();
 		gb.GetFileInput()->Reset(gb.MachineState().fileState);
 #else
 		if (reportMissing)
@@ -2864,6 +2864,7 @@ void GCodes::StartPrinting(bool fromStart)
 	{
 #if HAS_MASS_STORAGE
 		fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
+		fileGCode->StartNewFile();
 		fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
 #endif
 	}

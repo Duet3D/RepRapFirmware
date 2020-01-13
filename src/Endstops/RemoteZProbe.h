@@ -15,8 +15,8 @@
 class RemoteZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<RemoteZProbe>(); }
-	void operator delete(void* p) noexcept { Release<RemoteZProbe>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<RemoteZProbe>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<RemoteZProbe>(p); }
 
 	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn) { }
 	~RemoteZProbe() noexcept override;

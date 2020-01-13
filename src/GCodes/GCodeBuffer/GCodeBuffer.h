@@ -52,9 +52,10 @@ public:
 	bool Put(char c) noexcept __attribute__((hot));								// Add a character to the end
 	void PutAndDecode(const char *data, size_t len, bool isBinary) noexcept;	// Add an entire G-Code, overwriting any existing content
 	void PutAndDecode(const char *str) noexcept;								// Add a null-terminated string, overwriting any existing content
+	void StartNewFile() noexcept;												// Called when we start a new file
 	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
-	bool CheckMetaCommand(const StringRef& reply) THROWS_GCODE_EXCEPTION;			// Check whether the current command is a meta command, or we are skipping a block
+	bool CheckMetaCommand(const StringRef& reply) THROWS_GCODE_EXCEPTION;		// Check whether the current command is a meta command, or we are skipping a block
 
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;
@@ -63,7 +64,7 @@ public:
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
 
-	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?
+	bool Seen(char c) noexcept __attribute__((hot));								// Is a character present?
 	void MustSee(char c) THROWS_GCODE_EXCEPTION;									// Test for character present, throw error if not
 
 	float GetFValue() THROWS_GCODE_EXCEPTION __attribute__((hot));					// Get a float after a key letter
@@ -104,8 +105,8 @@ public:
 	GCodeMachineState& OriginalMachineState() const noexcept;
 	float ConvertDistance(float distance) const noexcept;
 	float InverseConvertDistance(float distance) const noexcept;
-	bool PushState(bool preserveLineNumber) noexcept;			// Push state returning true if successful (i.e. stack not overflowed)
-	bool PopState(bool preserveLineNumber) noexcept;				// Pop state returning true if successful (i.e. no stack underrun)
+	bool PushState(bool withinSameFile) noexcept;				// Push state returning true if successful (i.e. stack not overflowed)
+	bool PopState(bool withinSameFile) noexcept;				// Pop state returning true if successful (i.e. no stack underrun)
 
 	void AbortFile(bool abortAll, bool requestAbort = true) noexcept;
 	bool IsDoingFile() const noexcept;							// Return true if this source is executing a file

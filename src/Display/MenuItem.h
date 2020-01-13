@@ -98,8 +98,8 @@ private:
 class TextMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<TextMenuItem>(); }
-	void operator delete(void* p) noexcept { Release<TextMenuItem>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<TextMenuItem>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<TextMenuItem>(p); }
 
 	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char *t) noexcept;
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
@@ -115,8 +115,8 @@ private:
 class ButtonMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<ButtonMenuItem>(); }
-	void operator delete(void* p) noexcept { Release<ButtonMenuItem>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ButtonMenuItem>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<ButtonMenuItem>(p); }
 
 	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *t, const char *cmd, const char *acFile) noexcept;
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
@@ -137,8 +137,8 @@ private:
 class ValueMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<ValueMenuItem>(); }
-	void operator delete(void* p) noexcept { Release<ValueMenuItem>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ValueMenuItem>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<ValueMenuItem>(p); }
 
 	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d) noexcept;
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
@@ -184,8 +184,8 @@ private:
 class FilesMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<FilesMenuItem>(); }
-	void operator delete(void* p) noexcept { Release<FilesMenuItem>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<FilesMenuItem>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<FilesMenuItem>(p); }
 
 	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf) noexcept;
 	void Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
@@ -231,8 +231,8 @@ private:
 class ImageMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<ImageMenuItem>(); }
-	void operator delete(void* p) noexcept { Release<ImageMenuItem>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ImageMenuItem>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<ImageMenuItem>(p); }
 
 	ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName) noexcept;
 

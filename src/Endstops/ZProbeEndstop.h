@@ -13,8 +13,8 @@
 class ZProbeEndstop final : public Endstop
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<ZProbeEndstop>(); }
-	void operator delete(void* p) noexcept { Release<ZProbeEndstop>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ZProbeEndstop>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<ZProbeEndstop>(p); }
 
 	ZProbeEndstop(uint8_t axis, EndStopPosition pos) noexcept;
 

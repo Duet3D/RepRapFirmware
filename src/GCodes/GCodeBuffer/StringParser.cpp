@@ -28,6 +28,7 @@ StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0), indentToSkipTo(NoIndentSkip),
 	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), binaryWriting(false)
 {
+	StartNewFile();
 	Init();
 }
 
@@ -40,6 +41,10 @@ void StringParser::Init() noexcept
 	computedChecksum = 0;
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	commandIndent = 0;
+	if (!seenMetaCommand)
+	{
+		seenLeadingSpace = seenLeadingTab = false;
+	}
 }
 
 inline void StringParser::AddToChecksum(char c) noexcept
@@ -98,9 +103,15 @@ bool StringParser::Put(char c) noexcept
 				break;
 
 			case ' ':
-			case '\t':
 				AddToChecksum(c);
 				++commandIndent;
+				seenLeadingSpace = true;
+				break;
+
+			case '\t':
+				AddToChecksum(c);
+				commandIndent = (commandIndent + 4) & ~3;	// move on at least 1 to next multiple of 4
+				seenLeadingTab = true;
 				break;
 
 			default:
@@ -256,9 +267,7 @@ bool StringParser::LineFinished()
 
 	if (gcodeLineEnd == ARRAY_SIZE(gb.buffer))
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "G-Code buffer '%s' length overflow\n", gb.GetIdentity());
-		Init();
-		return false;
+		throw ConstructParseException("GCode command too long from input '%s'", gb.GetIdentity());
 	}
 
 	gb.buffer[gcodeLineEnd] = 0;
@@ -323,7 +332,15 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 	const bool b = ProcessConditionalGCode(reply, previousBlockType, doingFile);	// this may throw a ParseException
 	if (b)
 	{
+		seenMetaCommand = true;
 		Init();
+	}
+
+	if (seenMetaCommand && !warnedAboutMixedSpacesAndTabs && seenLeadingSpace && seenLeadingTab)
+	{
+		reprap.GetPlatform().MessageF(AddWarning(gb.GetResponseMessageType()),
+								"both space and tab characters used to indent blocks by line %" PRIu32, gb.MachineState().lineNumber);
+		warnedAboutMixedSpacesAndTabs = true;
 	}
 	return b;
 }
@@ -1397,6 +1414,12 @@ void StringParser::FinishWritingBinary() noexcept
 	{
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::error, "CRC32 checksum doesn't match");
 	}
+}
+
+// Called when we start a new file
+void StringParser::StartNewFile() noexcept
+{
+	seenLeadingSpace = seenLeadingTab = seenMetaCommand = warnedAboutMixedSpacesAndTabs = false;
 }
 
 // This is called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.

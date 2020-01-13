@@ -266,8 +266,8 @@ private:
 
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
 
-	bool Push(GCodeBuffer& gb, bool preserveLineNumber);						// Push feedrate etc on the stack
-	void Pop(GCodeBuffer& gb, bool preserveLineNumber);							// Pop feedrate etc
+	bool Push(GCodeBuffer& gb, bool withinSameFile);							// Push feedrate etc on the stack
+	void Pop(GCodeBuffer& gb, bool withinSameFile);								// Pop feedrate etc
 	void DisableDrives();														// Turn the motors off
 																				// Start saving GCodes in a file
 	bool SendConfigToLine();													// Deal with M503

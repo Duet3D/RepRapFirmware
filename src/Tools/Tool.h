@@ -47,8 +47,8 @@ class Filament;
 class Tool
 {
 public:
-	void* operator new(size_t sz) noexcept { return Allocate<Tool>(); }
-	void operator delete(void* p) noexcept { Release<Tool>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<Tool>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<Tool>(p); }
 
 	~Tool() noexcept { delete name; }
 

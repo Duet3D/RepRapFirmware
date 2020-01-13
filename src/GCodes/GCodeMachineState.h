@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "Storage/FileData.h"
+#include <General/FreelistManager.h>
 
 // Enumeration to list all the possible states that the Gcode processing machine may be in
 enum class GCodeState : uint8_t
@@ -160,7 +161,14 @@ public:
 		BlockType blockType;										// the type of this block
 	};
 
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<GCodeMachineState>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<GCodeMachineState>(p); }
+
 	GCodeMachineState() noexcept;
+	GCodeMachineState(GCodeMachineState&, bool withinSameFile) noexcept;	// this chains the new one to the previous one
+	GCodeMachineState(const GCodeMachineState&) = delete;			// copying these would be a bad idea
+
+	~GCodeMachineState() noexcept;
 
 	GCodeMachineState *previous;
 	float feedRate;
@@ -200,9 +208,6 @@ public:
 	GCodeState state;
 	uint8_t toolChangeParam;
 
-	static GCodeMachineState *Allocate() noexcept
-	post(!result.IsLive(); result.state == GCodeState::normal);
-
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;
 
@@ -224,14 +229,6 @@ public:
 
 	bool CreateBlock(uint16_t indentLevel) noexcept;
 	void EndBlock() noexcept;
-
-	static void Release(GCodeMachineState *ms) noexcept;
-	static unsigned int GetNumAllocated() noexcept { return numAllocated; }
-	static unsigned int GetNumInUse() noexcept;
-
-private:
-	static GCodeMachineState *freeList;
-	static unsigned int numAllocated;
 };
 
 #endif /* SRC_GCODES_GCODEMACHINESTATE_H_ */

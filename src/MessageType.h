@@ -57,4 +57,9 @@ inline MessageType AddError(MessageType mt)
 	return (MessageType)(mt | ErrorMessageFlag | LogMessage);
 }
 
+inline MessageType AddWarning(MessageType mt)
+{
+	return (MessageType)(mt | WarningMessageFlag | LogMessage);
+}
+
 #endif /* MESSAGETYPE_H_ */
