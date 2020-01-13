@@ -19,6 +19,7 @@ Bug fixes:
 - The M917 command didn't work on Duet 3 and Duet Maestro.
 - Fixed two instances of possible 1-character buffer overflow in class OutputBuffer
 - If no heaters were configured, one spurious heater was reported in the status response
+- On delta printers, M564 S0 didn't allow movement outside the print radius defined in M665 
 
 RepRapFirmware 3.0
 ==================
