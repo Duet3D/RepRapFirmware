@@ -34,17 +34,17 @@ class _typename { \
 public: \
 	enum _E : unsigned int { _v1 = 0, __VA_ARGS__ };											/* underlying enumeration */ \
 	static constexpr unsigned int NumValues = VA_SIZE(__VA_ARGS__) + 1;							/* count of members */ \
-	explicit _typename(_E arg) { v = arg; }														/* constructor */ \
-	_typename(const _typename& arg) { v = arg.v; }												/* copy constructor */ \
-	bool operator==(_typename arg) const { return v == arg.v; }									/* equality operator */ \
-	bool operator!=(_typename arg) const { return v != arg.v; }									/* inequality operator */ \
-	bool operator==(_E arg) const { return v == arg; }											/* equality operator */ \
-	bool operator!=(_E arg) const { return v != arg; }											/* inequality operator */ \
-	const _typename& operator=(_E arg) { v = arg; return *this; }								/* assignment operator from underlying enum */ \
-	const _typename& operator=(_typename arg) { v = arg.v; return *this; }						/* copy assignment operator */ \
-	unsigned int ToInt() const { return static_cast<unsigned int>(v); }							/* conversion to unsigned integer */ \
-	const char* ToString() const { return (v < NumValues) ? _names[v] : "undefined"; }			/* conversion to C string */ \
-	void Assign(unsigned int arg) { v = static_cast<_E>(arg); }									/* assignment from integer */ \
+	explicit _typename(_E arg) noexcept { v = arg; }											/* constructor */ \
+	_typename(const _typename& arg) noexcept { v = arg.v; }										/* copy constructor */ \
+	bool operator==(_typename arg) const noexcept { return v == arg.v; }						/* equality operator */ \
+	bool operator!=(_typename arg) const noexcept { return v != arg.v; }						/* inequality operator */ \
+	bool operator==(_E arg) const noexcept { return v == arg; }									/* equality operator */ \
+	bool operator!=(_E arg) const noexcept { return v != arg; }									/* inequality operator */ \
+	const _typename& operator=(_E arg) noexcept { v = arg; return *this; }						/* assignment operator from underlying enum */ \
+	const _typename& operator=(_typename arg) noexcept { v = arg.v; return *this; }				/* copy assignment operator */ \
+	unsigned int ToInt() const noexcept { return static_cast<unsigned int>(v); }				/* conversion to unsigned integer */ \
+	const char* ToString() const noexcept { return (v < NumValues) ? _names[v] : "undefined"; }	/* conversion to C string */ \
+	void Assign(unsigned int arg) noexcept { v = static_cast<_E>(arg); }						/* assignment from integer */ \
 private: \
 	_E v; \
 	static constexpr const char* _names[NumValues] = { STRINGLIST(_v1, __VA_ARGS__) }; \

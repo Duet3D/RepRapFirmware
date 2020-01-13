@@ -24,24 +24,24 @@ enum class StraightProbeType : uint8_t {
 class StraightProbeSettings
 {
 public:
-	StraightProbeSettings();
+	StraightProbeSettings() noexcept;
 
-	void Reset();
+	void Reset() noexcept;
 
-	void SetCoordsToTarget(float[MaxAxes]) const;
-	void SetTarget(const float[MaxAxes]);                            // Set target for G38 move
+	void SetCoordsToTarget(float[MaxAxes]) const noexcept;
+	void SetTarget(const float[MaxAxes]) noexcept;						// Set target for G38 move
 
-	const StraightProbeType GetType() const { return type; }
-	void SetStraightProbeType(const StraightProbeType t) { type = t; }
+	const StraightProbeType GetType() const noexcept { return type; }
+	void SetStraightProbeType(const StraightProbeType t) noexcept { type = t; }
 
-	const AxesBitmap GetMovingAxes() const { return movingAxes; }
-	void AddMovingAxis(const size_t);
+	const AxesBitmap GetMovingAxes() const noexcept { return movingAxes; }
+	void AddMovingAxis(const size_t) noexcept;
 
-	const size_t GetZProbeToUse() const { return probeToUse; }
-	void SetZProbeToUse(const size_t probeNumber) { probeToUse = probeNumber; }
+	const size_t GetZProbeToUse() const noexcept { return probeToUse; }
+	void SetZProbeToUse(const size_t probeNumber) noexcept { probeToUse = probeNumber; }
 
-	const bool ProbingAway() const;
-	const bool SignalError() const;
+	const bool ProbingAway() const noexcept;
+	const bool SignalError() const noexcept;
 
 private:
 	AxesBitmap movingAxes;                 // Axes supposed to move - this is only used for manual probing
@@ -50,16 +50,18 @@ private:
 	StraightProbeType type;                // Type of move
 };
 
-inline void StraightProbeSettings::AddMovingAxis(const size_t axis)
+inline void StraightProbeSettings::AddMovingAxis(const size_t axis) noexcept
 {
 	SetBit(movingAxes, axis);
 }
 
-inline const bool StraightProbeSettings::ProbingAway() const {
+inline const bool StraightProbeSettings::ProbingAway() const noexcept
+{
 	return type == StraightProbeType::awayFromWorkpieceErrorOnFailure || type == StraightProbeType::awayFromWorkpiece;
 }
 
-inline const bool StraightProbeSettings::SignalError() const {
+inline const bool StraightProbeSettings::SignalError() const noexcept
+{
 	return type == StraightProbeType::awayFromWorkpieceErrorOnFailure || type == StraightProbeType::towardsWorkpieceErrorOnFailure;
 }
 

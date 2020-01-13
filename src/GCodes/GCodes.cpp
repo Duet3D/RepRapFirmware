@@ -3638,6 +3638,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 	if (reprap.UsingLinuxInterface())
 	{
 		fileGCode->MachineState().CloseFile();
+		fileGCode->Init();
 	}
 	else
 #endif
