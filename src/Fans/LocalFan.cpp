@@ -84,7 +84,7 @@ void LocalFan::InternalRefresh() noexcept
 		SensorsBitmap copySensorsMonitored = sensorsMonitored;
 		while (copySensorsMonitored != 0)
 		{
-			unsigned int sensorNum = LowestSetBit(copySensorsMonitored);
+			const unsigned int sensorNum = LowestSetBit(copySensorsMonitored);
 			ClearBit(copySensorsMonitored, sensorNum);
 			const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
 			if (sensor.IsNotNull())

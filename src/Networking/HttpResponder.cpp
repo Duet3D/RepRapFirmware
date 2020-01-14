@@ -471,7 +471,8 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		}
 
 		// Client has been logged in
-		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\"}", HttpSessionTimeout, GetPlatform().GetBoardString());
+		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\",\"apiLevel\":%u}",
+							HttpSessionTimeout, GetPlatform().GetBoardString(), ApiLevel);
 		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
 
 		// See if we can update the current RTC date and time

@@ -50,6 +50,10 @@ Licence: GPL
 # define __nocache		// nothing
 #endif
 
+// API level definition.
+// ApiLevel 1 is the first level that supports rr_model.
+constexpr unsigned int ApiLevel = 1;
+
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control
 typedef uint8_t LogicalPin;				// type used to represent logical pin numbers

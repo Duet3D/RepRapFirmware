@@ -145,12 +145,12 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			if (sensorsMonitored != 0)
 			{
 				reply.catf(", temperature: %.1f:%.1fC, sensors:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				for (unsigned int i = 0; i < MaxSensors; ++i)
+				SensorsBitmap copySensorsMonitored = sensorsMonitored;
+				while (copySensorsMonitored != 0)
 				{
-					if (IsBitSet(sensorsMonitored, i))
-					{
-						reply.catf(" %u", i);
-					}
+					const unsigned int sensorNum = LowestSetBit(copySensorsMonitored);
+					ClearBit(copySensorsMonitored, sensorNum);
+					reply.catf(" %u", sensorNum);
 				}
 				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
 			}

@@ -198,6 +198,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[] members
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),			ObjectModelEntryFlags::none },
+	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),						ObjectModelEntryFlags::none },
 #if HAS_LINUX_INTERFACE
 	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),			ObjectModelEntryFlags::none },
 #endif
@@ -238,7 +239,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	3 + HAS_12V_MONITOR,
-	8 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR,
+	9 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR,
 	3,
 	3,
 #if HAS_12V_MONITOR
