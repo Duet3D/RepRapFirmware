@@ -1,5 +1,5 @@
-RepRapFirmware 3.1beta1 (in preparation)
-=======================
+RepRapFirmware 3.01beta1
+========================
 
 Recommended compatible firmware:
 - DuetWebControl 2.06 (when available) or 2.05
