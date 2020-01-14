@@ -2,24 +2,31 @@ RepRapFirmware 3.1beta1 (in preparation)
 =======================
 
 Recommended compatible firmware:
-- TBD
+- DuetWebControl 2.06 (when available) or 2.05
+- DuetWiFiServer 1.23
+- Duet Software Framework 1.2.2 (for Duet 3/Raspberry Pi users)
 
 Upgrade notes:
 - You cannot upgrade a Duet WiFi, Ethernet or Maestro direct to this release from RRF 1.x or 2.x because the firmware binary is too large for the old IAP. You must upgrade to version 3.0 first, then from 3.0 you can upgrade to this release.
 - If upgrading a Duet WiFi/Ethernet/Maestro from the 3.0 release, note that default fans are no longer created. Unless your config.g file already used M950 to create the fans explicitly, add these commands M950 F0 C"fan0", M950 F1 C"fan1" and M950 F2 C"fan2" to config.g before your  M106 commands
 
+Limitations:
+- The new conditional GCode commands and expressions ad parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, utill this support has been added to Duet Software Framework
+
 New features and changed behaviour:
 - The **if**, **elif**, **else**, **while**, **break**, **continue**, **echo** and **abort** GCode meta commands are implemented, along with expression evaluation. See https://duet3d.dozuki.com/Wiki/GCode_Meta_Commands.
 - M409 and a corresponding HTTP call rr_model have been added, to allow parts of the object model to be queried
-- Large parts of the RepRapFirmware Object Model have been implemented. Values can be retrieved from the OM within GCode command parameters and by M409.
+- Parts of the RepRapFirmware Object Model have been implemented. Values can be retrieved from the OM within GCode command parameters, by M409, and by the new rr_model HTTP command. See https://duet3d.dozuki.com/Wiki/Object_Model_of_RepRapFirmware.
 - The MakeDirectory and RenameFile local SD card functions now create the full path recursively if necessary
+- The rr_connect message returns additional field "apiLevel":1 if it succeeds. This can be used as an indication that the rr_model command is supported.
 
 Bug fixes:
 - When the C (temperature coefficient) parameter was used in the G31 command, if the temperature could not be read from the sensor specified in the H parameter then the error message was not clear; and it didn't allow time for the sensor to become ready in case it had only just been configured.
 - The M917 command didn't work on Duet 3 and Duet Maestro.
 - Fixed two instances of possible 1-character buffer overflow in class OutputBuffer
 - If no heaters were configured, one spurious heater was reported in the status response
-- On delta printers, M564 S0 didn't allow movement outside the print radius defined in M665 
+- On delta printers, M564 S0 didn't allow movement outside the print radius defined in M665
+- On Duet 3 with attached SBC, when a job was paused and then cancelled, a spurious move sometimes occurred
 
 RepRapFirmware 3.0
 ==================
