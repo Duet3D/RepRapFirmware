@@ -125,7 +125,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RepRap, __VA_ARGS__)
 
-const ObjectModelArrayDescriptor RepRap::boardsArrayDescriptor =
+constexpr ObjectModelArrayDescriptor RepRap::boardsArrayDescriptor =
 {
 	nullptr,					// no lock needed
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->platform->GetNumBoards(); },
@@ -136,20 +136,21 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
-	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),			ObjectModelEntryFlags::live },
-	{ "heat",					OBJECT_MODEL_FUNC(self->heat),								ObjectModelEntryFlags::live },
-	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),						ObjectModelEntryFlags::live },
-	{ "move",					OBJECT_MODEL_FUNC(self->move),								ObjectModelEntryFlags::live },
-	{ "network",				OBJECT_MODEL_FUNC(self->network),							ObjectModelEntryFlags::none },
-	{ "state",					OBJECT_MODEL_FUNC(self, 1),									ObjectModelEntryFlags::live },
+	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
+	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
+	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
+	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
+	{ "state",					OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::live },
 
 	// 1. MachineModel.State
-	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),	ObjectModelEntryFlags::live },
-	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),	ObjectModelEntryFlags::none },
-	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),					ObjectModelEntryFlags::live },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
+	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
+	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
+	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 6, 3 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 6, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 

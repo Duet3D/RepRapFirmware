@@ -46,7 +46,7 @@ W5500Interface::W5500Interface(Platform& p) noexcept
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(W5500Interface, _ret)
 
-const ObjectModelTableEntry W5500Interface::objectModelTable[] =
+constexpr ObjectModelTableEntry W5500Interface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
