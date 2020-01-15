@@ -52,12 +52,6 @@ template<> constexpr TypeCode TypeOf<DateTime>() noexcept { return 12; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
-// Function used for compile-time check for the correct number of entries in an object model table
-static inline constexpr size_t ArraySum(const uint8_t *arr, size_t numEntries)
-{
-	return (numEntries == 0) ? 0 : arr[0] + ArraySum(arr + 1, numEntries - 1);
-}
-
 // Forward declarations
 class ObjectModelTableEntry;
 class ObjectModel;
@@ -191,6 +185,12 @@ protected:
 	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept = 0;
 };
 
+// Function used for compile-time check for the correct number of entries in an object model table
+static inline constexpr size_t ArraySum(const uint8_t *arr, size_t numEntries)
+{
+	return (numEntries == 0) ? 0 : arr[0] + ArraySum(arr + 1, numEntries - 1);
+}
+
 // Object model table entry
 // It must be possible to construct these in the form of initialised data in flash memory, to avoid using large amounts of RAM.
 // Therefore we can't use a class hierarchy to represent different types of entry.
@@ -219,6 +219,24 @@ public:
 
 	// Compare the name of this field with the filter string that we are trying to match
 	int IdCompare(const char *id) const noexcept;
+
+	// Return true if a section of the OMT is ordered
+	static inline constexpr bool IsOrdered(const ObjectModelTableEntry *omt, size_t len)
+	{
+		return len <= 1 || (strcmp(omt[1].name, omt[0].name) == 1 && IsOrdered(omt + 1, len - 1));
+	}
+
+	// Return true if a section of the OMT specified by the descriptor is ordered
+	static inline constexpr bool IsOrdered(uint8_t sectionsLeft, const uint8_t *descriptorSection, const ObjectModelTableEntry *omt)
+	{
+		return sectionsLeft == 0 || (IsOrdered(omt, *descriptorSection) && IsOrdered(sectionsLeft - 1, descriptorSection + 1, omt + *descriptorSection));
+	}
+
+	// Return true if the whole OMT is ordered
+	static inline constexpr bool IsOrdered(const uint8_t *descriptor, const ObjectModelTableEntry *omt)
+	{
+		return IsOrdered(descriptor[0], descriptor + 1, omt);
+	}
 };
 
 // Use this macro to inherit form ObjectModel
@@ -230,12 +248,16 @@ public:
 	static const ObjectModelTableEntry objectModelTable[]; \
 	static const uint8_t objectModelTableDescriptor[];
 
+#define DESCRIPTOR_OK(_class) 	(ARRAY_SIZE(_class::objectModelTableDescriptor) == _class::objectModelTableDescriptor[0] + 1)
+#define OMT_SIZE_OK(_class)		(ARRAY_SIZE(_class::objectModelTable) == ArraySum(_class::objectModelTableDescriptor + 1, ARRAY_SIZE(_class::objectModelTableDescriptor) - 1))
+#define OMT_ORDERING_OK(_class)	(ObjectModelTableEntry::IsOrdered(_class::objectModelTableDescriptor, _class::objectModelTable))
+
 #define DEFINE_GET_OBJECT_MODEL_TABLE(_class) \
 	const ObjectModelTableEntry *_class::GetObjectModelTable(const uint8_t*& descriptor) const noexcept \
 	{ \
-		static_assert(ARRAY_SIZE(_class::objectModelTableDescriptor) == _class::objectModelTableDescriptor[0] + 1, "Bad descriptor length"); \
-		static_assert(ARRAY_SIZE(_class::objectModelTable) == ArraySum(_class::objectModelTableDescriptor + 1, ARRAY_SIZE(_class::objectModelTableDescriptor) - 1), \
-				"Mismatched object model table and descriptor"); \
+		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
+		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \
+		static_assert(!DESCRIPTOR_OK(_class) || !OMT_SIZE_OK(_class) || OMT_ORDERING_OK(_class), "Object model table must be ordered"); \
 		descriptor = objectModelTableDescriptor; \
 		return objectModelTable; \
 	}
