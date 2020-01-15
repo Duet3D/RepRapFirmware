@@ -167,6 +167,7 @@ private:
 	bool seenLeadingTab;
 	bool seenMetaCommand;
 	bool warnedAboutMixedSpacesAndTabs;
+	bool overflowed;
 
 	bool checksumRequired;								// True if we only accept commands with a valid checksum
 	int8_t commandFraction;

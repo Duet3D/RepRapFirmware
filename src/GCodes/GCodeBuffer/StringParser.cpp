@@ -37,7 +37,7 @@ void StringParser::Init() noexcept
 	gcodeLineEnd = 0;
 	commandLength = 0;
 	readPointer = -1;
-	hadLineNumber = hadChecksum = false;
+	hadLineNumber = hadChecksum = overflowed = false;
 	computedChecksum = 0;
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	commandIndent = 0;
@@ -55,9 +55,13 @@ inline void StringParser::AddToChecksum(char c) noexcept
 inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 {
 	computedChecksum ^= (uint8_t)c;
-	if (gcodeLineEnd < ARRAY_SIZE(gb.buffer))
+	if (gcodeLineEnd + 1 < ARRAY_SIZE(gb.buffer))			// if there is space for this characate and a trailing null
 	{
 		gb.buffer[gcodeLineEnd++] = c;
+	}
+	else
+	{
+		overflowed = true;
 	}
 }
 
@@ -265,11 +269,6 @@ bool StringParser::LineFinished()
 		return false;
 	}
 
-	if (gcodeLineEnd == ARRAY_SIZE(gb.buffer))
-	{
-		throw ConstructParseException("GCode command too long from input '%s'", gb.GetIdentity());
-	}
-
 	gb.buffer[gcodeLineEnd] = 0;
 	const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
 	const bool missingChecksum = (checksumRequired && !hadChecksum && gb.machineState->previous == nullptr);
@@ -286,6 +285,11 @@ bool StringParser::LineFinished()
 // Return true if the current line no longer needs to be processed
 bool StringParser::CheckMetaCommand(const StringRef& reply)
 {
+	if (overflowed)
+	{
+		throw GCodeException(gb.MachineState().lineNumber, 0, "GCode command too long");
+	}
+
 	const bool doingFile = gb.IsDoingFile();
 	BlockType previousBlockType = BlockType::plain;
 	if (doingFile)
@@ -2008,7 +2012,7 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 						break;
 
 					case TYPE_OF(float_t):
-						val.fVal = (val.fVal == val2.fVal);
+						val.bVal = (val.fVal == val2.fVal);
 						break;
 
 					case TYPE_OF(bool):
