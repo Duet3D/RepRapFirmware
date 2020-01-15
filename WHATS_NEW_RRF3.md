@@ -8,7 +8,7 @@ Recommended compatible firmware:
 
 Upgrade notes:
 - You cannot upgrade a Duet WiFi, Ethernet or Maestro direct to this release from RRF 1.x or 2.x because the firmware binary is too large for the old IAP. You must upgrade to version 3.0 first, then from 3.0 you can upgrade to this release.
-- If upgrading a Duet WiFi/Ethernet/Maestro from the 3.0 release, note that default fans are no longer created. Unless your config.g file already used M950 to create the fans explicitly, add commands M950 F0 C"fan0", M950 F1 C"fan1" and M950 F2 C"fan2" to config.g before your M106 commands. Likewise, default endstop switches are not set up, so you will need to set up X and Y endstops (and Z odf needed) explicity, using one M574 line for each, and specifying the port name. Example: M574 X1 S1 P"xstop".
+- If upgrading a Duet WiFi/Ethernet/Maestro from the 3.0 release, note that default fans are no longer created. Unless your config.g file already used M950 to create the fans explicitly, add commands M950 F0 C"fan0", M950 F1 C"fan1" and M950 F2 C"fan2" to config.g before your M106 commands. Likewise, default endstop switches are not set up, so you will need to set up X and Y endstops (and Z if needed) explicity, using one M574 line for each, and specifying the port name. Example: M574 X1 S1 P"xstop".
 
 Limitations:
 - The new conditional GCode commands and expressions ad parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
