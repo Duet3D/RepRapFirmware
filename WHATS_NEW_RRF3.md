@@ -11,7 +11,7 @@ Upgrade notes:
 - If upgrading a Duet WiFi/Ethernet/Maestro from the 3.0 release, note that default fans are no longer created. Unless your config.g file already used M950 to create the fans explicitly, add commands M950 F0 C"fan0", M950 F1 C"fan1" and M950 F2 C"fan2" to config.g before your M106 commands. Likewise, default endstop switches are not set up, so you will need to set up X and Y endstops (and Z if needed) explicity, using one M574 line for each, and specifying the port name. Example: M574 X1 S1 P"xstop".
 
 Limitations:
-- The new conditional GCode commands and expressions ad parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
+- The new conditional GCode commands and expressions and parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
 
 New features and changed behaviour:
 - The **if**, **elif**, **else**, **while**, **break**, **continue**, **echo** and **abort** GCode meta commands are implemented, along with expression evaluation. See https://duet3d.dozuki.com/Wiki/GCode_Meta_Commands.
