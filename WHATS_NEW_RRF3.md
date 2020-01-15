@@ -1,8 +1,30 @@
+RepRapFirmware 3.01beta2 (in preparation)
+========================
+
+Recommended compatible firmware:
+- DuetWebControl 2.06
+- DuetWiFiServer 1.23
+- Duet Software Framework 1.2.2 (for Duet 3/Raspberry Pi users)
+
+Upgrade notes:
+- No significant changes since 3.01beta1
+
+Limitations:
+- The new conditional GCode commands and expressions and parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
+
+New features and changed behaviour:
+- Object model field state.upTime has been added. This is the number of seconds (rounded down to the nearest integer) since the firmware was started or restarted.
+
+Bug fixes:
+- Object model properties move.initialDeviation, move.calibrationDeviation.mean and move.meshDeviation.mean were inaccessible
+- Equality between floating point numbers gave the wrong result
+- If a GCode line was too long after stripping line numbers, leading white space and comments, the firmware restarted instead of reporting an error
+
 RepRapFirmware 3.01beta1
 ========================
 
 Recommended compatible firmware:
-- DuetWebControl 2.06 (when available) or 2.05
+- DuetWebControl 2.06
 - DuetWiFiServer 1.23
 - Duet Software Framework 1.2.2 (for Duet 3/Raspberry Pi users)
 
