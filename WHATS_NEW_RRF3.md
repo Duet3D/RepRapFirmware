@@ -19,6 +19,7 @@ Bug fixes:
 - Object model properties move.initialDeviation, move.calibrationDeviation.mean and move.meshDeviation.mean were inaccessible
 - Equality between floating point numbers gave the wrong result
 - If a GCode line was too long after stripping line numbers, leading white space and comments, the firmware restarted instead of reporting an error
+- When an under-voltage event occurs, all axes are now flagged as not homed
 
 RepRapFirmware 3.01beta1
 ========================
