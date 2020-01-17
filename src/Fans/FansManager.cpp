@@ -17,6 +17,8 @@
 
 #include <utility>
 
+ReadWriteLock FansManager::fansLock;
+
 FansManager::FansManager() noexcept
 {
 	for (Fan*& f : fans)
@@ -61,15 +63,15 @@ bool FansManager::CheckFans() noexcept
 	return thermostaticFanRunning;
 }
 
-// Return the highest used fan number. Used by RepRap.cpp to shorten responses by omitting unused trailing fan numbers. If no fans are configured, return 0.
-size_t FansManager::GetHighestUsedFanNumber() const noexcept
+// Return the number of fans to report on. Used by RepRap.cpp to shorten responses by omitting unused trailing fan numbers.
+size_t FansManager::GetNumFansToReport() const noexcept
 {
-	size_t highestFan = ARRAY_SIZE(fans);
-	do
+	size_t numFans = ARRAY_SIZE(fans);
+	while (numFans != 0 && fans[numFans - 1] == nullptr)
 	{
-		--highestFan;
-	} while (fans[highestFan] == nullptr && highestFan != 0);
-	return highestFan;
+		--numFans;
+	}
+	return numFans;
 }
 
 #if HAS_MASS_STORAGE

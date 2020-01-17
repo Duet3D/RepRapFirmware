@@ -44,7 +44,7 @@ private:
 	static constexpr uint32_t RemoteStatusTimeout = 2000;
 
 	CanAddress boardAddress;
-	enum HeaterMode lastMode;
+	HeaterMode lastMode;
 	uint8_t averagePwm;
 	float lastTemperature;
 	uint32_t whenLastStatusReceived;

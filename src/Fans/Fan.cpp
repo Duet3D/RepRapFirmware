@@ -8,11 +8,55 @@
 #include "Fan.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Fan, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(Fan, _condition,__VA_ARGS__)
+
+constexpr ObjectModelArrayDescriptor Fan::monitoredSensorsArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Fan*)self)->GetNumMonitoredSensors(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Fan*)self)->GetMonitoredSensorNumber(context.GetLastIndex())); }
+};
+
+constexpr ObjectModelTableEntry Fan::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. Fan members
+	{ "actualValue",		OBJECT_MODEL_FUNC(self->lastVal), 														ObjectModelEntryFlags::live },
+	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime), 										ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->maxVal), 														ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->minVal), 														ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->name.c_str()), 													ObjectModelEntryFlags::none },
+	{ "requestedValue",		OBJECT_MODEL_FUNC(self->val), 															ObjectModelEntryFlags::live },
+	{ "rpm",				OBJECT_MODEL_FUNC(self->GetRPM()), 														ObjectModelEntryFlags::live },
+	{ "thermostatic",		OBJECT_MODEL_FUNC(self, 1), 															ObjectModelEntryFlags::none },
+
+	// 1. Fan.thermostatic members
+	{ "control",			OBJECT_MODEL_FUNC(self->sensorsMonitored != 0), 										ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC_IF(self->sensorsMonitored != 0, &monitoredSensorsArrayDescriptor),	ObjectModelEntryFlags::none },
+	{ "highTemperature",	OBJECT_MODEL_FUNC_IF(self->sensorsMonitored != 0, self->triggerTemperatures[1]), 		ObjectModelEntryFlags::none },
+	{ "lowTemperature",		OBJECT_MODEL_FUNC_IF(self->sensorsMonitored != 0, self->triggerTemperatures[0]), 		ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 8, 4 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Fan)
+
+#endif
+
 Fan::Fan(unsigned int fanNum) noexcept
 	: fanNumber(fanNum),
 	  val(0.0), lastVal(0.0),
 	  minVal(DefaultMinFanPwm),
 	  maxVal(1.0),										// 100% maximum fan speed
+	  lastRpm(-1), whenLastRpmSet(0),
 	  blipTime(DefaultFanBlipTime),
 	  sensorsMonitored(0),
 	  isConfigured(false)
@@ -165,6 +209,45 @@ GCodeResult Fan::SetPwm(float speed, const StringRef& reply) noexcept
 {
 	val = speed;
 	return Refresh(reply);
+}
+
+int32_t Fan::GetRPM() const noexcept
+{
+	if (millis() - whenLastRpmSet > RpmReadingTimeout)
+	{
+		lastRpm = -1;
+	}
+	return lastRpm;
+}
+
+// Object model support functions
+size_t Fan::GetNumMonitoredSensors() const noexcept
+{
+	static constexpr uint8_t bitCount[16] = { 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4 };
+	SensorsBitmap copySensorsMonitored = sensorsMonitored;
+	size_t count = 0;
+	while (copySensorsMonitored != 0)
+	{
+		count += bitCount[copySensorsMonitored & 0x0F];
+		copySensorsMonitored >>= 4;
+	}
+	return count;
+}
+
+int32_t Fan::GetMonitoredSensorNumber(size_t index) const noexcept
+{
+	SensorsBitmap copySensorsMonitored = sensorsMonitored;
+	while (copySensorsMonitored != 0)
+	{
+		const unsigned int lowestBit = LowestSetBit(copySensorsMonitored);
+		if (index == 0)
+		{
+			return (int32_t)lowestBit;
+		}
+		ClearBit(copySensorsMonitored, lowestBit);
+		--index;
+	}
+	return -1;
 }
 
 #if HAS_MASS_STORAGE

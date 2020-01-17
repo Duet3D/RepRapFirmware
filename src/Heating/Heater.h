@@ -8,7 +8,8 @@
 #ifndef SRC_HEATING_HEATER_H_
 #define SRC_HEATING_HEATER_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
+#include <NamedEnum.h>
 #include "FOPDT.h"
 #include "GCodes/GCodeResult.h"
 #include <ObjectModel/ObjectModel.h>
@@ -21,7 +22,7 @@ class HeaterProtection;
 struct CanHeaterReport;
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
-enum class HeaterStatus { off = 0, standby = 1, active = 2, fault = 3, tuning = 4, offline = 5 };
+NamedEnum(HeaterStatus, uint8_t, off, standby, active, fault, tuning, offline);
 
 class Heater INHERIT_OBJECT_MODEL
 {
@@ -118,7 +119,6 @@ protected:
 
 private:
 	bool CheckProtection() const noexcept;			// Check heater protection elements and return true if everything is good
-	const char *GetStateName() const noexcept;
 
 	unsigned int heaterNumber;
 	int sensorNumber;								// the sensor number used by this heater

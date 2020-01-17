@@ -16,6 +16,7 @@ void GCodeFileInfo::Init() noexcept
 	layerHeight = 0.0;
 	printTime = simulatedTime = 0;
 	numFilaments = 0;
+	lastModifiedTime = 0;
 	generatedBy.Clear();
 	fileSize = 0;
 	for (size_t extr = 0; extr < MaxExtruders; extr++)

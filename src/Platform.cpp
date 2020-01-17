@@ -194,56 +194,91 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Platform, __VA_ARGS__)
 
+constexpr ObjectModelArrayDescriptor Platform::axisDriversArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const Platform*)self)->axisDrivers[context.GetLastIndex()].numDrivers; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+			{ return ExpressionValue(((const Platform*)self)->axisDrivers[context.GetIndex(1)].driverNumbers[context.GetLastIndex()]); }
+};
+
 constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[] members
-	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),			ObjectModelEntryFlags::none },
-	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),						ObjectModelEntryFlags::none },
+	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
+	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
 #if HAS_LINUX_INTERFACE
-	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),			ObjectModelEntryFlags::none },
+	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),														ObjectModelEntryFlags::none },
 #endif
-	{ "iapFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),				ObjectModelEntryFlags::none },
-	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),			ObjectModelEntryFlags::verbose },
-	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),	ObjectModelEntryFlags::verbose },
-	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),								ObjectModelEntryFlags::live },
+	{ "iapFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),															ObjectModelEntryFlags::none },
+	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),														ObjectModelEntryFlags::verbose },
+	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),												ObjectModelEntryFlags::verbose },
+	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																			ObjectModelEntryFlags::live },
 # ifdef DUET_NG
-	{ "name",				OBJECT_MODEL_FUNC(self->GetBoardName()),				ObjectModelEntryFlags::none },
-	{ "shortName",			OBJECT_MODEL_FUNC(self->GetBoardShortName()),			ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->GetBoardName()),															ObjectModelEntryFlags::none },
+	{ "shortName",			OBJECT_MODEL_FUNC(self->GetBoardShortName()),														ObjectModelEntryFlags::none },
 # else
-	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),					ObjectModelEntryFlags::none },
-	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),				ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),																ObjectModelEntryFlags::none },
+	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
 # endif
 #if HAS_12V_MONITOR
-	{ "v12",				OBJECT_MODEL_FUNC(self, 3),								ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::live },
 #endif
-	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),								ObjectModelEntryFlags::live },
+	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
 
 	// 1. mcuTemp members
-	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current),	ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().max),		ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min),		ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current),												ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().max),													ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min),													ObjectModelEntryFlags::none },
 
 	// 2. vIn members
-	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage()),		ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().max),		ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().min),		ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage()),													ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().max),													ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().min),													ObjectModelEntryFlags::none },
+
+	// 3. move.axes[] members
+	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "drivers",			OBJECT_MODEL_FUNC_NOSELF(&axisDriversArrayDescriptor),												ObjectModelEntryFlags::none },
+	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),					ObjectModelEntryFlags::live },
+	{ "jerk",				OBJECT_MODEL_FUNC(self->GetInstantDv(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),				ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->AxisMinimum(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "speed",				OBJECT_MODEL_FUNC(self->MaxFeedrate(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3),			ObjectModelEntryFlags::live },
+	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),	ObjectModelEntryFlags::none },
+
+	// 4. move.extruders[] members
+	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),									ObjectModelEntryFlags::none },
+	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex())),			ObjectModelEntryFlags::none },
+	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																			ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvance(context.GetLastIndex())),								ObjectModelEntryFlags::none },
+
+	// 5. move.extruders[].nonlinear members
+	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionA[context.GetLastIndex()]),								ObjectModelEntryFlags::none },
+	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionB[context.GetLastIndex()]),								ObjectModelEntryFlags::none },
+	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusionLimit[context.GetLastIndex()]),							ObjectModelEntryFlags::none },
 
 #if HAS_12V_MONITOR
-	// 3. v12 members
-	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current),		ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max),			ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min),			ObjectModelEntryFlags::none },
+	// 6. v12 members
+	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current),													ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max),														ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min),														ObjectModelEntryFlags::none },
 #endif
+
 };
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	3 + HAS_12V_MONITOR,
-	9 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR,
-	3,
-	3,
+	6 + HAS_12V_MONITOR,							// number of sections
+	9 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR,		// section 0: boards[]
+	3,												// section 1: mcuTemp
+	3,												// section 2: vIn
+	10,												// section 3: move.axes[]
+	4,												// section 4: move.extruders[]
+	3,												// section 5: move.extruders[].nonlinear
 #if HAS_12V_MONITOR
-	3
+	3												// section 6: v12
 #endif
 };
 
@@ -945,6 +980,7 @@ void Platform::Spin() noexcept
 			driversPowered = false;
 			++numVinUnderVoltageEvents;
 			lastVinUnderVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
+			reprap.GetGCodes().SetAllAxesNotHomed();
 		}
 # if ENFORCE_MAX_VIN
 		else if (currentVin > driverOverVoltageAdcReading)

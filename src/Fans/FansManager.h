@@ -8,7 +8,7 @@
 #ifndef SRC_FANS_FANSMANAGER_H_
 #define SRC_FANS_FANSMANAGER_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
 #include "Fan.h"
 #include "GCodes/GCodeResult.h"
 #include <RTOSIface/RTOSIface.h>
@@ -27,7 +27,6 @@ public:
 	FansManager() noexcept;
 	void Init() noexcept;
 	bool CheckFans() noexcept;
-	size_t GetHighestUsedFanNumber() const noexcept;
 	GCodeResult ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);
 	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
 	float GetFanValue(size_t fanNum) const noexcept;
@@ -43,11 +42,15 @@ public:
 	bool WriteFanSettings(FileStore *f) const noexcept;
 #endif
 
-private:
+	// These need to be accessed by the OMT in class RepRap
+	size_t GetNumFansToReport() const noexcept;
 	ReadLockedPointer<Fan> FindFan(size_t fanNum) const noexcept;
+
+	static ReadWriteLock fansLock;
+
+private:
 	LocalFan *CreateLocalFan(uint32_t fanNum, const char *pinNames, PwmFrequency freq, const StringRef& reply) noexcept;
 
-	mutable ReadWriteLock fansLock;
 	Fan *fans[MaxFans];
 };
 

@@ -556,6 +556,7 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(axisDrivers)
 
 private:
 	Platform(const Platform&) noexcept;						// private copy constructor to make sure we don't try to copy a Platform

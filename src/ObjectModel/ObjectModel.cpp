@@ -60,7 +60,7 @@ ObjectModel::ObjectModel() noexcept
 // ObjectExplorationContext members
 
 ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, bool wal) noexcept
-	: numIndicesProvided(0), numIndicesCounted(0), shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal)
+	: numIndicesProvided(0), numIndicesCounted(0), shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false)
 {
 	while (true)
 	{
@@ -76,6 +76,9 @@ ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, bool
 			break;
 		case 'f':
 			onlyLive = true;
+			break;
+		case 'n':
+			includeNulls = true;
 			break;
 		default:
 			break;
@@ -127,19 +130,10 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 		{
 			if (tbl->Matches(filter, context))
 			{
-				if (!added)
+				if (tbl->ReportAsJson(buf, context, this, filter, !added))
 				{
-					if (*filter == 0)
-					{
-						buf->cat('{');
-					}
 					added = true;
 				}
-				else
-				{
-					buf->cat(',');
-				}
-				tbl->ReportAsJson(buf, context, this, filter);
 			}
 			--numEntries;
 			++tbl;
@@ -304,18 +298,19 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 		case TYPE_OF(DateTime):
 			{
 				const time_t time = val.Get40BitValue();
-				if (time == 0)
-				{
-					buf->cat("null");
-				}
-				else
-				{
-					tm timeInfo;
-					gmtime_r(&time, &timeInfo);
-					buf->catf("\"%04u-%02u-%02uT%02u:%02u:%02u\"",
-								timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-				}
+				tm timeInfo;
+				gmtime_r(&time, &timeInfo);
+				buf->catf("\"%04u-%02u-%02uT%02u:%02u:%02u\"",
+							timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 			}
+			break;
+
+		case TYPE_OF(DriverId):
+#if SUPPORT_CAN_EXPANSION
+			buf->catf("\"%u.%u\"", (unsigned int)(val.uVal >> 8), (unsigned int)(val.uVal & 0xFF));
+#else
+			buf->catf("\"%u\"", (unsigned int)val.uVal);
+#endif
 			break;
 
 		case NoType:
@@ -398,20 +393,26 @@ bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplor
 }
 
 // Add the value of this element to the buffer, returning true if it matched and we did
-void ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter) const noexcept
+bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter, bool first) const noexcept
 {
-	if (*filter == 0)
-	{
-		buf->cat('"');
-		buf->cat(name);
-		buf->cat("\":");
-	}
 	const char * nextElement = ObjectModel::GetNextElement(filter);
 	if (*nextElement == '.')
 	{
 		++nextElement;
 	}
-	self->ReportItemAsJson(buf, context, func(self, context), nextElement);
+	const ExpressionValue val = func(self, context);
+	if (val.type != NoType || context.ShouldIncludeNulls())
+	{
+		if (*filter == 0)
+		{
+			buf->cat((first) ? "{\"" : ",\"");
+			buf->cat(name);
+			buf->cat("\":");
+		}
+		self->ReportItemAsJson(buf, context, val, nextElement);
+		return true;
+	}
+	return false;
 }
 
 // Compare an ID with the name of this object

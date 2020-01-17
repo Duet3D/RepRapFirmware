@@ -92,12 +92,9 @@ public:
 	void HandleTelnetGCodeReply(OutputBuffer *buf) noexcept;
 	uint32_t GetHttpReplySeq() noexcept;
 
-#if SUPPORT_OBJECT_MODEL
-	NetworkInterface *GetInterface(size_t n) const noexcept { return interfaces[n]; }
-#endif
-
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(interfaces)
 
 private:
 	WiFiInterface *FindWiFiInterface() const noexcept;

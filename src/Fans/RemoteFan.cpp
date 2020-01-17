@@ -15,7 +15,7 @@
 
 RemoteFan::RemoteFan(unsigned int fanNum, CanAddress boardNum) noexcept
 	: Fan(fanNum),
-	  lastRpm(-1), whenLastRpmReceived(0), boardNumber(boardNum), thermostaticFanRunning(false)
+	  boardNumber(boardNum), thermostaticFanRunning(false)
 {
 }
 
@@ -56,18 +56,8 @@ void RemoteFan::UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept
 {
 	if (src == boardNumber)
 	{
-		lastRpm = rpm;
-		whenLastRpmReceived = millis();
+		SetLastRpm(rpm);
 	}
-}
-
-int32_t RemoteFan::GetRPM() noexcept
-{
-	if (millis() - whenLastRpmReceived > RpmReadingTimeout)
-	{
-		lastRpm = -1;
-	}
-	return lastRpm;
 }
 
 GCodeResult RemoteFan::ReportPortDetails(const StringRef& str) const noexcept

@@ -9,13 +9,13 @@
 #include "RepRap.h"
 #include "PrintMonitor.h"
 
-Trigger::Trigger()
+Trigger::Trigger() noexcept
 {
 	condition = 0;
 }
 
 // Initialise the trigger
-void Trigger::Init()
+void Trigger::Init() noexcept
 {
 	for (IoPort& port : ports)
 	{
@@ -25,7 +25,7 @@ void Trigger::Init()
 }
 
 // Return true if this trigger is unused, i.e. it doesn't watch any pins
-bool Trigger::IsUnused() const
+bool Trigger::IsUnused() const noexcept
 {
 	for (const IoPort& port : ports)
 	{
@@ -38,7 +38,7 @@ bool Trigger::IsUnused() const
 }
 
 // Check whether this trigger is active and update the input states
-bool Trigger::Check()
+bool Trigger::Check() noexcept
 {
 	bool triggered = false;
 	for (unsigned int i = 0; i < ARRAY_SIZE(ports); ++i)

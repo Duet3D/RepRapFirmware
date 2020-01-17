@@ -158,6 +158,17 @@ void LocalFan::InternalRefresh() noexcept
 
 	SetHardwarePwm(reqVal);
 	lastVal = reqVal;
+
+	if (tachoPort.IsValid())
+	{
+		// The ISR sets fanInterval to the number of step interrupt clocks it took to get fanMaxInterruptCount interrupts.
+		// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
+		// When the fan stops, we get no interrupts and fanInterval stops getting updated. We must recognise this and return zero.
+		const float rpm = (fanInterval != 0 && StepTimer::GetTimerTicks() - fanLastResetTime < 3 * StepTimer::StepClockRate)	// if we have a reading and it is less than 3 seconds old
+						  ? (StepTimer::StepClockRate * fanMaxInterruptCount * (60/2))/fanInterval		// then calculate RPM assuming 2 interrupts per rev
+						  : 0;																			// else assume fan is off or tacho not connected
+		SetLastRpm(rpm);
+	}
 }
 
 GCodeResult LocalFan::Refresh(const StringRef& reply) noexcept
@@ -202,19 +213,6 @@ bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply) noexcep
 
 	InternalRefresh();
 	return true;
-}
-
-// Tacho support
-int32_t LocalFan::GetRPM() noexcept
-{
-	// The ISR sets fanInterval to the number of step interrupt clocks it took to get fanMaxInterruptCount interrupts.
-	// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
-	// When the fan stops, we get no interrupts and fanInterval stops getting updated. We must recognise this and return zero.
-	return (!tachoPort.IsValid())
-			? -1																			// we return -1 if there is no tacho configured
-			: (fanInterval != 0 && StepTimer::GetTimerTicks() - fanLastResetTime < 3 * StepTimer::StepClockRate)	// if we have a reading and it is less than 3 seconds old
-			  ? (StepTimer::StepClockRate * fanMaxInterruptCount * (60/2))/fanInterval		// then calculate RPM assuming 2 interrupts per rev
-			  : 0;																			// else assume fan is off or tacho not connected
 }
 
 void LocalFan::Interrupt() noexcept

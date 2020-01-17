@@ -251,7 +251,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				UpdateCurrentUserPosition();			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();
-			if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
+			if (reprap.GetTool(gb.MachineState().newToolNumber).IsNotNull() && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
 			{
 				String<StringLength20> scratchString;
 				scratchString.printf("tpre%d.g", gb.MachineState().newToolNumber);

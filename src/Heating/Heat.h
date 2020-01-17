@@ -145,11 +145,8 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
-
-#if SUPPORT_OBJECT_MODEL
-	static const ObjectModelArrayDescriptor heatersArrayDescriptor;
-	static const ObjectModelArrayDescriptor sensorsArrayDescriptor;
-#endif
+	OBJECT_MODEL_ARRAY(heaters)
+	OBJECT_MODEL_ARRAY(sensors)
 
 private:
 	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying

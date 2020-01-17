@@ -54,11 +54,18 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Move, __VA_ARGS__)
 
-static const ObjectModelArrayDescriptor axesArrayDescriptor =
+static constexpr ObjectModelArrayDescriptor axesArrayDescriptor =
 {
 	nullptr,					// no lock needed
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 3); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetPlatform(), 3); }
+};
+
+static constexpr ObjectModelArrayDescriptor extrudersArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumExtruders(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetPlatform(), 4); }
 };
 
 constexpr ObjectModelTableEntry Move::objectModelTable[] =
@@ -66,12 +73,13 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::live },
-	{ "calibrationDeviation",	OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
-	{ "currentMove",			OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::live },
+	{ "calibrationDeviation",	OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::none },
+	{ "currentMove",			OBJECT_MODEL_FUNC(self, 3),																ObjectModelEntryFlags::live },
 	{ "daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
+	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::none },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
-	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
-	{ "meshDeviation",			OBJECT_MODEL_FUNC(self, 7),																ObjectModelEntryFlags::none },
+	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
+	{ "meshDeviation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),										ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),							ObjectModelEntryFlags::live },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),											ObjectModelEntryFlags::none },
@@ -83,34 +91,28 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 	// 2. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor()),					ObjectModelEntryFlags::none },
-	{ "timeout",				OBJECT_MODEL_FUNC((int32_t)self->idleTimeout),											ObjectModelEntryFlags::none },
+	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout),									ObjectModelEntryFlags::none },
 
-	// 3. Move.Axis[] members
-	{ "homed",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),		ObjectModelEntryFlags::live },
-	{ "letter",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),	ObjectModelEntryFlags::none },
-	{ "max",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMaximum(context.GetLastIndex())),		ObjectModelEntryFlags::none },
-	{ "min",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMinimum(context.GetLastIndex())),		ObjectModelEntryFlags::none },
-	{ "userPosition",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
-	{ "visible",				OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()), ObjectModelEntryFlags::none },
-
-	// 4. move.currentMove members
+	// 3. move.currentMove members
+	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAcceleration()),												ObjectModelEntryFlags::live },
+	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDeceleration()),												ObjectModelEntryFlags::live },
 	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed()),											ObjectModelEntryFlags::live },
 	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed()),													ObjectModelEntryFlags::live },
 
-	// 5. move.calibrationDeviation members
+	// 4. move.calibrationDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
-	// 6. move.initialDeviation members
+	// 5. move.initialDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
-	// 7. move.meshDeviation members
+	// 6. move.meshDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetDeviationFromMean(), 3),					ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 8, 10, 3, 2, 6, 2, 2, 2, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 7, 11, 3, 2, 4, 2, 2, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 

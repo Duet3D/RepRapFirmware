@@ -162,6 +162,11 @@ struct DriverId
 		return boardAddress != other.boardAddress || localDriver != other.localDriver;
 	}
 
+	uint32_t AsU32() const noexcept
+	{
+		return (boardAddress << 8) | localDriver;
+	}
+
 #else
 
 	void SetFromBinary(uint32_t val) noexcept
@@ -178,6 +183,11 @@ struct DriverId
 
 	bool IsLocal() const noexcept { return true; }
 	bool IsRemote() const noexcept { return false; }
+
+	uint32_t AsU32() const noexcept
+	{
+		return localDriver;
+	}
 
 #endif
 };

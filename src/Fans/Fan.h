@@ -9,6 +9,7 @@
 #define SRC_FAN_H_
 
 #include "RepRapFirmware.h"
+#include <ObjectModel/ObjectModel.h>
 #include "Hardware/IoPorts.h"
 #include "GCodes/GCodeResult.h"
 
@@ -18,7 +19,7 @@
 
 class GCodeBuffer;
 
-class Fan
+class Fan INHERIT_OBJECT_MODEL
 {
 public:
 	Fan(unsigned int fanNum) noexcept;
@@ -27,7 +28,6 @@ public:
 	virtual bool Check() noexcept = 0;								// update the fan PWM returning true if it is a thermostatic fan that is on
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept = 0;
 	virtual bool IsEnabled() const noexcept = 0;
-	virtual int32_t GetRPM() noexcept = 0;
 	virtual GCodeResult ReportPortDetails(const StringRef& str) const noexcept = 0;
 #if SUPPORT_CAN_EXPANSION
 	virtual void UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept = 0;
@@ -42,6 +42,7 @@ public:
 	bool IsConfigured() const noexcept { return isConfigured && IsEnabled(); }
 
 	float GetConfiguredPwm() const noexcept { return val; }			// returns the configured PWM. Actual PWM may be different, e.g. due to blipping or for thermostatic fans.
+	int32_t GetRPM() const noexcept;
 
 	GCodeResult SetPwm(float speed, const StringRef& reply) noexcept;
 	bool HasMonitoredSensors() const noexcept { return sensorsMonitored != 0; }
@@ -50,9 +51,20 @@ public:
 #if HAS_MASS_STORAGE
 	bool WriteSettings(FileStore *f, size_t fanNum) const noexcept;	// save the settings of this fan if it isn't thermostatic
 #endif
+
 protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(monitoredSensors)
+
+	static constexpr uint32_t RpmReadingTimeout = 2000;		// any reading older than this number of milliseconds is considered unreliable
+
 	virtual GCodeResult Refresh(const StringRef& reply) noexcept = 0;
 	virtual bool UpdateFanConfiguration(const StringRef& reply) noexcept = 0;
+
+	void SetLastRpm(float rpm) noexcept { lastRpm = rpm; whenLastRpmSet = millis(); }
+
+	size_t GetNumMonitoredSensors() const noexcept;
+	int32_t GetMonitoredSensorNumber(size_t index) const noexcept;
 
 	unsigned int fanNumber;
 
@@ -61,12 +73,14 @@ protected:
 	float lastVal;
 	float minVal;
 	float maxVal;
+	mutable int32_t lastRpm;
+	uint32_t whenLastRpmSet;
 	float triggerTemperatures[2];
 	uint32_t blipTime;										// in milliseconds
 	SensorsBitmap sensorsMonitored;
 
-	String<MaxFanNameLength> name;
 	bool isConfigured;
+	String<MaxFanNameLength> name;
 };
 
 #endif /* SRC_FAN_H_ */

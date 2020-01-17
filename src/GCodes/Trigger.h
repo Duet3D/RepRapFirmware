@@ -18,15 +18,15 @@ static_assert(MaxPortsPerTrigger <= sizeof(TriggerInputStatesBitmap) * CHAR_BIT,
 
 struct Trigger
 {
-	Trigger();
+	Trigger() noexcept;
 
-	void Init();
+	void Init() noexcept;
 
 	// Return true if this trigger is unused, i.e. it doesn't watch any pins
-	bool IsUnused() const;
+	bool IsUnused() const noexcept;
 
 	// Check whether this trigger is active and update the input states
-	bool Check();
+	bool Check() noexcept;
 
 	IoPort ports[MaxPortsPerTrigger];
 	TriggerInputStatesBitmap inputStates;

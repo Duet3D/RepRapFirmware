@@ -517,7 +517,7 @@ void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 	if (mode >= HeaterMode::tuning0)
 	{
 		reply.printf("Heater %u is being tuned, phase %u of %u",
-			GetHeaterNumber(),
+						GetHeaterNumber(),
 						(unsigned int)mode - (unsigned int)HeaterMode::tuning0 + 1,
 						(unsigned int)HeaterMode::lastTuningMode - (unsigned int)HeaterMode::tuning0 + 1);
 	}
@@ -609,7 +609,7 @@ void LocalHeater::DoTuningStep() noexcept
 	tuningTempReadings[tuningReadingsTaken] = temperature;
 	++tuningReadingsTaken;
 
-	switch(mode)
+	switch (mode)
 	{
 	case HeaterMode::tuning0:
 		// Waiting for initial temperature to settle after any thermostatic fans have turned on

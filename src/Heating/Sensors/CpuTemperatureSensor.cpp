@@ -11,7 +11,7 @@
 
 #if HAS_CPU_TEMP_SENSOR
 
-CpuTemperatureSensor::CpuTemperatureSensor(unsigned int sensorNum) noexcept : TemperatureSensor(sensorNum, "microcontroller embedded temperature sensor")
+CpuTemperatureSensor::CpuTemperatureSensor(unsigned int sensorNum) noexcept : TemperatureSensor(sensorNum, "Microcontroller embedded temperature sensor")
 {
 }
 

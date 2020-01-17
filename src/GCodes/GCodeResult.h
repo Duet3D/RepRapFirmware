@@ -25,13 +25,13 @@ enum class GCodeResult : uint8_t
 };
 
 // Convert a true/false error/no-error indication to a GCodeResult
-inline GCodeResult GetGCodeResultFromError(bool err)
+inline GCodeResult GetGCodeResultFromError(bool err) noexcept
 {
 	return (err) ? GCodeResult::error : GCodeResult::ok;
 }
 
 // Convert a true/false finished/not-finished indication to a GCodeResult
-inline GCodeResult GetGCodeResultFromFinished(bool finished)
+inline GCodeResult GetGCodeResultFromFinished(bool finished) noexcept
 {
 	return (finished) ? GCodeResult::ok : GCodeResult::notFinished;
 }

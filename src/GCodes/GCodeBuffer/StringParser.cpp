@@ -287,7 +287,7 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 {
 	if (overflowed)
 	{
-		throw GCodeException(gb.MachineState().lineNumber, 0, "GCode command too long");
+		throw GCodeException(gb.MachineState().lineNumber, ARRAY_SIZE(gb.buffer) - 1, "GCode command too long");
 	}
 
 	const bool doingFile = gb.IsDoingFile();
@@ -1673,6 +1673,14 @@ void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 			str.catf("%04u-%02u-%02u %02u:%02u:%02u",
 						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 		}
+		break;
+
+	case TYPE_OF(DriverId):
+#if SUPPORT_CAN_EXPANSION
+		str.catf("%u.%u", (unsigned int)(val.uVal >> 8), (unsigned int)(val.uVal & 0xFF));
+#else
+		str.catf("%u", (unsigned int)val.uVal);
+#endif
 		break;
 
 	default:

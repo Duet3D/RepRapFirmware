@@ -26,11 +26,13 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Heater members
 	{ "current",	OBJECT_MODEL_FUNC(self->GetTemperature()), 							ObjectModelEntryFlags::live },
+	{ "max",		OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit()), 				ObjectModelEntryFlags::none },
+	{ "min",		OBJECT_MODEL_FUNC(self->GetLowestTemperatureLimit()), 				ObjectModelEntryFlags::none },
 	{ "sensor",		OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 				ObjectModelEntryFlags::none },
-	{ "state",		OBJECT_MODEL_FUNC(self->GetStateName()), 							ObjectModelEntryFlags::live },
+	{ "state",		OBJECT_MODEL_FUNC(self->GetStatus().ToString()), 					ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
@@ -97,12 +99,6 @@ HeaterStatus Heater::GetStatus() const noexcept
 					: (mode >= HeaterMode::tuning0) ? HeaterStatus::tuning
 						: (active) ? HeaterStatus::active
 							: HeaterStatus::standby;
-}
-
-const char *Heater::GetStateName() const noexcept
-{
-	static const char * const StateNames[] = { "Off", "Standby", "Active", "Tuning", "Offline" };
-	return StateNames[(uint8_t)GetStatus()];
 }
 
 const char* Heater::GetSensorName() const noexcept

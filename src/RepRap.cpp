@@ -132,43 +132,61 @@ constexpr ObjectModelArrayDescriptor RepRap::boardsArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
 };
 
+constexpr ObjectModelArrayDescriptor RepRap::fansArrayDescriptor =
+{
+	&FansManager::fansLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->fansManager->GetNumFansToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->fansManager->FindFan(context.GetLastIndex()).Ptr()); }
+};
+
+constexpr ObjectModelArrayDescriptor RepRap::toolsArrayDescriptor =
+{
+	&toolListLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->numToolsToReport; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->GetTool(context.GetLastIndex()).Ptr()); }
+};
+
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
 	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
 	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
 	{ "state",					OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::live },
+	{ "tools",					OBJECT_MODEL_FUNC_NOSELF(&toolsArrayDescriptor),						ObjectModelEntryFlags::live },
 
-	// 1. MachineModel.State
+	// 1. MachineModel.state
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 6, 4 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 8, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
 #endif
 
+ReadWriteLock RepRap::toolListLock;
+
 // RepRap member functions.
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() noexcept : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
-	activeToolHeaters(0), ticksInSpinState(0),
-	heatTaskIdleTicks(0),
-	debug(0),
-	beepFrequency(0), beepDuration(0),
-	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
-	spinningModule(noModule), stopped(false), active(false), processingConfig(true)
+RepRap::RepRap() noexcept
+	: toolList(nullptr), currentTool(nullptr), lastWarningMillis(0),
+	  activeExtruders(0), activeToolHeaters(0), numToolsToReport(0),
+	  ticksInSpinState(0), heatTaskIdleTicks(0), debug(0),
+	  beepFrequency(0), beepDuration(0),
+	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
+	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
 #if HAS_LINUX_INTERFACE
-	, usingLinuxInterface(true)
+	  , usingLinuxInterface(true)
 #endif
 {
 	OutputBuffer::Init();
@@ -203,7 +221,6 @@ RepRap::RepRap() noexcept : toolList(nullptr), currentTool(nullptr), lastWarning
 
 void RepRap::Init() noexcept
 {
-	toolListMutex.Create("ToolList");
 	messageBoxMutex.Create("MessageBox");
 
 	platform->Init();
@@ -428,7 +445,7 @@ void RepRap::Spin() noexcept
 	const uint32_t now = millis();
 	if (now - lastWarningMillis >= MinimumWarningInterval)
 	{
-		MutexLocker lock(toolListMutex);
+		ReadLocker lock(toolListLock);
 		for (Tool *t = toolList; t != nullptr; t = t->Next())
 		{
 			if (t->DisplayColdExtrudeWarning())
@@ -717,7 +734,7 @@ void RepRap::PrintDebug(MessageType mt) noexcept
 // The tool list is maintained in tool number order.
 void RepRap::AddTool(Tool* tool) noexcept
 {
-	MutexLocker lock(toolListMutex);
+	WriteLocker lock(toolListLock);
 	Tool** t = &toolList;
 	while(*t != nullptr && (*t)->Number() < tool->Number())
 	{
@@ -725,37 +742,35 @@ void RepRap::AddTool(Tool* tool) noexcept
 	}
 	tool->next = *t;
 	*t = tool;
-	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters);
+	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
 	platform->UpdateConfiguredHeaters();
 }
 
-void RepRap::DeleteTool(Tool* tool) noexcept
+void RepRap::DeleteTool(int toolNumber) noexcept
 {
-	// Must have a valid tool...
-	if (tool == nullptr)
-	{
-		return;
-	}
+	WriteLocker lock(toolListLock);
 
 	// Deselect it if necessary
-	if (GetCurrentTool() == tool)
+	if (currentTool != nullptr && currentTool->Number() == toolNumber)
 	{
 		SelectTool(-1, false);
 	}
 
-	// Switch off any associated heater and remove heater references
-	for (size_t i = 0; i < tool->HeaterCount(); i++)
-	{
-		heat->SwitchOff(tool->Heater(i));
-	}
-
 	// Purge any references to this tool
-	MutexLocker lock(toolListMutex);
+	Tool * tool = nullptr;
 	for (Tool **t = &toolList; *t != nullptr; t = &((*t)->next))
 	{
-		if (*t == tool)
+		if ((*t)->Number() == toolNumber)
 		{
+			tool = *t;
 			*t = tool->next;
+
+			// Switch off any associated heaters
+			for (size_t i = 0; i < tool->HeaterCount(); i++)
+			{
+				heat->SwitchOff(tool->Heater(i));
+			}
+
 			break;
 		}
 	}
@@ -764,10 +779,10 @@ void RepRap::DeleteTool(Tool* tool) noexcept
 	Tool::Delete(tool);
 
 	// Update the number of active heaters and extruder drives
-	activeExtruders = activeToolHeaters = 0;
+	activeExtruders = activeToolHeaters = numToolsToReport = 0;
 	for (Tool *t = toolList; t != nullptr; t = t->Next())
 	{
-		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters);
+		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
 	}
 	platform->UpdateConfiguredHeaters();
 }
@@ -775,25 +790,25 @@ void RepRap::DeleteTool(Tool* tool) noexcept
 // Select the specified tool, putting the existing current tool into standby
 void RepRap::SelectTool(int toolNumber, bool simulating) noexcept
 {
-	Tool* const newTool = GetTool(toolNumber);
+	ReadLockedPointer<Tool> const newTool = GetTool(toolNumber);
 	if (!simulating)
 	{
-		if (currentTool != nullptr && currentTool != newTool)
+		if (currentTool != nullptr && currentTool != newTool.Ptr())
 		{
 			currentTool->Standby();
 		}
-		if (newTool != nullptr)
+		if (newTool.IsNotNull())
 		{
 			newTool->Activate();
 		}
 	}
-	currentTool = newTool;
+	currentTool = newTool.Ptr();
 }
 
 void RepRap::PrintTool(int toolNumber, const StringRef& reply) const noexcept
 {
-	const Tool* const tool = GetTool(toolNumber);
-	if (tool != nullptr)
+	ReadLockedPointer<Tool> const tool = GetTool(toolNumber);
+	if (tool.IsNotNull())
 	{
 		tool->Print(reply);
 	}
@@ -805,14 +820,14 @@ void RepRap::PrintTool(int toolNumber, const StringRef& reply) const noexcept
 
 void RepRap::StandbyTool(int toolNumber, bool simulating) noexcept
 {
-	Tool* const tool = GetTool(toolNumber);
-	if (tool != nullptr)
+	ReadLockedPointer<Tool> const tool = GetTool(toolNumber);
+	if (tool.IsNotNull())
 	{
 		if (!simulating)
 		{
 			tool->Standby();
 		}
-  		if (currentTool == tool)
+  		if (currentTool == tool.Ptr())
 		{
 			currentTool = nullptr;
 		}
@@ -823,19 +838,25 @@ void RepRap::StandbyTool(int toolNumber, bool simulating) noexcept
 	}
 }
 
-Tool* RepRap::GetTool(int toolNumber) const noexcept
+ReadLockedPointer<Tool> RepRap::GetLockedCurrentTool() const noexcept
 {
-	MutexLocker lock(toolListMutex);
+	ReadLocker lock(toolListLock);
+	return ReadLockedPointer<Tool>(lock, currentTool);
+}
+
+ReadLockedPointer<Tool> RepRap::GetTool(int toolNumber) const noexcept
+{
+	ReadLocker lock(toolListLock);
 	Tool* tool = toolList;
 	while(tool != nullptr)
 	{
 		if (tool->Number() == toolNumber)
 		{
-			return tool;
+			return ReadLockedPointer<Tool>(lock, tool);
 		}
 		tool = tool->Next();
 	}
-	return nullptr; // Not an error
+	return ReadLockedPointer<Tool>(lock, nullptr);		 // not an error
 }
 
 // Return the current tool number, or -1 if no tool selected
@@ -846,15 +867,23 @@ int RepRap::GetCurrentToolNumber() const noexcept
 
 // Get the current tool, or failing that the default tool. May return nullptr if we can't
 // Called when a M104 or M109 command doesn't specify a tool number.
-Tool* RepRap::GetCurrentOrDefaultTool() const noexcept
+ReadLockedPointer<Tool> RepRap::GetCurrentOrDefaultTool() const noexcept
 {
+	ReadLocker lock(toolListLock);
 	// If a tool is already selected, use that one, else use the lowest-numbered tool which is the one at the start of the tool list
-	return (currentTool != nullptr) ? currentTool : toolList;
+	return ReadLockedPointer<Tool>(lock, (currentTool != nullptr) ? currentTool : toolList);
+}
+
+// Return the lowest-numbered tool
+ReadLockedPointer<Tool> RepRap::GetFirstTool() const noexcept
+{
+	ReadLocker lock(toolListLock);
+	return ReadLockedPointer<Tool>(lock, toolList);
 }
 
 bool RepRap::IsHeaterAssignedToTool(int8_t heater) const noexcept
 {
-	MutexLocker lock(toolListMutex);
+	ReadLocker lock(toolListLock);
 	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 	{
 		for (size_t i = 0; i < tool->HeaterCount(); i++)
@@ -872,12 +901,55 @@ bool RepRap::IsHeaterAssignedToTool(int8_t heater) const noexcept
 
 unsigned int RepRap::GetNumberOfContiguousTools() const noexcept
 {
-	unsigned int numTools = 0;
-	while (GetTool(numTools) != nullptr)
+	int numTools = 0;
+	ReadLocker lock(toolListLock);
+	for (const Tool *t = toolList; t != nullptr && t->Number() == numTools; t = t->Next())
 	{
 		++numTools;
 	}
-	return numTools;
+	return (unsigned int)numTools;
+}
+
+// Report the temperatures of one tool in M105 format
+void RepRap::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept
+{
+	if (tool != nullptr && tool->HeaterCount() != 0)
+	{
+		if (reply.strlen() != 0)
+		{
+			reply.cat(' ');
+		}
+		if (includeNumber)
+		{
+			reply.catf("T%u", tool->Number());
+		}
+		else
+		{
+			reply.cat("T");
+		}
+
+		Heat& heat = reprap.GetHeat();
+		char sep = ':';
+		for (size_t i = 0; i < tool->HeaterCount(); ++i)
+		{
+			const int heater = tool->Heater(i);
+			reply.catf("%c%.1f /%.1f", sep, (double)heat.GetHeaterTemperature(heater), (double)heat.GetTargetTemperature(heater));
+			sep = ' ';
+		}
+	}
+}
+
+void RepRap::ReportAllToolTemperatures(const StringRef& reply) const noexcept
+{
+	ReadLocker lock(toolListLock);
+
+	// The following is believed to be compatible with Marlin and Octoprint, based on thread https://github.com/foosel/OctoPrint/issues/2590#issuecomment-385023980
+	ReportToolTemperatures(reply, currentTool, false);
+
+	for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	{
+		ReportToolTemperatures(reply, tool, true);
+	}
 }
 
 void RepRap::Tick() noexcept
@@ -1068,10 +1140,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 	// Parameters
 	{
 		// Cooling fan values
-		const size_t highestFan = fansManager->GetHighestUsedFanNumber();
+		const size_t numFans = fansManager->GetNumFansToReport();
 		response->cat(",\"fanPercent\":");
 		ch = '[';
-		for (size_t i = 0; i <= highestFan; i++)
+		for (size_t i = 0; i < numFans; i++)
 		{
 			const float fanValue = fansManager->GetFanValue(i);
 			response->catf("%c%d", ch, (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0));
@@ -1084,7 +1156,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		{
 			response->cat(",\"fanNames\":");
 			ch = '[';
-			for (size_t fan = 0; fan <= highestFan; fan++)
+			for (size_t fan = 0; fan < numFans; fan++)
 			{
 				response->cat(ch);
 				ch = ',';
@@ -1134,7 +1206,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		// Send fan RPM value(s)
 		response->cat(",\"fanRPM\":");
 		char ch = '[';
-		for (size_t i = 0; i <= highestFan; ++i)
+		for (size_t i = 0; i < numFans; ++i)
 		{
 			response->catf("%c%" PRIi32, ch, fansManager->GetFanRPM(i));
 			ch = ',';
@@ -1150,27 +1222,27 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		const int8_t bedHeater = (MaxBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
 		if (bedHeater != -1)
 		{
-			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%d,\"heater\":%d},",
+			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%u,\"heater\":%d},",
 				(double)heat->GetHeaterTemperature(bedHeater), (double)heat->GetActiveTemperature(bedHeater), (double)heat->GetStandbyTemperature(bedHeater),
-					(int)heat->GetStatus(bedHeater), bedHeater);
+					heat->GetStatus(bedHeater).ToBaseType(), bedHeater);
 		}
 
 		/* Chamber */
 		const int8_t chamberHeater = (MaxChamberHeaters > 0) ? heat->GetChamberHeater(0) : -1;
 		if (chamberHeater != -1)
 		{
-			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%u,\"heater\":%d},",
 				(double)heat->GetHeaterTemperature(chamberHeater), (double)heat->GetActiveTemperature(chamberHeater),
-					(int)heat->GetStatus(chamberHeater), chamberHeater);
+					heat->GetStatus(chamberHeater).ToBaseType(), chamberHeater);
 		}
 
 		/* Cabinet */
 		const int8_t cabinetHeater = (MaxChamberHeaters > 1) ? heat->GetChamberHeater(1) : -1;
 		if (cabinetHeater != -1)
 		{
-			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%u,\"heater\":%d},",
 				(double)heat->GetHeaterTemperature(cabinetHeater), (double)heat->GetActiveTemperature(cabinetHeater),
-					(int)heat->GetStatus(cabinetHeater), cabinetHeater);
+					heat->GetStatus(cabinetHeater).ToBaseType(), cabinetHeater);
 		}
 
 		/* Heaters */
@@ -1192,7 +1264,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 			ch = '[';
 			for (size_t heater = 0; heater < numHeaters; heater++)
 			{
-				response->catf("%c%d", ch, (int)heat->GetStatus(heater));
+				response->catf("%c%u", ch, heat->GetStatus(heater).ToBaseType());
 				ch = ',';
 			}
 			response->cat((ch == '[') ? "[]" : "]");
@@ -1215,7 +1287,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		// Tool temperatures
 		response->cat(",\"tools\":{\"active\":[");
 		{
-			MutexLocker lock(toolListMutex);
+			ReadLocker lock(toolListLock);
 			for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
 				ch = '[';
@@ -1422,7 +1494,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		/* Tool Mapping */
 		{
 			response->cat(",\"tools\":[");
-			MutexLocker lock(toolListMutex);
+			ReadLocker lock(toolListLock);
 			for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
 				// Number
@@ -1796,10 +1868,10 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 	response->cat(']');
 
 	// Send the heater statuses (0=off, 1=standby, 2=active, 3 = fault)
-	response->catf(",\"hstat\":[%d", (bedHeater == -1) ? 0 : static_cast<int>(heat->GetStatus(bedHeater)));
+	response->catf(",\"hstat\":[%u", (bedHeater == -1) ? 0 : heat->GetStatus(bedHeater).ToBaseType());
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf(",%d", static_cast<int>(heat->GetStatus(heater)));
+		response->catf(",%u", heat->GetStatus(heater).ToBaseType());
 	}
 	response->cat(']');
 
@@ -2437,7 +2509,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 
 void RepRap::FlagTemperatureFault(int8_t dudHeater) noexcept
 {
-	MutexLocker lock(toolListMutex);
+	ReadLocker lock(toolListLock);
 	if (toolList != nullptr)
 	{
 		toolList->FlagTemperatureFault(dudHeater);
@@ -2447,7 +2519,7 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater) noexcept
 GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply) noexcept
 {
 	const GCodeResult rslt = heat->ResetFault(wasDudHeater, reply);
-	MutexLocker lock(toolListMutex);
+	ReadLocker lock(toolListLock);
 	if (toolList != nullptr)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);
@@ -2459,11 +2531,11 @@ GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& 
 
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix
-bool RepRap::WriteToolSettings(FileStore *f) const noexcept
+bool RepRap::WriteToolSettings(FileStore *f) noexcept
 {
 	// First write the settings of all tools except the current one and the command to select them if they are on standby
 	bool ok = true;
-	MutexLocker lock(toolListMutex);
+	ReadLocker lock(toolListLock);
 	for (const Tool *t = toolList; t != nullptr && ok; t = t->Next())
 	{
 		if (t != currentTool)
@@ -2494,10 +2566,10 @@ bool RepRap::WriteToolSettings(FileStore *f) const noexcept
 }
 
 // Save some information in config-override.g
-bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept
+bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noexcept
 {
 	bool ok = true, written = false;
-	MutexLocker lock(toolListMutex);
+	ReadLocker lock(toolListLock);
 	for (const Tool *t = toolList; ok && t != nullptr; t = t->Next())
 	{
 		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();

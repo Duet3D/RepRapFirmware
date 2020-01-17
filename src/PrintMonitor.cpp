@@ -33,6 +33,7 @@ Licence: GPL
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(PrintMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(PrintMonitor, _condition,__VA_ARGS__)
 
 const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
 {
@@ -47,27 +48,27 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. PrintMonitor members
-	{ "file",					OBJECT_MODEL_FUNC(self, 1),							 							ObjectModelEntryFlags::none },
-	{ "lastFileName",			OBJECT_MODEL_FUNC(self->filenameBeingPrinted.c_str()), 							ObjectModelEntryFlags::none },
-	{ "layer",					OBJECT_MODEL_FUNC((int32_t)self->currentLayer), 								ObjectModelEntryFlags::none },
-	{ "timesLeft",				OBJECT_MODEL_FUNC(self, 2),							 							ObjectModelEntryFlags::none },
+	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
+	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
+	{ "layer",				OBJECT_MODEL_FUNC((int32_t)self->currentLayer), 																	ObjectModelEntryFlags::none },
+	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::none },
 
 	// 1. ParsedFileInfo members
-	{ "filament",				OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 	ObjectModelEntryFlags::none },
-	{ "firstLayerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight), 					ObjectModelEntryFlags::none },
-	{ "generatedBy",			OBJECT_MODEL_FUNC(self->printingFileInfo.generatedBy.c_str()),					ObjectModelEntryFlags::none },
-	{ "height",					OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight), 						ObjectModelEntryFlags::none },
-	{ "lastModified",			OBJECT_MODEL_FUNC(DateTime(self->printingFileInfo.lastModifiedTime)), 			ObjectModelEntryFlags::none },
-	{ "layerHeight",			OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight), 							ObjectModelEntryFlags::none },
-	{ "numLayers",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.GetNumLayers()), 				ObjectModelEntryFlags::none },
-	{ "printTime",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.printTime), 					ObjectModelEntryFlags::none },
-	{ "simulatedTime",			OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.simulatedTime), 				ObjectModelEntryFlags::none },
-	{ "size",					OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.fileSize), 					ObjectModelEntryFlags::none },	// note, using int32_t limits us to 2Gb
+	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 										ObjectModelEntryFlags::none },
+	{ "firstLayerHeight",	OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight), 														ObjectModelEntryFlags::none },
+	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
+	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight), 															ObjectModelEntryFlags::none },
+	{ "lastModified",		OBJECT_MODEL_FUNC(DateTime(self->printingFileInfo.lastModifiedTime)), 												ObjectModelEntryFlags::none },
+	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight), 																ObjectModelEntryFlags::none },
+	{ "numLayers",			OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.GetNumLayers()), 													ObjectModelEntryFlags::none },
+	{ "printTime",			OBJECT_MODEL_FUNC_IF(self->printingFileInfo.printTime != 0, (int32_t)self->printingFileInfo.printTime), 			ObjectModelEntryFlags::none },
+	{ "simulatedTime",		OBJECT_MODEL_FUNC_IF(self->printingFileInfo.simulatedTime != 0, (int32_t)self->printingFileInfo.simulatedTime), 	ObjectModelEntryFlags::none },
+	{ "size",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.fileSize),	/* note, using int32_t limits us to 2Gb */			ObjectModelEntryFlags::none },
 
 	// 2. TimesLeft members
-	{ "filament",				OBJECT_MODEL_FUNC(self->EstimateTimeLeft(filamentBased)), 						ObjectModelEntryFlags::none },
-	{ "file",					OBJECT_MODEL_FUNC(self->EstimateTimeLeft(fileBased)),							ObjectModelEntryFlags::none },
-	{ "layer",					OBJECT_MODEL_FUNC(self->EstimateTimeLeft(layerBased)),							ObjectModelEntryFlags::none },
+	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::none },
+	{ "file",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(fileBased)),													ObjectModelEntryFlags::none },
+	{ "layer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(layerBased)),													ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 4, 10, 3 };
@@ -484,6 +485,17 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 
 	return 0.0;
 }
+
+#if SUPPORT_OBJECT_MODEL
+
+// Return the estimated time remaining if we have it, else null
+ExpressionValue PrintMonitor::EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept
+{
+	const float time = EstimateTimeLeft(method);
+	return (time > 0.0) ? ExpressionValue(time) : ExpressionValue(nullptr);
+}
+
+#endif
 
 // This returns the amount of time the machine has printed without interruptions (i.e. pauses)
 float PrintMonitor::GetPrintDuration() const noexcept

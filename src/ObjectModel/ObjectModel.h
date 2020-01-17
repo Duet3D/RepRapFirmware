@@ -49,6 +49,7 @@ template<> constexpr TypeCode TypeOf<const char*>() noexcept { return 9; }
 template<> constexpr TypeCode TypeOf<IPAddress>() noexcept { return 10; }
 template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>() noexcept { return 11; }
 template<> constexpr TypeCode TypeOf<DateTime>() noexcept { return 12; }
+template<> constexpr TypeCode TypeOf<DriverId>() noexcept { return 13; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -87,7 +88,8 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type(TYPE_OF(const ObjectModelArrayDescriptor*)), param(0), omadVal(omad) { }
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type(TYPE_OF(IPAddress)), param(0), uVal(ip.GetV4LittleEndian()) { }
 	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type(NoType), param(0), uVal(0) { }
-	explicit ExpressionValue(DateTime t) noexcept : type(TYPE_OF(DateTime)), param(t.tim >> 32), uVal((uint32_t)t.tim) { }
+	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? NoType : TYPE_OF(DateTime)), param(t.tim >> 32), uVal((uint32_t)t.tim) { }
+	explicit ExpressionValue(DriverId id) noexcept : type(TYPE_OF(DriverId)), param(0), uVal(id.AsU32()) { }
 
 	void Set(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
 	void Set(char c) noexcept { type = TYPE_OF(char); cVal = c; }
@@ -129,6 +131,7 @@ public:
 	bool ShortFormReport() const noexcept { return shortForm; }
 	bool ShouldReport(const ObjectModelEntryFlags f) const noexcept;
 	bool WantArrayLength() const noexcept { return wantArrayLength; }
+	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 
 private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
@@ -140,6 +143,7 @@ private:
 	bool onlyLive;
 	bool includeVerbose;
 	bool wantArrayLength;
+	bool includeNulls;
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.
@@ -156,6 +160,7 @@ class ObjectModel
 {
 public:
 	ObjectModel() noexcept;
+	virtual ~ObjectModel() { }
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
 	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS_GCODE_EXCEPTION;
@@ -212,7 +217,7 @@ public:
 	bool Matches(const char *filter, const ObjectExplorationContext& context) const noexcept;
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	void ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter) const noexcept;
+	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter, bool first) const noexcept;
 
 	// Return the name of this field
 	const char* GetName() const noexcept { return name; }
@@ -262,14 +267,19 @@ public:
 		return objectModelTable; \
 	}
 
-#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept { const _class * const self = static_cast<const _class*>(arg); return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
+	{ const _class * const self = static_cast<const _class*>(arg); return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_FUNC_IF_BODY(_class,_condition,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
+	{ const _class * const self = static_cast<const _class*>(arg); return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
 #define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept { return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_ARRAY(_name)	static const ObjectModelArrayDescriptor _name ## ArrayDescriptor;
 
 #else
 
 #define INHERIT_OBJECT_MODEL			// nothing
 #define DECLARE_OBJECT_MODEL			// nothing
 #define DEFINE_GET_OBJECT_MODEL_TABLE	// nothing
+#define OBJECT_MODEL_ARRAY(_name)		// nothing
 
 #endif
 

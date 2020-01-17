@@ -538,16 +538,28 @@ void DDARing::ResetExtruderPositions() noexcept
 	cpu_irq_enable();
 }
 
+float DDARing::GetRequestedSpeed() const noexcept
+{
+	DDA* const cdda = currentDda;					// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetRequestedSpeed() : 0.0;
+}
+
 float DDARing::GetTopSpeed() const noexcept
 {
 	DDA* const cdda = currentDda;					// capture volatile variable
 	return (cdda != nullptr) ? cdda->GetTopSpeed() : 0.0;
 }
 
-float DDARing::GetRequestedSpeed() const noexcept
+float DDARing::GetAcceleration() const noexcept
 {
 	DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetRequestedSpeed() : 0.0;
+	return (cdda != nullptr) ? cdda->GetAcceleration() : 0.0;
+}
+
+float DDARing::GetDeceleration() const noexcept
+{
+	DDA* const cdda = currentDda;					// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetDeceleration() : 0.0;
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.

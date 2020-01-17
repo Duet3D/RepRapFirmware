@@ -157,6 +157,8 @@ public:
 	DDARing& GetMainDDARing() noexcept { return mainDDARing; }
 	float GetTopSpeed() const noexcept { return mainDDARing.GetTopSpeed(); }
 	float GetRequestedSpeed() const noexcept { return mainDDARing.GetRequestedSpeed(); }
+	float GetAcceleration() const noexcept { return mainDDARing.GetAcceleration(); }
+	float GetDeceleration() const noexcept { return mainDDARing.GetDeceleration(); }
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 

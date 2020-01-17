@@ -40,7 +40,7 @@
 #include "Wire.h"
 
 // Deal with G60
-GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	const uint32_t sParam = (gb.Seen('S')) ? gb.GetUIValue() : 0;
 	if (sParam < ARRAY_SIZE(numberedRestorePoints))
@@ -197,7 +197,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 # if HAS_MASS_STORAGE
 
 // Save all the workplace coordinate offsets to file returning true if successful. Used by M500 and by SaveResumeInfo.
-bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
+bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
 {
 	if (!f->Write("; Workplace coordinates\n"))
 	{
@@ -561,7 +561,7 @@ GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply, int co
 }
 
 // Deal with a M584
-GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (!LockMovementAndWaitForStandstill(gb))				// we also rely on this to retrieve the current motor positions to moveBuffer
 	{
@@ -934,7 +934,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 }
 
 // Deal with a M905
-GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	tm timeInfo;
 	(void)platform.GetDateTime(timeInfo);
@@ -1180,7 +1180,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 }
 
 // Deal with M569
-GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (gb.Seen('P'))
 	{
@@ -1389,7 +1389,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Change a live extrusion factor
-void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor)
+void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 {
 	if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
 	{

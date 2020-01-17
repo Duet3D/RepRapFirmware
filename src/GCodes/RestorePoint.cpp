@@ -7,12 +7,12 @@
 
 #include "RestorePoint.h"
 
-RestorePoint::RestorePoint()
+RestorePoint::RestorePoint() noexcept
 {
 	Init();
 }
 
-void RestorePoint::Init()
+void RestorePoint::Init() noexcept
 {
 	for (size_t i = 0; i < MaxAxes; ++i)
 	{

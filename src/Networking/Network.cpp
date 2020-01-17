@@ -73,11 +73,11 @@ Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextR
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
-static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
+constexpr ObjectModelArrayDescriptor Network::interfacesArrayDescriptor =
 {
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->GetInterface(context.GetIndex(0))); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetIndex(0)]); }
 };
 
 // Macro to build a standard lambda function that includes the necessary type conversions
@@ -86,7 +86,7 @@ static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
 constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), ObjectModelEntryFlags::none }
+	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfacesArrayDescriptor), ObjectModelEntryFlags::none }
 };
 
 constexpr uint8_t Network::objectModelTableDescriptor[] = { 1, 1 };
