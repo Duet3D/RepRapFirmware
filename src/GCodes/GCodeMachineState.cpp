@@ -20,7 +20,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 #if HAS_LINUX_INTERFACE
 	  fileId(0),
 #endif
-	  lockedResources(0), errorMessage(nullptr),
+	  errorMessage(nullptr),
 	  lineNumber(0),
 	  compatibility(Compatibility::reprapFirmware), drivesRelative(false), axesRelative(false),
 #if HAS_LINUX_INTERFACE

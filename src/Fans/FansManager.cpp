@@ -103,7 +103,7 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 			WriteLocker lock(fansLock);
 
 			Fan *oldFan = nullptr;
-			std::swap(oldFan, fans[fanNum]);
+			std::swap<Fan*>(oldFan, fans[fanNum]);
 			delete oldFan;
 
 			const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;

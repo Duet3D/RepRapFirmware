@@ -48,16 +48,16 @@ bool Trigger::Check() noexcept
 			break;
 		}
 		const bool b = ports[i].Read();
-		if (b != IsBitSet(inputStates, i))			// if the input level has changed
+		if (b != inputStates.IsBitSet(i))			// if the input level has changed
 		{
 			if (b)
 			{
-				SetBit(inputStates, i);
+				inputStates.SetBit(i);
 				triggered = true;
 			}
 			else
 			{
-				ClearBit(inputStates, i);
+				inputStates.ClearBit(i);
 			}
 		}
 	}

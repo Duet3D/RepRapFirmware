@@ -206,12 +206,11 @@ bool LinearDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) co
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
 LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
-	constexpr AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
 
 	// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
 	// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
-	if ((axesHomed & allAxes) == allAxes)
+	if ((axesHomed & XyzAxes) == XyzAxes)
 	{
 		// Constrain the move to be within the build radius
 		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
@@ -933,10 +932,9 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 AxesBitmap LinearDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If all of X, Y and Z have been specified then we know the positions of all 3 tower motors, otherwise we don't
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((g92Axes & xyzAxes) != xyzAxes)
+	if ((g92Axes & XyzAxes) != XyzAxes)
 	{
-		g92Axes &= ~xyzAxes;
+		g92Axes &= ~XyzAxes;
 	}
 	return g92Axes;
 }
@@ -944,10 +942,9 @@ AxesBitmap LinearDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	if (axesMoving.Intersects(XyzAxes))
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= XyzAxes;
 	}
 	return axesMoving;
 }
@@ -958,10 +955,10 @@ AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 AxesBitmap LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// If homing X, Y or Z we must home all the towers
-	if ((toBeHomed & LowestNBits<AxesBitmap>(XYZ_AXES)) != 0)
+	if (toBeHomed.Intersects(XyzAxes))
 	{
 		filename.copy("homedelta.g");
-		return 0;
+		return AxesBitmap();
 	}
 
 	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
@@ -1013,7 +1010,7 @@ void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *nor
 // The DDA class has special support for delta printers, so we can baystep the Z axis.
 AxesBitmap LinearDeltaKinematics::GetLinearAxes() const
 {
-	return MakeBitmap<AxesBitmap>(Z_AXIS);
+	return AxesBitmap::MakeFromBits(Z_AXIS);
 }
 
 // End

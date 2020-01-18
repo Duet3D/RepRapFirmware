@@ -133,9 +133,9 @@ EndStopHit SwitchEndstop::Stopped() const noexcept
 bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Decide whether we stop just the driver, just the axis, or everything
-	stopAll = ((kin.GetConnectedAxes(GetAxis()) & ~MakeBitmap<AxesBitmap>(GetAxis())) != 0);
+	stopAll = kin.GetConnectedAxes(GetAxis()).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
 	numPortsLeftToTrigger = (numPortsUsed != axisDrivers.numDrivers) ? 1 : numPortsUsed;
-	portsLeftToTrigger = LowestNBits<PortsBitmap>(numPortsUsed);
+	portsLeftToTrigger = PortsBitmap::MakeLowestNBits(numPortsUsed);
 
 #if SUPPORT_CAN_EXPANSION
 	// For each remote switch, check that the expansion board knows about it, and make sure we have an up-to-date state
@@ -163,11 +163,11 @@ bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDr
 EndstopHitDetails SwitchEndstop::CheckTriggered(bool goingSlow) noexcept
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
-	if (portsLeftToTrigger != 0)
+	if (portsLeftToTrigger.IsNonEmpty())
 	{
 		for (size_t i = 0; i < numPortsUsed; ++i)
 		{
-			if (IsBitSet(portsLeftToTrigger, i) && IsTriggered(i))
+			if (portsLeftToTrigger.IsBitSet(i) && IsTriggered(i))
 			{
 				rslt.axis = GetAxis();
 				if (stopAll)
@@ -219,7 +219,7 @@ bool SwitchEndstop::Acknowledge(EndstopHitDetails what) noexcept
 		return true;
 
 	case EndstopHitAction::stopDriver:
-		ClearBit(portsLeftToTrigger, what.internalUse);
+		portsLeftToTrigger.ClearBit(what.internalUse);
 		--numPortsLeftToTrigger;
 		return false;
 

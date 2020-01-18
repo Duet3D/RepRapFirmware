@@ -184,10 +184,9 @@ void PolarKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[
 AxesBitmap PolarKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If both X and Y have been specified then we know the positions the radius motor and the turntable, otherwise we don't
-	const AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
-	if ((g92Axes & xyAxes) != xyAxes)
+	if ((g92Axes & XyAxes) != XyAxes)
 	{
-		g92Axes &= ~xyAxes;
+		g92Axes &= ~XyAxes;
 	}
 	return g92Axes;
 }
@@ -195,10 +194,9 @@ AxesBitmap PolarKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap PolarKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	if (axesMoving.Intersects(XyzAxes))
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= XyzAxes;
 	}
 	return axesMoving;
 }
@@ -210,8 +208,8 @@ AxesBitmap PolarKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallow
 AxesBitmap PolarKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// Ask the base class which homing file we should call first
-	AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
-	if (ret == 0)
+	const AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
+	if (ret.IsNonEmpty())
 	{
 		// Change the returned name if it is X or Y
 		if (StringEqualsIgnoreCase(filename.c_str(), "homex.g"))
@@ -293,7 +291,7 @@ bool PolarKinematics::IsContinuousRotationAxis(size_t axis) const
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
 AxesBitmap PolarKinematics::GetLinearAxes() const
 {
-	return MakeBitmap<AxesBitmap>(Z_AXIS);
+	return AxesBitmap::MakeFromBits(Z_AXIS);
 }
 
 // Update the derived parameters after the master parameters have been changed

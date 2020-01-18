@@ -85,7 +85,7 @@ bool RemoteFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 	msg->maxVal = maxVal;
 	msg->triggerTemperatures[0] = triggerTemperatures[0];
 	msg->triggerTemperatures[1] = triggerTemperatures[1];
-	msg->sensorsMonitored = sensorsMonitored;
+	msg->sensorsMonitored = sensorsMonitored.GetRaw();
 
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply) == GCodeResult::ok;
 }

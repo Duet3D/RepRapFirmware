@@ -14,6 +14,14 @@
 #include <cstring>
 #include <General/SafeStrtod.h>
 
+// Get the format string to use assuming this is a floating point number
+const char *ExpressionValue::GetFloatFormatString() const noexcept
+{
+	static constexpr const char *FormatStrings[] = { "%.7f", "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f", "%.7f" };
+	static_assert(ARRAY_SIZE(FormatStrings) == MaxFloatDigitsDisplayedAfterPoint + 1);
+	return FormatStrings[min<unsigned int>(param, MaxFloatDigitsDisplayedAfterPoint)];
+}
+
 void ObjectExplorationContext::AddIndex(int32_t index)
 {
 	if (numIndicesCounted == MaxIndices)
@@ -225,7 +233,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TYPE_OF(float):
-			buf->catf((val.param == 3) ? "%.3f" : (val.param == 2) ? "%.2f" : "%.1f", (double)val.fVal);
+			buf->catf(val.GetFloatFormatString(), (double)val.fVal);
 			break;
 
 		case TYPE_OF(uint32_t):
@@ -240,22 +248,86 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			buf->EncodeString(val.sVal, true);
 			break;
 
-		case TYPE_OF(Bitmap32):
+		case TYPE_OF(Bitmap<uint16_t>):
+			if (context.ShortFormReport())
+			{
+				buf->catf("%" PRIu16, (uint16_t)val.uVal);
+			}
+			else
+			{
+				Bitmap<uint16_t> bm = Bitmap<uint16_t>::MakeFromRaw((uint16_t)val.uVal);
+				buf->cat('[');
+				bool first = true;
+				bm.Iterate
+					([buf, &first](unsigned int bn)
+						{
+							if (first)
+							{
+								first = false;
+							}
+							else
+							{
+								buf->cat(',');
+							}
+							buf->catf("%u", bn);
+						}
+					);
+				buf->cat(']');
+			}
+			break;
+
+		case TYPE_OF(Bitmap<uint32_t>):
 			if (context.ShortFormReport())
 			{
 				buf->catf("%" PRIu32, val.uVal);
 			}
 			else
 			{
-				uint32_t v = val.uVal;
+				Bitmap<uint32_t> bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
 				buf->cat('[');
-				buf->cat((v & 1) ? '1' : '0');
-				for (unsigned int i = 1; i < 32; ++i)
-				{
-					v >>= 1;
-					buf->cat(',');
-					buf->cat((v & 1) ? '1' : '0');
-				}
+				bool first = true;
+				bm.Iterate
+					([buf, &first](unsigned int bn)
+						{
+							if (first)
+							{
+								first = false;
+							}
+							else
+							{
+								buf->cat(',');
+							}
+							buf->catf("%u", bn);
+						}
+					);
+				buf->cat(']');
+			}
+			break;
+
+		case TYPE_OF(Bitmap<uint64_t>):
+			if (context.ShortFormReport())
+			{
+				buf->catf("%" PRIu64, val.Get56BitValue());
+			}
+			else
+			{
+				Bitmap<uint64_t> bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
+				buf->cat('[');
+				bool first = true;
+				bm.Iterate
+					([buf, &first](unsigned int bn)
+						{
+							if (first)
+							{
+								first = false;
+							}
+							else
+							{
+								buf->cat(',');
+							}
+							buf->catf("%u", bn);
+						}
+					);
 				buf->cat(']');
 			}
 			break;
@@ -297,7 +369,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 
 		case TYPE_OF(DateTime):
 			{
-				const time_t time = val.Get40BitValue();
+				const time_t time = val.Get56BitValue();
 				tm timeInfo;
 				gmtime_r(&time, &timeInfo);
 				buf->catf("\"%04u-%02u-%02uT%02u:%02u:%02u\"",

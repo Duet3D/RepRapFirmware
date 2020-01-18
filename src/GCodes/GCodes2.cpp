@@ -286,7 +286,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 			return false;
 		}
 
-		if ((reprap.GetMove().GetKinematics().AxesToHomeBeforeProbing() & ~axesHomed) != 0)
+		if (reprap.GetMove().GetKinematics().AxesToHomeBeforeProbing().Intersects(~axesHomed))
 		{
 			reply.copy("Insufficient axes homed for bed probing");
 			result = GCodeResult::error;
@@ -2387,12 +2387,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						break;
 					}
 
-					AxesBitmap axisControls = 0;
+					AxesBitmap axisControls;
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
 						{
-							SetBit(axisControls, axis);
+							axisControls.SetBit(axis);
 						}
 					}
 

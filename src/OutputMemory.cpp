@@ -125,6 +125,18 @@ size_t OutputBuffer::catf(const char *fmt, ...) noexcept
 	return cat(formatBuffer);
 }
 
+size_t OutputBuffer::lcatf(const char *fmt, ...) noexcept
+{
+	char formatBuffer[FormatStringLength];
+	va_list vargs;
+	va_start(vargs, fmt);
+	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
+	va_end(vargs);
+
+	formatBuffer[ARRAY_UPB(formatBuffer)] = 0;
+	return lcat(formatBuffer);
+}
+
 size_t OutputBuffer::copy(const char c) noexcept
 {
 	// Unlink existing entries before starting the copy process
@@ -194,6 +206,11 @@ size_t OutputBuffer::cat(const char *src) noexcept
 	return cat(src, strlen(src));
 }
 
+size_t OutputBuffer::lcat(const char *src) noexcept
+{
+	return lcat(src, strlen(src));
+}
+
 size_t OutputBuffer::cat(const char *src, size_t len) noexcept
 {
 	size_t copied = 0;
@@ -223,6 +240,15 @@ size_t OutputBuffer::cat(const char *src, size_t len) noexcept
 		copied += copyLength;
 	}
 	return copied;
+}
+
+size_t OutputBuffer::lcat(const char *src, size_t len) noexcept
+{
+	if (Length() != 0)
+	{
+		cat('\n');
+	}
+	return cat(src, len);
 }
 
 size_t OutputBuffer::cat(StringRef &str) noexcept

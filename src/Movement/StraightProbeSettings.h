@@ -52,7 +52,7 @@ private:
 
 inline void StraightProbeSettings::AddMovingAxis(const size_t axis) noexcept
 {
-	SetBit(movingAxes, axis);
+	movingAxes.SetBit(axis);
 }
 
 inline const bool StraightProbeSettings::ProbingAway() const noexcept

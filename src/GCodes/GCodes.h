@@ -109,7 +109,7 @@ public:
 	bool IsDaemonBusy() const noexcept;											// Return true if the daemon is busy running config.g or a trigger file
 
 	bool IsAxisHomed(unsigned int axis) const noexcept							// Has the axis been homed?
-		{ return IsBitSet(axesHomed, axis); }
+		{ return axesHomed.IsBitSet(axis); }
 	void SetAxisIsHomed(unsigned int axis) noexcept;							// Tell us that the axis is now homed
 	void SetAxisNotHomed(unsigned int axis) noexcept;							// Tell us that the axis is not homed
 	void SetAllAxesNotHomed() noexcept;											// Flag all axes as not homed
@@ -294,7 +294,7 @@ private:
 
 	void SetMachinePosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation = true) noexcept; // Set the current position to be this
 	void UpdateCurrentUserPosition() noexcept;									// Get the current position from the Move class
-	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0) const noexcept;
+	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
 																				// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;	// Convert head reference point coordinates to user coordinates
 	float GetCurrentToolOffset(size_t axis) const noexcept;						// Get an axis offset of the current tool

@@ -148,12 +148,12 @@ void EndstopsManager::AddToActive(EndstopOrZProbe& e) noexcept
 bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming) noexcept
 {
 	activeEndstops = nullptr;
-	isHomingMove = forHoming && axes != 0;
+	isHomingMove = forHoming && axes.IsNonEmpty();
 	const Kinematics& kin = reprap.GetMove().GetKinematics();
-	while (axes != 0)
+	while (axes.IsNonEmpty())
 	{
-		const unsigned int axis = LowestSetBit(axes);
-		ClearBit(axes, axis);
+		const unsigned int axis = axes.LowestSetBit();
+		axes.ClearBit(axis);
 		if (axisEndstops[axis] != nullptr && axisEndstops[axis]->Prime(kin, reprap.GetPlatform().GetAxisDriversConfig(axis)))
 		{
 			AddToActive(*axisEndstops[axis]);
@@ -183,22 +183,22 @@ bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway) noexcep
 // Enable extruder endstops. This adds to any existing axis endstops, so you must call EnableAxisEndstops before calling this.
 bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 {
-	if (extruders != 0)
+	if (extruders.IsNonEmpty())
 	{
 		if (extrudersEndstop == nullptr)
 		{
 			extrudersEndstop = new StallDetectionEndstop;
 		}
-		DriversBitmap drivers = 0;
-		while (extruders != 0)
+		DriversBitmap drivers;
+		while (extruders.IsNonEmpty())
 		{
-			const unsigned int extruder = LowestSetBit(extruders);
-			ClearBit(extruders, extruder);
+			const unsigned int extruder = extruders.LowestSetBit();
+			extruders.ClearBit(extruder);
 			const DriverId driver = reprap.GetPlatform().GetExtruderDriver(extruder);
 #if SUPPORT_CAN_EXPANSION
 			if (driver.IsLocal())
 			{
-				SetBit(drivers, driver.localDriver);
+				drivers.SetBit(driver.localDriver);
 			}
 			else
 			{
@@ -206,7 +206,7 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 				return false;
 			}
 #else
-			SetBit(drivers, driver.localDriver);
+			drivers.SetBit(driver.localDriver);
 #endif
 		}
 

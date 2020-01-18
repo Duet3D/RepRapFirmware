@@ -22,6 +22,8 @@ class DDA;
 class DriveMovement;
 struct PrepParams;
 
+typedef Bitmap<uint16_t> CanDriversBitmap;
+
 // Class to accumulate a set of values relating to CAN-connected drivers
 class CanDriversData
 {
@@ -29,7 +31,7 @@ public:
 	CanDriversData() noexcept;
 	void AddEntry(DriverId id, uint16_t val) noexcept;
 	size_t GetNumEntries() const noexcept { return numEntries; }
-	CanAddress GetNextBoardDriverBitmap(size_t& startFrom, uint16_t& driversBitmap) const noexcept;
+	CanAddress GetNextBoardDriverBitmap(size_t& startFrom, CanDriversBitmap& driversBitmap) const noexcept;
 	uint16_t GetElement(size_t n) const pre(n < GetnumEntries()) noexcept { return data[n].val; }
 
 private:
@@ -50,7 +52,7 @@ public:
 	void Clear() noexcept { numEntries = 0; }
 	void AddEntry(DriverId id) noexcept;
 	size_t GetNumEntries() const noexcept { return numEntries; }
-	CanAddress GetNextBoardDriverBitmap(size_t& startFrom, uint16_t& driversBitmap) const noexcept;
+	CanAddress GetNextBoardDriverBitmap(size_t& startFrom, CanDriversBitmap& driversBitmap) const noexcept;
 
 private:
 	size_t numEntries;

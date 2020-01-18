@@ -265,7 +265,7 @@ void GCodes::Reset() noexcept
 	{
 		tr.Init();
 	}
-	triggersPending = 0;
+	triggersPending.Clear();
 
 	simulationMode = 0;
 	exitSimulationWhenFileComplete = updateFileWhenSimulationComplete = false;
@@ -737,19 +737,19 @@ void GCodes::CheckTriggers() noexcept
 {
 	for (unsigned int i = 0; i < MaxTriggers; ++i)
 	{
-		if (!IsBitSet(triggersPending, i) && triggers[i].Check())
+		if (!triggersPending.IsBitSet(i) && triggers[i].Check())
 		{
-			SetBit(triggersPending, i);
+			triggersPending.SetBit(i);
 		}
 	}
 
 	// If any triggers are pending, activate the one with the lowest number
-	if (triggersPending != 0)
+	if (triggersPending.IsNonEmpty())
 	{
-		const unsigned int lowestTriggerPending = LowestSetBitNumber(triggersPending);
+		const unsigned int lowestTriggerPending = triggersPending.LowestSetBit();
 		if (lowestTriggerPending == 0)
 		{
-			ClearBit(triggersPending, lowestTriggerPending);			// clear the trigger
+			triggersPending.ClearBit(lowestTriggerPending);			// clear the trigger
 			DoEmergencyStop();
 		}
 		else if (!IsDaemonBusy() && daemonGCode->GetState() == GCodeState::normal)	// if we are not already executing a trigger or config.g
@@ -758,17 +758,17 @@ void GCodes::CheckTriggers() noexcept
 			{
 				if (!IsReallyPrinting())
 				{
-					ClearBit(triggersPending, lowestTriggerPending);	// ignore a pause trigger if we are already paused or not printing
+					triggersPending.ClearBit(lowestTriggerPending);	// ignore a pause trigger if we are already paused or not printing
 				}
 				else if (LockMovement(*daemonGCode))					// need to lock movement before executing the pause macro
 				{
-					ClearBit(triggersPending, lowestTriggerPending);	// clear the trigger
+					triggersPending.ClearBit(lowestTriggerPending);	// clear the trigger
 					DoPause(*daemonGCode, PauseReason::trigger, "Print paused by external trigger");
 				}
 			}
 			else
 			{
-				ClearBit(triggersPending, lowestTriggerPending);		// clear the trigger
+				triggersPending.ClearBit(lowestTriggerPending);		// clear the trigger
 				String<StringLength20> filename;
 				filename.printf("trigger%u.g", lowestTriggerPending);
 				DoFileMacro(*daemonGCode, filename.c_str(), true);
@@ -954,7 +954,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg) noexc
 
 	if (msg != nullptr)
 	{
-		platform.SendAlert(GenericMessage, msg, "Printing paused", 1, 0.0, 0);
+		platform.SendAlert(GenericMessage, msg, "Printing paused", 1, 0.0, AxesBitmap());
 	}
 }
 
@@ -1528,7 +1528,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 	}
 	moveBuffer.hasExtrusion = false;
 	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
-	ExtrudersBitmap extrudersMoving = 0;
+	ExtrudersBitmap extrudersMoving;
 
 	// Check if we are extruding
 	if (gb.Seen(extrudeLetter))							// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
@@ -1591,7 +1591,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 						}
 
 						moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = extrusionAmount * extrusionFactors[extruder];
-						SetBit(extrudersMoving, extruder);
+						extrudersMoving.SetBit(extruder);
 					}
 				}
 				if (!isPrintingMove && moveBuffer.usingStandardFeedrate)
@@ -1623,7 +1623,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 								rawExtruderTotal += extrusionAmount;
 							}
 							moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = extrusionAmount * extrusionFactors[extruder] * volumetricExtrusionFactors[extruder];
-							SetBit(extrudersMoving, extruder);
+							extrudersMoving.SetBit(extruder);
 						}
 					}
 				}
@@ -1651,7 +1651,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 // Check that enough axes have been homed, returning true if insufficient axes homed
 bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept
 {
-	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesMoved, noMovesBeforeHoming) & ~axesHomed) != 0;
+	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesMoved, noMovesBeforeHoming) & ~axesHomed).IsNonEmpty();
 }
 
 // Execute a straight move returning an error message if the command was rejected, else nullptr
@@ -1676,7 +1676,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	moveBuffer.moveType = 0;
 	moveBuffer.tool = reprap.GetCurrentTool();
 	moveBuffer.usePressureAdvance = false;
-	axesToSenseLength = 0;
+	axesToSenseLength.Clear();
 
 	// Check to see if the move is a 'homing' move that endstops are checked on.
 	// We handle H1 parameters affecting extrusion elsewhere.
@@ -1767,7 +1767,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	// Deal with axis movement
 	const float initialX = currentUserPosition[X_AXIS];
 	const float initialY = currentUserPosition[Y_AXIS];
-	AxesBitmap axesMentioned = 0;
+	AxesBitmap axesMentioned;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -1778,7 +1778,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 				return "G0/G1: attempt to move individual motors of a delta machine to absolute positions";
 			}
 
-			SetBit(axesMentioned, axis);
+			axesMentioned.SetBit(axis);
 			const float moveArg = gb.GetDistance();
 			if (moveBuffer.moveType != 0)
 			{
@@ -1829,7 +1829,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		break;
 
 	case 1:
-		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & LowestNBits<AxesBitmap>(numTotalAxes), true))
+		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), true))
 		{
 			return "Failed to enable endstops";
 		}
@@ -1837,8 +1837,8 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		break;
 
 	case 3:
-		axesToSenseLength = axesMentioned & LowestNBits<AxesBitmap>(numTotalAxes);
-		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & LowestNBits<AxesBitmap>(numTotalAxes), false))
+		axesToSenseLength = axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes);
+		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), false))
 		{
 			return "Failed to enable endstops";
 		}
@@ -1850,7 +1850,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		break;
 	}
 
-	LoadExtrusionAndFeedrateFromGCode(gb, axesMentioned != 0);		// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
+	LoadExtrusionAndFeedrateFromGCode(gb, axesMentioned.IsNonEmpty());		// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
 
 	// Set up the move. We must assign segmentsLeft last, so that when Move runs as a separate task the move won't be picked up by the Move process before it is complete.
 	// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.
@@ -1860,13 +1860,13 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		totalSegments = 1;
 		gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 	}
-	else if (axesMentioned == 0)
+	else if (axesMentioned.IsEmpty())
 	{
 		totalSegments = 1;
 	}
 	else
 	{
-		if (&gb == fileGCode && !gb.IsDoingFileMacro() && moveBuffer.hasExtrusion && (axesMentioned & ((1 << X_AXIS) | (1 << Y_AXIS))) != 0)
+		if (&gb == fileGCode && !gb.IsDoingFileMacro() && moveBuffer.hasExtrusion && axesMentioned.Intersects(XyAxes))
 		{
 			lastPrintingMoveHeight = currentUserPosition[Z_AXIS];
 		}
@@ -1876,7 +1876,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		AxesBitmap effectiveAxesHomed = axesHomed;
 		if (doingManualBedProbe)
 		{
-			ClearBit(effectiveAxesHomed, Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
+			effectiveAxesHomed.ClearBit(Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
 		}
 
 		if (moveBuffer.moveType == 0)
@@ -1933,8 +1933,8 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU.. movement here.
 		{
 			AxesBitmap axesMentionedExceptZ = axesMentioned;
-			ClearBit(axesMentionedExceptZ, Z_AXIS);
-			moveBuffer.usePressureAdvance = moveBuffer.hasExtrusion && (axesMentionedExceptZ != 0);
+			axesMentionedExceptZ.ClearBit(Z_AXIS);
+			moveBuffer.usePressureAdvance = moveBuffer.hasExtrusion && axesMentionedExceptZ.IsNonEmpty();
 		}
 
 		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
@@ -2093,7 +2093,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	const bool wholeCircle = (moveBuffer.initialUserX == currentUserPosition[X_AXIS] && moveBuffer.initialUserY == currentUserPosition[Y_AXIS]);
 
 	// Get any additional axes
-	AxesBitmap axesMentioned = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
+	AxesBitmap axesMentioned = XyAxes;
 	for (size_t axis = Z_AXIS; axis < numVisibleAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -2115,7 +2115,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 			{
 				currentUserPosition[axis] = moveArg + GetWorkplaceOffset(axis);
 			}
-			SetBit(axesMentioned, axis);
+			axesMentioned.SetBit(axis);
 		}
 	}
 
@@ -2150,11 +2150,11 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	const AxesBitmap yAxes = reprap.GetCurrentYAxes();
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		if (IsBitSet(xAxes, axis))
+		if (xAxes.IsBitSet(axis))
 		{
 			arcCentre[axis] = (userArcCentreX * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), X_AXIS);
 		}
-		else if (IsBitSet(yAxes, axis))
+		else if (yAxes.IsBitSet(axis))
 		{
 			arcCentre[axis] = (userArcCentreY * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), Y_AXIS);
 		}
@@ -2315,12 +2315,12 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
 		{
-			if (doingArcMove && drive != Z_AXIS && IsBitSet(Tool::GetYAxes(moveBuffer.tool), drive))
+			if (doingArcMove && drive != Z_AXIS && Tool::GetYAxes(moveBuffer.tool).IsBitSet(drive))
 			{
 				// Y axis or a substitute Y axis
 				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * sinf(arcCurrentAngle);
 			}
-			else if (doingArcMove && drive != Z_AXIS && IsBitSet(Tool::GetXAxes(moveBuffer.tool), drive))
+			else if (doingArcMove && drive != Z_AXIS && Tool::GetXAxes(moveBuffer.tool).IsBitSet(drive))
 			{
 				// X axis or a substitute X axis
 				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * cosf(arcCurrentAngle);
@@ -2516,20 +2516,20 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 	// Find out which axes we have been asked to home
-	toBeHomed = 0;
+	toBeHomed.Clear();
 	for (size_t axis = 0; axis < numTotalAxes; ++axis)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-			SetBit(toBeHomed, axis);
+			toBeHomed.SetBit(axis);
 			SetAxisNotHomed(axis);
 		}
 	}
 
-	if (toBeHomed == 0)
+	if (toBeHomed.IsEmpty())
 	{
 		SetAllAxesNotHomed();		// homing everything
-		toBeHomed = LowestNBits<AxesBitmap>(numVisibleAxes);
+		toBeHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);
 	}
 
 	gb.SetState(GCodeState::homing1);
@@ -2631,7 +2631,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *tit
 // Do a manual bed probe. On entry the state variable is the state we want to return to when the user has finished adjusting the height.
 void GCodes::DoManualBedProbe(GCodeBuffer& gb)
 {
-	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", MakeBitmap<AxesBitmap>(Z_AXIS));
+	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", AxesBitmap::MakeFromBits(Z_AXIS));
 }
 
 // Start probing the grid, returning true if we didn't because of an error.
@@ -3082,7 +3082,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		uint32_t xMapping[MaxAxes];
 		size_t xCount = numVisibleAxes;
 		gb.GetUnsignedArray(xMapping, xCount, false);
-		xMap = UnsignedArrayToBitMap<AxesBitmap>(xMapping, xCount) & LowestNBits<AxesBitmap>(numVisibleAxes);
+		xMap = AxesBitmap::MakeFromArray(xMapping, xCount) & AxesBitmap::MakeLowestNBits(numVisibleAxes);
 		seen = true;
 	}
 	else
@@ -3097,7 +3097,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		uint32_t yMapping[MaxAxes];
 		size_t yCount = numVisibleAxes;
 		gb.GetUnsignedArray(yMapping, yCount, false);
-		yMap = UnsignedArrayToBitMap<AxesBitmap>(yMapping, yCount) & LowestNBits<AxesBitmap>(numVisibleAxes);
+		yMap = AxesBitmap::MakeFromArray(yMapping, yCount) & AxesBitmap::MakeLowestNBits(numVisibleAxes);
 		seen = true;
 	}
 	else
@@ -3105,7 +3105,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		yMap = DefaultYAxisMapping;					// by default map X axis straight through
 	}
 
-	if ((xMap & yMap) != 0)
+	if (xMap.Intersects(yMap))
 	{
 		reply.copy("Cannot map both X and Y to the same axis");
 		return GCodeResult::error;
@@ -3118,12 +3118,12 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		uint32_t fanMapping[MaxFans];
 		size_t fanCount = MaxFans;
 		gb.GetUnsignedArray(fanMapping, fanCount, false);
-		fanMap = UnsignedArrayToBitMap<FansBitmap>(fanMapping, fanCount) & LowestNBits<FansBitmap>(MaxFans);
+		fanMap = FansBitmap::MakeFromArray(fanMapping, fanCount) & FansBitmap::MakeLowestNBits(MaxFans);
 		seen = true;
 	}
 	else
 	{
-		fanMap = 1;					// by default map fan 0 to fan 0
+		fanMap.SetBit(0);							// by default map fan 0 to fan 0
 	}
 
 	if (seen)
@@ -3194,14 +3194,8 @@ void GCodes::SetMappedFanSpeed(float f) noexcept
 	}
 	else
 	{
-		const uint32_t fanMap = ct->GetFanMapping();
-		for (size_t i = 0; i < MaxFans; ++i)
-		{
-			if (IsBitSet(fanMap, i))
-			{
-				reprap.GetFansManager().SetFanValue(i, f);
-			}
-		}
+		const FansBitmap fanMap = ct->GetFanMapping();
+		fanMap.Iterate([f](unsigned int i) { reprap.GetFansManager().SetFanValue(i, f); });
 	}
 }
 
@@ -3209,8 +3203,9 @@ void GCodes::SetMappedFanSpeed(float f) noexcept
 bool GCodes::IsMappedFan(unsigned int fanNumber) noexcept
 {
 	const Tool * const ct = reprap.GetCurrentTool();
-	return (ct == nullptr) ? fanNumber == 0
-		: IsBitSet(ct->GetFanMapping(), fanNumber);
+	return (ct == nullptr)
+			? fanNumber == 0
+				: ct->GetFanMapping().IsBitSet(fanNumber);
 }
 
 // Save the speeds of all fans
@@ -3851,14 +3846,14 @@ void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[
 		const AxesBitmap yAxes = currentTool->GetYAxisMap();
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			if (   (axis != X_AXIS || IsBitSet(xAxes, X_AXIS))
-				&& (axis != Y_AXIS || IsBitSet(yAxes, Y_AXIS))
+			if (   (axis != X_AXIS || xAxes.IsBitSet(X_AXIS))
+				&& (axis != Y_AXIS || yAxes.IsBitSet(Y_AXIS))
 			   )
 			{
 				const float totalOffset = currentBabyStepOffsets[axis] - currentTool->GetOffset(axis);
-				const size_t inputAxis = (IsBitSet(explicitAxes, axis)) ? axis
-										: (IsBitSet(xAxes, axis)) ? X_AXIS
-											: (IsBitSet(yAxes, axis)) ? Y_AXIS
+				const size_t inputAxis = (explicitAxes.IsBitSet(axis)) ? axis
+										: (xAxes.IsBitSet(axis)) ? X_AXIS
+											: (yAxes.IsBitSet(axis)) ? Y_AXIS
 												: axis;
 				coordsOut[axis] = (coordsIn[inputAxis] * axisScaleFactors[axis]) + totalOffset;
 			}
@@ -3881,8 +3876,8 @@ void GCodes::ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coo
 	}
 	else
 	{
-		const uint32_t xAxes = reprap.GetCurrentXAxes();
-		const uint32_t yAxes = reprap.GetCurrentYAxes();
+		const AxesBitmap xAxes = reprap.GetCurrentXAxes();
+		const AxesBitmap yAxes = reprap.GetCurrentYAxes();
 		float xCoord = 0.0, yCoord = 0.0;
 		size_t numXAxes = 0, numYAxes = 0;
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -3890,12 +3885,12 @@ void GCodes::ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coo
 			const float totalOffset = currentBabyStepOffsets[axis] - currentTool->GetOffset(axis);
 			const float coord = (coordsIn[axis] - totalOffset)/axisScaleFactors[axis];
 			coordsOut[axis] = coord;
-			if (IsBitSet(xAxes, axis))
+			if (xAxes.IsBitSet(axis))
 			{
 				xCoord += coord;
 				++numXAxes;
 			}
-			if (IsBitSet(yAxes, axis))
+			if (yAxes.IsBitSet(axis))
 			{
 				yCoord += coord;
 				++numYAxes;
@@ -3981,20 +3976,20 @@ GCodeResult GCodes::AdvanceHash(const StringRef &reply) noexcept
 
 bool GCodes::AllAxesAreHomed() const noexcept
 {
-	const AxesBitmap allAxes = LowestNBits<AxesBitmap>(numVisibleAxes);
+	const AxesBitmap allAxes = AxesBitmap::MakeLowestNBits(numVisibleAxes);
 	return (axesHomed & allAxes) == allAxes;
 }
 
 // Tell us that the axis is now homed
 void GCodes::SetAxisIsHomed(unsigned int axis) noexcept
 {
-	SetBit(axesHomed, axis);
+	axesHomed.SetBit(axis);
 }
 
 // Tell us that the axis is not homed
 void GCodes::SetAxisNotHomed(unsigned int axis) noexcept
 {
-	ClearBit(axesHomed, axis);
+	axesHomed.ClearBit(axis);
 	if (axis == Z_AXIS)
 	{
 		zDatumSetByProbing = false;
@@ -4004,7 +3999,7 @@ void GCodes::SetAxisNotHomed(unsigned int axis) noexcept
 // Flag all axes as not homed
 void GCodes::SetAllAxesNotHomed() noexcept
 {
-	axesHomed = 0;
+	axesHomed.Clear();
 	zDatumSetByProbing = false;
 }
 
@@ -4240,7 +4235,7 @@ bool GCodes::LockResource(const GCodeBuffer& gb, Resource r) noexcept
 	if (resourceOwners[r] == nullptr)
 	{
 		resourceOwners[r] = &gb;
-		SetBit(gb.MachineState().lockedResources, r);
+		gb.MachineState().lockedResources.SetBit(r);
 		return true;
 	}
 	return false;
@@ -4257,7 +4252,7 @@ void GCodes::GrabResource(const GCodeBuffer& gb, Resource r) noexcept
 			GCodeMachineState *m = &(resourceOwners[r]->MachineState());
 			do
 			{
-				ClearBit(m->lockedResources, r);
+				m->lockedResources.ClearBit(r);
 				m = m->previous;
 			}
 			while (m != nullptr);
@@ -4296,7 +4291,7 @@ void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 		GCodeMachineState * mc = &gb.MachineState();
 		do
 		{
-			ClearBit(mc->lockedResources, r);
+			mc->lockedResources.ClearBit(r);
 			mc = mc->previous;
 		} while (mc != nullptr);
 		resourceOwners[r] = nullptr;
@@ -4307,13 +4302,13 @@ void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 {
 	const GCodeMachineState * const mc = gb.MachineState().previous;
-	const uint32_t resourcesToKeep = (mc == nullptr) ? 0 : mc->lockedResources;
+	const GCodeMachineState::ResourceBitmap resourcesToKeep = (mc == nullptr) ? GCodeMachineState::ResourceBitmap() : mc->lockedResources;
 	for (size_t i = 0; i < NumResources; ++i)
 	{
-		if (resourceOwners[i] == &gb && !IsBitSet(resourcesToKeep, i))
+		if (resourceOwners[i] == &gb && !resourcesToKeep.IsBitSet(i))
 		{
 			resourceOwners[i] = nullptr;
-			ClearBit(gb.MachineState().lockedResources, i);
+			gb.MachineState().lockedResources.ClearBit(i);
 		}
 	}
 }
@@ -4321,13 +4316,7 @@ void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 // Append a list of axes to a string
 void GCodes::AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept
 {
-	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-	{
-		if (IsBitSet(axes, axis))
-		{
-			reply.cat(axisLetters[axis]);
-		}
-	}
+	axes.Iterate([reply, this](unsigned int axis) { reply.cat(this->axisLetters[axis]); });
 }
 
 // Get the name of the current machine mode

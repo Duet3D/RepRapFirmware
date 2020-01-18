@@ -267,7 +267,7 @@ private:
 			int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
 
 #if SUPPORT_CAN_EXPANSION
-			uint32_t drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
+			DriversBitmap drivesMoving;			// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
 			static_assert(MaxAxesPlusExtruders <= sizeof(drivesMoving) * CHAR_BIT);
 #endif
 		} afterPrepare;

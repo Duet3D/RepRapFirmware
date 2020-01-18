@@ -80,24 +80,24 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
 	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
 	{ "meshDeviation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),										ObjectModelEntryFlags::none },
-	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),							ObjectModelEntryFlags::live },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),											ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
+	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 1),						ObjectModelEntryFlags::live },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
 
 	// 1. Move.Daa members
 	{ "enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 													ObjectModelEntryFlags::none },
-	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration),										ObjectModelEntryFlags::none },
-	{ "period",					OBJECT_MODEL_FUNC(self->drcPeriod), 													ObjectModelEntryFlags::none },
+	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration, 1),										ObjectModelEntryFlags::none },
+	{ "period",					OBJECT_MODEL_FUNC(self->drcPeriod, 1), 													ObjectModelEntryFlags::none },
 
 	// 2. Move.Idle members
-	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor()),					ObjectModelEntryFlags::none },
-	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout),									ObjectModelEntryFlags::none },
+	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),				ObjectModelEntryFlags::none },
+	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),								ObjectModelEntryFlags::none },
 
 	// 3. move.currentMove members
-	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAcceleration()),												ObjectModelEntryFlags::live },
-	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDeceleration()),												ObjectModelEntryFlags::live },
-	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed()),											ObjectModelEntryFlags::live },
-	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed()),													ObjectModelEntryFlags::live },
+	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAcceleration(), 1),											ObjectModelEntryFlags::live },
+	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDeceleration(), 1),											ObjectModelEntryFlags::live },
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed(), 1),										ObjectModelEntryFlags::live },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed(), 1),												ObjectModelEntryFlags::live },
 
 	// 4. move.calibrationDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
@@ -538,18 +538,18 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 	// Identify the lowest Y axis
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	const AxesBitmap yAxes = Tool::GetYAxes(tool);
-	const size_t lowestYAxis = LowestSetBit(yAxes);
+	const size_t lowestYAxis = yAxes.LowestSetBit();
 	if (lowestYAxis < numVisibleAxes)
 	{
 		// Found a Y axis. Use this one when correcting the X coordinate.
 		const AxesBitmap xAxes = Tool::GetXAxes(tool);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			if (IsBitSet(xAxes, axis))
+			if (xAxes.IsBitSet(axis))
 			{
 				xyzPoint[axis] += tanXY*xyzPoint[lowestYAxis] + tanXZ*xyzPoint[Z_AXIS];
 			}
-			if (IsBitSet(yAxes, axis))
+			if (yAxes.IsBitSet(axis))
 			{
 				xyzPoint[axis] += tanYZ*xyzPoint[Z_AXIS];
 			}
@@ -569,18 +569,18 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 	// Identify the lowest Y axis
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	const AxesBitmap yAxes = Tool::GetYAxes(tool);
-	const size_t lowestYAxis = LowestSetBit(yAxes);
+	const size_t lowestYAxis = yAxes.LowestSetBit();
 	if (lowestYAxis < numVisibleAxes)
 	{
 		// Found a Y axis. Use this one when correcting the X coordinate.
 		const AxesBitmap xAxes = Tool::GetXAxes(tool);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			if (IsBitSet(yAxes, axis))
+			if (yAxes.IsBitSet(axis))
 			{
 				xyzPoint[axis] -= tanYZ*xyzPoint[Z_AXIS];
 			}
-			if (IsBitSet(xAxes, axis))
+			if (xAxes.IsBitSet(axis))
 			{
 				xyzPoint[axis] -= (tanXY*xyzPoint[lowestYAxis] + tanXZ*xyzPoint[Z_AXIS]);
 			}
@@ -602,12 +602,12 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
 		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 		{
-			if (IsBitSet(xAxes, xAxis))
+			if (xAxes.IsBitSet(xAxis))
 			{
 				const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
 				for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
 				{
-					if (IsBitSet(yAxes, yAxis))
+					if (yAxes.IsBitSet(yAxis))
 					{
 						const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
 						zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
@@ -639,12 +639,12 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 	// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
 	for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 	{
-		if (IsBitSet(xAxes, xAxis))
+		if (xAxes.IsBitSet(xAxis))
 		{
 			const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
 			for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
 			{
-				if (IsBitSet(yAxes, yAxis))
+				if (yAxes.IsBitSet(yAxis))
 				{
 					const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
 					zCorrection += GetInterpolatedHeightError(xCoord, yCoord);

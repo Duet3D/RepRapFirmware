@@ -59,20 +59,20 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 {
 	// Don't wait for the machine to stop if only extruder drives are being reset.
 	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
-	AxesBitmap axesIncluded = 0;
+	AxesBitmap axesIncluded;
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
 			const float axisValue = gb.GetFValue();
-			if (axesIncluded == 0)
+			if (axesIncluded.IsEmpty())
 			{
 				if (!LockMovementAndWaitForStandstill(gb))	// lock movement and get current coordinates
 				{
 					return GCodeResult::notFinished;
 				}
 			}
-			SetBit(axesIncluded, axis);
+			axesIncluded.SetBit(axis);
 			currentUserPosition[axis] = gb.ConvertDistance(axisValue);
 		}
 	}
@@ -83,10 +83,10 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 		virtualExtruderPosition = gb.GetDistance();
 	}
 
-	if (axesIncluded != 0)
+	if (axesIncluded.IsNonEmpty())
 	{
 		ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false, limitAxes)
+		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, AxesBitmap::MakeLowestNBits(numVisibleAxes), false, limitAxes)
 			!= LimitPositionResult::ok												// pretend that all axes are homed
 		   )
 		{
@@ -94,7 +94,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 		}
 		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
 		axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
-		if (IsBitSet(axesIncluded, Z_AXIS))
+		if (axesIncluded.IsBitSet(Z_AXIS))
 		{
 			zDatumSetByProbing -= false;
 		}
@@ -383,7 +383,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		if (simulationMode == 0)
 		{
 			axesHomedBeforeSimulation = axesHomed;
-			axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
+			axesHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 			SavePosition(simulationRestorePoint, gb);
 			simulationRestorePoint.feedRate = gb.MachineState().feedRate;
 		}
@@ -421,7 +421,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 			{
 				// Starting a new simulation, so save the current position
 				axesHomedBeforeSimulation = axesHomed;
-				axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
+				axesHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 				SavePosition(simulationRestorePoint, gb);
 			}
 			simulationTime = 0.0;
@@ -502,7 +502,7 @@ GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, in
 					return GCodeResult::error;
 				}
 
-				tr.inputStates = 0;
+				tr.inputStates.Clear();
 				(void)tr.Check();					// set up initial input states
 				return GCodeResult::ok;
 			}
@@ -542,10 +542,10 @@ GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply, int co
 		if (triggerNumber < MaxTriggers)
 		{
 			Trigger& tr = triggers[triggerNumber];
-			tr.inputStates = 0;
+			tr.inputStates.Clear();
 			if (tr.Check())
 			{
-				SetBit(triggersPending, triggerNumber);
+				triggersPending.SetBit(triggerNumber);
 			}
 			return GCodeResult::ok;
 		}
@@ -841,7 +841,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
-										: platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+										: platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(axis), false);
 			if (!probeOk)
 			{
 				reply.copy("Failed to prime endstop or probe");
@@ -905,7 +905,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
-										: platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+										: platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(axis), false);
 			if (!probeOk)
 			{
 				reply.copy("Failed to prime endstop or probe");

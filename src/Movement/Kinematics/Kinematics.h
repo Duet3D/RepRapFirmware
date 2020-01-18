@@ -131,7 +131,7 @@ public:
 
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)
-	virtual AxesBitmap AxesToHomeBeforeProbing() const { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS); }
+	virtual AxesBitmap AxesToHomeBeforeProbing() const { return XyAxes; }
 
 	// Return the initial Cartesian coordinates we assume after switching to this kinematics
 	virtual void GetAssumedInitialPosition(size_t numAxes, float positions[]) const;
@@ -168,7 +168,7 @@ public:
 
 	// Return the set of axes that must be homed prior to regular movement of the specified axes
 	// This default is good for Cartesian and Core printers, but not deltas or SCARA
-	virtual AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const { return (disallowMovesBeforeHoming) ? axesMoving : 0; }
+	virtual AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const { return (disallowMovesBeforeHoming) ? axesMoving : AxesBitmap(); }
 
 #if HAS_MASS_STORAGE
 	// Write any calibration data that we need to resume a print after power fail, returning true if successful. Override where necessary.

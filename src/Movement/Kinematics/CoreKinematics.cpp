@@ -60,7 +60,7 @@ void CoreKinematics::Recalc()
 	{
 		firstMotor[i] = firstAxis[i] = MaxAxes;
 		lastMotor[i] = lastAxis[i] = 0;
-		connectedAxes[i] = 0;
+		connectedAxes[i].Clear();
 	}
 
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
@@ -77,7 +77,7 @@ void CoreKinematics::Recalc()
 				{
 					lastAxis[motor] = axis;
 				}
-				SetBit(connectedAxes[axis], motor);
+				connectedAxes[axis].SetBit(motor);
 			}
 
 			if (forwardMatrix(motor, axis) != 0.0)							// if this motor affects this axes
@@ -90,7 +90,7 @@ void CoreKinematics::Recalc()
 				{
 					lastMotor[axis] = motor;
 				}
-				SetBit(connectedAxes[axis], motor);
+				connectedAxes[axis].SetBit(motor);
 			}
 		}
 	}
@@ -120,7 +120,7 @@ void CoreKinematics::Recalc()
 // Return true if the axis doesn't have a single dedicated motor
 inline bool CoreKinematics::HasSharedMotor(size_t axis) const
 {
-	return connectedAxes[axis] != MakeBitmap<AxesBitmap>(axis);
+	return connectedAxes[axis] != AxesBitmap::MakeFromBits(axis);
 }
 
 CoreKinematics::CoreKinematics(KinematicsType k) : ZLeadscrewKinematics(k), modified(false)
@@ -408,7 +408,7 @@ AxesBitmap CoreKinematics::GetConnectedAxes(size_t axis) const
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
 AxesBitmap CoreKinematics::GetLinearAxes() const
 {
-	return LowestNBits<AxesBitmap>(reprap.GetGCodes().GetVisibleAxes());	// we can babystep all axes
+	return AxesBitmap::MakeLowestNBits(reprap.GetGCodes().GetVisibleAxes());	// we can babystep all axes
 }
 
 // End

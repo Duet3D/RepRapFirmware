@@ -8,7 +8,7 @@
 #include "Endstop.h"
 
 // Endstop base class
-DriversBitmap EndstopOrZProbe::stalledDrivers = 0;			// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
+DriversBitmap EndstopOrZProbe::stalledDrivers;			// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
 
 #if SUPPORT_OBJECT_MODEL
 

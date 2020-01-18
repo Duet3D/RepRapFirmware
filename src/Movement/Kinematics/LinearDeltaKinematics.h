@@ -35,7 +35,7 @@ public:
 	bool IsReachable(float x, float y, bool isCoordinated) const override;
 	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
-	AxesBitmap AxesToHomeBeforeProbing() const override { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS); }
+	AxesBitmap AxesToHomeBeforeProbing() const override { return XyzAxes; }
 	MotionType GetMotionType(size_t axis) const override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
 	HomingMode GetHomingMode() const override { return HomingMode::homeIndividualMotors; }

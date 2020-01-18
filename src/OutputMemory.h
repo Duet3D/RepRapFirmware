@@ -48,6 +48,7 @@ class OutputBuffer
 		size_t printf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
 		size_t vprintf(const char *fmt, va_list vargs) noexcept;
 		size_t catf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
+		size_t lcatf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
 
 		size_t copy(const char c) noexcept;
 		size_t copy(const char *src) noexcept;
@@ -55,7 +56,9 @@ class OutputBuffer
 
 		size_t cat(const char c) noexcept;
 		size_t cat(const char *src) noexcept;
+		size_t lcat(const char *src) noexcept;
 		size_t cat(const char *src, size_t len) noexcept;
+		size_t lcat(const char *src, size_t len) noexcept;
 		size_t cat(StringRef &str) noexcept;
 
 		size_t EncodeString(const char *src, bool allowControlChars, bool prependAsterisk = false) noexcept;

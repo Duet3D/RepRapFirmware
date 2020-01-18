@@ -324,10 +324,9 @@ void ScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[
 AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If both X and Y have been specified then we know the positions of both arm motors, otherwise we don't
-	const AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
-	if ((g92Axes & xyAxes) != xyAxes)
+	if ((g92Axes & XyAxes) != XyAxes)
 	{
-		g92Axes &= ~xyAxes;
+		g92Axes &= ~XyAxes;
 	}
 	return g92Axes;
 }
@@ -335,10 +334,9 @@ AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap ScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
 {
-	constexpr AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS);
-	if ((axesMoving & xyAxes) != 0)
+	if (axesMoving.Intersects(XyAxes))
 	{
-		axesMoving |= xyAxes;
+		axesMoving |= XyAxes;
 	}
 	return axesMoving;
 }
@@ -369,9 +367,9 @@ size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// Ask the base class which homing file we should call first
-	AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
+	const AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 
-	if (ret == 0)
+	if (ret.IsEmpty())
 	{
 		// Change the returned name if it is X or Y
 		if (StringEqualsIgnoreCase(filename.c_str(), "homex.g"))
@@ -468,7 +466,7 @@ bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
 AxesBitmap ScaraKinematics::GetLinearAxes() const
 {
-	return (crosstalk[1] == 0.0 && crosstalk[2] == 0.0) ? MakeBitmap<AxesBitmap>(Z_AXIS) : 0;
+	return (crosstalk[1] == 0.0 && crosstalk[2] == 0.0) ? AxesBitmap::MakeFromBits(Z_AXIS) : AxesBitmap();
 }
 
 // Recalculate the derived parameters

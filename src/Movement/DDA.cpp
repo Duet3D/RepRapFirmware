@@ -308,7 +308,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				{
 					const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
 					directionVector[drive] = positionDelta;
-					if (positionDelta != 0.0 && (IsBitSet(Tool::GetXAxes(nextMove.tool), drive) || IsBitSet(Tool::GetYAxes(nextMove.tool), drive)))
+					if (positionDelta != 0.0 && (Tool::GetXAxes(nextMove.tool).IsBitSet(drive) || Tool::GetYAxes(nextMove.tool).IsBitSet(drive)))
 					{
 						flags.xyMoving = true;
 					}
@@ -1253,16 +1253,16 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 			platform.EnableLocalDrivers(Z_AXIS);			// ensure all Z motors are enabled
 		}
 
-		AxesBitmap additionalAxisMotorsToEnable = 0, axisMotorsEnabled = 0;
+		AxesBitmap additionalAxisMotorsToEnable, axisMotorsEnabled;
 #if SUPPORT_CAN_EXPANSION
-		afterPrepare.drivesMoving = 0;
+		afterPrepare.drivesMoving.Clear();
 #endif
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
 			if (flags.isLeadscrewAdjustmentMove)
 			{
 #if SUPPORT_CAN_EXPANSION
-				SetBit(afterPrepare.drivesMoving, Z_AXIS);
+				afterPrepare.drivesMoving.SetBit(Z_AXIS);
 #endif
 				// For a leadscrew adjustment move, the first N elements of the direction vector are the adjustments to the N Z motors
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(Z_AXIS);
@@ -1330,7 +1330,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				}
 
 #if SUPPORT_CAN_EXPANSION
-				SetBit(afterPrepare.drivesMoving, drive);
+				afterPrepare.drivesMoving.SetBit(drive);
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 				for (size_t i = 0; i < config.numDrivers; ++i)
 				{
@@ -1341,7 +1341,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					}
 				}
 #endif
-				SetBit(axisMotorsEnabled, drive);
+				axisMotorsEnabled.SetBit(drive);
 			}
 			else if (drive < reprap.GetGCodes().GetTotalAxes())
 			{
@@ -1386,7 +1386,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					}
 
 #if SUPPORT_CAN_EXPANSION
-					SetBit(afterPrepare.drivesMoving, drive);
+					afterPrepare.drivesMoving.SetBit(drive);
 					const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 					for (size_t i = 0; i < config.numDrivers; ++i)
 					{
@@ -1397,7 +1397,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 						}
 					}
 #endif
-					SetBit(axisMotorsEnabled, drive);
+					axisMotorsEnabled.SetBit(drive);
 					additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetConnectedAxes(drive);
 				}
 			}
@@ -1421,7 +1421,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 
 					const size_t extruder = LogicalDriveToExtruder(drive);
 #if SUPPORT_CAN_EXPANSION
-					SetBit(afterPrepare.drivesMoving, drive);
+					afterPrepare.drivesMoving.SetBit(drive);
 					const DriverId driver = platform.GetExtruderDriver(extruder);
 					if (driver.IsRemote())
 					{
@@ -1468,27 +1468,25 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 
 		// On CoreXY and similar architectures, we also need to enable the motors controlling any connected axes
 		additionalAxisMotorsToEnable &= ~axisMotorsEnabled;
-		for (size_t drive = 0; additionalAxisMotorsToEnable != 0; ++drive)
+		while (additionalAxisMotorsToEnable.IsNonEmpty())
 		{
-			if (IsBitSet(additionalAxisMotorsToEnable, drive))
+			const size_t drive = additionalAxisMotorsToEnable.LowestSetBit();
+			additionalAxisMotorsToEnable.ClearBit(drive);
+			if (platform.GetDriversBitmap(drive) != 0)									// if any of the connected axis drives is local
 			{
-				ClearBit(additionalAxisMotorsToEnable, drive);
-				if (platform.GetDriversBitmap(drive) != 0)		// if any of the connected axis drives is local
-				{
-					platform.EnableLocalDrivers(drive);
-				}
-#if SUPPORT_CAN_EXPANSION
-				const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
-				for (size_t i = 0; i < config.numDrivers; ++i)
-				{
-					const DriverId driver = config.driverNumbers[i];
-					if (driver.IsRemote())
-					{
-						CanMotion::AddMovement(*this, params, driver, 0, false);
-					}
-				}
-#endif
+				platform.EnableLocalDrivers(drive);
 			}
+#if SUPPORT_CAN_EXPANSION
+			const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
+			for (size_t i = 0; i < config.numDrivers; ++i)
+			{
+				const DriverId driver = config.driverNumbers[i];
+				if (driver.IsRemote())
+				{
+					CanMotion::AddMovement(*this, params, driver, 0, false);
+				}
+			}
+#endif
 		}
 
 		const DDAState st = prev->state;
@@ -1578,12 +1576,12 @@ float DDA::NormaliseXYZ() noexcept
 	const AxesBitmap yAxes = Tool::GetYAxes(tool);
 	for (size_t d = 0; d < MaxAxes; ++d)
 	{
-		if (IsBitSet(xAxes, d))
+		if (xAxes.IsBitSet(d))
 		{
 			xMagSquared += fsquare(directionVector[d]);
 			++numXaxes;
 		}
-		if (IsBitSet(yAxes, d))
+		if (yAxes.IsBitSet(d))
 		{
 			yMagSquared += fsquare(directionVector[d]);
 			++numYaxes;
@@ -1950,8 +1948,8 @@ void DDA::StopDrive(size_t drive) noexcept
 	}
 
 #if SUPPORT_CAN_EXPANSION
-	ClearBit(afterPrepare.drivesMoving, drive);
-	if (afterPrepare.drivesMoving == 0)
+	afterPrepare.drivesMoving.ClearBit(drive);
+	if (afterPrepare.drivesMoving.IsEmpty())
 	{
 		state = completed;
 	}

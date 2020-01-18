@@ -132,7 +132,7 @@ enum class BlockType : uint8_t
 class GCodeMachineState
 {
 public:
-	typedef uint32_t ResourceBitmap;
+	typedef Bitmap<uint32_t> ResourceBitmap;
 
 	// Class to record the state of blocks when using conditional GCode
 	class BlockState

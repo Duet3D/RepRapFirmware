@@ -27,7 +27,7 @@ constexpr ObjectModelArrayDescriptor ZProbe::offsetsArrayDescriptor =
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue((context.GetLastIndex() == 0) ? ((const ZProbe*)self)->xOffset : ((const ZProbe*)self)->yOffset); }
+				{ return ExpressionValue((context.GetLastIndex() == 0) ? ((const ZProbe*)self)->xOffset : ((const ZProbe*)self)->yOffset, 1); }
 };
 
 constexpr ObjectModelArrayDescriptor ZProbe::valueArrayDescriptor =
@@ -48,18 +48,18 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Probe members
-	{ "calibrationTemperature",	OBJECT_MODEL_FUNC(self->calibTemperature), 					ObjectModelEntryFlags::none },
+	{ "calibrationTemperature",	OBJECT_MODEL_FUNC(self->calibTemperature, 1), 				ObjectModelEntryFlags::none },
 	{ "disablesHeaters",		OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 	ObjectModelEntryFlags::none },
-	{ "diveHeight",				OBJECT_MODEL_FUNC(self->diveHeight), 						ObjectModelEntryFlags::none },
+	{ "diveHeight",				OBJECT_MODEL_FUNC(self->diveHeight, 1), 					ObjectModelEntryFlags::none },
 	{ "maxProbeCount",			OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 		ObjectModelEntryFlags::none },
 	{ "offsets",				OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 			ObjectModelEntryFlags::none },
-	{ "recoveryTime",			OBJECT_MODEL_FUNC(self->recoveryTime), 						ObjectModelEntryFlags::none },
-	{ "speed",					OBJECT_MODEL_FUNC(self->probeSpeed), 						ObjectModelEntryFlags::none },
-	{ "temperatureCoefficient",	OBJECT_MODEL_FUNC(self->temperatureCoefficient), 			ObjectModelEntryFlags::none },
+	{ "recoveryTime",			OBJECT_MODEL_FUNC(self->recoveryTime, 1), 					ObjectModelEntryFlags::none },
+	{ "speed",					OBJECT_MODEL_FUNC(self->probeSpeed, 1), 					ObjectModelEntryFlags::none },
+	{ "temperatureCoefficient",	OBJECT_MODEL_FUNC(self->temperatureCoefficient, 3), 		ObjectModelEntryFlags::none },
 	{ "threshold",				OBJECT_MODEL_FUNC((int32_t)self->adcValue), 				ObjectModelEntryFlags::none },
-	{ "tolerance",				OBJECT_MODEL_FUNC(self->tolerance), 						ObjectModelEntryFlags::none },
-	{ "travelSpeed",			OBJECT_MODEL_FUNC(self->travelSpeed), 						ObjectModelEntryFlags::none },
-	{ "triggerHeight",			OBJECT_MODEL_FUNC(self->triggerHeight), 					ObjectModelEntryFlags::none },
+	{ "tolerance",				OBJECT_MODEL_FUNC(self->tolerance, 3), 						ObjectModelEntryFlags::none },
+	{ "travelSpeed",			OBJECT_MODEL_FUNC(self->travelSpeed, 1), 					ObjectModelEntryFlags::none },
+	{ "triggerHeight",			OBJECT_MODEL_FUNC(self->triggerHeight, 3), 					ObjectModelEntryFlags::none },
 	{ "type",					OBJECT_MODEL_FUNC((int32_t)self->type), 					ObjectModelEntryFlags::none },
 	{ "value",					OBJECT_MODEL_FUNC_NOSELF(&valueArrayDescriptor), 			ObjectModelEntryFlags::live },
 };
@@ -148,7 +148,7 @@ int ZProbe::GetReading() const noexcept
 #if HAS_STALL_DETECT
 			{
 				const DriversBitmap zDrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).GetDriversBitmap();
-				zProbeVal = ((zDrivers & GetStalledDrivers()) != 0) ? 1000 : 0;
+				zProbeVal = (zDrivers.Intersects(GetStalledDrivers())) ? 1000 : 0;
 			}
 #else
 			return 1000;

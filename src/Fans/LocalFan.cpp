@@ -70,10 +70,10 @@ void LocalFan::InternalRefresh() noexcept
 {
 	float reqVal;
 #if HAS_SMART_DRIVERS
-	uint32_t driverChannelsMonitored = 0;
+	DriverChannelsBitmap driverChannelsMonitored;
 #endif
 
-	if (sensorsMonitored == 0)
+	if (sensorsMonitored.IsEmpty())
 	{
 		reqVal = val;
 	}
@@ -81,40 +81,43 @@ void LocalFan::InternalRefresh() noexcept
 	{
 		reqVal = 0.0;
 		const bool bangBangMode = (triggerTemperatures[1] <= triggerTemperatures[0]);
-		SensorsBitmap copySensorsMonitored = sensorsMonitored;
-		while (copySensorsMonitored != 0)
-		{
-			const unsigned int sensorNum = LowestSetBit(copySensorsMonitored);
-			ClearBit(copySensorsMonitored, sensorNum);
-			const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
-			if (sensor.IsNotNull())
-			{
-				//TODO we used to turn the fan on if the associated heater was being tuned
-				float ht;
-				const TemperatureError err = sensor->GetLatestTemperature(ht);
-				if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
-				{
-					reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : 1.0);
-				}
-				else if (!bangBangMode && ht > triggerTemperatures[0])
-				{
-					// We already know that ht < triggerTemperatures[1], therefore unless we have NaNs it is safe to divide by (triggerTemperatures[1] - triggerTemperatures[0])
-					reqVal = max<float>(reqVal, (ht - triggerTemperatures[0])/(triggerTemperatures[1] - triggerTemperatures[0]));
-				}
-				else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
-				{
-					const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
-					reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
-				}
+		sensorsMonitored.Iterate
+		([&reqVal, bangBangMode, this
 #if HAS_SMART_DRIVERS
-				const int channel = sensor->GetSmartDriversChannel();
-				if (channel >= 0)
-				{
-					driverChannelsMonitored |= 1 << (unsigned int)channel;
-				}
+		  , &driverChannelsMonitored
 #endif
+		 ](unsigned int sensorNum)
+			{
+				const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
+				if (sensor.IsNotNull())
+				{
+					//TODO we used to turn the fan on if the associated heater was being tuned
+					float ht;
+					const TemperatureError err = sensor->GetLatestTemperature(ht);
+					if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
+					{
+						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : 1.0);
+					}
+					else if (!bangBangMode && ht > triggerTemperatures[0])
+					{
+						// We already know that ht < triggerTemperatures[1], therefore unless we have NaNs it is safe to divide by (triggerTemperatures[1] - triggerTemperatures[0])
+						reqVal = max<float>(reqVal, (ht - triggerTemperatures[0])/(triggerTemperatures[1] - triggerTemperatures[0]));
+					}
+					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
+					{
+						const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
+						reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
+					}
+#if HAS_SMART_DRIVERS
+					const int channel = sensor->GetSmartDriversChannel();
+					if (channel >= 0)
+					{
+						driverChannelsMonitored.SetBit((unsigned int)channel);
+					}
+#endif
+				}
 			}
-		}
+		);
 	}
 
 	if (reqVal > 0.0)
@@ -124,7 +127,7 @@ void LocalFan::InternalRefresh() noexcept
 		{
 			// We are turning this fan on
 #if HAS_SMART_DRIVERS
-			if (driverChannelsMonitored != 0)
+			if (driverChannelsMonitored.IsNonEmpty())
 			{
 				reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, true);		// tell Platform that we have started a fan that cools drivers
 			}
@@ -150,7 +153,7 @@ void LocalFan::InternalRefresh() noexcept
 		}
 	}
 #if HAS_SMART_DRIVERS
-	else if (driverChannelsMonitored != 0 && lastVal != 0.0)
+	else if (driverChannelsMonitored.IsNonEmpty() && lastVal != 0.0)
 	{
 		reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);	// tell Platform that we have stopped a fan that cools drivers
 	}
@@ -185,11 +188,11 @@ bool LocalFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 
 bool LocalFan::Check() noexcept
 {
-	if (sensorsMonitored != 0 || blipping)
+	if (sensorsMonitored.IsNonEmpty() || blipping)
 	{
 		InternalRefresh();
 	}
-	return sensorsMonitored != 0 && lastVal != 0.0;
+	return sensorsMonitored.IsNonEmpty() && lastVal != 0.0;
 }
 
 bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply) noexcept

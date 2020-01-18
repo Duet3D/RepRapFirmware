@@ -38,7 +38,7 @@ public:
 	GCodeResult Configure(const char *pinNames, const StringRef& reply) noexcept;
 
 private:
-	typedef uint16_t PortsBitmap;
+	typedef Bitmap<uint16_t> PortsBitmap;
 
 	void ReleasePorts() noexcept;
 

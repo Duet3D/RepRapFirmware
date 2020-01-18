@@ -70,8 +70,8 @@ public:
 	void DefineMix(const float m[]) noexcept;
 	const float* GetMix() const noexcept;
 	void Print(const StringRef& reply) const noexcept;
-	AxesBitmap GetXAxisMap() const noexcept { return xMapping; }
-	AxesBitmap GetYAxisMap() const noexcept { return yMapping; }
+	AxesBitmap GetXAxisMap() const noexcept { return axisMapping[0]; }
+	AxesBitmap GetYAxisMap() const noexcept { return axisMapping[1]; }
 	FansBitmap GetFanMapping() const noexcept { return fanMapping; }
 	Filament *GetFilament() const noexcept { return filament; }
 	Tool *Next() const noexcept { return next; }
@@ -93,13 +93,15 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
-
-#if SUPPORT_OBJECT_MODEL
-	static const ObjectModelArrayDescriptor activeTempsArrayDescriptor;
-	static const ObjectModelArrayDescriptor standbyTempsArrayDescriptor;
-	static const ObjectModelArrayDescriptor heatersArrayDescriptor;
-	static const ObjectModelArrayDescriptor extrudersArrayDescriptor;
-#endif
+	OBJECT_MODEL_ARRAY(activeTemps)
+	OBJECT_MODEL_ARRAY(axes)
+	OBJECT_MODEL_ARRAY(extruders)
+	OBJECT_MODEL_ARRAY(fans)
+	OBJECT_MODEL_ARRAY(heaters)
+	OBJECT_MODEL_ARRAY(mix)
+	OBJECT_MODEL_ARRAY(offsets)
+	OBJECT_MODEL_ARRAY(standbyTemps)
+	OBJECT_MODEL_ARRAY(oneAxis)
 
 	void Activate() noexcept;
 	void Standby() noexcept;
@@ -126,7 +128,7 @@ private:
 	uint8_t driveCount;
 	uint8_t heaterCount;
 	uint16_t myNumber;
-	AxesBitmap xMapping, yMapping;
+	AxesBitmap axisMapping[2];
 	AxesBitmap axisOffsetsProbed;
 	FansBitmap fanMapping;
 	uint8_t drives[MaxExtrudersPerTool];

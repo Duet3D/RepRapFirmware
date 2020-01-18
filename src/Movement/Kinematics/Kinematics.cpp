@@ -70,7 +70,7 @@ bool Kinematics::LimitPositionFromAxis(float coords[], size_t firstAxis, size_t 
 	bool limited = false;
 	for (size_t axis = firstAxis; axis < numVisibleAxes; axis++)
 	{
-		if (IsBitSet(axesHomed, axis))
+		if (axesHomed.IsBitSet(axis))
 		{
 			float& f = coords[axis];
 			// When homing a printer we convert the M208 axis limit to motor positions, then back again to get the user position.
@@ -107,26 +107,26 @@ void Kinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) co
 // This default is suitable for most kinematics.
 AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
-	const AxesBitmap allAxes = LowestNBits<AxesBitmap>(numVisibleAxes);
+	const AxesBitmap allAxes = AxesBitmap::MakeLowestNBits(numVisibleAxes);
 	if ((toBeHomed & allAxes) == allAxes)
 	{
 		filename.copy(HomeAllFileName);
-		return 0;
+		return AxesBitmap();
 	}
 
 	// If Z homing is done using a Z probe then X and Y must be homed before Z
-	const bool homeZLast = (IsBitSet(toBeHomed, Z_AXIS) && reprap.GetPlatform().GetEndstops().HomingZWithProbe());
+	const bool homeZLast = (toBeHomed.IsBitSet(Z_AXIS) && reprap.GetPlatform().GetEndstops().HomingZWithProbe());
 	const AxesBitmap homeFirst = AxesToHomeBeforeProbing();
 
 	// Return the homing file for the lowest axis that we have been asked to home
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		if (IsBitSet(toBeHomed, axis) && (axis != Z_AXIS || !homeZLast || (alreadyHomed & homeFirst) == homeFirst))
+		if (toBeHomed.IsBitSet(axis) && (axis != Z_AXIS || !homeZLast || (alreadyHomed & homeFirst) == homeFirst))
 		{
 			filename.copy("home");
 			filename.cat(tolower(reprap.GetGCodes().GetAxisLetters()[axis]));
 			filename.cat(".g");
-			return 0;
+			return AxesBitmap();
 		}
 	}
 
@@ -138,7 +138,7 @@ AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alread
 // Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
 AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const
 {
-	return MakeBitmap<AxesBitmap>(axis);
+	return AxesBitmap::MakeFromBits(axis);
 }
 
 /*static*/ Kinematics *Kinematics::Create(KinematicsType k)

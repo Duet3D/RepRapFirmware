@@ -28,7 +28,7 @@ EndStopHit ZProbeEndstop::Stopped() const noexcept
 bool ZProbeEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Decide whether we stop just the driver, just the axis, or everything
-	stopAll = (kin.GetConnectedAxes(GetAxis()) & ~MakeBitmap<AxesBitmap>(GetAxis())) != 0;
+	stopAll = kin.GetConnectedAxes(GetAxis()).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
 
 #if SUPPORT_CAN_EXPANSION
 	//TODO if the Z probe is remote, check that the expansion board knows about it

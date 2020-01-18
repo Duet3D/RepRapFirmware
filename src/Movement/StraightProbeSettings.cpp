@@ -15,7 +15,7 @@ StraightProbeSettings::StraightProbeSettings() noexcept
 
 void StraightProbeSettings::Reset() noexcept
 {
-	movingAxes = (AxesBitmap) 0;
+	movingAxes = AxesBitmap();
 	type = StraightProbeType::unset;
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{

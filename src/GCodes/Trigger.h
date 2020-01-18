@@ -11,10 +11,10 @@
 #include "RepRapFirmware.h"
 #include "Hardware/IoPorts.h"
 
-typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
-typedef uint16_t TriggerInputStatesBitmap;				// Bitmap of input states
-static_assert(MaxTriggers <= sizeof(TriggerNumbersBitmap) * CHAR_BIT, "need larger TriggerNumbersBitmap type");
-static_assert(MaxPortsPerTrigger <= sizeof(TriggerInputStatesBitmap) * CHAR_BIT, "need larger TriggerInputStatesBitmap");
+typedef Bitmap<uint32_t> TriggerNumbersBitmap;					// Bitmap of trigger numbers
+typedef Bitmap<uint16_t> TriggerInputStatesBitmap;				// Bitmap of input states
+static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits(), "need larger TriggerNumbersBitmap type");
+static_assert(MaxPortsPerTrigger <= TriggerInputStatesBitmap::MaxBits(), "need larger TriggerInputStatesBitmap");
 
 struct Trigger
 {

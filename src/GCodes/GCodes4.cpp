@@ -37,7 +37,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			// Check whether we made any G1 S3 moves and need to set the axis limits
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
-				if (IsBitSet<AxesBitmap>(axesToSenseLength, axis))
+				if (axesToSenseLength.IsBitSet(axis))
 				{
 					const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
 					if (stopType == EndStopPosition::highEndStop)
@@ -172,7 +172,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case GCodeState::homing1:
-		if (toBeHomed == 0)
+		if (toBeHomed.IsEmpty())
 		{
 			gb.SetState(GCodeState::normal);
 		}
@@ -180,7 +180,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		{
 			String<StringLength20> nextHomingFileName;
 			AxesBitmap mustHomeFirst = reprap.GetMove().GetKinematics().GetHomingFileName(toBeHomed, axesHomed, numVisibleAxes, nextHomingFileName.GetRef());
-			if (mustHomeFirst != 0)
+			if (mustHomeFirst.IsNonEmpty())
 			{
 				// Error, can't home this axes
 				reply.copy("Must home these axes:");
@@ -188,7 +188,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				reply.cat(" before homing these:");
 				AppendAxes(reply, toBeHomed);
 				error = true;
-				toBeHomed = 0;
+				toBeHomed.Clear();
 				gb.SetState(GCodeState::normal);
 			}
 			else
@@ -208,7 +208,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for the previous homing move to complete
 		{
 			// Test whether the previous homing move homed any axes
-			if ((toBeHomed & axesHomed) == 0)
+			if (!toBeHomed.Intersects(axesHomed))
 			{
 				reply.copy("Homing failed");
 				error = true;
@@ -217,7 +217,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			else
 			{
 				toBeHomed &= ~axesHomed;
-				gb.SetState((toBeHomed == 0) ? GCodeState::normal : GCodeState::homing1);
+				gb.SetState((toBeHomed.IsEmpty()) ? GCodeState::normal : GCodeState::homing1);
 			}
 		}
 		break;

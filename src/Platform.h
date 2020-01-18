@@ -274,6 +274,7 @@ public:
 	enum class DriverStatus : uint8_t { disabled, idle, enabled };
 
 	Platform() noexcept;
+	Platform(const Platform&) = delete;
 
 //-------------------------------------------------------------------------------------------------------------
 
@@ -511,7 +512,7 @@ public:
 
 #if HAS_SMART_DRIVERS
 	float GetTmcDriversTemperature(unsigned int board) const noexcept;
-	void DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on) noexcept;
+	void DriverCoolingFansOnOff(DriverChannelsBitmap driverChannelsMonitored, bool on) noexcept;
 	unsigned int GetNumSmartDrivers() const noexcept { return numSmartDrivers; }
 #endif
 
@@ -559,23 +560,21 @@ protected:
 	OBJECT_MODEL_ARRAY(axisDrivers)
 
 private:
-	Platform(const Platform&) noexcept;						// private copy constructor to make sure we don't try to copy a Platform
-
-	const char* InternalGetSysDir() const noexcept;  		// where the system files are - not thread-safe!
+	const char* InternalGetSysDir() const noexcept;  					// where the system files are - not thread-safe!
 
 	void RawMessage(MessageType type, const char *message) noexcept;	// called by Message after handling error/warning flags
 
-	void ResetChannel(size_t chan) noexcept;					// re-initialise a serial channel
+	void ResetChannel(size_t chan) noexcept;							// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint32_t reading) const noexcept;
 
 	GCodeResult ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply);
 
 #if SUPPORT_CAN_EXPANSION
-	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc, std::function<void(DriverId)> remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId){}); }
+	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc, std::function<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId){}); }
 #else
-	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func) noexcept { IterateDrivers(axisOrExtruder, func); }
+	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
 
 #if HAS_SMART_DRIVERS

@@ -170,15 +170,15 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	// Add whichever XYZ jog buttons we have been asked to display - assume only XYZ for now
 	const PixelNumber axisButtonWidth = availableWidth/4;
 	const PixelNumber axisButtonStep = (availableWidth - 3 *axisButtonWidth)/2 + axisButtonWidth;
-	if (IsBitSet(mbox.controls, X_AXIS))
+	if (mbox.controls.IsBitSet(X_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 510, 1), true);
 	}
-	if (IsBitSet(mbox.controls, Y_AXIS))
+	if (mbox.controls.IsBitSet(Y_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 511, 1), true);
 	}
-	if (IsBitSet(mbox.controls, Z_AXIS))
+	if (mbox.controls.IsBitSet(Z_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 512, 2), true);
 	}

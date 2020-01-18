@@ -242,9 +242,8 @@ bool RotaryDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) co
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
 LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
-	constexpr AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
-	if ((axesHomed & allAxes) == allAxes)
+	if ((axesHomed & XyzAxes) == XyzAxes)
 	{
 		// If axes have been homed on a rotary delta printer and this isn't a homing move, check for movements outside limits.
 		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
@@ -293,10 +292,9 @@ void RotaryDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 AxesBitmap RotaryDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If all of X, Y and Z have been specified then we know the positions of all 3 tower motors, otherwise we don't
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((g92Axes & xyzAxes) != xyzAxes)
+	if ((g92Axes & XyzAxes) != XyzAxes)
 	{
-		g92Axes &= ~xyzAxes;
+		g92Axes &= ~XyzAxes;
 	}
 	return g92Axes;
 }
@@ -304,10 +302,9 @@ AxesBitmap RotaryDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap RotaryDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	if (axesMoving.Intersects(XyzAxes))
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= XyzAxes;
 	}
 	return axesMoving;
 }
@@ -318,10 +315,10 @@ AxesBitmap RotaryDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 AxesBitmap RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// If homing X, Y or Z we must home all the towers
-	if ((toBeHomed & LowestNBits<AxesBitmap>(DELTA_AXES)) != 0)
+	if (toBeHomed.Intersects(AxesBitmap::MakeLowestNBits(DELTA_AXES)))
 	{
 		filename.copy("homedelta.g");
-		return 0;
+		return AxesBitmap();
 	}
 
 	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
@@ -384,7 +381,7 @@ void RotaryDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *nor
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
 AxesBitmap RotaryDeltaKinematics::GetLinearAxes() const
 {
-	return 0;
+	return AxesBitmap();
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.

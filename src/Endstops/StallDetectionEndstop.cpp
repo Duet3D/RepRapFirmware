@@ -12,26 +12,26 @@
 
 // Stall detection endstop
 StallDetectionEndstop::StallDetectionEndstop(uint8_t axis, EndStopPosition pos, bool p_individualMotors) noexcept
-	: Endstop(axis, pos), driversMonitored(0), individualMotors(p_individualMotors)
+	: Endstop(axis, pos), individualMotors(p_individualMotors)
 {
 }
 
 StallDetectionEndstop::StallDetectionEndstop() noexcept
-	: Endstop(NO_AXIS, EndStopPosition::noEndStop), driversMonitored(0), individualMotors(false), stopAll(true)
+	: Endstop(NO_AXIS, EndStopPosition::noEndStop), individualMotors(false), stopAll(true)
 {
 }
 
 // Test whether we are at or near the stop
 EndStopHit StallDetectionEndstop::Stopped() const noexcept
 {
-	return ((GetStalledDrivers() & driversMonitored) != 0) ? EndStopHit::atStop : EndStopHit::noStop;
+	return (GetStalledDrivers().Intersects(driversMonitored)) ? EndStopHit::atStop : EndStopHit::noStop;
 }
 
 // This is called to prime axis endstops
 bool StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Find which drivers are relevant, and decide whether we stop just the driver, just the axis, or everything
-	stopAll = (kin.GetConnectedAxes(GetAxis()) & ~MakeBitmap<AxesBitmap>(GetAxis())) != 0;
+	stopAll = kin.GetConnectedAxes(GetAxis()).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
 	numDriversLeft = axisDrivers.numDrivers;
 	driversMonitored = axisDrivers.GetDriversBitmap();
 
@@ -48,7 +48,7 @@ EndstopHitDetails StallDetectionEndstop::CheckTriggered(bool goingSlow) noexcept
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
 	const DriversBitmap relevantStalledDrivers = driversMonitored & GetStalledDrivers();
-	if (relevantStalledDrivers != 0)
+	if (relevantStalledDrivers.IsNonEmpty())
 	{
 		rslt.axis = GetAxis();
 		if (rslt.axis == NO_AXIS)
@@ -73,7 +73,7 @@ EndstopHitDetails StallDetectionEndstop::CheckTriggered(bool goingSlow) noexcept
 #if SUPPORT_CAN_EXPANSION
 			rslt.driver.boardAddress = 0;
 #else
-			rslt.driver.localDriver = LowestSetBitNumber(relevantStalledDrivers);
+			rslt.driver.localDriver = relevantStalledDrivers.LowestSetBit();
 #endif
 		}
 		else
@@ -104,7 +104,7 @@ bool StallDetectionEndstop::Acknowledge(EndstopHitDetails what) noexcept
 		return true;
 
 	case EndstopHitAction::stopDriver:
-		ClearBit(driversMonitored, what.driver.localDriver);
+		driversMonitored.ClearBit(what.driver.localDriver);
 		--numDriversLeft;
 		return false;
 

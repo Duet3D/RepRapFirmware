@@ -21,28 +21,30 @@
 constexpr ObjectModelArrayDescriptor Fan::monitoredSensorsArrayDescriptor =
 {
 	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Fan*)self)->GetNumMonitoredSensors(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Fan*)self)->GetMonitoredSensorNumber(context.GetLastIndex())); }
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
+				{ return ((const Fan*)self)->sensorsMonitored.CountSetBits(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue((int32_t)((const Fan*)self)->sensorsMonitored.GetSetBitNumber(context.GetLastIndex())); }
 };
 
 constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Fan members
-	{ "actualValue",		OBJECT_MODEL_FUNC(self->lastVal), 														ObjectModelEntryFlags::live },
-	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime), 										ObjectModelEntryFlags::none },
-	{ "max",				OBJECT_MODEL_FUNC(self->maxVal), 														ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->minVal), 														ObjectModelEntryFlags::none },
+	{ "actualValue",		OBJECT_MODEL_FUNC(self->lastVal, 1), 													ObjectModelEntryFlags::live },
+	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime, 2), 									ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->maxVal, 2), 													ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->minVal, 2), 													ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->name.c_str()), 													ObjectModelEntryFlags::none },
-	{ "requestedValue",		OBJECT_MODEL_FUNC(self->val), 															ObjectModelEntryFlags::live },
+	{ "requestedValue",		OBJECT_MODEL_FUNC(self->val, 2), 														ObjectModelEntryFlags::live },
 	{ "rpm",				OBJECT_MODEL_FUNC(self->GetRPM()), 														ObjectModelEntryFlags::live },
 	{ "thermostatic",		OBJECT_MODEL_FUNC(self, 1), 															ObjectModelEntryFlags::none },
 
 	// 1. Fan.thermostatic members
-	{ "control",			OBJECT_MODEL_FUNC(self->sensorsMonitored != 0), 										ObjectModelEntryFlags::none },
-	{ "heaters",			OBJECT_MODEL_FUNC_IF(self->sensorsMonitored != 0, &monitoredSensorsArrayDescriptor),	ObjectModelEntryFlags::none },
-	{ "highTemperature",	OBJECT_MODEL_FUNC_IF(self->sensorsMonitored != 0, self->triggerTemperatures[1]), 		ObjectModelEntryFlags::none },
-	{ "lowTemperature",		OBJECT_MODEL_FUNC_IF(self->sensorsMonitored != 0, self->triggerTemperatures[0]), 		ObjectModelEntryFlags::none },
+	{ "control",			OBJECT_MODEL_FUNC(self->sensorsMonitored.IsNonEmpty()), 										ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), &monitoredSensorsArrayDescriptor),	ObjectModelEntryFlags::none },
+	{ "highTemperature",	OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[1], 1), 	ObjectModelEntryFlags::none },
+	{ "lowTemperature",		OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[0], 1), 	ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 8, 4 };
@@ -58,7 +60,6 @@ Fan::Fan(unsigned int fanNum) noexcept
 	  maxVal(1.0),										// 100% maximum fan speed
 	  lastRpm(-1), whenLastRpmSet(0),
 	  blipTime(DefaultFanBlipTime),
-	  sensorsMonitored(0),
 	  isConfigured(false)
 {
 	triggerTemperatures[0] = triggerTemperatures[1] = DefaultHotEndFanTemperature;
@@ -128,7 +129,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			gb.GetIntArray(sensors, numH, false);
 
 			// Note that M106 H-1 disables thermostatic mode. The following code implements that automatically.
-			sensorsMonitored = 0;
+			sensorsMonitored.Clear();
 			for (size_t h = 0; h < numH; ++h)
 			{
 				const int hnum = sensors[h];
@@ -136,7 +137,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 				{
 					if (hnum < (int)MaxSensors)
 					{
-						SetBit(sensorsMonitored, (unsigned int)hnum);
+						sensorsMonitored.SetBit((unsigned int)hnum);
 					}
 					else
 					{
@@ -145,7 +146,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 					}
 				}
 			}
-			if (sensorsMonitored != 0)
+			if (sensorsMonitored.IsNonEmpty())
 			{
 				val = 1.0;					// default the fan speed to full for safety
 			}
@@ -186,16 +187,10 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 						(int)(maxVal * 100.0),
 						(double)(blipTime * MillisToSeconds)
 					  );
-			if (sensorsMonitored != 0)
+			if (sensorsMonitored.IsNonEmpty())
 			{
 				reply.catf(", temperature: %.1f:%.1fC, sensors:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				SensorsBitmap copySensorsMonitored = sensorsMonitored;
-				while (copySensorsMonitored != 0)
-				{
-					const unsigned int sensorNum = LowestSetBit(copySensorsMonitored);
-					ClearBit(copySensorsMonitored, sensorNum);
-					reply.catf(" %u", sensorNum);
-				}
+				sensorsMonitored.Iterate([&reply](unsigned int sensorNum) { reply.catf(" %u", sensorNum); });
 				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
 			}
 		}
@@ -220,42 +215,12 @@ int32_t Fan::GetRPM() const noexcept
 	return lastRpm;
 }
 
-// Object model support functions
-size_t Fan::GetNumMonitoredSensors() const noexcept
-{
-	static constexpr uint8_t bitCount[16] = { 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4 };
-	SensorsBitmap copySensorsMonitored = sensorsMonitored;
-	size_t count = 0;
-	while (copySensorsMonitored != 0)
-	{
-		count += bitCount[copySensorsMonitored & 0x0F];
-		copySensorsMonitored >>= 4;
-	}
-	return count;
-}
-
-int32_t Fan::GetMonitoredSensorNumber(size_t index) const noexcept
-{
-	SensorsBitmap copySensorsMonitored = sensorsMonitored;
-	while (copySensorsMonitored != 0)
-	{
-		const unsigned int lowestBit = LowestSetBit(copySensorsMonitored);
-		if (index == 0)
-		{
-			return (int32_t)lowestBit;
-		}
-		ClearBit(copySensorsMonitored, lowestBit);
-		--index;
-	}
-	return -1;
-}
-
 #if HAS_MASS_STORAGE
 
 // Save the settings of this fan if it isn't thermostatic
 bool Fan::WriteSettings(FileStore *f, size_t fanNum) const noexcept
 {
-	if (sensorsMonitored == 0)
+	if (sensorsMonitored.IsNonEmpty())
 	{
 		String<StringLength20> fanCommand;
 		fanCommand.printf("M106 P%u S%.2f\n", fanNum, (double)val);

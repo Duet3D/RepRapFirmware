@@ -175,9 +175,8 @@ bool HangprinterKinematics::IsReachable(float x, float y, bool isCoordinated) co
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
 LimitPositionResult HangprinterKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
-	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
-	if ((axesHomed & allAxes) == allAxes)
+	if ((axesHomed & XyzAxes) == XyzAxes)
 	{
 		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
 		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
@@ -225,7 +224,7 @@ void HangprinterKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 AxesBitmap HangprinterKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	filename.copy("homeall.g");
-	return 0;
+	return AxesBitmap();
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
@@ -246,14 +245,13 @@ void HangprinterKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 AxesBitmap HangprinterKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If all of X, Y and Z have been specified then we know the positions of all 4 spool motors, otherwise we don't
-	const uint32_t xyzAxes = (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS);
-	if ((g92Axes & xyzAxes) == xyzAxes)
+	if ((g92Axes & XyzAxes) == XyzAxes)
 	{
-		g92Axes |= (1u << D_AXIS);
+		g92Axes.SetBit(D_AXIS);
 	}
 	else
 	{
-		g92Axes &= ~xyzAxes;
+		g92Axes &= ~XyzAxes;
 	}
 	return g92Axes;
 }
@@ -261,10 +259,9 @@ AxesBitmap HangprinterKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap HangprinterKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	if (axesMoving.Intersects(XyzAxes))
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= XyzAxes;
 	}
 	return axesMoving;
 }
@@ -288,7 +285,7 @@ void HangprinterKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *nor
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
 AxesBitmap HangprinterKinematics::GetLinearAxes() const
 {
-	return 0;
+	return AxesBitmap();
 }
 
 #if HAS_MASS_STORAGE

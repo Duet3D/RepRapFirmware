@@ -1129,7 +1129,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 				response->EncodeString(mbox.message, false);
 				response->cat(",\"title\":");
 				response->EncodeString(mbox.title, false);
-				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%u}", mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
+				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%u}", mbox.mode, mbox.seq, (double)timeLeft, mbox.controls.GetRaw());
 			}
 			response->cat('}');
 		}
@@ -1430,15 +1430,15 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		}
 
 		// Controllable Fans
-		FansBitmap controllableFans = 0;
+		FansBitmap controllableFans;
 		for (size_t fan = 0; fan < MaxFans; fan++)
 		{
 			if (fansManager->IsFanControllable(fan))
 			{
-				SetBit(controllableFans, fan);
+				controllableFans.SetBit(fan);
 			}
 		}
-		response->catf(",\"controllableFans\":%lu", controllableFans);
+		response->catf(",\"controllableFans\":%lu", controllableFans.GetRaw());
 
 		// Maximum hotend temperature - DWC just wants the highest one
 		response->catf(",\"tempLimit\":%.1f", (double)(heat->GetHighestTemperatureLimit()));
@@ -1532,42 +1532,41 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 				// Axis mapping
 				response->cat("],\"axisMap\":[[");
 				bool first = true;
-				for (size_t xi = 0; xi < MaxAxes; ++xi)
-				{
-					if (IsBitSet(tool->GetXAxisMap(), xi))
-					{
-						if (first)
+				tool->GetXAxisMap().Iterate
+					([&response, &first](unsigned int xi)
 						{
-							first = false;
+							if (first)
+							{
+								first = false;
+							}
+							else
+							{
+								response->cat(',');
+							}
+							response->catf("%u", xi);
 						}
-						else
-						{
-							response->cat(',');
-						}
-						response->catf("%u", xi);
-					}
-				}
+					);
 				response->cat("],[");
+
 				first = true;
-				for (size_t yi = 0; yi < MaxAxes; ++yi)
-				{
-					if (IsBitSet(tool->GetYAxisMap(), yi))
-					{
-						if (first)
+				tool->GetYAxisMap().Iterate
+					([&response, &first](unsigned int yi)
 						{
-							first = false;
+							if (first)
+							{
+								first = false;
+							}
+							else
+							{
+								response->cat(',');
+							}
+							response->catf("%u", yi);
 						}
-						else
-						{
-							response->cat(',');
-						}
-						response->catf("%u", yi);
-					}
-				}
+					);
 				response->cat("]]");
 
 				// Fan mapping
-				response->catf(",\"fans\":%lu", tool->GetFanMapping());
+				response->catf(",\"fans\":%lu", tool->GetFanMapping().GetRaw());
 
 				// Filament (if any)
 				if (tool->GetFilament() != nullptr)
@@ -1983,7 +1982,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 		if (mbox.active)
 		{
 			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u",
-							mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
+							mbox.mode, mbox.seq, (double)timeLeft, mbox.controls.GetRaw());
 			response->cat(",\"msgBox.msg\":");
 			response->EncodeString(mbox.message, false);
 			response->cat(",\"msgBox.title\":");
@@ -2570,7 +2569,7 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 	for (const Tool *t = toolList; ok && t != nullptr; t = t->Next())
 	{
 		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();
-		if (axesProbed != 0 || forceWriteOffsets)
+		if (axesProbed.IsNonEmpty() || forceWriteOffsets)
 		{
 			String<StringLength256> scratchString;
 			if (!written)
@@ -2581,7 +2580,7 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 			scratchString.catf("G10 P%d", t->Number());
 			for (size_t axis = 0; axis < MaxAxes; ++axis)
 			{
-				if (forceWriteOffsets || IsBitSet(axesProbed, axis))
+				if (forceWriteOffsets || axesProbed.IsBitSet(axis))
 				{
 					scratchString.catf(" %c%.2f", gCodes->GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
 				}

@@ -160,12 +160,12 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 
 	if (driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() != 0)
 	{
-		uint16_t drivers;
+		CanDriversBitmap drivers;
 		const CanAddress board = driversToStop[driversToStopIndexBeingFilled ^ 1].GetNextBoardDriverBitmap(indexOfNextDriverToStop, drivers);
 		if (board != CanId::NoAddress)
 		{
 			auto msg = urgentMessageBuffer->SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), board);
-			msg->whichDrives = drivers;
+			msg->whichDrives = drivers.GetRaw();
 			return urgentMessageBuffer;
 		}
 		driversToStop[driversToStopIndexBeingFilled ^ 1].Clear();

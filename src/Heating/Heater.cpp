@@ -25,9 +25,9 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Heater members
-	{ "current",	OBJECT_MODEL_FUNC(self->GetTemperature()), 							ObjectModelEntryFlags::live },
-	{ "max",		OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit()), 				ObjectModelEntryFlags::none },
-	{ "min",		OBJECT_MODEL_FUNC(self->GetLowestTemperatureLimit()), 				ObjectModelEntryFlags::none },
+	{ "current",	OBJECT_MODEL_FUNC(self->GetTemperature(), 1), 						ObjectModelEntryFlags::live },
+	{ "max",		OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit(), 1), 			ObjectModelEntryFlags::none },
+	{ "min",		OBJECT_MODEL_FUNC(self->GetLowestTemperatureLimit(), 1), 			ObjectModelEntryFlags::none },
 	{ "sensor",		OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 				ObjectModelEntryFlags::none },
 	{ "state",		OBJECT_MODEL_FUNC(self->GetStatus().ToString()), 					ObjectModelEntryFlags::live },
 };

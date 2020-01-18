@@ -264,31 +264,33 @@ class LinuxInterface;
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
 #if SAME70
-typedef double floatc_t;					// type of matrix element used for calibration
+typedef double floatc_t;						// type of matrix element used for calibration
 #else
 // We are more memory-constrained on the older processors
-typedef float floatc_t;						// type of matrix element used for calibration
+typedef float floatc_t;							// type of matrix element used for calibration
 #endif
 
-typedef uint16_t AxesBitmap;				// Type of a bitmap representing a set of axes
-typedef uint32_t ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
-typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of local driver numbers
-typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
-typedef uint32_t HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
-typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
+typedef Bitmap<uint16_t> AxesBitmap;			// Type of a bitmap representing a set of axes
+typedef Bitmap<uint32_t> ExtrudersBitmap;		// Type of a bitmap representing a set of extruder drive numbers
+typedef Bitmap<uint32_t> DriversBitmap;			// Type of a bitmap representing a set of local driver numbers
+typedef Bitmap<uint32_t> FansBitmap;			// Type of a bitmap representing a set of fan numbers
+typedef Bitmap<uint32_t> HeatersBitmap;			// Type of a bitmap representing a set of heater numbers
+typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing a set of drivers that typically have a common cooling fan
+
+typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
 
 #if SUPPORT_CAN_EXPANSION
-typedef uint64_t SensorsBitmap;
+typedef Bitmap<uint64_t> SensorsBitmap;
 #else
-typedef uint32_t SensorsBitmap;
+typedef Bitmap<uint32_t> SensorsBitmap;
 #endif
 
-static_assert(MaxAxes <= sizeof(AxesBitmap) * CHAR_BIT);
-static_assert(MaxExtruders <= sizeof(ExtrudersBitmap) * CHAR_BIT);
-static_assert(MaxFans <= sizeof(FansBitmap) * CHAR_BIT);
-static_assert(MaxHeaters <= sizeof(HeatersBitmap) * CHAR_BIT);
-static_assert(NumDirectDrivers <= sizeof(DriversBitmap) * CHAR_BIT);
-static_assert(MaxSensors <= sizeof(SensorsBitmap) * CHAR_BIT);
+static_assert(MaxAxes <= AxesBitmap::MaxBits());
+static_assert(MaxExtruders <= ExtrudersBitmap::MaxBits());
+static_assert(MaxFans <= FansBitmap::MaxBits());
+static_assert(MaxHeaters <= HeatersBitmap::MaxBits());
+static_assert(NumDirectDrivers <= DriversBitmap::MaxBits());
+static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 
 #if SUPPORT_IOBITS
 typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
@@ -399,6 +401,7 @@ private:
 
 // Common definitions used by more than one module
 
+constexpr size_t XY_AXES = 2;										// The number of Cartesian axes
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
 constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
@@ -419,8 +422,10 @@ constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 inline size_t ExtruderToLogicalDrive(size_t extruder) noexcept { return MaxAxesPlusExtruders - 1 - extruder; }
 inline size_t LogicalDriveToExtruder(size_t drive) noexcept { return MaxAxesPlusExtruders - 1 - drive; }
 
-constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
-constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y
+const AxesBitmap DefaultXAxisMapping = AxesBitmap::MakeFromBits(X_AXIS);	// by default, X is mapped to X
+const AxesBitmap DefaultYAxisMapping = AxesBitmap::MakeFromBits(Y_AXIS);	// by default, Y is mapped to Y
+const AxesBitmap XyzAxes = AxesBitmap::MakeLowestNBits(XYZ_AXES);
+const AxesBitmap XyAxes = AxesBitmap::MakeLowestNBits(XY_AXES);
 
 // Common conversion factors
 constexpr float MinutesToSeconds = 60.0;
@@ -432,6 +437,8 @@ constexpr float Pi = 3.141592653589793;
 constexpr float TwoPi = 3.141592653589793 * 2;
 constexpr float DegreesToRadians = 3.141592653589793/180.0;
 constexpr float RadiansToDegrees = 180.0/3.141592653589793;
+
+constexpr unsigned int MaxFloatDigitsDisplayedAfterPoint = 7;
 
 #define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 

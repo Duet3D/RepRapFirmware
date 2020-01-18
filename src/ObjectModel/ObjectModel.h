@@ -14,6 +14,7 @@
 #if SUPPORT_OBJECT_MODEL
 
 #include <General/IPAddress.h>
+#include <General/Bitmap.h>
 #include <RTOSIface/RTOSIface.h>
 
 typedef uint8_t TypeCode;
@@ -21,6 +22,7 @@ constexpr TypeCode NoType = 0;							// code for an invalid or unknown type
 
 // Dummy types, used to define type codes
 class Bitmap32;
+class Bitmap64;
 class Enum32;
 class ObjectModel;					// forward declaration
 class ObjectModelArrayDescriptor;	// forward declaration
@@ -37,19 +39,21 @@ struct DateTime
 // Each type must return a unique type code in the range 1 to 127 (0 is NoType)
 template<class T> constexpr TypeCode TypeOf() noexcept;
 
-template<> constexpr TypeCode TypeOf<bool>() noexcept { return 1; }
-template<> constexpr TypeCode TypeOf<char>() noexcept { return 2; }
-template<> constexpr TypeCode TypeOf<uint32_t>() noexcept { return 3; }
-template<> constexpr TypeCode TypeOf<int32_t>() noexcept { return 4; }
-template<> constexpr TypeCode TypeOf<float>() noexcept { return 5; }
-template<> constexpr TypeCode TypeOf<Bitmap32>() noexcept { return 6; }
-template<> constexpr TypeCode TypeOf<Enum32>() noexcept { return 7; }
-template<> constexpr TypeCode TypeOf<const ObjectModel*>() noexcept { return 8; }
-template<> constexpr TypeCode TypeOf<const char*>() noexcept { return 9; }
-template<> constexpr TypeCode TypeOf<IPAddress>() noexcept { return 10; }
-template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>() noexcept { return 11; }
-template<> constexpr TypeCode TypeOf<DateTime>() noexcept { return 12; }
-template<> constexpr TypeCode TypeOf<DriverId>() noexcept { return 13; }
+template<> constexpr TypeCode TypeOf<bool>								() noexcept { return 1; }
+template<> constexpr TypeCode TypeOf<char>								() noexcept { return 2; }
+template<> constexpr TypeCode TypeOf<uint32_t>							() noexcept { return 3; }
+template<> constexpr TypeCode TypeOf<int32_t>							() noexcept { return 4; }
+template<> constexpr TypeCode TypeOf<float>								() noexcept { return 5; }
+template<> constexpr TypeCode TypeOf<Bitmap<uint16_t>>					() noexcept { return 6; }
+template<> constexpr TypeCode TypeOf<Bitmap<uint32_t>>					() noexcept { return 7; }
+template<> constexpr TypeCode TypeOf<Bitmap<uint64_t>>					() noexcept { return 8; }
+template<> constexpr TypeCode TypeOf<Enum32>							() noexcept { return 9; }
+template<> constexpr TypeCode TypeOf<const ObjectModel*>				() noexcept { return 10; }
+template<> constexpr TypeCode TypeOf<const char*>						() noexcept { return 11; }
+template<> constexpr TypeCode TypeOf<IPAddress>							() noexcept { return 12; }
+template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>	() noexcept { return 13; }
+template<> constexpr TypeCode TypeOf<DateTime>							() noexcept	{ return 14; }
+template<> constexpr TypeCode TypeOf<DriverId>							() noexcept { return 15; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -61,9 +65,9 @@ class StringParser;
 // Struct used to hold the expressions with polymorphic types
 struct ExpressionValue
 {
-	TypeCode type;									// what type is stored in the union
-	uint8_t param;									// additional parameter, e.g. number of usual displayed decimal places for a float,
-													// or table # for an ObjectModel, or 8 extra bits for a date/time
+	uint32_t type : 8,								// what type is stored in the union
+			 param : 24;							// additional parameter, e.g. number of usual displayed decimal places for a float,
+													// or table # for an ObjectModel, or 24 extra bits for a date/time or a long bitmap
 	union
 	{
 		bool bVal;
@@ -72,14 +76,14 @@ struct ExpressionValue
 		int32_t iVal;
 		uint32_t uVal;								// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
 		const char *sVal;
-		const ObjectModel *omVal;					// object of some class derived form ObkectModel
+		const ObjectModel *omVal;					// object of some class derived form ObjectModel
 		const ObjectModelArrayDescriptor *omadVal;
 	};
 
 	ExpressionValue() noexcept : type(NoType) { }
 	explicit constexpr ExpressionValue(bool b) noexcept : type(TYPE_OF(bool)), param(0), bVal(b) { }
 	explicit constexpr ExpressionValue(char c) noexcept : type(TYPE_OF(char)), param(0), cVal(c) { }
-	explicit constexpr ExpressionValue(float f) noexcept : type(TYPE_OF(float)), param(1), fVal(f) { }
+	explicit constexpr ExpressionValue(float f) noexcept : type(TYPE_OF(float)), param(MaxFloatDigitsDisplayedAfterPoint), fVal(f) { }
 	constexpr ExpressionValue(float f, uint8_t numDecimalPlaces) noexcept : type(TYPE_OF(float)), param(numDecimalPlaces), fVal(f) { }
 	explicit constexpr ExpressionValue(int32_t i) noexcept : type(TYPE_OF(int32_t)), param(0), iVal(i) { }
 	explicit constexpr ExpressionValue(const ObjectModel *om) noexcept : type(TYPE_OF(const ObjectModel*)), param(0), omVal(om) { }
@@ -90,6 +94,9 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type(NoType), param(0), uVal(0) { }
 	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? NoType : TYPE_OF(DateTime)), param(t.tim >> 32), uVal((uint32_t)t.tim) { }
 	explicit ExpressionValue(DriverId id) noexcept : type(TYPE_OF(DriverId)), param(0), uVal(id.AsU32()) { }
+	explicit ExpressionValue(Bitmap<uint16_t> bm) noexcept : type(TYPE_OF(Bitmap<uint16_t>)), param(0), uVal(bm.GetRaw()) { }
+	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type(TYPE_OF(Bitmap<uint32_t>)), param(0), uVal(bm.GetRaw()) { }
+	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type(TYPE_OF(Bitmap<uint64_t>)), param(bm.GetRaw() >> 32), uVal((uint32_t)bm.GetRaw()) { }
 
 	void Set(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
 	void Set(char c) noexcept { type = TYPE_OF(char); cVal = c; }
@@ -98,8 +105,11 @@ struct ExpressionValue
 	void Set(float f) noexcept { type = TYPE_OF(float); fVal = f; param = 1; }
 	void Set(const char *s) noexcept { type = TYPE_OF(const char*); sVal = s; }
 
-	// Extract a 40-bit value that we have stored. Used to retrieve date/times.
-	uint64_t Get40BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
+	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.
+	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
+
+	// Get the format string to use assuming this is a floating point number
+	const char *GetFloatFormatString() const noexcept;
 };
 
 // Flags field of a table entry

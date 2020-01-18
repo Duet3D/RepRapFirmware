@@ -45,7 +45,7 @@ public:
 	int32_t GetRPM() const noexcept;
 
 	GCodeResult SetPwm(float speed, const StringRef& reply) noexcept;
-	bool HasMonitoredSensors() const noexcept { return sensorsMonitored != 0; }
+	bool HasMonitoredSensors() const noexcept { return sensorsMonitored.IsNonEmpty(); }
 	const char *GetName() const noexcept { return name.c_str(); }
 
 #if HAS_MASS_STORAGE
@@ -62,9 +62,6 @@ protected:
 	virtual bool UpdateFanConfiguration(const StringRef& reply) noexcept = 0;
 
 	void SetLastRpm(float rpm) noexcept { lastRpm = rpm; whenLastRpmSet = millis(); }
-
-	size_t GetNumMonitoredSensors() const noexcept;
-	int32_t GetMonitoredSensorNumber(size_t index) const noexcept;
 
 	unsigned int fanNumber;
 

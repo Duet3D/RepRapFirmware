@@ -250,7 +250,7 @@ private:
 	uint32_t pin;											// the pin number that drives the chip select pin of this driver
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state
 	volatile uint32_t registersToUpdate;					// bitmap of register values that need to be sent to the driver chip
-	uint32_t driverBit;										// 1 << the driver number
+	DriversBitmap driverBit;								// bitmap of just this driver number
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
@@ -401,7 +401,7 @@ void TmcDriverState::Init(uint32_t driverNumber, uint32_t p_pin) noexcept
 pre(!driversPowered)
 {
 	axisNumber = driverNumber;												// assume straight through mapping at initialisation
-	driverBit = 1ul << driverNumber;
+	driverBit = DriversBitmap::MakeFromBits(driverNumber);
 	pin = p_pin;
 	pinMode(pin, OUTPUT_HIGH);
 	enabled = false;
@@ -915,7 +915,7 @@ namespace SmartDrivers
 #endif
 
 		driversPowered = false;
-		EndstopOrZProbe::UpdateStalledDrivers(LowestNBits<DriversBitmap>(MaxSmartDrivers), false);
+		EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 		for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 		{
 			driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
@@ -1025,7 +1025,7 @@ namespace SmartDrivers
 			if (!wasPowered)
 			{
 				// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
-				EndstopOrZProbe::UpdateStalledDrivers(LowestNBits<DriversBitmap>(MaxSmartDrivers), false);
+				EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 				digitalWrite(GlobalTmc2660EnablePin, LOW);
 				delayMicroseconds(10);
 
@@ -1044,7 +1044,7 @@ namespace SmartDrivers
 		else if (wasPowered)
 		{
 			digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
-			EndstopOrZProbe::UpdateStalledDrivers(LowestNBits<DriversBitmap>(MaxSmartDrivers), false);
+			EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 		}
 	}
 
@@ -1053,7 +1053,7 @@ namespace SmartDrivers
 	{
 		digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
 		driversPowered = false;
-		EndstopOrZProbe::UpdateStalledDrivers(LowestNBits<DriversBitmap>(MaxSmartDrivers), false);
+		EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 	}
 
 	void SetStallThreshold(size_t driver, int sgThreshold) noexcept

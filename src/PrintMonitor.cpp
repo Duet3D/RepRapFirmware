@@ -41,7 +41,7 @@ const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
 			{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-			{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)]); }
+			{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)], 1); }
 };
 
 constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
@@ -55,11 +55,11 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 
 	// 1. ParsedFileInfo members
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 										ObjectModelEntryFlags::none },
-	{ "firstLayerHeight",	OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight), 														ObjectModelEntryFlags::none },
+	{ "firstLayerHeight",	OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight, 2), 														ObjectModelEntryFlags::none },
 	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
-	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight), 															ObjectModelEntryFlags::none },
+	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight, 2), 															ObjectModelEntryFlags::none },
 	{ "lastModified",		OBJECT_MODEL_FUNC(DateTime(self->printingFileInfo.lastModifiedTime)), 												ObjectModelEntryFlags::none },
-	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight), 																ObjectModelEntryFlags::none },
+	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight, 2), 																ObjectModelEntryFlags::none },
 	{ "numLayers",			OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.GetNumLayers()), 													ObjectModelEntryFlags::none },
 	{ "printTime",			OBJECT_MODEL_FUNC_IF(self->printingFileInfo.printTime != 0, (int32_t)self->printingFileInfo.printTime), 			ObjectModelEntryFlags::none },
 	{ "simulatedTime",		OBJECT_MODEL_FUNC_IF(self->printingFileInfo.simulatedTime != 0, (int32_t)self->printingFileInfo.simulatedTime), 	ObjectModelEntryFlags::none },
@@ -492,7 +492,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 ExpressionValue PrintMonitor::EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept
 {
 	const float time = EstimateTimeLeft(method);
-	return (time > 0.0) ? ExpressionValue(time) : ExpressionValue(nullptr);
+	return (time > 0.0) ? ExpressionValue(lrintf(time)) : ExpressionValue(nullptr);
 }
 
 #endif

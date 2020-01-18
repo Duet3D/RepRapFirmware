@@ -819,10 +819,9 @@ void FiveBarScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float pos
 AxesBitmap FiveBarScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If both X and Y have been specified then we know the positions of both arm motors, otherwise we don't
-	const AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
-	if ((g92Axes & xyAxes) != xyAxes)
+	if ((g92Axes & XyAxes) != XyAxes)
 	{
-		g92Axes &= ~xyAxes;
+		g92Axes &= ~XyAxes;
 	}
 	return g92Axes;
 }
@@ -830,10 +829,9 @@ AxesBitmap FiveBarScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap FiveBarScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	if (axesMoving.Intersects(XyzAxes))
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= XyzAxes;
 	}
 	return axesMoving;
 }
@@ -911,14 +909,14 @@ bool FiveBarScaraKinematics::IsContinuousRotationAxis(size_t axis) const
 
 AxesBitmap FiveBarScaraKinematics::GetLinearAxes() const
 {
-	return MakeBitmap<AxesBitmap>(Z_AXIS);
+	return AxesBitmap::MakeFromBits(Z_AXIS);
 }
 
 AxesBitmap FiveBarScaraKinematics::GetConnectedAxes(size_t axis) const
 {
 	return (axis == X_AXIS || axis == Y_AXIS)
-			? MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS)
-				: MakeBitmap<AxesBitmap>(axis);
+			? XyAxes
+				: AxesBitmap::MakeFromBits(axis);
 }
 
 // Recalculate the derived parameters
