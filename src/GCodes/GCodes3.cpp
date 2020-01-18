@@ -769,7 +769,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 	const size_t probeToUse = gb.Seen('P') ? gb.GetUIValue() : platform.GetEndstops().GetCurrentZProbeNumber();
 
 	// Check if this probe exists to not run into a nullptr dereference later
-	if (platform.GetEndstops().GetZProbe(probeToUse) == nullptr)
+	if (platform.GetEndstops().GetZProbe(probeToUse).IsNull())
 	{
 		reply.catf("Invalid probe number: %d", probeToUse);
 		return GCodeResult::error;
@@ -800,7 +800,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 	if (useProbe)
 	{
 		probeNumberToUse = gb.GetUIValue();
-		if (platform.GetEndstops().GetZProbe(probeNumberToUse) == nullptr)
+		if (platform.GetEndstops().GetZProbe(probeNumberToUse).IsNull())
 		{
 			reply.copy("Invalid probe number");
 			return GCodeResult::error;
@@ -879,7 +879,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 	if (useProbe)
 	{
 		probeNumberToUse = gb.GetUIValue();
-		if (platform.GetEndstops().GetZProbe(probeNumberToUse) == nullptr)
+		if (platform.GetEndstops().GetZProbe(probeNumberToUse).IsNull())
 		{
 			reply.copy("Invalid probe number");
 			return GCodeResult::error;

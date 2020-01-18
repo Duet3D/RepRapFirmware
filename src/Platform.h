@@ -451,7 +451,7 @@ public:
 
 	// Endstops and Z probe
 	EndstopsManager& GetEndstops() noexcept { return endstops; }
-	ZProbe& GetCurrentZProbe() noexcept { return endstops.GetCurrentZProbe(); }
+	ReadLockedPointer<ZProbe> GetCurrentZProbe() noexcept { return endstops.GetCurrentOrDefaultZProbe(); }
 	ZProbeType GetCurrentZProbeType() const noexcept;
 	void InitZProbeFilters() noexcept;
 	const volatile ZProbeAveragingFilter& GetZProbeOnFilter() const noexcept { return zProbeOnFilter; }

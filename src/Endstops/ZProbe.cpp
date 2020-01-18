@@ -13,6 +13,63 @@
 #include "Storage/FileStore.h"
 #include "Heating/Heat.h"
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ZProbe, __VA_ARGS__)
+
+constexpr ObjectModelArrayDescriptor ZProbe::offsetsArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue((context.GetLastIndex() == 0) ? ((const ZProbe*)self)->xOffset : ((const ZProbe*)self)->yOffset); }
+};
+
+constexpr ObjectModelArrayDescriptor ZProbe::valueArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::dumbModulated) ? 2 : 1; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{	int v1 = 0;
+					return ExpressionValue
+							(	(context.GetLastIndex() == 0)
+								? (int32_t)((const ZProbe*)self)->GetRawReading()
+								: (((const ZProbe*)self)->GetSecondaryValues(v1), v1)
+							);
+				}
+};
+
+constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. Probe members
+	{ "calibrationTemperature",	OBJECT_MODEL_FUNC(self->calibTemperature), 					ObjectModelEntryFlags::none },
+	{ "disablesHeaters",		OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 	ObjectModelEntryFlags::none },
+	{ "diveHeight",				OBJECT_MODEL_FUNC(self->diveHeight), 						ObjectModelEntryFlags::none },
+	{ "maxProbeCount",			OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 		ObjectModelEntryFlags::none },
+	{ "offsets",				OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 			ObjectModelEntryFlags::none },
+	{ "recoveryTime",			OBJECT_MODEL_FUNC(self->recoveryTime), 						ObjectModelEntryFlags::none },
+	{ "speed",					OBJECT_MODEL_FUNC(self->probeSpeed), 						ObjectModelEntryFlags::none },
+	{ "temperatureCoefficient",	OBJECT_MODEL_FUNC(self->temperatureCoefficient), 			ObjectModelEntryFlags::none },
+	{ "threshold",				OBJECT_MODEL_FUNC((int32_t)self->adcValue), 				ObjectModelEntryFlags::none },
+	{ "tolerance",				OBJECT_MODEL_FUNC(self->tolerance), 						ObjectModelEntryFlags::none },
+	{ "travelSpeed",			OBJECT_MODEL_FUNC(self->travelSpeed), 						ObjectModelEntryFlags::none },
+	{ "triggerHeight",			OBJECT_MODEL_FUNC(self->triggerHeight), 					ObjectModelEntryFlags::none },
+	{ "type",					OBJECT_MODEL_FUNC((int32_t)self->type), 					ObjectModelEntryFlags::none },
+	{ "value",					OBJECT_MODEL_FUNC_NOSELF(&valueArrayDescriptor), 			ObjectModelEntryFlags::live },
+};
+
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 14 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
+
+#endif
+
 ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(), number(num)
 {
 	SetDefaults();
@@ -106,7 +163,7 @@ int ZProbe::GetReading() const noexcept
 	return (misc.parts.invertReading) ? 1000 - zProbeVal : zProbeVal;
 }
 
-int ZProbe::GetSecondaryValues(int& v1, int& v2) noexcept
+int ZProbe::GetSecondaryValues(int& v1) const noexcept
 {
 	const Platform& p = reprap.GetPlatform();
 	if (p.GetZProbeOnFilter().IsValid() && p.GetZProbeOffFilter().IsValid())
@@ -114,7 +171,7 @@ int ZProbe::GetSecondaryValues(int& v1, int& v2) noexcept
 		switch (type)
 		{
 		case ZProbeType::dumbModulated:		// modulated IR sensor
-			v1 = (int) (p.GetZProbeOnFilter().GetSum() / ZProbeAverageReadings);	// pass back the reading with IR turned on
+			v1 = (int)(p.GetZProbeOnFilter().GetSum() / ZProbeAverageReadings);	// pass back the reading with IR turned on
 			return 1;
 		default:
 			break;
@@ -245,14 +302,11 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 	else
 	{
 		const int v0 = GetReading();
-		int v1, v2;
-		switch (GetSecondaryValues(v1, v2))
+		int v1;
+		switch (GetSecondaryValues(v1))
 		{
 		case 1:
 			reply.printf("Current reading %d (%d)", v0, v1);
-			break;
-		case 2:
-			reply.printf("Current reading %d (%d, %d)", v0, v1, v2);
 			break;
 		default:
 			reply.printf("Current reading %d", v0);

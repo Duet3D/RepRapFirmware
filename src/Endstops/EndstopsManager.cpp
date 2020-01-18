@@ -26,7 +26,47 @@
 # include "CanMessageBuffer.h"
 #endif
 
-ReadWriteLock EndstopsManager::endstopsLock;					// used to lock both endstops and Z probes
+ReadWriteLock EndstopsManager::endstopsLock;
+ReadWriteLock EndstopsManager::zProbesLock;
+
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(EndstopsManager, __VA_ARGS__)
+
+constexpr ObjectModelArrayDescriptor EndstopsManager::endstopsArrayDescriptor =
+{
+	&endstopsLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstop(context.GetLastIndex()).Ptr()); }
+};
+
+constexpr ObjectModelArrayDescriptor EndstopsManager::probesArrayDescriptor =
+{
+	&zProbesLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const EndstopsManager*)self)->GetNumProbesToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{ return ExpressionValue(((const EndstopsManager*)self)->GetZProbe(context.GetLastIndex()).Ptr()); }
+};
+
+constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. sensors members
+	{ "endstops",			OBJECT_MODEL_FUNC_NOSELF(&endstopsArrayDescriptor), 	ObjectModelEntryFlags::live },
+	{ "probes",				OBJECT_MODEL_FUNC_NOSELF(&probesArrayDescriptor),		ObjectModelEntryFlags::live },
+};
+
+constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 2 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(EndstopsManager)
+
+#endif
 
 EndstopsManager::EndstopsManager() noexcept : activeEndstops(nullptr), extrudersEndstop(nullptr), isHomingMove(false)
 {
@@ -66,6 +106,35 @@ void EndstopsManager::Init() noexcept
 
 	defaultZProbe = new DummyZProbe(0);			// we must always have a non-null current Z probe so we use this one if none is defined
 	currentZProbeNumber = 0;
+}
+
+ReadLockedPointer<Endstop> EndstopsManager::FindEndstop(size_t axis) const noexcept
+{
+	ReadLocker lock(endstopsLock);
+	return ReadLockedPointer<Endstop>(lock, (axis < MaxAxes) ? axisEndstops[axis] : nullptr);
+}
+
+ReadLockedPointer<ZProbe> EndstopsManager::GetZProbe(size_t index) const noexcept
+{
+	ReadLocker lock(zProbesLock);
+	return ReadLockedPointer<ZProbe>(lock, (index < ARRAY_SIZE(zProbes)) ? zProbes[index] : nullptr);
+}
+
+// Return the current Z probe if there is one, else a default Z probe
+ReadLockedPointer<ZProbe> EndstopsManager::GetCurrentOrDefaultZProbe() const noexcept
+{
+	ReadLocker lock(zProbesLock);
+	return ReadLockedPointer<ZProbe>(lock,
+										(currentZProbeNumber < ARRAY_SIZE(zProbes) && zProbes[currentZProbeNumber] != nullptr)
+										? zProbes[currentZProbeNumber]
+										: defaultZProbe);
+}
+
+ZProbe& EndstopsManager::GetCurrentOrDefaultZProbeFromISR() const noexcept
+{
+	return (currentZProbeNumber < ARRAY_SIZE(zProbes) && zProbes[currentZProbeNumber] != nullptr)
+			? *zProbes[currentZProbeNumber]
+			: *defaultZProbe;
 }
 
 // Add an endstop to the active list
@@ -320,7 +389,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 			}
 			else
 			{
-				switch (inputType)
+				switch (inputType.ToBaseType())
 				{
 				case EndStopType::motorStallAny:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
@@ -393,7 +462,7 @@ void EndstopsManager::GetM119report(const StringRef& reply) noexcept
 											: TranslateEndStopResult(axisEndstops[axis]->Stopped(), axisEndstops[axis]->GetAtHighEnd());
 		reply.catf("%c: %s, ", reprap.GetGCodes().GetAxisLetters()[axis], status);
 	}
-	reply.catf("Z probe: %s", TranslateEndStopResult(GetCurrentZProbe().Stopped(), false));
+	reply.catf("Z probe: %s", TranslateEndStopResult(GetCurrentOrDefaultZProbe()->Stopped(), false));
 }
 
 const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEnd) noexcept
@@ -410,17 +479,6 @@ const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEn
 	default:
 		return "not stopped";
 	}
-}
-
-ZProbe& EndstopsManager::GetCurrentZProbe() const noexcept
-{
-	ZProbe * const zp = (currentZProbeNumber < MaxZProbes) ? zProbes[currentZProbeNumber] : nullptr;
-	return (zp == nullptr) ? *defaultZProbe : *zp;
-}
-
-ZProbe *EndstopsManager::GetZProbe(size_t num) const noexcept
-{
-	return (num < ARRAY_SIZE(zProbes)) ? zProbes[num] : nullptr;
 }
 
 void EndstopsManager::SetZProbeDefaults() noexcept
@@ -624,6 +682,21 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 
 	return zProbes[probeNumber]->HandleG31(gb, reply);
 }
+
+#if SUPPORT_OBJECT_MODEL
+
+size_t EndstopsManager::GetNumProbesToReport() const noexcept
+{
+	size_t ret = MaxZProbes;
+	while (ret != 0 && zProbes[ret - 1] == nullptr)
+	{
+		--ret;
+	}
+	return ret;
+}
+
+#endif
+
 
 #if SUPPORT_CAN_EXPANSION
 

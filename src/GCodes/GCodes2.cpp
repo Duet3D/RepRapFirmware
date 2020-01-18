@@ -4086,15 +4086,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case 851: // Set Z probe offset, only for Marlin compatibility
 			{
-				ZProbe& zp = platform.GetCurrentZProbe();
+				auto zp = platform.GetCurrentZProbe();
 				if (gb.Seen('Z'))
 				{
-					zp.SetTriggerHeight(-gb.GetFValue());
-					zp.SetSaveToConfigOverride();
+					zp->SetTriggerHeight(-gb.GetFValue());
+					zp->SetSaveToConfigOverride();
 				}
 				else
 				{
-					reply.printf("Z probe offset is %.2fmm", (double)(-zp.GetConfiguredTriggerHeight()));
+					reply.printf("Z probe offset is %.2fmm", (double)(-zp->GetConfiguredTriggerHeight()));
 				}
 			}
 			break;

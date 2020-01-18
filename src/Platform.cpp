@@ -3812,7 +3812,7 @@ void Platform::SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept
 
 ZProbeType Platform::GetCurrentZProbeType() const noexcept
 {
-	return endstops.GetCurrentZProbe().GetProbeType();
+	return endstops.GetCurrentOrDefaultZProbe()->GetProbeType();
 }
 
 void Platform::InitZProbeFilters() noexcept
@@ -4405,7 +4405,7 @@ void Platform::Tick() noexcept
 	}
 #endif
 
-	const ZProbe& currentZProbe = GetCurrentZProbe();
+	const ZProbe& currentZProbe = endstops.GetCurrentOrDefaultZProbeFromISR();
 	switch (tickState)
 	{
 	case 1:

@@ -2583,7 +2583,8 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 			{
 				// Do a Z probe at the specified point.
 				gb.SetState(GCodeState::probingAtPoint0);
-				if (platform.GetCurrentZProbeType() != ZProbeType::none && platform.GetCurrentZProbeType() != ZProbeType::blTouch && !probeIsDeployed)
+				const ZProbeType t = platform.GetCurrentZProbeType();
+				if (t != ZProbeType::none && t != ZProbeType::blTouch && !probeIsDeployed)
 				{
 					DoFileMacro(gb, DEPLOYPROBE_G, false, 30);
 				}
@@ -2654,7 +2655,8 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	gridXindex = gridYindex = 0;
 	gb.SetState(GCodeState::gridProbing1);
 
-	if (platform.GetCurrentZProbeType() != ZProbeType::none && platform.GetCurrentZProbeType() != ZProbeType::blTouch && !probeIsDeployed)
+	const ZProbeType t = platform.GetCurrentZProbeType();
+	if (t != ZProbeType::none && t != ZProbeType::blTouch && !probeIsDeployed)
 	{
 		DoFileMacro(gb, DEPLOYPROBE_G, false, 29);
 	}

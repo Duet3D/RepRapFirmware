@@ -8,9 +8,10 @@
 #ifndef SRC_ENDSTOPS_ENDSTOPMANAGER_H_
 #define SRC_ENDSTOPS_ENDSTOPMANAGER_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
 #include "EndstopDefs.h"
-#include "GCodes/GCodeResult.h"
+#include <GCodes/GCodeResult.h>
+#include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
 
 #if SUPPORT_CAN_EXPANSION
@@ -21,7 +22,7 @@ class CanMessageBuffer;
 class StallDetectionEndstop;
 
 // Endstop manager class
-class EndstopsManager
+class EndstopsManager INHERIT_OBJECT_MODEL
 {
 public:
 	EndstopsManager() noexcept;
@@ -57,9 +58,11 @@ public:
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS_GCODE_EXCEPTION;		// M558
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;		// G31
 
-	ZProbe& GetCurrentZProbe() const noexcept;
-	const size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
-	ZProbe *GetZProbe(size_t num) const noexcept;
+	ReadLockedPointer<ZProbe> GetZProbe(size_t index) const noexcept;
+	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
+	ReadLockedPointer<ZProbe> GetCurrentOrDefaultZProbe() const noexcept;
+	ZProbe& GetCurrentOrDefaultZProbeFromISR() const noexcept;
+
 	void SetZProbeDefaults() noexcept;
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 
@@ -73,17 +76,26 @@ public:
 	bool WriteZProbeParameters(FileStore *f, bool includingG31) const noexcept;
 #endif
 
+protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(endstops)
+	OBJECT_MODEL_ARRAY(probes)
+
 private:
 	// Add an endstop to the active list
 	void AddToActive(EndstopOrZProbe& e) noexcept;
 
+#if SUPPORT_OBJECT_MODEL
+	size_t GetNumProbesToReport() const noexcept;
+#endif
+
 	// Translate end stop result to text
 	static const char *TranslateEndStopResult(EndStopHit es, bool atHighEnd) noexcept;
 
-	ReadLockedPointer<ZProbe> FindZProbe(size_t index) const noexcept;
 	ReadLockedPointer<Endstop> FindEndstop(size_t axis) const noexcept;
 
-	static ReadWriteLock endstopsLock;					// used to lock both endstops and Z probes
+	static ReadWriteLock endstopsLock;
+	static ReadWriteLock zProbesLock;
 
 	EndstopOrZProbe * volatile activeEndstops;			// linked list of endstops and Z probes that are active for the current move
 	size_t currentZProbeNumber;							// which Z probe we are using

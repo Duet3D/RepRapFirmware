@@ -47,7 +47,7 @@ public:
 	void SetProbingAway(const bool probingAway) noexcept { misc.parts.probingAway = probingAway; }
 
 	int GetReading() const noexcept;
-	int GetSecondaryValues(int& v1, int& v2) noexcept;
+	int GetSecondaryValues(int& v1) const noexcept;
 
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 	void SetTriggerHeight(float height) noexcept { triggerHeight = height; }
@@ -60,6 +60,10 @@ public:
 	static constexpr unsigned int MaxTapsLimit = 31;	// must be low enough to fit in the maxTaps field
 
 protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(offsets)
+	OBJECT_MODEL_ARRAY(value)
+
 	uint8_t number;
 	ZProbeType type;
 	int8_t sensor;					// the sensor number used for temperature calibration

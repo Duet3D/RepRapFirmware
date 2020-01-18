@@ -8,6 +8,8 @@
 #ifndef SRC_ENDSTOPS_ENDSTOPDEFS_H_
 #define SRC_ENDSTOPS_ENDSTOPDEFS_H_
 
+#include <NamedEnum.h>
+
 // Forward declarations
 class EndstopOrZProbe;
 class Endstop;
@@ -53,15 +55,15 @@ enum class EndStopPosition : unsigned int
 };
 
 // Type of an endstop input - values must tally with the M574 command S parameter
-enum class EndStopType : unsigned int
-{
-	unused_wasActiveLow = 0,
-	inputPin = 1,
-	zProbeAsEndstop = 2,
-	motorStallAny = 3,
-	motorStallIndividual = 4,
-	numInputTypes = 5
-};
+NamedEnum
+(	EndStopType, unsigned int,
+	unused_wasActiveLow,
+	inputPin,
+	zProbeAsEndstop,
+	motorStallAny,
+	motorStallIndividual,
+	numInputTypes
+);
 
 // This is used as the return type of function Stopped.
 // Note the ordering: we need more-stopped-value > less-stopped-value

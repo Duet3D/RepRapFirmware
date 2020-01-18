@@ -20,8 +20,8 @@ ZProbeEndstop::ZProbeEndstop(uint8_t axis, EndStopPosition pos) noexcept : Endst
 // Test whether we are at or near the stop
 EndStopHit ZProbeEndstop::Stopped() const noexcept
 {
-	const ZProbe * const zp = reprap.GetPlatform().GetEndstops().GetZProbe(zProbeNumber);
-	return (zp != nullptr) ? zp->Stopped() : EndStopHit::atStop;
+	const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(zProbeNumber);
+	return (zp.IsNotNull()) ? zp->Stopped() : EndStopHit::atStop;
 }
 
 // This is called to prime axis endstops

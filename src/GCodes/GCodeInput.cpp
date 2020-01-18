@@ -12,7 +12,7 @@
 #include "GCodeBuffer/GCodeBuffer.h"
 
 // Read some input bytes into the GCode buffer. Return true if there is a line of GCode waiting to be processed.
-bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb)
+bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
 {
 	const size_t bytesToPass = min<size_t>(BytesCached(), GCODE_LENGTH);
 	for (size_t i = 0; i < bytesToPass; i++)
@@ -50,7 +50,7 @@ bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb)
 
 // G-code input class for wrapping around Stream-based hardware ports
 
-void StreamGCodeInput::Reset()
+void StreamGCodeInput::Reset() noexcept
 {
 	while (device.available() > 0)
 	{
@@ -58,30 +58,30 @@ void StreamGCodeInput::Reset()
 	}
 }
 
-char StreamGCodeInput::ReadByte()
+char StreamGCodeInput::ReadByte() noexcept
 {
 	return static_cast<char>(device.read());
 }
 
-size_t StreamGCodeInput::BytesCached() const
+size_t StreamGCodeInput::BytesCached() const noexcept
 {
 	return device.available();
 }
 
 // Dynamic G-code input class for caching codes from software-defined sources
 
-RegularGCodeInput::RegularGCodeInput()
+RegularGCodeInput::RegularGCodeInput() noexcept
 	: state(GCodeInputState::idle), writingPointer(0), readingPointer(0)
 {
 }
 
-void RegularGCodeInput::Reset()
+void RegularGCodeInput::Reset() noexcept
 {
 	state = GCodeInputState::idle;
 	writingPointer = readingPointer = 0;
 }
 
-char RegularGCodeInput::ReadByte()
+char RegularGCodeInput::ReadByte() noexcept
 {
 	char c = buffer[readingPointer++];
 	if (readingPointer == GCodeInputBufferSize)
@@ -92,7 +92,7 @@ char RegularGCodeInput::ReadByte()
 }
 
 
-size_t RegularGCodeInput::BytesCached() const
+size_t RegularGCodeInput::BytesCached() const noexcept
 {
 	if (writingPointer >= readingPointer)
 	{
@@ -101,12 +101,12 @@ size_t RegularGCodeInput::BytesCached() const
 	return GCodeInputBufferSize - readingPointer + writingPointer;
 }
 
-size_t RegularGCodeInput::BufferSpaceLeft() const
+size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
 {
 	return (readingPointer - writingPointer - 1u) % GCodeInputBufferSize;
 }
 
-void NetworkGCodeInput::Put(MessageType mtype, char c)
+void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 {
 	if (BufferSpaceLeft() == 0)
 	{
@@ -190,7 +190,7 @@ void NetworkGCodeInput::Put(MessageType mtype, char c)
 	}
 }
 
-void NetworkGCodeInput::Put(MessageType mtype, const char *buf)
+void NetworkGCodeInput::Put(MessageType mtype, const char *buf) noexcept
 {
 	const size_t len = strlen(buf) + 1;
 	MutexLocker lock(bufMutex, 200);
@@ -207,13 +207,13 @@ void NetworkGCodeInput::Put(MessageType mtype, const char *buf)
 	}
 }
 
-NetworkGCodeInput::NetworkGCodeInput() : RegularGCodeInput()
+NetworkGCodeInput::NetworkGCodeInput() noexcept : RegularGCodeInput()
 {
 	bufMutex.Create("NetworkGCodeInput");
 }
 
 // Fill a GCodeBuffer with the last available G-code
-bool NetworkGCodeInput::FillBuffer(GCodeBuffer *gb) /*override*/
+bool NetworkGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept /*override*/
 {
 	MutexLocker lock(bufMutex, 10);
 	return lock && RegularGCodeInput::FillBuffer(gb);
@@ -224,14 +224,14 @@ bool NetworkGCodeInput::FillBuffer(GCodeBuffer *gb) /*override*/
 // File-based G-code input source
 
 // Reset this input. Should be called when the associated file is being closed
-void FileGCodeInput::Reset()
+void FileGCodeInput::Reset() noexcept
 {
 	lastFile = nullptr;
 	RegularGCodeInput::Reset();
 }
 
 // Reset this input. Should be called when a specific G-code or macro file is closed outside of the reading context
-void FileGCodeInput::Reset(const FileData &file)
+void FileGCodeInput::Reset(const FileData &file) noexcept
 {
 	if (file.f == lastFile)
 	{
@@ -240,7 +240,7 @@ void FileGCodeInput::Reset(const FileData &file)
 }
 
 // Read another chunk of G-codes from the file and return true if more data is available
-GCodeInputReadResult FileGCodeInput::ReadFromFile(FileData &file)
+GCodeInputReadResult FileGCodeInput::ReadFromFile(FileData &file) noexcept
 {
 	const size_t bytesCached = BytesCached();
 

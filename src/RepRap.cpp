@@ -156,6 +156,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
 	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
+	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::none },
 	{ "state",					OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC_NOSELF(&toolsArrayDescriptor),						ObjectModelEntryFlags::live },
 
@@ -166,7 +167,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 8, 4 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 9, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
@@ -1188,15 +1189,13 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		response->cat(",\"sensors\":{");
 
 		// Probe
-		const int v0 = platform->GetCurrentZProbe().GetReading();
-		int v1, v2;
-		switch (platform->GetCurrentZProbe().GetSecondaryValues(v1, v2))
+		const auto zp = platform->GetCurrentZProbe();
+		const int v0 = zp->GetReading();
+		int v1;
+		switch (zp->GetSecondaryValues(v1))
 		{
 			case 1:
 				response->catf("\"probeValue\":%d,\"probeSecondary\":[%d]", v0, v1);
-				break;
-			case 2:
-				response->catf("\"probeValue\":%d,\"probeSecondary\":[%d,%d]", v0, v1, v2);
 				break;
 			default:
 				response->catf("\"probeValue\":%d", v0);
@@ -1484,11 +1483,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 
 		/* Probe */
 		{
-			const ZProbe& zp = platform->GetCurrentZProbe();
+			const auto zp = platform->GetCurrentZProbe();
 
 			// Trigger threshold, trigger height, type
 			response->catf(",\"probe\":{\"threshold\":%d,\"height\":%.2f,\"type\":%u}",
-							zp.GetAdcValue(), (double)zp.GetConfiguredTriggerHeight(), (unsigned int)zp.GetProbeType());
+							zp->GetAdcValue(), (double)zp->GetConfiguredTriggerHeight(), (unsigned int)zp->GetProbeType());
 		}
 
 		/* Tool Mapping */
@@ -1916,15 +1915,13 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 	response->catf(",\"tool\":%d", GetCurrentToolNumber());
 
 	// Send the Z probe value
-	const int v0 = platform->GetCurrentZProbe().GetReading();
-	int v1, v2;
-	switch (platform->GetCurrentZProbe().GetSecondaryValues(v1, v2))
+	const auto zp = platform->GetCurrentZProbe();
+	const int v0 = zp->GetReading();
+	int v1;
+	switch (zp->GetSecondaryValues(v1))
 	{
 	case 1:
 		response->catf(",\"probe\":\"%d (%d)\"", v0, v1);
-		break;
-	case 2:
-		response->catf(",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
 		break;
 	default:
 		response->catf(",\"probe\":\"%d\"", v0);
