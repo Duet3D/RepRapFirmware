@@ -15,12 +15,12 @@
 
 const float M3ScrewPitch = 0.5;
 
-ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k)
+ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k) noexcept
 	: Kinematics(k, -1.0, 0.0, true), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 
-ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, float segsPerSecond, float minSegLength, bool doUseRawG0)
+ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, float segsPerSecond, float minSegLength, bool doUseRawG0) noexcept
 	: Kinematics(k, segsPerSecond, minSegLength, doUseRawG0), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
@@ -87,13 +87,13 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 }
 
 // Return true if the kinematics supports auto calibration based on bed probing.
-bool ZLeadscrewKinematics::SupportsAutoCalibration() const
+bool ZLeadscrewKinematics::SupportsAutoCalibration() const noexcept
 {
 	return numLeadscrews >= 2;
 }
 
 // Perform auto calibration, returning true if failed. Override this implementation in kinematics that support it. Caller already owns the GCode movement lock.
-bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply)
+bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	if (!SupportsAutoCalibration())			// should be checked by caller, but check it here too
 	{
@@ -345,7 +345,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 }
 
 // Append the list of leadscrew corrections to 'reply'
-void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], const StringRef& reply) const
+void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], const StringRef& reply) const noexcept
 {
 	for (size_t i = 0; i < numLeadscrews; ++i)
 	{
@@ -356,7 +356,7 @@ void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], const
 #if HAS_MASS_STORAGE
 
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
-bool ZLeadscrewKinematics::WriteResumeSettings(FileStore *f) const
+bool ZLeadscrewKinematics::WriteResumeSettings(FileStore *f) const noexcept
 {
 	//TODO we could write leadscrew corrections here, but they may not be the same as before
 	return true;

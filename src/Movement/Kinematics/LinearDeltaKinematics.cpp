@@ -13,18 +13,18 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include <Math/Deviation.h>
 
-LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true), numTowers(UsualNumTowers)
+LinearDeltaKinematics::LinearDeltaKinematics() noexcept : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true), numTowers(UsualNumTowers)
 {
 	Init();
 }
 
 // Return the name of the current kinematics
-const char *LinearDeltaKinematics::GetName(bool forStatusReport) const
+const char *LinearDeltaKinematics::GetName(bool forStatusReport) const noexcept
 {
 	return (forStatusReport) ? "delta" : "Linear delta";
 }
 
-void LinearDeltaKinematics::Init()
+void LinearDeltaKinematics::Init() noexcept
 {
 	radius = DefaultDeltaRadius;
 	xTilt = yTilt = 0.0;
@@ -47,7 +47,7 @@ void LinearDeltaKinematics::Init()
 	Recalc();
 }
 
-void LinearDeltaKinematics::Recalc()
+void LinearDeltaKinematics::Recalc() noexcept
 {
 	towerX[DELTA_A_AXIS] = -(radius * cosf((30 + angleCorrections[DELTA_A_AXIS]) * DegreesToRadians));
 	towerY[DELTA_A_AXIS] = -(radius * sinf((30 + angleCorrections[DELTA_A_AXIS]) * DegreesToRadians));
@@ -104,7 +104,7 @@ void LinearDeltaKinematics::Recalc()
 }
 
 // Make the average of the endstop adjustments zero, without changing the individual homed carriage heights
-void LinearDeltaKinematics::NormaliseEndstopAdjustments()
+void LinearDeltaKinematics::NormaliseEndstopAdjustments() noexcept
 {
 	const float eav = (endstopAdjustments[DELTA_A_AXIS] + endstopAdjustments[DELTA_B_AXIS] + endstopAdjustments[DELTA_C_AXIS])/3.0;
 	for (size_t i = 0; i < numTowers; ++i)
@@ -115,7 +115,7 @@ void LinearDeltaKinematics::NormaliseEndstopAdjustments()
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.
-float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) const
+float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) const noexcept
 {
 	if (axis < numTowers)
 	{
@@ -131,7 +131,7 @@ float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 }
 
 // Calculate the Cartesian coordinates from the motor coordinates
-void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[XYZ_AXES]) const
+void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[XYZ_AXES]) const noexcept
 {
 	// Calculate RSUT such that x = (Uz + S)/Q, y = -(Rz + T)/Q
 	const float R = ((Xbc * Ha) + (Xca * Hb) + (Xab * Hc)) * 2;
@@ -161,7 +161,8 @@ void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 }
 
 // Convert Cartesian coordinates to motor steps
-bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
+bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
+													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	bool ok = true;
 	for (size_t axis = 0; axis < numTowers; ++axis)
@@ -186,7 +187,7 @@ bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
-void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
+void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	ForwardTransform(motorPos[DELTA_A_AXIS]/stepsPerMm[DELTA_A_AXIS], motorPos[DELTA_B_AXIS]/stepsPerMm[DELTA_B_AXIS], motorPos[DELTA_C_AXIS]/stepsPerMm[DELTA_C_AXIS], machinePos);
 
@@ -198,13 +199,14 @@ void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 }
 
 // Return true if the specified XY position is reachable by the print head reference point.
-bool LinearDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) const
+bool LinearDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
 {
 	return fsquare(x) + fsquare(y) < printRadiusSquared;
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+															size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	bool limited = false;
 
@@ -370,7 +372,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
-void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
+void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept
 {
 	for (size_t i = 0; i < numAxes; ++i)
 	{
@@ -380,7 +382,7 @@ void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 }
 
 // Auto calibrate from a set of probe points returning true if it failed
-bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply)
+bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 9;		// maximum number of delta machine factors we can adjust
 
@@ -593,7 +595,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 }
 
 // Return the type of motion computation needed by an axis
-MotionType LinearDeltaKinematics::GetMotionType(size_t axis) const
+MotionType LinearDeltaKinematics::GetMotionType(size_t axis) const noexcept
 {
 	return (axis < numTowers) ? MotionType::segmentFreeDelta : MotionType::linear;
 }
@@ -606,7 +608,7 @@ MotionType LinearDeltaKinematics::GetMotionType(size_t axis) const
 // 5 = Y tower correction
 // 6 = diagonal rod length
 // 7, 8 = X tilt, Y tilt. We scale these by the printable radius to get sensible values in the range -1..1
-floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, float hb, float hc) const
+floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, float hb, float hc) const noexcept
 {
 	const float perturb = 0.2;			// perturbation amount in mm or degrees
 	LinearDeltaKinematics hiParams(*this), loParams(*this);
@@ -682,7 +684,7 @@ floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 //  Diagonal rod length adjustment - omitted if doing 8-factor calibration (remainder are moved down)
 //  X tilt adjustment
 //  Y tilt adjustment
-void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
+void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[]) noexcept
 {
 	// Update the delta radius
 	const float oldRadius = radius;				// we will need this to correct the endstop adjustments
@@ -733,7 +735,7 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 }
 
 // Print all the parameters for debugging
-void LinearDeltaKinematics::PrintParameters(const StringRef& reply) const
+void LinearDeltaKinematics::PrintParameters(const StringRef& reply) const noexcept
 {
 	reply.printf("Stops X%.3f Y%.3f Z%.3f height %.3f diagonals",
 		(double)endstopAdjustments[DELTA_A_AXIS], (double)endstopAdjustments[DELTA_B_AXIS], (double)endstopAdjustments[DELTA_C_AXIS], (double)homedHeight);
@@ -750,7 +752,7 @@ void LinearDeltaKinematics::PrintParameters(const StringRef& reply) const
 #if HAS_MASS_STORAGE
 
 // Write the parameters that are set by auto calibration to a file, returning true if success
-bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
+bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const noexcept
 {
 	bool ok = f->Write("; Delta parameters\n");
 	if (ok)
@@ -777,7 +779,7 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 }
 
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
-bool LinearDeltaKinematics::WriteResumeSettings(FileStore *f) const
+bool LinearDeltaKinematics::WriteResumeSettings(FileStore *f) const noexcept
 {
 	return !doneAutoCalibration || WriteCalibrationParameters(f);
 }
@@ -785,7 +787,7 @@ bool LinearDeltaKinematics::WriteResumeSettings(FileStore *f) const
 #endif
 
 // Get the bed tilt fraction for the specified axis
-float LinearDeltaKinematics::GetTiltCorrection(size_t axis) const
+float LinearDeltaKinematics::GetTiltCorrection(size_t axis) const noexcept
 {
 	return (axis == X_AXIS) ? xTilt : (axis == Y_AXIS) ? yTilt : 0.0;
 }
@@ -929,7 +931,7 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
-AxesBitmap LinearDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
+AxesBitmap LinearDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noexcept
 {
 	// If all of X, Y and Z have been specified then we know the positions of all 3 tower motors, otherwise we don't
 	if ((g92Axes & XyzAxes) != XyzAxes)
@@ -940,7 +942,7 @@ AxesBitmap LinearDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 }
 
 // Return the set of axes that must be homed prior to regular movement of the specified axes
-AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
+AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept
 {
 	if (axesMoving.Intersects(XyzAxes))
 	{
@@ -952,7 +954,7 @@ AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-AxesBitmap LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
+AxesBitmap LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept
 {
 	// If homing X, Y or Z we must home all the towers
 	if (toBeHomed.Intersects(XyzAxes))
@@ -966,14 +968,14 @@ AxesBitmap LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBi
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
 // Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool LinearDeltaKinematics::QueryTerminateHomingMove(size_t axis) const
+bool LinearDeltaKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 {
 	return false;
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
+void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
 {
 	if (axis < numTowers)
 	{
@@ -992,7 +994,7 @@ void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
+void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
 	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
@@ -1008,7 +1010,7 @@ void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *nor
 // Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
 // The DDA class has special support for delta printers, so we can baystep the Z axis.
-AxesBitmap LinearDeltaKinematics::GetLinearAxes() const
+AxesBitmap LinearDeltaKinematics::GetLinearAxes() const noexcept
 {
 	return AxesBitmap::MakeFromBits(Z_AXIS);
 }

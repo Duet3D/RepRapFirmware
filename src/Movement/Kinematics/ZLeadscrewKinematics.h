@@ -15,18 +15,18 @@
 class ZLeadscrewKinematics : public Kinematics
 {
 public:
-	ZLeadscrewKinematics(KinematicsType k);
-	ZLeadscrewKinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0);
+	ZLeadscrewKinematics(KinematicsType k) noexcept;
+	ZLeadscrewKinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0) noexcept;
 
-	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) override;
-	bool SupportsAutoCalibration() const override;
-	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) override;
+	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS_GCODE_EXCEPTION override;
+	bool SupportsAutoCalibration() const noexcept override;
+	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
 #if HAS_MASS_STORAGE
-	bool WriteResumeSettings(FileStore *f) const override;
+	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
 
 private:
-	void AppendCorrections(const floatc_t corrections[], const StringRef& reply) const;
+	void AppendCorrections(const floatc_t corrections[], const StringRef& reply) const noexcept;
 
 	static const unsigned int MaxLeadscrews = 8;			// some Folgertech FT5 printers have 8 bed adjusting screws
 
