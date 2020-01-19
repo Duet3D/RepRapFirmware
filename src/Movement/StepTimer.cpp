@@ -232,18 +232,32 @@ void StepTimer::SetCallback(TimerCallbackFunction cb, CallbackParameter param) n
 // Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent.
 bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 {
+	// Optimise the common case i.e. no other timer is pending
+	if (pendingList == nullptr)
+	{
+		if (ScheduleTimerInterrupt(when))
+		{
+			return true;
+		}
+		whenDue = when;
+		next = nullptr;
+		pendingList = this;
+		active = true;
+		return false;
+	}
+
+	// Another timer (or possibly this one) is already pending
 	if (active)
 	{
 		CancelCallbackFromIsr();
 	}
 
-	whenDue = when;
 	const Ticks now = GetTimerTicks();
 	const int32_t howSoon = (int32_t)(when - now);
 	StepTimer** ppst = const_cast<StepTimer**>(&pendingList);
-	if (*ppst == nullptr || howSoon < (int32_t)((*ppst)->whenDue - now))
+	if (howSoon < (int32_t)((*ppst)->whenDue - now))
 	{
-		// No other callbacks are scheduled, or this one is due earlier than the first existing one
+		// This one is due earlier than the first existing one
 		if (ScheduleTimerInterrupt(when))
 		{
 			return true;
@@ -257,6 +271,7 @@ bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 		}
 	}
 
+	whenDue = when;
 	next = *ppst;
 	*ppst = this;
 	active = true;

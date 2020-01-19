@@ -338,49 +338,50 @@ void DDARing::TryStartNextMove(Platform& p, uint32_t startTime) noexcept
 void DDARing::Interrupt(Platform& p) noexcept
 {
 	const uint16_t isrStartTime = StepTimer::GetTimerTicks16();
-	for (;;)
+	DDA* cdda = currentDda;								// capture volatile variable
+	if (cdda != nullptr)
 	{
-		// Generate a step for the current move
-		DDA* const cdda = currentDda;					// capture volatile variable
-		if (cdda != nullptr)
+		for (;;)
 		{
+			// Generate a step for the current move
 			cdda->StepDrivers(p);						// check endstops if necessary and step the drivers
 			if (cdda->GetState() == DDA::completed)
 			{
 				OnMoveCompleted(cdda, p);
+				cdda = currentDda;
+				if (cdda == nullptr)
+				{
+					break;
+				}
 			}
-		}
 
-		// Schedule a callback at the time when the next step is due, and quit unless it is due immediately
-		if (!ScheduleNextStepInterrupt())
-		{
-			return;
-		}
-
-		// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
-		const uint16_t clocksTaken = StepTimer::GetTimerTicks16() - isrStartTime;
-		if (clocksTaken >= DDA::MaxStepInterruptTime)
-		{
-			// Force a break by updating the move start time
-			DDA* const cdda = currentDda;					// capture volatile variable
-			if (cdda != nullptr)
+			// Schedule a callback at the time when the next step is due, and quit unless it is due immediately
+			if (!cdda->ScheduleNextStepInterrupt(timer))
 			{
+				break;
+			}
+
+			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
+			const uint16_t clocksTaken = StepTimer::GetTimerTicks16() - isrStartTime;
+			if (clocksTaken >= DDA::MaxStepInterruptTime)
+			{
+				// Force a break by updating the move start time
 				cdda->InsertHiccup(DDA::HiccupTime);
 				for (DDA *nextDda = cdda->GetNext(); nextDda->GetState() == DDA::frozen; nextDda = nextDda->GetNext())
 				{
 					nextDda->InsertHiccup(DDA::HiccupTime);
 				}
-			}
 
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::InsertHiccup(DDA::HiccupTime);
+				CanMotion::InsertHiccup(DDA::HiccupTime);
 #endif
-			++numHiccups;
+				++numHiccups;
 
-			// Reschedule the next step interrupt. This time it should succeed.
-			if (!ScheduleNextStepInterrupt())
-			{
-				return;
+				// Reschedule the next step interrupt. This time it should succeed.
+				if (!cdda->ScheduleNextStepInterrupt(timer))
+				{
+					return;
+				}
 			}
 		}
 	}
