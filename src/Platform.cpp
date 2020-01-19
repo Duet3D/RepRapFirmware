@@ -1361,7 +1361,7 @@ void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const 
 	{
 		String<StringLength100> scratchString;
 		scratchString.printf("%s reported by driver(s)", text);
-		whichDrivers.Iterate([&scratchString](unsigned int drive) { scratchString.catf(" %u", drive); });
+		whichDrivers.Iterate([&scratchString](unsigned int drive, bool) noexcept { scratchString.catf(" %u", drive); });
 		MessageF(mt, "%s\n", scratchString.c_str());
 		reported = true;
 		whichDrivers.Clear();
@@ -2180,7 +2180,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 void Platform::DriverCoolingFansOnOff(DriverChannelsBitmap driverChannelsMonitored, bool on) noexcept
 {
 	driverChannelsMonitored.Iterate
-		([this, on](unsigned int i)
+		([this, on](unsigned int i, bool) noexcept
 			{
 				if (on)
 				{
@@ -2283,7 +2283,7 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 
 	String<StringLength100> scratchString;
 	scratchString.printf("M208 S%d", sParam);
-	axesProbed.Iterate([&scratchString, limits](unsigned int axis) { scratchString.catf(" %c%.2f", reprap.GetGCodes().GetAxisLetters()[axis], (double)limits[axis]); });
+	axesProbed.Iterate([&scratchString, limits](unsigned int axis, bool) noexcept { scratchString.catf(" %c%.2f", reprap.GetGCodes().GetAxisLetters()[axis], (double)limits[axis]); });
 	scratchString.cat('\n');
 	return f->Write(scratchString.c_str());
 }
@@ -4026,25 +4026,25 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 	{
 		seen = true;
 		const int sgThreshold = gb.GetIValue();
-		drivers.Iterate([sgThreshold](unsigned int drive) { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
+		drivers.Iterate([sgThreshold](unsigned int drive, bool) noexcept { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
 	}
 	if (gb.Seen('F'))
 	{
 		seen = true;
 		const bool sgFilter = (gb.GetIValue() == 1);
-		drivers.Iterate([sgFilter](unsigned int drive) { SmartDrivers::SetStallFilter(drive, sgFilter); });
+		drivers.Iterate([sgFilter](unsigned int drive, bool) noexcept { SmartDrivers::SetStallFilter(drive, sgFilter); });
 	}
 	if (gb.Seen('H'))
 	{
 		seen = true;
 		const unsigned int stepsPerSecond = gb.GetUIValue();
-		drivers.Iterate([stepsPerSecond](unsigned int drive) { SmartDrivers::SetStallMinimumStepsPerSecond(drive, stepsPerSecond); });
+		drivers.Iterate([stepsPerSecond](unsigned int drive, bool) noexcept { SmartDrivers::SetStallMinimumStepsPerSecond(drive, stepsPerSecond); });
 	}
 	if (gb.Seen('T'))
 	{
 		seen = true;
 		const uint16_t coolStepConfig = (uint16_t)gb.GetUIValue();
-		drivers.Iterate([coolStepConfig](unsigned int drive) { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
+		drivers.Iterate([coolStepConfig](unsigned int drive, bool) noexcept { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
 	}
 	if (gb.Seen('R'))
 	{
@@ -4100,7 +4100,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 	}
 
 	drivers.Iterate
-		([buf, this, reply](unsigned int drive)
+		([buf, this, reply](unsigned int drive, bool) noexcept
 			{
 				buf->lcatf("Driver %u: ", drive);
 				reply.Clear();										// we use 'reply' as a temporary buffer

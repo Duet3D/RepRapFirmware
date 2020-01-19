@@ -75,14 +75,6 @@ constexpr ObjectModelArrayDescriptor Tool::mixArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->mix[context.GetLastIndex()], 2); }
 };
 
-constexpr ObjectModelArrayDescriptor Tool::fansArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->fanMapping.CountSetBits(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue((int32_t)((const Tool*)self)->fanMapping.GetSetBitNumber(context.GetLastIndex())); }
-};
-
 constexpr ObjectModelArrayDescriptor Tool::offsetsArrayDescriptor =
 {
 	nullptr,					// no lock needed
@@ -94,15 +86,7 @@ constexpr ObjectModelArrayDescriptor Tool::axesArrayDescriptor =
 {
 	nullptr,					// no lock needed
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&oneAxisArrayDescriptor); }
-};
-
-constexpr ObjectModelArrayDescriptor Tool::oneAxisArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const Tool*)self)->axisMapping[context.GetLastIndex()].CountSetBits(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue((int32_t)((const Tool*)self)->axisMapping[context.GetIndex(1)].GetSetBitNumber(context.GetLastIndex())); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->axisMapping[context.GetLastIndex()]); }
 };
 
 constexpr ObjectModelTableEntry Tool::objectModelTable[] =
@@ -112,7 +96,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "active",		OBJECT_MODEL_FUNC_NOSELF(&activeTempsArrayDescriptor), 			ObjectModelEntryFlags::live },
 	{ "axes",		OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 				ObjectModelEntryFlags::none },
 	{ "extruders",	OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 			ObjectModelEntryFlags::none },
-	{ "fans",		OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor), 				ObjectModelEntryFlags::none },
+	{ "fans",		OBJECT_MODEL_FUNC(self->fanMapping), 							ObjectModelEntryFlags::none },
 	{ "heaters",	OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 				ObjectModelEntryFlags::none },
 	{ "mix",		OBJECT_MODEL_FUNC_NOSELF(&mixArrayDescriptor), 					ObjectModelEntryFlags::none },
 	{ "name",		OBJECT_MODEL_FUNC(self->name),						 			ObjectModelEntryFlags::none },

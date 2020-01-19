@@ -54,7 +54,6 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(monitoredSensors)
 
 	static constexpr uint32_t RpmReadingTimeout = 2000;		// any reading older than this number of milliseconds is considered unreliable
 

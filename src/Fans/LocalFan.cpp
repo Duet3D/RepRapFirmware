@@ -86,7 +86,7 @@ void LocalFan::InternalRefresh() noexcept
 #if HAS_SMART_DRIVERS
 		  , &driverChannelsMonitored
 #endif
-		 ](unsigned int sensorNum)
+		 ](unsigned int sensorNum, bool) noexcept
 			{
 				const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
 				if (sensor.IsNotNull())

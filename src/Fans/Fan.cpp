@@ -18,31 +18,22 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Fan, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(Fan, _condition,__VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor Fan::monitoredSensorsArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
-				{ return ((const Fan*)self)->sensorsMonitored.CountSetBits(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue((int32_t)((const Fan*)self)->sensorsMonitored.GetSetBitNumber(context.GetLastIndex())); }
-};
-
 constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Fan members
-	{ "actualValue",		OBJECT_MODEL_FUNC(self->lastVal, 1), 													ObjectModelEntryFlags::live },
-	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime, 2), 									ObjectModelEntryFlags::none },
-	{ "max",				OBJECT_MODEL_FUNC(self->maxVal, 2), 													ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->minVal, 2), 													ObjectModelEntryFlags::none },
-	{ "name",				OBJECT_MODEL_FUNC(self->name.c_str()), 													ObjectModelEntryFlags::none },
-	{ "requestedValue",		OBJECT_MODEL_FUNC(self->val, 2), 														ObjectModelEntryFlags::live },
-	{ "rpm",				OBJECT_MODEL_FUNC(self->GetRPM()), 														ObjectModelEntryFlags::live },
-	{ "thermostatic",		OBJECT_MODEL_FUNC(self, 1), 															ObjectModelEntryFlags::none },
+	{ "actualValue",		OBJECT_MODEL_FUNC(self->lastVal, 1), 															ObjectModelEntryFlags::live },
+	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime, 2), 											ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->maxVal, 2), 															ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->minVal, 2), 															ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->name.c_str()), 															ObjectModelEntryFlags::none },
+	{ "requestedValue",		OBJECT_MODEL_FUNC(self->val, 2), 																ObjectModelEntryFlags::live },
+	{ "rpm",				OBJECT_MODEL_FUNC(self->GetRPM()), 																ObjectModelEntryFlags::live },
+	{ "thermostatic",		OBJECT_MODEL_FUNC(self, 1), 																	ObjectModelEntryFlags::none },
 
 	// 1. Fan.thermostatic members
 	{ "control",			OBJECT_MODEL_FUNC(self->sensorsMonitored.IsNonEmpty()), 										ObjectModelEntryFlags::none },
-	{ "heaters",			OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), &monitoredSensorsArrayDescriptor),	ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->sensorsMonitored),				ObjectModelEntryFlags::none },
 	{ "highTemperature",	OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[1], 1), 	ObjectModelEntryFlags::none },
 	{ "lowTemperature",		OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[0], 1), 	ObjectModelEntryFlags::none },
 };
@@ -190,7 +181,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			if (sensorsMonitored.IsNonEmpty())
 			{
 				reply.catf(", temperature: %.1f:%.1fC, sensors:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				sensorsMonitored.Iterate([&reply](unsigned int sensorNum) { reply.catf(" %u", sensorNum); });
+				sensorsMonitored.Iterate([&reply](unsigned int sensorNum, bool) noexcept { reply.catf(" %u", sensorNum); });
 				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
 			}
 		}

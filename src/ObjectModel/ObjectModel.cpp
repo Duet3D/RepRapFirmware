@@ -170,13 +170,24 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 	if (context.WantArrayLength() && *filter == 0)
 	{
 		// We have been asked for the length of an array and we have reached the end of the filter, so the value should be an array
-		if (val.type == TYPE_OF(const ObjectModelArrayDescriptor*))
+		switch (val.type)
 		{
+		case TYPE_OF(const ObjectModelArrayDescriptor*):
 			buf->catf("%u", val.omadVal->GetNumElements(this, context));
-		}
-		else
-		{
+			break;
+
+		case TYPE_OF(Bitmap<uint16_t>):
+		case TYPE_OF(Bitmap<uint32_t>):
+			buf->catf("%u", Bitmap<uint32_t>::MakeFromRaw(val.uVal).CountSetBits());
+			break;
+
+		case TYPE_OF(Bitmap<uint64_t>):
+			buf->catf("%u", Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).CountSetBits());
+			break;
+
+		default:
 			buf->cat("null");
+			break;
 		}
 	}
 	else
@@ -249,51 +260,42 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TYPE_OF(Bitmap<uint16_t>):
-			if (context.ShortFormReport())
-			{
-				buf->catf("%" PRIu16, (uint16_t)val.uVal);
-			}
-			else
-			{
-				Bitmap<uint16_t> bm = Bitmap<uint16_t>::MakeFromRaw((uint16_t)val.uVal);
-				buf->cat('[');
-				bool first = true;
-				bm.Iterate
-					([buf, &first](unsigned int bn)
-						{
-							if (first)
-							{
-								first = false;
-							}
-							else
-							{
-								buf->cat(',');
-							}
-							buf->catf("%u", bn);
-						}
-					);
-				buf->cat(']');
-			}
-			break;
-
 		case TYPE_OF(Bitmap<uint32_t>):
-			if (context.ShortFormReport())
+			if (*filter == '[')
+			{
+				++filter;
+				if (*filter == ']')						// if reporting on all elements in the array
+				{
+					++filter;
+				}
+				else
+				{
+					const char *endptr;
+					const long index = SafeStrtol(filter, &endptr);
+					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+					{
+						buf->cat("null");				// avoid returning badly-formed JSON
+						break;							// invalid syntax, or index out of range
+					}
+					const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
+					buf->catf("%u", bm.GetSetBitNumber(index));
+					break;
+				}
+			}
+			else if (context.ShortFormReport())
 			{
 				buf->catf("%" PRIu32, val.uVal);
+				break;
 			}
-			else
+
+			// If we get here then we want a long form report
 			{
-				Bitmap<uint32_t> bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
+				const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
 				buf->cat('[');
-				bool first = true;
 				bm.Iterate
-					([buf, &first](unsigned int bn)
+					([buf](unsigned int bn, bool first) noexcept
 						{
-							if (first)
-							{
-								first = false;
-							}
-							else
+							if (!first)
 							{
 								buf->cat(',');
 							}
@@ -305,23 +307,41 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TYPE_OF(Bitmap<uint64_t>):
-			if (context.ShortFormReport())
+			if (*filter == '[')
+			{
+				++filter;
+				if (*filter == ']')						// if reporting on all elements in the array
+				{
+					++filter;
+				}
+				else
+				{
+					const char *endptr;
+					const long index = SafeStrtol(filter, &endptr);
+					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+					{
+						buf->cat("null");				// avoid returning badly-formed JSON
+						break;							// invalid syntax, or index out of range
+					}
+					const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.uVal);
+					buf->catf("%u", bm.GetSetBitNumber(index));
+					break;
+				}
+			}
+			else if (context.ShortFormReport())
 			{
 				buf->catf("%" PRIu64, val.Get56BitValue());
+				break;
 			}
-			else
+
+			// If we get here then we want a long form report
 			{
-				Bitmap<uint64_t> bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
+				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
 				buf->cat('[');
-				bool first = true;
 				bm.Iterate
-					([buf, &first](unsigned int bn)
+					([buf](unsigned int bn, bool first) noexcept
 						{
-							if (first)
-							{
-								first = false;
-							}
-							else
+							if (!first)
 							{
 								buf->cat(',');
 							}
@@ -522,42 +542,112 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 
 ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, ExpressionValue val, const char *idString) const
 {
-	if (val.type == TYPE_OF(const ObjectModelArrayDescriptor*))
+	switch (val.type)
 	{
-		if (*idString == 0 && context.WantArrayLength())
+	case TYPE_OF(const ObjectModelArrayDescriptor*):
 		{
+			if (*idString == 0 && context.WantArrayLength())
+			{
+				ReadLocker lock(val.omadVal->lockPointer);
+				return ExpressionValue((int32_t)val.omadVal->GetNumElements(this, context));
+			}
+			if (*idString != '^')
+			{
+				throw sp.ConstructParseException("missing array index");
+			}
+
+			context.AddIndex();
 			ReadLocker lock(val.omadVal->lockPointer);
-			return ExpressionValue((int32_t)val.omadVal->GetNumElements(this, context));
-		}
-		if (*idString != '^')
-		{
-			throw sp.ConstructParseException("missing array index");
-		}
 
-		context.AddIndex();
-		ReadLocker lock(val.omadVal->lockPointer);
+			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.omadVal->GetNumElements(this, context))
+			{
+				throw sp.ConstructParseException("array index out of bounds");
+			}
 
-		if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.omadVal->GetNumElements(this, context))
-		{
-			throw sp.ConstructParseException("array index out of bounds");
+			const ExpressionValue arrayElement = val.omadVal->GetElement(this, context);
+			return GetObjectValue(sp, context, arrayElement, idString + 1);
 		}
 
-		const ExpressionValue arrayElement = val.omadVal->GetElement(this, context);
-		return GetObjectValue(sp, context, arrayElement, idString + 1);
-	}
-
-	if (val.type == TYPE_OF(const ObjectModel*))
-	{
+	case TYPE_OF(const ObjectModel*):
 		if (*idString == '.')
 		{
 			return val.omVal->GetObjectValue(sp, context, idString + 1, val.param);
 		}
 		throw sp.ConstructParseException((*idString == 0) ? "selected value has non-primitive type" : "syntax error in value selector string");
-	}
 
-	if (*idString == 0)
-	{
-		return val;
+	case TYPE_OF(Bitmap<uint16_t>):
+	case TYPE_OF(Bitmap<uint32_t>):
+		if (context.WantArrayLength())
+		{
+			if (*idString != 0)
+			{
+				break;
+			}
+			const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
+			return ExpressionValue((int32_t)bm.CountSetBits());
+		}
+		if (*idString == '^')
+		{
+			++idString;
+			if (*idString != 0)
+			{
+				break;
+			}
+			const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
+			return ExpressionValue((int32_t)bm.GetSetBitNumber(context.GetLastIndex()));
+		}
+		if (*idString != 0)
+		{
+			break;
+		}
+		if (val.uVal > 0x7FFFFFFF)
+		{
+			throw sp.ConstructParseException("bitmap too large to convert to integer");
+		}
+		return ExpressionValue((int32_t)val.uVal);
+
+	case TYPE_OF(Bitmap<uint64_t>):
+		if (context.WantArrayLength())
+		{
+			if (*idString != 0)
+			{
+				break;
+			}
+			const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
+			return ExpressionValue((int32_t)bm.CountSetBits());
+		}
+		if (*idString == '^')
+		{
+			++idString;
+			if (*idString != 0)
+			{
+				break;
+			}
+			const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
+			return ExpressionValue((int32_t)bm.GetSetBitNumber(context.GetLastIndex()));
+		}
+		if (*idString != 0)
+		{
+			break;
+		}
+		if (val.Get56BitValue() > 0x7FFFFFFF)
+		{
+			throw sp.ConstructParseException("bitmap too large to convert to integer");
+		}
+		return ExpressionValue((int32_t)val.uVal);
+
+	case TYPE_OF(const char*):
+		if (*idString == 0 && context.WantArrayLength())
+		{
+			return ExpressionValue((int32_t)strlen(val.sVal));
+		}
+		// no break
+	default:
+		if (*idString == 0)
+		{
+			return val;
+		}
+		break;
 	}
 
 	throw sp.ConstructParseException("reached primitive type before end of selector string");

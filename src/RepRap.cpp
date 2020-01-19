@@ -1531,15 +1531,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 
 				// Axis mapping
 				response->cat("],\"axisMap\":[[");
-				bool first = true;
 				tool->GetXAxisMap().Iterate
-					([&response, &first](unsigned int xi)
+					([&response](unsigned int xi, bool first) noexcept
 						{
-							if (first)
-							{
-								first = false;
-							}
-							else
+							if (!first)
 							{
 								response->cat(',');
 							}
@@ -1548,15 +1543,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 					);
 				response->cat("],[");
 
-				first = true;
 				tool->GetYAxisMap().Iterate
-					([&response, &first](unsigned int yi)
+					([&response](unsigned int yi, bool first) noexcept
 						{
-							if (first)
-							{
-								first = false;
-							}
-							else
+							if (!first)
 							{
 								response->cat(',');
 							}
