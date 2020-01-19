@@ -215,7 +215,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 	{
 		// Constrain the move to be within the build radius
 		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
-		if (diagonalSquared > printRadiusSquared)
+		if (applyM208Limits && diagonalSquared > printRadiusSquared)
 		{
 			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
 			finalCoords[X_AXIS] *= factor;

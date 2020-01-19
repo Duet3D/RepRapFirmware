@@ -63,7 +63,7 @@ char &OutputBuffer::operator[](size_t index)
 {
 	// Get the right buffer to access
 	OutputBuffer *itemToIndex = this;
-	while (index > itemToIndex->DataLength())
+	while (index >= itemToIndex->DataLength())
 	{
 		index -= itemToIndex->DataLength();
 		itemToIndex = itemToIndex->Next();
@@ -77,7 +77,7 @@ char OutputBuffer::operator[](size_t index) const
 {
 	// Get the right buffer to access
 	const OutputBuffer *itemToIndex = this;
-	while (index > itemToIndex->DataLength())
+	while (index >= itemToIndex->DataLength())
 	{
 		index -= itemToIndex->DataLength();
 		itemToIndex = itemToIndex->Next();
