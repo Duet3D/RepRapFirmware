@@ -201,7 +201,7 @@ protected:
 };
 
 // Function used for compile-time check for the correct number of entries in an object model table
-static inline constexpr size_t ArraySum(const uint8_t *arr, size_t numEntries)
+static inline constexpr size_t ArraySum(const uint8_t *arr, size_t numEntries) noexcept
 {
 	return (numEntries == 0) ? 0 : arr[0] + ArraySum(arr + 1, numEntries - 1);
 }
@@ -236,19 +236,19 @@ public:
 	int IdCompare(const char *id) const noexcept;
 
 	// Return true if a section of the OMT is ordered
-	static inline constexpr bool IsOrdered(const ObjectModelTableEntry *omt, size_t len)
+	static inline constexpr bool IsOrdered(const ObjectModelTableEntry *omt, size_t len) noexcept
 	{
 		return len <= 1 || (strcmp(omt[1].name, omt[0].name) == 1 && IsOrdered(omt + 1, len - 1));
 	}
 
 	// Return true if a section of the OMT specified by the descriptor is ordered
-	static inline constexpr bool IsOrdered(uint8_t sectionsLeft, const uint8_t *descriptorSection, const ObjectModelTableEntry *omt)
+	static inline constexpr bool IsOrdered(uint8_t sectionsLeft, const uint8_t *descriptorSection, const ObjectModelTableEntry *omt) noexcept
 	{
 		return sectionsLeft == 0 || (IsOrdered(omt, *descriptorSection) && IsOrdered(sectionsLeft - 1, descriptorSection + 1, omt + *descriptorSection));
 	}
 
 	// Return true if the whole OMT is ordered
-	static inline constexpr bool IsOrdered(const uint8_t *descriptor, const ObjectModelTableEntry *omt)
+	static inline constexpr bool IsOrdered(const uint8_t *descriptor, const ObjectModelTableEntry *omt) noexcept
 	{
 		return IsOrdered(descriptor[0], descriptor + 1, omt);
 	}

@@ -34,7 +34,7 @@ struct RawMove
 			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
 			reduceAcceleration : 1;									// true if Z probing so we should limit the Z acceleration
 
-	void SetDefaults(size_t firstDriveToZero);						// set up default values
+	void SetDefaults(size_t firstDriveToZero) noexcept;				// set up default values
 };
 
 #if SUPPORT_ASYNC_MOVES
@@ -45,7 +45,7 @@ struct AsyncMove
 	float startSpeed, endSpeed, requestedSpeed;
 	float acceleration, deceleration;
 
-	void SetDefaults();
+	void SetDefaults() noexcept;
 };
 
 #endif

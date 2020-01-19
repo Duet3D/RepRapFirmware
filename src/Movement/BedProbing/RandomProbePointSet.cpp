@@ -30,7 +30,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RandomProbePointSet)
 
 #endif
 
-RandomProbePointSet::RandomProbePointSet() : numBedCompensationPoints(0)
+RandomProbePointSet::RandomProbePointSet() noexcept : numBedCompensationPoints(0)
 {
 	for (size_t point = 0; point < MaxProbePoints; point++)
 	{
@@ -40,7 +40,7 @@ RandomProbePointSet::RandomProbePointSet() : numBedCompensationPoints(0)
 }
 
 // Record the X and Y coordinates of a probe point
-void RandomProbePointSet::SetXYBedProbePoint(size_t index, float x, float y)
+void RandomProbePointSet::SetXYBedProbePoint(size_t index, float x, float y) noexcept
 {
 	xBedProbePoints[index] = x;
 	yBedProbePoints[index] = y;
@@ -48,7 +48,7 @@ void RandomProbePointSet::SetXYBedProbePoint(size_t index, float x, float y)
 }
 
 // Record the Z coordinate of a probe point
-void RandomProbePointSet::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError)
+void RandomProbePointSet::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept
 {
 	zBedProbePoints[index] = z;
 	probePointSet[index] |= zSet;
@@ -72,7 +72,7 @@ void RandomProbePointSet::SetZBedProbePoint(size_t index, float z, bool wasXyCor
 	}
 }
 
-size_t RandomProbePointSet::NumberOfProbePoints() const
+size_t RandomProbePointSet::NumberOfProbePoints() const noexcept
 {
 	for (size_t i = 0; i < MaxProbePoints; i++)
 	{
@@ -85,7 +85,7 @@ size_t RandomProbePointSet::NumberOfProbePoints() const
 }
 
 // Clear out the Z heights so that we don't re-use old points
-void RandomProbePointSet::ClearProbeHeights()
+void RandomProbePointSet::ClearProbeHeights() noexcept
 {
 	for (size_t i = 0; i < MaxProbePoints; ++i)
 	{
@@ -94,7 +94,7 @@ void RandomProbePointSet::ClearProbeHeights()
 }
 
 // Set the bed transform, returning true if error
-bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, const StringRef& reply)
+bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, const StringRef& reply) noexcept
 {
 	if (!GoodProbePointOrdering(numPoints))
 	{
@@ -182,7 +182,7 @@ bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, const StringRef
 }
 
 // Compute the interpolated height error at the specified point
-float RandomProbePointSet::GetInterpolatedHeightError(float x, float y) const
+float RandomProbePointSet::GetInterpolatedHeightError(float x, float y) const noexcept
 {
 	switch(numBedCompensationPoints)
 	{
@@ -202,7 +202,7 @@ float RandomProbePointSet::GetInterpolatedHeightError(float x, float y) const
 }
 
 // Check whether the specified set of points has been successfully defined and probed
-bool RandomProbePointSet::GoodProbePoints(size_t numPoints) const
+bool RandomProbePointSet::GoodProbePoints(size_t numPoints) const noexcept
 {
 	for (size_t i = 0; i < numPoints; ++i)
 	{
@@ -215,7 +215,7 @@ bool RandomProbePointSet::GoodProbePoints(size_t numPoints) const
 }
 
 // Check that the probe points are in the right order
-bool RandomProbePointSet::GoodProbePointOrdering(size_t numPoints) const
+bool RandomProbePointSet::GoodProbePointOrdering(size_t numPoints) const noexcept
 {
 	if (numPoints >= 2 && yBedProbePoints[1] <= yBedProbePoints[0])
 	{
@@ -251,7 +251,7 @@ bool RandomProbePointSet::GoodProbePointOrdering(size_t numPoints) const
 }
 
 // Print out the probe heights and any errors
-void RandomProbePointSet::ReportProbeHeights(size_t numPoints, const StringRef& reply) const
+void RandomProbePointSet::ReportProbeHeights(size_t numPoints, const StringRef& reply) const noexcept
 {
 	reply.copy("G32 bed probe heights:");
 	float sum = 0.0;
@@ -291,7 +291,7 @@ void RandomProbePointSet::ReportProbeHeights(size_t numPoints, const StringRef& 
  *
  *   The values of x and y are transformed to put them in the interval [0, 1].
  */
-float RandomProbePointSet::SecondDegreeTransformZ(float x, float y) const
+float RandomProbePointSet::SecondDegreeTransformZ(float x, float y) const noexcept
 {
 	x = (x - xBedProbePoints[0])*xRectangle;
 	y = (y - yBedProbePoints[0])*yRectangle;
@@ -309,7 +309,7 @@ float RandomProbePointSet::SecondDegreeTransformZ(float x, float y) const
  *      -----X---->
  *
  */
-float RandomProbePointSet::TriangleZ(float x, float y) const
+float RandomProbePointSet::TriangleZ(float x, float y) const noexcept
 {
 	for (size_t i = 0; i < 4; i++)
 	{
@@ -325,7 +325,7 @@ float RandomProbePointSet::TriangleZ(float x, float y) const
 	return 0.0;
 }
 
-void RandomProbePointSet::BarycentricCoordinates(size_t p1, size_t p2, size_t p3, float x, float y, float& l1, float& l2, float& l3) const
+void RandomProbePointSet::BarycentricCoordinates(size_t p1, size_t p2, size_t p3, float x, float y, float& l1, float& l2, float& l3) const noexcept
 {
 	const float y23 = baryYBedProbePoints[p2] - baryYBedProbePoints[p3];
 	const float x3 = x - baryXBedProbePoints[p3];
@@ -339,7 +339,7 @@ void RandomProbePointSet::BarycentricCoordinates(size_t p1, size_t p2, size_t p3
 	l3 = 1.0 - l1 - l2;
 }
 
-void RandomProbePointSet::DebugPrint(size_t numPoints) const
+void RandomProbePointSet::DebugPrint(size_t numPoints) const noexcept
 {
 	debugPrintf("Z probe offsets:");
 	float sum = 0.0;

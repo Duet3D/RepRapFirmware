@@ -17,7 +17,7 @@
 #include "Movement/Move.h"
 #include <TaskPriorities.h>
 
-HeightController::HeightController()
+HeightController::HeightController() noexcept
 	: heightControllerTask(nullptr), sensorNumber(-1),
 		sampleInterval(DefaultSampleInterval), setPoint(1.0), pidP(1.0), configuredPidI(0.0), configuredPidD(0.0), iAccumulator(0.0),
 		zMin(5.0), zMax(10.0), state(PidState::stopped)
@@ -25,7 +25,7 @@ HeightController::HeightController()
 	CalcDerivedValues();
 }
 
-extern "C" [[noreturn]] void HeightControllerTaskStart(void *p)
+extern "C" [[noreturn]] void HeightControllerTaskStart(void *p) noexcept
 {
 	static_cast<HeightController*>(p)->RunTask();
 }
@@ -89,7 +89,7 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Start/stop height following
-GCodeResult HeightController::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult HeightController::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (gb.Seen('P'))
 	{
@@ -137,12 +137,12 @@ GCodeResult HeightController::StartHeightFollowing(GCodeBuffer& gb, const String
 }
 
 // Stop height following mode
-void HeightController::Stop()
+void HeightController::Stop() noexcept
 {
 	state = PidState::stopped;
 }
 
-[[noreturn]] void HeightController::RunTask()
+[[noreturn]] void HeightController::RunTask() noexcept
 {
 	lastWakeTime = xTaskGetTickCount();
 	for (;;)
@@ -213,7 +213,7 @@ void HeightController::Stop()
 	}
 }
 
-void HeightController::CalcDerivedValues()
+void HeightController::CalcDerivedValues() noexcept
 {
 	actualPidI = configuredPidI * ((float)sampleInterval * MillisToSeconds);
 	actualPidD = configuredPidD * (SecondsToMillis/(float)sampleInterval);

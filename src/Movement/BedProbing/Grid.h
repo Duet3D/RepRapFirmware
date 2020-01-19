@@ -21,27 +21,27 @@ public:
 	friend class DataTransfer;
 	friend class HeightMap;
 
-	GridDefinition();
+	GridDefinition() noexcept;
 
-	uint32_t NumXpoints() const { return numX; }
-	uint32_t NumYpoints() const { return numY; }
-	uint32_t NumPoints() const { return numX * numY; }
-	float GetXCoordinate(unsigned int xIndex) const;
-	float GetYCoordinate(unsigned int yIndex) const;
-	bool IsInRadius(float x, float y) const;
-	bool IsValid() const { return isValid; }
+	uint32_t NumXpoints() const noexcept { return numX; }
+	uint32_t NumYpoints() const noexcept { return numY; }
+	uint32_t NumPoints() const noexcept { return numX * numY; }
+	float GetXCoordinate(unsigned int xIndex) const noexcept;
+	float GetYCoordinate(unsigned int yIndex) const noexcept;
+	bool IsInRadius(float x, float y) const noexcept;
+	bool IsValid() const noexcept { return isValid; }
 
-	bool Set(const float xRange[2], const float yRange[2], float pRadius, const float pSpacings[2]);
-	void PrintParameters(const StringRef& r) const;
-	void WriteHeadingAndParameters(const StringRef& r) const;
-	static int CheckHeading(const StringRef& s);
-	bool ReadParameters(const StringRef& s, int version);
+	bool Set(const float xRange[2], const float yRange[2], float pRadius, const float pSpacings[2]) noexcept;
+	void PrintParameters(const StringRef& r) const noexcept;
+	void WriteHeadingAndParameters(const StringRef& r) const noexcept;
+	static int CheckHeading(const StringRef& s) noexcept;
+	bool ReadParameters(const StringRef& s, int version) noexcept;
 
-	void PrintError(float originalXrange, float originalYrange, const StringRef& r) const
+	void PrintError(float originalXrange, float originalYrange, const StringRef& r) const noexcept
 	pre(!IsValid());
 
 private:
-	void CheckValidity();
+	void CheckValidity() noexcept;
 
 	static constexpr float MinSpacing = 0.1;						// The minimum point spacing allowed
 	static constexpr float MinRange = 1.0;							// The minimum X and Y range allowed
@@ -62,35 +62,35 @@ private:
 class HeightMap
 {
 public:
-	HeightMap();
+	HeightMap() noexcept;
 
-	const GridDefinition& GetGrid() const { return def; }
-	void SetGrid(const GridDefinition& gd);
+	const GridDefinition& GetGrid() const noexcept { return def; }
+	void SetGrid(const GridDefinition& gd) noexcept;
 
-	float GetInterpolatedHeightError(float x, float y) const;		// Compute the interpolated height error at the specified point
-	void ClearGridHeights();										// Clear all grid height corrections
-	void SetGridHeight(size_t xIndex, size_t yIndex, float height);	// Set the height of a grid point
-	void SetGridHeight(size_t index, float height);					// Set the height of a grid point
+	float GetInterpolatedHeightError(float x, float y) const noexcept;			// Compute the interpolated height error at the specified point
+	void ClearGridHeights() noexcept;											// Clear all grid height corrections
+	void SetGridHeight(size_t xIndex, size_t yIndex, float height) noexcept;	// Set the height of a grid point
+	void SetGridHeight(size_t index, float height) noexcept;					// Set the height of a grid point
 
 #if HAS_MASS_STORAGE
-	bool SaveToFile(FileStore *f, float zOffset) const				// Save the grid to file returning true if an error occurred
+	bool SaveToFile(FileStore *f, float zOffset) const noexcept					// Save the grid to file returning true if an error occurred
 	pre(IsValid());
-	bool LoadFromFile(FileStore *f, const StringRef& r);			// Load the grid from file returning true if an error occurred
+	bool LoadFromFile(FileStore *f, const StringRef& r) noexcept;				// Load the grid from file returning true if an error occurred
 #endif
 
 #if HAS_LINUX_INTERFACE
-	void SaveToArray(float *array, float zOffset) const				// Save the grid Z coordinates to an array
+	void SaveToArray(float *array, float zOffset) const noexcept				// Save the grid Z coordinates to an array
 	pre(IsValid());
 #endif
 
-	unsigned int GetMinimumSegments(float deltaX, float deltaY) const;	// Return the minimum number of segments for a move by this X or Y amount
+	unsigned int GetMinimumSegments(float deltaX, float deltaY) const noexcept;	// Return the minimum number of segments for a move by this X or Y amount
 
-	bool UseHeightMap(bool b);
-	bool UsingHeightMap() const { return useMap; }
+	bool UseHeightMap(bool b) noexcept;
+	bool UsingHeightMap() const noexcept { return useMap; }
 
-	unsigned int GetStatistics(Deviation& deviation, float& minError, float& maxError) const;
+	unsigned int GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept;
 																	// Return number of points probed, mean and RMS deviation, min and max error
-	void ExtrapolateMissing();										// Extrapolate missing points to ensure consistency
+	void ExtrapolateMissing() noexcept;								// Extrapolate missing points to ensure consistency
 
 private:
 	static const char * const HeightMapComment;						// The start of the comment we write at the start of the height map file
@@ -100,9 +100,9 @@ private:
 	LargeBitmap<MaxGridProbePoints> gridHeightSet;					// Bitmap of which heights are set
 	bool useMap;													// True to do bed compensation
 
-	uint32_t GetMapIndex(uint32_t xIndex, uint32_t yIndex) const { return (yIndex * def.NumXpoints()) + xIndex; }
+	uint32_t GetMapIndex(uint32_t xIndex, uint32_t yIndex) const noexcept { return (yIndex * def.NumXpoints()) + xIndex; }
 
-	float InterpolateXY(uint32_t xIndex, uint32_t yIndex, float xFrac, float yFrac) const;
+	float InterpolateXY(uint32_t xIndex, uint32_t yIndex, float xFrac, float yFrac) const noexcept;
 };
 
 #endif /* SRC_MOVEMENT_GRID_H_ */

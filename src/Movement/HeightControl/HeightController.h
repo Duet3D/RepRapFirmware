@@ -19,16 +19,16 @@
 class HeightController
 {
 public:
-	HeightController();
+	HeightController() noexcept;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
-	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply);		// Start/stop height following
-	void Stop();									// stop height following mode
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Start/stop height following
+	void Stop() noexcept;							// stop height following mode
 
-	[[noreturn]] void RunTask();
+	[[noreturn]] void RunTask() noexcept;
 
 private:
-	void CalcDerivedValues();
+	void CalcDerivedValues() noexcept;
 
 	static constexpr unsigned int HeightControllerTaskStackWords = 100;
 	static constexpr uint32_t DefaultSampleInterval = 200;
