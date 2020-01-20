@@ -86,7 +86,7 @@ private:
 	bool StartNextMove(Platform& p, uint32_t startTime) noexcept __attribute__ ((hot));	// Start the next move, returning true if laser or IObits need to be controlled
 	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept;
 
-	static bool TimerCallback(CallbackParameter p, StepTimer::Ticks& when) noexcept;
+	static void TimerCallback(CallbackParameter p) noexcept;
 
 	DDA* volatile currentDda;
 	DDA* addPointer;

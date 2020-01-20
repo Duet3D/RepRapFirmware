@@ -388,10 +388,9 @@ void DDARing::Interrupt(Platform& p) noexcept
 }
 
 // DDARing timer callback function
-/*static*/ bool DDARing::TimerCallback(CallbackParameter p, StepTimer::Ticks& when) noexcept
+/*static*/ void DDARing::TimerCallback(CallbackParameter p) noexcept
 {
 	static_cast<DDARing*>(p.vp)->Interrupt(reprap.GetPlatform());
-	return false;
 }
 
 // This is called when the state has been set to 'completed'. Step interrupts must be disabled or locked out when calling this.

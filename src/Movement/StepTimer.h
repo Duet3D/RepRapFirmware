@@ -11,12 +11,15 @@
 #include "RepRapFirmware.h"
 
 // Class to implement a software timer with a few microseconds resolution
+// Important! In systems that use 16-bit timers, callbacks may take place at multiples of 65536 ticks before they are actually due.
+// In order to achieve the maximum step rate possible, the timer code doesn't check for this, because the step generation code checks which drivers are due steps anyway.
+// Any other client that uses the timer MUST do a similar check. The simple way to do this is to use a callback function of the following form:
+// if (timer.ScheduleCallbackFromIsr()) { /* code to execute it the callback really was due */ }
 class StepTimer
 {
 public:
-	// The callback function returns true if it wants another callback, after setting the requested time via the second parameter
 	typedef uint32_t Ticks;
-	typedef bool (*TimerCallbackFunction)(CallbackParameter, Ticks&);
+	typedef void (*TimerCallbackFunction)(CallbackParameter) noexcept;
 
 	StepTimer() noexcept;
 
@@ -26,8 +29,11 @@ public:
 	// Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent
 	bool ScheduleCallback(Ticks when) noexcept;
 
-	// As ScheduleCallback but base priority >= NvicPriorityStep when called
+	// As ScheduleCallback but base priority >= NvicPriorityStep when called. Can be called from within a callback.
 	bool ScheduleCallbackFromIsr(Ticks when) noexcept;
+
+	// Check whether a callback really is due, schedule it if not. Returns true if it really is due. Can be called from within a callback.
+	bool ScheduleCallbackFromIsr() noexcept;
 
 	// Cancel any scheduled callbacks
 	void CancelCallback() noexcept;
@@ -50,7 +56,7 @@ public:
 	// Get the tick rate (can also access it directly as StepClockRate)
 	static uint32_t GetTickRate() noexcept { return StepClockRate; }
 
-	// ISR called from StepTimer. May sometimes get called prematurely.
+	// ISR called from StepTimer
 	static void Interrupt() noexcept;
 
 #if SAME70

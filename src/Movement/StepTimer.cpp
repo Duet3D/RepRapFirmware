@@ -156,35 +156,25 @@ void StepTimer::DisableTimerInterrupt() noexcept
 // The guts of the ISR
 /*static*/ void StepTimer::Interrupt() noexcept
 {
-	for (;;)
+	StepTimer * tmr = pendingList;
+	if (tmr != nullptr)
 	{
-		StepTimer * const tmr = pendingList;
-		if (tmr == nullptr)
+		for (;;)
 		{
-			return;
-		}
+			pendingList = tmr->next;									// remove it from the pending list
+			tmr->active = false;
+			tmr->callback(tmr->cbParam);								// execute its callback. This may schedule another callback and hence change the pending list.
 
-		// On the first iteration, the timer at the head of the list is probably expired. But this isn't necessarily true, especially on platforms that use 16-bit timers.
-		// Try to schedule another interrupt for it, if we get a true return then it has indeed expired and we need to execute the callback.
-		// On subsequent iterations this just sets up the interrupt for the next timer that is due to expire.
-		if (!StepTimer::ScheduleTimerInterrupt(tmr->whenDue))
-		{
-			return;																		// interrupt isn't due yet and a new one has been scheduled
-		}
-
-		pendingList = tmr->next;														// remove it from the pending list
-		tmr->active = false;
-		if (tmr->callback != nullptr && tmr->callback(tmr->cbParam, tmr->whenDue))		// execute its callback. This may schedule another callback and hence change the pending list.
-		{
-			// Schedule another callback for this timer
-			StepTimer** ppst = const_cast<StepTimer**>(&pendingList);
-			while (*ppst != nullptr && (int32_t)(tmr->whenDue - (*ppst)->whenDue) > 0)
+			tmr = pendingList;
+			if (tmr == nullptr)
 			{
-				ppst = &((*ppst)->next);
+				break;
 			}
-			tmr->next = *ppst;
-			*ppst = tmr;
-			tmr->active = true;
+
+			if (!StepTimer::ScheduleTimerInterrupt(tmr->whenDue))
+			{
+				break;													// interrupt isn't due yet and a new one has been scheduled
+			}
 		}
 	}
 }
@@ -232,14 +222,20 @@ void StepTimer::SetCallback(TimerCallbackFunction cb, CallbackParameter param) n
 // Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent.
 bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 {
+	whenDue = when;
+	return ScheduleCallbackFromIsr();
+}
+
+bool StepTimer::ScheduleCallbackFromIsr() noexcept
+{
+
 	// Optimise the common case i.e. no other timer is pending
 	if (pendingList == nullptr)
 	{
-		if (ScheduleTimerInterrupt(when))
+		if (ScheduleTimerInterrupt(whenDue))
 		{
 			return true;
 		}
-		whenDue = when;
 		next = nullptr;
 		pendingList = this;
 		active = true;
@@ -253,12 +249,12 @@ bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 	}
 
 	const Ticks now = GetTimerTicks();
-	const int32_t howSoon = (int32_t)(when - now);
+	const int32_t howSoon = (int32_t)(whenDue - now);
 	StepTimer** ppst = const_cast<StepTimer**>(&pendingList);
 	if (howSoon < (int32_t)((*ppst)->whenDue - now))
 	{
 		// This one is due earlier than the first existing one
-		if (ScheduleTimerInterrupt(when))
+		if (ScheduleTimerInterrupt(whenDue))
 		{
 			return true;
 		}
@@ -271,7 +267,6 @@ bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 		}
 	}
 
-	whenDue = when;
 	next = *ppst;
 	*ppst = this;
 	active = true;

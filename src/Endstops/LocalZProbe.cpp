@@ -128,9 +128,9 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) const noexcept
 
 // Z probe programming functions
 
-/*static*/ bool LocalZProbe::TimerInterrupt(CallbackParameter param, StepTimer::Ticks& when) noexcept
+/*static*/ void LocalZProbe::TimerInterrupt(CallbackParameter param) noexcept
 {
-	return static_cast<LocalZProbe*>(param.vp)->Interrupt(when);
+	static_cast<LocalZProbe*>(param.vp)->Interrupt();
 }
 
 // Kick off sending some program bytes
@@ -156,61 +156,63 @@ GCodeResult LocalZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len,
 	return GCodeResult::ok;
 }
 
-bool LocalZProbe::Interrupt(uint32_t& when) noexcept
+void LocalZProbe::Interrupt() noexcept
 {
-	// The data format is:
-	// [0 0 1 0 b7 b6 b5 b4 /b4 b3 b2 b1 b0 /b0] repeated for each byte, where /b4 = inverse of b4, /b0 = inverse of b0
-	// After the last byte the line returns to 0
-	bool nextBit;
-	switch(bitsSent++)
+	if (timer.ScheduleCallbackFromIsr())
 	{
-	case 0:		// We sent 00, now send 1
-		nextBit = true;
-		break;
+		// The data format is:
+		// [0 0 1 0 b7 b6 b5 b4 /b4 b3 b2 b1 b0 /b0] repeated for each byte, where /b4 = inverse of b4, /b0 = inverse of b0
+		// After the last byte the line returns to 0
+		bool nextBit;
+		switch(bitsSent++)
+		{
+		case 0:		// We sent 00, now send 1
+			nextBit = true;
+			break;
 
-	case 1:	// We sent 001, now send 0
-	default:
-		nextBit = false;
-		break;
+		case 1:	// We sent 001, now send 0
+		default:
+			nextBit = false;
+			break;
 
-	case 2:
-	case 3:
-	case 4:
-	case 5:
-		nextBit = (((progBytes[bytesSent] >> (10 - bitsSent)) & 1) != 0);
-		break;
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+			nextBit = (((progBytes[bytesSent] >> (10 - bitsSent)) & 1) != 0);
+			break;
 
-	case 6:
-		nextBit = (((progBytes[bytesSent] >> 4) & 1) == 0);
-		break;
+		case 6:
+			nextBit = (((progBytes[bytesSent] >> 4) & 1) == 0);
+			break;
 
-	case 7:
-	case 8:
-	case 9:
-	case 10:
-		nextBit = (((progBytes[bytesSent] >> (11 - bitsSent)) & 1) != 0);
-		break;
+		case 7:
+		case 8:
+		case 9:
+		case 10:
+			nextBit = (((progBytes[bytesSent] >> (11 - bitsSent)) & 1) != 0);
+			break;
 
-	case 11:
-		nextBit = ((progBytes[bytesSent] & 1) == 0);
-		break;
+		case 11:
+			nextBit = ((progBytes[bytesSent] & 1) == 0);
+			break;
 
-	case 12:		// We sent 0010 + 10 data bits, now send 0
-		nextBit = false;
-		bitsSent = 0;
-		++bytesSent;
-		break;
+		case 12:		// We sent 0010 + 10 data bits, now send 0
+			nextBit = false;
+			bitsSent = 0;
+			++bytesSent;
+			break;
+		}
+
+		modulationPort.WriteDigital(nextBit);
+		if (bytesSent < numBytes)
+		{
+			timer.ScheduleCallbackFromIsr(startTime + ((bytesSent * 14) + bitsSent + 2) * bitTime);
+			return;
+		}
+
+		bytesSent = numBytes = 0;
 	}
-
-	modulationPort.WriteDigital(nextBit);
-	if (bytesSent < numBytes)
-	{
-		when = startTime + ((bytesSent * 14) + bitsSent + 2) * bitTime;
-		return true;
-	}
-
-	bytesSent = numBytes = 0;
-	return false;
 }
 
 // End

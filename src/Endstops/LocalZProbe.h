@@ -35,8 +35,8 @@ private:
 	IoPort modulationPort;			// the modulation port we are using
 
 	// Variable for programming Smart Effector and other programmable Z probes
-	static bool TimerInterrupt(CallbackParameter param, StepTimer::Ticks& when) noexcept;
-	bool Interrupt(uint32_t& when) noexcept;
+	static void TimerInterrupt(CallbackParameter param) noexcept;
+	void Interrupt() noexcept;
 
 	StepTimer timer;
 	uint8_t progBytes[MaxZProbeProgramBytes];
