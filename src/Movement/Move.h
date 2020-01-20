@@ -211,7 +211,6 @@ private:
 	void InverseBedTransform(float move[MaxAxes],const  Tool *tool) const noexcept;		// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;	// Go from an axis transformed point back to user coordinates
-	void SetPositions(const float move[MaxAxesPlusExtruders]) noexcept { return mainDDARing.SetPositions(move); }	// Force the machine coordinates to be these;
 	float GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept;		// Get the height error at an XY position on the bed
 
 	DDARing mainDDARing;								// The DDA ring used for regular moves

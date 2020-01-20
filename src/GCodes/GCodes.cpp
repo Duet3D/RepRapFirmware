@@ -3766,13 +3766,6 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 	return true;
 }
 
-// Set the current position, optionally applying bed and axis compensation
-void GCodes::SetMachinePosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept
-{
-	memcpy(moveBuffer.coords, positionNow, sizeof(moveBuffer.coords[0] * numTotalAxes));
-	reprap.GetMove().SetNewPosition(positionNow, doBedCompensation);
-}
-
 // Get the current position from the Move class
 void GCodes::UpdateCurrentUserPosition() noexcept
 {

@@ -292,7 +292,6 @@ private:
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;	// Save position to a restore point
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;		// Restore user position from a restore point
 
-	void SetMachinePosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation = true) noexcept; // Set the current position to be this
 	void UpdateCurrentUserPosition() noexcept;									// Get the current position from the Move class
 	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
 																				// Convert user coordinates to head reference point coordinates

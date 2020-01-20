@@ -448,7 +448,7 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool do
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentTool(), doBedCompensation);
 	SetLiveCoordinates(newPos);
-	SetPositions(newPos);
+	mainDDARing.SetPositions(newPos);
 }
 
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered and DDA::SetPositions

@@ -43,7 +43,7 @@ void DDARing::Init1(unsigned int numDdas) noexcept
 	timer.SetCallback(DDARing::TimerCallback, static_cast<void*>(this));
 }
 
-// This must be called from Move::Init because it indirectly refers to the GCodes module, which must therefore be initialised first
+// This must be called from Move::Init, not from the Move constructor, because it indirectly refers to the GCodes module which must therefore be initialised first
 void DDARing::Init2() noexcept
 {
 	stepErrors = 0;
