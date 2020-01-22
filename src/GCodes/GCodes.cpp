@@ -218,19 +218,13 @@ void GCodes::Reset() noexcept
 	for (size_t i = 0; i < MaxAxes; ++i)
 	{
 		axisScaleFactors[i] = 1.0;
-#if SUPPORT_WORKPLACE_COORDINATES
 		for (size_t j = 0; j < NumCoordinateSystems; ++j)
 		{
 			workplaceCoordinates[j][i] = 0.0;
 		}
-#else
-		axisOffsets[i] = 0.0;
-#endif
 	}
 
-#if SUPPORT_WORKPLACE_COORDINATES
 	currentCoordinateSystem = 0;
-#endif
 
 	for (float& f : moveBuffer.coords)
 	{
@@ -2787,14 +2781,10 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const noexcept
 	// Now the virtual extruder position, for Octoprint
 	s.catf("E:%.3f ", (double)virtualExtruderPosition);
 
-	// Get the live machine coordinates, we'll need them later
-	float liveCoordinates[MaxAxesPlusExtruders];
-	reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentTool());
-
 	// Now the extruder coordinates
 	for (size_t i = 0; i < numExtruders; i++)
 	{
-		s.catf("E%u:%.1f ", i, (double)liveCoordinates[ExtruderToLogicalDrive(i)]);
+		s.catf("E%u:%.1f ", i, (double)reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(i), reprap.GetCurrentTool()));
 	}
 
 	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.

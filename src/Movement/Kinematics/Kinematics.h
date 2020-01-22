@@ -8,8 +8,9 @@
 #ifndef SRC_MOVEMENT_KINEMATICS_H_
 #define SRC_MOVEMENT_KINEMATICS_H_
 
-#include "RepRapFirmware.h"
-#include "Math/Matrix.h"
+#include <RepRapFirmware.h>
+#include <Math/Matrix.h>
+#include <ObjectModel/ObjectModel.h>
 
 inline floatc_t fcsquare(floatc_t a)
 {
@@ -61,7 +62,7 @@ enum class LimitPositionResult : uint8_t
 	adjustedAndIntermediateUnreachable	// we adjusted the final position to make it reachable, but intermediate positions are still urreachable
 };
 
-class Kinematics
+class Kinematics INHERIT_OBJECT_MODEL
 {
 public:
 	// Functions that must be defined in each derived class that implements a kinematics
@@ -208,6 +209,8 @@ public:
 	float GetMinSegmentLength() const noexcept pre(UseSegmentation()) { return minSegmentLength; }
 
 protected:
+	DECLARE_OBJECT_MODEL_VIRTUAL
+
 	// Constructor. Pass segsPerSecond <= 0.0 to get non-segmented motion.
 	Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0) noexcept;
 

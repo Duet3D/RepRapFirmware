@@ -29,6 +29,7 @@ Licence: GPL
 #include "Fans/FansManager.h"
 #include "Tools/Tool.h"
 #include "SoftwareReset.h"
+#include <functional>
 
 enum class ResponseSource
 {
@@ -175,6 +176,9 @@ protected:
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
+	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits);
+	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func);
+	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func);
 
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;

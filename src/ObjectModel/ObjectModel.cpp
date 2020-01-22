@@ -14,14 +14,6 @@
 #include <cstring>
 #include <General/SafeStrtod.h>
 
-// Get the format string to use assuming this is a floating point number
-const char *ExpressionValue::GetFloatFormatString() const noexcept
-{
-	static constexpr const char *FormatStrings[] = { "%.7f", "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f", "%.7f" };
-	static_assert(ARRAY_SIZE(FormatStrings) == MaxFloatDigitsDisplayedAfterPoint + 1);
-	return FormatStrings[min<unsigned int>(param, MaxFloatDigitsDisplayedAfterPoint)];
-}
-
 void ObjectExplorationContext::AddIndex(int32_t index)
 {
 	if (numIndicesCounted == MaxIndices)
@@ -244,7 +236,14 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TYPE_OF(float):
-			buf->catf(val.GetFloatFormatString(), (double)val.fVal);
+			if (val.fVal == 0.0)
+			{
+				buf->cat('0');				// replace 0.000... in JSON by 0. This is mostly to save space when writing workplace coordinates.
+			}
+			else
+			{
+				buf->catf(val.GetFloatFormatString(), (double)val.fVal);
+			}
 			break;
 
 		case TYPE_OF(uint32_t):

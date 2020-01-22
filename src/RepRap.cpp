@@ -1006,19 +1006,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 	}
 
 	// Machine status
-	char ch = GetStatusCharacter();
-	response->printf("{\"status\":\"%c\",\"coords\":{", ch);
+	response->printf("{\"status\":\"%c\",\"coords\":{", GetStatusCharacter());
 
-	// Coordinates
-	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
 	// Homed axes
-	response->cat("\"axesHomed\":");
-	ch = '[';
-	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-	{
-		response->catf("%c%d", ch, (gCodes->IsAxisHomed(axis)) ? 1 : 0);
-		ch = ',';
-	}
+	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
+	AppendIntArray(response, "axesHomed", numVisibleAxes, [this](size_t axis) noexcept { return (gCodes->IsAxisHomed(axis)) ? 1 : 0; });
 
 	// XYZ positions
 	// Coordinates may be NaNs or infinities, for example when delta or SCARA homing fails. We must replace any NaNs or infinities to avoid JSON parsing errors.
@@ -1027,57 +1019,23 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 
 	// First the user coordinates
 #if SUPPORT_WORKPLACE_COORDINATES
-	response->catf("],\"wpl\":%u,\"xyz\":", gCodes->GetWorkplaceCoordinateSystemNumber());
+	response->catf(",\"wpl\":%u,", gCodes->GetWorkplaceCoordinateSystemNumber());
 #else
-	response->cat("],\"xyz\":");
+	response->cat(',');
 #endif
-	ch = '[';
-	for (size_t axis = 0; axis < numVisibleAxes; axis++)
-	{
-		response->catf("%c%.3f", ch, HideNan(gCodes->GetUserCoordinate(axis)));
-		ch = ',';
-	}
 
-	// Now the machine coordinates and the extruder coordinates
-	{
-		float liveCoordinates[MaxAxesPlusExtruders];
-#if SUPPORT_ROLAND
-		if (roland->Active())
-		{
-			roland->GetCurrentRolandPosition(liveCoordinates);
-		}
-		else
-#endif
-		{
-			move->LiveCoordinates(liveCoordinates, currentTool);
-		}
+	AppendFloatArray(response, "xyz", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetUserCoordinate(axis); }, 3);
 
-		// Machine coordinates
-		response->catf("],\"machine\":");		// announce the machine position
-		ch = '[';
-		for (size_t drive = 0; drive < numVisibleAxes; drive++)
-		{
-			response->catf("%c%.3f", ch, HideNan(liveCoordinates[drive]));
-			ch = ',';
-		}
+	// Machine coordinates
+	response->cat(',');
+	AppendFloatArray(response, "machine", numVisibleAxes, [this](size_t axis) noexcept { return move->LiveCoordinate(axis, currentTool); }, 3);
 
-		// Actual and theoretical extruder positions since power up, last G92 or last M23
-		response->catf("],\"extr\":");			// announce actual extruder positions
-		ch = '[';
-		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
-		{
-			response->catf("%c%.1f", ch, HideNan(liveCoordinates[ExtruderToLogicalDrive(extruder)]));
-			ch = ',';
-		}
-		if (ch == '[')							// we may have no extruders
-		{
-			response->cat(ch);
-		}
-	}
+	// Actual extruder positions since power up, last G92 or last M23
+	response->cat(',');
+	AppendFloatArray(response, "extr", GetExtrudersInUse(), [this](size_t extruder) noexcept { return move->LiveCoordinate(ExtruderToLogicalDrive(extruder), currentTool); }, 1);
 
 	// Current speeds
-	response->catf("]},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}",
-			(double)move->GetRequestedSpeed(), (double)move->GetTopSpeed());
+	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeed(), (double)move->GetTopSpeed());
 
 	// Current tool number
 	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());
@@ -1141,42 +1099,27 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 	// Parameters
 	{
 		// Cooling fan values
+		response->cat(',');
 		const size_t numFans = fansManager->GetNumFansToReport();
-		response->cat(",\"fanPercent\":");
-		ch = '[';
-		for (size_t i = 0; i < numFans; i++)
-		{
-			const float fanValue = fansManager->GetFanValue(i);
-			response->catf("%c%d", ch, (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0));
-			ch = ',';
-		}
-		response->cat((ch == '[') ? "[]" : "]");
+		AppendIntArray(response, "fanPercent", numFans,
+						[this](size_t fan) noexcept
+						{
+							const float fanValue = fansManager->GetFanValue(fan);
+							return  (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0);
+						});
 
 		// Cooling fan names
 		if (type == 2)
 		{
-			response->cat(",\"fanNames\":");
-			ch = '[';
-			for (size_t fan = 0; fan < numFans; fan++)
-			{
-				response->cat(ch);
-				ch = ',';
-
-				const char *fanName = fansManager->GetFanName(fan);
-				response->EncodeString(fanName, true);
-			}
-			response->cat((ch == '[') ? "[]" : "]");
+			response->cat(',');
+			AppendStringArray(response, "fanNames", numFans, [this](size_t fan) noexcept { return fansManager->GetFanName(fan); });
 		}
 
 		// Speed and Extrusion factors in %
-		response->catf(",\"speedFactor\":%.1f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor()));
-		ch = '[';
-		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
-		{
-			response->catf("%c%.1f", ch, (double)(gCodes->GetExtrusionFactor(extruder)));
-			ch = ',';
-		}
-		response->cat((ch == '[') ? "[]" : "]");
+		response->catf(",\"speedFactor\":%.1f,", (double)(gCodes->GetSpeedFactor()));
+		AppendFloatArray(response, "extrFactors", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetExtrusionFactor(extruder); }, 1);
+
+		// Z babystepping
 		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetTotalBabyStepOffset(Z_AXIS));
 
 		// G-code reply sequence for webserver (sequence number for AUX is handled later)
@@ -1195,22 +1138,16 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		switch (zp->GetSecondaryValues(v1))
 		{
 			case 1:
-				response->catf("\"probeValue\":%d,\"probeSecondary\":[%d]", v0, v1);
+				response->catf("\"probeValue\":%d,\"probeSecondary\":[%d],", v0, v1);
 				break;
 			default:
-				response->catf("\"probeValue\":%d", v0);
+				response->catf("\"probeValue\":%d,", v0);
 				break;
 		}
 
 		// Send fan RPM value(s)
-		response->cat(",\"fanRPM\":");
-		char ch = '[';
-		for (size_t i = 0; i < numFans; ++i)
-		{
-			response->catf("%c%" PRIi32, ch, fansManager->GetFanRPM(i));
-			ch = ',';
-		}
-		response->cat("]}");		// end fan RPMs and sensors
+		AppendIntArray(response, "fanRPM", numFans, [this](size_t fan) noexcept { return (int)fansManager->GetFanRPM(fan); });
+		response->cat('}');
 	}
 
 	/* Temperatures */
@@ -1247,39 +1184,19 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		/* Heaters */
 
 		// Current temperatures
-		response->cat("\"current\":");
-		ch = '[';
 		{
 			const size_t numHeaters = heat->GetNumHeatersToReport();
-			for (size_t heater = 0; heater < numHeaters; heater++)
-			{
-				response->catf("%c%.1f", ch, (double)heat->GetHeaterTemperature(heater));
-				ch = ',';
-			}
-			response->cat((ch == '[') ? "[]" : "]");
+			AppendFloatArray(response, "current", numHeaters, [this](size_t heater) noexcept { return heat->GetHeaterTemperature(heater); }, 1);
 
 			// Current states
-			response->cat(",\"state\":");
-			ch = '[';
-			for (size_t heater = 0; heater < numHeaters; heater++)
-			{
-				response->catf("%c%u", ch, heat->GetStatus(heater).ToBaseType());
-				ch = ',';
-			}
-			response->cat((ch == '[') ? "[]" : "]");
+			response->cat(',');
+			AppendIntArray(response, "state", numHeaters, [this](size_t heater) noexcept { return (int)heat->GetStatus(heater).ToBaseType(); });
 
 			// Names of the sensors use to control heaters
 			if (type == 2)
 			{
-				response->cat(",\"names\":");
-				ch = '[';
-				for (size_t heater = 0; heater < numHeaters; heater++)
-				{
-					response->cat(ch);
-					ch = ',';
-					response->EncodeString(GetHeat().GetHeaterSensorName(heater), true);
-				}
-				response->cat((ch == '[') ? "[]" : "]");
+				response->cat(',');
+				AppendStringArray(response, "names", numHeaters, [this](size_t heater) noexcept { return heat->GetHeaterSensorName(heater); });
 			}
 		}
 
@@ -1289,14 +1206,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 			ReadLocker lock(toolListLock);
 			for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
-				ch = '[';
-				for (size_t heater = 0; heater < tool->heaterCount; heater++)
-				{
-					response->catf("%c%.1f", ch, (double)tool->activeTemperatures[heater]);
-					ch = ',';
-				}
-				response->cat((ch == '[') ? "[]" : "]");
-
+				AppendFloatArray(response, nullptr, tool->heaterCount, [tool](unsigned int n) noexcept { return tool->activeTemperatures[n]; }, 1);
 				if (tool->Next() != nullptr)
 				{
 					response->cat(',');
@@ -1306,14 +1216,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 			response->cat("],\"standby\":[");
 			for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
-				ch = '[';
-				for (size_t heater = 0; heater < tool->heaterCount; heater++)
-				{
-					response->catf("%c%.1f", ch, (double)tool->standbyTemperatures[heater]);
-					ch = ',';
-				}
-				response->cat((ch == '[') ? "[]" : "]");
-
+				AppendFloatArray(response, nullptr, tool->heaterCount, [tool](unsigned int n) noexcept { return tool->standbyTemperatures[n]; }, 1);
 				if (tool->Next() != nullptr)
 				{
 					response->cat(',');
@@ -1368,21 +1271,18 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 	// Spindles
 	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
 	{
-		int lastConfiguredSpindle = -1;
-		for (size_t spindle = 0; spindle < MaxSpindles; spindle++)
+		size_t numSpindles = MaxSpindles;
+		while (numSpindles != 0 && platform->AccessSpindle(numSpindles - 1).GetToolNumber() == -1)
 		{
-			if (platform->AccessSpindle(spindle).GetToolNumber() != -1)
-			{
-				lastConfiguredSpindle = spindle;
-			}
+			--numSpindles;
 		}
 
-		if (lastConfiguredSpindle != -1)
+		if (numSpindles != 0)
 		{
 			response->cat(",\"spindles\":[");
-			for (int i = 0; i <= lastConfiguredSpindle; i++)
+			for (size_t i = 0; i < numSpindles; i++)
 			{
-				if (i > 0)
+				if (i != 0)
 				{
 					response->cat(',');
 				}
@@ -1497,40 +1397,26 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 			for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
 				// Number
-				response->catf("{\"number\":%d", tool->Number());
+				response->catf("{\"number\":%d,", tool->Number());
 
 				// Name
 				const char *toolName = tool->GetName();
 				if (toolName[0] != 0)
 				{
-					response->cat(",\"name\":");
+					response->cat("\"name\":");
 					response->EncodeString(toolName, false);
+					response->cat(',');
 				}
 
 				// Heaters
-				response->cat(",\"heaters\":[");
-				for (size_t heater = 0; heater < tool->HeaterCount(); heater++)
-				{
-					response->catf("%d", tool->Heater(heater));
-					if (heater + 1 < tool->HeaterCount())
-					{
-						response->cat(',');
-					}
-				}
+				AppendIntArray(response, "heaters", tool->HeaterCount(), [tool](size_t heater) noexcept { return tool->Heater(heater); });
 
 				// Extruder drives
-				response->cat("],\"drives\":[");
-				for (size_t drive = 0; drive < tool->DriveCount(); drive++)
-				{
-					response->catf("%d", tool->Drive(drive));
-					if (drive + 1 < tool->DriveCount())
-					{
-						response->cat(',');
-					}
-				}
+				response->cat(',');
+				AppendIntArray(response, "drives", tool->DriveCount(), [tool](size_t drive) noexcept { return tool->Drive(drive); });
 
 				// Axis mapping
-				response->cat("],\"axisMap\":[[");
+				response->cat(",\"axisMap\":[[");
 				tool->GetXAxisMap().Iterate
 					([&response](unsigned int xi, bool first) noexcept
 						{
@@ -1567,14 +1453,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 				}
 
 				// Offsets
-				response->cat(",\"offsets\":[");
-				for (size_t i = 0; i < numVisibleAxes; i++)
-				{
-					response->catf((i == 0) ? "%.2f" : ",%.2f", (double)tool->GetOffset(i));
-				}
+				response->cat(',');
+				AppendFloatArray(response, "offsets", numVisibleAxes, [tool](size_t axis) noexcept { return tool->GetOffset(axis); }, 2);
 
   				// Do we have any more tools?
-				response->cat((tool->Next() != nullptr) ? "]}," : "]}");
+				response->cat((tool->Next() != nullptr) ? "}," : "}");
 			}
 			response->cat(']');
 		}
@@ -1609,23 +1492,13 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		response->catf(",\"currentLayer\":%d", printMonitor->GetCurrentLayer());
 
 		// Current Layer Time
-		response->catf(",\"currentLayerTime\":%.1f", (double)(printMonitor->GetCurrentLayerTime()));
+		response->catf(",\"currentLayerTime\":%.1f,", (double)(printMonitor->GetCurrentLayerTime()));
 
 		// Raw Extruder Positions
-		response->cat(",\"extrRaw\":");
-		ch = '[';
-		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)		// loop through extruders
-		{
-			response->catf("%c%.1f", ch, (double)(gCodes->GetRawExtruderTotalByDrive(extruder)));
-			ch = ',';
-		}
-		if (ch == '[')
-		{
-			response->cat(ch);		// no extruders
-		}
+		AppendFloatArray(response, "extrRaw", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetRawExtruderTotalByDrive(extruder); }, 1);
 
 		// Fraction of file printed
-		response->catf("],\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (printMonitor->FractionOfFilePrinted() * 100.0) : 0.0));
+		response->catf(",\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (printMonitor->FractionOfFilePrinted() * 100.0) : 0.0));
 
 		// Byte position of the file being printed
 		response->catf(",\"filePosition\":%lu", gCodes->GetFilePosition());
@@ -1646,13 +1519,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		/* Print Time Estimations */
 		{
 			// Based on file progress
-			response->catf(",\"timesLeft\":{\"file\":%.1f", (double)(printMonitor->EstimateTimeLeft(fileBased)));
-
-			// Based on filament usage
-			response->catf(",\"filament\":%.1f", (double)(printMonitor->EstimateTimeLeft(filamentBased)));
-
-			// Based on layers
-			response->catf(",\"layer\":%.1f}", (double)(printMonitor->EstimateTimeLeft(layerBased)));
+			response->catf(",\"timesLeft\":{\"file\":%.1f,\"filament\":%.1f,\"layer\":%.1f}",
+							(double)(printMonitor->EstimateTimeLeft(fileBased)),
+							(double)(printMonitor->EstimateTimeLeft(filamentBased)),
+							(double)(printMonitor->EstimateTimeLeft(layerBased)));
 		}
 	}
 
@@ -1690,43 +1560,23 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 	const size_t numAxes = gCodes->GetVisibleAxes();
 
 	// Axis minima
-	response->copy("{\"axisMins\":");
-	char ch = '[';
-	for (size_t axis = 0; axis < numAxes; axis++)
-	{
-		response->catf("%c%.2f", ch, (double)(platform->AxisMinimum(axis)));
-		ch = ',';
-	}
+	response->copy('{');
+	AppendFloatArray(response, "axisMins", numAxes, [this](size_t axis) noexcept { return platform->AxisMinimum(axis); }, 2);
 
 	// Axis maxima
-	response->cat("],\"axisMaxes\":");
-	ch = '[';
-	for (size_t axis = 0; axis < numAxes; axis++)
-	{
-		response->catf("%c%.2f", ch, (double)(platform->AxisMaximum(axis)));
-		ch = ',';
-	}
+	response->cat(',');
+	AppendFloatArray(response, "axisMaxes", numAxes, [this](size_t axis) noexcept { return platform->AxisMaximum(axis); }, 2);
 
 	// Accelerations
-	response->cat("],\"accelerations\":");
-	ch = '[';
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
-	{
-		response->catf("%c%.2f", ch, (double)(platform->Acceleration(drive)));
-		ch = ',';
-	}
+	response->cat(',');
+	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return platform->Acceleration(drive); }, 2);
 
 	// Motor currents
-	response->cat("],\"currents\":");
-	ch = '[';
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
-	{
-		response->catf("%c%d", ch, (int)platform->GetMotorCurrent(drive, 906));
-		ch = ',';
-	}
+	response->cat(',');
+	AppendIntArray(response, "currents", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return (int)platform->GetMotorCurrent(drive, 906); });
 
 	// Firmware details
-	response->catf("],\"firmwareElectronics\":\"%s", platform->GetElectronicsString());
+	response->catf(",\"firmwareElectronics\":\"%s", platform->GetElectronicsString());
 #ifdef DUET_NG
 	const char* expansionName = DuetExpansion::GetExpansionBoardName();
 	if (expansionName != nullptr)
@@ -1774,28 +1624,17 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	// Motor idle parameters
 	response->catf(",\"idleCurrentFactor\":%.1f", (double)(platform->GetIdleCurrentFactor() * 100.0));
-	response->catf(",\"idleTimeout\":%.1f", (double)(move->IdleTimeout()));
+	response->catf(",\"idleTimeout\":%.1f,", (double)(move->IdleTimeout()));
 
 	// Minimum feedrates
-	response->cat(",\"minFeedrates\":");
-	ch = '[';
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
-	{
-		response->catf("%c%.2f", ch, (double)(platform->GetInstantDv(drive)));
-		ch = ',';
-	}
+	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return platform->GetInstantDv(drive); }, 2);
 
 	// Maximum feedrates
-	response->cat("],\"maxFeedrates\":");
-	ch = '[';
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
-	{
-		response->catf("%c%.2f", ch, (double)(platform->MaxFeedrate(drive)));
-		ch = ',';
-	}
+	response->cat(',');
+	AppendFloatArray(response, "maxFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return platform->MaxFeedrate(drive); }, 2);
 
 	// Config file is no longer included, because we can use rr_configfile or M503 instead
-	response->cat("]}");
+	response->cat('}');
 
 	return response;
 }
@@ -1861,41 +1700,19 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 	{
 		response->catf(",%u", heat->GetStatus(heater).ToBaseType());
 	}
-	response->cat(']');
+	response->cat("],");
 
-	// Send XYZ positions
+	// User coordinates
 	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
+	AppendFloatArray(response, "pos", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetUserCoordinate(axis); }, 3);
 
-	// First the user coordinates
-	response->catf(",\"pos\":");			// announce the user position
-	ch = '[';
-	for (size_t axis = 0; axis < numVisibleAxes; axis++)
-	{
-		// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
-		response->catf("%c%.3f", ch, HideNan(gCodes->GetUserCoordinate(axis)));
-		ch = ',';
-	}
-
-	// Now the machine coordinates
-	float liveCoordinates[MaxAxesPlusExtruders];
-	move->LiveCoordinates(liveCoordinates, currentTool);
-	response->catf("],\"machine\":");		// announce the machine position
-	ch = '[';
-	for (size_t drive = 0; drive < numVisibleAxes; drive++)
-	{
-		response->catf("%c%.3f", ch, HideNan(liveCoordinates[drive]));
-		ch = ',';
-	}
+	// Machine coordinates
+	response->cat(',');
+	AppendFloatArray(response, "machine", numVisibleAxes, [this](size_t axis) noexcept { return move->LiveCoordinate(axis, currentTool); }, 3);
 
 	// Send the speed and extruder override factors
-	response->catf("],\"sfactor\":%.2f,\"efactor\":", (double)(gCodes->GetSpeedFactor()));
-	ch = '[';
-	for (size_t i = 0; i < GetExtrudersInUse(); ++i)
-	{
-		response->catf("%c%.2f", ch, (double)(gCodes->GetExtrusionFactor(i)));
-		ch = ',';
-	}
-	response->cat((ch == '[') ? "[]" : "]");
+	response->catf(",\"sfactor\":%.2f,", (double)(gCodes->GetSpeedFactor()));
+	AppendFloatArray(response, "efactor", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetExtrusionFactor(extruder); }, 2);
 
 	// Send the baby stepping offset
 	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetTotalBabyStepOffset(Z_AXIS)));
@@ -1925,27 +1742,14 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 		const float fanValue = fansManager->GetFanValue(i);
 		response->catf(",%d", (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0));
 	}
-	response->cat(']');
+	response->cat("],");
 
 	// Send fan RPM value(s)
-	response->cat(",\"fanRPM\":");
-	ch = '[';
-	for (size_t i = 0; i < MaxFans; ++i)
-	{
-		response->catf("%c%" PRIi32, ch, fansManager->GetFanRPM(i));
-		ch = ',';
-	}
-	response->cat(']');
+	AppendIntArray(response, "fanRPM", fansManager->GetNumFansToReport(), [this](size_t fan) { return (int)fansManager->GetFanRPM(fan);});
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-	response->cat(",\"homed\":");
-	ch = '[';
-	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-	{
-		response->catf("%c%d", ch, (gCodes->IsAxisHomed(axis)) ? 1 : 0);
-		ch = ',';
-	}
-	response->cat(']');
+	response->cat(',');
+	AppendIntArray(response, "homed", numVisibleAxes, [this](size_t axis) noexcept { return (gCodes->IsAxisHomed(axis)) ? 1 : 0; });
 
 	if (printMonitor->IsPrinting())
 	{
@@ -2274,6 +2078,62 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		response->copy("{\"err\":1}");
 	}
 	return true;
+}
+
+// Helper functions to write JSON arrays
+// Append float array using 1 decimal place
+void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits)
+{
+	if (name != nullptr)
+	{
+		buf->catf("\"%s\":", name);
+	}
+	buf->cat('[');
+	for (size_t i = 0; i < numValues; ++i)
+	{
+		if (i != 0)
+		{
+			buf->cat(',');
+		}
+		buf->catf(GetFloatFormatString(numDecimalDigits), HideNan(func(i)));
+	}
+	buf->cat(']');
+}
+
+void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func)
+{
+	if (name != nullptr)
+	{
+		buf->catf("\"%s\":", name);
+	}
+	buf->cat('[');
+	for (size_t i = 0; i < numValues; ++i)
+	{
+		if (i != 0)
+		{
+			buf->cat(',');
+		}
+		buf->catf("%d", func(i));
+	}
+	buf->cat(']');
+}
+
+void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func)
+{
+	if (name != nullptr)
+	{
+		buf->catf("\"%s\":", name);
+	}
+	buf->cat('[');
+	for (size_t i = 0; i < numValues; ++i)
+	{
+		if (i != 0)
+		{
+			buf->cat(',');
+		}
+		buf->EncodeString(func(i), true);
+	}
+	buf->cat(']');
 }
 
 #if SUPPORT_OBJECT_MODEL

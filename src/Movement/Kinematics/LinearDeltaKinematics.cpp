@@ -13,6 +13,47 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include <Math/Deviation.h>
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(LinearDeltaKinematics, __VA_ARGS__)
+
+constexpr ObjectModelArrayDescriptor LinearDeltaKinematics::towersArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const LinearDeltaKinematics*)self)->numTowers; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 2); }
+};
+
+constexpr ObjectModelTableEntry LinearDeltaKinematics::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. kinematics members
+	{ "deltaRadius",		OBJECT_MODEL_FUNC(self->radius, 3), 									ObjectModelEntryFlags::none },
+	{ "homedHeight",		OBJECT_MODEL_FUNC(self->homedHeight, 3), 								ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->GetName(false)), 								ObjectModelEntryFlags::none },
+	{ "printRadius",		OBJECT_MODEL_FUNC(self->printRadius, 1), 								ObjectModelEntryFlags::none },
+	{ "towers",				OBJECT_MODEL_FUNC_NOSELF(&towersArrayDescriptor),						ObjectModelEntryFlags::none },
+	{ "xTilt",				OBJECT_MODEL_FUNC(self->xTilt, 3), 										ObjectModelEntryFlags::none },
+	{ "yTilt",				OBJECT_MODEL_FUNC(self->yTilt, 3), 										ObjectModelEntryFlags::none },
+
+	// 1. tower members
+	{ "diagonal",			OBJECT_MODEL_FUNC(self->diagonals[context.GetLastIndex()], 3),			ObjectModelEntryFlags::none },
+	{ "endstopAdjustment",	OBJECT_MODEL_FUNC(self->endstopAdjustments[context.GetLastIndex()], 3),	ObjectModelEntryFlags::none },
+	{ "xPos",				OBJECT_MODEL_FUNC(self->towerX[context.GetLastIndex()], 3),				ObjectModelEntryFlags::none },
+	{ "yPos",				OBJECT_MODEL_FUNC(self->towerY[context.GetLastIndex()], 3),				ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t LinearDeltaKinematics::objectModelTableDescriptor[] = { 2, 7, 4 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(LinearDeltaKinematics)
+
+#endif
+
 LinearDeltaKinematics::LinearDeltaKinematics() noexcept : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true), numTowers(UsualNumTowers)
 {
 	Init();

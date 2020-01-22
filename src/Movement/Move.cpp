@@ -79,10 +79,12 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::none },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
 	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
+	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
 	{ "meshDeviation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 1),						ObjectModelEntryFlags::live },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
+	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),	ObjectModelEntryFlags::none },
 
 	// 1. Move.Daa members
 	{ "enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 													ObjectModelEntryFlags::none },
@@ -112,7 +114,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 7, 11, 3, 2, 4, 2, 2, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 7, 13, 3, 2, 4, 2, 2, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -160,7 +162,7 @@ void Move::Init() noexcept
 
 	simulationMode = 0;
 	longestGcodeWaitInterval = 0;
-	bedLevellingMoveAvailable = false;
+	bedLevellingMoveAvailable = liveCoordinatesUpToDate = false;
 
 	active = true;
 }
@@ -989,6 +991,19 @@ GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef&
 		}
 	}
 	return GCodeResult::ok;
+}
+
+// Return the current live XYZ and extruder coordinates
+// Interrupts are assumed enabled on entry
+float Move::LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept
+{
+	if (!liveCoordinatesUpToDate)
+	{
+		mainDDARing.LiveCoordinates(latestLiveCoordinates);
+		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
+		liveCoordinatesUpToDate = true;
+	}
+	return latestLiveCoordinates[axisOrExtruder];
 }
 
 #if SUPPORT_LASER || SUPPORT_IOBITS

@@ -45,6 +45,9 @@ public:
 	bool IsContinuousRotationAxis(size_t axis) const noexcept override;
 	AxesBitmap GetLinearAxes() const noexcept override;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
 	static constexpr float DefaultMinSegmentSize = 0.2;

@@ -195,8 +195,19 @@ public:
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Start timing SD card file writing
 #endif
 
-#if SUPPORT_WORKPLACE_COORDINATES
 	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return currentCoordinateSystem + 1; }
+
+	// This function is called by other functions to account correctly for workplace coordinates
+	inline float GetWorkplaceOffset(size_t axis) const noexcept
+	{
+		return workplaceCoordinates[currentCoordinateSystem][axis];
+	}
+
+#if SUPPORT_OBJECT_MODEL
+	inline float GetWorkplaceOffset(size_t axis, size_t workplaceNumber) const noexcept
+	{
+		return workplaceCoordinates[workplaceNumber][axis];
+	}
 #endif
 
 private:
@@ -368,16 +379,6 @@ private:
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
-	// This function is called by other functions to account correctly for workplace coordinates, depending on whether the build configuration supports them.
-	inline float GetWorkplaceOffset(size_t axis) const noexcept
-	{
-#if SUPPORT_WORKPLACE_COORDINATES
-		return workplaceCoordinates[currentCoordinateSystem][axis];
-#else
-		return axisOffsets[axis];
-#endif
-	}
-
 #ifdef SERIAL_AUX_DEVICE
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(UARTClass *p);
@@ -469,13 +470,8 @@ private:
 	float rawExtruderTotalByDrive[MaxExtruders]; // Extrusion amount in the last G1 command with an E parameter when in absolute extrusion mode
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 
-#if SUPPORT_WORKPLACE_COORDINATES
-	static const size_t NumCoordinateSystems = 9;
 	unsigned int currentCoordinateSystem;		// This is zero-based, where as the P parameter in the G10 command is 1-based
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
-#else
-	float axisOffsets[MaxAxes];					// M206 axis offsets
-#endif
 
 #if HAS_MASS_STORAGE
 	FileData fileToPrint;						// The next file to print

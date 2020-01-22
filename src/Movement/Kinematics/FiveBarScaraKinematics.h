@@ -45,6 +45,9 @@ public:
 	AxesBitmap GetLinearAxes() const noexcept;
 	AxesBitmap GetConnectedAxes(size_t axis) const noexcept;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
 	static constexpr float DefaultMinSegmentSize = 0.2;

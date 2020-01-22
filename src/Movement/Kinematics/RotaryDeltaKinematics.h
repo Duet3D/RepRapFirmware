@@ -44,6 +44,9 @@ public:
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
 	AxesBitmap GetLinearAxes() const noexcept override;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	void Init() noexcept;
 	void Recalc() noexcept;

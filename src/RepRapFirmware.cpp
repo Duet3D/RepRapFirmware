@@ -172,6 +172,14 @@ Licence: GPL
 
 RepRap reprap;
 
+// Get the format string to use for printing a floating point number to the specified number of decimal digits. Zero means the maximum sensible number.
+const char *GetFloatFormatString(unsigned int numDigitsAfterPoint) noexcept
+{
+	static constexpr const char *FormatStrings[] = { "%.7f", "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f", "%.7f" };
+	static_assert(ARRAY_SIZE(FormatStrings) == MaxFloatDigitsDisplayedAfterPoint + 1);
+	return FormatStrings[min<unsigned int>(numDigitsAfterPoint, MaxFloatDigitsDisplayedAfterPoint)];
+}
+
 static const char * const moduleName[] =
 {
 	"Platform",

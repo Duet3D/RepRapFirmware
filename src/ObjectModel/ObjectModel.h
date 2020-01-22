@@ -109,7 +109,7 @@ struct ExpressionValue
 	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
 
 	// Get the format string to use assuming this is a floating point number
-	const char *GetFloatFormatString() const noexcept;
+	const char *GetFloatFormatString() const noexcept { return ::GetFloatFormatString(param); }
 };
 
 // Flags field of a table entry
@@ -263,6 +263,9 @@ public:
 	static const ObjectModelTableEntry objectModelTable[]; \
 	static const uint8_t objectModelTableDescriptor[];
 
+#define DECLARE_OBJECT_MODEL_VIRTUAL \
+	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept override = 0;
+
 #define DESCRIPTOR_OK(_class) 	(ARRAY_SIZE(_class::objectModelTableDescriptor) == _class::objectModelTableDescriptor[0] + 1)
 #define OMT_SIZE_OK(_class)		(ARRAY_SIZE(_class::objectModelTable) == ArraySum(_class::objectModelTableDescriptor + 1, ARRAY_SIZE(_class::objectModelTableDescriptor) - 1))
 #define OMT_ORDERING_OK(_class)	(ObjectModelTableEntry::IsOrdered(_class::objectModelTableDescriptor, _class::objectModelTable))
@@ -288,6 +291,7 @@ public:
 
 #define INHERIT_OBJECT_MODEL			// nothing
 #define DECLARE_OBJECT_MODEL			// nothing
+#define DECLARE_OBJECT_MODEL_VIRTUAL	// nothing
 #define DEFINE_GET_OBJECT_MODEL_TABLE	// nothing
 #define OBJECT_MODEL_ARRAY(_name)		// nothing
 

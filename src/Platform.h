@@ -558,6 +558,7 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(axisDrivers)
+	OBJECT_MODEL_ARRAY(workplaceOffsets)
 
 private:
 	const char* InternalGetSysDir() const noexcept;  					// where the system files are - not thread-safe!

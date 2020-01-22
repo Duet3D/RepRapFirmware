@@ -28,6 +28,13 @@ public:
 	AxesBitmap GetConnectedAxes(size_t axis) const noexcept override;
 	AxesBitmap GetLinearAxes() const noexcept override;
 
+protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(forwardMatrix)
+	OBJECT_MODEL_ARRAY(forwardMatrixElement)
+	OBJECT_MODEL_ARRAY(inverseMatrix)
+	OBJECT_MODEL_ARRAY(inverseMatrixElement)
+
 private:
 	void Recalc() noexcept;									// recalculate internal variables following a configuration change
 	bool HasSharedMotor(size_t axis) const noexcept;		// return true if the axis doesn't have a single dedicated motor

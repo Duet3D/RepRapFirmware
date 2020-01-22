@@ -126,12 +126,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-#if SUPPORT_WORKPLACE_COORDINATES
-			workplaceCoordinates[currentCoordinateSystem][axis]
-#else
-			axisOffsets[axis]
-#endif
-						 = -gb.GetDistance();
+			workplaceCoordinates[currentCoordinateSystem][axis] = -gb.GetDistance();
 			seen = true;
 		}
 	}
@@ -141,13 +136,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 		reply.printf("Axis offsets:");
 		for (size_t axis = 0; axis < numVisibleAxes; axis++)
 		{
-			reply.catf(" %c%.2f", axisLetters[axis],
-#if SUPPORT_WORKPLACE_COORDINATES
-				-(double)(gb.InverseConvertDistance(workplaceCoordinates[0][axis]))
-#else
-				-(double)(gb.InverseConvertDistance(axisOffsets[axis]))
-#endif
-													 );
+			reply.catf(" %c%.2f", axisLetters[axis], -(double)(gb.InverseConvertDistance(workplaceCoordinates[0][axis])));
 		}
 	}
 

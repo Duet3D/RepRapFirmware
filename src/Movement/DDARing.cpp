@@ -408,6 +408,7 @@ void DDARing::CurrentMoveCompleted() noexcept
 {
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
+	liveCoordinatesChanged = true;
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 	{
@@ -479,12 +480,18 @@ void DDARing::AdjustMotorPositions(const float adjustment[], size_t numMotors) n
 	}
 
 	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated
+	liveCoordinatesChanged = true;
 }
 
-// Return the current live XYZ and extruder coordinates
+// Fetch the current live XYZ and extruder coordinates if they have changed since this was lass called
 // Interrupts are assumed enabled on entry
-void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
+bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 {
+	if (!liveCoordinatesChanged)
+	{
+		return false;
+	}
+
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();			// do this before we disable interrupts
@@ -493,6 +500,7 @@ void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 	{
 		// All coordinates are valid, so copy them across
 		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * MaxAxesPlusExtruders);
+		liveCoordinatesChanged = false;
 		cpu_irq_enable();
 	}
 	else
@@ -511,9 +519,11 @@ void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 		{
 			memcpy(const_cast<float *>(liveCoordinates), m, sizeof(m[0]) * numVisibleAxes);
 			liveCoordinatesValid = true;
+			liveCoordinatesChanged = false;
 		}
 		cpu_irq_enable();
 	}
+	return true;
 }
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
@@ -525,6 +535,7 @@ void DDARing::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexc
 		liveCoordinates[drive] = coords[drive];
 	}
 	liveCoordinatesValid = true;
+	liveCoordinatesChanged = true;
 	reprap.GetMove().EndPointToMachine(coords, const_cast<int32_t *>(liveEndPoints), reprap.GetGCodes().GetVisibleAxes());
 }
 
@@ -536,6 +547,7 @@ void DDARing::ResetExtruderPositions() noexcept
 		liveCoordinates[eDrive] = 0.0;
 	}
 	cpu_irq_enable();
+	liveCoordinatesChanged = true;
 }
 
 float DDARing::GetRequestedSpeed() const noexcept

@@ -66,7 +66,7 @@ public:
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 	void SetPositions(const float move[MaxAxesPlusExtruders]) noexcept;					// Force the machine coordinates to be these
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;		// Perform motor endpoint adjustment
-	void LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Gives the last point at the end of the last complete DDA transformed to user coords
+	bool LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Fetch the last point at the end of the last completed DDA if it has changed since we last called this
 	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept;			// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions() noexcept;												// Resets the extrusion amounts of the live coordinates
 
@@ -96,7 +96,6 @@ private:
 	StepTimer timer;															// Timer object to control getting step interrupts
 
 	volatile float liveCoordinates[MaxAxesPlusExtruders];						// The endpoint that the machine moved to in the last completed move
-	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates are reliable (the extruder ones always are)
 	volatile int32_t liveEndPoints[MaxAxesPlusExtruders];						// The XYZ endpoints of the last completed move in motor coordinates
 
 	unsigned int numDdasInRing;
@@ -114,7 +113,10 @@ private:
 	float extrusionPending[MaxExtruders];										// Extrusion not done due to rounding to nearest step
 	volatile int32_t extrusionAccumulators[MaxExtruders]; 						// Accumulated extruder motor steps
 	volatile uint32_t extrudersPrintingSince;									// The milliseconds clock time when extrudersPrinting was set to true
+
 	volatile bool extrudersPrinting;											// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
+	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates in liveCoordinates are reliable (the extruder ones always are)
+	volatile bool liveCoordinatesChanged;										// True if the live coordinates have changed since LiveCoordinates was last called
 };
 
 // Start the next move. Return true if laser or IO bits need to be active
