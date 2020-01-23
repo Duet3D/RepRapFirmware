@@ -2077,8 +2077,8 @@ void StringParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& v
 		{
 			throw ConstructParseException("expected numeric operands");
 		}
-		val1.Set(0);
-		val2.Set(0);
+		val1.Set((int32_t)0);
+		val2.Set((int32_t)0);
 	}
 }
 
@@ -2098,8 +2098,8 @@ void StringParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bo
 		{
 			throw ConstructParseException("cannot convert operands to same type");
 		}
-		val1.Set(0);
-		val2.Set(0);
+		val1.Set((int32_t)0);
+		val2.Set((int32_t)0);
 	}
 }
 
@@ -2121,7 +2121,7 @@ void StringParser::EnsureNumeric(ExpressionValue& val, bool evaluate)
 		{
 			throw ConstructParseException("expected numeric operand");
 		}
-		val.Set(0);
+		val.Set((int32_t)0);
 	}
 }
 
@@ -2303,7 +2303,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 	}
 
 	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context("v", applyLengthOperator);
+	ObjectExplorationContext context("v", 99, applyLengthOperator);
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
@@ -2410,7 +2410,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 				{
 					throw ConstructParseException("expected numeric operand");
 				}
-				rslt.Set(0);
+				rslt.Set((int32_t)0);
 			}
 		}
 		else if (id.Equals("sin"))

@@ -101,7 +101,6 @@ struct ExpressionValue
 	void Set(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
 	void Set(char c) noexcept { type = TYPE_OF(char); cVal = c; }
 	void Set(int32_t i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
-	void Set(int i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
 	void Set(float f) noexcept { type = TYPE_OF(float); fVal = f; param = 1; }
 	void Set(const char *s) noexcept { type = TYPE_OF(const char*); sVal = s; }
 
@@ -129,8 +128,11 @@ enum class ObjectModelEntryFlags : uint8_t
 class ObjectExplorationContext
 {
 public:
-	ObjectExplorationContext(const char *reportFlags, bool wal) noexcept;
+	ObjectExplorationContext(const char *reportFlags, unsigned int initialMaxDepth, bool wal) noexcept;
 
+	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
+	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
+	void DecreaseDepth() noexcept { --currentDepth; }
 	void AddIndex(int32_t index) THROWS_GCODE_EXCEPTION;
 	void AddIndex() THROWS_GCODE_EXCEPTION;
 	void RemoveIndex() THROWS_GCODE_EXCEPTION;
@@ -146,6 +148,8 @@ public:
 private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
 
+	unsigned int maxDepth;
+	unsigned int currentDepth;
 	size_t numIndicesProvided;						// the number of indices provided, when we are doing a value lookup
 	size_t numIndicesCounted;						// the number of indices passed in the search string
 	int32_t indices[MaxIndices];

@@ -59,12 +59,24 @@ ObjectModel::ObjectModel() noexcept
 
 // ObjectExplorationContext members
 
-ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, bool wal) noexcept
-	: numIndicesProvided(0), numIndicesCounted(0), shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false)
+ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, unsigned int initialMaxDepth, bool wal) noexcept
+	: maxDepth(initialMaxDepth), currentDepth(0), numIndicesProvided(0), numIndicesCounted(0),
+	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false)
 {
 	while (true)
 	{
-		switch(*reportFlags)
+		if (isdigit(*reportFlags))
+		{
+			maxDepth = *reportFlags - '0';
+			++reportFlags;
+			while (isdigit(*reportFlags))
+			{
+				maxDepth = (10 * maxDepth) + (*reportFlags - '0');
+				++reportFlags;
+			}
+		}
+
+		switch (*reportFlags)
 		{
 		case '\0':
 			return;
@@ -114,45 +126,54 @@ bool ObjectExplorationContext::ShouldReport(const ObjectModelEntryFlags f) const
 // Report this object
 void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, uint8_t tableNumber, const char* filter) const
 {
-	bool added = false;
-	const uint8_t *descriptor;
-	const ObjectModelTableEntry *tbl = GetObjectModelTable(descriptor);
-	if (tableNumber < descriptor[0])
+	if (context.IncreaseDepth())
 	{
-		size_t numEntries = descriptor[tableNumber + 1];
-		while (tableNumber != 0)
+		bool added = false;
+		const uint8_t *descriptor;
+		const ObjectModelTableEntry *tbl = GetObjectModelTable(descriptor);
+		if (tableNumber < descriptor[0])
 		{
-			--tableNumber;
-			tbl += descriptor[tableNumber + 1];
-		}
-
-		while (numEntries != 0)
-		{
-			if (tbl->Matches(filter, context))
+			size_t numEntries = descriptor[tableNumber + 1];
+			while (tableNumber != 0)
 			{
-				if (tbl->ReportAsJson(buf, context, this, filter, !added))
-				{
-					added = true;
-				}
+				--tableNumber;
+				tbl += descriptor[tableNumber + 1];
 			}
-			--numEntries;
-			++tbl;
+
+			while (numEntries != 0)
+			{
+				if (tbl->Matches(filter, context))
+				{
+					if (tbl->ReportAsJson(buf, context, this, filter, !added))
+					{
+						added = true;
+					}
+				}
+				--numEntries;
+				++tbl;
+			}
+			if (added && *filter == 0)
+			{
+				buf->cat('}');
+			}
 		}
-		if (added && *filter == 0)
+		if (!added)
 		{
-			buf->cat('}');
+			buf->cat("null");
 		}
+		context.DecreaseDepth();
 	}
-	if (!added)
+	else
 	{
-		buf->cat("null");
+		buf->cat("{}");
 	}
 }
 
 // Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
 void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const
 {
-	ObjectExplorationContext context(reportFlags, wantArrayLength);
+	const unsigned int defaultMaxDepth = (wantArrayLength) ? 99 : (filter[0] == 0) ? 1 : 99;
+	ObjectExplorationContext context(reportFlags, defaultMaxDepth, wantArrayLength);
 	ReportAsJson(buf, context, 0, filter);
 }
 
