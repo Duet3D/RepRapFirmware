@@ -7,10 +7,11 @@ Recommended compatible firmware:
 - Duet Software Framework 1.2.3.0 (for Duet 3/Raspberry Pi users)
 
 Upgrade notes:
-- No significant changes since 3.01beta1
+- See upgrade notes for 3.01beta1
 
 Limitations:
 - The new conditional GCode commands and expressions and parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
+- If you try to report the entire object model using M409, the response may be too long to send and you may get a null response instead. For this reason, M409 without parameters now reports only the top-level property names. Use M409 with a key string to drill down into them.
 
 New features and changed behaviour:
 - Many new object model fields have been added
