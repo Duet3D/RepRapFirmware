@@ -14,6 +14,7 @@ Limitations:
 
 New features and changed behaviour:
 - Many new object model fields have been added
+- M409 now allows a number to be included in the flags field. This is the maximum depth to which the object model tree will be reported. It defaults to 1 if the key string is empty, otherwise to a large number.
 
 Bug fixes:
 - Object model properties move.initialDeviation, move.calibrationDeviation.mean and move.meshDeviation.mean were inaccessible
