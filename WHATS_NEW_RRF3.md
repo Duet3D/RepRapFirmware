@@ -9,7 +9,8 @@ Recommended compatible firmware:
 Upgrade notes:
 - See upgrade notes for 3.01beta1
 
-Limitations:
+Known issues and limitations:
+- If you try to access a string-values field of the object model from a GCode command or meta command, the # operator is always applied to it automatically 
 - The new conditional GCode commands and expressions and parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
 - If you try to report the entire object model using M409, the response may be too long to send and you may get a null response instead. For this reason, M409 without parameters now reports only the top-level property names. Use M409 with a key string to drill down into them.
 
