@@ -1807,7 +1807,7 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 		}
 		else if (isalpha(c))				// looks like a variable name
 		{
-			val = ParseIdentifierExpression(stringBuffer, evaluate, false);
+			val = ParseIdentifierExpression(stringBuffer, false, evaluate);
 		}
 		else
 		{
