@@ -2393,6 +2393,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 		// It's a function call
 		++readPointer;
 		ExpressionValue rslt = ParseExpression(stringBuffer, 0, evaluate);
+		//TODO use a binary search to do function lookup
 		if (id.Equals("abs"))
 		{
 			switch (rslt.type)
@@ -2475,6 +2476,44 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 			ConvertToFloat(rslt, evaluate);
 			rslt.type = TYPE_OF(bool);
 			rslt.bVal = (isnan(rslt.fVal) != 0);
+		}
+		else if (id.Equals("floor"))
+		{
+			ConvertToFloat(rslt, evaluate);
+			const float f = floorf(rslt.fVal);
+			if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
+			{
+				rslt.type = TYPE_OF(int32_t);
+				rslt.iVal = (int32_t)f;
+			}
+			else
+			{
+				rslt.fVal = f;
+			}
+		}
+		else if (id.Equals("mod"))
+		{
+			SkipWhiteSpace();
+			if (gb.buffer[readPointer] != ',')
+			{
+				throw ConstructParseException("expected ','");
+			}
+			++readPointer;
+			SkipWhiteSpace();
+			ExpressionValue nextOperand = ParseExpression(stringBuffer, 0, evaluate);
+			BalanceNumericTypes(rslt, nextOperand, evaluate);
+			if (rslt.type == TYPE_OF(float))
+			{
+				rslt.fVal = fmod(rslt.fVal, nextOperand.fVal);
+			}
+			else if (nextOperand.iVal == 0)
+			{
+				rslt.iVal = 0;
+			}
+			else
+			{
+				rslt.iVal %= nextOperand.iVal;
+			}
 		}
 		else if (id.Equals("max"))
 		{

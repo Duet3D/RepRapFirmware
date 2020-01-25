@@ -61,6 +61,7 @@ public:
 	bool HasCommandNumber() const noexcept;
 	int GetCommandNumber() const noexcept;
 	int8_t GetCommandFraction() const noexcept;
+	int32_t GetLineNumber() const noexcept { return machineState->lineNumber; }
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
 

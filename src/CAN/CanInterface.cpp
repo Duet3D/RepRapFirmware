@@ -18,6 +18,8 @@
 #include "Movement/StepTimer.h"
 #include <RTOSIface/RTOSIface.h>
 #include <TaskPriorities.h>
+#include <GCodes/GCodeException.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
@@ -198,6 +200,17 @@ CanRequestId CanInterface::AllocateRequestId(CanAddress destination) noexcept
 	CanRequestId rslt = rid & 0x07FF;
 	++rid;
 	return rslt;
+}
+
+// Allocate a CAN message buffer, throw if failed
+CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		throw GCodeException(gb.GetLineNumber(), -1, "no CAN buffer");
+	}
+	return buf;
 }
 
 // Wait for a specified buffer to become free. If it's still not free after the timeout, cancel the pending transmission.
@@ -1009,20 +1022,39 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	longestWaitMessageType = 0;
 }
 
-GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const StringRef &reply) noexcept
+GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef &reply)
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
-	{
-		reply.copy("No CAN buffer");
-		return GCodeResult::error;
-	}
-
+	CanMessageBuffer * const buf = AllocateBuffer(gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 	auto msg = buf->SetupRequestMessage<CanMessageWriteGpio>(rid, CanId::MasterAddress, boardAddress);
 	msg->portNumber = portNumber;
 	msg->pwm = pwm;
 	msg->isServo = isServo;
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, nullptr);
+}
+
+GCodeResult CanInterface::SetFastDataRate(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
+{
+	return GCodeResult::errorNotSupported;
+}
+
+GCodeResult CanInterface::ChangeExpansionBoardAddress(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
+{
+	gb.MustSee('B');
+	const uint32_t oldAddress = gb.GetUIValue();
+	gb.MustSee('S');
+	uint32_t newAddress = gb.GetUIValue();
+	if (oldAddress > CanId::MaxNormalAddress || newAddress >= CanId::MaxNormalAddress)
+	{
+		reply.copy("Can address out of range");
+		return GCodeResult::error;
+	}
+	CanMessageBuffer * const buf = AllocateBuffer(gb);
+	const CanRequestId rid = CanInterface::AllocateRequestId((uint8_t)oldAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageChangeAddress>(rid, CanId::MasterAddress, (uint8_t)oldAddress);
+	msg->oldAddress = (uint8_t)oldAddress;
+	msg->newAddress = (uint8_t)newAddress;
+	msg->newAddressInverted = (uint8_t)~newAddress;
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, nullptr);
 }
 

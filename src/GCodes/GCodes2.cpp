@@ -1128,7 +1128,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #if SUPPORT_CAN_EXPANSION
 						if (gpPort.boardAddress != CanId::MasterAddress)
 						{
-							result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, val, false, reply);
+							result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, val, false, gb, reply);
 							break;
 						}
 #endif
@@ -2264,7 +2264,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #if SUPPORT_CAN_EXPANSION
 						if (gpPort.boardAddress != CanId::MasterAddress)
 						{
-							result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, pwm, true, reply);
+							result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, pwm, true, gb, reply);
 							break;
 						}
 #endif
@@ -4312,7 +4312,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 #endif
 
-		case 997: // Perform firmware update
+#if SUPPORT_CAN_EXPANSION
+		case 952:	// set CAN-FD data rate
+			result = CanInterface::SetFastDataRate(gb, reply);
+			break;
+
+		case 953:	// change expansion board CAN address
+			result = CanInterface::ChangeExpansionBoardAddress(gb, reply);
+			break;
+#endif
+
+		case 997:	// Perform firmware update
 			result = UpdateFirmware(gb, reply);
 			break;
 

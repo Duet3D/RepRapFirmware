@@ -71,6 +71,7 @@ namespace CanInterface
 	void SendResponse(CanMessageBuffer *buf) noexcept;
 	void SendBroadcast(CanMessageBuffer *buf) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
+	CanMessageBuffer *AllocateBuffer(const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION;
 
 	// Info functions
 	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) noexcept;
@@ -102,7 +103,9 @@ namespace CanInterface
 	GCodeResult EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef& reply) noexcept;
 
 	// Misc functions
-	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const StringRef& reply) noexcept;
+	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult SetFastDataRate(GCodeBuffer& gb, const StringRef& reply)THROWS_GCODE_EXCEPTION;
+	GCodeResult ChangeExpansionBoardAddress(GCodeBuffer& gb, const StringRef& reply)THROWS_GCODE_EXCEPTION;
 }
 
 #endif
