@@ -15,6 +15,7 @@
 #include "RepRap.h"
 #include <General/IP4String.h>
 #include <General/StringBuffer.h>
+#include <Networking/NetworkDefs.h>
 
 // Replace the default definition of THROW_INTERNAL_ERROR by one that gives line information
 #undef THROW_INTERNAL_ERROR
@@ -1282,8 +1283,8 @@ void StringParser::GetIPAddress(IPAddress& returnedIp)
 	returnedIp.SetV4(ip);
 }
 
-// Get a MAX address sextet after a key letter
-void StringParser::GetMacAddress(uint8_t mac[6])
+// Get a MAC address sextet after a key letter
+void StringParser::GetMacAddress(MacAddress& mac)
 {
 	if (readPointer <= 0)
 	{
@@ -1301,7 +1302,7 @@ void StringParser::GetMacAddress(uint8_t mac[6])
 			readPointer = -1;
 			throw ConstructParseException("invalid MAC address");
 		}
-		mac[n] = (uint8_t)v;
+		mac.bytes[n] = (uint8_t)v;
 		++n;
 		p = pp;
 		if (*p != ':')
@@ -1681,6 +1682,12 @@ void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 #else
 		str.catf("%u", (unsigned int)val.uVal);
 #endif
+		break;
+
+	case TYPE_OF(MacAddress):
+		str.catf("%02x:%02x:%02x:%02x:%02x:%02x",
+					(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
+					(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
 		break;
 
 	default:

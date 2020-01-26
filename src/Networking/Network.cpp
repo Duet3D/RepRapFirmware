@@ -46,6 +46,23 @@ constexpr size_t NetworkStackWords = 550;
 
 static Task<NetworkStackWords> networkTask;
 
+// MacAddress members
+uint32_t MacAddress::LowWord() const noexcept
+{
+	return (((((bytes[3] << 8) | bytes[2]) << 8) | bytes[1]) << 8) | bytes[0];
+}
+
+uint16_t MacAddress::HighWord() const noexcept
+{
+	return (bytes[5] << 8) | bytes[4];
+}
+
+void MacAddress::SetFromBytes(const uint8_t mb[6]) noexcept
+{
+	memcpy(bytes, mb, sizeof(bytes));
+}
+
+// Network members
 Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
 #if defined(DUET3_V03)
@@ -496,15 +513,17 @@ void Network::SetHostname(const char *name) noexcept
 }
 
 // Net the MAC address. Pass -1 as the interface number to set the default MAC address for interfaces that don't have one.
-void Network::SetMacAddress(unsigned int interface, const uint8_t mac[]) noexcept
+GCodeResult Network::SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
-		interfaces[interface]->SetMacAddress(mac);
+		return interfaces[interface]->SetMacAddress(mac, reply);
 	}
+	reply.copy("unknown interface ");
+	return GCodeResult::error;
 }
 
-const uint8_t *Network::GetMacAddress(unsigned int interface) const noexcept
+const MacAddress& Network::GetMacAddress(unsigned int interface) const noexcept
 {
 	if (interface >= NumNetworkInterfaces)
 	{

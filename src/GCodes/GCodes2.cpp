@@ -2918,14 +2918,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 				if (gb.Seen('P'))
 				{
-					uint8_t mac[6];
+					MacAddress mac;
 					gb.GetMacAddress(mac);
-					reprap.GetNetwork().SetMacAddress(interface, mac);
+					result = reprap.GetNetwork().SetMacAddress(interface, mac, reply);
 				}
 				else
 				{
-					const uint8_t * const mac = reprap.GetNetwork().GetMacAddress(interface);
-					reply.printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+					const MacAddress& mac = reprap.GetNetwork().GetMacAddress(interface);
+					reply.printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x", mac.bytes[0], mac.bytes[1], mac.bytes[2], mac.bytes[3], mac.bytes[4], mac.bytes[5]);
 				}
 			}
 			break;

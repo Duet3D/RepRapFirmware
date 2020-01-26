@@ -9,6 +9,7 @@
 #include "GCodeBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include <Networking/NetworkDefs.h>
 
 BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
 {
@@ -247,7 +248,7 @@ void BinaryParser::GetIPAddress(IPAddress& returnedIp)
 	returnedIp.SetV4(ip);
 }
 
-void BinaryParser::GetMacAddress(uint8_t mac[6])
+void BinaryParser::GetMacAddress(MacAddress& mac)
 {
 	if (seenParameter == nullptr)
 	{
@@ -269,7 +270,7 @@ void BinaryParser::GetMacAddress(uint8_t mac[6])
 		{
 			throw ConstructParseException("invalid MAC address");
 		}
-		mac[n] = (uint8_t)v;
+		mac.bytes[n] = (uint8_t)v;
 		++n;
 		p = pp;
 		if (*p != ':')

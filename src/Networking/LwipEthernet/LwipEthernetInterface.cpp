@@ -112,8 +112,8 @@ constexpr ObjectModelTableEntry LwipEthernetInterface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
-	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(nullptr),		ObjectModelEntryFlags::none },
 	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),		ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),	ObjectModelEntryFlags::none },
 	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),		ObjectModelEntryFlags::none },
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),	ObjectModelEntryFlags::none },
 };
@@ -137,7 +137,7 @@ void LwipEthernetInterface::Init() noexcept
 		listeningPcbs[i] = nullptr;
 	}
 
-	memcpy(macAddress, platform.GetDefaultMacAddress(), sizeof(macAddress));
+	macAddress = platform.GetDefaultMacAddress();
 }
 
 GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
@@ -338,7 +338,7 @@ void LwipEthernetInterface::Start() noexcept
 		const char *hostname = reprap.GetNetwork().GetHostname();
 
 		// Allow the MAC address to be set only before LwIP is started...
-		ethernet_configure_interface(platform.GetDefaultMacAddress(), hostname);
+		ethernet_configure_interface(platform.GetDefaultMacAddress().bytes, hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
 		// Initialise mDNS subsystem
@@ -589,9 +589,10 @@ void LwipEthernetInterface::UpdateHostname(const char *hostname) noexcept
 	}
 }
 
-void LwipEthernetInterface::SetMacAddress(const uint8_t mac[]) noexcept
+GCodeResult LwipEthernetInterface::SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept
 {
-	memcpy(macAddress, mac, sizeof(macAddress));
+	macAddress = mac;
+	return GCodeResult::ok;
 }
 
 void LwipEthernetInterface::OpenDataPort(Port port) noexcept

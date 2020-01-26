@@ -308,7 +308,7 @@ public:
 	const char *GetBoardShortName() const;
 #endif
 
-	const uint8_t *GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
+	const MacAddress& GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
 
 	// Timing
 	void Tick() noexcept __attribute__((hot));						// Process a systick interrupt
@@ -591,7 +591,7 @@ private:
 	IPAddress ipAddress;
 	IPAddress netMask;
 	IPAddress gateWay;
-	uint8_t defaultMacAddress[6];
+	MacAddress defaultMacAddress;
 
 	// Board and processor
 #if SAM4E || SAM4S || SAME70

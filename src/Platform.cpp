@@ -368,17 +368,17 @@ void Platform::Init() noexcept
 		// On the Duet Ethernet and SAM E70, use the unique chip ID as most of the MAC address.
 		// The unique ID is 128 bits long whereas the whole MAC address is only 48 bits,
 		// so we can't guarantee that each Duet will get a unique MAC address this way.
-		memset(defaultMacAddress, 0, sizeof(defaultMacAddress));
-		defaultMacAddress[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
+		memset(defaultMacAddress.bytes, 0, sizeof(defaultMacAddress.bytes));
+		defaultMacAddress.bytes[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
 		const uint8_t * const idBytes = reinterpret_cast<const uint8_t *>(uniqueId);
 		for (size_t i = 0; i < 15; ++i)
 		{
-			defaultMacAddress[(i % 5) + 1] ^= idBytes[i];
+			defaultMacAddress.bytes[(i % 5) + 1] ^= idBytes[i];
 		}
 	}
 	else
 	{
-		ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
+		defaultMacAddress.SetDefault();
 	}
 #endif
 
@@ -1062,7 +1062,7 @@ void Platform::Spin() noexcept
 				else if (openLoadATimer.IsRunning())
 				{
 					notOpenLoadADrivers |= mask;
-					if (!openLoadADrivers.Intersects(~notOpenLoadADrivers))
+					if (openLoadADrivers.Disjoint(~notOpenLoadADrivers))
 					{
 						openLoadATimer.Stop();
 					}
@@ -1081,7 +1081,7 @@ void Platform::Spin() noexcept
 				else if (openLoadBTimer.IsRunning())
 				{
 					notOpenLoadBDrivers |= mask;
-					if (!openLoadBDrivers.Intersects(~notOpenLoadBDrivers))
+					if (openLoadBDrivers.Disjoint(~notOpenLoadBDrivers))
 					{
 						openLoadBTimer.Stop();
 					}
@@ -1090,7 +1090,7 @@ void Platform::Spin() noexcept
 # if HAS_STALL_DETECT
 				if ((stat & TMC_RR_SG) != 0)
 				{
-					if (!stalledDrivers.Intersects(mask))
+					if (stalledDrivers.Disjoint(mask))
 					{
 						// This stall is new so check whether we need to perform some action in response to the stall
 						if (rehomeOnStallDrivers.Intersects(mask))

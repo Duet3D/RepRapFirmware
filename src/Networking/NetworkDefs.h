@@ -19,7 +19,20 @@ typedef uint8_t SocketNumber;
 typedef uint16_t Port;
 typedef uint8_t NetworkProtocol;
 
-constexpr uint8_t DefaultMacAddress[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };
+struct MacAddress
+{
+public:
+	uint8_t bytes[6];
+
+	uint32_t LowWord() const noexcept;
+	uint16_t HighWord() const noexcept;
+
+	void SetFromBytes(const uint8_t mb[6]) noexcept;
+	void SetDefault() noexcept { SetFromBytes(defaultBytes); }
+
+private:
+	static constexpr uint8_t defaultBytes[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };
+};
 
 constexpr IPAddress DefaultIpAddress;				// will be initialised to 0 by constructor
 constexpr IPAddress DefaultNetMask(0xFFFFFF00);		// equivalent to 255.255.255.0. Use constexpr constructor to avoid it being allocated in RAM.

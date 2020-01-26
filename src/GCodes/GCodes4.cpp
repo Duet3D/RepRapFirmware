@@ -208,7 +208,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for the previous homing move to complete
 		{
 			// Test whether the previous homing move homed any axes
-			if (!toBeHomed.Intersects(axesHomed))
+			if (toBeHomed.Disjoint(axesHomed))
 			{
 				reply.copy("Homing failed");
 				error = true;

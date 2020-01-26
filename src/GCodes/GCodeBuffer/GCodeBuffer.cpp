@@ -249,7 +249,7 @@ void GCodeBuffer::GetIPAddress(IPAddress& returnedIp)
 }
 
 // Get a MAC address sextet after a key letter
-void GCodeBuffer::GetMacAddress(uint8_t mac[6])
+void GCodeBuffer::GetMacAddress(MacAddress& mac)
 {
 	if (isBinaryBuffer)
 	{

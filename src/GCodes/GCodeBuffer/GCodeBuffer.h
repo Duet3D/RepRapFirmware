@@ -73,7 +73,7 @@ public:
 	int32_t GetIValue() THROWS_GCODE_EXCEPTION __attribute__((hot));				// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS_GCODE_EXCEPTION;									// Get an unsigned integer value
 	void GetIPAddress(IPAddress& returnedIp) THROWS_GCODE_EXCEPTION;				// Get an IP address quad after a key letter
-	void GetMacAddress(uint8_t mac[6]) THROWS_GCODE_EXCEPTION;						// Get a MAC address sextet after a key letter
+	void GetMacAddress(MacAddress& mac) THROWS_GCODE_EXCEPTION;						// Get a MAC address sextet after a key letter
 	PwmFrequency GetPwmFrequency() THROWS_GCODE_EXCEPTION;							// Get a PWM frequency
 	float GetPwmValue() THROWS_GCODE_EXCEPTION;										// Get a PWM value
 	DriverId GetDriverId() THROWS_GCODE_EXCEPTION;									// Get a driver ID

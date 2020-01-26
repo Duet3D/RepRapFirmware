@@ -33,8 +33,8 @@ public:
 
 	virtual IPAddress GetIPAddress() const noexcept = 0;
 	virtual void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept = 0;
-	virtual void SetMacAddress(const uint8_t mac[]) noexcept = 0;
-	virtual const uint8_t *GetMacAddress() const noexcept = 0;
+	virtual GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept = 0;
+	virtual const MacAddress& GetMacAddress() const noexcept = 0;
 
 	virtual void UpdateHostname(const char *hostname) noexcept = 0;
 

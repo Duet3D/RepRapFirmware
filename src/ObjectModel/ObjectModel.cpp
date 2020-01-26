@@ -14,6 +14,10 @@
 #include <cstring>
 #include <General/SafeStrtod.h>
 
+ExpressionValue::ExpressionValue(const MacAddress& mac) noexcept : type(TYPE_OF(MacAddress)), param(mac.HighWord()), uVal(mac.LowWord())
+{
+}
+
 void ObjectExplorationContext::AddIndex(int32_t index)
 {
 	if (numIndicesCounted == MaxIndices)
@@ -425,6 +429,12 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 #endif
 			break;
 
+		case TYPE_OF(MacAddress):
+			buf->catf("%02x:%02x:%02x:%02x:%02x:%02x",
+						(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
+						(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
+			break;
+
 		case NoType:
 			buf->cat("null");
 			break;
@@ -655,6 +665,13 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 			throw sp.ConstructParseException("bitmap too large to convert to integer");
 		}
 		return ExpressionValue((int32_t)val.uVal);
+
+	case TYPE_OF(MacAddress):
+		if (*idString == 0)
+		{
+			return (context.WantArrayLength()) ? ExpressionValue((int32_t)17) : val;
+		}
+		break;
 
 	case TYPE_OF(const char*):
 		if (*idString == 0 && context.WantArrayLength())

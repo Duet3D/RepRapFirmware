@@ -16,6 +16,7 @@
 #include <General/IPAddress.h>
 #include <General/Bitmap.h>
 #include <RTOSIface/RTOSIface.h>
+#include <Networking/NetworkDefs.h>
 
 typedef uint8_t TypeCode;
 constexpr TypeCode NoType = 0;							// code for an invalid or unknown type
@@ -54,6 +55,7 @@ template<> constexpr TypeCode TypeOf<IPAddress>							() noexcept { return 12; }
 template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>	() noexcept { return 13; }
 template<> constexpr TypeCode TypeOf<DateTime>							() noexcept	{ return 14; }
 template<> constexpr TypeCode TypeOf<DriverId>							() noexcept { return 15; }
+template<> constexpr TypeCode TypeOf<MacAddress>						() noexcept { return 16; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -97,6 +99,7 @@ struct ExpressionValue
 	explicit ExpressionValue(Bitmap<uint16_t> bm) noexcept : type(TYPE_OF(Bitmap<uint16_t>)), param(0), uVal(bm.GetRaw()) { }
 	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type(TYPE_OF(Bitmap<uint32_t>)), param(0), uVal(bm.GetRaw()) { }
 	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type(TYPE_OF(Bitmap<uint64_t>)), param(bm.GetRaw() >> 32), uVal((uint32_t)bm.GetRaw()) { }
+	explicit ExpressionValue(const MacAddress& mac) noexcept;
 
 	void Set(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
 	void Set(char c) noexcept { type = TYPE_OF(char); cVal = c; }

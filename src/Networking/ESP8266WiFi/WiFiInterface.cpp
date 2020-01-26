@@ -175,14 +175,15 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullp
 constexpr ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
-	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(nullptr),		ObjectModelEntryFlags::none },
-	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),		ObjectModelEntryFlags::none },
-	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),		ObjectModelEntryFlags::none },
-	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),		ObjectModelEntryFlags::none },
+	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),				ObjectModelEntryFlags::none },
+	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion),		ObjectModelEntryFlags::none },
+	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),				ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),			ObjectModelEntryFlags::none },
+	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),				ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),				ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 5 };
+constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
 
@@ -518,12 +519,13 @@ void WiFiInterface::Spin() noexcept
 					platform.Message(NetworkInfoMessage, "WiFi module started\n");
 					SetupSpi();									// set up the SPI subsystem
 
-					// Read the status to get the WiFi server version
+					// Read the status to get the WiFi server version and MAC address
 					Receiver<NetworkStatusResponse> status;
 					const int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
 					if (rc > 0)
 					{
 						SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+						macAddress.SetFromBytes(status.Value().macAddress);
 
 						// Set the hostname before anything else is done
 						if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, reprap.GetNetwork().GetHostname(), HostNameLength, nullptr, 0) != ResponseEmpty)
@@ -1106,13 +1108,10 @@ void WiFiInterface::UpdateHostname(const char *hostname) noexcept
 	}
 }
 
-void WiFiInterface::SetMacAddress(const uint8_t mac[]) noexcept
+GCodeResult WiFiInterface::SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept
 {
-	for (size_t i = 0; i < 6; i++)
-	{
-		macAddress[i] = mac[i];
-	}
-	// TODO actually update the mac address on the wifi module. For now we don't support this.
+	reply.copy("Not supported on this interface");
+	return GCodeResult::warningNotSupported;
 }
 
 void WiFiInterface::InitSockets() noexcept

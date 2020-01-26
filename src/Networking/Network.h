@@ -81,8 +81,8 @@ public:
 	IPAddress GetIPAddress(unsigned int interface) const noexcept;
 	const char *GetHostname() const noexcept { return hostname; }
 	void SetHostname(const char *name) noexcept;
-	void SetMacAddress(unsigned int interface, const uint8_t mac[]) noexcept;
-	const uint8_t *GetMacAddress(unsigned int interface) const noexcept;
+	GCodeResult SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept;
+	const MacAddress& GetMacAddress(unsigned int interface) const noexcept;
 
 	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
 
