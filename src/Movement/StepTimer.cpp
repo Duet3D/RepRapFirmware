@@ -228,6 +228,10 @@ bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 
 bool StepTimer::ScheduleCallbackFromIsr() noexcept
 {
+	if (active)
+	{
+		CancelCallbackFromIsr();
+	}
 
 	// Optimise the common case i.e. no other timer is pending
 	if (pendingList == nullptr)
@@ -242,12 +246,7 @@ bool StepTimer::ScheduleCallbackFromIsr() noexcept
 		return false;
 	}
 
-	// Another timer (or possibly this one) is already pending
-	if (active)
-	{
-		CancelCallbackFromIsr();
-	}
-
+	// Another timer is already pending
 	const Ticks now = GetTimerTicks();
 	const int32_t howSoon = (int32_t)(whenDue - now);
 	StepTimer** ppst = const_cast<StepTimer**>(&pendingList);
