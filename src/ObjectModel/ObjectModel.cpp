@@ -10,7 +10,6 @@
 #if SUPPORT_OBJECT_MODEL
 
 #include <OutputMemory.h>
-#include <GCodes/GCodeBuffer/StringParser.h>
 #include <cstring>
 #include <General/SafeStrtod.h>
 
@@ -63,8 +62,9 @@ ObjectModel::ObjectModel() noexcept
 
 // ObjectExplorationContext members
 
-ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, unsigned int initialMaxDepth, bool wal) noexcept
+ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, bool wal, unsigned int initialMaxDepth, int p_line, int p_col) noexcept
 	: maxDepth(initialMaxDepth), currentDepth(0), numIndicesProvided(0), numIndicesCounted(0),
+	  line(p_line), column(p_col),
 	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false)
 {
 	while (true)
@@ -127,6 +127,11 @@ bool ObjectExplorationContext::ShouldReport(const ObjectModelEntryFlags f) const
 		&& (includeVerbose || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::verbose) == 0);
 }
 
+GCodeException ObjectExplorationContext::ConstructParseException(const char *msg) const noexcept
+{
+	return GCodeException(line, column, msg);
+}
+
 // Report this object
 void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, uint8_t tableNumber, const char* filter) const
 {
@@ -177,7 +182,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const
 {
 	const unsigned int defaultMaxDepth = (wantArrayLength) ? 99 : (filter[0] == 0) ? 1 : 99;
-	ObjectExplorationContext context(reportFlags, defaultMaxDepth, wantArrayLength);
+	ObjectExplorationContext context(reportFlags, wantArrayLength, defaultMaxDepth);
 	ReportAsJson(buf, context, 0, filter);
 }
 
@@ -557,20 +562,20 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 }
 
 // Get the value of an object
-ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, const char *idString, uint8_t tableNumber) const
+ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const char *idString, uint8_t tableNumber) const
 {
 	const ObjectModelTableEntry *const e = FindObjectModelTableEntry(tableNumber, idString);
 	if (e == nullptr)
 	{
-		throw sp.ConstructParseException("unknown value %s", idString);
+		throw context.ConstructParseException("unknown value");		// idString will have gone out of scope by the time the exception is caught
 	}
 
 	idString = GetNextElement(idString);
 	ExpressionValue val = e->func(this, context);
-	return GetObjectValue(sp, context, val, idString);
+	return GetObjectValue(context, val, idString);
 }
 
-ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, ExpressionValue val, const char *idString) const
+ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, ExpressionValue val, const char *idString) const
 {
 	switch (val.type)
 	{
@@ -583,7 +588,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 			}
 			if (*idString != '^')
 			{
-				throw sp.ConstructParseException("missing array index");
+				throw context.ConstructParseException("missing array index");
 			}
 
 			context.AddIndex();
@@ -591,19 +596,19 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 
 			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.omadVal->GetNumElements(this, context))
 			{
-				throw sp.ConstructParseException("array index out of bounds");
+				throw context.ConstructParseException("array index out of bounds");
 			}
 
 			const ExpressionValue arrayElement = val.omadVal->GetElement(this, context);
-			return GetObjectValue(sp, context, arrayElement, idString + 1);
+			return GetObjectValue(context, arrayElement, idString + 1);
 		}
 
 	case TYPE_OF(const ObjectModel*):
 		if (*idString == '.')
 		{
-			return val.omVal->GetObjectValue(sp, context, idString + 1, val.param);
+			return val.omVal->GetObjectValue(context, idString + 1, val.param);
 		}
-		throw sp.ConstructParseException((*idString == 0) ? "selected value has non-primitive type" : "syntax error in value selector string");
+		throw context.ConstructParseException((*idString == 0) ? "selected value has non-primitive type" : "syntax error in value selector string");
 
 	case TYPE_OF(Bitmap<uint16_t>):
 	case TYPE_OF(Bitmap<uint32_t>):
@@ -632,7 +637,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 		}
 		if (val.uVal > 0x7FFFFFFF)
 		{
-			throw sp.ConstructParseException("bitmap too large to convert to integer");
+			throw context.ConstructParseException("bitmap too large to convert to integer");
 		}
 		return ExpressionValue((int32_t)val.uVal);
 
@@ -662,7 +667,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 		}
 		if (val.Get56BitValue() > 0x7FFFFFFF)
 		{
-			throw sp.ConstructParseException("bitmap too large to convert to integer");
+			throw context.ConstructParseException("bitmap too large to convert to integer");
 		}
 		return ExpressionValue((int32_t)val.uVal);
 
@@ -687,7 +692,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 		break;
 	}
 
-	throw sp.ConstructParseException("reached primitive type before end of selector string");
+	throw context.ConstructParseException("reached primitive type before end of selector string");
 }
 
 #endif

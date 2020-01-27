@@ -706,13 +706,13 @@ void StringParser::DecodeCommand() noexcept
 			}
 		}
 
-		// Find where the end of the command is. We assume that a G or M preceded by a space and not inside quotes is the start of a new command.
+		// Find where the end of the command is. We assume that a G or M preceded by a space and not inside quotes or { } is the start of a new command.
 		bool inQuotes = false;
+		unsigned int braceCount = 0;
 		bool primed = false;
 		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
 		{
 			const char c = gb.buffer[commandEnd];
-			char c2;
 			if (c == '"')
 			{
 				inQuotes = !inQuotes;
@@ -720,11 +720,28 @@ void StringParser::DecodeCommand() noexcept
 			}
 			else if (!inQuotes)
 			{
-				if (primed && ((c2 = toupper(c)) == 'G' || c2 == 'M'))
+				char c2;
+				if (c == '{')
+				{
+					++braceCount;
+					primed = false;
+				}
+				else if (c == '}')
+				{
+					if (braceCount != 0)
+					{
+						--braceCount;
+					}
+					primed = false;
+				}
+				else if (primed && ((c2 = toupper(c)) == 'G' || c2 == 'M'))
 				{
 					break;
 				}
-				primed = (c == ' ' || c == '\t');
+				else if (braceCount == 0)
+				{
+					primed = (c == ' ' || c == '\t');
+				}
 			}
 		}
 	}
@@ -1872,8 +1889,6 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 			++readPointer;
 		}
 
-		SkipWhiteSpace();
-
 		// Handle operators that do not always evaluate their second operand
 		switch (opChar)
 		{
@@ -2310,7 +2325,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 	}
 
 	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context("v", 99, applyLengthOperator);
+	ObjectExplorationContext context("v", applyLengthOperator, 99, gb.machineState->lineNumber, readPointer);
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
@@ -2583,7 +2598,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 		return rslt;
 	}
 
-	return reprap.GetObjectValue(*this, context, id.c_str());
+	return reprap.GetObjectValue(context, id.c_str());
 }
 
 GCodeException StringParser::ConstructParseException(const char *str) const
