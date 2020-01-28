@@ -229,6 +229,9 @@ void HeightMap::SetGrid(const GridDefinition& gd) noexcept
 void HeightMap::ClearGridHeights() noexcept
 {
 	gridHeightSet.ClearAll();
+#if HAS_MASS_STORAGE
+	fileName.Clear();
+#endif
 }
 
 // Set the height of a grid point
@@ -262,7 +265,7 @@ unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const noe
 #if HAS_MASS_STORAGE
 
 // Save the grid to file returning true if an error occurred
-bool HeightMap::SaveToFile(FileStore *f, float zOffset) const noexcept
+bool HeightMap::SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept
 {
 	String<StringLength500> bufferSpace;
 	const StringRef buf = bufferSpace.GetRef();
@@ -321,18 +324,19 @@ bool HeightMap::SaveToFile(FileStore *f, float zOffset) const noexcept
 		}
 	}
 
+	fileName.copy(fname);
 	return false;
 }
 
 // Load the grid from file, returning true if an error occurred with the error reason appended to the buffer
-bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r) noexcept
+bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
 {
 	const size_t MaxLineLength = (MaxXGridPoints * 8) + 2;						// maximum length of a line in the height map file, need 8 characters per grid point
 	const char* const readFailureText = "failed to read line from file";
 	char buffer[MaxLineLength + 1];
 	StringRef s(buffer, ARRAY_SIZE(buffer));
 
-	ClearGridHeights();
+	ClearGridHeights();															// this also clears the filename
 	GridDefinition newGrid;
 	int gridVersion;
 
@@ -340,7 +344,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r) noexcept
 	{
 		r.cat(readFailureText);
 	}
-	else if (!StringStartsWith(buffer, HeightMapComment))	// check the version line is as expected
+	else if (!StringStartsWith(buffer, HeightMapComment))						// check the version line is as expected
 	{
 		r.cat("bad header line or wrong version header");
 	}
@@ -352,7 +356,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r) noexcept
 	{
 		r.cat("bad label line");
 	}
-	else if (f->ReadLine(buffer, sizeof(buffer)) <= 0)		// read the height map parameters
+	else if (f->ReadLine(buffer, sizeof(buffer)) <= 0)							// read the height map parameters
 	{
 		r.cat(readFailureText);
 	}
@@ -405,6 +409,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r) noexcept
 			}
 		}
 		ExtrapolateMissing();
+		fileName.copy(fname);
 		return false;										// success!
 	}
 	return true;											// an error occurred

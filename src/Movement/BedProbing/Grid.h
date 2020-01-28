@@ -73,9 +73,10 @@ public:
 	void SetGridHeight(size_t index, float height) noexcept;					// Set the height of a grid point
 
 #if HAS_MASS_STORAGE
-	bool SaveToFile(FileStore *f, float zOffset) const noexcept					// Save the grid to file returning true if an error occurred
+	bool SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept	// Save the grid to file returning true if an error occurred
 	pre(IsValid());
-	bool LoadFromFile(FileStore *f, const StringRef& r) noexcept;				// Load the grid from file returning true if an error occurred
+	bool LoadFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the grid from file returning true if an error occurred
+	const char *GetFileName() const noexcept { return fileName.c_str(); }
 #endif
 
 #if HAS_LINUX_INTERFACE
@@ -98,6 +99,9 @@ private:
 	GridDefinition def;
 	float gridHeights[MaxGridProbePoints];							// The Z coordinates of the points on the bed that were probed
 	LargeBitmap<MaxGridProbePoints> gridHeightSet;					// Bitmap of which heights are set
+#if HAS_MASS_STORAGE
+	String<MaxFilenameLength> fileName;								// The name of the file that this height map was loaded from or saved to
+#endif
 	bool useMap;													// True to do bed compensation
 
 	uint32_t GetMapIndex(uint32_t xIndex, uint32_t yIndex) const noexcept { return (yIndex * def.NumXpoints()) + xIndex; }

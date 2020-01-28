@@ -143,8 +143,8 @@ public:
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
 
 #if HAS_MASS_STORAGE
-	bool LoadHeightMapFromFile(FileStore *f, const StringRef& r) noexcept;					// Load the height map from a file returning true if an error occurred
-	bool SaveHeightMapToFile(FileStore *f) const noexcept;									// Save the height map to a file returning true if an error occurred
+	bool LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred
+	bool SaveHeightMapToFile(FileStore *f, const char *fname) noexcept;						// Save the height map to a file returning true if an error occurred
 #endif
 
 #if HAS_LINUX_INTERFACE
@@ -212,6 +212,10 @@ private:
 	void AxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;	// Go from an axis transformed point back to user coordinates
 	float GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept;		// Get the height error at an XY position on the bed
+
+#if SUPPORT_OBJECT_MODEL
+	const char *GetCompensationTypeString() const noexcept;
+#endif
 
 	DDARing mainDDARing;								// The DDA ring used for regular moves
 

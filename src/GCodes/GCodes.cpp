@@ -2680,15 +2680,17 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 		heightMapFileName.copy(DefaultHeightMapFile);
 	}
 
-	FileStore * const f = platform.OpenSysFile(heightMapFileName.c_str(), OpenMode::read);
+	String<MaxFilenameLength> fullName;
+	platform.MakeSysFileName(fullName.GetRef(), heightMapFileName.c_str());
+	FileStore * const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::read, 0);
 	if (f == nullptr)
 	{
-		reply.printf("Height map file %s not found", heightMapFileName.c_str());
+		reply.printf("Height map file %s not found", fullName.c_str());
 		return GCodeResult::error;
 	}
 
-	reply.printf("Failed to load height map from file %s: ", heightMapFileName.c_str());	// set up error message to append to
-	const bool err = reprap.GetMove().LoadHeightMapFromFile(f, reply);
+	reply.printf("Failed to load height map from file %s: ", fullName.c_str());	// set up error message to append to
+	const bool err = reprap.GetMove().LoadHeightMapFromFile(f, fullName.c_str(), reply);
 	f->Close();
 
 	ActivateHeightmap(!err);
@@ -2719,25 +2721,27 @@ bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) cons
 	}
 #endif
 
-	FileStore * const f = platform.OpenSysFile(filename, OpenMode::write);
+	String<MaxFilenameLength> fullName;
+	platform.MakeSysFileName(fullName.GetRef(), filename);
+	FileStore * const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::write, 0);
 	bool err;
 	if (f == nullptr)
 	{
-		reply.catf("Failed to create height map file %s", filename);
+		reply.catf("Failed to create height map file %s", fullName.c_str());
 		err = true;
 	}
 	else
 	{
-		err = reprap.GetMove().SaveHeightMapToFile(f);
+		err = reprap.GetMove().SaveHeightMapToFile(f, fullName.c_str());
 		f->Close();
 		if (err)
 		{
-			platform.DeleteSysFile(filename);
-			reply.catf("Failed to save height map to file %s", filename);
+			MassStorage::Delete(fullName.c_str());
+			reply.catf("Failed to save height map to file %s", fullName.c_str());
 		}
 		else
 		{
-			reply.catf("Height map saved to file %s", filename);
+			reply.catf("Height map saved to file %s", fullName.c_str());
 		}
 	}
 	return err;

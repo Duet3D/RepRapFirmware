@@ -53,6 +53,7 @@
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Move, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(Move, __VA_ARGS__)
 
 static constexpr ObjectModelArrayDescriptor axesArrayDescriptor =
 {
@@ -74,13 +75,13 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// 0. Move members
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::live },
 	{ "calibrationDeviation",	OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::none },
+	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 3),																ObjectModelEntryFlags::live },
 	{ "daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::none },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
 	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
-	{ "meshDeviation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 1),						ObjectModelEntryFlags::live },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
@@ -109,12 +110,22 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "deviation",				OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
-	// 6. move.meshDeviation members
+	// 6. move.compensation members
+	{ "file",					OBJECT_MODEL_FUNC_IF(
+									self->usingMesh
+#if HAS_LINUX_INTERFACE
+									&& !reprap.UsingLinuxInterface()
+#endif
+									, self->heightMap.GetFileName()),													ObjectModelEntryFlags::none },
+	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 7),											ObjectModelEntryFlags::none },
+	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),									ObjectModelEntryFlags::none },
+
+	// 7. move.compensation.meshDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetDeviationFromMean(), 3),					ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 7, 13, 3, 2, 4, 2, 2, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 8, 13, 3, 2, 4, 2, 2, 3, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -698,9 +709,9 @@ void Move::SetIdentityTransform() noexcept
 #if HAS_MASS_STORAGE
 
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
-bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r) noexcept
+bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
 {
-	const bool ret = heightMap.LoadFromFile(f, r);
+	const bool ret = heightMap.LoadFromFile(f, fname, r);
 	if (ret)
 	{
 		heightMap.ClearGridHeights();							// make sure we don't end up with a partial height map
@@ -713,9 +724,9 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r) noexcept
 }
 
 // Save the height map to a file returning true if an error occurred
-bool Move::SaveHeightMapToFile(FileStore *f) const noexcept
+bool Move::SaveHeightMapToFile(FileStore *f, const char *fname) noexcept
 {
-	return heightMap.SaveToFile(f, zShift);
+	return heightMap.SaveToFile(f, fname, zShift);
 }
 
 #endif
@@ -1005,6 +1016,17 @@ float Move::LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexce
 	}
 	return latestLiveCoordinates[axisOrExtruder];
 }
+
+#if SUPPORT_OBJECT_MODEL
+
+const char *Move::GetCompensationTypeString() const noexcept
+{
+	return (usingMesh) ? "mesh"
+			: (probePoints.GetNumBedCompensationPoints() != 0) ? "legacy"
+				: "none";
+}
+
+#endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 
