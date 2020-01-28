@@ -1,3 +1,27 @@
+RepRapFirmware 3.01beta3 (in preparation)
+========================
+
+Recommended compatible firmware:
+- DuetWebControl 2.07
+- DuetWiFiServer 1.23
+- Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
+
+Upgrade notes:
+- See upgrade notes for 3.01beta1
+
+Known issues and limitations:
+- The new conditional GCode commands and expressions and parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
+- If you try to report the entire object model using M409, the response may be too long to send and you may get a null response instead. For this reason, M409 without parameters now reports only the top-level property names. Use M409 with a key string to drill down into them.
+
+New features and changed behaviour:
+- More new object model fields have been added
+
+Bug fixes since 3.01-beta2:
+- If you tried to access a string-valued field of the object model from a GCode command or meta command, the # operator was always applied to it automatically
+- If you used an object model variable beginning with g, m or t in an expression within a regular GCode command, and there was a space or tab character immediately before that letter, then after executing the command the parser would try to interpret that variable name as a new command, resulting in an error message
+- On Duet 3 if you executed 2 consecutive G1 H2 moves that involved only motors on expansion boards, the firmware crashed with a memory protection fault
+- A fan that wasn't explicitly configured using M106 with some parameter other than P or S was reported to DWC as being non-controllable
+
 RepRapFirmware 3.01beta2
 ========================
 
