@@ -50,8 +50,7 @@ Fan::Fan(unsigned int fanNum) noexcept
 	  minVal(DefaultMinFanPwm),
 	  maxVal(1.0),										// 100% maximum fan speed
 	  lastRpm(-1), whenLastRpmSet(0),
-	  blipTime(DefaultFanBlipTime),
-	  isConfigured(false)
+	  blipTime(DefaultFanBlipTime)
 {
 	triggerTemperatures[0] = triggerTemperatures[1] = DefaultHotEndFanTemperature;
 }
@@ -151,8 +150,6 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 
 		if (seen)
 		{
-			isConfigured = true;
-
 			// We only act on the 'S' parameter here if we have processed other parameters
 			if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
 			{

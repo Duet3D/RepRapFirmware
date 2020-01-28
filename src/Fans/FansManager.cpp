@@ -194,7 +194,7 @@ void FansManager::SetFanValue(size_t fanNum, float speed) noexcept
 bool FansManager::IsFanControllable(size_t fanNum) const noexcept
 {
 	auto fan = FindFan(fanNum);
-	return fan.IsNotNull() && !fan->HasMonitoredSensors() && fan->IsConfigured();
+	return fan.IsNotNull() && !fan->HasMonitoredSensors();
 }
 
 // Return the fan's name
