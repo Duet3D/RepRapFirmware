@@ -38,7 +38,7 @@ constexpr ObjectModelArrayDescriptor ZProbe::valueArrayDescriptor =
 				{	int v1 = 0;
 					return ExpressionValue
 							(	(context.GetLastIndex() == 0)
-								? (int32_t)((const ZProbe*)self)->GetRawReading()
+								? (int32_t)((const ZProbe*)self)->GetReading()
 								: (((const ZProbe*)self)->GetSecondaryValues(v1), v1)
 							);
 				}
@@ -136,7 +136,7 @@ int ZProbe::GetReading() const noexcept
 		case ZProbeType::dumbModulated:		// Dumb modulated IR sensor.
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
-			zProbeVal = (int) (((int32_t)p.GetZProbeOnFilter().GetSum() - (int32_t)p.GetZProbeOffFilter().GetSum())/ZProbeAverageReadings);
+			zProbeVal = (int) (((int32_t)p.GetZProbeOnFilter().GetSum() - (int32_t)p.GetZProbeOffFilter().GetSum())/(int)ZProbeAverageReadings);
 			break;
 
 		case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
