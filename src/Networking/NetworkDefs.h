@@ -35,7 +35,7 @@ private:
 };
 
 constexpr IPAddress DefaultIpAddress;				// will be initialised to 0 by constructor
-constexpr IPAddress DefaultNetMask(0xFFFFFF00);		// equivalent to 255.255.255.0. Use constexpr constructor to avoid it being allocated in RAM.
+constexpr IPAddress DefaultNetMask(0x00FFFFFF);		// equivalent to 255.255.255.0. Use constexpr constructor to avoid it being allocated in RAM.
 constexpr IPAddress DefaultGateway;					// will be initialised to 0 by constructor
 
 constexpr size_t NumProtocols = 3;					// number of network protocols we support, not counting FtpDataProtocol, MdnsProtocol or AnyProtocol

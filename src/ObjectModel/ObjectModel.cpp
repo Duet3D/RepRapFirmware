@@ -435,7 +435,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TYPE_OF(MacAddress):
-			buf->catf("%02x:%02x:%02x:%02x:%02x:%02x",
+			buf->catf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
 						(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
 						(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
 			break;
