@@ -1,4 +1,4 @@
-RepRapFirmware 3.01beta3 (in preparation)
+RepRapFirmware 3.01beta3
 ========================
 
 Recommended compatible firmware:
