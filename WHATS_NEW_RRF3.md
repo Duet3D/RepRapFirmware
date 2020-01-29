@@ -8,6 +8,7 @@ Recommended compatible firmware:
 
 Upgrade notes:
 - Object model property move.meshDeviation is renamed moved.calibration.meshDeviation
+- In the M409 command and the rr_model HTTP command, the maximum depth is onw specified by letter d followed by a digit string, instead of just a digit string
 - See also upgrade notes for 3.01beta1
 
 Known issues and limitations:
@@ -15,7 +16,7 @@ Known issues and limitations:
 - If you try to report the entire object model using M409, the response may be too long to send and you may get a null response instead. For this reason, M409 without parameters now reports only the top-level property names as if parameter F"1" was used. Use M409 with a key string to drill down into them.
 
 New features and changed behaviour:
-- More new object model fields have been added
+- More object model fields have been added
 
 Bug fixes since 3.01-beta2:
 - If you tried to access a string-valued field of the object model from a GCode command or meta command, the # operator was always applied to it automatically
