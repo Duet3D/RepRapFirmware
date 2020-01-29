@@ -69,18 +69,7 @@ ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, bool
 {
 	while (true)
 	{
-		if (isdigit(*reportFlags))
-		{
-			maxDepth = *reportFlags - '0';
-			++reportFlags;
-			while (isdigit(*reportFlags))
-			{
-				maxDepth = (10 * maxDepth) + (*reportFlags - '0');
-				++reportFlags;
-			}
-		}
-
-		switch (*reportFlags)
+		switch (*reportFlags++)
 		{
 		case '\0':
 			return;
@@ -96,10 +85,21 @@ ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, bool
 		case 'n':
 			includeNulls = true;
 			break;
+		case 'd':
+			maxDepth = 0;
+			while (isdigit(*reportFlags))
+			{
+				maxDepth = (10 * maxDepth) + (*reportFlags - '0');
+				++reportFlags;
+			}
+			break;
+		case ' ':
+		case ',':
+			break;
 		default:
+			// We could report an error here
 			break;
 		}
-		++reportFlags;
 	}
 }
 
