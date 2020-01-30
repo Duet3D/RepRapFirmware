@@ -1,3 +1,18 @@
+RepRapFirmware 3.01beta4 (in preparation)
+========================
+
+Recommended compatible firmware:
+- DuetWebControl 2.07
+- DuetWiFiServer 1.23
+- Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
+
+Upgrade notes: none since beta3
+
+Bug fixes:
+- The M587 command didn't set up the access point password corrrectly, resulting in "Wrong password" reports when trying to connect to the access point
+- if..elif GCode meta commands with multiple elif parts sometimes gave rise to error messages "'elif' did not follow 'if'"
+- When G32 true bed levelling failed (for example, because the correction required exceeded the limit), the initial and final deviation were left unchanged. Now thay are both set to the initial deviation measured by probing.
+
 RepRapFirmware 3.01beta3
 ========================
 
@@ -14,6 +29,9 @@ Upgrade notes:
 Known issues and limitations:
 - The new conditional GCode commands and expressions and parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
 - If you try to report the entire object model using M409, the response may be too long to send and you may get a null response instead. For this reason, M409 without parameters now reports only the top-level property names as if parameter F"1" was used. Use M409 with a key string to drill down into them.
+- The M587 command doesn't set up the access point password correctly, resulting in "Wrong password" reports when trying to connect to the access point
+- if..elif GCode meta commands with multiple elif parts sometimes give rise to error messages "'elif' did not follow 'if'"
+- When G32 true bed levelling fails (for example, because the correction required exceeds the limit), the initial and final deviation are left unchanged
 
 New features and changed behaviour:
 - More object model fields have been added
