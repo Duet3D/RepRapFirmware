@@ -205,6 +205,10 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		initialDeviation.Set(initialSumOfSquares, initialSum, numPoints);
 	}
 
+	// Set up the initial and final deviations now in case calibration fails
+	reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
+	reprap.GetMove().SetLatestCalibrationDeviation(initialDeviation);
+
 	if (reprap.Debug(moduleMove))
 	{
 		PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
@@ -321,7 +325,6 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 				reply.printf("Leadscrew adjustments made:");
 				AppendCorrections(solution, reply);
 
-				reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
 				reprap.GetMove().SetLatestCalibrationDeviation(finalDeviation);
 				reply.catf(", points used %d, (mean, deviation) before (%.3f, %.3f) after (%.3f, %.3f)",
 							numPoints,

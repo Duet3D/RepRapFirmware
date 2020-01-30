@@ -292,9 +292,10 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 	}
 
 	const bool doingFile = gb.IsDoingFile();
-	BlockType previousBlockType = BlockType::plain;
+	BlockType skippedBlockType = BlockType::plain;
 	if (doingFile)
 	{
+		// Deal with warning about mixed spaces and tabs
 		if (commandIndent == 0)
 		{
 			seenLeadingSpace = seenLeadingTab = false;						// it's OK if the previous block used only space and the following one uses only tab, or v.v.
@@ -302,22 +303,26 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 		else
 		{
 			CheckForMixedSpacesAndTabs();
+		}
+
+		// Deal with skipping blocks
+		if (indentToSkipTo != NoIndentSkip)
+		{
 			if (indentToSkipTo < commandIndent)
 			{
 				Init();
 				return true;												// continue skipping this block
 			}
-		}
-
-		if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
-		{
-			// Finished skipping the nested block
-			if (indentToSkipTo == commandIndent)
+			else
 			{
-				previousBlockType = gb.machineState->CurrentBlockState().GetType();
-				gb.machineState->CurrentBlockState().SetPlainBlock();		// we've ended the loop or if-block
+				// Finished skipping the nested block
+				if (indentToSkipTo == commandIndent)
+				{
+					skippedBlockType = gb.machineState->CurrentBlockState().GetType();	// save the type of the block we skipped in case the command is 'else' or 'elif'
+					gb.machineState->CurrentBlockState().SetPlainBlock();	// we've ended the loop or if-block
+				}
+				indentToSkipTo = NoIndentSkip;								// no longer skipping
 			}
-			indentToSkipTo = NoIndentSkip;									// no longer skipping
 		}
 
 		while (commandIndent < gb.machineState->CurrentBlockIndent())
@@ -335,7 +340,7 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 
 		if (commandIndent > gb.machineState->CurrentBlockIndent())
 		{
-			// indentation has increased so start new block(s)
+			// Indentation has increased so start new block(s)
 			if (!gb.machineState->CreateBlock(commandIndent))
 			{
 				throw ConstructParseException("blocks nested too deeply");
@@ -343,7 +348,7 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 		}
 	}
 
-	const bool b = ProcessConditionalGCode(reply, previousBlockType, doingFile);	// this may throw a ParseException
+	const bool b = ProcessConditionalGCode(reply, skippedBlockType, doingFile);	// this may throw a ParseException
 	if (b)
 	{
 		seenMetaCommand = true;
@@ -368,8 +373,8 @@ void StringParser::CheckForMixedSpacesAndTabs() noexcept
 }
 
 // Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
-// 'skippedIfFalse' is true if we just finished skipping an if-block when the condition was false and there might be an 'else'
-bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType, bool doingFile)
+// If we just finished skipping an if- or elif-block when the condition was false then 'skippedBlockType' is the type of that block, else it is BlockType::plain
+bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile)
 {
 	// First count the number of lowercase characters.
 	unsigned int i = 0;
@@ -417,12 +422,12 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType pre
 			{
 				if (StringStartsWith(command, "else"))
 				{
-					ProcessElseCommand(previousBlockType);
+					ProcessElseCommand(skippedBlockType);
 					return true;
 				}
 				if (StringStartsWith(command, "elif"))
 				{
-					ProcessElifCommand(previousBlockType);
+					ProcessElifCommand(skippedBlockType);
 					return true;
 				}
 			}
@@ -480,13 +485,13 @@ void StringParser::ProcessIfCommand()
 	}
 }
 
-void StringParser::ProcessElseCommand(BlockType previousBlockType)
+void StringParser::ProcessElseCommand(BlockType skippedBlockType)
 {
-	if (previousBlockType == BlockType::ifFalseNoneTrue)
+	if (skippedBlockType == BlockType::ifFalseNoneTrue)
 	{
 		gb.machineState->CurrentBlockState().SetPlainBlock();			// execute the else-block, treating it like a plain block
 	}
-	else if (gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifFalseHadTrue)
+	else if (skippedBlockType == BlockType::ifFalseHadTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue)
 	{
 		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the if-block
 		gb.machineState->CurrentBlockState().SetPlainBlock();			// so that we get an error if there is another 'else' part
@@ -497,9 +502,9 @@ void StringParser::ProcessElseCommand(BlockType previousBlockType)
 	}
 }
 
-void StringParser::ProcessElifCommand(BlockType previousBlockType)
+void StringParser::ProcessElifCommand(BlockType skippedBlockType)
 {
-	if (previousBlockType == BlockType::ifFalseNoneTrue)
+	if (skippedBlockType == BlockType::ifFalseNoneTrue)
 	{
 		if (EvaluateCondition())
 		{
@@ -511,7 +516,7 @@ void StringParser::ProcessElifCommand(BlockType previousBlockType)
 			gb.machineState->CurrentBlockState().SetIfFalseNoneTrueBlock();
 		}
 	}
-	else if (gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifFalseHadTrue)
+	else if (skippedBlockType == BlockType::ifFalseHadTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue)
 	{
 		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the if-block
 		gb.machineState->CurrentBlockState().SetIfFalseHadTrueBlock();

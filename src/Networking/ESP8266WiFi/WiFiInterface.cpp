@@ -923,9 +923,20 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			String<ARRAY_SIZE(config.ssid)> ssid;
 			gb.GetQuotedString(ssid.GetRef());
 			SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
-			String<ARRAY_SIZE(config.password)> password;
+
+			// Get the password
 			gb.MustSee('P');
-			gb.GetQuotedString(password.GetRef());
+			{
+				String<ARRAY_SIZE(config.password)> password;
+				gb.GetQuotedString(password.GetRef());
+				if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+				{
+					reply.copy("WiFi password must be at least 8 characters");
+					return GCodeResult::error;
+				}
+				SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+			}
+
 			if (gb.Seen('I'))
 			{
 				IPAddress temp;

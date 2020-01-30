@@ -102,11 +102,11 @@ private:
 		pre (readPointer >= 0);
 
 	void CheckForMixedSpacesAndTabs() noexcept;
-	bool ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType, bool doingFile) THROWS_GCODE_EXCEPTION;
+	bool ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile) THROWS_GCODE_EXCEPTION;
 																			// Check for and process a conditional GCode language command returning true if we found one
 	void ProcessIfCommand() THROWS_GCODE_EXCEPTION;
-	void ProcessElseCommand(BlockType previousBlockType) THROWS_GCODE_EXCEPTION;
-	void ProcessElifCommand(BlockType previousBlockType) THROWS_GCODE_EXCEPTION;
+	void ProcessElseCommand(BlockType skippedBlockType) THROWS_GCODE_EXCEPTION;
+	void ProcessElifCommand(BlockType skippedBlockType) THROWS_GCODE_EXCEPTION;
 	void ProcessWhileCommand() THROWS_GCODE_EXCEPTION;
 	void ProcessBreakCommand() THROWS_GCODE_EXCEPTION;
 	void ProcessContinueCommand() THROWS_GCODE_EXCEPTION;
