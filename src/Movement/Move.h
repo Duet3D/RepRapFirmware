@@ -267,7 +267,6 @@ private:
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
-	bool liveCoordinatesUpToDate;
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
 

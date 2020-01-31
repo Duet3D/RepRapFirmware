@@ -173,7 +173,7 @@ void Move::Init() noexcept
 
 	simulationMode = 0;
 	longestGcodeWaitInterval = 0;
-	bedLevellingMoveAvailable = liveCoordinatesUpToDate = false;
+	bedLevellingMoveAvailable = false;
 
 	active = true;
 }
@@ -1008,11 +1008,10 @@ GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef&
 // Interrupts are assumed enabled on entry
 float Move::LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept
 {
-	if (!liveCoordinatesUpToDate)
+	if (mainDDARing.HaveLiveCoordinatesChanged())
 	{
 		mainDDARing.LiveCoordinates(latestLiveCoordinates);
 		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
-		liveCoordinatesUpToDate = true;
 	}
 	return latestLiveCoordinates[axisOrExtruder];
 }

@@ -68,6 +68,7 @@ public:
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;		// Perform motor endpoint adjustment
 	bool LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Fetch the last point at the end of the last completed DDA if it has changed since we last called this
 	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept;			// Force the live coordinates (see above) to be these
+	bool HaveLiveCoordinatesChanged() const noexcept { return liveCoordinatesChanged; }
 	void ResetExtruderPositions() noexcept;												// Resets the extrusion amounts of the live coordinates
 
 	bool PauseMoves(RestorePoint& rp) noexcept;											// Pause the print as soon as we can, returning true if we were able to skip any
