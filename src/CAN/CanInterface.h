@@ -104,8 +104,8 @@ namespace CanInterface
 
 	// Misc functions
 	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-	GCodeResult SetFastDataRate(GCodeBuffer& gb, const StringRef& reply)THROWS_GCODE_EXCEPTION;
-	GCodeResult ChangeExpansionBoardAddress(GCodeBuffer& gb, const StringRef& reply)THROWS_GCODE_EXCEPTION;
+	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply)THROWS_GCODE_EXCEPTION;
+	GCodeResult ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply)THROWS_GCODE_EXCEPTION;
 }
 
 #endif

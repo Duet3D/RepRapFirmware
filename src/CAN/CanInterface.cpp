@@ -13,23 +13,20 @@
 #include "CommandProcessor.h"
 #include "CanMessageGenericConstructor.h"
 #include <CanMessageBuffer.h>
-#include "Movement/DDA.h"
-#include "Movement/DriveMovement.h"
-#include "Movement/StepTimer.h"
+#include <Movement/DDA.h>
+#include <Movement/DriveMovement.h>
+#include <Movement/StepTimer.h>
 #include <RTOSIface/RTOSIface.h>
 #include <TaskPriorities.h>
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Hardware/CanDriver.h>
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
 #endif
 
-extern "C"
-{
-	#include "mcan/mcan.h"
-	#include "pmc/pmc.h"
-}
+#include <memory>
 
 const unsigned int NumCanBuffers = 40;
 
@@ -40,6 +37,19 @@ constexpr uint32_t MaxResponseSendWait = 50;	// milliseconds
 constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
 
 #define USE_BIT_RATE_SWITCH		0
+
+constexpr uint32_t CanClockSpeed = 48000000;	// all boards use a 48MHz CAN clock
+
+constexpr uint32_t MinBitRate = 15;				// MCP2542 has a minimum bite rate of 14.4kbps
+constexpr uint32_t MaxBitRate = 5000;
+
+constexpr float MinSamplePoint = 0.5;
+constexpr float MaxSamplePoint = 0.95;
+constexpr float DefaultSamplePoint = 0.75;
+
+constexpr float MinJumpWidth = 0.05;
+constexpr float MaxJumpWidth = 0.5;
+constexpr float DefaultJumpWidth = 0.25;
 
 //#define CAN_DEBUG
 
@@ -162,6 +172,51 @@ static void configure_mcan()
 	NVIC_EnableIRQ(MCanIRQn);
 
 	mcan_start(&mcan_instance);
+}
+
+static void GetLocalCanTiming(CanTiming& timing)
+{
+	const uint32_t nbtp = MCAN_MODULE->MCAN_NBTP;
+	const uint32_t tseg1 = (nbtp & MCAN_NBTP_NTSEG1_Msk) >> MCAN_NBTP_NTSEG1_Pos;
+	const uint32_t tseg2 = (nbtp & MCAN_NBTP_NTSEG2_Msk) >> MCAN_NBTP_NTSEG2_Pos;
+	const uint32_t jw = (nbtp & MCAN_NBTP_NSJW_Msk) >> MCAN_NBTP_NSJW_Pos;
+	const uint32_t brp = (nbtp & MCAN_NBTP_NBRP_Msk) >> MCAN_NBTP_NBRP_Pos;
+	timing.period = (tseg1 + tseg2 + 3) * (brp + 1);
+	timing.tseg1 = (tseg1 + 1) * (brp + 1);
+	timing.jumpWidth = (jw + 1) * (brp + 1);
+}
+
+static void ChangeLocalCanTiming(const CanTiming& timing)
+{
+	// Sort out the bit timing
+	uint32_t period = timing.period;
+	uint32_t tseg1 = timing.tseg1;
+	uint32_t jumpWidth = timing.jumpWidth;
+	uint32_t prescaler = 1;						// 48MHz main clock
+	uint32_t tseg2;
+
+	for (;;)
+	{
+		tseg2 = period - tseg1 - 1;
+		if (tseg1 <= 32 && tseg2 <= 16 && jumpWidth <= 16)
+		{
+			break;
+		}
+		prescaler <<= 1;
+		period >>= 1;
+		tseg1 >>= 1;
+		jumpWidth >>= 1;
+	}
+
+	//TODO stop transmissions in an orderly fashion, or postpone initialising CAN until we have the timing data
+	MCAN_MODULE->MCAN_CCCR |= MCAN_CCCR_CCE | MCAN_CCCR_INIT;
+
+	MCAN_MODULE->MCAN_NBTP =  ((tseg1 - 1) << MCAN_NBTP_NTSEG1_Pos)
+							| ((tseg2 - 1) << MCAN_NBTP_NTSEG2_Pos)
+							| ((jumpWidth - 1) << MCAN_NBTP_NSJW_Pos)
+							| ((prescaler - 1) << MCAN_NBTP_NBRP_Pos);
+
+	MCAN_MODULE->MCAN_CCCR &= ~MCAN_CCCR_CCE;
 }
 
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
@@ -614,7 +669,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 		if (((rxf1s & MCAN_RXF1S_F1FL_Msk) >> MCAN_RXF1S_F1FL_Pos) != 0)			// if there are any messages
 		{
 			const uint32_t getIndex = (rxf1s & MCAN_RXF1S_F1GI_Msk) >> MCAN_RXF1S_F1GI_Pos;
-			mcan_rx_element_fifo_1 elem;
+			mcan_rx_element elem;
 			mcan_get_rx_fifo_1_element(&mcan_instance, &elem, getIndex);			// copy the data (TODO use our own driver, avoid double copying)
 			mcan_instance.hw->MCAN_RXF1A = getIndex;								// acknowledge it, release the FIFO entry
 
@@ -713,7 +768,7 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 			else
 			{
 				const uint32_t getIndex = (rxf0s & MCAN_RXF0S_F0GI_Msk) >> MCAN_RXF0S_F0GI_Pos;
-				mcan_rx_element_fifo_0 elem;
+				mcan_rx_element elem;
 				mcan_get_rx_fifo_0_element(&mcan_instance, &elem, getIndex);		// copy the data (TODO use our own driver, avoid double copying)
 				mcan_instance.hw->MCAN_RXF0A = getIndex;							// acknowledge it, release the FIFO entry
 
@@ -1033,29 +1088,95 @@ GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber,
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, nullptr);
 }
 
-GCodeResult CanInterface::SetFastDataRate(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
+GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
 {
-	return GCodeResult::errorNotSupported;
-}
-
-GCodeResult CanInterface::ChangeExpansionBoardAddress(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
-{
+	// Get the address of the board whose parameters we are changing
 	gb.MustSee('B');
 	const uint32_t oldAddress = gb.GetUIValue();
-	gb.MustSee('S');
-	uint32_t newAddress = gb.GetUIValue();
-	if (oldAddress > CanId::MaxNormalAddress || newAddress >= CanId::MaxNormalAddress)
+	if (oldAddress > CanId::MaxNormalAddress)
 	{
 		reply.copy("Can address out of range");
 		return GCodeResult::error;
 	}
-	CanMessageBuffer * const buf = AllocateBuffer(gb);
+
+	// Get the new timing details, if provided
+	CanTiming timing;
+	bool changeTiming = false;
+	if (gb.Seen('S'))
+	{
+		uint32_t speed = gb.GetUIValue();
+		if (speed < MinBitRate || speed > MaxBitRate)
+		{
+			reply.copy("Data rate out of range");
+			return GCodeResult::error;
+		}
+		speed *= 1000;
+		timing.period = (CanClockSpeed + speed - 1)/speed;
+		const float tseg1 = gb.Seen('T') ? gb.GetFValue() : DefaultSamplePoint;
+		if (tseg1 < MinSamplePoint || tseg1 > MaxSamplePoint)
+		{
+			reply.copy("Sample point out of range");
+			return GCodeResult::error;
+		}
+		timing.tseg1 = lrintf(timing.period * tseg1);
+
+		const float jumpWidth = (gb.Seen('J')) ? gb.GetFValue() : DefaultJumpWidth;
+		if (jumpWidth < MinJumpWidth || jumpWidth > MaxJumpWidth)
+		{
+			reply.copy("Jump width out of range");
+			return GCodeResult::error;
+		}
+		timing.jumpWidth = max<uint16_t>(lrintf(timing.period * jumpWidth), 1);
+		changeTiming = true;
+	}
+
+	if (oldAddress == 0)
+	{
+		if (changeTiming)
+		{
+			ChangeLocalCanTiming(timing);
+		}
+		else
+		{
+			GetLocalCanTiming(timing);
+			reply.printf("CAN bit rate %.1fkbps, tseg1 %.2f, jump width %.2f",
+							(double)((float)CanClockSpeed/(1000 * timing.period)),
+							(double)((float)timing.tseg1/(float)timing.period),
+							(double)((float)timing.jumpWidth/(float)timing.period));
+		}
+		return GCodeResult::ok;
+	}
+
+	CanMessageBufferHandle buf(AllocateBuffer(gb));
 	const CanRequestId rid = CanInterface::AllocateRequestId((uint8_t)oldAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageChangeAddress>(rid, CanId::MasterAddress, (uint8_t)oldAddress);
+	auto msg = buf.Access()->SetupRequestMessage<CanMessageSetAddressAndNormalTiming>(rid, CanId::MasterAddress, (uint8_t)oldAddress);
 	msg->oldAddress = (uint8_t)oldAddress;
-	msg->newAddress = (uint8_t)newAddress;
-	msg->newAddressInverted = (uint8_t)~newAddress;
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, nullptr);
+
+	if (gb.Seen('A'))
+	{
+		const uint32_t newAddress = gb.GetUIValue();
+		if (newAddress > CanId::MaxNormalAddress)
+		{
+			reply.copy("Can address out of range");
+			return GCodeResult::error;
+		}
+		msg->newAddress = (uint8_t)newAddress;
+		msg->newAddressInverted = (uint8_t)~newAddress;
+	}
+	else
+	{
+		msg->newAddress = msg->oldAddress = 0;
+	}
+
+	msg->doSetTiming = (changeTiming) ? CanMessageSetAddressAndNormalTiming::DoSetTimingYes : CanMessageSetAddressAndNormalTiming::DoSetTimingNo;
+	msg->normalTiming = timing;
+
+	return CanInterface::SendRequestAndGetStandardReply(buf.HandOver(), rid, reply, nullptr);
+}
+
+GCodeResult CanInterface::ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
+{
+	return GCodeResult::errorNotSupported;
 }
 
 #endif
