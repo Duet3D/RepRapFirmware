@@ -493,7 +493,6 @@ GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, in
 
 				tr.inputStates.Clear();
 				(void)tr.Check();					// set up initial input states
-				return GCodeResult::ok;
 			}
 
 			if (!seen)
@@ -510,6 +509,7 @@ GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, in
 					reply.cat(" when printing from SD card");
 				}
 			}
+			return GCodeResult::ok;
 		}
 		else
 		{
