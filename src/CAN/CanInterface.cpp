@@ -38,8 +38,6 @@ constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
 
 #define USE_BIT_RATE_SWITCH		0
 
-constexpr uint32_t CanClockSpeed = 48000000;	// all boards use a 48MHz CAN clock
-
 constexpr uint32_t MinBitRate = 15;				// MCP2542 has a minimum bite rate of 14.4kbps
 constexpr uint32_t MaxBitRate = 5000;
 
@@ -1093,7 +1091,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	// Get the address of the board whose parameters we are changing
 	gb.MustSee('B');
 	const uint32_t oldAddress = gb.GetUIValue();
-	if (oldAddress > CanId::MaxNormalAddress)
+	if (oldAddress > CanId::MaxCanAddress)
 	{
 		reply.copy("Can address out of range");
 		return GCodeResult::error;
@@ -1111,7 +1109,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 			return GCodeResult::error;
 		}
 		speed *= 1000;
-		timing.period = (CanClockSpeed + speed - 1)/speed;
+		timing.period = (CanTiming::ClockFrequency + speed - 1)/speed;
 		const float tseg1 = gb.Seen('T') ? gb.GetFValue() : DefaultSamplePoint;
 		if (tseg1 < MinSamplePoint || tseg1 > MaxSamplePoint)
 		{
@@ -1126,7 +1124,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 			reply.copy("Jump width out of range");
 			return GCodeResult::error;
 		}
-		timing.jumpWidth = max<uint16_t>(lrintf(timing.period * jumpWidth), 1);
+		timing.jumpWidth = constrain<uint16_t>(lrintf(timing.period * jumpWidth), 1, timing.period - timing.tseg1 - 2);
 		changeTiming = true;
 	}
 
@@ -1139,8 +1137,8 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 		else
 		{
 			GetLocalCanTiming(timing);
-			reply.printf("CAN bit rate %.1fkbps, tseg1 %.2f, jump width %.2f",
-							(double)((float)CanClockSpeed/(1000 * timing.period)),
+			reply.printf("CAN bus speed %.1fkbps, tseg1 %.2f, jump width %.2f",
+							(double)((float)CanTiming::ClockFrequency/(1000 * timing.period)),
 							(double)((float)timing.tseg1/(float)timing.period),
 							(double)((float)timing.jumpWidth/(float)timing.period));
 		}
@@ -1155,7 +1153,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	if (gb.Seen('A'))
 	{
 		const uint32_t newAddress = gb.GetUIValue();
-		if (newAddress > CanId::MaxNormalAddress)
+		if (newAddress > CanId::MaxCanAddress)
 		{
 			reply.copy("Can address out of range");
 			return GCodeResult::error;
@@ -1165,7 +1163,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	}
 	else
 	{
-		msg->newAddress = msg->oldAddress = 0;
+		msg->newAddress = msg->newAddressInverted = 0;
 	}
 
 	msg->doSetTiming = (changeTiming) ? CanMessageSetAddressAndNormalTiming::DoSetTimingYes : CanMessageSetAddressAndNormalTiming::DoSetTimingNo;
