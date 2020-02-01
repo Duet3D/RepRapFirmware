@@ -1,5 +1,5 @@
-RepRapFirmware 3.01beta4 (in preparation)
-========================
+RepRapFirmware 3.01-beta4 (in preparation)
+=========================
 
 Recommended compatible firmware:
 - DuetWebControl 2.07
@@ -8,13 +8,18 @@ Recommended compatible firmware:
 
 Upgrade notes: none since beta3
 
+New features:
+- Implemented M952
+
 Bug fixes:
-- The M587 command didn't set up the access point password corrrectly, resulting in "Wrong password" reports when trying to connect to the access point
+- The M587 command didn't set up the access point password correctly, resulting in "Wrong password" reports when trying to connect to the access point
 - if..elif GCode meta commands with multiple elif parts sometimes gave rise to error messages "'elif' did not follow 'if'"
 - When G32 true bed levelling failed (for example, because the correction required exceeded the limit), the initial and final deviation were left unchanged. Now thay are both set to the initial deviation measured by probing.
+- If the M581 command was used with a T parameter but no P parameter, it reported "missing T parameter".
+- The machine coordinates returned to DWC and in the object model were not updated
 
-RepRapFirmware 3.01beta3
-========================
+RepRapFirmware 3.01-beta3
+=========================
 
 Recommended compatible firmware:
 - DuetWebControl 2.07
