@@ -217,6 +217,14 @@ static void ChangeLocalCanTiming(const CanTiming& timing)
 	MCAN_MODULE->MCAN_CCCR &= ~MCAN_CCCR_CCE;
 }
 
+static void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION
+{
+	if (address == 0 || address > CanId::MaxCanAddress)
+	{
+		throw GCodeException(gb.GetLineNumber(), -1, "CAN address out of range");
+	}
+}
+
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
@@ -863,11 +871,7 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 
 static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr) noexcept
 {
-	if (boardAddress > CanId::MaxCanAddress)
-	{
-		reply.copy("Invalid board address");
-		return GCodeResult::error;
-	}
+	CheckCanAddress(boardAddress, gb);
 
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -884,7 +888,7 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_
 }
 
 // Get diagnostics from an expansion board
-GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply)
 {
 	Platform& p = reprap.GetPlatform();
 
@@ -910,33 +914,23 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	return res;
 }
 
-GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply)
 {
 	return GetRemoteInfo(CanMessageReturnInfo::typeM408, boardAddress, type, gb, reply, nullptr);
 }
 
-GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
 	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, 0, gb, reply);
 }
 
 // Tell an expansion board to update
-GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
 {
-	if (boardAddress > CanId::MaxCanAddress)
-	{
-		reply.copy("Invalid board address");
-		return GCodeResult::error;
-	}
+	CheckCanAddress(boardAddress, gb);
 
 	// Ask the board for its type and check we have the firmware file for it
-	CanMessageBuffer * const buf1 = CanMessageBuffer::Allocate();
-	if (buf1 == nullptr)
-	{
-		reply.copy("No CAN buffer available");
-		return GCodeResult::error;
-	}
-
+	CanMessageBuffer * const buf1 = AllocateBuffer(gb);
 	CanRequestId rid1 = AllocateRequestId(boardAddress);
 	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg1->type = CanMessageReturnInfo::typeBoardName;
@@ -945,6 +939,7 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 	{
 		return rslt;
 	}
+
 	String<StringLength50> firmwareFilename;
 	firmwareFilename.copy("Duet3Firmware_");
 	firmwareFilename.cat(reply.c_str());
@@ -994,6 +989,15 @@ void CanInterface::UpdateStarting() noexcept
 void CanInterface::UpdateFinished() noexcept
 {
 	doingFirmwareUpdate = false;
+}
+
+GCodeResult CanInterface::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+{
+	CheckCanAddress(boardAddress, gb);
+	CanMessageBuffer * const buf = AllocateBuffer(gb);
+	const CanRequestId rid = AllocateRequestId(boardAddress);
+	buf->SetupRequestMessage<CanMessageReset>(rid, CanId::MasterAddress, (uint8_t)boardAddress);
+	return SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
 void CanInterface::WakeCanSender() noexcept
@@ -1091,11 +1095,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	// Get the address of the board whose parameters we are changing
 	gb.MustSee('B');
 	const uint32_t oldAddress = gb.GetUIValue();
-	if (oldAddress > CanId::MaxCanAddress)
-	{
-		reply.copy("Can address out of range");
-		return GCodeResult::error;
-	}
+	CheckCanAddress(oldAddress, gb);
 
 	// Get the new timing details, if provided
 	CanTiming timing;
@@ -1153,11 +1153,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	if (gb.Seen('A'))
 	{
 		const uint32_t newAddress = gb.GetUIValue();
-		if (newAddress > CanId::MaxCanAddress)
-		{
-			reply.copy("Can address out of range");
-			return GCodeResult::error;
-		}
+		CheckCanAddress(newAddress, gb);
 		msg->newAddress = (uint8_t)newAddress;
 		msg->newAddressInverted = (uint8_t)~newAddress;
 	}

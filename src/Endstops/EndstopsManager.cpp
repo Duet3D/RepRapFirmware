@@ -41,7 +41,7 @@ ReadWriteLock EndstopsManager::zProbesLock;
 constexpr ObjectModelArrayDescriptor EndstopsManager::endstopsArrayDescriptor =
 {
 	&endstopsLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 					{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstop(context.GetLastIndex()).Ptr()); }
 };

@@ -4340,6 +4340,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 
 		case 999:
+#if SUPPORT_CAN_EXPANSION
+			if (gb.Seen('B'))
+			{
+				const uint32_t address = gb.GetUIValue();
+				if (address != CanId::MasterAddress)
+				{
+					result = CanInterface::ResetRemote(address, gb, reply);
+					break;
+				}
+			}
+#endif
 			if (!gb.DoDwellTime(1000))		// wait a second to allow the response to be sent back to the web server, otherwise it may retry
 			{
 				return false;
