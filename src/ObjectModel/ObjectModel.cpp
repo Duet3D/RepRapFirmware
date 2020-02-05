@@ -17,6 +17,45 @@ ExpressionValue::ExpressionValue(const MacAddress& mac) noexcept : type(TYPE_OF(
 {
 }
 
+#if SUPPORT_CAN_EXPANSION
+
+// Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter
+// sVal is a string of the form shortName|version
+void ExpressionValue::ExtractRequestedPart(const StringRef& rslt)
+{
+	const char *const p = strchr(sVal, '|');
+	const size_t indexOfDivider = (p == nullptr) ? strlen(sVal) : p - sVal;
+
+	switch((ExpansionDetail)param)
+	{
+	case ExpansionDetail::shortName:
+		rslt.copy(sVal, indexOfDivider);
+		break;
+
+	case ExpansionDetail::firmwareVersion:
+		if (p == nullptr)
+		{
+			rslt.Clear();
+		}
+		else
+		{
+			rslt.copy(sVal + indexOfDivider + 1);
+		}
+		break;
+
+	case ExpansionDetail::firmwareFileName:
+		rslt.copy("Duet3Firmware_");
+		rslt.catn(sVal, indexOfDivider);
+		rslt.cat(".bin");
+		break;
+
+	default:
+		break;
+	}
+}
+
+#endif
+
 void ObjectExplorationContext::AddIndex(int32_t index)
 {
 	if (numIndicesCounted == MaxIndices)
@@ -287,6 +326,16 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 		case TYPE_OF(const char*):
 			buf->EncodeString(val.sVal, true);
 			break;
+
+#ifdef DUET3
+		case TYPE_OF(CanExpansionBoardDetails):
+			{
+				String<StringLength50> rslt;
+				val.ExtractRequestedPart(rslt.GetRef());
+				buf->EncodeString(rslt.c_str(), true);
+			}
+			break;
+#endif
 
 		case TYPE_OF(Bitmap<uint16_t>):
 		case TYPE_OF(Bitmap<uint32_t>):
@@ -677,6 +726,21 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, E
 			return (context.WantArrayLength()) ? ExpressionValue((int32_t)17) : val;
 		}
 		break;
+
+#ifdef DUET3
+	case TYPE_OF(CanExpansionBoardDetails):
+		if (*idString == 0)
+		{
+			if (context.WantArrayLength())
+			{
+				String<StringLength50> rslt;
+				val.ExtractRequestedPart(rslt.GetRef());
+				return ExpressionValue((int32_t)rslt.strlen());
+			}
+			return val;
+		}
+		break;
+#endif
 
 	case TYPE_OF(const char*):
 		if (*idString == 0 && context.WantArrayLength())

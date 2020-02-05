@@ -42,7 +42,8 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanInterface.h"
+# include <CAN/CanInterface.h>
+# include <CAN/ExpansionManager.h>
 #endif
 
 #include "FreeRTOS.h"
@@ -128,8 +129,16 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 constexpr ObjectModelArrayDescriptor RepRap::boardsArrayDescriptor =
 {
 	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->platform->GetNumBoards(); },
+#if SUPPORT_CAN_EXPANSION
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->expansion->GetNumExpansionBoards() + 1; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+			{	return (context.GetLastIndex() == 0)
+						? ExpressionValue(((const RepRap*)self)->platform, 0)
+							: ExpressionValue(((const RepRap*)self)->expansion, 0); }
+#else
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
+#endif
 };
 
 constexpr ObjectModelArrayDescriptor RepRap::fansArrayDescriptor =
@@ -213,6 +222,9 @@ RepRap::RepRap() noexcept
 #endif
 #if HAS_LINUX_INTERFACE
 	linuxInterface = new LinuxInterface();
+#endif
+#if SUPPORT_CAN_EXPANSION
+	expansion = new ExpansionManager();
 #endif
 
 	SetPassword(DEFAULT_PASSWORD);
@@ -2236,7 +2248,7 @@ size_t RepRap::GetStatusIndex() const noexcept
 {
 	return    (processingConfig)										? 0		// Reading the configuration file
 #if HAS_LINUX_INTERFACE && SUPPORT_CAN_EXPANSION
-			: (gCodes->IsFlashing() || CanInterface::IsFlashing())		? 1		// Flashing a new firmware binary
+			: (gCodes->IsFlashing() || expansion->IsFlashing())			? 1		// Flashing a new firmware binary
 #else
 			: (gCodes->IsFlashing())									? 1		// Flashing a new firmware binary
 #endif

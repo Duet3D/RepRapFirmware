@@ -12,6 +12,7 @@
 #include "Hardware/IoPorts.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
+#include <ObjectModel/ObjectModel.h>
 #include "RTOSIface/RTOSIface.h"
 
 enum class FilamentSensorStatus : uint8_t
@@ -23,7 +24,7 @@ enum class FilamentSensorStatus : uint8_t
 	sensorError
 };
 
-class FilamentMonitor
+class FilamentMonitor INHERIT_OBJECT_MODEL
 {
 public:
 	// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
@@ -67,6 +68,17 @@ public:
 	// Send diagnostics info
 	static void Diagnostics(MessageType mtype) noexcept;
 
+#if SUPPORT_OBJECT_MODEL
+	// Get the number of monitors to report in the OM
+	static size_t GetNumMonitorsToReport();
+
+	// Get access to a filament monitor when we already have a read lock
+	static FilamentMonitor *GetMonitorAlreadyLocked(size_t extruder) { return filamentSensors[extruder]; }
+#endif
+
+	// This must be public so that the array descriptor in class RepRap can lock it
+	static ReadWriteLock filamentMonitorsLock;
+
 protected:
 	FilamentMonitor(unsigned int extruder, unsigned int t) noexcept : extruderNumber(extruder), type(t) { }
 
@@ -75,13 +87,16 @@ protected:
 	const IoPort& GetPort() const noexcept { return port; }
 	bool HaveIsrStepsCommanded() const noexcept { return haveIsrStepsCommanded; }
 
+	static int32_t ConvertToPercent(float f)
+	{
+		return lrintf(100 * f);
+	}
+
 private:
 	// Create a filament sensor returning null if not a valid sensor type
 	static FilamentMonitor *Create(unsigned int extruder, unsigned int type) noexcept;
-
 	static void InterruptEntry(CallbackParameter param) noexcept;
 
-	static Mutex filamentSensorsMutex;
 	static FilamentMonitor *filamentSensors[MaxExtruders];
 
 	int32_t isrExtruderStepsCommanded;

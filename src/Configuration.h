@@ -70,6 +70,7 @@ constexpr unsigned int MAIN_BAUD_RATE = 115200;			// Default communication speed
 constexpr unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART device
 constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
 constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
+constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
 // Heater values
 constexpr uint32_t HeatSampleIntervalMillis = 250;		// interval between taking temperature samples

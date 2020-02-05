@@ -72,18 +72,12 @@ namespace CanInterface
 	void SendBroadcast(CanMessageBuffer *buf) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 	CanMessageBuffer *AllocateBuffer(const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION;
+	void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION;
 
 	// Info functions
 	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 	GCodeResult RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-
-	// Firmware update and related functions
-	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-	bool IsFlashing() noexcept;
-	void UpdateStarting() noexcept;
-	void UpdateFinished() noexcept;
-	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 
 	// Motor control functions
 	void SendMotion(CanMessageBuffer *buf) noexcept;

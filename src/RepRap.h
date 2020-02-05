@@ -28,6 +28,11 @@ Licence: GPL
 #include "GCodes/GCodeResult.h"
 #include "Fans/FansManager.h"
 #include "Tools/Tool.h"
+
+#if SUPPORT_CAN_EXPANSION
+# include <CAN/ExpansionManager.h>
+#endif
+
 #include "SoftwareReset.h"
 #include <functional>
 
@@ -121,6 +126,9 @@ public:
  	bool UsingLinuxInterface() const noexcept { return usingLinuxInterface; }
  	LinuxInterface& GetLinuxInterface() const noexcept { return *linuxInterface; }
 #endif
+#if SUPPORT_CAN_EXPANSION
+ 	ExpansionManager& GetExpansion() const noexcept { return *expansion; }
+#endif
 
 	void Tick() noexcept;
 	bool SpinTimeoutImminent() const noexcept;
@@ -213,6 +221,10 @@ private:
 
 #if SUPPORT_ROLAND
 	Roland* roland;
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+ 	ExpansionManager *expansion;
 #endif
 
  	Mutex messageBoxMutex;

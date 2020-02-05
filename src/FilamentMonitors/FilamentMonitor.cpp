@@ -17,8 +17,23 @@
 #include "PrintMonitor.h"
 
 // Static data
-Mutex FilamentMonitor::filamentSensorsMutex;
+ReadWriteLock FilamentMonitor::filamentMonitorsLock;
 FilamentMonitor *FilamentMonitor::filamentSensors[MaxExtruders] = { 0 };
+
+#if SUPPORT_OBJECT_MODEL
+
+// Get the number of monitors to report in the OM
+size_t FilamentMonitor::GetNumMonitorsToReport()
+{
+	size_t rslt = ARRAY_SIZE(filamentSensors);
+	while (rslt != 0 && filamentSensors[rslt - 1] == nullptr)
+	{
+		--rslt;
+	}
+	return rslt;
+}
+
+#endif
 
 // Default destructor
 FilamentMonitor::~FilamentMonitor() noexcept
@@ -62,18 +77,16 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 // Static initialisation
 /*static*/ void FilamentMonitor::InitStatic() noexcept
 {
-	filamentSensorsMutex.Create("FilamentSensors");
 }
 
 // Handle M591
 /*static*/ GCodeResult FilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder)
 {
-
 	bool seen = false;
 	uint32_t newSensorType;
 	gb.TryGetUIValue('P', newSensorType, seen);
 
-	MutexLocker lock(filamentSensorsMutex);
+	WriteLocker lock(filamentMonitorsLock);
 	FilamentMonitor*& sensor = filamentSensors[extruder];
 
 	if (seen)
@@ -167,7 +180,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 
 /*static*/ void FilamentMonitor::Spin() noexcept
 {
-	MutexLocker lock(filamentSensorsMutex);
+	ReadLocker lock(filamentMonitorsLock);
 
 	// Filament sensors
 	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)

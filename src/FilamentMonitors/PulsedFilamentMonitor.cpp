@@ -16,6 +16,44 @@
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
 const int32_t SyncDelayMillis = 10;
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(PulsedFilamentMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(PulsedFilamentMonitor, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry PulsedFilamentMonitor::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. PulsedFilamentMonitor members
+	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(self->DataReceived() && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::none },
+	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 															ObjectModelEntryFlags::none },
+	{ "enabled",		OBJECT_MODEL_FUNC(self->comparisonEnabled),		 										ObjectModelEntryFlags::none },
+	{ "type",			OBJECT_MODEL_FUNC_NOSELF("pulsed"), 													ObjectModelEntryFlags::none },
+
+	// 1. PulsedFilamentMonitor.calibrated members
+	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 3), 										ObjectModelEntryFlags::none },
+	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 							ObjectModelEntryFlags::none },
+	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 							ObjectModelEntryFlags::none },
+	{ "totalDistance",	OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 									ObjectModelEntryFlags::none },
+
+	// 2. PulsedFilamentMonitor.configured members
+	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->mmPerPulse, 3), 												ObjectModelEntryFlags::none },
+	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 							ObjectModelEntryFlags::none },
+	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 							ObjectModelEntryFlags::none },
+	{ "sampleDistance", OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 								ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t PulsedFilamentMonitor::objectModelTableDescriptor[] = { 3, 4, 4, 4 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(PulsedFilamentMonitor)
+
+#endif
+
 PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: FilamentMonitor(extruder, type),
 	  mmPerPulse(DefaultMmPerPulse),
@@ -40,6 +78,21 @@ void PulsedFilamentMonitor::Reset() noexcept
 	comparisonStarted = false;
 	haveInterruptData = false;
 	wasPrintingAtInterrupt = false;			// force a resync
+}
+
+bool PulsedFilamentMonitor::DataReceived() const noexcept
+{
+	return samplesReceived >= 2;
+}
+
+bool PulsedFilamentMonitor::HaveCalibrationData() const noexcept
+{
+	return calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0;
+}
+
+float PulsedFilamentMonitor::MeasuredSensitivity() const noexcept
+{
+	return totalExtrusionCommanded/totalMovementMeasured;
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
@@ -86,29 +139,25 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 		reply.catf(", %s, sensitivity %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
 					(comparisonEnabled) ? "enabled" : "disabled",
 					(double)mmPerPulse,
-					lrintf(minMovementAllowed * 100.0),
-					lrintf(maxMovementAllowed * 100.0),
+					ConvertToPercent(minMovementAllowed),
+					ConvertToPercent(maxMovementAllowed),
 					(double)minimumExtrusionCheckLength);
 
-		if (samplesReceived < 2)
+		if (!DataReceived())
 		{
 			reply.cat("no data received");
 		}
+		else if (HaveCalibrationData())
+		{
+			reply.catf("measured sensitivity %.3fmm/pulse, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
+				(double)MeasuredSensitivity(),
+				ConvertToPercent(minMovementRatio),
+				ConvertToPercent(maxMovementRatio),
+				(double)totalExtrusionCommanded);
+		}
 		else
 		{
-			if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
-			{
-				const float measuredMmPerPulse = totalExtrusionCommanded/totalMovementMeasured;
-				reply.catf("measured sensitivity %.3fmm/pulse, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
-					(double)measuredMmPerPulse,
-					lrintf(100 * minMovementRatio),
-					lrintf(100 * maxMovementRatio),
-					(double)totalExtrusionCommanded);
-			}
-			else
-			{
-				reply.cat("no calibration data");
-			}
+			reply.cat("no calibration data");
 		}
 	}
 

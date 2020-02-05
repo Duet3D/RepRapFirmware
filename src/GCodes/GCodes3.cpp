@@ -34,7 +34,8 @@
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanInterface.h"
+# include <CAN/CanInterface.h>
+# include <CAN/ExpansionManager.h>
 #endif
 
 #include "Wire.h"
@@ -979,7 +980,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		const uint32_t boardNumber = gb.GetUIValue();
 		if (boardNumber != CanId::MasterAddress)
 		{
-			return CanInterface::UpdateRemoteFirmware((CanAddress)boardNumber, gb, reply);
+			return reprap.GetExpansion().UpdateRemoteFirmware(boardNumber, gb, reply);
 		}
 	}
 #endif

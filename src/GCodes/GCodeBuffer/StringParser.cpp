@@ -1712,6 +1712,12 @@ void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 					(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
 		break;
 
+#if SUPPORT_CAN_EXPANSION
+	case TYPE_OF(CanExpansionBoardDetails):
+		val.ExtractRequestedPart(str);
+		break;
+#endif
+
 	default:
 		throw ConstructParseException("string value expected");
 	}

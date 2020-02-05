@@ -16,6 +16,44 @@
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
 const int32_t SyncDelayMillis = 10;
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RotatingMagnetFilamentMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(RotatingMagnetFilamentMonitor, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. RotatingMagnetFilamentMonitor members
+	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(self->dataReceived && self->HaveCalibrationData(), self, 1), 			ObjectModelEntryFlags::none },
+	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 																ObjectModelEntryFlags::none },
+	{ "enabled",		OBJECT_MODEL_FUNC(self->comparisonEnabled),		 											ObjectModelEntryFlags::none },
+	{ "type",			OBJECT_MODEL_FUNC_NOSELF("rotatingMagnet"), 												ObjectModelEntryFlags::none },
+
+	// 1. RotatingMagnetFilamentMonitor.calibrated members
+	{ "mmPerRev",		OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 2), 											ObjectModelEntryFlags::none },
+	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio * self->MeasuredSensitivity())), 	ObjectModelEntryFlags::none },
+	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio * self->MeasuredSensitivity())), 	ObjectModelEntryFlags::none },
+	{ "totalDistance",	OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 										ObjectModelEntryFlags::none },
+
+	// 2. RotatingMagnetFilamentMonitor.configured members
+	{ "mmPerRev",		OBJECT_MODEL_FUNC(self->mmPerRev, 2), 														ObjectModelEntryFlags::none },
+	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 								ObjectModelEntryFlags::none },
+	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 								ObjectModelEntryFlags::none },
+	{ "sampleDistance", OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 									ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] = { 3, 4, 4, 4 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(RotatingMagnetFilamentMonitor)
+
+#endif
+
 RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: Duet3DFilamentMonitor(extruder, type),
 	  mmPerRev(DefaultMmPerRev),
@@ -48,6 +86,16 @@ void RotatingMagnetFilamentMonitor::Reset() noexcept
 	magneticMonitorState = MagneticMonitorState::idle;
 	haveStartBitData = false;
 	synced = false;							// force a resync
+}
+
+bool RotatingMagnetFilamentMonitor::HaveCalibrationData() const noexcept
+{
+	return magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0;
+}
+
+float RotatingMagnetFilamentMonitor::MeasuredSensitivity() const noexcept
+{
+	return totalExtrusionCommanded/totalMovementMeasured;
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
@@ -100,8 +148,8 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 		reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
 					(comparisonEnabled) ? "enabled" : "disabled",
 					(double)mmPerRev,
-					lrintf(minMovementAllowed * 100.0),
-					lrintf(maxMovementAllowed * 100.0),
+					ConvertToPercent(minMovementAllowed),
+					ConvertToPercent(maxMovementAllowed),
 					(double)minimumExtrusionCheckLength);
 
 		if (!dataReceived)
@@ -123,13 +171,13 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 					reply.catf(" %u", lastErrorCode);
 				}
 			}
-			else if (magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0)
+			else if (HaveCalibrationData())
 			{
-				const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;
+				const float measuredMmPerRev = MeasuredSensitivity();
 				reply.catf("measured sensitivity %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
 					(double)measuredMmPerRev,
-					lrintf(100 * minMovementRatio * measuredMmPerRev),
-					lrintf(100 * maxMovementRatio * measuredMmPerRev),
+					ConvertToPercent(minMovementRatio * measuredMmPerRev),
+					ConvertToPercent(maxMovementRatio * measuredMmPerRev),
 					(double)totalExtrusionCommanded);
 			}
 			else

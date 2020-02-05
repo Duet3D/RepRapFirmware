@@ -46,6 +46,13 @@ constexpr ObjectModelArrayDescriptor EndstopsManager::endstopsArrayDescriptor =
 					{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstop(context.GetLastIndex()).Ptr()); }
 };
 
+constexpr ObjectModelArrayDescriptor EndstopsManager::filamentMonitorsArrayDescriptor =
+{
+	&FilamentMonitor::filamentMonitorsLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return FilamentMonitor::GetNumMonitorsToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(FilamentMonitor::GetMonitorAlreadyLocked(context.GetLastIndex())); }
+};
+
 constexpr ObjectModelArrayDescriptor EndstopsManager::probesArrayDescriptor =
 {
 	&zProbesLock,
@@ -59,10 +66,11 @@ constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. sensors members
 	{ "endstops",			OBJECT_MODEL_FUNC_NOSELF(&endstopsArrayDescriptor), 	ObjectModelEntryFlags::live },
+	{ "filamentMonitors",	OBJECT_MODEL_FUNC_NOSELF(&filamentMonitorsArrayDescriptor),				ObjectModelEntryFlags::live },
 	{ "probes",				OBJECT_MODEL_FUNC_NOSELF(&probesArrayDescriptor),		ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 2 };
+constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(EndstopsManager)
 

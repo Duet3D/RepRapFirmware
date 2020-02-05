@@ -82,8 +82,6 @@ enum class CanStatusBits : uint32_t
 	busOff = 0x40000
 };
 
-static bool doingFirmwareUpdate = false;
-
 #ifdef CAN_DEBUG
 static uint32_t GetAndClearStatusBits() noexcept
 {
@@ -217,14 +215,6 @@ static void ChangeLocalCanTiming(const CanTiming& timing)
 	MCAN_MODULE->MCAN_CCCR &= ~MCAN_CCCR_CCE;
 }
 
-static void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION
-{
-	if (address == 0 || address > CanId::MaxCanAddress)
-	{
-		throw GCodeException(gb.GetLineNumber(), -1, "CAN address out of range");
-	}
-}
-
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
@@ -272,6 +262,14 @@ CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer& gb) THROWS_GCO
 		throw GCodeException(gb.GetLineNumber(), -1, "no CAN buffer");
 	}
 	return buf;
+}
+
+void CanInterface::CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION
+{
+	if (address == 0 || address > CanId::MaxCanAddress)
+	{
+		throw GCodeException(gb.GetLineNumber(), -1, "CAN address out of range");
+	}
 }
 
 // Wait for a specified buffer to become free. If it's still not free after the timeout, cancel the pending transmission.
@@ -743,14 +741,14 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 	return GCodeResult::error;
 }
 
-// Send a response to an expansion board
+// Send a response to an expansion board and free the buffer
 void CanInterface::SendResponse(CanMessageBuffer *buf) noexcept
 {
 	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexResponse, MaxResponseSendWait);
 	CanMessageBuffer::Free(buf);
 }
 
-// Send a broadcast message
+// Send a broadcast message and free the buffer
 void CanInterface::SendBroadcast(CanMessageBuffer *buf) noexcept
 {
 	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferBroadcast, MaxResponseSendWait);
@@ -871,7 +869,7 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 
 static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr) noexcept
 {
-	CheckCanAddress(boardAddress, gb);
+	CanInterface::CheckCanAddress(boardAddress, gb);
 
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -922,82 +920,6 @@ GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, G
 GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
 	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, 0, gb, reply);
-}
-
-// Tell an expansion board to update
-GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
-{
-	CheckCanAddress(boardAddress, gb);
-
-	// Ask the board for its type and check we have the firmware file for it
-	CanMessageBuffer * const buf1 = AllocateBuffer(gb);
-	CanRequestId rid1 = AllocateRequestId(boardAddress);
-	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanId::MasterAddress, (CanAddress)boardAddress);
-	msg1->type = CanMessageReturnInfo::typeBoardName;
-	const GCodeResult rslt = SendRequestAndGetStandardReply(buf1, rid1, reply);
-	if (rslt != GCodeResult::ok)
-	{
-		return rslt;
-	}
-
-	String<StringLength50> firmwareFilename;
-	firmwareFilename.copy("Duet3Firmware_");
-	firmwareFilename.cat(reply.c_str());
-	reply.Clear();
-	firmwareFilename.cat(".bin");
-
-	// Do not ask Linux for a file here because that would create a deadlock.
-	// If blocking calls to Linux are supposed to be made from the Spin loop, the Linux interface,
-	// or at least the code doing SPI data transfers, has to be moved to a separate task first
-#if HAS_MASS_STORAGE
-	// It's fine to check if the file exists on the local SD though
-	if (
-# if HAS_LINUX_INTERFACE
-			!reprap.UsingLinuxInterface() &&
-# endif
-			!reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, firmwareFilename.c_str()))
-	{
-		reply.printf("Firmware file %s not found", firmwareFilename.c_str());
-		return GCodeResult::error;
-	}
-#endif
-
-	CanMessageBuffer * const buf2 = CanMessageBuffer::Allocate();
-	if (buf2 == nullptr)
-	{
-		reply.copy("No CAN buffer available");
-		return GCodeResult::error;
-	}
-
-	const CanRequestId rid2 = AllocateRequestId(boardAddress);
-	auto msg2 = buf2->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid2, CanId::MasterAddress, (CanAddress)boardAddress);
-	msg2->boardId = (uint8_t)boardAddress;
-	msg2->invertedBoardId = (uint8_t)~boardAddress;
-	return SendRequestAndGetStandardReply(buf2, rid2, reply);
-}
-
-bool CanInterface::IsFlashing() noexcept
-{
-	return doingFirmwareUpdate;
-}
-
-void CanInterface::UpdateStarting() noexcept
-{
-	doingFirmwareUpdate = true;
-}
-
-void CanInterface::UpdateFinished() noexcept
-{
-	doingFirmwareUpdate = false;
-}
-
-GCodeResult CanInterface::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
-{
-	CheckCanAddress(boardAddress, gb);
-	CanMessageBuffer * const buf = AllocateBuffer(gb);
-	const CanRequestId rid = AllocateRequestId(boardAddress);
-	buf->SetupRequestMessage<CanMessageReset>(rid, CanId::MasterAddress, (uint8_t)boardAddress);
-	return SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
 void CanInterface::WakeCanSender() noexcept

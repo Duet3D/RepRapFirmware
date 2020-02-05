@@ -42,7 +42,8 @@
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanInterface.h"
+# include <CAN/CanInterface.h>
+# include <CAN/ExpansionManager.h>
 #endif
 
 #include <utility>			// for std::swap
@@ -4346,7 +4347,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				const uint32_t address = gb.GetUIValue();
 				if (address != CanId::MasterAddress)
 				{
-					result = CanInterface::ResetRemote(address, gb, reply);
+					result = reprap.GetExpansion().ResetRemote(address, gb, reply);
 					break;
 				}
 			}

@@ -262,6 +262,10 @@ class Display;
 class LinuxInterface;
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+class ExpansionManager;
+#endif
+
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
 #if SAME70
 typedef double floatc_t;						// type of matrix element used for calibration

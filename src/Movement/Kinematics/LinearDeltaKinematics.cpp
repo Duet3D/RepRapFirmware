@@ -616,7 +616,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	}
 
 	reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
-	reprap.GetMove().SetLatestCalibrationDeviation(finalDeviation);
+	reprap.GetMove().SetLatestCalibrationDeviation(finalDeviation, numFactors);
 
 	reply.printf("Calibrated %d factors using %d points, (mean, deviation) before (%.3f, %.3f) after (%.3f, %.3f)",
 			numFactors, numPoints,

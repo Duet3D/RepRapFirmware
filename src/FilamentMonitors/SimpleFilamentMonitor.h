@@ -21,6 +21,9 @@ public:
 	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
 	bool Interrupt() noexcept override;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	void Poll() noexcept;
 

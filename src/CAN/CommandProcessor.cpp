@@ -14,6 +14,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Heating/Heat.h"
+#include "ExpansionManager.h"
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
@@ -111,7 +112,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 								CanInterface::SendResponse(buf);
 
 								reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
-								CanInterface::UpdateFinished();
+								reprap.GetExpansion().UpdateFailed(src);
 								return;
 							}
 							bytesSent = 0;
@@ -129,7 +130,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 				buf->dataLength = msgp->GetActualDataLength();
 				CanInterface::SendResponse(buf);
 				reprap.GetPlatform().MessageF(ErrorMessage, "Firmware file %s not found", fname.c_str());
-				CanInterface::UpdateFinished();
+				reprap.GetExpansion().UpdateFailed(src);
 				return;
 			}
 		}
@@ -178,7 +179,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 							CanInterface::SendResponse(buf);
 
 							reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
-							CanInterface::UpdateFinished();
+							reprap.GetExpansion().UpdateFailed(src);
 							return;
 						}
 						msgp->dataLength = lengthToSend;
@@ -215,11 +216,11 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 			CanInterface::SendResponse(buf);
 
 			reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request for missing file '%s'\n", fname.c_str());
-			CanInterface::UpdateFinished();
+			reprap.GetExpansion().UpdateFailed(src);
 		}
 		else if (fileOffset == fileLength)
 		{
-			CanInterface::UpdateFinished();
+			reprap.GetExpansion().UpdateFinished(src);
 		}
 	}
 	else
@@ -284,7 +285,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			break;
 
 		case CanMessageType::firmwareBlockRequest:
-			HandleFirmwareBlockRequest(buf);		// this one reuses or frees the buffer
+			HandleFirmwareBlockRequest(buf);					// this one reuses or frees the buffer
 			break;
 
 		case CanMessageType::sensorTemperaturesReport:
@@ -300,6 +301,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 		case CanMessageType::fanRpmReport:
 			reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fanRpms);
 			CanMessageBuffer::Free(buf);
+			break;
+
+		case CanMessageType::announce:
+			reprap.GetExpansion().ProcessAnnouncement(buf);		// this one reuses or frees the buffer
 			break;
 
 		case CanMessageType::statusReport:

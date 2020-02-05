@@ -720,7 +720,7 @@ private:
 	Mutex auxMutex;
 #endif
 
-	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
+	OutputStack auxGCodeReply;					// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
 	bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
 
@@ -1009,9 +1009,7 @@ inline void Platform::SetNozzleDiameter(float diameter) noexcept
 
 inline OutputBuffer *Platform::GetAuxGCodeReply() noexcept
 {
-	OutputBuffer *temp = auxGCodeReply;
-	auxGCodeReply = nullptr;
-	return temp;
+	return auxGCodeReply.Pop();
 }
 
 #endif

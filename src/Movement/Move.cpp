@@ -74,13 +74,12 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::live },
-	{ "calibrationDeviation",	OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::none },
-	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
+	{ "calibration",			OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::none },
+	{ "compensation",			OBJECT_MODEL_FUNC(self, 7),																ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 3),																ObjectModelEntryFlags::live },
 	{ "daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::none },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
-	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 1),						ObjectModelEntryFlags::live },
@@ -102,30 +101,35 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed(), 1),										ObjectModelEntryFlags::live },
 	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed(), 1),												ObjectModelEntryFlags::live },
 
-	// 4. move.calibrationDeviation members
+	// 4. move.calibration members
+	{ "finalDeviation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
+	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
+	{ "numFactors",				OBJECT_MODEL_FUNC((int32_t)self->numCalibratedFactors),									ObjectModelEntryFlags::none },
+
+	// 5. move.calibration.finalDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
-	// 5. move.initialDeviation members
+	// 6. move.calibration.initialDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
-	// 6. move.compensation members
+	// 7. move.compensation members
 	{ "file",					OBJECT_MODEL_FUNC_IF(
 									self->usingMesh
 #if HAS_LINUX_INTERFACE
 									&& !reprap.UsingLinuxInterface()
 #endif
 									, self->heightMap.GetFileName()),													ObjectModelEntryFlags::none },
-	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 7),											ObjectModelEntryFlags::none },
+	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 8),											ObjectModelEntryFlags::none },
 	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),									ObjectModelEntryFlags::none },
 
-	// 7. move.compensation.meshDeviation members
+	// 8. move.compensation.meshDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetDeviationFromMean(), 3),					ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 8, 13, 3, 2, 4, 2, 2, 3, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4, 3, 2, 2, 3, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -137,7 +141,8 @@ Move::Move() noexcept
 	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
 	  drcPeriod(0.025),												// 40Hz
 	  drcMinimumAcceleration(10.0),
-	  jerkPolicy(0)
+	  jerkPolicy(0),
+	  numCalibratedFactors(0)
 {
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian

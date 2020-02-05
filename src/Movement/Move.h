@@ -86,7 +86,7 @@ public:
 	bool IsUsingMesh() const noexcept { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const noexcept;						// Return the number of currently used probe points
 	unsigned int GetNumProbedProbePoints() const noexcept;					// Return the number of actually probed probe points
-	void SetLatestCalibrationDeviation(const Deviation& d) { latestCalibrationDeviation = d; }
+	void SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) { latestCalibrationDeviation = d; numCalibratedFactors = numFactors; }
 	void SetInitialCalibrationDeviation(const Deviation& d) { initialCalibrationDeviation = d; }
 	void SetLatestMeshDeviation(const Deviation& d) { latestMeshDeviation = d; }
 
@@ -266,10 +266,10 @@ private:
 	float latestLiveCoordinates[MaxAxesPlusExtruders];
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 
+	uint8_t numCalibratedFactors;
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
-
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	static constexpr size_t LaserTaskStackWords = 100;	// stack size in dwords for the laser and IOBits task

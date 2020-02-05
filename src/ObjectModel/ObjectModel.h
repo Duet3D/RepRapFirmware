@@ -25,6 +25,18 @@ constexpr TypeCode NoType = 0;							// code for an invalid or unknown type
 class Bitmap32;
 class Bitmap64;
 class Enum32;
+
+#if SUPPORT_CAN_EXPANSION
+
+class CanExpansionBoardDetails;
+
+enum class ExpansionDetail : uint32_t
+{
+	shortName, firmwareVersion, firmwareFileName
+};
+
+#endif
+
 class ObjectModel;					// forward declaration
 class ObjectModelArrayDescriptor;	// forward declaration
 
@@ -56,6 +68,10 @@ template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>	() noexc
 template<> constexpr TypeCode TypeOf<DateTime>							() noexcept	{ return 14; }
 template<> constexpr TypeCode TypeOf<DriverId>							() noexcept { return 15; }
 template<> constexpr TypeCode TypeOf<MacAddress>						() noexcept { return 16; }
+
+#if SUPPORT_CAN_EXPANSION
+template<> constexpr TypeCode TypeOf<CanExpansionBoardDetails>			() noexcept { return 17; }
+#endif
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -99,6 +115,9 @@ struct ExpressionValue
 	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type(TYPE_OF(Bitmap<uint32_t>)), param(0), uVal(bm.GetRaw()) { }
 	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type(TYPE_OF(Bitmap<uint64_t>)), param(bm.GetRaw() >> 32), uVal((uint32_t)bm.GetRaw()) { }
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
+#if SUPPORT_CAN_EXPANSION
+	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type(TYPE_OF(CanExpansionBoardDetails)), param((uint32_t)p), sVal(s) { }
+#endif
 
 	void Set(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
 	void Set(char c) noexcept { type = TYPE_OF(char); cVal = c; }
@@ -111,6 +130,10 @@ struct ExpressionValue
 
 	// Get the format string to use assuming this is a floating point number
 	const char *GetFloatFormatString() const noexcept { return ::GetFloatFormatString(param); }
+
+#if SUPPORT_CAN_EXPANSION
+	void ExtractRequestedPart(const StringRef& rslt) pre(type == TYPE_OF(CanExpansionBoardDetails));
+#endif
 };
 
 // Flags field of a table entry
