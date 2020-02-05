@@ -6,10 +6,13 @@ Recommended compatible firmware:
 - DuetWiFiServer 1.23
 - Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
 
-Upgrade notes: none since beta3
+Upgrade notes:
+- Object model variables move.initialDeviation and move.calibrationDeviation are renamed to move.calibration.initialDeviation and move.calibration.finalDeviation. If you use these variables in bed.g or in other macro files then you will need to update those files.
 
 New features:
-- Implemented M952
+- Implemented M952, which is used to set the CAN addresses of tool boards, and exceptionally to alter the CAN bus timing
+- Added expansion boards and filament monitors to the object model
+- Added move.calibration to the object model and added numFactors as a property of it
 
 Bug fixes:
 - The M587 command didn't set up the access point password correctly, resulting in "Wrong password" reports when trying to connect to the access point
