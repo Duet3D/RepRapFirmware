@@ -13,6 +13,8 @@ New features:
 - Implemented M952, which is used to set the CAN addresses of tool boards, and exceptionally to alter the CAN bus timing
 - Added expansion boards and filament monitors to the object model
 - Added move.calibration to the object model and added numFactors as a property of it
+- On Duet 3, increased maximum heaters per tool from 4 to 8, maximum extruders per tool from 6 to 8, maxumum bed heaters from 9 to 12, maximum total heaters to 32 and maximum extra heater protection instances to 32
+- [TODO] in conditional GCode, introduce literal 'null' and allow object-valued OM elements to be compared with null
 
 Bug fixes:
 - The M587 command didn't set up the access point password correctly, resulting in "Wrong password" reports when trying to connect to the access point
