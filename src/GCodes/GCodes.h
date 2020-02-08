@@ -209,6 +209,31 @@ public:
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
+
+	inline float GetRetractExtraRestart(size_t extruder) const noexcept
+	{
+		return retractExtra;
+	}
+
+	inline float GetRetractLength(size_t extruder) const noexcept
+	{
+		return retractLength;
+	}
+
+	inline float GetRetractSpeed(size_t extruder) const noexcept
+	{
+		return retractSpeed;
+	}
+
+	inline float GetUnretractSpeed(size_t extruder) const noexcept
+	{
+		return unRetractSpeed;
+	}
+
+	inline float GetZHop(size_t extruder) const noexcept
+	{
+		return retractHop;
+	}
 #endif
 
 private:

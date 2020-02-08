@@ -459,12 +459,16 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 			}
 			break;
 
-		case 9:
+		case 8:
 			if (doingFile && StringStartsWith(command, "continue"))
 			{
 				ProcessContinueCommand();
 				return true;
 			}
+			break;
+
+		default:
+			break;
 		}
 	}
 

@@ -102,17 +102,17 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed(), 1),												ObjectModelEntryFlags::live },
 
 	// 4. move.calibration members
-	{ "finalDeviation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
-	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
+	{ "final",					OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
+	{ "initial",				OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
 	{ "numFactors",				OBJECT_MODEL_FUNC((int32_t)self->numCalibratedFactors),									ObjectModelEntryFlags::none },
 
-	// 5. move.calibration.finalDeviation members
-	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
-	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
-
-	// 6. move.calibration.initialDeviation members
+	// 5. move.calibration.initialDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
+
+	// 6. move.calibration.finalDeviation members
+	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
+	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
 	// 7. move.compensation members
 	{ "file",					OBJECT_MODEL_FUNC_IF(

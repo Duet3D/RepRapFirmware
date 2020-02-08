@@ -233,7 +233,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
 # endif
 #if HAS_12V_MONITOR
-	{ "v12",				OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC(self, 7),																			ObjectModelEntryFlags::live },
 #endif
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
 
@@ -249,6 +249,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 	// 3. move.axes[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
+	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),		ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_NOSELF(&axisDriversArrayDescriptor),												ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),					ObjectModelEntryFlags::live },
 	{ "jerk",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->GetInstantDv(context.GetLastIndex()), 1),				ObjectModelEntryFlags::none },
@@ -266,14 +267,22 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																			ObjectModelEntryFlags::none },
 	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvance(context.GetLastIndex()), 2),								ObjectModelEntryFlags::none },
+	{ "retraction",			OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::none },
 
 	// 5. move.extruders[].nonlinear members
 	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionA[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
 	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionB[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
 	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusionLimit[context.GetLastIndex()], 2),						ObjectModelEntryFlags::none },
 
+	// 6. move.retraction members
+	{ "extraRestart",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRetractExtraRestart(context.GetLastIndex()), 1),		ObjectModelEntryFlags::none },
+	{ "length",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRetractLength(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
+	{ "speed" ,				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRetractSpeed(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
+	{ "unretractSpeed",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUnretractSpeed(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
+	{ "zHop",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetZHop(context.GetLastIndex()), 2),					ObjectModelEntryFlags::none },
+
 #if HAS_12V_MONITOR
-	// 6. v12 members
+	// 7. v12 members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),												ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max, 1),													ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min, 1),													ObjectModelEntryFlags::none },
@@ -283,15 +292,16 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	6 + HAS_12V_MONITOR,													// number of sections
+	7 + HAS_12V_MONITOR,													// number of sections
 	9 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION,		// section 0: boards[]
 	3,																		// section 1: mcuTemp
 	3,																		// section 2: vIn
-	12,																		// section 3: move.axes[]
-	4,																		// section 4: move.extruders[]
+	13,																		// section 3: move.axes[]
+	5,																		// section 4: move.extruders[]
 	3,																		// section 5: move.extruders[].nonlinear
+	5,																		// section 6: move.extruders[].retraction
 #if HAS_12V_MONITOR
-	3																		// section 6: v12
+	3																		// section 7: v12
 #endif
 };
 
