@@ -819,7 +819,7 @@ void Platform::Exit() noexcept
 
 	// Release all output buffers
 	usbOutput.ReleaseAll();
-	auxOutput.ReleaseAll();
+	auxGCodeReply.ReleaseAll();
 #ifdef SERIAL_AUX2_DEVICE
 	aux2Output.ReleaseAll();
 #endif

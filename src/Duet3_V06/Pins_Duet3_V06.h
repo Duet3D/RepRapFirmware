@@ -73,7 +73,7 @@ constexpr size_t MaxCanBoards = 18;
 
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxBedHeaters = 9;
+constexpr size_t MaxBedHeaters = 12;
 constexpr size_t MaxChamberHeaters = 4;
 constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
 
@@ -89,8 +89,8 @@ constexpr size_t NumDefaultExtruders = 1;			// The number of drivers that we con
 
 constexpr size_t MaxAxesPlusExtruders = 20;			// May be <= MaxAxes + MaxExtruders
 
-constexpr size_t MaxHeatersPerTool = 4;
-constexpr size_t MaxExtrudersPerTool = 6;
+constexpr size_t MaxHeatersPerTool = 8;
+constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
