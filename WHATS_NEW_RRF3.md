@@ -1,4 +1,4 @@
-RepRapFirmware 3.01-beta4 (in preparation)
+RepRapFirmware 3.01-RC1
 =========================
 
 Recommended compatible firmware:
@@ -7,14 +7,15 @@ Recommended compatible firmware:
 - Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
 
 Upgrade notes:
-- Object model variables move.initialDeviation and move.calibrationDeviation are renamed to move.calibration.initialDeviation and move.calibration.finalDeviation. If you use these variables in bed.g or in other macro files then you will need to update those files.
+- Object model variables move.initialDeviation and move.calibrationDeviation are renamed to move.calibration.initial and move.calibration.final. If you use these variables in bed.g or in other macro files then you will need to update those files.
 
 New features:
 - Implemented M952, which is used to set the CAN addresses of tool boards, and exceptionally to alter the CAN bus timing
 - Added expansion boards and filament monitors to the object model
 - Added move.calibration to the object model and added numFactors as a property of it
+- Added move.axes[].babystepping to object model
 - On Duet 3, increased maximum heaters per tool from 4 to 8, maximum extruders per tool from 6 to 8, maxumum bed heaters from 9 to 12, maximum total heaters to 32 and maximum extra heater protection instances to 32
-- [TODO] in conditional GCode, introduce literal 'null' and allow object-valued OM elements to be compared with null
+- In conditional GCode, literal 'null' is now provided. Object-valued OM elements can be compared for equality/inequality with null.
 
 Bug fixes:
 - The M587 command didn't set up the access point password correctly, resulting in "Wrong password" reports when trying to connect to the access point
@@ -22,6 +23,8 @@ Bug fixes:
 - When G32 true bed levelling failed (for example, because the correction required exceeded the limit), the initial and final deviation were left unchanged. Now thay are both set to the initial deviation measured by probing.
 - If the M581 command was used with a T parameter but no P parameter, it reported "missing T parameter".
 - The machine coordinates returned to DWC and in the object model were not updated
+- The 'abort' command stopped printing but didn't reset the state to Idle
+- The 'continue' command was not recognised
 
 RepRapFirmware 3.01-beta3
 =========================
