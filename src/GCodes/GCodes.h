@@ -100,6 +100,7 @@ public:
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
+	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
 	void GetCurrentCoordinates(const StringRef& s) const noexcept;				// Write where we are into a string
 	bool DoingFileMacro() const noexcept;										// Or still busy processing a macro file?
 	FilePosition GetFilePosition() const noexcept;								// Return the current position of the file being printed in bytes
@@ -258,7 +259,6 @@ private:
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(GCodeBuffer& gb) noexcept;								// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;					// Check that enough axes have been homed
-	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
 
 	GCodeResult DoDwell(GCodeBuffer& gb) noexcept;								// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);				// Home some axes

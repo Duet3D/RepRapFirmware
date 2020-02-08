@@ -616,7 +616,7 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 		reply.copy("'abort' command executed");
 	}
 
-	gb.AbortFile(true);
+	reprap.GetGCodes().AbortPrint(gb);
 }
 
 void StringParser::ProcessEchoCommand(const StringRef& reply)
@@ -2048,6 +2048,16 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 					BalanceTypes(val, val2, evaluate);
 					switch (val.type)
 					{
+					case TYPE_OF(const ObjectModel*):
+						{
+							const bool v1Null = (val.omVal == nullptr),
+										v2Null = (val2.omVal == nullptr);
+							val.bVal = (v1Null) ? v2Null
+										: (v2Null) ? false
+											: throw ConstructParseException("cannot compare objects");
+						}
+						break;
+
 					case TYPE_OF(int32_t):
 						val.bVal = (val.iVal == val2.iVal);
 						break;
@@ -2376,6 +2386,11 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 	if (id.Equals("false"))
 	{
 		return ExpressionValue(false);
+	}
+
+	if (id.Equals("null"))
+	{
+		return ExpressionValue((const ObjectModel *)nullptr);
 	}
 
 	if (id.Equals("pi"))

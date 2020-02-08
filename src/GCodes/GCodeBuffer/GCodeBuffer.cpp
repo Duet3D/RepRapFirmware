@@ -629,11 +629,16 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 			if (machineState->DoingFile())
 			{
 #if HAS_MASS_STORAGE
-				fileInput->Reset(machineState->fileState);
+# if HAS_LINUX_INTERFACE
+				if (!reprap.UsingLinuxInterface())
+# endif
+				{
+					fileInput->Reset(machineState->fileState);
+				}
 #endif
 				machineState->CloseFile();
 			}
-		} while (PopState(false) && (!machineState->DoingFile() || abortAll));
+		} while (PopState(false) && (abortAll || !machineState->DoingFile()));
 	}
 
 #if HAS_LINUX_INTERFACE

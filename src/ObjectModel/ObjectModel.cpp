@@ -657,7 +657,11 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, E
 		{
 			return val.omVal->GetObjectValue(context, idString + 1, val.param);
 		}
-		throw context.ConstructParseException((*idString == 0) ? "selected value has non-primitive type" : "syntax error in value selector string");
+		if (*idString == 0)
+		{
+			return val;				// an object value can be compared to null
+		}
+		throw context.ConstructParseException("syntax error in value selector string");
 
 	case TYPE_OF(Bitmap<uint16_t>):
 	case TYPE_OF(Bitmap<uint32_t>):

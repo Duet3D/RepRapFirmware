@@ -95,6 +95,7 @@ void GCodeMachineState::SetFileFinished(bool error) noexcept
 
 #endif
 
+// Return true if we are reading GCode commands from a file or macro
 bool GCodeMachineState::DoingFile() const noexcept
 {
 #if HAS_LINUX_INTERFACE
