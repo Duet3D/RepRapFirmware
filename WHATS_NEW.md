@@ -5,7 +5,7 @@ Version 2.06 (in preparation)
 ============
 Compatible files:
 - DuetWiFiServer 1.23
-- DuetWebControl 2.0.6 (recommended) or 1.22.6
+- DuetWebControl 2.0.7 or 1.22.6
 
 Bug fixes:
 - On delta printers, M564 S0 did not allow you to exceed the M665 print radius parameter
@@ -16,7 +16,7 @@ Version 2.05
 ============
 Compatible files:
 - DuetWiFiServer 1.23
-- DuetWebControl 2.0.4 (recommended) or 1.22.6
+- DuetWebControl 2.0.4 or 1.22.6
 
 Upgrade notes from version 2.04:
 - If using this release to control a laser cutter or laser engraver, see "Changed behaviour" below.
@@ -46,7 +46,7 @@ Version 2.04
 ============
 Compatible files:
 - DuetWiFiServer 1.23
-- DuetWebControl 2.0.4 (recommended) or 1.22.6
+- DuetWebControl 2.0.4 or 1.22.6
 
 Upgrade notes:
 - If using this release to control a laser cutter/engraver, see the notes below on changed handling of the G1 S parameter
