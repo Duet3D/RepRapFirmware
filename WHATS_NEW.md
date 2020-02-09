@@ -1,8 +1,8 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.06 (in preparation)
-============
+Version 2.05.1
+==============
 Compatible files:
 - DuetWiFiServer 1.23
 - DuetWebControl 2.0.7 or 1.22.6
