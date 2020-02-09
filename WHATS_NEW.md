@@ -7,18 +7,10 @@ Compatible files:
 - DuetWiFiServer 1.23
 - DuetWebControl 2.0.6 (recommended) or 1.22.6
 
-Upgrade notes from version 2.05:
-- [TODO] This version uses a different IAP file in order to make direct upgrades to verson 3.01 and later possible. When upgrading, be sure to install the new IAP file too (Duet2CombinedIAP.bin for Duet WiFi/Ethernet, or DuetMaestroIAP.bin for Duet Maestro). Do not delete the old iap4e.bin or iap4s.bin file, you will need it again if you downgrade to 2.05 or earlier.
-
-Changed behaviour:
-- [TODO] It is possible to upgrade directly from this release to 3.01 and later (with appropriate changes to config.g and homing files)
-- [TODO] The maximum step pulse generation rate has been improved
-
 Bug fixes:
 - On delta printers, M564 S0 did not allow you to exceed the M665 print radius parameter
 - Fixed a possible 1-character buffer overflow in class OutputBuffer
 - On tool changers, if the different tools did not have equal XY offsets then G1 X moves in the tpre and tpost tool change files might perform uncommanded Y movement, and vice versa
-- [TODO] When the maximum step rates that the firmware can achieve were exceeded, hiccups were not always inserted to the extent needed
 
 Version 2.05
 ============
@@ -28,6 +20,10 @@ Compatible files:
 
 Upgrade notes from version 2.04:
 - If using this release to control a laser cutter or laser engraver, see "Changed behaviour" below.
+
+Known issues:
+- On delta printers, M564 S0 does not allow you to exceed the M665 print radius parameter
+- On tool changers, if the different tools do not have equal XY offsets then G1 X moves in the tpre and tpost tool change files might perform uncommanded Y movement, and vice versa. Workaround: insert command M400 at the start of each tpre and tpost file.
 
 Changed behaviour:
 - In laser mode (M453), M3 never turns on the laser immediately. Instead it sets the default laser power for following G1/G2/G3 commands. Likewise, M5 does not immediately turn off the laser, it sets the default laser power for following G1/G2/G3 commands. If a subsequent G1 command has a S parameter, the value of that parameter becomes the default laser power for that command and subsequent G1/G2/G3 commands.
