@@ -1,5 +1,22 @@
+RepRapFirmware 3.01-RC2 (in preparation)
+=======================
+
+Recommended compatible firmware:
+- DuetWebControl 2.07
+- DuetWiFiServer 1.23
+- Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
+
+Upgrade notes: none since 3.01-RC1
+
+New features:
+- Object model state.previousTool is added. It is the tool number that was active at the start of the last T command that caused a tool change (or implied T command caused by executing M109), or -1 if no tool was active.
+
+Bug fixes:
+- Round-robin scheduling of GCode input sources has been restored so that no channel can monpolise the motion system
+- On some Duet 3 boards, axes were not flagged as homed when VIN power was lost but 5V power remained
+
 RepRapFirmware 3.01-RC1
-=========================
+=======================
 
 Recommended compatible firmware:
 - DuetWebControl 2.07
