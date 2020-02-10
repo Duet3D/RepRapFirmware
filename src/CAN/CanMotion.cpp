@@ -22,7 +22,7 @@ static size_t driversToStopIndexBeingFilled = 0;
 static size_t indexOfNextDriverToStop = 0;
 static volatile bool stopAllFlag = false;
 static bool doingStopAll = false;
-static LargeBitmap<CanId::MaxNormalAddress + 1> boardsActiveInLastMove;
+static LargeBitmap<CanId::MaxCanAddress + 1> boardsActiveInLastMove;
 
 void CanMotion::Init() noexcept
 {

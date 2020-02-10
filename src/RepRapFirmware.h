@@ -129,7 +129,7 @@ struct DriverId
 	{
 		localDriver = val & 0x000000FF;
 		const uint32_t brdNum = val >> 16;
-		boardAddress = (brdNum <= CanId::MaxNormalAddress) ? (CanAddress)brdNum : CanId::NoAddress;
+		boardAddress = (brdNum <= CanId::MaxCanAddress) ? (CanAddress)brdNum : CanId::NoAddress;
 	}
 
 	void SetLocal(unsigned int driver) noexcept

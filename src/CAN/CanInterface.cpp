@@ -843,7 +843,7 @@ pre(driver.IsRemote())
 }
 
 // Handle M915 for a collection of remote drivers
-GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf)
 {
 	size_t start = 0;
 	for (;;)
@@ -858,7 +858,15 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 		CanMessageGenericConstructor cons(M915Params);
 		cons.AddUParam('d', driverBits.GetRaw());
 		cons.PopulateFromCommand(gb);
+		if (buf != nullptr)
+		{
+			reply.Clear();
+		}
 		const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::m915, boardAddress, reply);
+		if (buf != nullptr)
+		{
+			buf->lcat(reply.c_str());
+		}
 		if (rslt != GCodeResult::ok)
 		{
 			return rslt;
