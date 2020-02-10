@@ -205,6 +205,8 @@ void GCodes::Reset() noexcept
 		auxGCode->SetCommsProperties(1);				// by default, we require a checksum on the aux port
 	}
 
+	nextGcodeSource = 0;
+
 #if HAS_MASS_STORAGE
 	fileToPrint.Close();
 #endif
@@ -383,44 +385,52 @@ void GCodes::Spin() noexcept
 	CheckHeaterFault();
 	CheckFilament();
 
-	// Perform the next G-code(s)
-	String<GCodeReplyLength> reply;
-	for (GCodeBuffer *gbp : gcodeSources)
+	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
+	GCodeBuffer *gbp = autoPauseGCode;
+	if (gbp->IsCompletelyIdle() && !(gbp->MachineState().fileState.IsLive()))	// if autoPause is not active
 	{
-		if (gbp != nullptr)
+		do
 		{
-			GCodeBuffer& gb = *gbp;
-			reply.Clear();
-
-			if (gb.GetState() == GCodeState::normal)
+			gbp = gcodeSources[nextGcodeSource];
+			++nextGcodeSource;										// move on to the next gcode source ready for next time
+			if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)	// the last one is autoPauseGCode, so don't do it again
 			{
-				if (gb.MachineState().messageAcknowledged)
-				{
-					const bool wasCancelled = gb.MachineState().messageCancelled;
-					gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+				nextGcodeSource = 0;
+			}
+		} while (gbp == nullptr);									// we must have at least one GCode source, so this can't loop indefinitely
+	}
+	GCodeBuffer& gb = *gbp;
 
-					if (wasCancelled)
-					{
-						if (gb.MachineState().previous == nullptr)
-						{
-							StopPrint(StopPrintReason::userCancelled);
-						}
-						else
-						{
-							FileMacroCyclesReturn(gb);
-						}
-					}
+	// Set up a buffer for the reply
+	String<GCodeReplyLength> reply;
+
+	if (gb.GetState() == GCodeState::normal)
+	{
+		if (gb.MachineState().messageAcknowledged)
+		{
+			const bool wasCancelled = gb.MachineState().messageCancelled;
+			gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+
+			if (wasCancelled)
+			{
+				if (gb.MachineState().previous == nullptr)
+				{
+					StopPrint(StopPrintReason::userCancelled);
 				}
 				else
 				{
-					StartNextGCode(gb, reply.GetRef());
+					FileMacroCyclesReturn(gb);
 				}
 			}
-			else
-			{
-				RunStateMachine(gb, reply.GetRef());                            // execute the state machine
-			}
 		}
+		else
+		{
+			StartNextGCode(gb, reply.GetRef());
+		}
+	}
+	else
+	{
+		RunStateMachine(gb, reply.GetRef());                            // execute the state machine
 	}
 
 	// Check if we need to display a warning

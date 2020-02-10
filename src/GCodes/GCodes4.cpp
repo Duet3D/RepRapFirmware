@@ -227,6 +227,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		doingToolChange = true;
 		SaveFanSpeeds();
 		SavePosition(toolChangeRestorePoint, gb);
+		reprap.SetPreviousToolNumber();
 		gb.AdvanceState();
 		if ((gb.MachineState().toolChangeParam & TFreeBit) != 0)
 		{

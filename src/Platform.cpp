@@ -1026,6 +1026,7 @@ void Platform::Spin() noexcept
 			driversPowered = false;
 			++numVinOverVoltageEvents;
 			lastVinOverVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
+			reprap.GetGCodes().SetAllAxesNotHomed();
 		}
 # endif
 		else
@@ -1037,6 +1038,7 @@ void Platform::Spin() noexcept
 			driversPowered = false;
 			++numV12UnderVoltageEvents;
 			lastV12UnderVoltageValue = currentV12;					// save this because the voltage may have changed by the time we report it
+			reprap.GetGCodes().SetAllAxesNotHomed();
 		}
 		else
 #endif

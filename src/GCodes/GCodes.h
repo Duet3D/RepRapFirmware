@@ -429,6 +429,8 @@ private:
 	GCodeBuffer*& spiGCode = gcodeSources[8];
 	GCodeBuffer*& autoPauseGCode = gcodeSources[9];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
 
+	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
+
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 
 	MachineType machineType;					// whether FFF, laser or CNC

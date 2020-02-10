@@ -172,11 +172,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	// 1. MachineModel.state
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 9, 4 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 9, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
@@ -193,6 +194,7 @@ RepRap::RepRap() noexcept
 	  activeExtruders(0), activeToolHeaters(0), numToolsToReport(0),
 	  ticksInSpinState(0), heatTaskIdleTicks(0), debug(0),
 	  beepFrequency(0), beepDuration(0),
+	  previousToolNumber(-1),
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
 	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
 #if HAS_LINUX_INTERFACE
