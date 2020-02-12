@@ -138,8 +138,7 @@ ReadLockedPointer<Heater> Heat::FindHeater(int heater) const noexcept
 // Process M307
 GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 {
-	gb.MustSee('H');
-	const unsigned int heater = gb.GetUIValue();
+	const unsigned int heater = gb.GetLimitedUIValue('H', MaxHeaters);
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
@@ -893,7 +892,7 @@ GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, cons
 }
 
 // Process M303
-GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (gb.Seen('H'))
 	{
@@ -901,10 +900,8 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply)
 		const auto h = FindHeater(heater);
 		if (h.IsNotNull())
 		{
-			const float temperature = (gb.Seen('S')) ? gb.GetFValue()
-										: reprap.GetHeat().IsBedHeater(heater) ? 75.0
-										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
-										: 200.0;
+			gb.MustSee('S');
+			const float temperature = gb.GetFValue();
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : h->GetModel().GetMaxPwm();
 			if (!h->CheckGood())
 			{

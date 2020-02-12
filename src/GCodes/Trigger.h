@@ -9,15 +9,12 @@
 #define SRC_GCODES_TRIGGER_H_
 
 #include "RepRapFirmware.h"
+#include "GCodeResult.h"
 #include "Hardware/IoPorts.h"
 
-typedef Bitmap<uint32_t> TriggerNumbersBitmap;					// Bitmap of trigger numbers
-typedef Bitmap<uint16_t> TriggerInputStatesBitmap;				// Bitmap of input states
-static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits(), "need larger TriggerNumbersBitmap type");
-static_assert(MaxPortsPerTrigger <= TriggerInputStatesBitmap::MaxBits(), "need larger TriggerInputStatesBitmap");
-
-struct Trigger
+class Trigger
 {
+public:
 	Trigger() noexcept;
 
 	void Init() noexcept;
@@ -28,10 +25,18 @@ struct Trigger
 	// Check whether this trigger is active and update the input states
 	bool Check() noexcept;
 
-	IoPort ports[MaxPortsPerTrigger];
-	TriggerInputStatesBitmap inputStates;
-	uint8_t condition;
-};
+	// Handle M581 for this trigger
+	GCodeResult Configure(unsigned int number, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
+	// Handle M582 for this trigger
+	bool CheckLevel() noexcept;
+
+private:
+	static void AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs, const StringRef& reply) noexcept;
+
+	AxesBitmap highLevelEndstops, lowLevelEndstops, endstopStates;
+	InputPortsBitmap highLevelInputs, lowLevelInputs, inputStates;
+	int8_t condition;
+};
 
 #endif /* SRC_GCODES_TRIGGER_H_ */

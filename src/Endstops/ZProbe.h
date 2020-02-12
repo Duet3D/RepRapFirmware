@@ -73,7 +73,6 @@ protected:
 		struct
 		{
 			uint16_t maxTaps : 5,			// maximum probes at each point
-				invertReading : 1,			// true if we need to invert the reading
 				probingAway : 1,			// true if we are probing away, i.e. until contact lost
 				turnHeatersOff : 1,			// true to turn heaters off while probing
 				saveToConfigOverride : 1;	// true if the trigger height should be saved to config-override.g

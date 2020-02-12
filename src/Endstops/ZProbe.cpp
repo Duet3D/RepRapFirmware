@@ -89,7 +89,7 @@ void ZProbe::SetDefaults() noexcept
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
 	misc.parts.maxTaps = DefaultZProbeTaps;
-	misc.parts.invertReading = misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = misc.parts.probingAway = false;
+	misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = misc.parts.probingAway = false;
 	type = ZProbeType::none;
 	sensor = -1;
 }
@@ -160,7 +160,7 @@ int ZProbe::GetReading() const noexcept
 		}
 	}
 
-	return (misc.parts.invertReading) ? 1000 - zProbeVal : zProbeVal;
+	return zProbeVal;
 }
 
 int ZProbe::GetSecondaryValues(int& v1) const noexcept
@@ -337,12 +337,6 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 		seen = true;
 	}
 
-	if (gb.Seen('I'))
-	{
-		misc.parts.invertReading = (gb.GetIValue() != 0);
-		seen = true;
-	}
-
 	if (gb.Seen('B'))
 	{
 		misc.parts.turnHeatersOff = (gb.GetIValue() == 1);
@@ -365,8 +359,8 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 
 	reply.printf("Z Probe %u: type %u", number, (unsigned int)type);
 	const GCodeResult rslt = AppendPinNames(reply);
-	reply.catf(", invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
-					(misc.parts.invertReading) ? "yes" : "no", (double)diveHeight,
+	reply.catf(", dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
+					(double)diveHeight,
 					(int)(probeSpeed * MinutesToSeconds), (int)(travelSpeed * MinutesToSeconds),
 					(double)recoveryTime,
 					(misc.parts.turnHeatersOff) ? "suspended" : "normal",

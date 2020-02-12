@@ -307,11 +307,14 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Platform)
 
-// This is called by the OMT in class RepRap to get the size of the Boards array
-// For now only main board data is returned
-size_t Platform::GetNumBoards() const noexcept
+size_t Platform::GetNumInputsToReport() const noexcept
 {
-	return 1;
+	size_t ret = MaxGpInPorts;
+	while (ret != 0 && gpinPorts[ret - 1].IsUnused())
+	{
+		--ret;
+	}
+	return ret;
 }
 
 #endif
@@ -724,8 +727,7 @@ void Platform::Init() noexcept
 	// Setup the LED ports as GPIO ports
 	for (size_t i = 0; i < ARRAY_SIZE(DefaultGpioPinNames); ++i)
 	{
-		String<1> dummy;
-		gpioPorts[i].port.AssignPort(DefaultGpioPinNames[i], dummy.GetRef(), PinUsedBy::gpio, PinAccess::pwm);
+		gpoutPorts[i].Assign(DefaultGpioPinNames[i]);
 	}
 #endif
 
@@ -3283,7 +3285,7 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 #if HAS_MASS_STORAGE
 
 // Configure logging according to the M929 command received, returning true if error
-GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (gb.Seen('S'))
 	{
@@ -3965,7 +3967,7 @@ float Platform::GetTmcDriversTemperature(unsigned int board) const noexcept
 #if HAS_STALL_DETECT
 
 // Configure the motor stall detection, returning true if an error was encountered
-GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf)
+GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException)
 {
 	// Build a bitmap of all the drivers referenced
 	// First looks for explicit driver numbers
@@ -4121,7 +4123,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 	}
 
 	drivers.Iterate
-		([buf, this, reply](unsigned int drive, bool) noexcept
+		([buf, this, &reply](unsigned int drive, bool) noexcept
 			{
 #if SUPPORT_CAN_EXPANSION
 				buf->lcatf("Driver 0.%u: ", drive);
@@ -4168,12 +4170,12 @@ bool Platform::SetDateTime(time_t time) noexcept
 }
 
 // Configure an I/O port
-GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Exactly one of FHPS is allowed
+	// Exactly one of FHJPS is allowed
 	unsigned int charsPresent = 0;
 	uint32_t deviceNumber = 0;
-	for (char c : (const char[]){'F', 'H', 'P', 'S'})
+	for (char c : (const char[]){'J', 'F', 'H', 'P', 'S'})
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
@@ -4186,10 +4188,10 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 	switch (charsPresent)
 	{
 	case 1:
-		return ConfigureGpioOrServo(deviceNumber, true, gb, reply);
+		return ConfigureGpOutOrServo(deviceNumber, true, gb, reply);
 
 	case 2:
-		return ConfigureGpioOrServo(deviceNumber, false, gb, reply);
+		return ConfigureGpOutOrServo(deviceNumber, false, gb, reply);
 
 	case 4:
 		return reprap.GetHeat().ConfigureHeater(deviceNumber, gb, reply);
@@ -4197,110 +4199,59 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 	case 8:
 		return reprap.GetFansManager().ConfigureFanPort(deviceNumber, gb, reply);
 
+	case 16:
+		return ConfigureGpIn(deviceNumber, gb, reply);
+
 	default:
-		reply.copy("exactly one of FHPS must be given");
+		reply.copy("exactly one of FHJPS must be given");
 		return GCodeResult::error;
 	}
 }
 
-GCodeResult Platform::ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply)
+// Configure a general purpose output pin
+GCodeResult Platform::ConfigureGpOutOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (gpioNumber < MaxGpioPorts)
+	if (gpioNumber < MaxGpOutPorts)
 	{
-		PwmFrequency freq = 0;
-		const bool seenFreq = gb.Seen('Q');
-		if (seenFreq)
-		{
-			freq = gb.GetPwmFrequency();
-		}
-
-		GpOutputPort& gpPort = gpioPorts[gpioNumber];
-		if (gb.Seen('C'))
-		{
-			String<StringLength50> pinName;
-			gb.GetReducedString(pinName.GetRef());
-
-			// Remove any existing assignment
-#if SUPPORT_CAN_EXPANSION
-			if (gpPort.boardAddress != CanId::MasterAddress)
-			{
-				CanMessageGenericConstructor cons(M950GpioParams);
-				cons.AddUParam('P', gpioNumber);
-				cons.AddStringParam('C', NoPinName);
-				if (cons.SendAndGetResponse(CanMessageType::m950Gpio, gpPort.boardAddress, reply) != GCodeResult::ok)
-				{
-					reprap.GetPlatform().Message(WarningMessage, reply.c_str());
-					reply.Clear();
-				}
-				gpPort.boardAddress = CanId::MasterAddress;
-			}
-#endif
-			gpPort.port.Release();
-
-			if (!seenFreq)
-			{
-				freq = (isServo) ? ServoRefreshFrequency : DefaultPinWritePwmFreq;
-			}
-
-#if SUPPORT_CAN_EXPANSION
-			gpPort.boardAddress = IoPort::RemoveBoardAddress(pinName.GetRef());
-			if (gpPort.boardAddress != CanId::MasterAddress)
-			{
-				CanMessageGenericConstructor cons(M950GpioParams);
-				cons.AddUParam('P', gpioNumber);
-				cons.AddUParam('Q', freq);
-				cons.AddUParam('S', (isServo) ? 1 : 0);
-				cons.AddStringParam('C', pinName.c_str());
-				return cons.SendAndGetResponse(CanMessageType::m950Gpio, gpPort.boardAddress, reply);
-			}
-#endif
-			if (!gpPort.port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpio, (isServo) ? PinAccess::servo : PinAccess::pwm))
-			{
-				return GCodeResult::error;
-			}
-			gpPort.port.SetFrequency(freq);
-		}
-		else if (seenFreq)
-		{
-#if SUPPORT_CAN_EXPANSION
-			if (gpPort.boardAddress != CanId::MasterAddress)
-			{
-				CanMessageGenericConstructor cons(M950GpioParams);
-				cons.AddUParam('P', gpioNumber);
-				cons.AddUParam('Q', freq);
-				return cons.SendAndGetResponse(CanMessageType::m950Gpio, gpPort.boardAddress, reply);
-			}
-#endif
-			gpPort.port.SetFrequency(freq);
-		}
-		else
-		{
-#if SUPPORT_CAN_EXPANSION
-			if (gpPort.boardAddress != CanId::MasterAddress)
-			{
-				CanMessageGenericConstructor cons(M950GpioParams);
-				cons.AddUParam('P', gpioNumber);
-				return cons.SendAndGetResponse(CanMessageType::m950Gpio, gpPort.boardAddress, reply);
-			}
-#endif
-			reply.printf("GPIO/servo port %" PRIu32, gpioNumber);
-			gpPort.port.AppendDetails(reply);
-		}
-		return GCodeResult::ok;
+		return gpoutPorts[gpioNumber].Configure(gpioNumber, isServo, gb, reply);
 	}
 
 	reply.copy("GPIO port number out of range");
 	return GCodeResult::error;
 }
 
+// Configure a general purpose input pin
+GCodeResult Platform::ConfigureGpIn(uint32_t gpinNumber, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (gpinNumber < MaxGpInPorts)
+	{
+		return gpinPorts[gpinNumber].Configure(gpinNumber, gb, reply);
+	}
+
+	reply.copy("GPIO port number out of range");
+	return GCodeResult::error;
+}
+
+#if SUPPORT_CAN_EXPANSION
+
+void Platform::HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept
+{
+	if (handleMajor < MaxGpInPorts)
+	{
+		gpinPorts[handleMajor].SetState(src, state);
+	}
+}
+
+#endif
+
 // Configure the ancillary PWM
-GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		if (!extrusionAncilliaryPwmPort.AssignPort(gb, reply, PinUsedBy::gpio, PinAccess::pwm))
+		if (!extrusionAncilliaryPwmPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::pwm))
 		{
 			return GCodeResult::error;
 		}

@@ -244,7 +244,7 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 	for (unsigned int i = 0; i < msg.numHandles; ++i)
 	{
 		const RemoteInputHandle handle(msg.handles[i]);
-		const bool state = (msg.states & (1 << i)) != 0;
+		const bool state = (msg.states & (1u << i)) != 0;
 		switch (handle.u.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
@@ -252,8 +252,10 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 			endstopStatesChanged = true;
 			break;
 
-		case RemoteInputHandle::typeTrigger:
-			//TODO see if any triggers are waiting for this state change
+		case RemoteInputHandle::typeGpIn:
+			reprap.GetPlatform().HandleRemoteGpInChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			break;
+
 		default:
 			break;
 		}

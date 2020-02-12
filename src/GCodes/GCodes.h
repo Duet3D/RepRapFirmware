@@ -362,8 +362,8 @@ private:
 #endif
 	void ClearBedMapping();														// Stop using bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);				// Start probing the grid, returning true if we didn't because of an error
-	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code);	// Handle M581
-	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply, int code);		// Handle M582
+	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply);		// Handle M581
+	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply);			// Handle M582
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261

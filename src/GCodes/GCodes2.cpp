@@ -455,13 +455,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case 3: // Spin spindle clockwise
 			{
-				const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
-				if (slot >= MaxSpindles && machineType == MachineType::cnc)
-				{
-					reply.copy("Invalid spindle index");
-					result = GCodeResult::error;
-				}
-				else if (gb.Seen('S'))
+				const uint32_t slot = gb.Seen('P') ? gb.GetLimitedUIValue('P', MaxSpindles) : 0;
+				if (gb.Seen('S'))
 				{
 					switch (machineType)
 					{
@@ -506,26 +501,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 
 		case 4: // Spin spindle counter clockwise
-			if (gb.Seen('S'))
+			if (machineType == MachineType::cnc)
 			{
-				if (machineType == MachineType::cnc)
-				{
-					const float rpm = gb.GetFValue();
-					const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
-					if (slot >= MaxSpindles)
-					{
-						reply.copy("Invalid spindle index");
-						result = GCodeResult::error;
-					}
-					else
-					{
-						platform.AccessSpindle(slot).SetRpm(-rpm);
-					}
-				}
-				else
-				{
-					result = GCodeResult::notSupportedInCurrentMode;
-				}
+				gb.MustSee('S');
+				const float rpm = gb.GetFValue();
+				const uint32_t slot = (gb.Seen('P')) ? gb.GetLimitedUIValue('P', MaxSpindles) : 0;
+				platform.AccessSpindle(slot).SetRpm(-rpm);
+			}
+			else
+			{
+				result = GCodeResult::notSupportedInCurrentMode;
 			}
 			break;
 
@@ -536,16 +521,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen('P'))
 				{
 					// Turn off specific spindle
-					const uint32_t slot = gb.GetUIValue();
-					if (slot >= MaxSpindles)
-					{
-						reply.copy("Invalid spindle index");
-						result = GCodeResult::error;
-					}
-					else
-					{
-						platform.AccessSpindle(slot).TurnOff();
-					}
+					const uint32_t slot = gb.GetLimitedUIValue('P', MaxSpindles);
+					platform.AccessSpindle(slot).TurnOff();
 				}
 				else
 				{
@@ -912,13 +889,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #if HAS_MASS_STORAGE
 		case 26: // Set SD position
 			// This is used between executing M23 to set up the file to print, and M25 to print it
-			if (gb.Seen('S'))
-			{
-				fileOffsetToPrint = (FilePosition)gb.GetUIValue();
-				restartMoveFractionDone = (gb.Seen('P')) ? constrain<float>(gb.GetFValue(), 0.0, 1.0) : 0.0;
-				restartInitialUserX = (gb.Seen('X')) ? gb.GetFValue() : 0.0;
-				restartInitialUserY = (gb.Seen('Y')) ? gb.GetFValue() : 0.0;
-			}
+			gb.MustSee('S');
+			fileOffsetToPrint = (FilePosition)gb.GetUIValue();
+			restartMoveFractionDone = (gb.Seen('P')) ? constrain<float>(gb.GetFValue(), 0.0, 1.0) : 0.0;
+			restartInitialUserX = (gb.Seen('X')) ? gb.GetFValue() : 0.0;
+			restartInitialUserY = (gb.Seen('Y')) ? gb.GetFValue() : 0.0;
 			break;
 
 		case 27: // Report print status - Deprecated
@@ -1117,30 +1092,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 		case 42:	// Turn an output pin on or off
-			if (gb.Seen('P'))
 			{
-				const uint32_t gpioPortNumber = gb.GetUIValue();
-				if (gpioPortNumber < MaxGpioPorts)
-				{
-					if (gb.Seen('S'))
-					{
-						const float val = gb.GetPwmValue();
-						const GpOutputPort& gpPort = platform.GetGpioPort(gpioPortNumber);
-#if SUPPORT_CAN_EXPANSION
-						if (gpPort.boardAddress != CanId::MasterAddress)
-						{
-							result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, val, false, gb, reply);
-							break;
-						}
-#endif
-						gpPort.port.WriteAnalog(val);
-					}
-				}
-				else
-				{
-					reply.printf("Invalid gpio port %" PRIu32, gpioPortNumber);
-					result = GCodeResult::error;
-				}
+				const uint32_t gpioPortNumber = gb.GetLimitedUIValue('P', MaxGpOutPorts);
+				gb.MustSee('S');
+				result = platform.GetGpioPort(gpioPortNumber).WriteAnalog(gpioPortNumber, false, gb.GetPwmValue(), gb, reply);
 			}
 			break;
 
@@ -1233,16 +1188,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 
 		case 98: // Call Macro/Subprogram
-			if (gb.Seen('P'))
 			{
+				gb.MustSee('P');
+				String<MaxFilenameLength> filename;
+				gb.GetPossiblyQuotedString(filename.GetRef());
 #if HAS_LINUX_INTERFACE
 				if (reprap.UsingLinuxInterface())
 				{
 					gb.SetState(GCodeState::doingUserMacro);
 				}
 #endif
-				String<MaxFilenameLength> filename;
-				gb.GetPossiblyQuotedString(filename.GetRef());
 				DoFileMacro(gb, filename.c_str(), true, code);
 			}
 			break;
@@ -1632,6 +1587,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case 118:	// Echo message on host
 			{
+				gb.MustSee('S');
+				String<GCODE_LENGTH> message;
+				gb.GetQuotedString(message.GetRef());
+
 				MessageType type = GenericMessage;
 				if (gb.Seen('P'))
 				{
@@ -1660,10 +1619,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 				}
 
-				if (result != GCodeResult::error && gb.Seen(('S')))
+				if (result != GCodeResult::error)
 				{
-					String<GCODE_LENGTH> message;
-					gb.GetQuotedString(message.GetRef());
 					if (type != HttpMessage)
 					{
 						platform.Message((MessageType)(type | PushFlag), message.c_str());
@@ -1722,13 +1679,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				bool seen = false;
 
 				// Check if the heater index is passed
-				int index = gb.Seen('P') ? gb.GetIValue() : 0;
-				if (index < 0 || index >= (int)((code == 140) ? MaxBedHeaters : MaxChamberHeaters))
-				{
-					reply.printf("Invalid heater index '%d'", index);
-					result = GCodeResult::error;
-					break;
-				}
+				const unsigned int index = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
 
 				// See if the heater number is being set
 				if (gb.Seen('H'))
@@ -1823,14 +1774,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case 144: // Set bed to standby, or to active if S1 parameter given
 			{
-				const unsigned int index = gb.Seen('P') ? gb.GetUIValue() : 0;
-				if (index >= MaxBedHeaters)
-				{
-					reply.printf("Invalid bed heater index '%u'", index);
-					result = GCodeResult::error;
-					break;
-				}
-
+				const unsigned int index = gb.Seen('P') ? gb.GetLimitedUIValue('P', MaxBedHeaters) : 0;
 				const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 				if (bedHeater >= 0)
 				{
@@ -1864,14 +1808,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			UnlockMovement(gb);									// allow babystepping and pausing while heating
 			{
 				// Check if the heater index is passed
-				const uint32_t index = gb.Seen('P') ? gb.GetUIValue() : 0;
-				if (index >= ((code == 190) ? MaxBedHeaters : MaxChamberHeaters))
-				{
-					reply.printf("Invalid heater index '%" PRIu32 "'", index);
-					result = GCodeResult::error;
-					break;
-				}
-
+				const uint32_t index = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 190) ? MaxBedHeaters : MaxChamberHeaters) : 0;
 				const int8_t heater = (code == 191) ? reprap.GetHeat().GetChamberHeater(index) : reprap.GetHeat().GetBedHeater(index);
 				if (heater >= 0)
 				{
@@ -2141,14 +2078,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			break;
 
-		case 210: // Set/print homing feed rates
-			// This is no longer used, but for backwards compatibility we don't report an error
-			break;
-
 		case 220:	// Set/report speed factor override percentage
 			if (gb.Seen('S'))
 			{
-				float newSpeedFactor = gb.GetFValue();
+				const float newSpeedFactor = gb.GetFValue();
 				if (newSpeedFactor >= 1.0)
 				{
 					// Update the feed rate for ALL input sources, and all feed rates on the stack
@@ -2180,15 +2113,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Speed factor override: %.1f%%", (double)speedFactor);
+				reply.printf("Speed factor: %.1f%%", (double)speedFactor);
 			}
 			break;
 
 		case 221:	// Set/report extrusion factor override percentage
 			{
-				uint32_t extruder;
-				bool seenD = false;
-				gb.TryGetUIValue('D', extruder, seenD);
+				uint32_t extruder = 0;
+				const bool seenD = gb.Seen('D');
+				if (seenD)
+				{
+					extruder = gb.GetLimitedUIValue('D', numExtruders);
+				}
 
 				const Tool * const ct = reprap.GetCurrentTool();
 				if (!seenD && ct == nullptr)
@@ -2203,10 +2139,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						if (seenD)
 						{
-							if (extruder < numExtruders)
-							{
-								ChangeExtrusionFactor(extruder, extrusionFactor);
-							}
+							ChangeExtrusionFactor(extruder, extrusionFactor);
 						}
 						else
 						{
@@ -2216,7 +2149,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 				else if (seenD)
 				{
-					reply.printf("Extrusion factor override for extruder %" PRIu32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
+					reply.printf("Extrusion factor for extruder %" PRIu32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
 				}
 				else
 				{
@@ -2237,47 +2170,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 
 		case 280:	// Servos
-			if (gb.Seen('P'))
 			{
-				const uint32_t gpioPortNumber = gb.GetUIValue();
-				if (gpioPortNumber < MaxGpioPorts)
+				const uint32_t gpioPortNumber = gb.GetLimitedUIValue('P', MaxGpOutPorts);
+				gb.MustSee('S');
+				float angleOrWidth = gb.GetFValue();
+				if (angleOrWidth < 0.0)
 				{
-					if (gb.Seen('S'))
-					{
-						float angleOrWidth = gb.GetFValue();
-						if (angleOrWidth < 0.0)
-						{
-							// Disable the servo by setting the pulse width to zero
-							angleOrWidth = 0.0;
-						}
-						else if (angleOrWidth < MinServoPulseWidth)
-						{
-							// User gave an angle so convert it to a pulse width in microseconds
-							angleOrWidth = (min<float>(angleOrWidth, 180.0) * ((MaxServoPulseWidth - MinServoPulseWidth) / 180.0)) + MinServoPulseWidth;
-						}
-						else if (angleOrWidth > MaxServoPulseWidth)
-						{
-							angleOrWidth = MaxServoPulseWidth;
-						}
+					// Disable the servo by setting the pulse width to zero
+					angleOrWidth = 0.0;
+				}
+				else if (angleOrWidth < MinServoPulseWidth)
+				{
+					// User gave an angle so convert it to a pulse width in microseconds
+					angleOrWidth = (min<float>(angleOrWidth, 180.0) * ((MaxServoPulseWidth - MinServoPulseWidth) / 180.0)) + MinServoPulseWidth;
+				}
+				else if (angleOrWidth > MaxServoPulseWidth)
+				{
+					angleOrWidth = MaxServoPulseWidth;
+				}
 
-						const GpOutputPort& gpPort = platform.GetGpioPort(gpioPortNumber);
-						const float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
-#if SUPPORT_CAN_EXPANSION
-						if (gpPort.boardAddress != CanId::MasterAddress)
-						{
-							result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, pwm, true, gb, reply);
-							break;
-						}
-#endif
-						gpPort.port.WriteAnalog(pwm);
-					}
-					// We don't currently allow the servo position to be read back
-				}
-				else
-				{
-					reply.printf("Invalid gpio port %" PRIu32, gpioPortNumber);
-					result = GCodeResult::error;
-				}
+				const float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
+				result = platform.GetGpioPort(gpioPortNumber).WriteAnalog(gpioPortNumber, true, pwm, gb, reply);
 			}
 			break;
 
@@ -2352,65 +2265,63 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case 291:	// Display message, optionally wait for acknowledgement
 			{
-				bool seen = false;
-				String<MaxMessageLength> title;
-				gb.TryGetQuotedString('R', title.GetRef(), seen);
-
+				gb.MustSee('P');
 				String<MaxMessageLength> message;
-				gb.TryGetQuotedString('P', message.GetRef(), seen);
+				gb.GetQuotedString(message.GetRef());
 
-				if (seen)
+				bool dummy = false;
+				String<MaxMessageLength> title;
+				gb.TryGetQuotedString('R', title.GetRef(), dummy);
+
+				int32_t sParam = 1;
+				gb.TryGetIValue('S', sParam, dummy);
+				if (sParam < 0 || sParam > 3)
 				{
-					int32_t sParam = 1;
-					gb.TryGetIValue('S', sParam, seen);
-					if (sParam < 0 || sParam > 3)
-					{
-						reply.copy("Invalid message box mode");
-						result = GCodeResult::error;
-						break;
-					}
-
-					float tParam;
-					if (sParam == 0 || sParam == 1)
-					{
-						tParam = DefaultMessageTimeout;
-						gb.TryGetFValue('T', tParam, seen);
-					}
-					else
-					{
-						tParam = 0.0;
-					}
-
-					if (sParam == 0 && tParam <= 0.0)
-					{
-						reply.copy("Attempt to create a message box that cannot be dismissed");
-						result = GCodeResult::error;
-						break;
-					}
-
-					AxesBitmap axisControls;
-					for (size_t axis = 0; axis < numTotalAxes; axis++)
-					{
-						if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
-						{
-							axisControls.SetBit(axis);
-						}
-					}
-
-					// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
-
-					// If we need to wait for an acknowledgement, save the state and set waiting
-					if ((sParam == 2 || sParam == 3) && Push(gb, true))					// stack the machine state including the file position
-					{
-						UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
-						gb.MachineState().CloseFile();									// stop reading from file
-						gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
-					}
-
-					// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
-					const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
-					platform.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls);
+					reply.copy("Invalid message box mode");
+					result = GCodeResult::error;
+					break;
 				}
+
+				float tParam;
+				if (sParam == 0 || sParam == 1)
+				{
+					tParam = DefaultMessageTimeout;
+					gb.TryGetFValue('T', tParam, dummy);
+				}
+				else
+				{
+					tParam = 0.0;
+				}
+
+				if (sParam == 0 && tParam <= 0.0)
+				{
+					reply.copy("Attempt to create a message box that cannot be dismissed");
+					result = GCodeResult::error;
+					break;
+				}
+
+				AxesBitmap axisControls;
+				for (size_t axis = 0; axis < numTotalAxes; axis++)
+				{
+					if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
+					{
+						axisControls.SetBit(axis);
+					}
+				}
+
+				// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
+
+				// If we need to wait for an acknowledgement, save the state and set waiting
+				if ((sParam == 2 || sParam == 3) && Push(gb, true))					// stack the machine state including the file position
+				{
+					UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
+					gb.MachineState().CloseFile();									// stop reading from file
+					gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
+				}
+
+				// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
+				const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
+				platform.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls);
 			}
 			break;
 
@@ -2749,13 +2660,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				const MachineType oldMachineType = machineType;
 				machineType = MachineType::cnc;								// switch to CNC mode even if the spindle parameter is bad
-				const uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
-				if (slot >= MaxSpindles)
-				{
-					reply.copy("Invalid spindle index");
-					result = GCodeResult::error;
-					break;
-				}
+				const uint32_t slot = gb.Seen('S') ? gb.GetLimitedUIValue('S', MaxSpindles) : 0;
 
 				Spindle& spindle = platform.AccessSpindle(slot);
 				if (gb.Seen('C'))
@@ -3171,16 +3076,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		case 562: // Reset temperature fault - use with great caution
 			if (gb.Seen('P'))
 			{
-				const unsigned int heater = gb.GetUIValue();
-				if (heater < MaxHeaters)
-				{
-					result = reprap.ClearTemperatureFault(heater, reply);
-				}
-				else
-				{
-					reply.printf("Invalid heater number '%d'", heater);
-					result = GCodeResult::error;
-				}
+				const unsigned int heater = gb.GetLimitedUIValue('P', MaxHeaters);
+				result = reprap.ClearTemperatureFault(heater, reply);
 			}
 			else
 			{
@@ -3365,11 +3262,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		case 573: // Report heater average PWM
 			if (gb.Seen('P'))
 			{
-				const unsigned int heater = gb.GetUIValue();
-				if (heater < MaxHeaters)
-				{
-					reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
-				}
+				const unsigned int heater = gb.GetLimitedUIValue('P', MaxHeaters);
+				reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
 			}
 			break;
 
@@ -3384,42 +3278,38 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case 575: // Set communications parameters
 			{
-				gb.MustSee('P');
-				size_t chan = gb.GetIValue();
-				if (chan < NUM_SERIAL_CHANNELS)
+				const size_t chan = gb.GetLimitedUIValue('P', NUM_SERIAL_CHANNELS);
+				bool seen = false;
+				if (gb.Seen('B'))
 				{
-					bool seen = false;
-					if (gb.Seen('B'))
+					platform.SetBaudRate(chan, gb.GetIValue());
+					seen = true;
+				}
+				if (gb.Seen('S'))
+				{
+					uint32_t val = gb.GetIValue();
+					platform.SetCommsProperties(chan, val);
+					switch (chan)
 					{
-						platform.SetBaudRate(chan, gb.GetIValue());
-						seen = true;
-					}
-					if (gb.Seen('S'))
-					{
-						uint32_t val = gb.GetIValue();
-						platform.SetCommsProperties(chan, val);
-						switch (chan)
+					case 0:
+						usbGCode->SetCommsProperties(val);
+						break;
+					case 1:
+						if (auxGCode != nullptr)
 						{
-						case 0:
-							usbGCode->SetCommsProperties(val);
-							break;
-						case 1:
-							if (auxGCode != nullptr)
-							{
-								auxGCode->SetCommsProperties(val);
-								platform.SetAuxDetected();
-							}
-							break;
-						default:
-							break;
+							auxGCode->SetCommsProperties(val);
+							platform.SetAuxDetected();
 						}
-						seen = true;
+						break;
+					default:
+						break;
 					}
-					if (!seen)
-					{
-						uint32_t cp = platform.GetCommsProperties(chan);
-						reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
-					}
+					seen = true;
+				}
+				if (!seen)
+				{
+					uint32_t cp = platform.GetCommsProperties(chan);
+					reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
 				}
 			}
 			break;
@@ -3488,11 +3378,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 		case 581: // Configure external trigger
-			result = ConfigureTrigger(gb, reply, code);
+			result = ConfigureTrigger(gb, reply);
 			break;
 
 		case 582: // Check external trigger
-			result = CheckTrigger(gb, reply, code);
+			result = CheckTrigger(gb, reply);
 			break;
 
 		case 584: // Set axis/extruder to stepper driver(s) mapping
@@ -3546,20 +3436,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case 591: // Configure filament sensor
 			{
-				gb.MustSee('D');
-				const unsigned int extruder = gb.GetUIValue();
-				if (extruder < numExtruders)
-				{
-					result = FilamentMonitor::Configure(gb, reply, extruder);
-				}
+				const unsigned int extruder = gb.GetLimitedUIValue('D', numExtruders);
+				result = FilamentMonitor::Configure(gb, reply, extruder);
 			}
 			break;
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 		case 592: // Configure nonlinear extrusion
 			{
-				gb.MustSee('D');
-				const unsigned int extruder = gb.GetUIValue();
+				const unsigned int extruder = gb.GetLimitedUIValue('D', MaxExtruders);
 				bool seen = false;
 				float a = 0.0, b = 0.0, limit = DefaultNonlinearExtrusionLimit;
 				gb.TryGetFValue('A', a, seen);

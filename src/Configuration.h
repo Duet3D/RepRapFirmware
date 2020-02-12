@@ -59,6 +59,7 @@ constexpr uint32_t MinimumWarningInterval = 4000;		// Milliseconds, must be at l
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
+constexpr uint16_t MinimumGpinReportInterval = 30;		// Minimum interval between input change reports sent over CAN bus
 
 constexpr uint32_t MinimumOpenLoadFullStepsPerSec = 20;	// this is 4mm/sec @ 80steps/mm
 
@@ -131,10 +132,6 @@ constexpr PwmFrequency ServoRefreshFrequency = 50;
 // Fan defaults
 constexpr float DefaultMinFanPwm = 0.1;					// minimum fan PWM
 constexpr uint32_t DefaultFanBlipTime = 100;			// fan blip time in milliseconds
-
-// M577 and M581
-constexpr unsigned int MaxM577Ports = 4;
-constexpr unsigned int MaxPortsPerTrigger = 4;
 
 // Conditional GCode support
 constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduced a new block.
@@ -290,7 +287,6 @@ constexpr float FILAMENT_WIDTH = 1.75;					// Millimetres
 constexpr unsigned int MaxStackDepth = 5;				// Maximum depth of stack
 
 // CNC and laser support
-constexpr size_t MaxSpindles = 4;						// Maximum number of configurable spindles
 constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration

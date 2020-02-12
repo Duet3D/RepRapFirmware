@@ -36,6 +36,7 @@ Licence: GPL
 #include "MessageType.h"
 #include "Tools/Spindle.h"
 #include "Endstops/EndstopsManager.h"
+#include <GPIO/GpioPorts.h>
 #include <General/IPAddress.h>
 
 #if defined(DUET_NG)
@@ -48,6 +49,10 @@ Licence: GPL
 # include "Microstepping.h"
 #elif defined(__LPC17xx__)
 # include "MCP4461/MCP4461.h"
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+# include <RemoteInputHandle.h>
 #endif
 
 #include <functional>
@@ -256,16 +261,6 @@ struct AxisDriversConfig
 	DriverId driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
 };
 
-struct GpOutputPort
-{
-	PwmPort port;									// will be initialised by PwmPort default constructor
-#if SUPPORT_CAN_EXPANSION
-	CanAddress boardAddress;
-
-	GpOutputPort() noexcept { boardAddress = CanId::MasterAddress; }
-#endif
-};
-
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform INHERIT_OBJECT_MODEL
 {
@@ -298,7 +293,7 @@ public:
 	const char* GetBoardString() const noexcept;
 
 #if SUPPORT_OBJECT_MODEL
-	size_t GetNumBoards() const noexcept;							// for the object model table in class RepRap
+	size_t GetNumInputsToReport() const noexcept;
 #endif
 
 #ifdef DUET_NG
@@ -523,16 +518,16 @@ public:
 #endif
 
 #if HAS_STALL_DETECT
-	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf);
+	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
 #endif
 
 #if HAS_MASS_STORAGE
 	// Logging support
-	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 #endif
 
 	// Ancillary PWM
-	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void ExtrudeOn() noexcept;
 	void ExtrudeOff() noexcept;
 
@@ -545,14 +540,20 @@ public:
 	void SetLaserPwmFrequency(PwmFrequency freq) noexcept;
 
 	// Misc
-	GCodeResult ConfigurePort(GCodeBuffer& gb, const StringRef& reply);
-	const GpOutputPort& GetGpioPort(size_t gpioPortNumber) const noexcept
-	pre(gpioPortNumber < MaxGpioPorts)
-	{ return gpioPorts[gpioPortNumber]; }
+	GCodeResult ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+
+	const GpOutputPort& GetGpioPort(size_t gpoutPortNumber) const noexcept
+		pre(gpioPortNumber < MaxGpOutPorts) 	{ return gpoutPorts[gpoutPortNumber]; }
+	const GpInputPort& GetGpInPort(size_t gpinPortNumber) const noexcept
+		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
 
 #if SAM4E || SAM4S || SAME70
 	uint32_t Random() noexcept;
 	void PrintUniqueId(MessageType mtype) noexcept;
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 #endif
 
 protected:
@@ -568,7 +569,8 @@ private:
 	void ResetChannel(size_t chan) noexcept;							// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint32_t reading) const noexcept;
 
-	GCodeResult ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureGpOutOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult ConfigureGpIn(uint32_t gpinNumber, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 #if SUPPORT_CAN_EXPANSION
 	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc, std::function<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
@@ -686,7 +688,8 @@ private:
 	volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
 
 	// GPIO pins
-	GpOutputPort gpioPorts[MaxGpioPorts];
+	GpOutputPort gpoutPorts[MaxGpOutPorts];
+	GpInputPort gpinPorts[MaxGpInPorts];
 
 	// Thermistors and temperature monitoring
 	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters

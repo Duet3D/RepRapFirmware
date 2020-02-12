@@ -86,7 +86,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 			portAddresses[i] = &portMap[i];
 			access[i] = PinAccess::write0;
 		}
-		numConfiguredPorts = IoPort::AssignPorts(gb, reply, PinUsedBy::gpio, MaxPorts, portAddresses, access);
+		numConfiguredPorts = IoPort::AssignPorts(gb, reply, PinUsedBy::gpout, MaxPorts, portAddresses, access);
 		if (numConfiguredPorts == 0)
 		{
 			return true;

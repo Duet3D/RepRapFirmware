@@ -760,11 +760,13 @@ void StringParser::DecodeCommand() noexcept
 			 && (   strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr
 				 || ((cl == 'I' || cl == 'J') && commandNumber >= 2)
 				)
-			 && reprap.GetGCodes().GetMachineType() == MachineType::cnc
+			 && (   reprap.GetGCodes().GetMachineType() == MachineType::cnc			// Fanuc style CNC
+				 || reprap.GetGCodes().GetMachineType() == MachineType::laser		// LaserWeb style
+				)
 			 && !isalpha(gb.buffer[commandStart + 1])			// make sure it isn't an if-command or other meta command
 			)
 	{
-		// Fanuc-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
+		// Fanuc or LaserWeb-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
 		parameterStart = commandStart;
 		commandEnd = gcodeLineEnd;
 	}

@@ -53,6 +53,14 @@ constexpr ObjectModelArrayDescriptor EndstopsManager::filamentMonitorsArrayDescr
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(FilamentMonitor::GetMonitorAlreadyLocked(context.GetLastIndex())); }
 };
 
+constexpr ObjectModelArrayDescriptor EndstopsManager::inputsArrayDescriptor =
+{
+	&endstopsLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumInputsToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{ return ExpressionValue(&reprap.GetPlatform().GetGpInPort(context.GetLastIndex())); }
+};
+
 constexpr ObjectModelArrayDescriptor EndstopsManager::probesArrayDescriptor =
 {
 	&zProbesLock,
@@ -65,12 +73,13 @@ constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. sensors members
-	{ "endstops",			OBJECT_MODEL_FUNC_NOSELF(&endstopsArrayDescriptor), 	ObjectModelEntryFlags::live },
-	{ "filamentMonitors",	OBJECT_MODEL_FUNC_NOSELF(&filamentMonitorsArrayDescriptor),				ObjectModelEntryFlags::live },
-	{ "probes",				OBJECT_MODEL_FUNC_NOSELF(&probesArrayDescriptor),		ObjectModelEntryFlags::live },
+	{ "endstops",			OBJECT_MODEL_FUNC_NOSELF(&endstopsArrayDescriptor), 			ObjectModelEntryFlags::live },
+	{ "filamentMonitors",	OBJECT_MODEL_FUNC_NOSELF(&filamentMonitorsArrayDescriptor),		ObjectModelEntryFlags::live },
+	{ "inputs",				OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor), 				ObjectModelEntryFlags::live },
+	{ "probes",				OBJECT_MODEL_FUNC_NOSELF(&probesArrayDescriptor),				ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(EndstopsManager)
 

@@ -120,7 +120,7 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 			msg->number = number;
 			msg->type = (uint8_t)type;
 			msg->adcValue = adcValue;
-			msg->invertReading = misc.parts.invertReading;
+			msg->invertReading_obsolete = false;
 
 			rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 		}

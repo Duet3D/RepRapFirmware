@@ -84,7 +84,8 @@ enum class PinUsedBy : uint8_t
 	tacho,
 	spindle,
 	laser,
-	gpio,
+	gpin,
+	gpout,
 	filamentMonitor,
 	temporaryInput,
 	sensor
@@ -105,7 +106,8 @@ static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logica
 #include "General/SafeStrtod.h"
 #include "General/SafeVsnprintf.h"
 
-#define THROWS_GCODE_EXCEPTION	// we tag this on to function declarations to indicate that they may throw a GCodeException, which must be caught
+#define THROWS(...)				// expands to nothing, for providing exception specifications
+#define THROWS_GCODE_EXCEPTION	THROWS(GCodeException)
 #define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
 
 // Struct to hold min, max and current values
@@ -280,6 +282,8 @@ typedef Bitmap<uint32_t> DriversBitmap;			// Type of a bitmap representing a set
 typedef Bitmap<uint32_t> FansBitmap;			// Type of a bitmap representing a set of fan numbers
 typedef Bitmap<uint32_t> HeatersBitmap;			// Type of a bitmap representing a set of heater numbers
 typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing a set of drivers that typically have a common cooling fan
+typedef Bitmap<uint16_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
+typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
 
 typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
 
@@ -295,6 +299,8 @@ static_assert(MaxFans <= FansBitmap::MaxBits());
 static_assert(MaxHeaters <= HeatersBitmap::MaxBits());
 static_assert(NumDirectDrivers <= DriversBitmap::MaxBits());
 static_assert(MaxSensors <= SensorsBitmap::MaxBits());
+static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
+static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
 
 #if SUPPORT_IOBITS
 typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)

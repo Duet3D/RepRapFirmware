@@ -101,7 +101,8 @@ constexpr int8_t DefaultE0Heater = 0;				// Index of the default first extruder 
 constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
-constexpr size_t MaxGpioPorts = 5;
+constexpr size_t MaxGpInPorts = 5;
+constexpr size_t MaxGpOutPorts = 5;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, <= DRIVES
@@ -117,7 +118,9 @@ constexpr size_t MaxExtrudersPerTool = 1;
 
 constexpr size_t MaxFans = 7;
 
-constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
+
+constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
 constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE SerialUSB

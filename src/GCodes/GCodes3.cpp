@@ -428,88 +428,48 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 // Handle M577
 GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply)
 {
-	if (gb.Seen('P'))
+	AxesBitmap endstopsToWaitFor;
+	for (size_t axis = 0; axis < numTotalAxes; ++axis)
 	{
-		IoPort ports[MaxM577Ports];
-		IoPort *portAddrs[MaxM577Ports];
-		PinAccess access[MaxM577Ports];
-		for (size_t i = 0; i < MaxM577Ports; ++i)
+		if (gb.Seen(axisLetters[axis]))
 		{
-			portAddrs[i] = &ports[i];
-			access[i] = PinAccess::read;
-		}
-		const unsigned int numPortsUsed = IoPort::AssignPorts(gb, reply, PinUsedBy::temporaryInput, MaxM577Ports, portAddrs, access);
-		if (numPortsUsed == 0)
-		{
-			return GCodeResult::error;
-		}
-
-		for (unsigned int i = 0; i < numPortsUsed; ++i)
-		{
-			if (!ports[i].Read())
-			{
-				return GCodeResult::notFinished;
-			}
+			endstopsToWaitFor.SetBit(axis);
 		}
 	}
 
-	return GCodeResult::ok;
+	InputPortsBitmap portsToWaitFor;
+	if (gb.Seen('P'))
+	{
+		uint32_t inputNumbers[MaxGpInPorts];
+		size_t numValues = MaxGpInPorts;
+		gb.GetUnsignedArray(inputNumbers, numValues, false);
+		portsToWaitFor = InputPortsBitmap::MakeFromArray(inputNumbers, numValues);
+	}
+
+	const bool activeHigh = (!gb.Seen('S') || gb.GetUIValue() >= 1);
+	Platform& platform = reprap.GetPlatform();
+	const bool ok = endstopsToWaitFor.IterateWhile([&platform, activeHigh](unsigned int axis, bool)->bool
+								{
+									const bool stopped = platform.GetEndstops().Stopped(axis) == EndStopHit::atStop;
+									return stopped == activeHigh;
+								}
+							 )
+				&& portsToWaitFor.IterateWhile([&platform, activeHigh](unsigned int port, bool)->bool
+								{
+									return (port >= MaxGpInPorts || platform.GetGpInPort(port).GetState() == activeHigh);
+								}
+							 );
+	return (ok) ? GCodeResult::ok : GCodeResult::notFinished;
 }
 
 // Handle M581
-GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code)
+GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply)
 {
 	gb.MustSee('T');
 	const unsigned int triggerNumber = gb.GetUIValue();
 	if (triggerNumber < MaxTriggers)
 	{
-		Trigger& tr = triggers[triggerNumber];
-		bool seen = false;
-		if (gb.Seen('C'))
-		{
-			seen = true;
-			tr.condition = gb.GetIValue();
-		}
-		else if (tr.IsUnused())
-		{
-			tr.condition = 0;					// this is a new trigger, so set no condition
-		}
-
-		if (gb.Seen('P'))
-		{
-			seen = true;
-			IoPort *portAddrs[ARRAY_SIZE(tr.ports)];
-			PinAccess access[ARRAY_SIZE(tr.ports)];
-			for (size_t i = 0; i < ARRAY_SIZE(tr.ports); ++i)
-			{
-				portAddrs[i] = &tr.ports[i];
-				access[i] = PinAccess::read;
-			}
-			const unsigned int numPortsUsed = IoPort::AssignPorts(gb, reply, PinUsedBy::temporaryInput, ARRAY_SIZE(tr.ports), portAddrs, access);
-			if (numPortsUsed == 0)
-			{
-				return GCodeResult::error;
-			}
-
-			tr.inputStates.Clear();
-			(void)tr.Check();					// set up initial input states
-		}
-
-		if (!seen)
-		{
-			IoPort *portAddrs[ARRAY_SIZE(tr.ports)];
-			for (size_t i = 0; i < ARRAY_SIZE(tr.ports); ++i)
-			{
-				portAddrs[i] = &tr.ports[i];
-			}
-			reply.printf("Trigger %u fires on an edge on pin(s) ", triggerNumber);
-			IoPort::AppendPinNames(reply, ARRAY_SIZE(tr.ports), portAddrs);
-			if (triggers[triggerNumber].condition == 1)
-			{
-				reply.cat(" when printing from SD card");
-			}
-		}
-		return GCodeResult::ok;
+		return triggers[triggerNumber].Configure(triggerNumber, gb, reply);
 	}
 
 	reply.copy("Trigger number out of range");
@@ -517,15 +477,13 @@ GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, in
 }
 
 // Handle M582
-GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply, int code)
+GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply)
 {
 	gb.MustSee('T');
 	const unsigned int triggerNumber = gb.GetUIValue();
 	if (triggerNumber < MaxTriggers)
 	{
-		Trigger& tr = triggers[triggerNumber];
-		tr.inputStates.Clear();
-		if (tr.Check())
+		if (triggers[triggerNumber].CheckLevel())
 		{
 			triggersPending.SetBit(triggerNumber);
 		}

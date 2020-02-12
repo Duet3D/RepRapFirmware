@@ -235,6 +235,18 @@ uint32_t GCodeBuffer::GetUIValue()
 	return isBinaryBuffer ? binaryParser.GetUIValue() : stringParser.GetUIValue();
 }
 
+// Get an unsigned integer value, throw if >= limit
+uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t limit) THROWS(GCodeException)
+{
+	MustSee(c);
+	const uint32_t ret = GetUIValue();
+	if (ret < limit)
+	{
+		return ret;
+	}
+	throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too large", (uint32_t)c);
+}
+
 // Get an IP address quad after a key letter
 void GCodeBuffer::GetIPAddress(IPAddress& returnedIp)
 {
