@@ -8,8 +8,17 @@ Recommended compatible firmware:
 
 Upgrade notes: none since 3.01-RC1
 
+Changed behaviour:
+- The I (invert) parameter of M558 has been removed. If you were using I1 then you will need to invert the pin name instead.
+- The parameters to M577 have changed. See  https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M577_RepRapFirmware_3_01RC2_and_later.
+- The parameters to M581 have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M581_RepRapFirmware_3_01RC2_and_later.
+- When tuning a heater using M303 H# the S parameter is now mandatory
+
 New features:
-- Object model state.previousTool is added. It is the tool number that was active at the start of the last T command that caused a tool change (or implied T command caused by executing M109), or -1 if no tool was active.
+- General purpose inputs may now be configured using M950 J# C"pin-name". These are used by M577 and M581. Their states may be queried in the object model. On Duet 3 they may refer to pins on expansion boards and tool boards as well as pins on the main board.
+- Object model key **sensors.inputs** has been added. This lists the input states of the configured general purpose inputs.
+- Object model key **state.previousTool** is added. It is the tool number that was active at the start of the last T command that caused a tool change (or implied T command caused by executing M109), or -1 if no tool was active at that time.
+- Object model key **limits** has been added. This gives the maximum number of heaters, fans etc. that the firmware supports. It has the verbose flag set, so it is normally hidden. Send **M409 k"limits" f"v"** to see all the limits.
 
 Bug fixes:
 - Round-robin scheduling of GCode input sources has been restored so that no channel can monpolise the motion system
