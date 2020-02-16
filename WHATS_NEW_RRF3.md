@@ -12,18 +12,24 @@ Changed behaviour:
 - The I (invert) parameter of M558 has been removed. If you were using I1 then you will need to invert the pin name instead.
 - The parameters to M577 have changed. See  https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M577_RepRapFirmware_3_01RC2_and_later.
 - The parameters to M581 have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M581_RepRapFirmware_3_01RC2_and_later.
+- The P parameter to M143 now has a different meaning. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M143_Maximum_heater_temperature.
+- On Duet 3, M143 now works for heaters on expansion boards and tool boards provided that they are running version 3.01-RC2 of their own firmware
 - When tuning a heater using M303 H# the S parameter is now mandatory
+- The speed factor (M220) is no longer applied to extruder-only moves
 
 New features:
 - General purpose inputs may now be configured using M950 J# C"pin-name". These are used by M577 and M581. Their states may be queried in the object model. On Duet 3 they may refer to pins on expansion boards and tool boards as well as pins on the main board.
+- Object model key **heat.sensors** has been moved to **sensors.analog**
 - Object model key **sensors.inputs** has been added. This lists the input states of the configured general purpose inputs.
 - Object model key **state.previousTool** is added. It is the tool number that was active at the start of the last T command that caused a tool change (or implied T command caused by executing M109), or -1 if no tool was active at that time.
 - Object model key **limits** has been added. This gives the maximum number of heaters, fans etc. that the firmware supports. It has the verbose flag set, so it is normally hidden. Send **M409 k"limits" f"v"** to see all the limits.
+- Object model key **network.name** has been added. It returns the maxchine name set by M550.
 - In Laser mode, GCode lines with coordinates etc. but no G or M command are now accepted if the most recent command was G0, G1, G2, or G3 (as was already the case in CNC mode)
 
 Bug fixes:
 - Round-robin scheduling of GCode input sources has been restored so that no channel can monpolise the motion system
 - On some Duet 3 boards, axes were not flagged as homed when VIN power was lost but 5V power remained
+- When using the M109 command, the firmware did not prevent you from setting temperatures that exceeded the limit set by M143
 
 RepRapFirmware 3.01-RC1
 =======================
