@@ -27,6 +27,8 @@ enum class FilamentSensorStatus : uint8_t
 class FilamentMonitor INHERIT_OBJECT_MODEL
 {
 public:
+	FilamentMonitor(const FilamentMonitor&) = delete;
+
 	// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
 	virtual bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) = 0;
 

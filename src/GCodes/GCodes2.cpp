@@ -98,7 +98,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 	}
 	catch (const GCodeException& e)
 	{
-		e.GetMessage(reply, gb);
+		e.GetMessage(reply, &gb);
 		HandleReply(gb, GCodeResult::error, reply.c_str());
 		return true;
 	}
@@ -1353,7 +1353,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// because any slicer that uses M109 doesn't understand that there are separate active and standby temperatures.
 				if (simulationMode == 0)
 				{
-					SetToolHeaters(applicableTool.Ptr(), temperature, true);
+					SetToolHeaters(applicableTool.Ptr(), temperature, true);	// this may throw
 				}
 
 				Tool * const currentTool = reprap.GetCurrentTool();
@@ -1732,7 +1732,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						}
 						else
 						{
-							heat.SetActiveTemperature(currentHeater, temperature);
+							heat.SetActiveTemperature(currentHeater, temperature);		// may throw
 							result = heat.Activate(currentHeater, reply);
 						}
 					}
@@ -1769,7 +1769,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 
 		case 143: // Configure heater protection
-			result = reprap.GetHeat().SetHeaterProtection(gb, reply);
+			result = reprap.GetHeat().HandleM143(gb, reply);
 			break;
 
 		case 144: // Set bed to standby, or to active if S1 parameter given
@@ -1829,7 +1829,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						break;		// no target temperature given
 					}
 
-					reprap.GetHeat().SetActiveTemperature(heater, temperature);
+					reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
 					result = reprap.GetHeat().Activate(heater, reply);
 					if (cancelWait || reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TEMPERATURE_CLOSE_ENOUGH))
 					{

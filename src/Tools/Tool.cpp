@@ -361,8 +361,17 @@ void Tool::Activate() noexcept
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
-		reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+		try
+		{
+			reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
+			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+		}
+		catch (GCodeException& exc)
+		{
+			String<StringLength100> message;
+			exc.GetMessage(message.GetRef(), nullptr);
+			reprap.GetPlatform().Message(ErrorMessage, message.c_str());
+		}
 		String<1> dummy;
 		(void)reprap.GetHeat().Activate(heaters[heater], dummy.GetRef());
 	}
@@ -377,8 +386,17 @@ void Tool::Standby() noexcept
 		// Don't switch a heater to standby if the active tool is using it and is different from this tool
 		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
 		{
-			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-			reprap.GetHeat().Standby(heaters[heater], this);
+			try
+			{
+				reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+				reprap.GetHeat().Standby(heaters[heater], this);
+			}
+			catch (GCodeException& exc)
+			{
+				String<StringLength100> message;
+				exc.GetMessage(message.GetRef(), nullptr);
+				reprap.GetPlatform().Message(ErrorMessage, message.c_str());
+			}
 		}
 	}
 	state = ToolState::standby;
@@ -494,10 +512,11 @@ float Tool::GetToolHeaterStandbyTemperature(size_t heaterNumber) const noexcept
 	return (heaterNumber < heaterCount) ? standbyTemperatures[heaterNumber] : 0.0;
 }
 
-void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) noexcept
+void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) THROWS(GCodeException)
 {
 	if (heaterNumber < heaterCount)
 	{
+		const int8_t heater = heaters[heaterNumber];
 		const Tool * const currentTool = reprap.GetCurrentTool();
 		const bool setHeater = (currentTool == nullptr || currentTool == this);
 		if (temp < NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
@@ -505,26 +524,26 @@ void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) noexc
 			activeTemperatures[heaterNumber] = 0;
 			if (setHeater)
 			{
-				reprap.GetHeat().SwitchOff(heaters[heaterNumber]);
+				reprap.GetHeat().SwitchOff(heater);
 			}
 		}
 		else
 		{
-			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heaterNumber]);
-			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heaterNumber]);
+			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heater);
+			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heater);
 			if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
 			{
 				activeTemperatures[heaterNumber] = temp;
 				if (setHeater)
 				{
-					reprap.GetHeat().SetActiveTemperature(heaters[heaterNumber], activeTemperatures[heaterNumber]);
+					reprap.GetHeat().SetActiveTemperature(heater, activeTemperatures[heaterNumber]);
 				}
 			}
 		}
 	}
 }
 
-void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) noexcept
+void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THROWS(GCodeException)
 {
 	if (heaterNumber < heaterCount)
 	{

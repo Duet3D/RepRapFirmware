@@ -28,7 +28,7 @@ public:
 	float GetTemperature() const noexcept override;			// Get the current temperature
 	float GetAveragePWM() const noexcept override;			// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	float GetAccumulator() const noexcept override;			// Return the integral accumulator
-	void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept override;	// Start an auto tune cycle for this PID
+	GCodeResult StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept override;	// Start an auto tune cycle for this PID
 	void GetAutoTuneStatus(const StringRef& reply) const noexcept override;	// Get the auto tune status or last result
 	void Suspend(bool sus) noexcept override;				// Suspend the heater to conserve power or while doing Z probing
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override;
@@ -39,6 +39,7 @@ protected:
 	GCodeResult SwitchOn(const StringRef& reply) noexcept override;		// Turn the heater on and set the mode
 	GCodeResult UpdateModel(const StringRef& reply) noexcept override;	// Called when the heater model has been changed
 	GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept override;
+	GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept override;
 
 private:
 	static constexpr uint32_t RemoteStatusTimeout = 2000;

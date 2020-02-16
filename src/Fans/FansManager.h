@@ -25,6 +25,8 @@ class FansManager
 {
 public:
 	FansManager() noexcept;
+	FansManager(const FansManager&) = delete;
+
 	void Init() noexcept;
 	bool CheckFans() noexcept;
 	GCodeResult ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);

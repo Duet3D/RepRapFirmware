@@ -25,6 +25,7 @@ public:
 		boardAddress (CanId::MasterAddress),
 #endif
 		currentState(false) { }
+	GpInputPort(const GpInputPort&) = delete;
 
 	bool GetState() const noexcept;
 	bool IsUnused() const noexcept;
@@ -50,9 +51,13 @@ private:
 class GpOutputPort
 {
 public:
+	GpOutputPort() noexcept
 #if SUPPORT_CAN_EXPANSION
-	GpOutputPort() noexcept { boardAddress = CanId::MasterAddress; }
+		: boardAddress(CanId::MasterAddress)
 #endif
+	{ }
+
+	GpOutputPort(const GpOutputPort&) = delete;
 
 	GCodeResult WriteAnalog(uint32_t gpioPortNumber, bool isServo, float pwm, const GCodeBuffer& gb, const StringRef& reply) const noexcept;
 	GCodeResult Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);

@@ -181,9 +181,18 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxAxes),								ObjectModelEntryFlags::verbose },
 	{ "axesPlusExtruders",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxAxesPlusExtruders),				ObjectModelEntryFlags::verbose },
 	{ "bedHeaters",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxBedHeaters),						ObjectModelEntryFlags::verbose },
+#if SUPPORT_CAN_EXPANSION
+	{ "boards",					OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxCanBoards + 1),					ObjectModelEntryFlags::verbose },
+#else
+	{ "boards",					OBJECT_MODEL_FUNC_NOSELF((int32_t)1),									ObjectModelEntryFlags::verbose },
+#endif
 	{ "chamberHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxChamberHeaters),					ObjectModelEntryFlags::verbose },
+#if SUPPORT_CAN_EXPANSION
+	{ "drivers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(NumDirectDrivers + MaxCanDrivers)),	ObjectModelEntryFlags::verbose },
+#else
+	{ "drivers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),					ObjectModelEntryFlags::verbose },
+#endif
 	{ "driversPerAxis",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxDriversPerAxis),					ObjectModelEntryFlags::verbose },
-	{ "extraHeaterProtections",	OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxExtraHeaterProtections),			ObjectModelEntryFlags::verbose },
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxExtruders),						ObjectModelEntryFlags::verbose },
 	{ "extrudersPerTool",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxExtrudersPerTool),					ObjectModelEntryFlags::verbose },
 	{ "fans",					OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxFans),								ObjectModelEntryFlags::verbose },
@@ -191,6 +200,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "gpOutPorts",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxGpOutPorts),						ObjectModelEntryFlags::verbose },
 	{ "heaters",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),							ObjectModelEntryFlags::verbose },
 	{ "heatersPerTool",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeatersPerTool),					ObjectModelEntryFlags::verbose },
+	{ "monitorsPerHeater",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxMonitorsPerHeater),				ObjectModelEntryFlags::verbose },
 	{ "sensors",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxSensors),							ObjectModelEntryFlags::verbose },
 	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxSpindles),							ObjectModelEntryFlags::verbose },
 	{ "triggers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTriggers),							ObjectModelEntryFlags::verbose },
@@ -198,7 +208,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 3, 10, 5, 18 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 3, 10, 5, 20 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 

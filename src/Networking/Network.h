@@ -54,6 +54,7 @@ class Network INHERIT_OBJECT_MODEL
 {
 public:
 	Network(Platform& p) noexcept;
+	Network(const Network&) = delete;
 
 	void Init() noexcept;
 	void Activate() noexcept;

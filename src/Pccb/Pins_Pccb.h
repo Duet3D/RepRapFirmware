@@ -91,7 +91,7 @@ constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 1;					// The number of heaters in the machine. PCCB has no heaters.
-constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors per heater
 
 constexpr size_t MaxBedHeaters = 1;
 constexpr size_t MaxChamberHeaters = 1;

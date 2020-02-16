@@ -14,6 +14,9 @@
 class NetworkInterface INHERIT_OBJECT_MODEL
 {
 public:
+	NetworkInterface() { }
+	NetworkInterface(const NetworkInterface&) = delete;
+
 	virtual void Init() noexcept = 0;
 	virtual void Activate() noexcept = 0;
 	virtual void Exit() noexcept = 0;

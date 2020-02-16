@@ -9,7 +9,7 @@
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Heat.h"
-#include "HeaterProtection.h"
+#include "HeaterMonitor.h"
 #include "Platform.h"
 #include "RepRap.h"
 
@@ -395,24 +395,24 @@ void LocalHeater::Spin() noexcept
 				}
 
 				// Verify that everything is operating in the required temperature range
-				for (HeaterProtection *prot = GetHeaterProtections(); prot != nullptr; prot = prot->Next())
+				for (HeaterMonitor& prot : monitors)
 				{
-					if (!prot->Check())
+					if (!prot.Check())
 					{
 						lastPwm = 0.0;
-						switch (prot->GetAction())
+						switch (prot.GetAction())
 						{
-						case HeaterProtectionAction::GenerateFault:
+						case HeaterMonitorAction::GenerateFault:
 							mode = HeaterMode::fault;
 							reprap.GetGCodes().HandleHeaterFault(GetHeaterNumber());
-							reprap.GetPlatform().MessageF(ErrorMessage, "Heating fault on heater %u\n", GetHeaterNumber());
+							reprap.GetPlatform().MessageF(ErrorMessage, "Heating fault on heater %u: heater monitor was triggered\n", GetHeaterNumber());
 							break;
 
-						case HeaterProtectionAction::TemporarySwitchOff:
+						case HeaterMonitorAction::TemporarySwitchOff:
 							// Do nothing, the PWM value has already been set above
 							break;
 
-						case HeaterProtectionAction::PermanentSwitchOff:
+						case HeaterMonitorAction::PermanentSwitchOff:
 							SwitchOff();
 							break;
 						}
@@ -474,41 +474,49 @@ float LocalHeater::GetExpectedHeatingRate() const noexcept
 }
 
 // Auto tune this PID
-void LocalHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept
+GCodeResult LocalHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept
 {
 	// Starting an auto tune
 	if (!GetModel().IsEnabled())
 	{
-		reply.printf("Error: heater %u cannot be auto tuned while it is disabled", GetHeaterNumber());
+		reply.printf("heater %u cannot be auto tuned while it is disabled", GetHeaterNumber());
+		return GCodeResult::error;
 	}
-	else if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
-	{
-		reply.printf("Error: heater %u must be off and cold before auto tuning it", GetHeaterNumber());
-	}
-	else
-	{
-		const TemperatureError err = ReadTemperature();
-		if (err != TemperatureError::success)
-		{
-			reply.printf("Error: heater %u reported error '%s' at start of auto tuning", GetHeaterNumber(), TemperatureErrorString(err));
-		}
-		else
-		{
-			mode = HeaterMode::tuning0;
-			tuningReadingsTaken = 0;
-			tuned = false;					// assume failure
 
-			// We don't normally allow dynamic memory allocation when running. However, auto tuning is rarely done and it
-			// would be wasteful to allocate a permanent array just in case we are going to run it, so we make an exception here.
-			tuningTempReadings = new float[MaxTuningTempReadings];
-			tuningTempReadings[0] = temperature;
-			tuningReadingInterval = HeatSampleIntervalMillis;
-			tuningPwm = maxPwm;
-			tuningTargetTemp = targetTemp;
-			reply.printf("Auto tuning heater %u using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended",
-							GetHeaterNumber(), (double)targetTemp, (double)maxPwm);
-		}
+	if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
+	{
+		reply.printf("heater %u must be off and cold before auto tuning it", GetHeaterNumber());
+		return GCodeResult::error;
 	}
+
+	const float limit = GetHighestTemperatureLimit();
+	if (targetTemp > limit)
+	{
+		reply.printf("heater %u target temperature must be no hiher than the temperature limit for this heater (%.1fC)", GetHeaterNumber(), (double)limit);
+		return GCodeResult::error;
+	}
+
+	const TemperatureError err = ReadTemperature();
+	if (err != TemperatureError::success)
+	{
+		reply.printf("heater %u reported error '%s' at start of auto tuning", GetHeaterNumber(), TemperatureErrorString(err));
+		return GCodeResult::error;
+	}
+
+	mode = HeaterMode::tuning0;
+	tuningReadingsTaken = 0;
+	tuned = false;					// assume failure
+
+	// We don't normally allow dynamic memory allocation when running. However, auto tuning is rarely done and it
+	// would be wasteful to allocate a permanent array just in case we are going to run it, so we make an exception here.
+	tuningTempReadings = new float[MaxTuningTempReadings];
+	tuningTempReadings[0] = temperature;
+	tuningReadingInterval = HeatSampleIntervalMillis;
+	tuningPwm = maxPwm;
+	tuningTargetTemp = targetTemp;
+	reply.printf("Auto tuning heater %u using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended",
+					GetHeaterNumber(), (double)targetTemp, (double)maxPwm);
+	return GCodeResult::ok;
 }
 
 // Get the auto tune status or last result

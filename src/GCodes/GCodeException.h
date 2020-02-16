@@ -33,7 +33,7 @@ public:
 		param.i = iparam;
 	}
 
-	void GetMessage(const StringRef& reply, const GCodeBuffer& gb) const noexcept;
+	void GetMessage(const StringRef& reply, const GCodeBuffer *gb) const noexcept;
 
 private:
 	int line;

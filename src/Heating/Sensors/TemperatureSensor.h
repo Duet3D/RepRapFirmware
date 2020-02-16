@@ -14,6 +14,7 @@ class TemperatureSensor INHERIT_OBJECT_MODEL
 {
 public:
 	TemperatureSensor(unsigned int sensorNum, const char *type) noexcept;
+	TemperatureSensor(const TemperatureSensor&) = delete;
 
 	// Virtual destructor
 	virtual ~TemperatureSensor() noexcept;

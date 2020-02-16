@@ -611,7 +611,7 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 		}
 		catch (const GCodeException& e)
 		{
-			e.GetMessage(reply, gb);
+			e.GetMessage(reply, &gb);
 			reply.Insert(0, "invalid expression after 'abort': ");
 		}
 	}

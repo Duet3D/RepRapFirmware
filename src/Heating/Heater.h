@@ -11,6 +11,7 @@
 #include <RepRapFirmware.h>
 #include <NamedEnum.h>
 #include "FOPDT.h"
+#include "HeaterMonitor.h"
 #include "GCodes/GCodeResult.h"
 #include <ObjectModel/ObjectModel.h>
 
@@ -18,7 +19,7 @@
 # include "CanId.h"
 #endif
 
-class HeaterProtection;
+class HeaterMonitor;
 struct CanHeaterReport;
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
@@ -29,6 +30,7 @@ class Heater INHERIT_OBJECT_MODEL
 public:
 	Heater(unsigned int num) noexcept;
 	virtual ~Heater() noexcept;
+	Heater(const Heater&) = delete;
 
 	// Configuration methods
 	virtual GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sensorNumber, const StringRef& reply) = 0;
@@ -40,36 +42,35 @@ public:
 	virtual GCodeResult ResetFault(const StringRef& reply) noexcept = 0;	// Reset a fault condition - only call this if you know what you are doing
 	virtual void SwitchOff() noexcept = 0;
 	virtual void Spin() noexcept = 0;
-	virtual void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept = 0;	// Start an auto tune cycle for this PID
+	virtual GCodeResult StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept = 0;	// Start an auto tune cycle for this PID
 	virtual void GetAutoTuneStatus(const StringRef& reply) const = 0;	// Get the auto tune status or last result
-	virtual void Suspend(bool sus) noexcept = 0;							// Suspend the heater to conserve power or while doing Z probing
+	virtual void Suspend(bool sus) noexcept = 0;						// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const noexcept = 0;					// Get the inertial term accumulator
 
 #if SUPPORT_CAN_EXPANSION
 	virtual void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept = 0;
 #endif
 
-	HeaterStatus GetStatus() const noexcept;								// Get the status of the heater
+	HeaterStatus GetStatus() const noexcept;							// Get the status of the heater
 	unsigned int GetHeaterNumber() const noexcept { return heaterNumber; }
 	const char *GetSensorName() const noexcept;							// Get the name of the sensor for this heater, or nullptr if it hasn't been named
-	void SetActiveTemperature(float t) noexcept;
+	void SetTemperature(float t, bool activeNotStandby) THROWS(GCodeException);
 	float GetActiveTemperature() const noexcept { return activeTemperature; }
-	void SetStandbyTemperature(float t) noexcept;
 	float GetStandbyTemperature() const noexcept { return standbyTemperature; }
 	GCodeResult Activate(const StringRef& reply) noexcept;				// Switch from idle to active
-	void Standby() noexcept;												// Switch from active to idle
+	void Standby() noexcept;											// Switch from active to idle
 
 	void GetFaultDetectionParameters(float& pMaxTempExcursion, float& pMaxFaultTime) const noexcept
 		{ pMaxTempExcursion = maxTempExcursion; pMaxFaultTime = maxHeatingFaultTime; }
-
 	GCodeResult SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime, const StringRef& reply) noexcept;
 
-	float GetHighestTemperatureLimit() const noexcept;					// Get the highest temperature limit
-	float GetLowestTemperatureLimit() const noexcept;					// Get the lowest temperature limit
-	void SetHeaterProtection(HeaterProtection *h) noexcept;
+	GCodeResult ConfigureMonitor(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException);
 
-	const FopDt& GetModel() const noexcept { return model; }				// Get the process model
-	GCodeResult SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;	// Set the process model
+	float GetHighestTemperatureLimit() const noexcept;
+	float GetLowestTemperatureLimit() const noexcept;					// Get the lowest temperature limit
+
+	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
+	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) noexcept;
 	void SetModelDefaults() noexcept;
 
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
@@ -78,7 +79,7 @@ public:
 	void SetM301PidParameters(const M301PidParameters& params) noexcept
 		{ model.SetM301PidParameters(params); }
 
-	bool CheckGood() const noexcept;
+	void SetDefaultMonitors() noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -102,31 +103,31 @@ protected:
 		lastTuningMode = tuning3
 	};
 
+protected:
 	virtual void ResetHeater() noexcept = 0;
 	virtual HeaterMode GetMode() const noexcept = 0;
 	virtual GCodeResult SwitchOn(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateModel(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept = 0;
+	virtual GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
-	void SetSensorNumber(int sn) noexcept { sensorNumber = sn; }
+	void SetSensorNumber(int sn) noexcept;
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
-	HeaterProtection *GetHeaterProtections() const noexcept { return heaterProtection; }
+	GCodeResult SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;	// Set the process model
 
-	FopDt model;
+	HeaterMonitor monitors[MaxMonitorsPerHeater];	// embedding them in the Heater uses less memory than dynamic allocation
 
 private:
-	bool CheckProtection() const noexcept;			// Check heater protection elements and return true if everything is good
-
+	FopDt model;
 	unsigned int heaterNumber;
 	int sensorNumber;								// the sensor number used by this heater
 	float activeTemperature;						// The required active temperature
 	float standbyTemperature;						// The required standby temperature
 	float maxTempExcursion;							// The maximum temperature excursion permitted while maintaining the setpoint
 	float maxHeatingFaultTime;						// How long a heater fault is permitted to persist before a heater fault is raised
-	HeaterProtection *heaterProtection;				// The first element of assigned heater protection items
 
 	bool active;									// Are we active or standby?
 };

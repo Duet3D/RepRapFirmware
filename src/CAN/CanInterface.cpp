@@ -719,7 +719,6 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 				}
 				else
 				{
-//				debugPrintf("Discarded msg src=%u RID=%u exp %u\n", buf->id.Src(), buf->msg.standardReply.requestId, rid);
 					reply.lcatf("Discarded msg src=%u typ=%u RID=%u exp %u", buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
 				}
 			}

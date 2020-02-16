@@ -304,7 +304,7 @@ private:
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile);							// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb, bool withinSameFile);								// Pop feedrate etc
-	void DisableDrives() noexcept;														// Turn the motors off
+	void DisableDrives() noexcept;												// Turn the motors off
 																				// Start saving GCodes in a file
 	bool SendConfigToLine();													// Deal with M503
 
@@ -318,7 +318,7 @@ private:
 #endif
 
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply);			// Create a new tool definition
-	void SetToolHeaters(Tool *tool, float temperature, bool both);				// Set all a tool's heaters to the temperature, for M104/M109
+	void SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException);				// Set all a tool's heaters to the temperature, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
 																				// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const StringRef& reply) const noexcept;		// Store a standard-format temperature report in reply
@@ -338,10 +338,10 @@ private:
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);			// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		// Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t drive, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept; // Change microstepping on the specified drive
-	void CheckTriggers() noexcept;														// Check for and execute triggers
-	void CheckFilament() noexcept;														// Check for and respond to filament errors
-	void CheckHeaterFault() noexcept;													// Check for and respond to a heater fault, returning true if we should exit
-	void DoEmergencyStop() noexcept;														// Execute an emergency stop
+	void CheckTriggers() noexcept;												// Check for and execute triggers
+	void CheckFilament() noexcept;												// Check for and respond to filament errors
+	void CheckHeaterFault() noexcept;											// Check for and respond to a heater fault, returning true if we should exit
+	void DoEmergencyStop() noexcept;											// Execute an emergency stop
 
 	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg) noexcept	// Pause the print
 		pre(resourceOwners[movementResource] = &gb);

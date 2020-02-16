@@ -26,6 +26,7 @@ class EndstopsManager INHERIT_OBJECT_MODEL
 {
 public:
 	EndstopsManager() noexcept;
+	EndstopsManager(const EndstopsManager&) = delete;
 
 	void Init() noexcept;
 
@@ -78,6 +79,7 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(sensors)
 	OBJECT_MODEL_ARRAY(endstops)
 	OBJECT_MODEL_ARRAY(filamentMonitors)
 	OBJECT_MODEL_ARRAY(inputs)

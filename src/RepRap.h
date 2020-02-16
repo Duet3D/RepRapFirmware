@@ -61,6 +61,8 @@ class RepRap INHERIT_OBJECT_MODEL
 {
 public:
 	RepRap() noexcept;
+	RepRap(const RepRap&) = delete;
+
 	void EmergencyStop() noexcept;
 	void Init() noexcept;
 	void Spin() noexcept;

@@ -16,7 +16,7 @@ class ZProbe : public EndstopOrZProbe
 public:
 	ZProbe(unsigned int num, ZProbeType p_type) noexcept;
 
-	virtual void SetIREmitter(bool on) const noexcept = 0;
+	virtual void SetIREmitter(bool on) const noexcept = 0;			// Caution, this is called from within the tick ISR
 	virtual uint16_t GetRawReading() const noexcept = 0;
 	virtual void SetProbing(bool isProbing) const noexcept = 0;
 	virtual GCodeResult AppendPinNames(const StringRef& str) const noexcept = 0;

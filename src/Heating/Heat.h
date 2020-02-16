@@ -34,7 +34,7 @@ Licence: GPL
 #include <RTOSIface/RTOSIface.h>
 
 class TemperatureSensor;
-class HeaterProtection;
+class HeaterMonitor;
 class GCodeBuffer;
 class CanMessageSensorTemperatures;
 class CanMessageHeatersStatus;
@@ -43,6 +43,7 @@ class Heat INHERIT_OBJECT_MODEL
 {
 public:
 	Heat() noexcept;
+	Heat(const Heat&) = delete;
 
 	// Methods that don't relate to a particular heater
 	void HeaterTask() noexcept;
@@ -79,9 +80,7 @@ public:
 	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;		// Create a sensor or change the parameters for an existing sensor
 	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION; // Set the P/I/D parameters for a heater
-	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply) THROWS_GCODE_EXCEPTION;	// Configure heater protection (M143)
-
-	void UpdateHeaterProtection(int heaterNumber) noexcept;				// Updates the PIDs and HeaterProtection items when a heater is remapped
+	GCodeResult HandleM143(GCodeBuffer &gb, const StringRef &reply) THROWS_GCODE_EXCEPTION;	// Configure heater protection (M143)
 
 	void SensorsTask() noexcept;
 	static void EnsureSensorsTask() noexcept;
@@ -119,16 +118,16 @@ public:
 	float GetStandbyTemperature(int heater) const noexcept;
 	float GetHighestTemperatureLimit(int heater) const noexcept;
 	float GetLowestTemperatureLimit(int heater) const noexcept;
-	float GetHeaterTemperature(int heater) const noexcept;				// Get the current temperature of a heater
 	float GetTargetTemperature(int heater) const noexcept;				// Get the target temperature
+	float GetHeaterTemperature(int heater) const noexcept;				// Get the current temperature of a heater
 	HeaterStatus GetStatus(int heater) const noexcept;					// Get the off/standby/active status
 	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const noexcept;
 
 	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply);
 
-	void SetActiveTemperature(int heater, float t) noexcept;
-	void SetStandbyTemperature(int heater, float t) noexcept;
+	void SetActiveTemperature(int heater, float t) THROWS(GCodeException) { SetTemperature(heater, t, true); }
+	void SetStandbyTemperature(int heater, float t) THROWS(GCodeException) { SetTemperature(heater, t, false); }
 	GCodeResult Activate(int heater, const StringRef& reply) noexcept;	// Turn on a heater
 	void Standby(int heater, const Tool* tool) noexcept;				// Set a heater to standby
 	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
@@ -143,24 +142,22 @@ public:
 	void ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept;
 #endif
 
+	static ReadWriteLock sensorsLock;							// needs to be public so that the OMT in EndstopsManager can lock it
+
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(heaters)
-	OBJECT_MODEL_ARRAY(sensors)
 
 private:
-	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying
-
 	ReadLockedPointer<Heater> FindHeater(int heater) const noexcept;
 	void DeleteSensor(unsigned int sn) noexcept;
 	void InsertSensor(TemperatureSensor *newSensor) noexcept;
+	void SetTemperature(int heater, float t, bool activeNotStandby) THROWS(GCodeException);
 
 	static ReadWriteLock heatersLock;
-	static ReadWriteLock sensorsLock;
 
 	uint8_t volatile sensorCount;
 	TemperatureSensor * volatile sensorsRoot;					// The sensor list
-	HeaterProtection *heaterProtections[MaxHeaters + MaxExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
 	Heater* heaters[MaxHeaters];								// A local or remote heater
 	const Tool* lastStandbyTools[MaxHeaters];					// The last tool that caused the corresponding heater to be set to standby

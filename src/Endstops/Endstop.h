@@ -22,6 +22,7 @@ class EndstopOrZProbe INHERIT_OBJECT_MODEL
 {
 public:
 	EndstopOrZProbe() noexcept : next(nullptr) {}
+	EndstopOrZProbe(const EndstopOrZProbe&) = delete;
 	virtual ~EndstopOrZProbe() noexcept {}
 
 	virtual EndStopHit Stopped() const noexcept = 0;

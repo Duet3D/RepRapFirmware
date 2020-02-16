@@ -83,8 +83,8 @@ public:
 
 	float GetToolHeaterActiveTemperature(size_t heaterNumber) const noexcept;
 	float GetToolHeaterStandbyTemperature(size_t heaterNumber) const noexcept;
-	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) noexcept;
-	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) noexcept;
+	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) THROWS(GCodeException);
+	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THROWS(GCodeException);
 
 	bool HasTemperatureFault() const noexcept { return heaterFault; }
 

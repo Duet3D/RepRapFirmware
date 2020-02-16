@@ -138,7 +138,7 @@ void FopDt::CalcPidConstants() noexcept
 
 #if SUPPORT_CAN_EXPANSION
 
-void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) noexcept
+void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) const noexcept
 {
 	msg.heater = heater;
 	msg.gain = gain;
