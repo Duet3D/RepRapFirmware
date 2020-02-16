@@ -1501,6 +1501,7 @@ void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile)
 
 // Set up the extrusion and feed rate of a move for the Move class
 // 'moveBuffer.moveType' and 'moveBuffer.isCoordinated' must be set up before calling this
+// 'isPrintingMove' is true if there is any axis movement
 // Returns true if this gcode is valid so far, false if it should be discarded
 bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove)
 {
@@ -1512,7 +1513,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 		if (gb.Seen(feedrateLetter))
 		{
 			const float rate = gb.GetDistance();
-			gb.MachineState().feedRate = (moveBuffer.moveType == 0)
+			gb.MachineState().feedRate = (moveBuffer.moveType == 0 && isPrintingMove)
 						? rate * speedFactor * (0.01 * SecondsToMinutes)
 						: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 		}
