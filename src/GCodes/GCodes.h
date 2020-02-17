@@ -261,54 +261,54 @@ private:
 	void UnlockAll(const GCodeBuffer& gb) noexcept;								// Release all locks
 
 	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[(size_t)channel]; }
-	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply);				// Fetch a new or old GCode and process it
-	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply);				// Execute a step of the state machine
+	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
+	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Execute a step of the state machine
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps);
 
-	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply);					// Get G Codes from a file and print them
-	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = -1);
+	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
+	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = -1) noexcept;
 		// Run a GCode macro file, optionally report error if not found
-	void FileMacroCyclesReturn(GCodeBuffer& gb);								// End a macro
+	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro
 
-	bool ActOnCode(GCodeBuffer& gb, const StringRef& reply);					// Do a G, M or T Code
-	bool HandleGcode(GCodeBuffer& gb, const StringRef& reply);					// Do a G code
-	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply);					// Do an M code
-	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply);					// Do a T code
+	bool ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Do a G, M or T Code
+	bool HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do a G code
+	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do an M code
+	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do a T code
 	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf)
-		pre(outBuf == nullptr || rslt == GCodeResult::ok);
+		pre(outBuf == nullptr || rslt == GCodeResult::ok) noexcept;
 
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
 
 	const char* DoStraightMove(GCodeBuffer& gb, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning any error message
-	const char* DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning any error message
+	const char* DoArcMove(GCodeBuffer& gb, bool clockwise)							// Execute an arc move returning any error message
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
-	void FinaliseMove(GCodeBuffer& gb) noexcept;								// Adjust the move parameters to account for segmentation and/or part of the move having been done already
-	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;					// Check that enough axes have been homed
+	void FinaliseMove(GCodeBuffer& gb) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
+	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;						// Check that enough axes have been homed
 
-	GCodeResult DoDwell(GCodeBuffer& gb) noexcept;								// Wait for a bit
-	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);				// Home some axes
-	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply);			// Probes at a given position - see the comment at the head of the function itself
-	void InitialiseTaps() noexcept;												// Set up to do the first of a possibly multi-tap probe
-	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
-	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);	// Deal with a G10
-	GCodeResult SetPositions(GCodeBuffer& gb);									// Deal with a G92
-	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply);			// Deal with a G38.x
+	GCodeResult DoDwell(GCodeBuffer& gb) noexcept;									// Wait for a bit
+	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);					// Home some axes
+	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply);				// Probes at a given position - see the comment at the head of the function itself
+	void InitialiseTaps() noexcept;													// Set up to do the first of a possibly multi-tap probe
+	void SetBedEquationWithProbe(int sParam, const StringRef& reply);				// Probes a series of points and sets the bed equation
+	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);		// Deal with a G10
+	GCodeResult SetPositions(GCodeBuffer& gb);										// Deal with a G92
+	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply);				// Deal with a G38.x
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Deal with a M584
-	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);				// Deal with a M585
-	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin = true) THROWS_GCODE_EXCEPTION;	// Deal with a M675
+	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);					// Deal with a M585
+	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin = true) THROWS(GCodeException);	// Deal with a M675
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply) noexcept;		// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply) noexcept;		// Deal with G60
 	GCodeResult ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply) noexcept;	// Deal with M569
 
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
 
-	bool Push(GCodeBuffer& gb, bool withinSameFile);							// Push feedrate etc on the stack
-	void Pop(GCodeBuffer& gb, bool withinSameFile);								// Pop feedrate etc
-	void DisableDrives() noexcept;												// Turn the motors off
-																				// Start saving GCodes in a file
-	bool SendConfigToLine();													// Deal with M503
+	bool Push(GCodeBuffer& gb, bool withinSameFile);								// Push feedrate etc on the stack
+	void Pop(GCodeBuffer& gb, bool withinSameFile);									// Pop feedrate etc
+	void DisableDrives() noexcept;													// Turn the motors off
+																					// Start saving GCodes in a file
+	bool SendConfigToLine();														// Deal with M503
 
-	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply);			// Set/report offsets
+	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply);				// Set/report offsets
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates
@@ -317,12 +317,12 @@ private:
 # endif
 #endif
 
-	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply);			// Create a new tool definition
-	void SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException);				// Set all a tool's heaters to the temperature, for M104/M109
+	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Create a new tool definition
+	void SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException);	// Set all a tool's heaters to the temperature, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
 																				// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const StringRef& reply) const noexcept;		// Store a standard-format temperature report in reply
-	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const;	// Generate a M408 response
+	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const;			// Check whether we need to report temperatures or status
 
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;	// Save position to a restore point
@@ -357,7 +357,7 @@ private:
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply);			// Load the height map from file
-	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const;	// Save the height map to the specified file
+	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;	// Save the height map to the specified file
 	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;	// Save the height map to the file specified by P parameter
 #endif
 	void ClearBedMapping();														// Stop using bed compensation
@@ -406,7 +406,7 @@ private:
 
 #ifdef SERIAL_AUX_DEVICE
 	static bool emergencyStopCommanded;
-	static void CommandEmergencyStop(UARTClass *p);
+	static void CommandEmergencyStop(UARTClass *p) noexcept;
 #endif
 
 	Platform& platform;													// The RepRap machine

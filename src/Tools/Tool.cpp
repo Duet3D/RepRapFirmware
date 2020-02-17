@@ -529,15 +529,14 @@ void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) THROW
 		}
 		else
 		{
-			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heater);
-			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heater);
-			if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
+			if (temp <= reprap.GetHeat().GetLowestTemperatureLimit(heater) || temp >= reprap.GetHeat().GetHighestTemperatureLimit(heater))
 			{
-				activeTemperatures[heaterNumber] = temp;
-				if (setHeater)
-				{
-					reprap.GetHeat().SetActiveTemperature(heater, activeTemperatures[heaterNumber]);
-				}
+				throw GCodeException(-1, -1, "Requested temperature out of range");
+			}
+			activeTemperatures[heaterNumber] = temp;
+			if (setHeater)
+			{
+				reprap.GetHeat().SetActiveTemperature(heater, temp);
 			}
 		}
 	}
@@ -547,28 +546,28 @@ void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THRO
 {
 	if (heaterNumber < heaterCount)
 	{
+		const int8_t heater = heaters[heaterNumber];
 		const Tool * const currentTool = reprap.GetCurrentTool();
-		const Tool * const lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heaters[heaterNumber]);
+		const Tool * const lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heater);
 		const bool setHeater = (currentTool == nullptr || currentTool == this || lastStandbyTool == nullptr || lastStandbyTool == this);
 		if (temp < NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
 		{
 			standbyTemperatures[heaterNumber] = 0;
 			if (setHeater)
 			{
-				reprap.GetHeat().SwitchOff(heaters[heaterNumber]);
+				reprap.GetHeat().SwitchOff(heater);
 			}
 		}
 		else
 		{
-			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heaterNumber]);
-			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heaterNumber]);
-			if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
+			if (temp <= reprap.GetHeat().GetLowestTemperatureLimit(heater) || temp >= reprap.GetHeat().GetHighestTemperatureLimit(heater))
 			{
-				standbyTemperatures[heaterNumber] = temp;
-				if (setHeater)
-				{
-					reprap.GetHeat().SetStandbyTemperature(heaters[heaterNumber], standbyTemperatures[heaterNumber]);
-				}
+				throw GCodeException(-1, -1, "Requested temperature out of range");
+			}
+			standbyTemperatures[heaterNumber] = temp;
+			if (setHeater)
+			{
+				reprap.GetHeat().SetStandbyTemperature(heater, temp);
 			}
 		}
 	}

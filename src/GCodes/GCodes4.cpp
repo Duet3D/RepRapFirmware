@@ -16,7 +16,7 @@
 // CAUTION: don't allocate any long strings or other large objects directly within this function.
 // The reason is that this function calls FinishedBedProbing(), which on a delta calls DoAutoCalibration(), which uses lots of stack.
 // So any large local objects allocated here increase the amount of MAIN stack size needed.
-void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
+void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 #if HAS_LINUX_INTERFACE
 	// Wait for the G-code replies and abort requests to go before anything else is done in the state machine

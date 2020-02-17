@@ -50,7 +50,7 @@
 
 // If the code to act on is completed, this returns true, otherwise false.
 // It is called repeatedly for a given code until it returns true for that code.
-bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
+bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	try
 	{
@@ -103,14 +103,14 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 		return true;
 	}
 
-	// if we get here then we didn't see a command that was worth parsing
+	// If we get here then we didn't see a command that was worth parsing
 	reply.printf("Bad command: ");
 	gb.AppendFullCommand(reply);
 	HandleReply(gb, GCodeResult::error, reply.c_str());
 	return true;
 }
 
-bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
+bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	GCodeResult result = GCodeResult::ok;
 	const int code = gb.GetCommandNumber();
@@ -398,7 +398,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 	return HandleResult(gb, result, reply, nullptr);
 }
 
-bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
+bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const int code = gb.GetCommandNumber();
 	if (   simulationMode != 0
@@ -4365,7 +4365,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // This is called to deal with the result of processing a G- or M-code
-bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf)
+bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf) noexcept
 {
 	if (outBuf != nullptr)
 	{
