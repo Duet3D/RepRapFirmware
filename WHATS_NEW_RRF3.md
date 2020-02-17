@@ -6,7 +6,10 @@ Recommended compatible firmware:
 - DuetWiFiServer 1.23
 - Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
 
-Upgrade notes: none since 3.01-RC1
+Upgrade notes:
+- If you use M577 or M581 commands, you will need to change them.
+- If you use M143 commands with P or X parameters, you will need to change them
+- If you use the M558 command with the I nparameter, you will need to change it
 
 Changed behaviour:
 - The I (invert) parameter of M558 has been removed. If you were using I1 then you will need to invert the pin name instead.
