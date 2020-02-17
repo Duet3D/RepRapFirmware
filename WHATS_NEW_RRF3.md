@@ -9,7 +9,7 @@ Recommended compatible firmware:
 Upgrade notes:
 - If you use M577 or M581 commands, you will need to change them.
 - If you use M143 commands with P or X parameters, you will need to change them
-- If you use the M558 command with the I nparameter, you will need to change it
+- If you use M558 commands with the I parameter, you will need to change them
 
 Changed behaviour:
 - The I (invert) parameter of M558 has been removed. If you were using I1 then you will need to invert the pin name instead.
