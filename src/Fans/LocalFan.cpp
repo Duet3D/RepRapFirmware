@@ -188,10 +188,7 @@ bool LocalFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 
 bool LocalFan::Check() noexcept
 {
-	if (sensorsMonitored.IsNonEmpty() || blipping)
-	{
-		InternalRefresh();
-	}
+	InternalRefresh();
 	return sensorsMonitored.IsNonEmpty() && lastVal != 0.0;
 }
 
