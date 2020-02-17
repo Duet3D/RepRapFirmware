@@ -83,6 +83,7 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(monitors)
 
 	enum class HeaterMode : uint8_t
 	{

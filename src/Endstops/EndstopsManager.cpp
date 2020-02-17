@@ -22,6 +22,7 @@
 #include "Movement/Move.h"
 #include <OutputMemory.h>
 #include <Heating/Heat.h>
+#include <Heating/Sensors/TemperatureSensor.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CanMessageBuffer.h"
@@ -42,8 +43,8 @@ ReadWriteLock EndstopsManager::zProbesLock;
 constexpr ObjectModelArrayDescriptor EndstopsManager::sensorsArrayDescriptor =
 {
 	&Heat::sensorsLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Heat*)self)->GetNumSensorsToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Heat*)self)->FindSensor(context.GetLastIndex()).Ptr()); }
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetHeat().GetNumSensorsToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetHeat().FindSensor(context.GetLastIndex()).Ptr()); }
 };
 
 constexpr ObjectModelArrayDescriptor EndstopsManager::endstopsArrayDescriptor =

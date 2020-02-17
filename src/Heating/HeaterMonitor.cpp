@@ -96,4 +96,16 @@ void HeaterMonitor::Report(unsigned int heater, unsigned int index, const String
 	}
 }
 
+// Get the condition for a temperature event as a string
+const char *HeaterMonitor::GetTriggerName() const noexcept
+{
+	switch (trigger)
+	{
+	case HeaterMonitorTrigger::Disabled:				return "disabled";
+	case HeaterMonitorTrigger::TemperatureExceeded:		return "tooHigh";
+	case HeaterMonitorTrigger::TemperatureTooLow:		return "tooLow";
+	default:											return "undefined";
+	}
+}
+
 // End
