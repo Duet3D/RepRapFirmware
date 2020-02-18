@@ -15,7 +15,7 @@ Changed behaviour:
 - The I (invert) parameter of M558 has been removed. If you were using I1 then you will need to invert the pin name instead.
 - The parameters to M577 have changed. See  https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M577_RepRapFirmware_3_01RC2_and_later.
 - The parameters to M581 have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M581_RepRapFirmware_3_01RC2_and_later.
-- The P parameter to M143 now has a different meaning. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M143_Maximum_heater_temperature.
+- The P parameter to M143 now has a different meaning. Also the X (sensor) parameter has been replaced by T. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M143_Maximum_heater_temperature.
 - On Duet 3, M143 now works for heaters on expansion boards and tool boards provided that they are running version 3.01-RC2 of their own firmware
 - When tuning a heater using M303 H# the S parameter is now mandatory
 - The speed factor (M220) is no longer applied to extruder-only moves or to movement commands in system or user macro files
