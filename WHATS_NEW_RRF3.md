@@ -1,4 +1,4 @@
-RepRapFirmware 3.01-RC2 (in preparation)
+RepRapFirmware 3.01-RC2
 =======================
 
 Recommended compatible firmware:
@@ -18,7 +18,7 @@ Changed behaviour:
 - The P parameter to M143 now has a different meaning. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M143_Maximum_heater_temperature.
 - On Duet 3, M143 now works for heaters on expansion boards and tool boards provided that they are running version 3.01-RC2 of their own firmware
 - When tuning a heater using M303 H# the S parameter is now mandatory
-- The speed factor (M220) is no longer applied to extruder-only moves
+- The speed factor (M220) is no longer applied to extruder-only moves or to movement commands in system or user macro files
 
 New features:
 - General purpose inputs may now be configured using M950 J# C"pin-name". These are used by M577 and M581. Their states may be queried in the object model. On Duet 3 they may refer to pins on expansion boards and tool boards as well as pins on the main board.
@@ -26,8 +26,8 @@ New features:
 - Object model key **sensors.inputs** has been added. This lists the input states of the configured general purpose inputs.
 - Object model key **state.previousTool** is added. It is the tool number that was active at the start of the last T command that caused a tool change (or implied T command caused by executing M109), or -1 if no tool was active at that time.
 - Object model key **limits** has been added. This gives the maximum number of heaters, fans etc. that the firmware supports. It has the verbose flag set, so it is normally hidden. Send **M409 k"limits" f"v"** to see all the limits.
-- Object model key **network.name** has been added. It returns the maxchine name set by M550.
-- In Laser mode, GCode lines with coordinates etc. but no G or M command are now accepted if the most recent command was G0, G1, G2, or G3 (as was already the case in CNC mode)
+- Object model key **network.name** has been added. It returns the machine name set by M550.
+- In Laser mode, GCode lines with coordinates etc. but no G or M command are now accepted if the most recent command was G0, G1, G2, or G3. This was already the case in CNC mode.
 
 Bug fixes:
 - Round-robin scheduling of GCode input sources has been restored so that no channel can monpolise the motion system
