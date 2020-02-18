@@ -33,6 +33,7 @@ Bug fixes:
 - Round-robin scheduling of GCode input sources has been restored so that no channel can monpolise the motion system
 - On some Duet 3 boards, axes were not flagged as homed when VIN power was lost but 5V power remained
 - When using the M109 command, the firmware did not prevent you from setting temperatures that exceeded the limit set by M143
+- The RPM of non-thermostatic fans with tachos wasn't reported continuously
 
 RepRapFirmware 3.01-RC1
 =======================
