@@ -1513,7 +1513,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 		if (gb.Seen(feedrateLetter))
 		{
 			const float rate = gb.GetDistance();
-			gb.MachineState().feedRate = (moveBuffer.moveType == 0 && isPrintingMove)
+			gb.MachineState().feedRate = (moveBuffer.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro())
 						? rate * speedFactor * (0.01 * SecondsToMinutes)
 						: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 		}

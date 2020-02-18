@@ -74,6 +74,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 			if (CanInterface::DeleteHandle(boardAddress, handle, reply) != GCodeResult::ok)
 			{
 				reprap.GetPlatform().Message(AddWarning(gb.GetResponseMessageType()), reply.c_str());
+				reply.Clear();
 			}
 			boardAddress = CanId::MasterAddress;
 		}
