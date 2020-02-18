@@ -2,9 +2,10 @@ RepRapFirmware 3.01-RC2
 =======================
 
 Recommended compatible firmware:
-- DuetWebControl 2.07
+- DuetWebControl 2.0.7
 - DuetWiFiServer 1.23
 - Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC2
 
 Upgrade notes:
 - If you use M577 or M581 commands, you will need to change them.
