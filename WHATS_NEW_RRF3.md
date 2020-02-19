@@ -3,6 +3,7 @@ RepRapFirmware 3.01-RC3 (in preparation)
 
 New features/changed behaviour
 - Increased maximum stack/macro file depth from 5 to 7
+- If the macro stack depth is exceeded, the current macros ni the stack are abandoned; and if the macro was called from a GCode print file, that file is abandoned too
 
 Bug fixes:
 - The seconds in the last-modified times of files were reported incorrectly
