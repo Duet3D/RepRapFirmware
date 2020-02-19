@@ -4,6 +4,9 @@ RepRapFirmware 3.01-RC3 (in preparation)
 New features/changed behaviour
 - Increased maximum stack/macro file depth from 5 to 7
 
+Bug fixes:
+- When uploading a file via HTTP and no time stamp was specified in the rr_upload command, or when uploading using FTP, the file last-modified-time was not set even when the system date/time had been set
+
 RepRapFirmware 3.01-RC2
 =======================
 
