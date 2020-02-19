@@ -1,3 +1,9 @@
+RepRapFirmware 3.01-RC3 (in preparation)
+=======================
+
+New features/changed behaviour
+- Increased maximum stack/macro file depth from 5 to 7
+
 RepRapFirmware 3.01-RC2
 =======================
 
