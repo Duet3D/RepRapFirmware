@@ -8,6 +8,7 @@ New features/changed behaviour
 Bug fixes:
 - The seconds in the last-modified times of files were reported incorrectly (this was a long-standing bug)
 - If G10 was used to set the standby temperature of a heater for some tool, and the same heater was an active heater for the current tool, the target temperature would incorrectly be set to the standby value (this was a new bug in 3.01-RC2)
+- In five-bar SCARA kinematics, the X and Y motors were not treated as continuious rotation axes
 
 RepRapFirmware 3.01-RC2
 =======================
