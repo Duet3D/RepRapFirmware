@@ -3,10 +3,11 @@ RepRapFirmware 3.01-RC3 (in preparation)
 
 New features/changed behaviour
 - Increased maximum stack/macro file depth from 5 to 7
-- If the macro stack depth is exceeded, the current macros ni the stack are abandoned; and if the macro was called from a GCode print file, that file is abandoned too
+- If the macro stack depth is exceeded, the current macros in the stack are abandoned; and if the macro was called from a GCode print file, that file is abandoned too
 
 Bug fixes:
-- The seconds in the last-modified times of files were reported incorrectly
+- The seconds in the last-modified times of files were reported incorrectly (this was a long-standing bug)
+- If G10 was used to set the standby temperature of a heater for some tool, and the same heater was an active heater for the current tool, the target temperature would incorrectly be set to the standby value (this was a new bug in 3.01-RC2)
 
 RepRapFirmware 3.01-RC2
 =======================
