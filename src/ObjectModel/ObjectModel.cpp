@@ -661,7 +661,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, E
 		{
 			return val;				// an object value can be compared to null
 		}
-		throw context.ConstructParseException("syntax error in value selector string");
+		throw context.ConstructParseException((*idString == '[') ? "object is not an array" : "syntax error in object model path");
 
 	case TYPE_OF(Bitmap<uint16_t>):
 	case TYPE_OF(Bitmap<uint32_t>):

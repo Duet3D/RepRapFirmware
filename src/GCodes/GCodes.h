@@ -423,11 +423,12 @@ private:
 	GCodeBuffer*& fileGCode = gcodeSources[2];
 	GCodeBuffer*& usbGCode = gcodeSources[3];
 	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the PanelDue on the async serial interface
-	GCodeBuffer*& daemonGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
+	GCodeBuffer*& triggerGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[6];
 	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the 12864 LCD
 	GCodeBuffer*& spiGCode = gcodeSources[8];
-	GCodeBuffer*& autoPauseGCode = gcodeSources[9];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+	GCodeBuffer*& daemonGCode = gcodeSources[9];
+	GCodeBuffer*& autoPauseGCode = gcodeSources[10];					// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 
@@ -624,6 +625,7 @@ private:
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
 	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
+	static constexpr const char* DAEMON_G = "daemon.g";
 #if HAS_SMART_DRIVERS
 	static constexpr const char* REHOME_G = "rehome.g";
 #endif

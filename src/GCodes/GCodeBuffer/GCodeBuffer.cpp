@@ -56,6 +56,7 @@ void GCodeBuffer::StartTimer() noexcept
 	timerRunning = true;
 }
 
+// Delay executing this GCodeBuffer for the specified time. Return true when the timer has expired.
 bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis) noexcept
 {
 	const uint32_t now = millis();

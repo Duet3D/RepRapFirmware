@@ -104,7 +104,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	auxGCode = nullptr;
 #endif
 
-	daemonGCode = new GCodeBuffer(GCodeChannel::daemon, nullptr, fileInput, GenericMessage);
+	triggerGCode = new GCodeBuffer(GCodeChannel::trigger, nullptr, fileInput, GenericMessage);
 
 	codeQueue = new GCodeQueue();
 	queuedGCode = new GCodeBuffer(GCodeChannel::queue, codeQueue, fileInput, GenericMessage);
@@ -120,7 +120,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #else
 	spiGCode = nullptr;
 #endif
-
+	daemonGCode = new GCodeBuffer(GCodeChannel::daemon, nullptr, fileInput, GenericMessage);
 	autoPauseGCode = new GCodeBuffer(GCodeChannel::autopause, nullptr, fileInput, GenericMessage);
 }
 
@@ -334,14 +334,14 @@ FilePosition GCodes::GetFilePosition() const noexcept
 // Start running the config file
 bool GCodes::RunConfigFile(const char* fileName) noexcept
 {
-	runningConfigFile = DoFileMacro(*daemonGCode, fileName, false);
+	runningConfigFile = DoFileMacro(*triggerGCode, fileName, false);
 	return runningConfigFile;
 }
 
 // Return true if the daemon is busy running config.g or a trigger file
 bool GCodes::IsDaemonBusy() const noexcept
 {
-	return daemonGCode->IsDoingFile();
+	return triggerGCode->IsDoingFile();
 }
 
 // Copy the feed rate etc. from the daemon to the input channels
@@ -486,6 +486,14 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	else if (gb.IsDoingFile())
 	{
 		DoFilePrint(gb, reply);
+	}
+	else if (&gb == daemonGCode)
+	{
+		// Delay 1 second, then try to open and run daemon.g. No error if it is not found.
+		if (gb.DoDwellTime(1000))
+		{
+			DoFileMacro(gb, DAEMON_G, false, -1);
+		}
 	}
 	else
 #if SUPPORT_SCANNER
@@ -756,7 +764,7 @@ void GCodes::CheckTriggers() noexcept
 			triggersPending.ClearBit(lowestTriggerPending);			// clear the trigger
 			DoEmergencyStop();
 		}
-		else if (!IsDaemonBusy() && daemonGCode->GetState() == GCodeState::normal)	// if we are not already executing a trigger or config.g
+		else if (!IsDaemonBusy() && triggerGCode->GetState() == GCodeState::normal)	// if we are not already executing a trigger or config.g
 		{
 			if (lowestTriggerPending == 1)
 			{
@@ -764,10 +772,10 @@ void GCodes::CheckTriggers() noexcept
 				{
 					triggersPending.ClearBit(lowestTriggerPending);	// ignore a pause trigger if we are already paused or not printing
 				}
-				else if (LockMovement(*daemonGCode))					// need to lock movement before executing the pause macro
+				else if (LockMovement(*triggerGCode))					// need to lock movement before executing the pause macro
 				{
 					triggersPending.ClearBit(lowestTriggerPending);	// clear the trigger
-					DoPause(*daemonGCode, PauseReason::trigger, "Print paused by external trigger");
+					DoPause(*triggerGCode, PauseReason::trigger, "Print paused by external trigger");
 				}
 			}
 			else
@@ -775,7 +783,7 @@ void GCodes::CheckTriggers() noexcept
 				triggersPending.ClearBit(lowestTriggerPending);		// clear the trigger
 				String<StringLength20> filename;
 				filename.printf("trigger%u.g", lowestTriggerPending);
-				DoFileMacro(*daemonGCode, filename.c_str(), true);
+				DoFileMacro(*triggerGCode, filename.c_str(), true);
 			}
 		}
 	}
@@ -995,7 +1003,7 @@ bool GCodes::IsPausing() const noexcept
 		return true;
 	}
 
-	topState = daemonGCode->OriginalMachineState().state;
+	topState = triggerGCode->OriginalMachineState().state;
 	if (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
 		|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
 	   )
@@ -3261,7 +3269,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply) n
 
 	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued
 	// Also check that this response was triggered by a gcode
-	if (reply[0] == 0 && (gb.MachineState().doingFileMacro || &gb == fileGCode || &gb == queuedGCode || &gb == daemonGCode || &gb == autoPauseGCode))
+	if (reply[0] == 0 && (gb.MachineState().doingFileMacro || &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode))
 	{
 		return;
 	}

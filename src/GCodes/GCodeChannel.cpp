@@ -5,6 +5,8 @@
  *      Author: Christian
  */
 
+#include "GCodeChannel.h"
+
 extern const char * const gcodeChannelName[] =
 {
 	"http",
@@ -12,11 +14,14 @@ extern const char * const gcodeChannelName[] =
 	"file",
 	"serial",
 	"aux",
-	"daemon",
+	"trigger",
 	"queue",
 	"lcd",
 	"spi",
+	"daemon",
 	"autopause"
 };
+
+static_assert(ARRAY_SIZE(gcodeChannelName) == NumGCodeChannels);
 
 // End
