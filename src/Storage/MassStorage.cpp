@@ -94,7 +94,7 @@ static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime) noexcept
 	timeInfo.tm_mday = max<int>(fdate & 0x1F, 1);
 	timeInfo.tm_hour = (ftime >> 11) & 0x1F;
 	timeInfo.tm_min = (ftime >> 5) & 0x3F;
-	timeInfo.tm_sec = ftime & 0x1F;
+	timeInfo.tm_sec = (ftime & 0x1F) * 2;
 	timeInfo.tm_isdst = 0;
 	return mktime(&timeInfo);
 }

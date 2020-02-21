@@ -1486,6 +1486,7 @@ bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile)
 	if (!ok)
 	{
 		platform.Message(ErrorMessage, "Push(): stack overflow\n");
+		AbortPrint(gb);
 	}
 	return ok;
 }

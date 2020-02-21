@@ -3,28 +3,15 @@
 
 #define BOARD_SHORT_NAME		"MB6HC"
 #define BOARD_NAME				"Duet 3 MB6HC"
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC v0.6 or 1.0"
-#define DEFAULT_BOARD_TYPE		BoardType::Duet3
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC"
+#define DEFAULT_BOARD_TYPE		BoardType::Auto
+
 const size_t NumFirmwareUpdateModules = 1;
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-
-#define IAP_IN_RAM				1
-
-#if IAP_IN_RAM
-# define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
-# define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap_" BOARD_SHORT_NAME ".bin"
+#define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
+#define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
-#else
-# define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
-# define IAP_UPDATE_FILE_SBC		"Duet3iap_sbc_" BOARD_SHORT_NAME ".bin"
-
-// SAME70 Flash locations
-// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
-// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
-constexpr uint32_t IAP_IMAGE_START = 0x004E0000;
-constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
-#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1

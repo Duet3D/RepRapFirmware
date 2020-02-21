@@ -25,17 +25,8 @@
 
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define IAP_FIRMWARE_FILE		"PccbFirmware.bin"
-
-#define IAP_IN_RAM				1
-
-#if IAP_IN_RAM
-# define IAP_UPDATE_FILE		"PccbIAP.bin"
+#define IAP_UPDATE_FILE			"PccbIAP.bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20010000;
-#else
-# define IAP_UPDATE_FILE		"iap4s.bin"
-constexpr uint32_t IAP_IMAGE_START = 0x00470000;
-constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
-#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0

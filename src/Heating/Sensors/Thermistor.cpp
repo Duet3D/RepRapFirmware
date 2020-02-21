@@ -127,10 +127,14 @@ void Thermistor::Poll() noexcept
 # ifdef DUET3
 		// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon.
 		// So Extrapolate the reading for VrefP. We also allow offsets to be added.
+		// Version 1.01 and later boards have the series resistors connected to VrefMon.
 		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t averagedVssaReading = rawAveragedVssaReading + adcLowOffset;
-		const int32_t averagedVrefReading = ((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0)) + rawAveragedVssaReading + adcHighOffset;
+		const int32_t averagedVrefReading = ((reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
+											? ((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0)) + rawAveragedVssaReading
+												: rawAveragedVrefReading
+											) + adcHighOffset;
 # else
 		const int32_t averagedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t averagedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);

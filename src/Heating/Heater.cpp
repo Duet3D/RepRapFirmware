@@ -323,7 +323,7 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 	else
 	{
 		((activeNotStandby) ? activeTemperature : standbyTemperature) = t;
-		if (GetMode() > HeaterMode::suspended && active)
+		if (GetMode() > HeaterMode::suspended && active == activeNotStandby)
 		{
 			String<1> dummy;
 			(void)SwitchOn(dummy.GetRef());

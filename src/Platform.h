@@ -113,7 +113,8 @@ enum class BoardType : uint8_t
 {
 	Auto = 0,
 #if defined(DUET3)
-	Duet3 = 1
+	Duet3_v06_100 = 1,
+	Duet3_v101 = 2,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
@@ -288,6 +289,8 @@ public:
 	bool AtxPower() const noexcept;
 	void AtxPowerOn() noexcept;
 	void AtxPowerOff(bool defer) noexcept;
+
+	BoardType GetBoardType() const noexcept { return board; }
 	void SetBoardType(BoardType bt) noexcept;
 	const char* GetElectronicsString() const noexcept;
 	const char* GetBoardString() const noexcept;

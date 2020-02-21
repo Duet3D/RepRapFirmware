@@ -3533,7 +3533,10 @@ void Platform::SetBoardType(BoardType bt) noexcept
 	if (bt == BoardType::Auto)
 	{
 #if defined(DUET3)
-		board = BoardType::Duet3;
+		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but won't on v1.01 boards
+		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+		delayMicroseconds(20);										// give the pullup resistor time to work
+		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_v101 : BoardType::Duet3_v06_100;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
@@ -3600,7 +3603,8 @@ const char* Platform::GetElectronicsString() const noexcept
 	switch (board)
 	{
 #if defined(DUET3)
-	case BoardType::Duet3:					return "Duet 3 " BOARD_SHORT_NAME;
+	case BoardType::Duet3_v06_100:			return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
+	case BoardType::Duet3_v101:				return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
@@ -3637,14 +3641,8 @@ const char* Platform::GetBoardString() const noexcept
 	switch (board)
 	{
 #if defined(DUET3)
-	case BoardType::Duet3:
-# if defined(DUET3_V03)
-											return "duet3proto3";
-# elif defined(DUET3_V05)
-											return "duet3proto5";
-# elif defined(DUET3_V06)
-											return "duet3mb6hc";
-# endif
+	case BoardType::Duet3_v06_100:			return "duet3mb6hc100";
+	case BoardType::Duet3_v101:				return "duet3mb6hc101";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)

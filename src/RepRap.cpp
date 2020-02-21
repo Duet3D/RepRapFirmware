@@ -2547,7 +2547,6 @@ void RepRap::UpdateFirmware() noexcept
 	display->UpdatingFirmware();			// put the firmware update message on the display
 #endif
 
-#if IAP_IN_RAM
 	// Send this message before we start using RAM that may contain message buffers
 	platform->Message(AuxMessage, "Updating main firmware\n");
 	platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
@@ -2555,7 +2554,6 @@ void RepRap::UpdateFirmware() noexcept
 	// Allow time for the firmware update message to be sent
 	const uint32_t now = millis();
 	while (platform->FlushMessages() && millis() - now < 2000) { }
-#endif
 
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
@@ -2570,145 +2568,15 @@ void RepRap::UpdateFirmware() noexcept
 	ARM_MPU_Disable();
 #endif
 
-#if IAP_IN_RAM
 	// Use RAM-based IAP
 	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
-#else
-	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
-	// On the SAM3X, leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
-
-# if !defined(IFLASH_PAGE_SIZE) && defined(IFLASH0_PAGE_SIZE)
-#  define IFLASH_PAGE_SIZE	IFLASH0_PAGE_SIZE
-# endif
-
-	// Use a 32-bit aligned buffer. This gives us the option of calling the EFC functions directly in future.
-	uint32_t data32[IFLASH_PAGE_SIZE/4];
-	char* const data = reinterpret_cast<char *>(data32);
-
-# if SAM4E || SAM4S || SAME70
-	// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
-	// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
-	flash_unlock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
-	flash_erase_sector(IAP_IMAGE_START);
-
-	for (uint32_t flashAddr = IAP_IMAGE_START; flashAddr < IAP_IMAGE_END; flashAddr += IFLASH_PAGE_SIZE)
-	{
-		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
-
-		if (bytesRead > 0)
-		{
-			// Do we have to fill up the remaining buffer with zeros?
-			if (bytesRead != IFLASH_PAGE_SIZE)
-			{
-				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
-			}
-
-			// Write one page at a time
-			cpu_irq_disable();
-			const uint32_t rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
-			cpu_irq_enable();
-
-			if (rc != FLASH_RC_OK)
-			{
-				platform->MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, flashAddr);
-				return;
-			}
-
-			// Verify written data
-			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
-			{
-				platform->MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
-				return;
-			}
-		}
-		else
-		{
-			// Fill up the remaining space with zeros
-			memset(data, 0, sizeof(data[0]) * sizeof(data));
-			cpu_irq_disable();
-			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
-			cpu_irq_enable();
-		}
-	}
-
-	// Re-lock the whole area
-	flash_lock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
-
-# else	// SAM3X code
-
-	for (uint32_t flashAddr = IAP_IMAGE_START; flashAddr < IAP_IMAGE_END; flashAddr += IFLASH_PAGE_SIZE)
-	{
-		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
-
-		if (bytesRead > 0)
-		{
-			// Do we have to fill up the remaining buffer with zeros?
-			if (bytesRead != IFLASH_PAGE_SIZE)
-			{
-				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
-			}
-
-			// Write one page at a time
-			cpu_irq_disable();
-
-			const char* op = "unlock";
-			uint32_t rc = flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-
-			if (rc == FLASH_RC_OK)
-			{
-				op = "write";
-				rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
-			}
-			if (rc == FLASH_RC_OK)
-			{
-				op = "lock";
-				rc = flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-			}
-			cpu_irq_enable();
-
-			if (rc != FLASH_RC_OK)
-			{
-				platform->MessageF(FirmwareUpdateErrorMessage, "flash %s failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", op, rc, flashAddr);
-				return;
-			}
-			// Verify written data
-			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
-			{
-				platform->MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
-				return;
-			}
-		}
-		else
-		{
-			// Fill up the remaining space
-			memset(data, 0, sizeof(data[0]) * sizeof(data));
-			cpu_irq_disable();
-			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
-			flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-			cpu_irq_enable();
-		}
-	}
-# endif
-#endif
-
 	iapFile->Close();
-
 	StartIap();
 #endif
 }
 
 void RepRap::StartIap() noexcept
 {
-#if !IAP_IN_RAM
-	platform->Message(AuxMessage, "Updating main firmware\n");
-	platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
-
-	// Allow time for the firmware update message to be sent
-	const uint32_t now = millis();
-	while (platform->FlushMessages() && millis() - now < 2000) { }
-#endif
-
 	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
 	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
 
