@@ -927,7 +927,7 @@ void FiveBarScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *no
 // Return true if the specified axis is a continuous rotation axis
 bool FiveBarScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 {
-	return false;
+	return axis == X_AXIS || axis == Y_AXIS;
 }
 
 AxesBitmap FiveBarScaraKinematics::GetLinearAxes() const noexcept
