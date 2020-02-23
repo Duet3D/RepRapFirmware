@@ -8,6 +8,7 @@ New features/changed behaviour
 - A G4 command will no longer wait for all movement to complete if the input channel executing the G4 has not commanded any motion since it last waited for motion to stop. This is to allow G4 to be used to introduced delays in trigger and deamon GCode files, without causing motion to stop. M400 can be used to wait for motion to stop.
 - Filament monitor types types 4 (rotating magnet + filament presence switch) and 6 (laser + filament presence switch) now provoide object model property 'filamentPresent'. Types 1 and 2 already did.
 - Added object model properties extruders[].filament and tools[].filament
+- Added support for file runonce.g. If this file is present at startup, it is run after runnig config.g and activating the network, and then deleted.
 
 Bug fixes:
 - The seconds in the last-modified times of files were reported incorrectly (this was a long-standing bug)
