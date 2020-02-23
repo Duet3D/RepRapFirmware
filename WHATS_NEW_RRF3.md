@@ -2,13 +2,17 @@ RepRapFirmware 3.01-RC3 (in preparation)
 =======================
 
 New features/changed behaviour
+- There is now a daemon GCode channel, which looks for and executes file sys/daemon.g. This can be used to execute regular tasks. If the end of the file is reached, or the file is not found, it delays for 1 second and starts again.
 - Increased maximum stack/macro file depth from 5 to 7
 - If the macro stack depth is exceeded, the current macros in the stack are abandoned; and if the macro was called from a GCode print file, that file is abandoned too
+- A G4 command will no longer wait for all movement to complete if the input channel executing the G4 has not commanded any motion since it last waited for motion to stop. This is to allow G4 to be used to introduced delays in trigger and deamon GCode files, without causing motion to stop. M400 can be used to wait for motion to stop.
+- Filament monitor types types 4 (rotating magnet + filament presence switch) and 6 (laser + filament presence switch) now provoide object model property 'filamentPresent'. Types 1 and 2 already did.
 
 Bug fixes:
 - The seconds in the last-modified times of files were reported incorrectly (this was a long-standing bug)
 - If G10 was used to set the standby temperature of a heater for some tool, and the same heater was an active heater for the current tool, the target temperature would incorrectly be set to the standby value (this was a new bug in 3.01-RC2)
-- In five-bar SCARA kinematics, the X and Y motors were not treated as continuious rotation axes
+- In five-bar SCARA kinematics, the X and Y motors were not treated as continuous rotation axes (thanks bondus)
+- When a GCode channel locks movement and waits for movement to stop, if there is no movement but moves have been queued, those moves are now executed immediately. Previously there could be a short delay before they were executed.
 
 RepRapFirmware 3.01-RC2
 =======================
