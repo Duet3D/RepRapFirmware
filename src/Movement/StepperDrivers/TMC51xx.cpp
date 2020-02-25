@@ -672,12 +672,15 @@ void TmcDriverState::UpdateCurrent() noexcept
 	else if (gs < 32)
 	{
 		// We can't regulate the current just through the global scaler because it has a minimum value of 32
-		iRun = gs - 1;
+		iRun = (gs == 0) ? gs : gs - 1;
 		gs = 32;
 	}
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets
-	const uint8_t limitedStandstillCurrentFraction = (uint8_t)min<uint32_t>(standstillCurrentFraction, (256 * (uint32_t)MaximumStandstillCurrent)/motorCurrent);
+	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
+	const uint8_t limitedStandstillCurrentFraction = (motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
+														? standstillCurrentFraction
+															: (uint8_t)(MaxStandstillCurrentTimes256/motorCurrent);
 	const uint32_t iHold = (iRun * limitedStandstillCurrentFraction)/256;
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
