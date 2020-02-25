@@ -1,5 +1,14 @@
-RepRapFirmware 3.01-RC3 (in preparation)
+RepRapFirmware 3.01-RC3
 =======================
+
+Recommended compatible firmware:
+- DuetWebControl 2.0.7
+- DuetWiFiServer 1.23
+- Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC3
+
+Upgrade notes:
+- See the upgrade notes for 3.01-RC2 if you are upgrading from a version earlier than that
 
 New features/changed behaviour
 - There is now a daemon GCode channel, which looks for and executes file sys/daemon.g. This can be used to execute regular tasks. If the end of the file is reached, or the file is not found, it delays for 1 second and starts again.
@@ -9,12 +18,14 @@ New features/changed behaviour
 - Filament monitor types types 4 (rotating magnet + filament presence switch) and 6 (laser + filament presence switch) now provoide object model property 'filamentPresent'. Types 1 and 2 already did.
 - Added object model properties extruders[].filament and tools[].filament
 - Added support for file runonce.g. If this file is present at startup, it is run after runnig config.g and activating the network, and then deleted.
+- On Duet 3, an emergency stop now tries to stop all CAN-connected expansion boards and tool boards
 
 Bug fixes:
 - The seconds in the last-modified times of files were reported incorrectly (this was a long-standing bug)
 - If G10 was used to set the standby temperature of a heater for some tool, and the same heater was an active heater for the current tool, the target temperature would incorrectly be set to the standby value (this was a new bug in 3.01-RC2)
 - In five-bar SCARA kinematics, the X and Y motors were not treated as continuous rotation axes (thanks bondus)
 - When a GCode channel locks movement and waits for movement to stop, if there is no movement but moves have been queued, those moves are now executed immediately. Previously there could be a short delay before they were executed.
+- When M32 was run a second time, the line numbering was not reset
 
 Other:
 - Integrated PRs from ajquick (for building nonstandard Duet 2 configuration without smart driver support) and wilriker (refactoring of fan configuration code)
