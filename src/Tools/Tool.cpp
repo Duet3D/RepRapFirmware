@@ -97,6 +97,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "axes",		OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 				ObjectModelEntryFlags::none },
 	{ "extruders",	OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 			ObjectModelEntryFlags::none },
 	{ "fans",		OBJECT_MODEL_FUNC(self->fanMapping), 							ObjectModelEntryFlags::none },
+	{ "filament",	OBJECT_MODEL_FUNC(self->GetFilamentName()), 					ObjectModelEntryFlags::none },
 	{ "heaters",	OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 				ObjectModelEntryFlags::none },
 	{ "mix",		OBJECT_MODEL_FUNC_NOSELF(&mixArrayDescriptor), 					ObjectModelEntryFlags::none },
 	{ "name",		OBJECT_MODEL_FUNC(self->name),						 			ObjectModelEntryFlags::none },
@@ -105,7 +106,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "state",		OBJECT_MODEL_FUNC(self->state.ToString()), 						ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Tool::objectModelTableDescriptor[] = { 1, 10 };
+constexpr uint8_t Tool::objectModelTableDescriptor[] = { 1, 11 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
@@ -600,6 +601,11 @@ bool Tool::UsesHeater(int8_t heater) const noexcept
 		}
 	}
 	return false;
+}
+
+const char *Tool::GetFilamentName() const noexcept
+{
+	return (filament == nullptr) ? "" : filament->GetName();
 }
 
 // End

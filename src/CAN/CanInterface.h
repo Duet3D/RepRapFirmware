@@ -71,6 +71,7 @@ namespace CanInterface
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr) noexcept;
 	void SendResponse(CanMessageBuffer *buf) noexcept;
 	void SendBroadcast(CanMessageBuffer *buf) noexcept;
+	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 	CanMessageBuffer *AllocateBuffer(const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION;
 	void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION;

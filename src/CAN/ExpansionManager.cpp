@@ -238,6 +238,32 @@ const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index)
 	return boards[address];
 }
 
+void ExpansionManager::EmergencyStop() noexcept
+{
+	for (unsigned int i = 0; i < 1000; ++i)
+	{
+		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+		if (buf != nullptr)
+		{
+			// Send an individual message to each known expansion board
+			for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)
+			{
+				if (boards[addr].state == BoardState::running)
+				{
+					buf->SetupRequestMessage<CanMessageEmergencyStop>(0, CanId::MasterAddress, addr);
+					CanInterface::SendMessageNoReplyNoFree(buf);
+				}
+			}
+
+			// Finally, send a broadcast message in case we missed any, and free the buffer
+			buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanId::MasterAddress);
+			CanInterface::SendBroadcast(buf);
+			break;
+		}
+		delay(1);				// wait for a buffer to become available
+	}
+}
+
 #endif
 
 // End

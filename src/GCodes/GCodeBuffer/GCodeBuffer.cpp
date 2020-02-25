@@ -23,8 +23,8 @@ GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeIn
 #if HAS_MASS_STORAGE
 	  fileInput(fileIn),
 #endif
-	  responseMessageType(mt), toolNumberAdjust(0), lastResult(GCodeResult::ok), isBinaryBuffer(false), binaryParser(*this), stringParser(*this),
-	  machineState(new GCodeMachineState())
+	  responseMessageType(mt), toolNumberAdjust(0), lastResult(GCodeResult::ok), binaryParser(*this), stringParser(*this),
+	  machineState(new GCodeMachineState()), isBinaryBuffer(false), timerRunning(false), motionCommanded(false)
 {
 	machineState->compatibility = c;
 	Reset();
@@ -165,6 +165,7 @@ void GCodeBuffer::PutAndDecode(const char *str) noexcept
 
 void GCodeBuffer::StartNewFile() noexcept
 {
+	machineState->lineNumber = 0;						// reset line numbering when M32 is run
 	if (!isBinaryBuffer)
 	{
 		stringParser.StartNewFile();

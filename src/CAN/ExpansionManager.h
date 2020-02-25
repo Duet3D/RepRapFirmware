@@ -45,6 +45,8 @@ public:
 	void UpdateFailed(CanAddress address) noexcept;
 	bool IsFlashing() const noexcept { return numBoardsFlashing != 0; }
 
+	void EmergencyStop() noexcept;
+
 protected:
 	DECLARE_OBJECT_MODEL
 

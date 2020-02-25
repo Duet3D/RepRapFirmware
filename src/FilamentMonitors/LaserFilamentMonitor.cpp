@@ -30,24 +30,25 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. LaserFilamentMonitor members
-	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(self->dataReceived && self->HaveCalibrationData(), self, 1), 			ObjectModelEntryFlags::none },
-	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 																ObjectModelEntryFlags::none },
-	{ "enabled",		OBJECT_MODEL_FUNC(self->comparisonEnabled),		 											ObjectModelEntryFlags::none },
-	{ "type",			OBJECT_MODEL_FUNC_NOSELF("laser"), 															ObjectModelEntryFlags::none },
+	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->dataReceived && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::none },
+	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																		ObjectModelEntryFlags::none },
+	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 													ObjectModelEntryFlags::none },
+	{ "filamentPresent",	OBJECT_MODEL_FUNC_IF(self->switchOpenMask != 0, (self->sensorValue & self->switchOpenMask) == 0),	ObjectModelEntryFlags::live },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("laser"), 																	ObjectModelEntryFlags::none },
 
 	// 1. LaserFilamentMonitor.calibrated members
-	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 								ObjectModelEntryFlags::none },
-	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 								ObjectModelEntryFlags::none },
-	{ "sensitivity",	OBJECT_MODEL_FUNC(ConvertToPercent(self->MeasuredSensitivity())), 							ObjectModelEntryFlags::none },
-	{ "totalDistance",	OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 										ObjectModelEntryFlags::none },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 										ObjectModelEntryFlags::none },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 										ObjectModelEntryFlags::none },
+	{ "sensitivity",		OBJECT_MODEL_FUNC(ConvertToPercent(self->MeasuredSensitivity())), 									ObjectModelEntryFlags::none },
+	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 												ObjectModelEntryFlags::none },
 
 	// 2. LaserFilamentMonitor.configured members
-	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 								ObjectModelEntryFlags::none },
-	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 								ObjectModelEntryFlags::none },
-	{ "sampleDistance", OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 									ObjectModelEntryFlags::none },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 										ObjectModelEntryFlags::none },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 										ObjectModelEntryFlags::none },
+	{ "sampleDistance",	 OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 												ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] = { 3, 4, 4, 3 };
+constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] = { 3, 5, 4, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LaserFilamentMonitor)
 

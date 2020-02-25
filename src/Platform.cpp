@@ -210,6 +210,12 @@ constexpr ObjectModelArrayDescriptor Platform::workplaceOffsetsArrayDescriptor =
 			{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetIndex(0)), 3); }
 };
 
+static inline const char* GetFilamentName(size_t extruder) noexcept
+{
+	const Filament *fil = Filament::GetFilamentByExtruder(extruder);
+	return (fil == nullptr) ? "" : fil->GetName();
+}
+
 constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[] members
@@ -265,6 +271,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 4. move.extruders[] members
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),									ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
+	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),									ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																			ObjectModelEntryFlags::none },
 	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvance(context.GetLastIndex()), 2),								ObjectModelEntryFlags::none },
 	{ "retraction",			OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::none },
@@ -297,7 +304,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	3,																		// section 1: mcuTemp
 	3,																		// section 2: vIn
 	13,																		// section 3: move.axes[]
-	5,																		// section 4: move.extruders[]
+	6,																		// section 4: move.extruders[]
 	3,																		// section 5: move.extruders[].nonlinear
 	5,																		// section 6: move.extruders[].retraction
 #if HAS_12V_MONITOR
@@ -1403,7 +1410,11 @@ void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const 
 
 bool Platform::HasVinPower() const noexcept
 {
+# if HAS_SMART_DRIVERS
 	return driversPowered;			// not quite right because drivers are disabled if we get over-voltage too, or if the 12V rail is low, but OK for the status report
+# else
+	return true;
+# endif
 }
 
 #endif
@@ -1787,7 +1798,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s\n",
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
 				numVinUnderVoltageEvents, numVinOverVoltageEvents,
-				(driversPowered) ? "yes" : "no");
+				(HasVinPower()) ? "yes" : "no");
 	lowestVin = highestVin = currentVin;
 #endif
 

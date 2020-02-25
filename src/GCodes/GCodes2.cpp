@@ -2244,7 +2244,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
+					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished(false))
 					{
 						// The pipeline is empty, so execute the babystepping move immediately
 						SetMoveBufferDefaults();
@@ -2765,7 +2765,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 
 				// Read the entire file
-				FileStore * const f = platform.OpenSysFile(platform.GetConfigFile(), OpenMode::read);
+				FileStore * const f = platform.OpenSysFile(CONFIG_FILE, OpenMode::read);
 				if (f == nullptr)
 				{
 					reply.copy("Configuration file not found");
@@ -3038,7 +3038,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					platform.GetSysDir(sysDir.GetRef());
 					folder = sysDir.c_str();
-					defaultFile = platform.GetConfigFile();
+					defaultFile = CONFIG_FILE;
 				}
 				String<MaxFilenameLength> filename;
 				if (gb.Seen('P'))

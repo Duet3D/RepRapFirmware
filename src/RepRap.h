@@ -165,6 +165,8 @@ public:
 	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noexcept;	// save some information in config-override.g
 #endif
 
+	bool IsProcessingConfig() const noexcept { return processingConfig; }
+
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept;
 	void UpdateFirmware() noexcept;
@@ -187,14 +189,15 @@ protected:
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
-	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits);
-	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func);
-	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func);
+	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
+	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func) noexcept;
+	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func) noexcept;
 
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
 	const char* GetStatusString() const noexcept;
 	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
+	bool RunStartupFile(const char *filename) noexcept;
 
 	static constexpr uint32_t MaxTicksInSpinState = 20000;	// timeout before we reset the processor
 	static constexpr uint32_t HighTicksInSpinState = 16000;	// how long before we warn that timeout is approaching

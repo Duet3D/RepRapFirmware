@@ -754,6 +754,12 @@ void CanInterface::SendBroadcast(CanMessageBuffer *buf) noexcept
 	CanMessageBuffer::Free(buf);
 }
 
+// Send a request message with no reply expected, and don't free the buffer. Used to send emergency stop messages.
+void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
+{
+	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferBroadcast, MaxResponseSendWait);
+}
+
 // The CanReceiver task
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 {

@@ -490,7 +490,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	else if (&gb == daemonGCode)
 	{
 		// Delay 1 second, then try to open and run daemon.g. No error if it is not found.
-		if (gb.DoDwellTime(1000))
+		if (!reprap.IsProcessingConfig() && gb.DoDwellTime(1000))
 		{
 			DoFileMacro(gb, DAEMON_G, false, -1);
 		}
@@ -1462,7 +1462,7 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 
 // Lock movement and wait for pending moves to finish.
 // As a side-effect it loads moveBuffer with the last position and feedrate for you.
-bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb) noexcept
+bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 {
 	// Lock movement to stop another source adding moves to the queue
 	if (!LockMovement(gb))
@@ -1477,10 +1477,12 @@ bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb) noexcept
 	}
 
 	// Wait for all the queued moves to stop so we get the actual last position
-	if (!reprap.GetMove().AllMovesAreFinished())
+	if (!reprap.GetMove().AllMovesAreFinished(true))
 	{
 		return false;
 	}
+
+	gb.MotionStopped();								// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
 	// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
 	UpdateCurrentUserPosition();
@@ -2259,6 +2261,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb) noexcept
 {
 	moveBuffer.canPauseAfter = !moveBuffer.checkEndstops && !doingArcMove;		// pausing during an arc move isn't save because the arc centre get recomputed incorrectly when we resume
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
+	gb.MotionCommanded();
 
 	if (totalSegments > 1)
 	{
@@ -2928,10 +2931,14 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) noexcept
 	}
 #endif
 
-	// Wait for all the queued moves to stop
-	if (!LockMovementAndWaitForStandstill(gb))
+	// Wait for all the queued moves to stop. Only do this if motion has been commanded from this GCode stream since we last waited for motion to stop.
+	// This is so that G4 can be used in a trigger or daemon macro file without pausing motion, when the macro doesn't itself command any motion.
+	if (gb.WasMotionCommanded())
 	{
-		return GCodeResult::notFinished;
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
 	}
 
 	if (simulationMode != 0)

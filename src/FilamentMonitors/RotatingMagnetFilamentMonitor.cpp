@@ -30,25 +30,26 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. RotatingMagnetFilamentMonitor members
-	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(self->dataReceived && self->HaveCalibrationData(), self, 1), 			ObjectModelEntryFlags::none },
-	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 																ObjectModelEntryFlags::none },
-	{ "enabled",		OBJECT_MODEL_FUNC(self->comparisonEnabled),		 											ObjectModelEntryFlags::none },
-	{ "type",			OBJECT_MODEL_FUNC_NOSELF("rotatingMagnet"), 												ObjectModelEntryFlags::none },
+	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->dataReceived && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::none },
+	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																		ObjectModelEntryFlags::none },
+	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 													ObjectModelEntryFlags::none },
+	{ "filamentPresent",	OBJECT_MODEL_FUNC_IF(self->switchOpenMask != 0, (self->sensorValue & self->switchOpenMask) == 0),	ObjectModelEntryFlags::live },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("rotatingMagnet"), 														ObjectModelEntryFlags::none },
 
 	// 1. RotatingMagnetFilamentMonitor.calibrated members
-	{ "mmPerRev",		OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 2), 											ObjectModelEntryFlags::none },
-	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio * self->MeasuredSensitivity())), 	ObjectModelEntryFlags::none },
-	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio * self->MeasuredSensitivity())), 	ObjectModelEntryFlags::none },
-	{ "totalDistance",	OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 										ObjectModelEntryFlags::none },
+	{ "mmPerRev",			OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 2), 													ObjectModelEntryFlags::none },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio * self->MeasuredSensitivity())), 			ObjectModelEntryFlags::none },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio * self->MeasuredSensitivity())), 			ObjectModelEntryFlags::none },
+	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 												ObjectModelEntryFlags::none },
 
 	// 2. RotatingMagnetFilamentMonitor.configured members
-	{ "mmPerRev",		OBJECT_MODEL_FUNC(self->mmPerRev, 2), 														ObjectModelEntryFlags::none },
-	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 								ObjectModelEntryFlags::none },
-	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 								ObjectModelEntryFlags::none },
-	{ "sampleDistance", OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 									ObjectModelEntryFlags::none },
+	{ "mmPerRev",			OBJECT_MODEL_FUNC(self->mmPerRev, 2), 																ObjectModelEntryFlags::none },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 										ObjectModelEntryFlags::none },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 										ObjectModelEntryFlags::none },
+	{ "sampleDistance", 	OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 											ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] = { 3, 4, 4, 4 };
+constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] = { 3, 5, 4, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RotatingMagnetFilamentMonitor)
 

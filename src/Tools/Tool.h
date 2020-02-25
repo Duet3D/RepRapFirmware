@@ -74,6 +74,7 @@ public:
 	AxesBitmap GetYAxisMap() const noexcept { return axisMapping[1]; }
 	FansBitmap GetFanMapping() const noexcept { return fanMapping; }
 	Filament *GetFilament() const noexcept { return filament; }
+	const char *GetFilamentName() const noexcept;
 	Tool *Next() const noexcept { return next; }
 	ToolState GetState() const noexcept { return state; }
 

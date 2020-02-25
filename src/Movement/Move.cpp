@@ -167,8 +167,7 @@ void Move::Init() noexcept
 	SetIdentityTransform();
 	tanXY = tanYZ = tanXZ = 0.0;
 
-	usingMesh = false;
-	useTaper = false;
+	usingMesh = useTaper = executeAllMoves = false;
 	zShift = 0.0;
 
 	idleTimeout = DefaultIdleTimeout;
@@ -279,7 +278,7 @@ void Move::Spin() noexcept
 		}
 	}
 
-	mainDDARing.Spin(simulationMode, idleCount > 10);	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount.
+	mainDDARing.Spin(simulationMode, executeAllMoves || idleCount > 10);	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount.
 
 #if SUPPORT_ASYNC_MOVES
 	if (auxMoveAvailable && auxDDARing.CanAddMove())

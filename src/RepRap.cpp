@@ -323,7 +323,7 @@ void RepRap::Init() noexcept
 
 	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
 
-	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
+	platform->MessageF(UsbMessage, "\n%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
 #if HAS_MASS_STORAGE
 	// Try to mount the first SD card
@@ -340,55 +340,54 @@ void RepRap::Init() noexcept
 		if (rslt == GCodeResult::ok)
 		{
 			// Run the configuration file
-			const char *configFile = platform->GetConfigFile();
-			if (!platform->SysFileExists(configFile))
-			{
-				configFile = platform->GetDefaultFile();
-			}
 
 # if HAS_LINUX_INTERFACE
 			usingLinuxInterface = false;				// try to run config.g from the SD card
 # endif
-			if (gCodes->RunConfigFile(configFile))
+			if (RunStartupFile(GCodes::CONFIG_FILE) || RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
 			{
-				platform->MessageF(UsbMessage, "\nExecuting %s...", configFile);
-				do
-				{
-					// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
-					Spin();
-				} while (gCodes->IsDaemonBusy());
-				platform->Message(UsbMessage, "Done!\n");
+				// Processed config.g so OK
 			}
 			else
 			{
 # if HAS_LINUX_INTERFACE
 				usingLinuxInterface = true;				// we failed to open config.g or default.g so assume we have a SBC connected
 # else
-				platform->Message(UsbMessage, "\nError, no configuration file found\n");
+				platform->Message(UsbMessage, "Error, no configuration file found\n");
 # endif
 			}
 		}
 		else
 		{
 # if !HAS_LINUX_INTERFACE
-			delay(3000);			// Wait a few seconds so users have a chance to see this
+			delay(3000);								// Wait a few seconds so users have a chance to see this
 			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
 # endif
 		}
 	}
 #endif
 
-	processingConfig = false;
 
 #if HAS_LINUX_INTERFACE
 	if (usingLinuxInterface)
 	{
-		gCodes->RunConfigFile(platform->GetConfigFile());		// we didn't get config.g from SD card so request it from Linux
+		processingConfig = false;
+		gCodes->RunConfigFile(GCodes::CONFIG_FILE);		// we didn't get config.g from SD card so request it from Linux
+		network->Activate();							// need to do this here, as the configuration GCodes may set IP address etc.
 	}
+	else
 #endif
-
-	// Enable network (unless it's disabled)
-	network->Activate();			// need to do this here, as the configuration GCodes may set IP address etc.
+	{
+		network->Activate();							// need to do this here, as the configuration GCodes may set IP address etc.
+#if HAS_MASS_STORAGE
+		// If we are running from SD card, run the runonce.g file if it exists, then delete it
+		if (RunStartupFile(GCodes::RUNONCE_G))
+		{
+			platform->DeleteSysFile(GCodes::RUNONCE_G);
+		}
+#endif
+		processingConfig = false;
+	}
 
 #if HAS_HIGH_SPEED_SD
 	hsmci_set_idle_func(hsmciIdle);
@@ -400,6 +399,23 @@ void RepRap::Init() noexcept
 
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
+}
+
+// Run a startup file
+bool RepRap::RunStartupFile(const char *filename) noexcept
+{
+	bool rslt = gCodes->RunConfigFile(filename);
+	if (rslt)
+	{
+		platform->MessageF(UsbMessage, "Executing %s...", filename);
+		do
+		{
+			// GCodes::Spin will process the macro file and ensure IsDaemonBusy returns false when it's done
+			Spin();
+		} while (gCodes->IsDaemonBusy());
+		platform->Message(UsbMessage, "Done!\n");
+	}
+	return rslt;
 }
 
 void RepRap::Exit() noexcept
@@ -609,8 +625,12 @@ void RepRap::EmergencyStop() noexcept
 		break;
 	}
 
-	heat->Exit();		// this also turns off all heaters
-	move->Exit();
+	heat->Exit();								// this also turns off all heaters
+	move->Exit();								// this stops the motors stepping
+
+#if SUPPORT_CAN_EXPANSION
+	expansion->EmergencyStop();
+#endif
 
 	gCodes->EmergencyStop();
 	platform->StopLogging();
@@ -2127,7 +2147,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 
 // Helper functions to write JSON arrays
 // Append float array using 1 decimal place
-void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits)
+void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2145,7 +2165,7 @@ void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numVal
 	buf->cat(']');
 }
 
-void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func)
+void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2163,7 +2183,7 @@ void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValue
 	buf->cat(']');
 }
 
-void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func)
+void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func) noexcept
 {
 	if (name != nullptr)
 	{

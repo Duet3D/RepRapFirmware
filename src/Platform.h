@@ -343,8 +343,6 @@ public:
 #endif
 
 	// File functions
-	const char* GetConfigFile() const noexcept; 				// Where the configuration is stored (in the system dir).
-
 #if HAS_MASS_STORAGE
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool Delete(const char* folder, const char *filename) const noexcept;
@@ -354,7 +352,6 @@ public:
 	const char* GetWebDir() const noexcept; 					// Where the html etc files are
 	const char* GetGCodeDir() const noexcept; 					// Where the gcodes are
 	const char* GetMacroDir() const noexcept;					// Where the user-defined macros are
-	const char* GetDefaultFile() const noexcept;				// Where the default configuration is stored (in the system dir).
 
 	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char* dir, const StringRef& reply) noexcept;				// Set the system files path
@@ -832,11 +829,6 @@ private:
 	bool deliberateError;								// true if we deliberately caused an exception for testing purposes
 };
 
-inline const char* Platform::GetConfigFile() const noexcept
-{
-	return CONFIG_FILE;
-}
-
 #if HAS_MASS_STORAGE
 
 // Where the htm etc files are
@@ -854,11 +846,6 @@ inline const char* Platform::GetGCodeDir() const noexcept
 inline const char* Platform::GetMacroDir() const noexcept
 {
 	return MACRO_DIR;
-}
-
-inline const char* Platform::GetDefaultFile() const noexcept
-{
-	return CONFIG_BACKUP_FILE;
 }
 
 #endif

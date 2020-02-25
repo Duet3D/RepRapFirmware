@@ -180,6 +180,10 @@ public:
 #endif
 	GCodeInput *GetNormalInput() const noexcept { return normalInput; }	//TEMPORARY!
 
+	void MotionCommanded() noexcept { motionCommanded = true; }
+	void MotionStopped() noexcept { motionCommanded = false; }
+	bool WasMotionCommanded() const noexcept { return motionCommanded; }
+
 private:
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
@@ -192,14 +196,7 @@ private:
 
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 
-#if HAS_LINUX_INTERFACE
-	char buffer[MaxCodeBufferSize];
-#else
-	char buffer[GCODE_LENGTH];
-#endif
-
 	GCodeResult lastResult;
-	bool isBinaryBuffer;
 	BinaryParser binaryParser;
 	StringParser stringParser;
 
@@ -207,7 +204,15 @@ private:
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 
 	uint32_t whenTimerStarted;							// When we started waiting
+	bool isBinaryBuffer;
 	bool timerRunning;									// True if we are waiting
+	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
+
+#if HAS_LINUX_INTERFACE
+	char buffer[MaxCodeBufferSize];
+#else
+	char buffer[GCODE_LENGTH];
+#endif
 
 #if HAS_LINUX_INTERFACE
 	String<MaxFilenameLength> requestedMacroFile;
