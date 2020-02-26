@@ -845,7 +845,7 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			if (gb.Seen('L'))
 			{
 				seen = true;
-				size_t numValues = MaxAxes;
+				size_t numValues = min<size_t>(reprap.GetGCodes().GetTotalAxes(), MaxTowers);
 				gb.GetFloatArray(diagonals, numValues, false);
 				while (numValues < 3)
 				{

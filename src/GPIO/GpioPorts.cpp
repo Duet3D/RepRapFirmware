@@ -71,9 +71,12 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 #if SUPPORT_CAN_EXPANSION
 		if (boardAddress != CanId::MasterAddress)
 		{
-			if (CanInterface::DeleteHandle(boardAddress, handle, reply) != GCodeResult::ok)
+			const GCodeResult rslt = CanInterface::DeleteHandle(boardAddress, handle, reply);
+			if (rslt != GCodeResult::ok)
 			{
-				reprap.GetPlatform().Message(AddWarning(gb.GetResponseMessageType()), reply.c_str());
+				reply.cat('\n');
+				const MessageType mtype = (rslt == GCodeResult::warning) ? AddWarning(gb.GetResponseMessageType()) : AddError(gb.GetResponseMessageType());
+				reprap.GetPlatform().Message(mtype, reply.c_str());
 				reply.Clear();
 			}
 			boardAddress = CanId::MasterAddress;

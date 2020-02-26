@@ -901,28 +901,41 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_
 // Get diagnostics from an expansion board
 GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply)
 {
-	Platform& p = reprap.GetPlatform();
+	CanInterface::CheckCanAddress(boardAddress, gb);
 
-	uint8_t currentPart = 0;
-	uint8_t lastPart;
-	GCodeResult res;
-	do
+	if (type <= 15)
 	{
-		res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0 + currentPart, boardAddress, type, gb, reply, &lastPart);
-		if (res != GCodeResult::ok)
+		Platform& p = reprap.GetPlatform();
+
+		uint8_t currentPart = 0;
+		uint8_t lastPart;
+		GCodeResult res;
+		do
 		{
-			return res;
-		}
-		if (type == 0 && currentPart == 0)
-		{
-			p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
-		}
-		reply.cat('\n');
-		p.Message(mt, reply.c_str());
-		reply.Clear();
-		++currentPart;
-	} while (currentPart <= lastPart);
-	return res;
+			res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0 + currentPart, boardAddress, type, gb, reply, &lastPart);
+			if (res != GCodeResult::ok)
+			{
+				return res;
+			}
+			if (type == 0 && currentPart == 0)
+			{
+				p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
+			}
+			reply.cat('\n');
+			p.Message(mt, reply.c_str());
+			reply.Clear();
+			++currentPart;
+		} while (currentPart <= lastPart);
+		return res;
+	}
+
+	// It's a diagnostic test
+	CanMessageBuffer * const buf = AllocateBuffer(gb);
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+	auto const msg = buf->SetupRequestMessage<CanMessageDiagnosticTest>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
+	msg->testType = type;
+	msg->invertedTestType = ~type;
+	return SendRequestAndGetStandardReply(buf, rid, reply);			// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
 GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply)

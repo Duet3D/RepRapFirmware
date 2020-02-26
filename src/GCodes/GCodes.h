@@ -157,7 +157,7 @@ public:
 	const char* GetMachineModeString() const noexcept;							// Get the name of the current machine mode
 
 	void FilamentError(size_t extruder, FilamentSensorStatus fstat) noexcept;
-	void HandleHeaterFault(int heater) noexcept;								// Respond to a heater fault
+	void HandleHeaterFault() noexcept;											// Respond to a heater fault
 
 #if HAS_VOLTAGE_MONITOR
 	bool LowVoltagePause() noexcept;

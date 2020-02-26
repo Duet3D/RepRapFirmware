@@ -4350,7 +4350,7 @@ const char* GCodes::GetMachineModeString() const noexcept
 
 // Respond to a heater fault. The heater has already been turned off and its status set to 'fault' when this is called from the Heat module.
 // The Heat module will generate an appropriate error message, so no need to do that here.
-void GCodes::HandleHeaterFault(int heater) noexcept
+void GCodes::HandleHeaterFault() noexcept
 {
 	if (heaterFaultState == HeaterFaultState::noFault && fileGCode->OriginalMachineState().DoingFile())
 	{

@@ -1649,7 +1649,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 122:
 			{
 				const unsigned int type = (gb.Seen('P')) ? gb.GetIValue() : 0;
-				const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);
+				const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);	// set the Push flag to combine multiple messages into a single OutputBuffer chain
 #if SUPPORT_CAN_EXPANSION
 				const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
 				if (board != CanId::MasterAddress)
@@ -1660,7 +1660,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 				if (type == 0)
 				{
-					// Set the Push flag to combine multiple messages into a single OutputBuffer chain
 					reprap.Diagnostics(mt);
 				}
 				else

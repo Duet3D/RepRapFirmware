@@ -26,10 +26,11 @@ enum class HeaterMonitorAction : uint8_t
 {
 	GenerateFault = 0,
 	PermanentSwitchOff,
-	TemporarySwitchOff
+	TemporarySwitchOff,
+	ShutDown
 };
 
-const HeaterMonitorAction MaxHeaterMonitorAction = HeaterMonitorAction::TemporarySwitchOff;
+const HeaterMonitorAction MaxHeaterMonitorAction = HeaterMonitorAction::ShutDown;
 
 // A note about using this class. Its size is currently 8 bytes, and will be 12 bytes of object model support is added.
 // - If we allocate them statically within the heater object, then assuming 3 per heater we need 24 bytes, or 36 bytes with OM support.

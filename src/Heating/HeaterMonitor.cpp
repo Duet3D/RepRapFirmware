@@ -65,31 +65,18 @@ void HeaterMonitor::Report(unsigned int heater, unsigned int index, const String
 		const char *actionString, *triggerString;
 		switch (action)
 		{
-		case HeaterMonitorAction::GenerateFault:
-			actionString = "generate a heater fault";
-			break;
-		case HeaterMonitorAction::PermanentSwitchOff:
-			actionString = "permanently switch off";
-			break;
-		case HeaterMonitorAction::TemporarySwitchOff:
-			actionString = "temporarily switch off";
-			break;
-		default:
-			actionString = "(undefined)";
-			break;
+		case HeaterMonitorAction::GenerateFault:		actionString = "generate a heater fault"; break;
+		case HeaterMonitorAction::PermanentSwitchOff:	actionString = "permanently switch off"; break;
+		case HeaterMonitorAction::TemporarySwitchOff:	actionString = "temporarily switch off"; break;
+		case HeaterMonitorAction::ShutDown:				actionString = "shut down the printer"; break;
+		default:										actionString = "(undefined)"; break;
 		}
 
 		switch (trigger)
 		{
-		case HeaterMonitorTrigger::TemperatureExceeded:
-			triggerString = "exceeds";
-			break;
-		case HeaterMonitorTrigger::TemperatureTooLow:
-			triggerString = "falls below";
-			break;
-		default:
-			triggerString = "(undefined)";
-			break;
+		case HeaterMonitorTrigger::TemperatureExceeded:	triggerString = "exceeds"; break;
+		case HeaterMonitorTrigger::TemperatureTooLow:	triggerString = "falls below"; break;
+		default:										triggerString = "(undefined)"; break;
 		}
 
 		reply.catf("uses sensor %d to %s if the reading %s %.1f" DEGREE_SYMBOL "C", sensorNumber, actionString, triggerString, (double)limit);

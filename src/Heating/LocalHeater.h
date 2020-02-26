@@ -65,6 +65,7 @@ private:
 	void CalculateModel() noexcept;							// Calculate G, td and tc from the accumulated readings
 	void DisplayBuffer(const char *intro) noexcept;			// Debug helper
 	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
+	void RaiseHeaterFault(const char *format, ...) noexcept;
 
 	PwmPort port;											// The port that drives the heater
 	float temperature;										// The current temperature
