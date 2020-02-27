@@ -40,7 +40,7 @@
 #ifndef LWIP_HDR_PROT_DNS_H
 #define LWIP_HDR_PROT_DNS_H
 
-#include <Lwip/src/include/lwip/arch.h>
+#include "lwip/arch.h"
 
 #ifdef __cplusplus
 extern "C" {

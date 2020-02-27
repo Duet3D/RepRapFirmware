@@ -36,8 +36,8 @@
 #ifndef LWIP_HDR_ERR_H
 #define LWIP_HDR_ERR_H
 
-#include <Lwip/src/include/lwip/arch.h>
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
+#include "lwip/arch.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,14 +48,6 @@ extern "C" {
  * @ingroup infrastructure
  * @{
  */
-
-/** Define LWIP_ERR_T in cc.h if you want to use
- *  a different type for your platform (must be signed). */
-#ifdef LWIP_ERR_T
-typedef LWIP_ERR_T err_t;
-#else /* LWIP_ERR_T */
-typedef s8_t err_t;
-#endif /* LWIP_ERR_T*/
 
 /** Definitions for error constants. */
 typedef enum {
@@ -96,7 +88,13 @@ typedef enum {
   ERR_ARG        = -16
 } err_enum_t;
 
-#define ERR_IS_FATAL(e) ((e) <= ERR_ABRT)
+/** Define LWIP_ERR_T in cc.h if you want to use
+ *  a different type for your platform (must be signed). */
+#ifdef LWIP_ERR_T
+typedef LWIP_ERR_T err_t;
+#else /* LWIP_ERR_T */
+typedef s8_t err_t;
+#endif /* LWIP_ERR_T*/
 
 /**
  * @}

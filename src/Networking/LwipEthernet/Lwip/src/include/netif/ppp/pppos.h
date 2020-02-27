@@ -31,16 +31,20 @@
  *
  */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT && PPPOS_SUPPORT /* don't build if not configured for use in lwipopts.h */
 
 #ifndef PPPOS_H
 #define PPPOS_H
 
-#include <Lwip/src/include/lwip/sys.h>
+#include "lwip/sys.h"
 
-#include <Lwip/src/include/netif/ppp/ppp.h>
-#include <Lwip/src/include/netif/ppp/vj.h>
+#include "ppp.h"
+#include "vj.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* PPP packet parser states.  Current state indicates operation yet to be
  * completed. */
@@ -113,6 +117,10 @@ void pppos_input(ppp_pcb *ppp, u8_t* data, int len);
 #if !NO_SYS && !PPP_INPROC_IRQ_SAFE
 err_t pppos_input_sys(struct pbuf *p, struct netif *inp);
 #endif /* !NO_SYS && !PPP_INPROC_IRQ_SAFE */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PPPOS_H */
 #endif /* PPP_SUPPORT && PPPOL2TP_SUPPORT */

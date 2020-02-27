@@ -429,11 +429,6 @@ void LwipEthernetInterface::Spin() noexcept
 		break;
 
 	case NetworkState::connected:
-		if (usingDhcp)
-		{
-			dhcp_stop(&gs_net_if);
-		}
-
 		InitSockets();
 		RebuildMdnsServices();
 		ethernet_get_ipaddress(ipAddress, netmask, gateway);

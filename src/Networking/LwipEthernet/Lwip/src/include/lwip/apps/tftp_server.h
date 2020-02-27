@@ -1,4 +1,4 @@
-/****************************************************************//**
+/**
  *
  * @file tftp_server.h
  *
@@ -9,7 +9,7 @@
  * Copyright (c) Deltatee Enterprises Ltd. 2013
  * All rights reserved.
  *
- ********************************************************************/
+ */
 
 /* 
  * Redistribution and use in source and binary forms, with or without
@@ -41,9 +41,9 @@
 #ifndef LWIP_HDR_APPS_TFTP_SERVER_H
 #define LWIP_HDR_APPS_TFTP_SERVER_H
 
-#include <Lwip/src/include/lwip/apps/tftp_opts.h>
-#include <Lwip/src/include/lwip/err.h>
-#include <Lwip/src/include/lwip/pbuf.h>
+#include "lwip/apps/tftp_opts.h"
+#include "lwip/err.h"
+#include "lwip/pbuf.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,6 +86,7 @@ struct tftp_context {
 };
 
 err_t tftp_init(const struct tftp_context* ctx);
+void tftp_cleanup(void);
 
 #ifdef __cplusplus
 }

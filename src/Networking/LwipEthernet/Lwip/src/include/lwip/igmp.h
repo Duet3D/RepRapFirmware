@@ -40,10 +40,10 @@
 #ifndef LWIP_HDR_IGMP_H
 #define LWIP_HDR_IGMP_H
 
-#include <Lwip/src/include/lwip/ip_addr.h>
-#include <Lwip/src/include/lwip/netif.h>
-#include <Lwip/src/include/lwip/opt.h>
-#include <Lwip/src/include/lwip/pbuf.h>
+#include "lwip/opt.h"
+#include "lwip/ip_addr.h"
+#include "lwip/netif.h"
+#include "lwip/pbuf.h"
 
 #if LWIP_IPV4 && LWIP_IGMP /* don't build if not configured for use in lwipopts.h */
 

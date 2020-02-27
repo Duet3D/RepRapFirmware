@@ -138,13 +138,17 @@
  * $Id: ipv6cp.h,v 1.7 2002/12/04 23:03:32 paulus Exp $
  */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT && PPP_IPV6_SUPPORT  /* don't build if not configured for use in lwipopts.h */
 
 #ifndef IPV6CP_H
 #define	IPV6CP_H
 
-#include <Lwip/src/include/netif/ppp/eui64.h>
+#include "eui64.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * Options.
@@ -178,6 +182,10 @@ typedef struct ipv6cp_options {
 } ipv6cp_options;
 
 extern const struct protent ipv6cp_protent;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* IPV6CP_H */
 #endif /* PPP_SUPPORT && PPP_IPV6_SUPPORT */

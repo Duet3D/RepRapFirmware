@@ -42,13 +42,17 @@
  * $Id: fsm.h,v 1.10 2004/11/13 02:28:15 paulus Exp $
  */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT /* don't build if not configured for use in lwipopts.h */
 
 #ifndef FSM_H
 #define	FSM_H
 
-#include <Lwip/src/include/netif/ppp/ppp.h>
+#include "ppp.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * Packet header = Code, id, length.
@@ -170,6 +174,9 @@ void fsm_input(fsm *f, u_char *inpacket, int l);
 void fsm_protreject(fsm *f);
 void fsm_sdata(fsm *f, u_char code, u_char id, const u_char *data, int datalen);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* FSM_H */
 #endif /* PPP_SUPPORT */
