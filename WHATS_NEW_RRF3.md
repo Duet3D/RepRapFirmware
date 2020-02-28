@@ -11,7 +11,7 @@ Upgrade notes:
 - See the upgrade notes for 3.01-RC2 if you are upgrading from a version earlier than that
 
 New features/changed behaviour
-- There is now a daemon GCode channel, which looks for and executes file sys/daemon.g. This can be used to execute regular tasks. If the end of the file is reached, or the file is not found, it delays for 1 second and starts again.
+- There is now a daemon GCode channel, which looks for and executes file sys/daemon.g. This can be used to execute regular tasks. If the end of the file is reached, or the file is not found, it delays for 1 second and starts again. This feature is not yet available on Duet 3 with attached SBC.
 - Increased maximum stack/macro file depth from 5 to 7
 - If the macro stack depth is exceeded, the current macros in the stack are abandoned; and if the macro was called from a GCode print file, that file is abandoned too
 - A G4 command will no longer wait for all movement to complete if the input channel executing the G4 has not commanded any motion since it last waited for motion to stop. This is to allow G4 to be used to introduced delays in trigger and deamon GCode files, without causing motion to stop. M400 can be used to wait for motion to stop.
@@ -26,8 +26,10 @@ Bug fixes:
 - In five-bar SCARA kinematics, the X and Y motors were not treated as continuous rotation axes (thanks bondus)
 - When a GCode channel locks movement and waits for movement to stop, if there is no movement but moves have been queued, those moves are now executed immediately. Previously there could be a short delay before they were executed.
 - When M32 was run a second time, the line numbering was not reset
+- External SD cards didn't work on Duet Maestro
 
 Other:
+- In the Duet 3 build, upgraded Lwip (the TCP/IP network stack) from version 2.0.3 to 2.1.2
 - Integrated PRs from ajquick (for building nonstandard Duet 2 configuration without smart driver support) and wilriker (refactoring of fan configuration code)
 
 RepRapFirmware 3.01-RC2
