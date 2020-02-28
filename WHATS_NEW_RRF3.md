@@ -8,16 +8,17 @@ Recommended compatible firmware:
 - Duet 3 expansion board and tool board firmware 3.01-RC3
 
 Upgrade notes:
+- If you use a Duet 3 with expansion boards and/or tool boards, you must use firmware 3.01-RC3 on those boards. Otherwise remote endstops and GPIn pins will no longer work.
 - See the upgrade notes for 3.01-RC2 if you are upgrading from a version earlier than that
 
 New features/changed behaviour
 - There is now a daemon GCode channel, which looks for and executes file sys/daemon.g. This can be used to execute regular tasks. If the end of the file is reached, or the file is not found, it delays for 1 second and starts again. This feature is not yet available on Duet 3 with attached SBC.
 - Increased maximum stack/macro file depth from 5 to 7
 - If the macro stack depth is exceeded, the current macros in the stack are abandoned; and if the macro was called from a GCode print file, that file is abandoned too
-- A G4 command will no longer wait for all movement to complete if the input channel executing the G4 has not commanded any motion since it last waited for motion to stop. This is to allow G4 to be used to introduced delays in trigger and deamon GCode files, without causing motion to stop. M400 can be used to wait for motion to stop.
+- A G4 command will no longer wait for all movement to complete if the input channel executing the G4 has not commanded any motion since it last waited for motion to stop. This is to allow G4 to be used to introduced delays in trigger and deamon GCode files, without causing motion to stop. M400 can still be used to wait for motion to stop.
 - Filament monitor types types 4 (rotating magnet + filament presence switch) and 6 (laser + filament presence switch) now provoide object model property 'filamentPresent'. Types 1 and 2 already did.
-- Added object model properties extruders[].filament and tools[].filament
-- Added support for file runonce.g. If this file is present at startup, it is run after runnig config.g and activating the network, and then deleted.
+- Added object model properties 'extruders[].filament' and 'tools[].filament'
+- Added support for file runonce.g. If this file is present at startup, it is run after running config.g and activating the network, and then deleted.
 - On Duet 3, an emergency stop now tries to stop all CAN-connected expansion boards and tool boards
 
 Bug fixes:
@@ -27,6 +28,7 @@ Bug fixes:
 - When a GCode channel locks movement and waits for movement to stop, if there is no movement but moves have been queued, those moves are now executed immediately. Previously there could be a short delay before they were executed.
 - When M32 was run a second time, the line numbering was not reset
 - External SD cards didn't work on Duet Maestro
+- Increased the number of decimal places reported for object model variable fans[].actualValue from 1 to 2
 
 Other:
 - In the Duet 3 build, upgraded Lwip (the TCP/IP network stack) from version 2.0.3 to 2.1.2
