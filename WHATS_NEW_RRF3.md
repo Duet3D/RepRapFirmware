@@ -8,7 +8,7 @@ Recommended compatible firmware:
 - Duet 3 expansion board and tool board firmware 3.01-RC3
 
 Upgrade notes:
-- If you use a Duet 3 with expansion boards and/or tool boards, you must use firmware 3.01-RC3 on those boards. Otherwise remote endstops and GPIn pins will no longer work.
+- If you use a Duet 3 with expansion boards and/or tool boards, you must use firmware 3.01-RC3 on those boards. Otherwise remote endstops and GP input pins will no longer work.
 - See the upgrade notes for 3.01-RC2 if you are upgrading from a version earlier than that
 
 New features/changed behaviour
@@ -20,19 +20,21 @@ New features/changed behaviour
 - Added object model properties 'extruders[].filament' and 'tools[].filament'
 - Added support for file runonce.g. If this file is present at startup, it is run after running config.g and activating the network, and then deleted.
 - On Duet 3, an emergency stop now tries to stop all CAN-connected expansion boards and tool boards
+- On Duet 3, Z probes of types 8 (unfiltered digital) and 9 (BLTouch) connected to expansion boards and tool boards are supported. Other types of Z probe are supported only when they are connected to the main board.
+- When a GCode channel locks movement and waits for movement to stop, if there is no movement but moves have been queued, those moves are now executed immediately. Previously there could be a short delay before they were executed.
 
 Bug fixes:
-- The seconds in the last-modified times of files were reported incorrectly (this was a long-standing bug)
+- When homing switches were already triggered at the start of a homing move, sometimes the move queue got stuck, requiring a reboot
 - If G10 was used to set the standby temperature of a heater for some tool, and the same heater was an active heater for the current tool, the target temperature would incorrectly be set to the standby value (this was a new bug in 3.01-RC2)
-- In five-bar SCARA kinematics, the X and Y motors were not treated as continuous rotation axes (thanks bondus)
-- When a GCode channel locks movement and waits for movement to stop, if there is no movement but moves have been queued, those moves are now executed immediately. Previously there could be a short delay before they were executed.
-- When M32 was run a second time, the line numbering was not reset
 - External SD cards didn't work on Duet Maestro
-- Increased the number of decimal places reported for object model variable fans[].actualValue from 1 to 2
+- The seconds in the last-modified times of files were reported incorrectly (this was a long-standing bug)
+- In five-bar SCARA kinematics, the X and Y motors were not treated as continuous rotation axes (thanks bondus)
+- When M32 was run a second time, the line numbering was not reset
+- Object model variable fans[].actualValue was incorrectly reported to 1 decimal place instead of 2
 
 Other:
 - In the Duet 3 build, upgraded Lwip (the TCP/IP network stack) from version 2.0.3 to 2.1.2
-- Integrated PRs from ajquick (for building nonstandard Duet 2 configuration without smart driver support) and wilriker (refactoring of fan configuration code)
+- Integrated PRs from ajquick (for building nonstandard Duet 2 configuration without smart driver support) and wilriker (simplification of fan configuration code)
 
 RepRapFirmware 3.01-RC2
 =======================
