@@ -490,7 +490,12 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	else if (&gb == daemonGCode)
 	{
 		// Delay 1 second, then try to open and run daemon.g. No error if it is not found.
-		if (!reprap.IsProcessingConfig() && gb.DoDwellTime(1000))
+		if (   !reprap.IsProcessingConfig()
+#if HAS_LINUX_INTERFACE
+			&& !reprap.UsingLinuxInterface()		// DSF gets confused by the daemon, so disable it for now
+#endif
+			&& gb.DoDwellTime(1000)
+		   )
 		{
 			DoFileMacro(gb, DAEMON_G, false, -1);
 		}
@@ -1670,9 +1675,12 @@ bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept
 	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesMoved, noMovesBeforeHoming) & ~axesHomed).IsNonEmpty();
 }
 
-// Execute a straight move returning an error message if the command was rejected, else nullptr
+// Execute a straight move
+// If not ready, return false
+// If we can't execute the move, return true with 'err' set to the error message
+// Else return true with 'err' left alone (it is set to nullptr on entry)
 // We have already acquired the movement lock and waited for the previous move to be taken.
-const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
+bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err)
 {
 	if (moveFractionToSkip > 0.0)
 	{
@@ -1701,6 +1709,10 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		const int ival = gb.GetIValue();
 		if (ival >= 1 && ival <= 3)
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
 			moveBuffer.moveType = ival;
 			moveBuffer.tool = nullptr;
 		}
@@ -1721,7 +1733,8 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		}
 		else
 		{
-			return "G0/G1: bad restore point number";
+			err = "G0/G1: bad restore point number";
+			return true;
 		}
 	}
 
@@ -1791,7 +1804,8 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			// If it is a special move on a delta, movement must be relative.
 			if (moveBuffer.moveType != 0 && !gb.MachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
 			{
-				return "G0/G1: attempt to move individual motors of a delta machine to absolute positions";
+				err = "G0/G1: attempt to move individual motors of a delta machine to absolute positions";
+				return true;
 			}
 
 			axesMentioned.SetBit(axis);
@@ -1840,23 +1854,19 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	case 0:
 		if (!doingManualBedProbe && CheckEnoughAxesHomed(axesMentioned))
 		{
-			return "G0/G1: insufficient axes homed";
+			err = "G0/G1: insufficient axes homed";
+			return true;
 		}
-		break;
-
-	case 1:
-		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), true))
-		{
-			return "Failed to enable endstops";
-		}
-		moveBuffer.checkEndstops = true;
 		break;
 
 	case 3:
 		axesToSenseLength = axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes);
-		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), false))
+		// no break
+	case 1:
+		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), moveBuffer.moveType == 1))
 		{
-			return "Failed to enable endstops";
+			err = "Failed to enable endstops";
+			return true;
 		}
 		moveBuffer.checkEndstops = true;
 		break;
@@ -1895,47 +1905,46 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			effectiveAxesHomed.ClearBit(Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
 		}
 
-		if (moveBuffer.moveType == 0)
+		const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes, effectiveAxesHomed, moveBuffer.isCoordinated, limitAxes);
+		switch (lp)
 		{
-			const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes, effectiveAxesHomed, moveBuffer.isCoordinated, limitAxes);
-			switch (lp)
+		case LimitPositionResult::adjusted:
+		case LimitPositionResult::adjustedAndIntermediateUnreachable:
+			if (machineType != MachineType::fff)
 			{
-			case LimitPositionResult::adjusted:
-			case LimitPositionResult::adjustedAndIntermediateUnreachable:
-				if (machineType != MachineType::fff)
-				{
-					return "G0/G1: target position outside machine limits";		// it's a laser or CNC so this is a definite error
-				}
-				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
-				if (lp == LimitPositionResult::adjusted)
-				{
-					break;														// we can reach the intermediate positions, so nothing more to do
-				}
-				// no break
-
-			case LimitPositionResult::intermediateUnreachable:
-				if (   moveBuffer.isCoordinated
-					&& (   (machineType == MachineType::fff && !moveBuffer.hasExtrusion)
-#if SUPPORT_LASER || SUPPORT_IOBITS
-						|| (machineType == MachineType::laser && moveBuffer.laserPwmOrIoBits.laserPwm == 0)
-#endif
-					   )
-				   )
-				{
-					// It's a coordinated travel move on a 3D printer or laser cutter, so see whether an uncoordinated move will work
-					const LimitPositionResult lp2 = reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes, effectiveAxesHomed, false, limitAxes);
-					if (lp2 == LimitPositionResult::ok)
-					{
-						moveBuffer.isCoordinated = false;						// change it to an uncoordinated move
-						break;
-					}
-				}
-				return "G0/G1: target position not reachable from current position";		// we can't bring the move within limits, so this is a definite error
-
-			case LimitPositionResult::ok:
-			default:
-				break;
+				err = "G0/G1: target position outside machine limits";		// it's a laser or CNC so this is a definite error
+				return true;
 			}
+			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
+			if (lp == LimitPositionResult::adjusted)
+			{
+				break;														// we can reach the intermediate positions, so nothing more to do
+			}
+			// no break
+
+		case LimitPositionResult::intermediateUnreachable:
+			if (   moveBuffer.isCoordinated
+				&& (   (machineType == MachineType::fff && !moveBuffer.hasExtrusion)
+#if SUPPORT_LASER || SUPPORT_IOBITS
+					|| (machineType == MachineType::laser && moveBuffer.laserPwmOrIoBits.laserPwm == 0)
+#endif
+				   )
+			   )
+			{
+				// It's a coordinated travel move on a 3D printer or laser cutter, so see whether an uncoordinated move will work
+				const LimitPositionResult lp2 = reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes, effectiveAxesHomed, false, limitAxes);
+				if (lp2 == LimitPositionResult::ok)
+				{
+					moveBuffer.isCoordinated = false;						// change it to an uncoordinated move
+					break;
+				}
+			}
+			err = "G0/G1: target position not reachable from current position";		// we can't bring the move within limits, so this is a definite error
+			return true;
+
+		case LimitPositionResult::ok:
+		default:
+			break;
 		}
 
 		// If we are emulating Marlin for nanoDLP then we need to set a special end state
@@ -1978,7 +1987,8 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	doingArcMove = false;
 	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
-	return nullptr;
+	err = nullptr;
+	return true;
 }
 
 // Execute an arc move, returning true if it was badly-formed

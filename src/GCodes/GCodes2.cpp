@@ -133,7 +133,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			return false;
 		}
 		{
-			const char* err = DoStraightMove(gb, code == 1);
+			const char* err = nullptr;
+			if (!DoStraightMove(gb, code == 1, err))
+			{
+				return false;
+			}
 			if (err != nullptr)
 			{
 				AbortPrint(gb);

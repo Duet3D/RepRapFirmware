@@ -18,10 +18,15 @@ public:
 
 	virtual void SetIREmitter(bool on) const noexcept = 0;			// Caution, this is called from within the tick ISR
 	virtual uint16_t GetRawReading() const noexcept = 0;
-	virtual void SetProbing(bool isProbing) const noexcept = 0;
-	virtual GCodeResult AppendPinNames(const StringRef& str) const noexcept = 0;
+	virtual void SetProbing(bool isProbing) noexcept = 0;
+	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS_GCODE_EXCEPTION;		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
+
+#if SUPPORT_CAN_EXPANSION
+	// Process a remote input change that relates to this Z probe
+	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept { }
+#endif
 
 	EndStopHit Stopped() const noexcept override;
 	EndstopHitDetails CheckTriggered(bool goingSlow) noexcept override;
@@ -101,8 +106,8 @@ public:
 	~MotorStallZProbe() noexcept override { }
 	void SetIREmitter(bool on) const noexcept override { }
 	uint16_t GetRawReading() const noexcept override { return 4000; }
-	void SetProbing(bool isProbing) const noexcept override { }
-	GCodeResult AppendPinNames(const StringRef& str) const noexcept override { return GCodeResult::ok; }
+	void SetProbing(bool isProbing) noexcept override { }
+	GCodeResult AppendPinNames(const StringRef& str) noexcept override { return GCodeResult::ok; }
 
 private:
 };
@@ -118,8 +123,8 @@ public:
 	~DummyZProbe() noexcept override { }
 	void SetIREmitter(bool on) const noexcept override { }
 	uint16_t GetRawReading() const noexcept override { return 4000; }
-	void SetProbing(bool isProbing) const noexcept override { }
-	GCodeResult AppendPinNames(const StringRef& str) const noexcept override { return GCodeResult::ok; }
+	void SetProbing(bool isProbing) noexcept override { }
+	GCodeResult AppendPinNames(const StringRef& str) noexcept override { return GCodeResult::ok; }
 
 private:
 };

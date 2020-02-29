@@ -728,8 +728,7 @@ size_t EndstopsManager::GetNumProbesToReport() const noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
-// We must re-use or free the buffer.
-void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept
+void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
@@ -741,9 +740,22 @@ void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajo
 	}
 }
 
+// Handle signalling of a remote switch change, when the handle indicates that it is being used as a Z probe.
+void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept
+{
+	if (handleMajor < ARRAY_SIZE(zProbes))
+	{
+		ZProbe * const zp = zProbes[handleMajor];
+		if (zp != nullptr)
+		{
+			zp->HandleRemoteInputChange(src, handleMinor, state);
+		}
+	}
+}
+
 // This is called when we update endstop states because of a message from a remote board.
 // In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
-void EndstopsManager::OnEndstopStatesChanged() noexcept
+void EndstopsManager::OnEndstopOrZProbeStatesChanged() noexcept
 {
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
 
@@ -758,7 +770,7 @@ void EndstopsManager::OnEndstopStatesChanged() noexcept
 		}
 	}
 
-	RestoreBasePriority(oldPrio);								// allow step interrupts again
+	RestoreBasePriority(oldPrio);										// allow step interrupts again
 }
 
 #endif

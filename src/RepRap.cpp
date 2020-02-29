@@ -914,7 +914,7 @@ ReadLockedPointer<Tool> RepRap::GetTool(int toolNumber) const noexcept
 {
 	ReadLocker lock(toolListLock);
 	Tool* tool = toolList;
-	while(tool != nullptr)
+	while (tool != nullptr)
 	{
 		if (tool->Number() == toolNumber)
 		{

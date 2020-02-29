@@ -145,7 +145,7 @@ bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDr
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), i);
 			String<StringLength100> reply;
-			if (CanInterface::EnableHandle(boardNumbers[i], h, states[i], reply.GetRef()) != GCodeResult::ok)
+			if (CanInterface::EnableHandle(boardNumbers[i], h, true, states[i], reply.GetRef()) != GCodeResult::ok)
 			{
 				reply.cat('\n');
 				reprap.GetPlatform().Message(ErrorMessage, reply.c_str());

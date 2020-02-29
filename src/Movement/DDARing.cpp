@@ -208,15 +208,15 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 			if (dda->GetState() == DDA::provisional)
 			{
 				PrepareMoves(dda, 0, 0, simulationMode);
-				while (dda->GetState() == DDA::completed)
-				{
-					// We prepared the move but found there was nothing to do because endstops are already triggered
-					getPointer = dda = dda->GetNext();
-					completedMoves++;
-				}
 			}
 
-			if (dda->GetState() == DDA::frozen)
+			if (dda->GetState() == DDA::completed)
+			{
+				// We prepared the move but found there was nothing to do because endstops are already triggered
+				getPointer = dda = dda->GetNext();
+				completedMoves++;
+			}
+			else if (dda->GetState() == DDA::frozen)
 			{
 				if (simulationMode != 0)
 				{
@@ -764,8 +764,11 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 
 void DDARing::Diagnostics(MessageType mtype, const char *prefix) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "=== %sDDARing ===\nScheduled moves: %" PRIu32 ", completed moves: %" PRIu32 ", StepErrors: %u, LaErrors: %u, Underruns: %u, %u\n",
-		prefix, scheduledMoves, completedMoves, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns);
+	const DDA * const cdda = currentDda;
+	reprap.GetPlatform().MessageF(mtype,
+									"=== %sDDARing ===\nScheduled moves: %" PRIu32 ", completed moves: %" PRIu32 ", StepErrors: %u, LaErrors: %u, Underruns: %u, %u  CDDA state: %d\n",
+									prefix, scheduledMoves, completedMoves, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns,
+									(cdda == nullptr) ? -1 : (int)cdda->GetState());
 	stepErrors = numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
 }
 

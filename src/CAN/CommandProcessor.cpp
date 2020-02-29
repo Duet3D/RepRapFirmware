@@ -248,7 +248,12 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 		switch (handle.u.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
-			reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			reprap.GetPlatform().GetEndstops().HandleRemoteEndstopChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			endstopStatesChanged = true;
+			break;
+
+		case RemoteInputHandle::typeZprobe:
+			reprap.GetPlatform().GetEndstops().HandleRemoteZProbeChange(src, handle.u.parts.major, handle.u.parts.minor, state);
 			endstopStatesChanged = true;
 			break;
 
@@ -263,7 +268,7 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 
 	if (endstopStatesChanged)
 	{
-		reprap.GetPlatform().GetEndstops().OnEndstopStatesChanged();
+		reprap.GetPlatform().GetEndstops().OnEndstopOrZProbeStatesChanged();
 	}
 }
 

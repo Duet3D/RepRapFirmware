@@ -68,9 +68,9 @@ public:
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 
 #if SUPPORT_CAN_EXPANSION
-	void HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
-
-	void OnEndstopStatesChanged() noexcept;
+	void HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
+	void HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
+	void OnEndstopOrZProbeStatesChanged() noexcept;
 #endif
 
 #if HAS_MASS_STORAGE

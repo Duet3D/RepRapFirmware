@@ -390,7 +390,7 @@ void LwipEthernetInterface::Spin() noexcept
 			{
 				// IP address is all zeros, so use DHCP
 				state = NetworkState::obtainingIP;
-//					debugPrintf("Link established, getting IP address\n");
+//				debugPrintf("Link established, getting IP address\n");
 				IPAddress nullAddress;
 				ethernet_set_configuration(nullAddress, nullAddress, nullAddress);
 				dhcp_start(&gs_net_if);
@@ -399,7 +399,7 @@ void LwipEthernetInterface::Spin() noexcept
 			{
 				// Using static IP address
 				state = NetworkState::connected;
-//					debugPrintf("Link established, network running\n");
+//				debugPrintf("Link established, network running\n");
 				ethernet_set_configuration(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
 			}
 		}
@@ -417,12 +417,12 @@ void LwipEthernetInterface::Spin() noexcept
 			{
 				// Notify the mDNS responder about this
 				state = NetworkState::connected;
-//						debugPrintf("IP address obtained, network running\n");
+//				debugPrintf("IP address obtained, network running\n");
 			}
 		}
 		else
 		{
-//					debugPrintf("Lost phy link\n");
+//			debugPrintf("Lost phy link\n");
 			TerminateSockets();
 			state = NetworkState::establishingLink;
 		}
@@ -461,7 +461,7 @@ void LwipEthernetInterface::Spin() noexcept
 		}
 		else
 		{
-//				debugPrintf("Lost phy link\n");
+//			debugPrintf("Lost phy link\n");
 			TerminateSockets();
 			state = NetworkState::establishingLink;
 		}

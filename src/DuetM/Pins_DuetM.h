@@ -157,7 +157,7 @@ constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(8), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { PortCPin(2) };
+constexpr Pin SdSpiCSPins[1] = { PortBPin(13) };
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // 12864 LCD
