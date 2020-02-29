@@ -468,12 +468,6 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 	}
 }
 
-size_t BinaryParser::AddPadding(size_t bytesRead) const noexcept
-{
-    size_t padding = 4 - bytesRead % 4;
-    return bytesRead + ((padding == 4) ? 0 : padding);
-}
-
 template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
 {
 	if (seenParameter == nullptr)

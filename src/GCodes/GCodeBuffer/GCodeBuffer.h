@@ -209,7 +209,7 @@ private:
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 
 #if HAS_LINUX_INTERFACE
-	char buffer[MaxCodeBufferSize];
+	alignas(4) char buffer[MaxCodeBufferSize];
 #else
 	char buffer[GCODE_LENGTH];
 #endif

@@ -62,7 +62,7 @@ private:
 	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
 	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;
 
-	size_t AddPadding(size_t bytesRead) const noexcept;
+	size_t AddPadding(size_t bytesRead) const noexcept { return (bytesRead + 3u) & (~3u); }
 	template<typename T> void GetArray(T arr[], size_t& length, bool doPad) THROWS_GCODE_EXCEPTION __attribute__((hot));
 	void WriteParameters(const StringRef& s, bool quoteStrings) const noexcept;
 
