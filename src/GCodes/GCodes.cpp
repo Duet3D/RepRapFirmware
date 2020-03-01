@@ -696,8 +696,8 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					{
 						gb.SetFinished(ActOnCode(gb, reply));
 					}
-					break;
 				}
+				break;
 			}
 			gb.Init();								// mark buffer as empty
 

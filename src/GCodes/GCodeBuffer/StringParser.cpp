@@ -418,6 +418,15 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 			break;
 
 		case 4:
+			if (StringStartsWith(command, "echo"))
+			{
+				ProcessEchoCommand(reply);
+				return true;
+			}
+			if (StringStartsWith(command, "skip"))
+			{
+				return true;
+			}
 			if (doingFile)
 			{
 				if (StringStartsWith(command, "else"))
@@ -430,11 +439,6 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 					ProcessElifCommand(skippedBlockType);
 					return true;
 				}
-			}
-			if (StringStartsWith(command, "echo"))
-			{
-				ProcessEchoCommand(reply);
-				return true;
 			}
 			break;
 
@@ -804,6 +808,17 @@ void StringParser::PutAndDecode(const char *str, size_t len) noexcept
 void StringParser::PutAndDecode(const char *str) noexcept
 {
 	PutAndDecode(str, strlen(str));
+}
+
+// Put a complete command but don't decode it
+void StringParser::PutCommand(const char *str) noexcept
+{
+	char c;
+	do
+	{
+		c = *str++;
+		Put(c);
+	} while (c != 0);
 }
 
 void StringParser::SetFinished() noexcept
@@ -1515,6 +1530,13 @@ bool StringParser::FileEnded() noexcept
 		return false;
 	}
 
+	if (!commandCompleted && gb.MachineState().GetIterations() >= 0)
+	{
+		// We reached the end of the file while inside a loop. Insert a dummy 'skip' command to allow the loop processing to complete.
+		Init();
+		PutCommand("skip");
+		commandCompleted = true;
+	}
 	return commandCompleted;
 }
 
@@ -1692,6 +1714,14 @@ void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 
 	case TYPE_OF(IPAddress):
 		str.cat(IP4String(val.uVal).c_str());
+		break;
+
+	case TYPE_OF(const ObjectModel*):
+		str.cat("{object}");
+		break;
+
+	case NoType:
+		str.cat("null");
 		break;
 
 	case TYPE_OF(DateTime):
@@ -2051,41 +2081,46 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 					break;
 
 				case '=':
-					BalanceTypes(val, val2, evaluate);
-					switch (val.type)
+					// Before balancing, handle comparisons with null
+					if (val.type == NoType)
 					{
-					case TYPE_OF(const ObjectModel*):
+						val.bVal = (val2.type == NoType);
+					}
+					else if (val2.type == NoType)
+					{
+						val.bVal = false;
+					}
+					else
+					{
+						BalanceTypes(val, val2, evaluate);
+						switch (val.type)
 						{
-							const bool v1Null = (val.omVal == nullptr),
-										v2Null = (val2.omVal == nullptr);
-							val.bVal = (v1Null) ? v2Null
-										: (v2Null) ? false
-											: throw ConstructParseException("cannot compare objects");
+						case TYPE_OF(const ObjectModel*):
+							throw ConstructParseException("cannot compare objects");
+
+						case TYPE_OF(int32_t):
+							val.bVal = (val.iVal == val2.iVal);
+							break;
+
+						case TYPE_OF(uint32_t):
+							val.bVal = (val.uVal == val2.uVal);
+							break;
+
+						case TYPE_OF(float_t):
+							val.bVal = (val.fVal == val2.fVal);
+							break;
+
+						case TYPE_OF(bool):
+							val.bVal = (val.bVal == val2.bVal);
+							break;
+
+						case TYPE_OF(const char*):
+							val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
+							break;
+
+						default:
+							throw ConstructParseException("unexpected operand type to equality operator");
 						}
-						break;
-
-					case TYPE_OF(int32_t):
-						val.bVal = (val.iVal == val2.iVal);
-						break;
-
-					case TYPE_OF(uint32_t):
-						val.bVal = (val.uVal == val2.uVal);
-						break;
-
-					case TYPE_OF(float_t):
-						val.bVal = (val.fVal == val2.fVal);
-						break;
-
-					case TYPE_OF(bool):
-						val.bVal = (val.bVal == val2.bVal);
-						break;
-
-					case TYPE_OF(const char*):
-						val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
-						break;
-
-					default:
-						throw ConstructParseException("unexpected operand type to equality operator");
 					}
 					val.type = TYPE_OF(bool);
 					if (invert)
@@ -2396,7 +2431,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 
 	if (id.Equals("null"))
 	{
-		return ExpressionValue((const ObjectModel *)nullptr);
+		return ExpressionValue(nullptr);
 	}
 
 	if (id.Equals("pi"))

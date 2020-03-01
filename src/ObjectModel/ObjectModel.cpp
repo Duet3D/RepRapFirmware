@@ -293,16 +293,11 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TYPE_OF(const ObjectModel*):
-			if (val.omVal != nullptr)
+			if (*filter == '.')
 			{
-				if (*filter == '.')
-				{
-					++filter;
-				}
-				return val.omVal->ReportAsJson(buf, context, val.param, filter);
+				++filter;
 			}
-			buf->cat("null");
-			break;
+			return val.omVal->ReportAsJson(buf, context, val.param, filter);
 
 		case TYPE_OF(float):
 			if (val.fVal == 0.0)
@@ -653,15 +648,25 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, E
 		}
 
 	case TYPE_OF(const ObjectModel*):
-		if (*idString == '.')
+		switch (*idString)
 		{
+		case 0:
+			return val;
+		case '.':
 			return val.omVal->GetObjectValue(context, idString + 1, val.param);
+		case '^':
+			throw context.ConstructParseException("object is not an array");
+		default:
+			throw context.ConstructParseException("syntax error in object model path");
 		}
+		break;
+
+	case NoType:
 		if (*idString == 0)
 		{
-			return val;				// an object value can be compared to null
+			return val;				// a null value can be compared to null
 		}
-		throw context.ConstructParseException((*idString == '[') ? "object is not an array" : "syntax error in object model path");
+		throw context.ConstructParseException("reached null object before end of selector string");
 
 	case TYPE_OF(Bitmap<uint16_t>):
 	case TYPE_OF(Bitmap<uint32_t>):
