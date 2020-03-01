@@ -4391,7 +4391,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 
 	case GCodeResult::errorNotSupported:
-		if (!gb.IsBinary() && gb.IsDoingFile())
+		if (!gb.IsDoingLocalFile())
 		{
 			gb.PrintCommand(reply);
 			reply.cat(": ");
@@ -4401,7 +4401,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 
 	case GCodeResult::notSupportedInCurrentMode:
-		if (!gb.IsBinary() && gb.IsDoingFile())
+		if (!gb.IsDoingLocalFile())
 		{
 			gb.PrintCommand(reply);
 			reply.cat(": ");
@@ -4411,7 +4411,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 
 	case GCodeResult::badOrMissingParameter:
-		if (!gb.IsBinary() && gb.IsDoingFile())
+		if (!gb.IsDoingLocalFile())
 		{
 			gb.PrintCommand(reply);
 			reply.cat(": ");
@@ -4421,7 +4421,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 
 	case GCodeResult::remoteInternalError:
-		if (!gb.IsBinary() && gb.IsDoingFile())
+		if (!gb.IsDoingLocalFile())
 		{
 			gb.PrintCommand(reply);
 			reply.cat(": ");
@@ -4432,7 +4432,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 
 	case GCodeResult::error:
 	case GCodeResult::warning:
-		if (!gb.IsBinary() && gb.IsDoingFile())
+		if (!gb.IsDoingLocalFile())
 		{
 			String<StringLength50> scratchString;
 			gb.PrintCommand(scratchString.GetRef());

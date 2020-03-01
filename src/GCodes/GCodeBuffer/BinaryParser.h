@@ -8,9 +8,12 @@
 #ifndef SRC_GCODES_GCODEBUFFER_BINARYGCODEBUFFER_H_
 #define SRC_GCODES_GCODEBUFFER_BINARYGCODEBUFFER_H_
 
+#include <RepRapFirmware.h>
+
+#if HAS_LINUX_INTERFACE
+
 #include <Linux/MessageFormats.h>
 #include <MessageType.h>
-#include <RepRapFirmware.h>
 #include <GCodes/GCodeException.h>
 
 class GCodeBuffer;
@@ -75,5 +78,7 @@ private:
 
 	static constexpr int lineNumber = -1;							// ideally the Linux interface would pass us the line number, but for now use this
 };
+
+#endif
 
 #endif /* SRC_GCODES_GCODEBUFFER_BINARYGCODEBUFFER_H_ */

@@ -236,7 +236,9 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
 {
 	toolNumberAdjust = gb.GetToolNumberAdjust();
 
+#if HAS_LINUX_INTERFACE
 	isBinary = gb.IsBinary();
+#endif
 	memcpy(data, gb.DataStart(), gb.DataLength());
 	dataLength = gb.DataLength();
 }
@@ -244,7 +246,11 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
 void QueuedCode::AssignTo(GCodeBuffer *gb) noexcept
 {
 	gb->SetToolNumberAdjust(toolNumberAdjust);
+#if HAS_LINUX_INTERFACE
 	gb->PutAndDecode(data, dataLength, isBinary);
+#else
+	gb->PutAndDecode(data, dataLength);
+#endif
 }
 
 // End

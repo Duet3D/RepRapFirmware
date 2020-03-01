@@ -6,6 +6,9 @@
  */
 
 #include "BinaryParser.h"
+
+#if HAS_LINUX_INTERFACE
+
 #include "GCodeBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
@@ -648,5 +651,7 @@ GCodeException BinaryParser::ConstructParseException(const char *str, uint32_t p
 {
 	return GCodeException(lineNumber, -1, str, param);
 }
+
+#endif
 
 // End

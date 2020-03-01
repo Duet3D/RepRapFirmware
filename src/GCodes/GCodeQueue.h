@@ -48,7 +48,9 @@ public:
 private:
 	QueuedCode *next;
 
+#if HAS_LINUX_INTERFACE
 	bool isBinary;
+#endif
 	char data[BufferSizePerQueueItem];
 	size_t dataLength;
 

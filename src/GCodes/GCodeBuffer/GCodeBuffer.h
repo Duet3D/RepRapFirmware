@@ -48,9 +48,12 @@ public:
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
 
-	bool IsBinary() const noexcept { return isBinaryBuffer; }					// Return true if the code is in binary format
 	bool Put(char c) noexcept __attribute__((hot));								// Add a character to the end
-	void PutAndDecode(const char *data, size_t len, bool isBinary) noexcept;	// Add an entire G-Code, overwriting any existing content
+#if HAS_LINUX_INTERFACE
+	void PutAndDecode(const char *data, size_t len, bool isBinary = false) noexcept;	// Add an entire G-Code, overwriting any existing content
+#else
+	void PutAndDecode(const char *data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
+#endif
 	void PutAndDecode(const char *str) noexcept;								// Add a null-terminated string, overwriting any existing content
 	void StartNewFile() noexcept;												// Called when we start a new file
 	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
@@ -113,10 +116,13 @@ public:
 
 	void AbortFile(bool abortAll, bool requestAbort = true) noexcept;
 	bool IsDoingFile() const noexcept;							// Return true if this source is executing a file
+	bool IsDoingLocalFile() const noexcept;						// Return true if this source is executing a file from the local SD card
 	bool IsDoingFileMacro() const noexcept;						// Return true if this source is executing a file macro
 	FilePosition GetFilePosition() const noexcept;				// Get the file position at the start of the current command
 
 #if HAS_LINUX_INTERFACE
+	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
+
 	void SetPrintFinished() noexcept;							// Mark the print file as finished
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 
@@ -197,19 +203,26 @@ private:
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 
 	GCodeResult lastResult;
+
+#if HAS_LINUX_INTERFACE
 	BinaryParser binaryParser;
+#endif
+
 	StringParser stringParser;
 
 	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 
 	uint32_t whenTimerStarted;							// When we started waiting
+
+#if HAS_LINUX_INTERFACE
 	bool isBinaryBuffer;
+#endif
 	bool timerRunning;									// True if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 
 #if HAS_LINUX_INTERFACE
-	alignas(4) char buffer[MaxCodeBufferSize];
+	alignas(4) char buffer[MaxCodeBufferSize];			// must be aligned because we do dword fetches from it
 #else
 	char buffer[GCODE_LENGTH];
 #endif
@@ -261,6 +274,16 @@ inline bool GCodeBuffer::CanQueueCodes() const noexcept
 inline bool GCodeBuffer::IsDoingFile() const noexcept
 {
 	return machineState->DoingFile();
+}
+
+// Return true if this source is executing a file from the local SD card
+inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
+{
+#if HAS_LINUX_INTERFACE
+	return !IsBinary() && IsDoingFile();
+#else
+	return IsDoingFile();
+#endif
 }
 
 #if HAS_LINUX_INTERFACE
