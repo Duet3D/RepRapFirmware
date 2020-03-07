@@ -8,7 +8,7 @@
 #ifndef SRC_ENDSTOPS_ENDSTOPDEFS_H_
 #define SRC_ENDSTOPS_ENDSTOPDEFS_H_
 
-#include <NamedEnum.h>
+#include <General/NamedEnum.h>
 
 // Forward declarations
 class EndstopOrZProbe;

@@ -29,7 +29,7 @@ Licence: GPL
 #include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
 #include <General/FreelistManager.h>
-#include <NamedEnum.h>
+#include <General/NamedEnum.h>
 
 #undef array
 #include <functional>

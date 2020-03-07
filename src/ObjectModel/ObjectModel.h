@@ -131,8 +131,11 @@ struct ExpressionValue
 	// Get the format string to use assuming this is a floating point number
 	const char *GetFloatFormatString() const noexcept { return ::GetFloatFormatString(param); }
 
+	// Append a string representation of this value to a string
+	void AppendAsString(const StringRef& str) const noexcept;
+
 #if SUPPORT_CAN_EXPANSION
-	void ExtractRequestedPart(const StringRef& rslt) pre(type == TYPE_OF(CanExpansionBoardDetails));
+	void ExtractRequestedPart(const StringRef& rslt) const noexcept pre(type == TYPE_OF(CanExpansionBoardDetails));
 #endif
 };
 

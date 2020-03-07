@@ -9,10 +9,10 @@
 #define SRC_HEATING_HEATER_H_
 
 #include <RepRapFirmware.h>
-#include <NamedEnum.h>
+#include <General/NamedEnum.h>
 #include "FOPDT.h"
 #include "HeaterMonitor.h"
-#include "GCodes/GCodeResult.h"
+#include <GCodes/GCodeResult.h>
 #include <ObjectModel/ObjectModel.h>
 
 #if SUPPORT_CAN_EXPANSION

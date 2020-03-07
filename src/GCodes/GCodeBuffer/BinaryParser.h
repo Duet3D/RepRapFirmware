@@ -76,7 +76,7 @@ private:
 	const CodeParameter *seenParameter;
 	const char *seenParameterValue;
 
-	static constexpr int lineNumber = -1;							// ideally the Linux interface would pass us the line number, but for now use this
+	static constexpr int lineNumber = -1;							//TODO the Linux interface should pass us the line number
 };
 
 #endif

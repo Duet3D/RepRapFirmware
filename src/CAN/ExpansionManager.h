@@ -16,7 +16,7 @@
 #include <CanId.h>
 #include <CanMessageBuffer.h>
 #include <GCodes/GCodeResult.h>
-#include <NamedEnum.h>
+#include <General/NamedEnum.h>
 
 NamedEnum(BoardState, uint8_t, unknown, flashing, flashFailed, resetting, running);
 

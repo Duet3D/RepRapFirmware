@@ -9,11 +9,11 @@
 
 #include "StringParser.h"
 #include "GCodeBuffer.h"
+#include "ExpressionParser.h"
 
-#include "GCodes/GCodes.h"
-#include "Platform.h"
-#include "RepRap.h"
-#include <General/IP4String.h>
+#include <GCodes/GCodes.h>
+#include <Platform.h>
+#include <RepRap.h>
 #include <General/StringBuffer.h>
 #include <Networking/NetworkDefs.h>
 
@@ -178,7 +178,7 @@ bool StringParser::Put(char c) noexcept
 				break;
 
 			case '(':
-				if (braceCount == 0)
+				if (braceCount == 0 && reprap.GetGCodes().GetMachineType() == MachineType::cnc)
 				{
 					AddToChecksum(c);
 					gb.bufferState = GCodeBufferState::parsingBracketedComment;
@@ -608,10 +608,10 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 		// If we fail to parse the expression, we want to abort anyway
 		try
 		{
-			char stringBuffer[StringBufferLength];
-			StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-			const ExpressionValue val = ParseExpression(bufRef, 0, true);
-			AppendAsString(val, reply);
+			ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+			const ExpressionValue val = parser.Parse();
+			readPointer = parser.GetEndptr() - gb.buffer;
+			val.AppendAsString(reply);
 		}
 		catch (const GCodeException& e)
 		{
@@ -636,14 +636,14 @@ void StringParser::ProcessEchoCommand(const StringRef& reply)
 		{
 			return;
 		}
-		char stringBuffer[StringBufferLength];
-		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-		const ExpressionValue val = ParseExpression(bufRef, 0, true);
+		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		const ExpressionValue val = parser.Parse();
+		readPointer = parser.GetEndptr() - gb.buffer;
 		if (!reply.IsEmpty())
 		{
 			reply.cat(' ');
 		}
-		AppendAsString(val, reply);
+		val.AppendAsString(reply);
 		SkipWhiteSpace();
 		if (gb.buffer[readPointer] == ',')
 		{
@@ -659,16 +659,10 @@ void StringParser::ProcessEchoCommand(const StringRef& reply)
 // Evaluate the condition that should follow 'if' or 'while'
 bool StringParser::EvaluateCondition()
 {
-	char stringBuffer[StringBufferLength];
-	StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-	ExpressionValue val = ParseExpression(bufRef, 0, true);
-	SkipWhiteSpace();
-	if (gb.buffer[readPointer] != 0)
-	{
-		throw ConstructParseException("unexpected characters following condition");
-	}
-	ConvertToBool(val, true);
-	return val.bVal;
+	ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+	const bool b = parser.ParseBoolean();
+	parser.CheckForExtraCharacters();
+	return b;
 }
 
 // Decode this command and find the start of the next one on the same line.
@@ -1072,11 +1066,11 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty)
 		break;
 
 	case '{':
-		++readPointer;									// skip the '{'
 		{
-			char stringBuffer[StringBufferLength];
-			StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-			AppendAsString(ParseBracketedExpression(bufRef, '}', true), str);
+			ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+			const ExpressionValue val = parser.Parse();
+			readPointer = parser.GetEndptr() - gb.buffer;
+			val.AppendAsString(str);
 		}
 		break;
 
@@ -1155,10 +1149,10 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 	}
 	else if (gb.buffer[readPointer] == '{')
 	{
-		++readPointer;									// skip the '{'
-		char stringBuffer[StringBufferLength];
-		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-		AppendAsString(ParseBracketedExpression(bufRef, '}', true), str);
+		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		const ExpressionValue val = parser.Parse();
+		readPointer = parser.GetEndptr() - gb.buffer;
+		val.AppendAsString(str);
 	}
 	else
 	{
@@ -1547,24 +1541,10 @@ float StringParser::ReadFloatValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		++readPointer;
-		char stringBuffer[StringBufferLength];
-		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
-		switch (val.type)
-		{
-		case TYPE_OF(float):
-			return val.fVal;
-
-		case TYPE_OF(int32_t):
-			return (float)val.iVal;
-
-		case TYPE_OF(uint32_t):
-			return (float)val.uVal;
-
-		default:
-			throw ConstructParseException("expected float value");
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		const float val = parser.ParseFloat();
+		readPointer = parser.GetEndptr() - gb.buffer;
+		return val;
 	}
 
 	const char *endptr;
@@ -1577,25 +1557,10 @@ uint32_t StringParser::ReadUIValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		++readPointer;
-		char stringBuffer[StringBufferLength];
-		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
-		switch (val.type)
-		{
-		case TYPE_OF(uint32_t):
-			return val.uVal;
-
-		case TYPE_OF(int32_t):
-			if (val.iVal >= 0)
-			{
-				return (uint32_t)val.iVal;
-			}
-			throw ConstructParseException("value must be non-negative");
-
-		default:
-			throw ConstructParseException("expected non-negative integer value");
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		const uint32_t val = parser.ParseUnsigned();
+		readPointer = parser.GetEndptr() - gb.buffer;
+		return val;
 	}
 
 	int base = 10;
@@ -1637,21 +1602,10 @@ int32_t StringParser::ReadIValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		++readPointer;
-		char stringBuffer[StringBufferLength];
-		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
-		switch (val.type)
-		{
-		case TYPE_OF(int32_t):
-			return val.iVal;
-
-		case TYPE_OF(uint32_t):
-			return (int32_t)val.uVal;
-
-		default:
-			throw ConstructParseException("expected integer value");
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		const int32_t val = parser.ParseInteger();
+		readPointer = parser.GetEndptr() - gb.buffer;
+		return val;
 	}
 
 	const char *endptr;
@@ -1683,594 +1637,6 @@ DriverId StringParser::ReadDriverIdValue()
 	return result;
 }
 
-// Get a string expression and append it to the string
-void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
-{
-	switch (val.type)
-	{
-	case TYPE_OF(char):
-		str.cat(val.cVal);
-		break;
-
-	case TYPE_OF(const char*):
-		str.cat(val.sVal);
-		break;
-
-	case TYPE_OF(float):
-		str.catf(val.GetFloatFormatString(), (double)val.fVal);
-		break;
-
-	case TYPE_OF(uint32_t):
-		str.catf("%" PRIu32, val.uVal);			// convert unsigned integer to string
-		break;
-
-	case TYPE_OF(int32_t):
-		str.catf("%" PRIi32, val.uVal);			// convert signed integer to string
-		break;
-
-	case TYPE_OF(bool):
-		str.cat((val.bVal) ? "true" : "false");	// convert bool to string
-		break;
-
-	case TYPE_OF(IPAddress):
-		str.cat(IP4String(val.uVal).c_str());
-		break;
-
-	case TYPE_OF(const ObjectModel*):
-		str.cat("{object}");
-		break;
-
-	case NoType:
-		str.cat("null");
-		break;
-
-	case TYPE_OF(DateTime):
-		{
-			const time_t time = val.Get56BitValue();
-			tm timeInfo;
-			gmtime_r(&time, &timeInfo);
-			str.catf("%04u-%02u-%02u %02u:%02u:%02u",
-						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-		}
-		break;
-
-	case TYPE_OF(DriverId):
-#if SUPPORT_CAN_EXPANSION
-		str.catf("%u.%u", (unsigned int)(val.uVal >> 8), (unsigned int)(val.uVal & 0xFF));
-#else
-		str.catf("%u", (unsigned int)val.uVal);
-#endif
-		break;
-
-	case TYPE_OF(MacAddress):
-		str.catf("%02x:%02x:%02x:%02x:%02x:%02x",
-					(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
-					(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
-		break;
-
-#if SUPPORT_CAN_EXPANSION
-	case TYPE_OF(CanExpansionBoardDetails):
-		val.ExtractRequestedPart(str);
-		break;
-#endif
-
-	default:
-		throw ConstructParseException("string value expected");
-	}
-}
-
-// Evaluate a bracketed expression
-ExpressionValue StringParser::ParseBracketedExpression(StringBuffer& stringBuffer, char closingBracket, bool evaluate)
-{
-	auto rslt = ParseExpression(stringBuffer, 0, evaluate);
-	if (gb.buffer[readPointer] != closingBracket)
-	{
-		throw ConstructParseException("expected '%c'", (uint32_t)closingBracket);
-	}
-	++readPointer;
-	return rslt;
-}
-
-// Evaluate an expression, stopping before any binary operators with priority 'priority' or lower
-ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_t priority, bool evaluate)
-{
-	// Lists of binary operators and their priorities
-	static constexpr const char *operators = "?^&|!=<>+-*/";				// for multi-character operators <= and >= and != this is the first character
-	static constexpr uint8_t priorities[] = { 1, 2, 3, 3, 4, 4, 4, 4, 5, 5, 6, 6 };
-	constexpr uint8_t UnaryPriority = 10;									// must be higher than any binary operator priority
-	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
-
-	// Start by looking for a unary operator or opening bracket
-	SkipWhiteSpace();
-	const char c = gb.buffer[readPointer];
-	ExpressionValue val;
-	switch (c)
-	{
-	case '"':
-		InternalGetQuotedString(stringBuffer.GetRef());
-		val.Set(GetAndFix(stringBuffer));
-		break;
-
-	case '-':
-		++readPointer;
-		val = ParseExpression(stringBuffer, UnaryPriority, evaluate);
-		switch (val.type)
-		{
-		case TYPE_OF(int32_t):
-			val.iVal = -val.iVal;		//TODO overflow check
-			break;
-
-		case TYPE_OF(float):
-			val.fVal = -val.fVal;
-			break;
-
-		default:
-			throw ConstructParseException("expected numeric value after '-'");
-		}
-		break;
-
-	case '+':
-		++readPointer;
-		val = ParseExpression(stringBuffer, UnaryPriority, evaluate);
-		switch (val.type)
-		{
-		case TYPE_OF(uint32_t):
-			// Convert enumeration to integer
-			val.iVal = (int32_t)val.uVal;
-			val.type = TYPE_OF(int32_t);
-			break;
-
-		case TYPE_OF(int32_t):
-		case TYPE_OF(float):
-			break;
-
-		default:
-			throw ConstructParseException("expected numeric or enumeration value after '+'");
-		}
-		break;
-
-	case '#':
-		++readPointer;
-		SkipWhiteSpace();
-		if (isalpha(gb.buffer[readPointer]))
-		{
-			// Probably applying # to an object model array, so optimise by asking the OM for just the length
-			val = ParseIdentifierExpression(stringBuffer, true, evaluate);
-		}
-		else
-		{
-			val = ParseExpression(stringBuffer, UnaryPriority, evaluate);
-			if (val.type == TYPE_OF(const char*))
-			{
-				const char* s = val.sVal;
-				val.Set((int32_t)strlen(s));
-				stringBuffer.FinishedUsing(s);
-				val.type = TYPE_OF(int32_t);
-			}
-			else
-			{
-				throw ConstructParseException("expected object model value or string after '#");
-			}
-		}
-		break;
-
-	case '{':
-		++readPointer;
-		val = ParseBracketedExpression(stringBuffer, '}', evaluate);
-		break;
-
-	case '(':
-		++readPointer;
-		val = ParseBracketedExpression(stringBuffer, ')', evaluate);
-		break;
-
-	case '!':
-		++readPointer;
-		val = ParseExpression(stringBuffer, UnaryPriority, evaluate);
-		ConvertToBool(val, evaluate);
-		val.bVal = !val.bVal;
-		break;
-
-	default:
-		if (isdigit(c))						// looks like a number
-		{
-			val = ParseNumber();
-		}
-		else if (isalpha(c))				// looks like a variable name
-		{
-			val = ParseIdentifierExpression(stringBuffer, false, evaluate);
-		}
-		else
-		{
-			throw ConstructParseException("expected an expression");
-		}
-		break;
-	}
-
-	// See if it is followed by a binary operator
-	do
-	{
-		SkipWhiteSpace();
-		char opChar = gb.buffer[readPointer];
-		if (opChar == 0)	// don't pass null to strchr
-		{
-			return val;
-		}
-
-		const char * const p = strchr(operators, opChar);
-		if (p == nullptr)
-		{
-			return val;
-		}
-		const size_t index = p - operators;
-		const uint8_t opPrio = priorities[index];
-		if (opPrio <= priority)
-		{
-			return val;
-		}
-
-		++readPointer;						// skip the [first] operator character
-
-		// Handle >= and <= and !=
-		bool invert = false;
-		if (opChar == '!')
-		{
-			if (gb.buffer[readPointer] != '=')
-			{
-				throw ConstructParseException("expected '='");
-			}
-			invert = true;
-			++readPointer;
-			opChar = '=';
-		}
-		else if ((opChar == '>' || opChar == '<') && gb.buffer[readPointer] == '=')
-		{
-			invert = true;
-			++readPointer;
-			opChar ^= ('>' ^ '<');			// change < to > or vice versa
-		}
-
-		// Allow == && || as alternatives to = & |
-		if ((opChar == '=' || opChar == '&' || opChar == '|') && gb.buffer[readPointer] == opChar)
-		{
-			++readPointer;
-		}
-
-		// Handle operators that do not always evaluate their second operand
-		switch (opChar)
-		{
-		case '&':
-			ConvertToBool(val, evaluate);
-			{
-				ExpressionValue val2 = ParseExpression(stringBuffer, opPrio, evaluate && val.bVal);		// get the next operand
-				if (val.bVal)
-				{
-					ConvertToBool(val2, evaluate);
-					val.bVal = val.bVal && val2.bVal;
-				}
-			}
-			break;
-
-		case '|':
-			ConvertToBool(val, evaluate);
-			{
-				ExpressionValue val2 = ParseExpression(stringBuffer, opPrio, evaluate && !val.bVal);		// get the next operand
-				if (!val.bVal)
-				{
-					ConvertToBool(val2, evaluate);
-					val.bVal = val.bVal || val2.bVal;
-				}
-			}
-			break;
-
-		case '?':
-			ConvertToBool(val, evaluate);
-			{
-				ExpressionValue val2 = ParseExpression(stringBuffer, opPrio, evaluate && val.bVal);		// get the second operand
-				if (gb.buffer[readPointer] != ':')
-				{
-					throw ConstructParseException("expected ':'");
-				}
-				++readPointer;
-				ExpressionValue val3 = ParseExpression(stringBuffer, opPrio - 1, evaluate && !val.bVal);	// get the third operand, which may be a further conditional expression
-				return (val.bVal) ? val2 : val3;
-			}
-
-		default:
-			// Handle binary operators that always evaluate both operands
-			{
-				ExpressionValue val2 = ParseExpression(stringBuffer, opPrio, evaluate);	// get the next operand
-				switch(opChar)
-				{
-				case '+':
-					BalanceNumericTypes(val, val2, evaluate);
-					if (val.type == TYPE_OF(float))
-					{
-						val.fVal += val2.fVal;
-						val.param = max(val.param, val2.param);
-					}
-					else
-					{
-						val.iVal += val2.iVal;
-					}
-					break;
-
-				case '-':
-					BalanceNumericTypes(val, val2, evaluate);
-					if (val.type == TYPE_OF(float))
-					{
-						val.fVal -= val2.fVal;
-						val.param = max(val.param, val2.param);
-					}
-					else
-					{
-						val.iVal -= val2.iVal;
-					}
-					break;
-
-				case '*':
-					BalanceNumericTypes(val, val2, evaluate);
-					if (val.type == TYPE_OF(float))
-					{
-						val.fVal *= val2.fVal;
-						val.param = max(val.param, val2.param);
-					}
-					else
-					{
-						val.iVal *= val2.iVal;
-					}
-					break;
-
-				case '/':
-					ConvertToFloat(val, evaluate);
-					ConvertToFloat(val2, evaluate);
-					val.fVal /= val2.fVal;
-					val.param = 0;
-					break;
-
-				case '>':
-					BalanceTypes(val, val2, evaluate);
-					switch (val.type)
-					{
-					case TYPE_OF(int32_t):
-						val.bVal = (val.iVal > val2.iVal);
-						break;
-
-					case TYPE_OF(float_t):
-						val.bVal = (val.fVal > val2.fVal);
-						break;
-
-					case TYPE_OF(bool):
-						val.bVal = (val.bVal && !val2.bVal);
-						break;
-
-					default:
-						throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
-					}
-					val.type = TYPE_OF(bool);
-					if (invert)
-					{
-						val.bVal = !val.bVal;
-					}
-					break;
-
-				case '<':
-					BalanceTypes(val, val2, evaluate);
-					switch (val.type)
-					{
-					case TYPE_OF(int32_t):
-						val.bVal = (val.iVal < val2.iVal);
-						break;
-
-					case TYPE_OF(float_t):
-						val.bVal = (val.fVal < val2.fVal);
-						break;
-
-					case TYPE_OF(bool):
-						val.bVal = (!val.bVal && val2.bVal);
-						break;
-
-					default:
-						throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
-					}
-					val.type = TYPE_OF(bool);
-					if (invert)
-					{
-						val.bVal = !val.bVal;
-					}
-					break;
-
-				case '=':
-					// Before balancing, handle comparisons with null
-					if (val.type == NoType)
-					{
-						val.bVal = (val2.type == NoType);
-					}
-					else if (val2.type == NoType)
-					{
-						val.bVal = false;
-					}
-					else
-					{
-						BalanceTypes(val, val2, evaluate);
-						switch (val.type)
-						{
-						case TYPE_OF(const ObjectModel*):
-							throw ConstructParseException("cannot compare objects");
-
-						case TYPE_OF(int32_t):
-							val.bVal = (val.iVal == val2.iVal);
-							break;
-
-						case TYPE_OF(uint32_t):
-							val.bVal = (val.uVal == val2.uVal);
-							break;
-
-						case TYPE_OF(float_t):
-							val.bVal = (val.fVal == val2.fVal);
-							break;
-
-						case TYPE_OF(bool):
-							val.bVal = (val.bVal == val2.bVal);
-							break;
-
-						case TYPE_OF(const char*):
-							val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
-							break;
-
-						default:
-							throw ConstructParseException("unexpected operand type to equality operator");
-						}
-					}
-					val.type = TYPE_OF(bool);
-					if (invert)
-					{
-						val.bVal = !val.bVal;
-					}
-					break;
-
-				case '^':
-					ConvertToString(val, evaluate, stringBuffer);
-					ConvertToString(val2, evaluate, stringBuffer);
-					// We could skip evaluation if evaluate is false, but there is no real need to
-					if (stringBuffer.Concat(val.sVal, val2.sVal))
-					{
-						throw ConstructParseException("too many strings");
-					}
-					val.sVal = GetAndFix(stringBuffer);
-					break;
-				}
-			}
-		}
-	} while (true);
-}
-
-void StringParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate)
-{
-	if (val1.type == TYPE_OF(float))
-	{
-		ConvertToFloat(val2, evaluate);
-	}
-	else if (val2.type == TYPE_OF(float))
-	{
-		ConvertToFloat(val1, evaluate);
-	}
-	else if (val1.type != TYPE_OF(int32_t) || val2.type != TYPE_OF(int32_t))
-	{
-		if (evaluate)
-		{
-			throw ConstructParseException("expected numeric operands");
-		}
-		val1.Set((int32_t)0);
-		val2.Set((int32_t)0);
-	}
-}
-
-void StringParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate)
-{
-	if (val1.type == TYPE_OF(float))
-	{
-		ConvertToFloat(val2, evaluate);
-	}
-	else if (val2.type == TYPE_OF(float))
-	{
-		ConvertToFloat(val1, evaluate);
-	}
-	else if (val1.type != val2.type)
-	{
-		if (evaluate)
-		{
-			throw ConstructParseException("cannot convert operands to same type");
-		}
-		val1.Set((int32_t)0);
-		val2.Set((int32_t)0);
-	}
-}
-
-void StringParser::EnsureNumeric(ExpressionValue& val, bool evaluate)
-{
-	switch (val.type)
-	{
-	case TYPE_OF(uint32_t):
-		val.type = TYPE_OF(int32_t);
-		val.iVal = val.uVal;
-		break;
-
-	case TYPE_OF(int32_t):
-	case TYPE_OF(float):
-		break;
-
-	default:
-		if (evaluate)
-		{
-			throw ConstructParseException("expected numeric operand");
-		}
-		val.Set((int32_t)0);
-	}
-}
-
-void StringParser::ConvertToFloat(ExpressionValue& val, bool evaluate)
-{
-	switch (val.type)
-	{
-	case TYPE_OF(int32_t):
-		val.fVal = (float)val.iVal;
-		val.type = TYPE_OF(float);
-		val.param = 1;
-		break;
-
-	case TYPE_OF(float):
-		break;
-
-	default:
-		if (evaluate)
-		{
-			throw ConstructParseException("expected numeric operand");
-		}
-		val.Set(0.0f);
-	}
-}
-
-void StringParser::ConvertToBool(ExpressionValue& val, bool evaluate)
-{
-	if (val.type != TYPE_OF(bool))
-	{
-		if (evaluate)
-		{
-			throw ConstructParseException("expected Boolean operand");
-		}
-		val.Set(false);
-	}
-}
-
-void StringParser::ConvertToString(ExpressionValue& val, bool evaluate, StringBuffer& stringBuffer)
-{
-	if (val.type != TYPE_OF(const char*))
-	{
-		if (evaluate)
-		{
-			stringBuffer.ClearLatest();
-			AppendAsString(val, stringBuffer.GetRef());
-			val.Set(GetAndFix(stringBuffer));
-		}
-		else
-		{
-			val.Set("");
-		}
-	}
-}
-
-// Get a C-style pointer to the latest string in the buffer, and start a new one
-const char *StringParser::GetAndFix(StringBuffer& stringBuffer)
-{
-	const char *const rslt = stringBuffer.LatestCStr();
-	if (stringBuffer.Fix())
-	{
-		throw ConstructParseException("too many strings");
-	}
-	return rslt;
-}
-
 void StringParser::SkipWhiteSpace() noexcept
 {
 	while (gb.buffer[readPointer] == ' ' || gb.buffer[readPointer] == '\t')
@@ -2279,406 +1645,17 @@ void StringParser::SkipWhiteSpace() noexcept
 	}
 }
 
-// Parse a number. the initial character of the string is a decimal digit.
-ExpressionValue StringParser::ParseNumber()
-{
-	// 2. Read digits before decimal point, E or e
-	unsigned long valueBeforePoint = 0;
-	char c;
-	while (isdigit((c = gb.buffer[readPointer])))
-	{
-		const unsigned int digit = c - '0';
-		if (valueBeforePoint > ULONG_MAX/10 || (valueBeforePoint *= 10, valueBeforePoint > ULONG_MAX - digit))
-		{
-			throw ConstructParseException("too many digits");
-		}
-		valueBeforePoint += digit;
-		++readPointer;
-	}
-
-	// 3. Check for decimal point before E or e
-	unsigned long valueAfterPoint = 0;
-	long digitsAfterPoint = 0;
-	bool isFloat = (c == '.');
-	if (isFloat)
-	{
-		++readPointer;
-
-		// 3b. Read the digits (if any) after the decimal point
-		while (isdigit((c = gb.buffer[readPointer])))
-		{
-			const unsigned int digit = c - '0';
-			if (valueAfterPoint > LONG_MAX/10 || (valueAfterPoint *= 10, valueAfterPoint > LONG_MAX - digit))
-			{
-				throw ConstructParseException("too many decimal digits");
-			}
-			valueAfterPoint += digit;
-			++digitsAfterPoint;
-			++readPointer;
-		}
-	}
-
-	// 5. Check for exponent part
-	long exponent = 0;
-	if (toupper(c) == 'E')
-	{
-		isFloat = true;
-		++readPointer;
-		c = gb.buffer[readPointer];
-
-		// 5a. Check for signed exponent
-		const bool expNegative = (c == '-');
-		if (expNegative || c == '+')
-		{
-			++readPointer;
-		}
-
-		// 5b. Read exponent digits
-		while (isdigit((c = gb.buffer[readPointer])))
-		{
-			exponent = (10 * exponent) + (c - '0');	// could overflow, but anyone using such large numbers is being very silly
-			++readPointer;
-		}
-
-		if (expNegative)
-		{
-			exponent = -exponent;
-		}
-	}
-
-	// 6. Compute the composite value
-	ExpressionValue retvalue;
-
-	if (isFloat)
-	{
-		retvalue.type = TYPE_OF(float);
-		retvalue.param = constrain<long>(digitsAfterPoint, 1, MaxFloatDigitsDisplayedAfterPoint);
-		if (valueAfterPoint != 0)
-		{
-			if (valueBeforePoint == 0)
-			{
-				retvalue.fVal = (float)((double)valueAfterPoint * pow(10, exponent - digitsAfterPoint));
-			}
-			else
-			{
-				retvalue.fVal = (float)(((double)valueAfterPoint/pow(10, digitsAfterPoint) + valueBeforePoint) * pow(10, exponent));
-			}
-		}
-		else
-		{
-			retvalue.fVal = (float)(valueBeforePoint * pow(10, exponent));
-		}
-	}
-	else
-	{
-		retvalue.type = TYPE_OF(int32_t);
-		retvalue.iVal = (int32_t)valueBeforePoint;
-	}
-
-	return retvalue;
-}
-
-// Parse an identifier expression
-ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuffer, bool applyLengthOperator, bool evaluate)
-{
-	if (!isalpha(gb.buffer[readPointer]))
-	{
-		throw ConstructParseException("expected an identifier");
-	}
-
-	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context("v", applyLengthOperator, 99, gb.machineState->lineNumber, readPointer);
-
-	// Loop parsing identifiers and index expressions
-	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
-	char c;
-	while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.' || c == '[')
-	{
-		++readPointer;
-		if (c == '[')
-		{
-			char stringBuffer[StringLength20];			// we shouldn't need any strings while evaluate an index, so use a small buffer
-			StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
-			const ExpressionValue index = ParseExpression(bufRef, 0, evaluate);
-			if (gb.buffer[readPointer] != ']')
-			{
-				throw ConstructParseException("expected ']'");
-			}
-			if (index.type != TYPE_OF(int32_t))
-			{
-				throw ConstructParseException("expected integer expression");
-			}
-			++readPointer;								// skip the ']'
-			context.ProvideIndex(index.iVal);
-			c = '^';									// add the marker
-		}
-		if (id.cat(c))
-		{
-			throw ConstructParseException("variable name too long");;
-		}
-	}
-
-	// Check for the names of constants
-	if (id.Equals("true"))
-	{
-		return ExpressionValue(true);
-	}
-
-	if (id.Equals("false"))
-	{
-		return ExpressionValue(false);
-	}
-
-	if (id.Equals("null"))
-	{
-		return ExpressionValue(nullptr);
-	}
-
-	if (id.Equals("pi"))
-	{
-		return ExpressionValue(Pi);
-	}
-
-	if (id.Equals("iterations"))
-	{
-		const int32_t v = gb.MachineState().GetIterations();
-		if (v < 0)
-		{
-			throw ConstructParseException("'iterations' used when not inside a loop");
-		}
-		return ExpressionValue(v);
-	}
-
-	if (id.Equals("result"))
-	{
-		int32_t rslt;
-		switch (gb.GetLastResult())
-		{
-		case GCodeResult::ok:
-			rslt = 0;
-			break;
-
-		case GCodeResult::warning:
-		case GCodeResult::warningNotSupported:
-			rslt = 1;
-			break;
-
-		default:
-			rslt = 2;
-			break;
-		}
-		return ExpressionValue(rslt);
-	}
-
-	if (id.Equals("line"))
-	{
-		return ExpressionValue((int32_t)gb.MachineState().lineNumber);
-	}
-
-	// Check whether it is a function call
-	SkipWhiteSpace();
-	if (gb.buffer[readPointer] == '(')
-	{
-		// It's a function call
-		++readPointer;
-		ExpressionValue rslt = ParseExpression(stringBuffer, 0, evaluate);
-		//TODO use a binary search to do function lookup
-		if (id.Equals("abs"))
-		{
-			switch (rslt.type)
-			{
-			case TYPE_OF(int32_t):
-				rslt.iVal = labs(rslt.iVal);
-				break;
-
-			case TYPE_OF(float):
-				rslt.fVal = fabsf(rslt.fVal);
-				break;
-
-			default:
-				if (evaluate)
-				{
-					throw ConstructParseException("expected numeric operand");
-				}
-				rslt.Set((int32_t)0);
-			}
-		}
-		else if (id.Equals("sin"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = sinf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-		}
-		else if (id.Equals("cos"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = cosf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-		}
-		else if (id.Equals("tan"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = tanf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-		}
-		else if (id.Equals("asin"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = asinf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-		}
-		else if (id.Equals("acos"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = acosf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-		}
-		else if (id.Equals("atan"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = atanf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-		}
-		else if (id.Equals("atan2"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			SkipWhiteSpace();
-			if (gb.buffer[readPointer] != ',')
-			{
-				throw ConstructParseException("expected ','");
-			}
-			++readPointer;
-			SkipWhiteSpace();
-			ExpressionValue nextOperand = ParseExpression(stringBuffer, 0, evaluate);
-			ConvertToFloat(nextOperand, evaluate);
-			rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-		}
-		else if (id.Equals("sqrt"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = sqrtf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-		}
-		else if (id.Equals("isnan"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			rslt.type = TYPE_OF(bool);
-			rslt.bVal = (isnan(rslt.fVal) != 0);
-		}
-		else if (id.Equals("floor"))
-		{
-			ConvertToFloat(rslt, evaluate);
-			const float f = floorf(rslt.fVal);
-			if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
-			{
-				rslt.type = TYPE_OF(int32_t);
-				rslt.iVal = (int32_t)f;
-			}
-			else
-			{
-				rslt.fVal = f;
-			}
-		}
-		else if (id.Equals("mod"))
-		{
-			SkipWhiteSpace();
-			if (gb.buffer[readPointer] != ',')
-			{
-				throw ConstructParseException("expected ','");
-			}
-			++readPointer;
-			SkipWhiteSpace();
-			ExpressionValue nextOperand = ParseExpression(stringBuffer, 0, evaluate);
-			BalanceNumericTypes(rslt, nextOperand, evaluate);
-			if (rslt.type == TYPE_OF(float))
-			{
-				rslt.fVal = fmod(rslt.fVal, nextOperand.fVal);
-			}
-			else if (nextOperand.iVal == 0)
-			{
-				rslt.iVal = 0;
-			}
-			else
-			{
-				rslt.iVal %= nextOperand.iVal;
-			}
-		}
-		else if (id.Equals("max"))
-		{
-			for (;;)
-			{
-				SkipWhiteSpace();
-				if (gb.buffer[readPointer] != ',')
-				{
-					break;
-				}
-				++readPointer;
-				SkipWhiteSpace();
-				ExpressionValue nextOperand = ParseExpression(stringBuffer, 0, evaluate);
-				BalanceNumericTypes(rslt, nextOperand, evaluate);
-				if (rslt.type == TYPE_OF(float))
-				{
-					rslt.fVal = max<float>(rslt.fVal, nextOperand.fVal);
-					rslt.param = max(rslt.param, nextOperand.param);
-				}
-				else
-				{
-					rslt.iVal = max<int32_t>(rslt.iVal, nextOperand.iVal);
-				}
-			}
-		}
-		else if (id.Equals("min"))
-		{
-			for (;;)
-			{
-				SkipWhiteSpace();
-				if (gb.buffer[readPointer] != ',')
-				{
-					break;
-				}
-				++readPointer;
-				SkipWhiteSpace();
-				ExpressionValue nextOperand = ParseExpression(stringBuffer, 0, evaluate);
-				BalanceNumericTypes(rslt, nextOperand, evaluate);
-				if (rslt.type == TYPE_OF(float))
-				{
-					rslt.fVal = min<float>(rslt.fVal, nextOperand.fVal);
-					rslt.param = max(rslt.param, nextOperand.param);
-				}
-				else
-				{
-					rslt.iVal = min<int32_t>(rslt.iVal, nextOperand.iVal);
-				}
-			}
-		}
-		else
-		{
-			throw ConstructParseException("unknown function");
-		}
-		SkipWhiteSpace();
-		if (gb.buffer[readPointer] != ')')
-		{
-			throw ConstructParseException("expected ')'");
-		}
-		++readPointer;
-		return rslt;
-	}
-
-	return reprap.GetObjectValue(context, id.c_str());
-}
-
-GCodeException StringParser::ConstructParseException(const char *str) const
+GCodeException StringParser::ConstructParseException(const char *str) const noexcept
 {
 	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str);
 }
 
-GCodeException StringParser::ConstructParseException(const char *str, const char *param) const
+GCodeException StringParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
 	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
 }
 
-GCodeException StringParser::ConstructParseException(const char *str, uint32_t param) const
+GCodeException StringParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
 	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
 }

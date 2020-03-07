@@ -10,8 +10,9 @@
 #if HAS_LINUX_INTERFACE
 
 #include "GCodeBuffer.h"
-#include "Platform.h"
-#include "RepRap.h"
+#include "ExpressionParser.h"
+#include <Platform.h>
+#include <RepRap.h>
 #include <Networking/NetworkDefs.h>
 
 BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
@@ -114,8 +115,15 @@ float BinaryParser::GetFValue()
 	case DataType::UInt:
 		value = seenParameter->uintValue;
 		break;
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, -1);
+			value = parser.ParseFloat();
+			parser.CheckForExtraCharacters();
+		}
+		break;
 	default:
-		value = 0.0f;
+		value = 0.0;
 		break;
 	}
 	seenParameter = nullptr;
@@ -142,8 +150,15 @@ int32_t BinaryParser::GetIValue()
 	case DataType::UInt:
 		value = seenParameter->uintValue;
 		break;
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, -1);
+			value = parser.ParseInteger();
+			parser.CheckForExtraCharacters();
+		}
+		break;
 	default:
-		value = 0.0f;
+		value = 0;
 		break;
 	}
 	seenParameter = nullptr;
@@ -169,6 +184,13 @@ uint32_t BinaryParser::GetUIValue()
 		break;
 	case DataType::UInt:
 		value = seenParameter->uintValue;
+		break;
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, -1);
+			value = parser.ParseUnsigned();
+			parser.CheckForExtraCharacters();
+		}
 		break;
 	default:
 		value = 0;
@@ -212,43 +234,51 @@ void BinaryParser::GetIPAddress(IPAddress& returnedIp)
 		THROW_INTERNAL_ERROR;
 	}
 
-	if (seenParameter->type != DataType::String)
+	switch (seenParameter->type)
 	{
+	case DataType::String:
+		{
+			const char* p = seenParameterValue;
+			uint8_t ip[4];
+			unsigned int n = 0;
+			for (;;)
+			{
+				const char *pp;
+				const unsigned long v = SafeStrtoul(p, &pp);
+				if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
+				{
+					throw ConstructParseException("invalid IP address");
+				}
+				ip[n] = (uint8_t)v;
+				++n;
+				p = pp;
+				if (*p != '.')
+				{
+					break;
+				}
+				if (n == 4)
+				{
+					throw ConstructParseException("invalid IP address");
+				}
+				++p;
+			}
+
+			if (n != 4)
+			{
+				throw ConstructParseException("invalid IP address");
+			}
+			returnedIp.SetV4(ip);
+		}
+		break;
+
+	case DataType::Expression:
+		//TODO not handled yet
+	default:
 		throw ConstructParseException("IP address string expected");
 	}
 
-	const char* p = seenParameterValue;
-	uint8_t ip[4];
-	unsigned int n = 0;
-	for (;;)
-	{
-		const char *pp;
-		const unsigned long v = SafeStrtoul(p, &pp);
-		if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
-		{
-			throw ConstructParseException("invalid IP address");
-		}
-		ip[n] = (uint8_t)v;
-		++n;
-		p = pp;
-		if (*p != '.')
-		{
-			break;
-		}
-		if (n == 4)
-		{
-			throw ConstructParseException("invalid IP address");
-		}
-		++p;
-	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	if (n != 4)
-	{
-		throw ConstructParseException("invalid IP address");
-	}
-
-	returnedIp.SetV4(ip);
 }
 
 void BinaryParser::GetMacAddress(MacAddress& mac)
@@ -258,38 +288,45 @@ void BinaryParser::GetMacAddress(MacAddress& mac)
 		THROW_INTERNAL_ERROR;
 	}
 
-	if (seenParameter->type != DataType::String)
+	switch (seenParameter->type)
 	{
+	case DataType::String:
+		{
+			const char* p = seenParameterValue;
+			unsigned int n = 0;
+			for (;;)
+			{
+				const char *pp;
+				const unsigned long v = SafeStrtoul(p, &pp, 16);
+				if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
+				{
+					throw ConstructParseException("invalid MAC address");
+				}
+				mac.bytes[n] = (uint8_t)v;
+				++n;
+				p = pp;
+				if (*p != ':')
+				{
+					break;
+				}
+				if (n == 6)
+				{
+					throw ConstructParseException("invalid MAC address");
+				}
+				++p;
+			}
+
+			if (n != 6)
+			{
+				throw ConstructParseException("invalid MAC address");
+			}
+		}
+		break;
+
+	case DataType::Expression:
+		//TODO not handled yet
+	default:
 		throw ConstructParseException("MAC address string expected");
-	}
-
-	const char* p = seenParameterValue;
-	unsigned int n = 0;
-	for (;;)
-	{
-		const char *pp;
-		const unsigned long v = SafeStrtoul(p, &pp, 16);
-		if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
-		{
-			throw ConstructParseException("invalid MAC address");
-		}
-		mac.bytes[n] = (uint8_t)v;
-		++n;
-		p = pp;
-		if (*p != ':')
-		{
-			break;
-		}
-		if (n == 6)
-		{
-			throw ConstructParseException("invalid MAC address");
-		}
-		++p;
-	}
-
-	if (n != 6)
-	{
-		throw ConstructParseException("invalid MAC address");
 	}
 
 	seenParameter = nullptr;
@@ -298,6 +335,8 @@ void BinaryParser::GetMacAddress(MacAddress& mac)
 
 void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 {
+	//TODO DSF should know which commands take a string parameter without a preceding parameter letter,
+	// so it should send the argument as a string or as an expression with a dummy parameter letter.
 	str.Clear();
 	WriteParameters(str, false);
 	if (!allowEmpty && str.IsEmpty())
@@ -313,14 +352,31 @@ void BinaryParser::GetQuotedString(const StringRef& str)
 
 void BinaryParser::GetPossiblyQuotedString(const StringRef& str)
 {
-	if (seenParameter != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
+	if (seenParameter == nullptr)
 	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	switch (seenParameter->type)
+	{
+	case DataType::String:
 		str.copy(seenParameterValue, seenParameter->intValue);
-	}
-	else
-	{
+		break;
+
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, -1);
+			const ExpressionValue val = parser.Parse();
+			parser.CheckForExtraCharacters();
+			val.AppendAsString(str);
+		}
+		break;
+
+	default:
 		str.Clear();
+		break;
 	}
+
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
 	if (str.IsEmpty())
@@ -332,7 +388,7 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str)
 void BinaryParser::GetReducedString(const StringRef& str)
 {
 	str.Clear();
-	if (seenParameterValue != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
+	if (seenParameterValue != nullptr && seenParameter->type == DataType::String)
 	{
 		while (reducedBytesRead < seenParameter->intValue)
 		{
@@ -471,6 +527,7 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 	}
 }
 
+//TODO need a way to pass arrays in which one or more elements is an expression from DSF to RRF
 template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
 {
 	if (seenParameter == nullptr)

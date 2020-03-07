@@ -81,9 +81,9 @@ public:
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
 
-	GCodeException ConstructParseException(const char *str) const;
-	GCodeException ConstructParseException(const char *str, const char *param) const;
-	GCodeException ConstructParseException(const char *str, uint32_t param) const;
+	GCodeException ConstructParseException(const char *str) const noexcept;
+	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
+	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;
 
 private:
 	GCodeBuffer& gb;
@@ -99,8 +99,6 @@ private:
 	uint32_t ReadUIValue() THROWS_GCODE_EXCEPTION;
 	int32_t ReadIValue() THROWS_GCODE_EXCEPTION;
 	DriverId ReadDriverIdValue() THROWS_GCODE_EXCEPTION;
-	void AppendAsString(ExpressionValue val, const StringRef& str) THROWS_GCODE_EXCEPTION
-		pre (readPointer >= 0);
 
 	void CheckForMixedSpacesAndTabs() noexcept;
 	bool ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile) THROWS_GCODE_EXCEPTION;
@@ -117,24 +115,6 @@ private:
 	void ProcessEchoCommand(const StringRef& reply) THROWS_GCODE_EXCEPTION;
 
 	bool EvaluateCondition() THROWS_GCODE_EXCEPTION;
-
-	ExpressionValue ParseBracketedExpression(StringBuffer& stringBuffer, char closingBracket, bool evaluate) THROWS_GCODE_EXCEPTION
-		pre (readPointer >= 0; gb.buffer[readPointer] == '{');
-	ExpressionValue ParseExpression(StringBuffer& stringBuffer, uint8_t priority, bool evaluate) THROWS_GCODE_EXCEPTION
-		pre (readPointer >= 0);
-	ExpressionValue ParseNumber() THROWS_GCODE_EXCEPTION
-		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
-	ExpressionValue ParseIdentifierExpression(StringBuffer& stringBuffer, bool applyLengthOperator, bool evaluate) THROWS_GCODE_EXCEPTION
-		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
-
-	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS_GCODE_EXCEPTION;
-	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS_GCODE_EXCEPTION;
-	void ConvertToFloat(ExpressionValue& val, bool evaluate) THROWS_GCODE_EXCEPTION;
-	void ConvertToBool(ExpressionValue& val, bool evaluate) THROWS_GCODE_EXCEPTION;
-	void EnsureNumeric(ExpressionValue& val, bool evaluate) THROWS_GCODE_EXCEPTION;
-	void ConvertToString(ExpressionValue& val, bool evaluate, StringBuffer& stringBuffer) THROWS_GCODE_EXCEPTION;
-
-	const char *GetAndFix(StringBuffer& stringBuffer) THROWS_GCODE_EXCEPTION;
 
 	void SkipWhiteSpace() noexcept;
 

@@ -12,16 +12,94 @@
 #include <OutputMemory.h>
 #include <cstring>
 #include <General/SafeStrtod.h>
+#include <General/IP4String.h>
 
 ExpressionValue::ExpressionValue(const MacAddress& mac) noexcept : type(TYPE_OF(MacAddress)), param(mac.HighWord()), uVal(mac.LowWord())
 {
+}
+
+// Append a string representation of this value to a string
+void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
+{
+	switch (type)
+	{
+	case TYPE_OF(char):
+		str.cat(cVal);
+		break;
+
+	case TYPE_OF(const char*):
+		str.cat(sVal);
+		break;
+
+	case TYPE_OF(float):
+		str.catf(GetFloatFormatString(), (double)fVal);
+		break;
+
+	case TYPE_OF(uint32_t):
+		str.catf("%" PRIu32, uVal);			// convert unsigned integer to string
+		break;
+
+	case TYPE_OF(int32_t):
+		str.catf("%" PRIi32, uVal);			// convert signed integer to string
+		break;
+
+	case TYPE_OF(bool):
+		str.cat((bVal) ? "true" : "false");	// convert bool to string
+		break;
+
+	case TYPE_OF(IPAddress):
+		str.cat(IP4String(uVal).c_str());
+		break;
+
+	case TYPE_OF(const ObjectModel*):
+		str.cat("{object}");
+		break;
+
+	case NoType:
+		str.cat("null");
+		break;
+
+	case TYPE_OF(DateTime):
+		{
+			const time_t time = Get56BitValue();
+			tm timeInfo;
+			gmtime_r(&time, &timeInfo);
+			str.catf("%04u-%02u-%02u %02u:%02u:%02u",
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+		}
+		break;
+
+	case TYPE_OF(DriverId):
+#if SUPPORT_CAN_EXPANSION
+		str.catf("%u.%u", (unsigned int)(uVal >> 8), (unsigned int)(uVal & 0xFF));
+#else
+		str.catf("%u", (unsigned int)uVal);
+#endif
+		break;
+
+	case TYPE_OF(MacAddress):
+		str.catf("%02x:%02x:%02x:%02x:%02x:%02x",
+					(unsigned int)(uVal & 0xFF), (unsigned int)((uVal >> 8) & 0xFF), (unsigned int)((uVal >> 16) & 0xFF), (unsigned int)((uVal >> 24) & 0xFF),
+					(unsigned int)(param & 0xFF), (unsigned int)((param >> 8) & 0xFF));
+		break;
+
+#if SUPPORT_CAN_EXPANSION
+	case TYPE_OF(CanExpansionBoardDetails):
+		ExtractRequestedPart(str);
+		break;
+#endif
+
+	default:
+		str.cat("<unknown type>");
+		break;
+	}
 }
 
 #if SUPPORT_CAN_EXPANSION
 
 // Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter
 // sVal is a string of the form shortName|version
-void ExpressionValue::ExtractRequestedPart(const StringRef& rslt)
+void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 {
 	const char *const p = strchr(sVal, '|');
 	const size_t indexOfDivider = (p == nullptr) ? strlen(sVal) : p - sVal;
