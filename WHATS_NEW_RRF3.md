@@ -14,10 +14,12 @@ New features/changed behaviour:
 - Round brackets in GCode lines are no longer treated as enclosing comments if the machine is not in CNC mode
 - Added functions radians(arg) and degrees(arg) which convert the argument from degrees to radians, and from radians to degrees
 - M915 now reports the axis or extruder speed that corresponds to the fullsteps/second value of the H parameter
+- New object model variable inputs[] is provided, describing the state of each GCode input
 
 Bug fixes:
 - If an array of items in the object model (e.g. heaters, sensors) included null entries because of gaps in the item numbers created, and an object model expression referred to a prioerty of such as null element, the firmware crashed
 - If a while-loop was not followed by at least one GCode command or meta command outside the loop before the end of the file, the loop was never executed more than once
+- If an extruder-only move specified a feed rate, and the following printing move didn't specify a feed rate because it happened to be the same as the feed rate of the extruder-only move, then the speed factor wouldn't get applied to that move
 
 RepRapFirmware 3.01-RC3
 =======================
