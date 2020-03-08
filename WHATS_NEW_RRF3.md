@@ -7,7 +7,8 @@ Recommended compatible firmware:
 - Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01-RC4
 
-Upgrade notes: none since 2.03-RC3
+Upgrade notes:
+- M207 (set firmware retraction parameters) without the new P paramneter is applied to all existing tools but not to any tools created after the M207 command. Therefore, make sure that your M207 command is later in config.g that all your M563 tool creation commands.
 
 New features/changed behaviour:
 - Parameters in commands received from the SBC attached to a Duet 3 may now be expressions, except for array parameters
@@ -15,13 +16,14 @@ New features/changed behaviour:
 - Added functions radians(arg) and degrees(arg) which convert the argument from degrees to radians, and from radians to degrees
 - M915 now reports the axis or extruder speed that corresponds to the fullsteps/second value of the H parameter
 - New object model variable inputs[] is provided, describing the state of each GCode input
+- M207 retraction parameters are now settable on a per-tool basis. The P parameter selects which tool to set. M207 with no P parameter applies the parameters provided to all existing tools. Retraction settings in the object model are moved from extruders[].retraction to tools[].retraction.
 
 Bug fixes:
 - If an array of items in the object model (e.g. heaters, sensors) included null entries because of gaps in the item numbers created, and an object model expression referred to a prioerty of such as null element, the firmware crashed
 - If a while-loop was not followed by at least one GCode command or meta command outside the loop before the end of the file, the loop was never executed more than once
 - If an extruder-only move specified a feed rate, and the following printing move didn't specify a feed rate because it happened to be the same as the feed rate of the extruder-only move, then the speed factor wouldn't get applied to that move. Likewise if a GCode file used a G1 Fxxx line with no movement in order to dset the feed rate of the following moves, the speed factor would not be applied to those moves.
-- M409 incorrectly allowed a '.' to be omitted between the closing square bracket of an index and the following fields name
-- On Duet 3 in standalone mode only the 'echo' service was created, due to the limit on the number of MDNS services being set too low
+- M409 incorrectly allowed a '.' to be omitted between the closing square bracket of an index and the following field name
+- On Duet 3 in standalone mode, on the Ethernet interface the limit on the number of MDNS services was set too low, so only the 'echo' service was created
 
 RepRapFirmware 3.01-RC3
 =======================
