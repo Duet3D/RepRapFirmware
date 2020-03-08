@@ -1986,38 +1986,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 207: // Set firmware retraction details
+			if (gb.Seen('P'))
 			{
-				bool seen = false;
-				if (gb.Seen('S'))
+				const unsigned int toolNumber = gb.GetUIValue();
+				auto tool = reprap.GetTool(toolNumber);
+				if (tool.IsNull())
 				{
-					retractLength = max<float>(gb.GetFValue(), 0.0);
-					seen = true;
+					reply.printf("Tool %u does not exist", toolNumber);
+					result = GCodeResult::error;
 				}
-				if (gb.Seen('R'))	// must do this one after 'S'
+				else
 				{
-					retractExtra = max<float>(gb.GetFValue(), -retractLength);
-					seen = true;
+					tool->SetFirmwareRetraction(gb, reply);
 				}
-				if (gb.Seen('F'))
-				{
-					unRetractSpeed = retractSpeed = max<float>(gb.GetFValue(), 60.0) * SecondsToMinutes;
-					seen = true;
-				}
-				if (gb.Seen('T'))	// must do this one after 'F'
-				{
-					unRetractSpeed = max<float>(gb.GetFValue(), 60.0) * SecondsToMinutes;
-					seen = true;
-				}
-				if (gb.Seen('Z'))
-				{
-					retractHop = max<float>(gb.GetFValue(), 0.0);
-					seen = true;
-				}
-				if (!seen)
-				{
-					reply.printf("Retraction/un-retraction settings: length %.2f/%.2fmm, speed %d/%dmm/min, Z hop %.2fmm",
-						(double)retractLength, (double)(retractLength + retractExtra), (int)(retractSpeed * MinutesToSeconds), (int)(unRetractSpeed * MinutesToSeconds), (double)retractHop);
-				}
+			}
+			else
+			{
+				reprap.SetAllToolsFirmwareRetraction(gb, reply);
 			}
 			break;
 
@@ -2511,18 +2496,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 401: // Deploy Z probe
-			if (platform.GetCurrentZProbeType() != ZProbeType::none)
 			{
-				probeIsDeployed = true;
-				DoFileMacro(gb, DEPLOYPROBE_G, false, 401);
+				const size_t probeNumber = (gb.Seen('P')) ? gb.GetUIValue() : 0;
+				auto zp = platform.GetEndstops().GetZProbe(probeNumber);
+				if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none)
+				{
+					zp->SetDeployedByUser(false);							// pretend that the probe isn't deployed, to make sure we deploy it unconditionally
+					DeployZProbe(gb, probeNumber);
+					zp->SetDeployedByUser(true);							// probe is now deployed
+				}
 			}
 			break;
 
 		case 402: // Retract Z probe
-			if (platform.GetCurrentZProbeType() != ZProbeType::none)
 			{
-				probeIsDeployed = false;
-				DoFileMacro(gb, RETRACTPROBE_G, false, 402);
+				const size_t probeNumber = (gb.Seen('P')) ? gb.GetUIValue() : 0;
+				auto zp = platform.GetEndstops().GetZProbe(probeNumber);
+				if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none)
+				{
+					zp->SetDeployedByUser(false);							// do this first, otherwise the probe won't be retracted
+					RetractZProbe(gb, probeNumber);
+				}
 			}
 			break;
 

@@ -239,7 +239,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
 # endif
 #if HAS_12V_MONITOR
-	{ "v12",				OBJECT_MODEL_FUNC(self, 7),																			ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::live },
 #endif
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
 
@@ -274,22 +274,14 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),									ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																			ObjectModelEntryFlags::none },
 	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvance(context.GetLastIndex()), 2),								ObjectModelEntryFlags::none },
-	{ "retraction",			OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::none },
 
 	// 5. move.extruders[].nonlinear members
 	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionA[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
 	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionB[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
 	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusionLimit[context.GetLastIndex()], 2),						ObjectModelEntryFlags::none },
 
-	// 6. move.retraction members
-	{ "extraRestart",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRetractExtraRestart(context.GetLastIndex()), 1),		ObjectModelEntryFlags::none },
-	{ "length",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRetractLength(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
-	{ "speed" ,				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRetractSpeed(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
-	{ "unretractSpeed",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUnretractSpeed(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
-	{ "zHop",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetZHop(context.GetLastIndex()), 2),					ObjectModelEntryFlags::none },
-
 #if HAS_12V_MONITOR
-	// 7. v12 members
+	// 6. v12 members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),												ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max, 1),													ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min, 1),													ObjectModelEntryFlags::none },
@@ -299,14 +291,13 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	7 + HAS_12V_MONITOR,													// number of sections
+	6 + HAS_12V_MONITOR,													// number of sections
 	9 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION,		// section 0: boards[]
 	3,																		// section 1: mcuTemp
 	3,																		// section 2: vIn
 	13,																		// section 3: move.axes[]
-	6,																		// section 4: move.extruders[]
+	5,																		// section 4: move.extruders[]
 	3,																		// section 5: move.extruders[].nonlinear
-	5,																		// section 6: move.extruders[].retraction
 #if HAS_12V_MONITOR
 	3																		// section 7: v12
 #endif

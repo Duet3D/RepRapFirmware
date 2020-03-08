@@ -49,6 +49,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Probe members
 	{ "calibrationTemperature",	OBJECT_MODEL_FUNC(self->calibTemperature, 1), 				ObjectModelEntryFlags::none },
+	{ "deployedByUser",			OBJECT_MODEL_FUNC(self->isDeployedByUser), 					ObjectModelEntryFlags::none },
 	{ "disablesHeaters",		OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 	ObjectModelEntryFlags::none },
 	{ "diveHeight",				OBJECT_MODEL_FUNC(self->diveHeight, 1), 					ObjectModelEntryFlags::none },
 	{ "maxProbeCount",			OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 		ObjectModelEntryFlags::none },
@@ -64,13 +65,13 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "value",					OBJECT_MODEL_FUNC_NOSELF(&valueArrayDescriptor), 			ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 14 };
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 15 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
 #endif
 
-ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(), number(num)
+ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(), number(num), isDeployedByUser(false)
 {
 	SetDefaults();
 	type = p_type;

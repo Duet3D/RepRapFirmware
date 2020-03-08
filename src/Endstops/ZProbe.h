@@ -49,14 +49,15 @@ public:
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
 	int GetAdcValue() const noexcept { return adcValue; }
 	unsigned int GetMaxTaps() const { return misc.parts.maxTaps; }
-	void SetProbingAway(const bool probingAway) noexcept { misc.parts.probingAway = probingAway; }
-
 	int GetReading() const noexcept;
 	int GetSecondaryValues(int& v1) const noexcept;
+	bool IsDeployedByUser() const noexcept { return isDeployedByUser; }
 
+	void SetProbingAway(const bool probingAway) noexcept { misc.parts.probingAway = probingAway; }
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 	void SetTriggerHeight(float height) noexcept { triggerHeight = height; }
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
+	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
 
 #if HAS_MASS_STORAGE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;
@@ -93,6 +94,8 @@ protected:
 	float travelSpeed;				// the speed at which we travel to the probe point
 	float recoveryTime;				// Z probe recovery time
 	float tolerance;				// maximum difference between probe heights when doing >1 taps
+
+	bool isDeployedByUser;			// true if the user has used the M401 command to deploy this probe and not sent M402 to retract it
 };
 
 // MotorStall Z probes have no port, also in a CAN environment the local and remote proxy versions are the same

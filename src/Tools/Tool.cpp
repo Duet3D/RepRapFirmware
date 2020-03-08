@@ -27,6 +27,7 @@
 #include "Filament.h"
 
 #include "GCodes/GCodes.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include "Heating/Heat.h"
 #include "Platform.h"
 #include "RepRap.h"
@@ -93,20 +94,28 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Tool members
-	{ "active",		OBJECT_MODEL_FUNC_NOSELF(&activeTempsArrayDescriptor), 			ObjectModelEntryFlags::live },
-	{ "axes",		OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 				ObjectModelEntryFlags::none },
-	{ "extruders",	OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 			ObjectModelEntryFlags::none },
-	{ "fans",		OBJECT_MODEL_FUNC(self->fanMapping), 							ObjectModelEntryFlags::none },
-	{ "filament",	OBJECT_MODEL_FUNC(self->GetFilamentName()), 					ObjectModelEntryFlags::none },
-	{ "heaters",	OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 				ObjectModelEntryFlags::none },
-	{ "mix",		OBJECT_MODEL_FUNC_NOSELF(&mixArrayDescriptor), 					ObjectModelEntryFlags::none },
-	{ "name",		OBJECT_MODEL_FUNC(self->name),						 			ObjectModelEntryFlags::none },
-	{ "offsets",	OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 				ObjectModelEntryFlags::none },
-	{ "standby",	OBJECT_MODEL_FUNC_NOSELF(&standbyTempsArrayDescriptor), 		ObjectModelEntryFlags::live },
-	{ "state",		OBJECT_MODEL_FUNC(self->state.ToString()), 						ObjectModelEntryFlags::live },
+	{ "active",				OBJECT_MODEL_FUNC_NOSELF(&activeTempsArrayDescriptor), 			ObjectModelEntryFlags::live },
+	{ "axes",				OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 				ObjectModelEntryFlags::none },
+	{ "extruders",			OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 			ObjectModelEntryFlags::none },
+	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 							ObjectModelEntryFlags::none },
+	{ "filament",			OBJECT_MODEL_FUNC(self->GetFilamentName()), 					ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 				ObjectModelEntryFlags::none },
+	{ "mix",				OBJECT_MODEL_FUNC_NOSELF(&mixArrayDescriptor), 					ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->name),						 			ObjectModelEntryFlags::none },
+	{ "offsets",			OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 				ObjectModelEntryFlags::none },
+	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),										ObjectModelEntryFlags::none },
+	{ "standby",			OBJECT_MODEL_FUNC_NOSELF(&standbyTempsArrayDescriptor), 		ObjectModelEntryFlags::live },
+	{ "state",				OBJECT_MODEL_FUNC(self->state.ToString()), 						ObjectModelEntryFlags::live },
+
+	// 1. Tool.retraction members
+	{ "extraRestart",		OBJECT_MODEL_FUNC(self->retractExtra, 1),						ObjectModelEntryFlags::none },
+	{ "length",				OBJECT_MODEL_FUNC(self->retractLength, 1),						ObjectModelEntryFlags::none },
+	{ "speed" ,				OBJECT_MODEL_FUNC(self->retractSpeed, 1),						ObjectModelEntryFlags::none },
+	{ "unretractSpeed",		OBJECT_MODEL_FUNC(self->unRetractSpeed, 1),						ObjectModelEntryFlags::none },
+	{ "zHop",				OBJECT_MODEL_FUNC(self->retractHop, 2),							ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Tool::objectModelTableDescriptor[] = { 1, 11 };
+constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 12, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
@@ -183,6 +192,11 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	t->heaterFault = false;
 	t->axisOffsetsProbed.Clear();
 	t->displayColdExtrudeWarning = false;
+	t->retractLength = DefaultRetractLength;
+	t->retractExtra = 0.0;
+	t->retractHop = 0.0;
+	t->retractSpeed = t->unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
+	t->isRetracted = false;
 
 	for (size_t axis = 0; axis < MaxAxes; axis++)
 	{
@@ -606,6 +620,41 @@ bool Tool::UsesHeater(int8_t heater) const noexcept
 const char *Tool::GetFilamentName() const noexcept
 {
 	return (filament == nullptr) ? "" : filament->GetName();
+}
+
+void Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
+{
+	bool seen = false;
+	if (gb.Seen('S'))
+	{
+		retractLength = max<float>(gb.GetFValue(), 0.0);
+		seen = true;
+	}
+	if (gb.Seen('R'))	// must do this one after 'S'
+	{
+		retractExtra = max<float>(gb.GetFValue(), -retractLength);
+		seen = true;
+	}
+	if (gb.Seen('F'))
+	{
+		unRetractSpeed = retractSpeed = max<float>(gb.GetFValue(), 60.0) * SecondsToMinutes;
+		seen = true;
+	}
+	if (gb.Seen('T'))	// must do this one after 'F'
+	{
+		unRetractSpeed = max<float>(gb.GetFValue(), 60.0) * SecondsToMinutes;
+		seen = true;
+	}
+	if (gb.Seen('Z'))
+	{
+		retractHop = max<float>(gb.GetFValue(), 0.0);
+		seen = true;
+	}
+	if (!seen)
+	{
+		reply.lcatf("Tool %u retract/reprime: length %.2f/%.2fmm, speed %.1f/%.1fmm/sec, Z hop %.2fmm",
+			myNumber, (double)retractLength, (double)(retractLength + retractExtra), (double)retractSpeed, (double)unRetractSpeed, (double)retractHop);
+	}
 }
 
 // End

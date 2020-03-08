@@ -1026,6 +1026,14 @@ void RepRap::ReportAllToolTemperatures(const StringRef& reply) const noexcept
 	}
 }
 
+void RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	{
+		tool->SetFirmwareRetraction(gb, reply);
+	}
+}
+
 void RepRap::Tick() noexcept
 {
 	// Kicking the watchdog before it has been initialised may trigger it!

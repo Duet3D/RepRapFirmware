@@ -83,6 +83,7 @@ public:
 	bool CheckPassword(const char* pw) const noexcept;
 	void SetPassword(const char* pw) noexcept;
 
+	// Tool management
 	void AddTool(Tool* t) noexcept;
 	void DeleteTool(int toolNumber) noexcept;
 	void SelectTool(int toolNumber, bool simulating) noexcept;
@@ -99,6 +100,7 @@ public:
 	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
 	unsigned int GetNumberOfContiguousTools() const noexcept;
 	void ReportAllToolTemperatures(const StringRef& reply) const noexcept;
+	void SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept;
 	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;

@@ -222,13 +222,18 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::toolChange0: 		// Run tfree for the old tool (if any)
-	case GCodeState::m109ToolChange0:	// Run tfree for the old tool (if any)
+	case GCodeState::toolChange0: 						// run tfree for the old tool (if any)
+	case GCodeState::m109ToolChange0:					// run tfree for the old tool (if any)
 		doingToolChange = true;
 		SaveFanSpeeds();
 		SavePosition(toolChangeRestorePoint, gb);
 		reprap.SetPreviousToolNumber();
 		gb.AdvanceState();
+
+		// If the tool is in the firmware-retracted state, there may be some Z hop applied, which we must remove
+		currentUserPosition[Z_AXIS] += currentZHop;
+		currentZHop = 0.0;
+
 		if ((gb.MachineState().toolChangeParam & TFreeBit) != 0)
 		{
 			const Tool * const oldTool = reprap.GetCurrentTool();
@@ -241,8 +246,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::toolChange1:		// Release the old tool (if any), then run tpre for the new tool
-	case GCodeState::m109ToolChange1:	// Release the old tool (if any), then run tpre for the new tool
+	case GCodeState::toolChange1:						// release the old tool (if any), then run tpre for the new tool
+	case GCodeState::m109ToolChange1:					// release the old tool (if any), then run tpre for the new tool
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tfree.g to finish executing
 		{
 			const Tool * const oldTool = reprap.GetCurrentTool();
@@ -261,8 +266,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::toolChange2:		// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
-	case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
+	case GCodeState::toolChange2:						// select the new tool if it exists and run tpost
+	case GCodeState::m109ToolChange2:					// select the new tool if it exists and run tpost
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
 			reprap.SelectTool(gb.MachineState().newToolNumber, simulationMode != 0);
@@ -508,7 +513,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (platform.GetCurrentZProbeType() == ZProbeType::blTouch)
 			{
-				DoFileMacro(gb, DEPLOYPROBE_G, false, 29);				// bltouch needs to be redeployed prior to each probe point
+				DeployZProbe(gb, 0);
 			}
 		}
 		break;
@@ -546,10 +551,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					reprap.GetHeat().SuspendHeaters(false);
 					platform.Message(ErrorMessage, "Z probe already triggered before probing move started\n");
 					gb.SetState(GCodeState::normal);
-					if (zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-					{
-						DoFileMacro(gb, RETRACTPROBE_G, false, 29);
-					}
+					RetractZProbe(gb, 0);
 					break;
 				}
 				else
@@ -594,10 +596,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					platform.Message(ErrorMessage, "Z probe was not triggered during probing move\n");
 					gb.SetState(GCodeState::normal);
-					if (zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-					{
-						DoFileMacro(gb, RETRACTPROBE_G, false, 29);
-					}
+					RetractZProbe(gb, 0);
 					break;
 				}
 
@@ -606,9 +605,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 			gb.AdvanceState();
-			if (zp->GetProbeType() == ZProbeType::blTouch)
+			if (zp->GetProbeType() == ZProbeType::blTouch)		// bltouch needs to be retracted when it triggers
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false, 29);			// bltouch needs to be retracted when it triggers
+				RetractZProbe(gb, 0);
 			}
 		}
 		break;
@@ -669,10 +668,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				platform.Message(ErrorMessage, "Z probe readings not consistent\n");
 				gb.SetState(GCodeState::normal);
-				if (zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-				{
-					DoFileMacro(gb, RETRACTPROBE_G, false, 29);
-				}
+				RetractZProbe(gb, 0);
 			}
 		}
 		break;
@@ -709,10 +705,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Done all the points
 				gb.AdvanceState();
-				if (platform.GetCurrentZProbeType() != ZProbeType::none && !probeIsDeployed)
-				{
-					DoFileMacro(gb, RETRACTPROBE_G, false, 29);
-				}
+				RetractZProbe(gb, 0);
 			}
 			else
 			{
@@ -797,9 +790,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
-			if (platform.GetCurrentZProbeType() == ZProbeType::blTouch)
+			if (platform.GetCurrentZProbeType() == ZProbeType::blTouch)	// bltouch needs to be redeployed prior to each probe point
 			{
-				DoFileMacro(gb, DEPLOYPROBE_G, false, 30);			// bltouch needs to be redeployed prior to each probe point
+				DeployZProbe(gb, 0);
 			}
 		}
 		break;
@@ -843,10 +836,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(), true, true);
 					}
 					gb.SetState(GCodeState::normal);										// no point in doing anything else
-					if (zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-					{
-						DoFileMacro(gb, RETRACTPROBE_G, false, 30);
-					}
+					RetractZProbe(gb, 0);
 				}
 				else
 				{
@@ -916,10 +906,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// G30 S-1 command taps once and reports the height, S-2 sets the tool offset to the negative of the current height, S-3 sets the Z probe trigger height
 					gb.SetState(GCodeState::probingAtPoint7);					// special state for reporting the stopped height at the end
-					if (zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-					{
-						DoFileMacro(gb, RETRACTPROBE_G, false, 30);					// retract the probe before moving to the new state
-					}
+					RetractZProbe(gb, 0);										// retract the probe before moving to the new state
 					break;
 				}
 
@@ -944,9 +931,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 			gb.AdvanceState();
-			if (zp->GetProbeType() == ZProbeType::blTouch)
+			if (zp->GetProbeType() == ZProbeType::blTouch)						// bltouch needs to be retracted when it triggers
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false, 30);							// bltouch needs to be retracted when it triggers
+				RetractZProbe(gb, 0);
 			}
 		}
 		break;
@@ -1022,10 +1009,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}
 			gb.AdvanceState();
-			if (zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-			{
-				DoFileMacro(gb, RETRACTPROBE_G, false, 30);
-			}
+			RetractZProbe(gb, 0);
 		}
 		break;
 
@@ -1088,13 +1072,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::straightProbe0:		// ready to deploy the probe
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
-			const auto zp = platform.GetEndstops().GetZProbe(sps.GetZProbeToUse());
 			gb.AdvanceState();
-			if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-			{
-				DoFileMacro(gb, DEPLOYPROBE_G, false, 38);
-			}
+			DeployZProbe(gb, reprap.GetMove().GetStraightProbeSettings().GetZProbeToUse());
 		}
 		break;
 
@@ -1140,10 +1119,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						error = true;
 					}
 					gb.SetState(GCodeState::normal);									// no point in doing anything else
-					if (zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-					{
-						DoFileMacro(gb, RETRACTPROBE_G, false, 38);
-					}
+					RetractZProbe(gb, 0);
 				}
 				else
 				{
@@ -1189,10 +1165,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 			gb.SetState(GCodeState::normal);
-			if (zp->GetProbeType() != ZProbeType::none && !probeIsDeployed)
-			{
-				DoFileMacro(gb, RETRACTPROBE_G, false, 38);					// retract the probe before moving to the new state
-			}
+			RetractZProbe(gb, 0);							// retract the probe before moving to the new state
 		}
 		break;
 
@@ -1201,15 +1174,19 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (segmentsLeft == 0)
 		{
-			SetMoveBufferDefaults();
-			moveBuffer.tool = reprap.GetCurrentTool();
-			reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, moveBuffer.tool);
-			moveBuffer.coords[Z_AXIS] += retractHop;
-			moveBuffer.feedRate = platform.MaxFeedrate(Z_AXIS);
-			moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
-			moveBuffer.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
-			currentZHop = retractHop;
-			NewMoveAvailable(1);
+			const Tool * const tool = reprap.GetCurrentTool();
+			if (tool != nullptr)
+			{
+				SetMoveBufferDefaults();
+				moveBuffer.tool = tool;
+				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, moveBuffer.tool);
+				moveBuffer.coords[Z_AXIS] += tool->GetRetractHop();
+				moveBuffer.feedRate = platform.MaxFeedrate(Z_AXIS);
+				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
+				moveBuffer.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
+				currentZHop = tool->GetRetractHop();
+				NewMoveAvailable(1);
+			}
 			gb.SetState(GCodeState::normal);
 		}
 		break;
@@ -1225,9 +1202,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, tool);
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
-					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = retractLength + retractExtra;
+					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = tool->GetRetractLength() + tool->GetRetractExtra();
 				}
-				moveBuffer.feedRate = unRetractSpeed * tool->DriveCount();
+				moveBuffer.feedRate = tool->GetUnRetractSpeed() * tool->DriveCount();
 				moveBuffer.tool = tool;
 				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
 				moveBuffer.canPauseAfter = true;

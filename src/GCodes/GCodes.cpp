@@ -160,11 +160,6 @@ void GCodes::Init() noexcept
 	}
 	lastDefaultFanSpeed = pausedDefaultFanSpeed = 0.0;
 
-	retractLength = DefaultRetractLength;
-	retractExtra = 0.0;
-	retractHop = 0.0;
-	retractSpeed = unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
-	isRetracted = false;
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
 	laserMaxPower = DefaultMaxLaserPower;
@@ -273,7 +268,6 @@ void GCodes::Reset() noexcept
 	doingToolChange = false;
 	doingManualBedProbe = false;
 	pausePending = filamentChangePausePending = false;
-	probeIsDeployed = false;
 	moveBuffer.filePos = noFilePosition;
 	firmwareUpdateModuleMap = 0;
 	lastFilamentError = FilamentSensorStatus::ok;
@@ -2620,10 +2614,9 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 			{
 				// Do a Z probe at the specified point.
 				gb.SetState(GCodeState::probingAtPoint0);
-				const ZProbeType t = platform.GetCurrentZProbeType();
-				if (t != ZProbeType::none && t != ZProbeType::blTouch && !probeIsDeployed)
+				if (platform.GetCurrentZProbeType() != ZProbeType::blTouch)
 				{
-					DoFileMacro(gb, DEPLOYPROBE_G, false, 30);
+					DeployZProbe(gb, 0);
 				}
 			}
 		}
@@ -2634,10 +2627,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
 		InitialiseTaps();
 		gb.SetState(GCodeState::probingAtPoint2a);
-		if (platform.GetCurrentZProbeType() != ZProbeType::none && !probeIsDeployed)
-		{
-			DoFileMacro(gb, DEPLOYPROBE_G, false, 30);
-		}
+		DeployZProbe(gb, 0);
 	}
 	return GCodeResult::ok;
 }
@@ -2692,10 +2682,9 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	gridXindex = gridYindex = 0;
 	gb.SetState(GCodeState::gridProbing1);
 
-	const ZProbeType t = platform.GetCurrentZProbeType();
-	if (t != ZProbeType::none && t != ZProbeType::blTouch && !probeIsDeployed)
+	if (platform.GetCurrentZProbeType() != ZProbeType::blTouch)
 	{
-		DoFileMacro(gb, DEPLOYPROBE_G, false, 29);
+		DeployZProbe(gb, 0);
 	}
 	return GCodeResult::ok;
 }
@@ -3467,7 +3456,11 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCo
 // Retract or un-retract filament, returning true if movement has been queued, false if this needs to be called again
 GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 {
-	if (retract != isRetracted && (retractLength != 0.0 || retractHop != 0.0 || (!retract && retractExtra != 0.0)))
+	Tool* const currentTool = reprap.GetCurrentTool();
+	if (  currentTool != nullptr
+		&& retract != currentTool->IsRetracted()
+		&& (currentTool->GetRetractLength() != 0.0 || currentTool->GetRetractHop() != 0.0 || (!retract && currentTool->GetRetractExtra() != 0.0))
+	   )
 	{
 		if (!LockMovement(gb))
 		{
@@ -3494,18 +3487,18 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			{
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
-					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = -retractLength;
+					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = -currentTool->GetRetractLength();
 				}
-				moveBuffer.feedRate = retractSpeed * tool->DriveCount();
+				moveBuffer.feedRate = currentTool->GetRetractSpeed() * tool->DriveCount();
 				moveBuffer.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
 				NewMoveAvailable(1);
 			}
-			if (retractHop > 0.0)
+			if (currentTool->GetRetractHop() > 0.0)
 			{
 				gb.SetState(GCodeState::doingFirmwareRetraction);
 			}
 		}
-		else if (retractHop > 0.0)
+		else if (currentZHop > 0.0)
 		{
 			// Set up the reverse Z hop move
 			moveBuffer.feedRate = platform.MaxFeedrate(Z_AXIS);
@@ -3523,14 +3516,14 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			{
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
-					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = retractLength + retractExtra;
+					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = currentTool->GetRetractLength() + currentTool->GetRetractExtra();
 				}
-				moveBuffer.feedRate = unRetractSpeed * tool->DriveCount();
+				moveBuffer.feedRate = currentTool->GetUnRetractSpeed() * tool->DriveCount();
 				moveBuffer.canPauseAfter = true;
 				NewMoveAvailable(1);
 			}
 		}
-		isRetracted = retract;
+		currentTool->SetRetracted(retract);
 	}
 	return GCodeResult::ok;
 }
@@ -3673,11 +3666,12 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	UnlockAll(*fileGCode);
 
 	// Deal with the Z hop from a G10 that has not been undone by G11
-	if (isRetracted)
+	Tool* const currentTool = reprap.GetCurrentTool();
+	if (currentTool != nullptr && currentTool->IsRetracted())
 	{
 		currentUserPosition[Z_AXIS] += currentZHop;
 		currentZHop = 0.0;
-		isRetracted = false;
+		currentTool->SetRetracted(false);
 	}
 
 	const char *printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
