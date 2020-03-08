@@ -275,7 +275,7 @@ bool StringParser::LineFinished()
 	const bool missingChecksum = (checksumRequired && !hadChecksum && gb.machineState->previous == nullptr);
 	if (reprap.Debug(moduleGcodes) && fileBeingWritten == nullptr)
 	{
-		reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", gb.GetIdentity(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
+		reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
 	}
 
 	commandStart = 0;
@@ -608,7 +608,7 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 		// If we fail to parse the expression, we want to abort anyway
 		try
 		{
-			ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+			ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 			const ExpressionValue val = parser.Parse();
 			readPointer = parser.GetEndptr() - gb.buffer;
 			val.AppendAsString(reply);
@@ -636,7 +636,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply)
 		{
 			return;
 		}
-		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 		const ExpressionValue val = parser.Parse();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		if (!reply.IsEmpty())
@@ -659,7 +659,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply)
 // Evaluate the condition that should follow 'if' or 'while'
 bool StringParser::EvaluateCondition()
 {
-	ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 	const bool b = parser.ParseBoolean();
 	parser.CheckForExtraCharacters();
 	return b;
@@ -1067,7 +1067,7 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty)
 
 	case '{':
 		{
-			ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+			ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 			const ExpressionValue val = parser.Parse();
 			readPointer = parser.GetEndptr() - gb.buffer;
 			val.AppendAsString(str);
@@ -1149,7 +1149,7 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 	}
 	else if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 		const ExpressionValue val = parser.Parse();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		val.AppendAsString(str);
@@ -1405,7 +1405,7 @@ void StringParser::WriteToFile() noexcept
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			Init();
-			const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
+			const char* const r = (gb.MachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 			return;
 		}
@@ -1466,7 +1466,7 @@ void StringParser::FinishWritingBinary() noexcept
 	binaryWriting = false;
 	if (crcOk)
 	{
-		const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
+		const char* const r = (gb.MachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 	}
 	else
@@ -1519,7 +1519,7 @@ bool StringParser::FileEnded() noexcept
 		fileBeingWritten->Close();
 		fileBeingWritten = nullptr;
 		SetFinished();
-		const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
+		const char* const r = (gb.MachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 		return false;
 	}
@@ -1541,7 +1541,7 @@ float StringParser::ReadFloatValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 		const float val = parser.ParseFloat();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
@@ -1557,7 +1557,7 @@ uint32_t StringParser::ReadUIValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 		const uint32_t val = parser.ParseUnsigned();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
@@ -1602,7 +1602,7 @@ int32_t StringParser::ReadIValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, commandIndent + readPointer);
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 		const int32_t val = parser.ParseInteger();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;

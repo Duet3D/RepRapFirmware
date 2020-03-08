@@ -51,7 +51,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 			}
 
-			if (gb.MachineState().compatibility == Compatibility::nanoDLP && !DoingFileMacro())
+			if (gb.MachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
 			{
 				reply.copy("Z_move_comp");
 			}
@@ -1229,7 +1229,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				moveBuffer.feedRate = unRetractSpeed * tool->DriveCount();
 				moveBuffer.tool = tool;
-				moveBuffer.isFirmwareRetraction = true;
 				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
 				moveBuffer.canPauseAfter = true;
 				NewMoveAvailable(1);

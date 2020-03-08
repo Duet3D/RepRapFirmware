@@ -12,6 +12,7 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 {
 	moveType = 0;
 	isCoordinated = false;
+	applyM220M221 = false;
 	usingStandardFeedrate = false;
 	usePressureAdvance = false;
 	checkEndstops = false;

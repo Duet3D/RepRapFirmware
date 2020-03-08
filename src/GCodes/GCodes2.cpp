@@ -666,12 +666,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// If we are emulating RepRap then we print "GCode files:\n" at the start, otherwise we don't.
 					// If we are emulating Marlin and the code came via the serial/USB interface, then we don't put quotes around the names and we separate them with newline;
 					// otherwise we put quotes around them and separate them with comma.
-					if (gb.MachineState().compatibility == Compatibility::me || gb.MachineState().compatibility == Compatibility::reprapFirmware)
+					if (gb.MachineState().compatibility == Compatibility::Default || gb.MachineState().compatibility == Compatibility::RepRapFirmware)
 					{
 						outBuf->copy("GCode files:\n");
 					}
 
-					bool encapsulateList = gb.MachineState().compatibility != Compatibility::marlin;
+					bool encapsulateList = gb.MachineState().compatibility != Compatibility::Marlin;
 					FileInfo fileInfo;
 					if (MassStorage::FindFirst(dir.c_str(), fileInfo))
 					{
@@ -743,7 +743,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (QueueFileToPrint(filename.c_str(), reply))
 				{
 					reprap.GetPrintMonitor().StartingPrint(filename.c_str());
-					if (gb.MachineState().compatibility == Compatibility::marlin)
+					if (gb.MachineState().compatibility == Compatibility::Marlin)
 					{
 						reply.copy("File opened\nFile selected");
 					}
@@ -2084,27 +2084,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 220:	// Set/report speed factor override percentage
 			if (gb.Seen('S'))
 			{
-				const float newSpeedFactor = gb.GetFValue();
-				if (newSpeedFactor >= 1.0)
+				const float newSpeedFactor = gb.GetFValue() * 0.01;
+				if (newSpeedFactor >= 0.01)
 				{
-					// Update the feed rate for ALL input sources, and all feed rates on the stack
-					const float speedFactorRatio = newSpeedFactor / speedFactor;
-					for (GCodeBuffer *gb2 : gcodeSources)
+					// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
+					if (segmentsLeft != 0 && moveBuffer.applyM220M221)
 					{
-						if (gb2 != nullptr)
-						{
-							GCodeMachineState *ms = &gb2->MachineState();
-							while (ms != nullptr)
-							{
-								ms->feedRate *= speedFactorRatio;
-								ms = ms->previous;
-							}
-						}
-					}
-					// If the last move hasn't gone yet, update its feed rate too if it is not a firmware retraction
-					if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
-					{
-						moveBuffer.feedRate *= speedFactorRatio;
+						moveBuffer.feedRate *= newSpeedFactor / speedFactor;
 					}
 					speedFactor = newSpeedFactor;
 				}
@@ -2116,7 +2102,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			else
 			{
-				reply.printf("Speed factor: %.1f%%", (double)speedFactor);
+				reply.printf("Speed factor: %.1f%%", (double)(speedFactor * 100.0));
 			}
 			break;
 
@@ -2137,8 +2123,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else if (gb.Seen('S'))	// S parameter sets the override percentage
 				{
-					const float extrusionFactor = gb.GetFValue() / 100.0;
-					if (extrusionFactor >= 0.0)
+					const float extrusionFactor = gb.GetFValue() * 0.01;
+					if (extrusionFactor >= 0.01)
 					{
 						if (seenD)
 						{
@@ -2957,41 +2943,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 555: // Set/report firmware type to emulate
 			if (gb.Seen('P'))
 			{
-				gb.MachineState().compatibility = (Compatibility)gb.GetIValue();
+				gb.MachineState().compatibility.Assign(gb.GetIValue());
 			}
 			else
 			{
-				reply.copy("Emulating ");
-				switch (gb.MachineState().compatibility)
-				{
-				case Compatibility::me:
-				case Compatibility::reprapFirmware:
-					reply.cat("RepRapFirmware (i.e. in native mode)");
-					break;
-
-				case Compatibility::marlin:
-					reply.cat("Marlin");
-					break;
-
-				case Compatibility::teacup:
-					reply.cat("Teacup");
-					break;
-
-				case Compatibility::sprinter:
-					reply.cat("Sprinter");
-					break;
-
-				case Compatibility::repetier:
-					reply.cat("Repetier");
-					break;
-
-				case Compatibility::nanoDLP:
-					reply.cat("nanoDLP");
-					break;
-
-				default:
-					reply.catf("Unknown: (%u)", (unsigned int)gb.MachineState().compatibility);
-				}
+				reply.printf("Output mode: %s", gb.MachineState().compatibility.ToString());
 			}
 			break;
 

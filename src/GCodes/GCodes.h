@@ -234,6 +234,16 @@ public:
 	{
 		return retractHop;
 	}
+
+	inline size_t GetNumInputs() const noexcept
+	{
+		return NumGCodeChannels;
+	}
+
+	inline const GCodeBuffer* GetInput(size_t n) const noexcept
+	{
+		return gcodeSources[n];
+	}
 #endif
 
 	static constexpr const char *AllowedAxisLetters = "XYZUVWABCD";
@@ -288,7 +298,7 @@ private:
 	void UnlockMovement(const GCodeBuffer& gb) noexcept;						// Unlock the movement resource if we own it
 	void UnlockAll(const GCodeBuffer& gb) noexcept;								// Release all locks
 
-	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[(size_t)channel]; }
+	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
 	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Execute a step of the state machine
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps);
@@ -328,7 +338,7 @@ private:
 	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply) noexcept;		// Deal with G60
 	GCodeResult ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply) noexcept;	// Deal with M569
 
-	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
+	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile);								// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb, bool withinSameFile);									// Pop feedrate etc
@@ -446,17 +456,17 @@ private:
 
 	GCodeBuffer* gcodeSources[NumGCodeChannels];						// The various sources of gcodes
 
-	GCodeBuffer*& httpGCode = gcodeSources[0];
-	GCodeBuffer*& telnetGCode = gcodeSources[1];
-	GCodeBuffer*& fileGCode = gcodeSources[2];
-	GCodeBuffer*& usbGCode = gcodeSources[3];
-	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the PanelDue on the async serial interface
-	GCodeBuffer*& triggerGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
-	GCodeBuffer*& queuedGCode = gcodeSources[6];
-	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the 12864 LCD
-	GCodeBuffer*& spiGCode = gcodeSources[8];
-	GCodeBuffer*& daemonGCode = gcodeSources[9];
-	GCodeBuffer*& autoPauseGCode = gcodeSources[10];					// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+	GCodeBuffer*& httpGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)];
+	GCodeBuffer*& telnetGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)];
+	GCodeBuffer*& fileGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)];
+	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)];
+	GCodeBuffer*& auxGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)];					// This one is for the PanelDue on the async serial interface
+	GCodeBuffer*& triggerGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)];			// Used for executing config.g and trigger macro files
+	GCodeBuffer*& queuedGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)];
+	GCodeBuffer*& lcdGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)];					// This one for the 12864 LCD
+	GCodeBuffer*& spiGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)];
+	GCodeBuffer*& daemonGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)];
+	GCodeBuffer*& autoPauseGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)];		// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 

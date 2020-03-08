@@ -71,14 +71,14 @@ GCodes::GCodes(Platform& p) noexcept :
 #else
 	FileGCodeInput * const fileInput = nullptr;
 #endif
-	fileGCode = new GCodeBuffer(GCodeChannel::file, nullptr, fileInput, GenericMessage);
+	fileGCode = new GCodeBuffer(GCodeChannel::File, nullptr, fileInput, GenericMessage);
 
 #if HAS_NETWORKING || HAS_LINUX_INTERFACE
 	httpInput = new NetworkGCodeInput();
-	httpGCode = new GCodeBuffer(GCodeChannel::http, httpInput, fileInput, HttpMessage);
+	httpGCode = new GCodeBuffer(GCodeChannel::HTTP, httpInput, fileInput, HttpMessage);
 # if SUPPORT_TELNET
 	telnetInput = new NetworkGCodeInput();
-	telnetGCode = new GCodeBuffer(GCodeChannel::telnet, telnetInput, fileInput, TelnetMessage, Compatibility::marlin);
+	telnetGCode = new GCodeBuffer(GCodeChannel::Telnet, telnetInput, fileInput, TelnetMessage, Compatibility::Marlin);
 # else
 	telnetGCode = nullptr;
 # endif
@@ -88,40 +88,40 @@ GCodes::GCodes(Platform& p) noexcept :
 
 #if defined(SERIAL_MAIN_DEVICE)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-	usbGCode = new GCodeBuffer(GCodeChannel::usb, usbInput, fileInput, UsbMessage, Compatibility::marlin);
+	usbGCode = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_LINUX_INTERFACE
-	usbGCode = new GCodeBuffer(GCodeChannel::usb, nullptr, fileInput, UsbMessage, Compatbility::marlin);
+	usbGCode = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatbility::marlin);
 #else
 	usbGCode = nullptr;
 #endif
 
 #if defined(SERIAL_AUX_DEVICE)
 	StreamGCodeInput * const auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
-	auxGCode = new GCodeBuffer(GCodeChannel::aux, auxInput, fileInput, AuxMessage);
+	auxGCode = new GCodeBuffer(GCodeChannel::Aux, auxInput, fileInput, AuxMessage);
 #elif HAS_LINUX_INTERFACE
-	auxGCode = new GCodeBuffer(GCodeChannel::aux, nullptr, fileInput, AuxMessage);
+	auxGCode = new GCodeBuffer(GCodeChannel::Aux, nullptr, fileInput, AuxMessage);
 #else
 	auxGCode = nullptr;
 #endif
 
-	triggerGCode = new GCodeBuffer(GCodeChannel::trigger, nullptr, fileInput, GenericMessage);
+	triggerGCode = new GCodeBuffer(GCodeChannel::Trigger, nullptr, fileInput, GenericMessage);
 
 	codeQueue = new GCodeQueue();
-	queuedGCode = new GCodeBuffer(GCodeChannel::queue, codeQueue, fileInput, GenericMessage);
+	queuedGCode = new GCodeBuffer(GCodeChannel::Queue, codeQueue, fileInput, GenericMessage);
 
 #if SUPPORT_12864_LCD || HAS_LINUX_INTERFACE
-	lcdGCode = new GCodeBuffer(GCodeChannel::lcd, nullptr, fileInput, LcdMessage);
+	lcdGCode = new GCodeBuffer(GCodeChannel::LCD, nullptr, fileInput, LcdMessage);
 #else
 	lcdGCode = nullptr;
 #endif
 
 #if HAS_LINUX_INTERFACE
-	spiGCode = new GCodeBuffer(GCodeChannel::spi, nullptr, fileInput, GenericMessage);
+	spiGCode = new GCodeBuffer(GCodeChannel::SBC, nullptr, fileInput, GenericMessage);
 #else
 	spiGCode = nullptr;
 #endif
-	daemonGCode = new GCodeBuffer(GCodeChannel::daemon, nullptr, fileInput, GenericMessage);
-	autoPauseGCode = new GCodeBuffer(GCodeChannel::autopause, nullptr, fileInput, GenericMessage);
+	daemonGCode = new GCodeBuffer(GCodeChannel::Daemon, nullptr, fileInput, GenericMessage);
+	autoPauseGCode = new GCodeBuffer(GCodeChannel::Autopause, nullptr, fileInput, GenericMessage);
 }
 
 void GCodes::Exit() noexcept
@@ -210,7 +210,7 @@ void GCodes::Reset() noexcept
 #if HAS_MASS_STORAGE
 	fileToPrint.Close();
 #endif
-	speedFactor = 100.0;
+	speedFactor = 1.0;
 
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
@@ -1452,7 +1452,7 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 	platform.Message(mtype, "=== GCodes ===\n");
 	platform.MessageF(mtype, "Segments left: %u\n", segmentsLeft);
 	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
-	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetIdentity());
+	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetChannel().ToString());
 
 	for (GCodeBuffer *gb : gcodeSources)
 	{
@@ -1518,27 +1518,26 @@ void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile)
 // Set up the extrusion and feed rate of a move for the Move class
 // 'moveBuffer.moveType' and 'moveBuffer.isCoordinated' must be set up before calling this
 // 'isPrintingMove' is true if there is any axis movement
-// Returns true if this gcode is valid so far, false if it should be discarded
-bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove)
+// Returns nullptr if this gcode is valid so far, or an error message if it should be discarded
+const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove)
 {
-	bool ok = true;
-
-	// Deal with feed rate
+	// Deal with feed rate, also determine whether M220 and M221 speed and extrusion factors apply to this move
 	if (moveBuffer.isCoordinated || machineType == MachineType::fff)
 	{
+		moveBuffer.applyM220M221 = (moveBuffer.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro());
 		if (gb.Seen(feedrateLetter))
 		{
-			const float rate = gb.GetDistance();
-			gb.MachineState().feedRate = (moveBuffer.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro())
-						? rate * speedFactor * (0.01 * SecondsToMinutes)
-						: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+			gb.MachineState().feedRate = gb.GetDistance() * SecondsToMinutes;	// update requested speed, not allowing for speed factor
 		}
-		moveBuffer.feedRate = gb.MachineState().feedRate;
+		moveBuffer.feedRate = (moveBuffer.applyM220M221)
+								? speedFactor * gb.MachineState().feedRate
+								: gb.MachineState().feedRate;
 		moveBuffer.usingStandardFeedrate = true;
 	}
 	else
 	{
-		moveBuffer.feedRate = DefaultG0FeedRate;		// use maximum feed rate, the M203 parameters will limit it
+		moveBuffer.applyM220M221 = false;
+		moveBuffer.feedRate = DefaultG0FeedRate;					// use maximum feed rate, the M203 parameters will limit it
 		moveBuffer.usingStandardFeedrate = false;
 	}
 
@@ -1559,7 +1558,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 		if (tool == nullptr)
 		{
 			displayNoToolWarning = true;
-			return false;
+			return nullptr;
 		}
 
 		moveBuffer.hasExtrusion = true;
@@ -1611,7 +1610,9 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 							rawExtruderTotalByDrive[extruder] += extrusionAmount;
 						}
 
-						moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = extrusionAmount * extrusionFactors[extruder];
+						moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = (moveBuffer.applyM220M221)
+																				? extrusionAmount * extrusionFactors[extruder]
+																				: extrusionAmount;
 						extrudersMoving.SetBit(extruder);
 					}
 				}
@@ -1643,15 +1644,17 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 								rawExtruderTotalByDrive[extruder] += extrusionAmount;
 								rawExtruderTotal += extrusionAmount;
 							}
-							moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = extrusionAmount * extrusionFactors[extruder] * volumetricExtrusionFactors[extruder];
+							extrusionAmount *= volumetricExtrusionFactors[extruder];
+							moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = (moveBuffer.applyM220M221)
+																					? extrusionAmount * extrusionFactors[extruder]
+																					: extrusionAmount;
 							extrudersMoving.SetBit(extruder);
 						}
 					}
 				}
 				else
 				{
-					platform.Message(ErrorMessage, "Multiple E parameters in G1 commands are not supported in absolute extrusion mode\n");
-					ok = false;
+					return "Multiple E parameters in G1 commands are not supported in absolute extrusion mode";
 				}
 			}
 		}
@@ -1661,12 +1664,11 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 	{
 		if (!platform.GetEndstops().EnableExtruderEndstops(extrudersMoving))
 		{
-			platform.Message(ErrorMessage, "Failed to enable extruder endstops");
-			ok = false;
+			return "Failed to enable extruder endstops";
 		}
 	}
 
-	return ok;
+	return nullptr;
 }
 
 // Check that enough axes have been homed, returning true if insufficient axes homed
@@ -1876,7 +1878,11 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		break;
 	}
 
-	LoadExtrusionAndFeedrateFromGCode(gb, axesMentioned.IsNonEmpty());		// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
+	err = LoadExtrusionAndFeedrateFromGCode(gb, axesMentioned.IsNonEmpty());	// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
+	if (err != nullptr)
+	{
+		return true;
+	}
 
 	// Set up the move. We must assign segmentsLeft last, so that when Move runs as a separate task the move won't be picked up by the Move process before it is complete.
 	// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.
@@ -1948,7 +1954,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 
 		// If we are emulating Marlin for nanoDLP then we need to set a special end state
-		if (gb.MachineState().compatibility == Compatibility::nanoDLP && !DoingFileMacro())
+		if (gb.MachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
 		{
 			gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 		}
@@ -1991,7 +1997,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	return true;
 }
 
-// Execute an arc move, returning true if it was badly-formed
+// Execute an arc move, returning an error message if it was badly-formed
 // We already have the movement lock and the last move has gone
 // Currently, we do not process new babystepping when executing an arc move
 const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
@@ -2186,7 +2192,11 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		}
 	}
 
-	LoadExtrusionAndFeedrateFromGCode(gb, true);
+	const char *err = LoadExtrusionAndFeedrateFromGCode(gb, true);
+	if (err != nullptr)
+	{
+		return err;
+	}
 
 #if SUPPORT_LASER
 	if (machineType == MachineType::laser)
@@ -2402,7 +2412,7 @@ void GCodes::ClearMove() noexcept
 	moveBuffer.checkEndstops = false;
 	moveBuffer.reduceAcceleration = false;
 	moveBuffer.moveType = 0;
-	moveBuffer.isFirmwareRetraction = false;
+	moveBuffer.applyM220M221 = false;
 	moveFractionToSkip = 0.0;
 }
 
@@ -3295,18 +3305,17 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply) n
 	const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(initialMt | ErrorMessageFlag | LogMessage)
 							: (rslt == GCodeResult::warning) ? (MessageType)(initialMt | WarningMessageFlag | LogMessage)
 								: initialMt;
-	const char* emulationType = nullptr;
 
-	switch (gb.MachineState().compatibility)
+	switch (gb.MachineState().compatibility.RawValue())
 	{
-	case Compatibility::me:
-	case Compatibility::reprapFirmware:
+	case Compatibility::Default:
+	case Compatibility::RepRapFirmware:
 		// DWC 2 expects a reply from every command even if it is just a newline, so don't suppress empty responses
 		platform.MessageF(mt, "%s\n", reply);
 		break;
 
-	case Compatibility::nanoDLP:		// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
-	case Compatibility::marlin:
+	case Compatibility::NanoDLP:		// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
+	case Compatibility::Marlin:
 		{
 			const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 			// We don't need to handle M20 here because we always allocate an output buffer for that one
@@ -3333,22 +3342,12 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply) n
 		}
 		break;
 
-	case Compatibility::teacup:
-		emulationType = "teacup";
-		break;
-	case Compatibility::sprinter:
-		emulationType = "sprinter";
-		break;
-	case Compatibility::repetier:
-		emulationType = "repetier";
-		break;
+	case Compatibility::Teacup:
+	case Compatibility::Sprinter:
+	case Compatibility::Repetier:
 	default:
-		emulationType = "unknown";
-	}
-
-	if (emulationType != nullptr)
-	{
-		platform.MessageF(mt, "Emulation of %s is not yet supported.\n", emulationType);
+		platform.MessageF(mt, "Emulation of %s is not yet supported.\n", gb.MachineState().compatibility.ToString());
+		break;
 	}
 }
 
@@ -3381,17 +3380,16 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
-	const char* emulationType = nullptr;
 
-	switch (gb.MachineState().compatibility)
+	switch (gb.MachineState().compatibility.RawValue())
 	{
-	case Compatibility::me:
-	case Compatibility::reprapFirmware:
+	case Compatibility::Default:
+	case Compatibility::RepRapFirmware:
 		platform.Message(type, reply);
 		return;
 
-	case Compatibility::marlin:
-	case Compatibility::nanoDLP:
+	case Compatibility::Marlin:
+	case Compatibility::NanoDLP:
 		if (gb.GetCommandLetter() =='M' && gb.GetCommandNumber() == 20)
 		{
 			platform.Message(type, "Begin file list\n");
@@ -3437,25 +3435,16 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 		}
 		return;
 
-	case Compatibility::teacup:
-		emulationType = "teacup";
-		break;
-	case Compatibility::sprinter:
-		emulationType = "sprinter";
-		break;
-	case Compatibility::repetier:
-		emulationType = "repetier";
-		break;
+	case Compatibility::Teacup:
+	case Compatibility::Sprinter:
+	case Compatibility::Repetier:
 	default:
-		emulationType = "unknown";
+		platform.MessageF(type, "Emulation of %s is not yet supported.\n", gb.MachineState().compatibility.ToString());
+		break;
 	}
 
 	// If we get here then we didn't handle the message, so release the buffer(s)
 	OutputBuffer::ReleaseAll(reply);
-	if (emulationType != 0)
-	{
-		platform.MessageF(type, "Emulation of %s is not yet supported.\n", emulationType);	// don't send this one to the web as well, it concerns only the USB interface
-	}
 }
 
 void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException)
@@ -3495,7 +3484,6 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		moveBuffer.tool = reprap.GetCurrentTool();
 		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, moveBuffer.tool);
 		SetMoveBufferDefaults();
-		moveBuffer.isFirmwareRetraction = true;
 		moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
 
 		if (retract)
@@ -3749,12 +3737,12 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		}
 
 		// Pronterface expects a "Done printing" message
-		if (usbGCode->MachineState().compatibility == Compatibility::marlin)
+		if (usbGCode->MachineState().compatibility == Compatibility::Marlin)
 		{
 			platform.Message(UsbMessage, "Done printing file\n");
 		}
 #if SUPPORT_TELNET
-		if (telnetGCode->MachineState().compatibility == Compatibility::marlin)
+		if (telnetGCode->MachineState().compatibility == Compatibility::Marlin)
 		{
 			platform.Message(TelnetMessage, "Done printing file\n");
 		}
@@ -4183,7 +4171,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 {
 	if (gb.DoDwellTime(1000))
 	{
-		if (gb.MachineState().compatibility == Compatibility::marlin)
+		if (gb.MachineState().compatibility == Compatibility::Marlin)
 		{
 			// In Marlin emulation mode we should return a standard temperature report every second
 			GenerateTemperatureReport(reply);
@@ -4418,7 +4406,7 @@ void GCodes::CheckHeaterFault() noexcept
 // Return the current speed factor as a percentage
 float GCodes::GetSpeedFactor() const noexcept
 {
-	return speedFactor;
+	return speedFactor * 100.0;
 }
 
 // Return a current extrusion factor as a percentage

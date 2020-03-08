@@ -15,7 +15,7 @@
 #include "GCodes/GCodeChannel.h"
 #include "GCodes/GCodeMachineState.h"
 #include "GCodes/GCodeResult.h"
-#include "Linux/MessageFormats.h"
+#include "Linux/LinuxMessageFormats.h"
 #include "MessageType.h"
 #include "ObjectModel/ObjectModel.h"
 
@@ -37,13 +37,13 @@ enum class GCodeBufferState : uint8_t
 };
 
 // Class to hold an individual GCode and provide functions to allow it to be parsed
-class GCodeBuffer
+class GCodeBuffer INHERIT_OBJECT_MODEL
 {
 public:
 	friend class BinaryParser;
 	friend class StringParser;
 
-	GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c = Compatibility::reprapFirmware) noexcept;
+	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;														// Reset it to its state after start-up
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
@@ -111,6 +111,7 @@ public:
 	GCodeMachineState& OriginalMachineState() const noexcept;
 	float ConvertDistance(float distance) const noexcept;
 	float InverseConvertDistance(float distance) const noexcept;
+	unsigned int GetStackDepth() const noexcept;
 	bool PushState(bool withinSameFile) noexcept;				// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool withinSameFile) noexcept;				// Pop state returning true if successful (i.e. no stack underrun)
 
@@ -149,7 +150,7 @@ public:
 	void MessageAcknowledged(bool cancelled) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
-	const char *GetIdentity() const noexcept { return gcodeChannelName[(size_t)codeChannel]; }
+	const char *GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
 
@@ -190,7 +191,15 @@ public:
 	void MotionStopped() noexcept { motionCommanded = false; }
 	bool WasMotionCommanded() const noexcept { return motionCommanded; }
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
+
+#if SUPPORT_OBJECT_MODEL
+	const char *GetStateText() const noexcept;
+#endif
+
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
 

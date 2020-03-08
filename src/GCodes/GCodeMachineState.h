@@ -8,9 +8,10 @@
 #ifndef SRC_GCODES_GCODEMACHINESTATE_H_
 #define SRC_GCODES_GCODEMACHINESTATE_H_
 
-#include "RepRapFirmware.h"
-#include "Storage/FileData.h"
+#include <RepRapFirmware.h>
+#include <Storage/FileData.h>
 #include <General/FreelistManager.h>
+#include <General/NamedEnum.h>
 
 // Enumeration to list all the possible states that the Gcode processing machine may be in
 enum class GCodeState : uint8_t
@@ -106,17 +107,8 @@ enum class GCodeState : uint8_t
 #endif
 };
 
-// Other firmware that we might switch to be compatible with.
-enum class Compatibility : uint8_t
-{
-	me = 0,
-	reprapFirmware = 1,
-	marlin = 2,
-	teacup = 3,
-	sprinter = 4,
-	repetier = 5,
-	nanoDLP = 6
-};
+// Other firmware that we might switch to be compatible with. The ordering is as for M555 starting with 0.
+NamedEnum(Compatibility, uint8_t, Default, RepRapFirmware, Marlin, Teacup, Sprinter, Repetier, NanoDLP);
 
 // Type of the block we are in when processing conditional GCode
 enum class BlockType : uint8_t

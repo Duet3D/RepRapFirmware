@@ -266,6 +266,10 @@ extern uint32_t trueRandom(void);
  */
 #define LWIP_NETIF_HOSTNAME             1
 
+/** The maximum number of services per netif */
+#define MDNS_MAX_SERVICES               4
+
+
 /*
    ------------------------------------
    ---------- Thread options ----------

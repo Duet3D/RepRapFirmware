@@ -25,11 +25,11 @@ struct RawMove
 #endif
 	uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
 
-	uint8_t isFirmwareRetraction : 1,								// true if this is a firmware retraction/un-retraction move
+	uint8_t applyM220M221 : 1,										// true if this move is affected my M220 and M221
 			usePressureAdvance : 1,									// true if we want to us extruder pressure advance, if there is any extrusion
 			canPauseAfter : 1,										// true if we can pause just after this move and successfully restart
 			hasExtrusion : 1,										// true if the move includes extrusion; only valid if the move was set up by SetupMove
-			isCoordinated : 1,										// true if this is a coordinates move
+			isCoordinated : 1,										// true if this is a coordinated move
 			usingStandardFeedrate : 1,								// true if this move uses the standard feed rate
 			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
 			reduceAcceleration : 1;									// true if Z probing so we should limit the Z acceleration

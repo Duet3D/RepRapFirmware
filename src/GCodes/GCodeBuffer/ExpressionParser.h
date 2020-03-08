@@ -16,7 +16,7 @@
 class ExpressionParser
 {
 public:
-	ExpressionParser(const GCodeBuffer& p_gb, const char *text, int p_column = -1) noexcept;
+	ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column = -1) noexcept;
 
 	ExpressionValue Parse(bool evaluate = true, uint8_t priority = 0) THROWS(GCodeException);
 	bool ParseBoolean() THROWS(GCodeException);
@@ -26,7 +26,7 @@ public:
 
 	void SkipWhiteSpace() noexcept;
 	void CheckForExtraCharacters() THROWS(GCodeException);
-	const char *GetEndptr() const noexcept { return p; }
+	const char *GetEndptr() const noexcept { return currentp; }
 
 private:
 	GCodeException ConstructParseException(const char *str) const noexcept;
@@ -50,9 +50,12 @@ private:
 
 	const char *GetAndFix() THROWS(GCodeException);
 	int GetColumn() const noexcept;
+	char CurrentCharacter() const noexcept;
+	void AdvancePointer() noexcept { ++currentp; }		// could check that we havebn't reached endp but we should stop before that happens
 
-	const char *p;
-	const char *startp;
+	const char *currentp;
+	const char * const startp;
+	const char * const endp;
 	const GCodeBuffer& gb;
 	int column;
 	char stringBufferStorage[StringBufferLength];

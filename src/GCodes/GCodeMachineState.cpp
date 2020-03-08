@@ -22,7 +22,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 #endif
 	  errorMessage(nullptr),
 	  lineNumber(0),
-	  compatibility(Compatibility::reprapFirmware), drivesRelative(false), axesRelative(false),
+	  compatibility(Compatibility::RepRapFirmware), drivesRelative(false), axesRelative(false),
 #if HAS_LINUX_INTERFACE
 	  isFileFinished(false), fileError(false),
 #endif

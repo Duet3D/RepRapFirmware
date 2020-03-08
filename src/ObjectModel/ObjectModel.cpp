@@ -339,34 +339,40 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 				++filter;
 				if (*filter == ']')						// if reporting on [parts of] all elements in the array
 				{
-					return ReportArrayAsJson(buf, context, val.omadVal, filter + 1);
+					ReportArrayAsJson(buf, context, val.omadVal, filter + 1);
 				}
-
-				const char *endptr;
-				const long index = SafeStrtol(filter, &endptr);
-				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+				else
 				{
-					buf->cat("null");					// avoid returning badly-formed JSON
-					break;								// invalid syntax, or index out of range
-				}
-				if (*filter == 0)
-				{
-					buf->cat('[');
-				}
-				context.AddIndex(index);
-				{
-					ReadLocker lock(val.omadVal->lockPointer);
-					ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
-				}
-				context.RemoveIndex();
-				if (*filter == 0)
-				{
-					buf->cat(']');
+					const char *endptr;
+					const long index = SafeStrtol(filter, &endptr);
+					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+					{
+						buf->cat("null");					// avoid returning badly-formed JSON
+						break;								// invalid syntax, or index out of range
+					}
+					if (*filter == 0)
+					{
+						buf->cat('[');
+					}
+					context.AddIndex(index);
+					{
+						ReadLocker lock(val.omadVal->lockPointer);
+						ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
+					}
+					context.RemoveIndex();
+					if (*filter == 0)
+					{
+						buf->cat(']');
+					}
 				}
 			}
 			else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
 			{
 				ReportArrayAsJson(buf, context, val.omadVal, filter);
+			}
+			else
+			{
+				buf->cat("null");
 			}
 			break;
 
@@ -375,7 +381,13 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			{
 				++filter;
 			}
-			return val.omVal->ReportAsJson(buf, context, val.param, filter);
+			else if (*filter != 0)
+			{
+				buf->cat("null");						// error, should have reached the end of the filter or a '.'
+				break;
+			}
+			val.omVal->ReportAsJson(buf, context, val.param, filter);
+			break;
 
 		case TYPE_OF(float):
 			if (val.fVal == 0.0)
@@ -645,10 +657,6 @@ bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplor
 bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter, bool first) const noexcept
 {
 	const char * nextElement = ObjectModel::GetNextElement(filter);
-	if (*nextElement == '.')
-	{
-		++nextElement;
-	}
 	const ExpressionValue val = func(self, context);
 	if (val.type != NoType || context.ShouldIncludeNulls())
 	{

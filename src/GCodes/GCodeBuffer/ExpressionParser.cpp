@@ -17,8 +17,8 @@
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true);
 NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, floor, isnan, max, min, mod, radians, sin, sqrt, tan);
 
-ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, int p_column) noexcept
-	: p(text), startp(text), gb(p_gb), column(p_column), stringBuffer(stringBufferStorage, ARRAY_SIZE(stringBufferStorage))
+ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column) noexcept
+	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column), stringBuffer(stringBufferStorage, ARRAY_SIZE(stringBufferStorage))
 {
 }
 
@@ -26,11 +26,11 @@ ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, in
 ExpressionValue ExpressionParser::ParseExpectKet(bool evaluate, char closingBracket) THROWS(GCodeException)
 {
 	auto rslt = Parse(evaluate);
-	if (*p != closingBracket)
+	if (CurrentCharacter() != closingBracket)
 	{
 		throw ConstructParseException("expected '%c'", (uint32_t)closingBracket);
 	}
-	++p;
+	AdvancePointer();
 	return rslt;
 }
 
@@ -45,7 +45,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 	// Start by looking for a unary operator or opening bracket
 	SkipWhiteSpace();
-	const char c = *p;
+	const char c = CurrentCharacter();
 	ExpressionValue val;
 	switch (c)
 	{
@@ -55,7 +55,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		break;
 
 	case '-':
-		++p;
+		AdvancePointer();
 		val = Parse(evaluate, UnaryPriority);
 		switch (val.type)
 		{
@@ -73,7 +73,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		break;
 
 	case '+':
-		++p;
+		AdvancePointer();
 		val = Parse(evaluate, UnaryPriority);
 		switch (val.type)
 		{
@@ -93,9 +93,9 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		break;
 
 	case '#':
-		++p;
+		AdvancePointer();
 		SkipWhiteSpace();
-		if (isalpha(*p))
+		if (isalpha(CurrentCharacter()))
 		{
 			// Probably applying # to an object model array, so optimise by asking the OM for just the length
 			val = ParseIdentifierExpression(evaluate, true);
@@ -118,17 +118,17 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		break;
 
 	case '{':
-		++p;
+		AdvancePointer();
 		val = ParseExpectKet(evaluate, '}');
 		break;
 
 	case '(':
-		++p;
+		AdvancePointer();
 		val = ParseExpectKet(evaluate, ')');
 		break;
 
 	case '!':
-		++p;
+		AdvancePointer();
 		val = Parse(evaluate, UnaryPriority);
 		ConvertToBool(val, evaluate);
 		val.bVal = !val.bVal;
@@ -154,7 +154,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 	do
 	{
 		SkipWhiteSpace();
-		char opChar = *p;
+		char opChar = CurrentCharacter();
 		if (opChar == 0)	// don't pass null to strchr
 		{
 			return val;
@@ -172,31 +172,31 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 			return val;
 		}
 
-		++p;								// skip the [first] operator character
+		AdvancePointer();								// skip the [first] operator character
 
 		// Handle >= and <= and !=
 		bool invert = false;
 		if (opChar == '!')
 		{
-			if (*p != '=')
+			if (CurrentCharacter() != '=')
 			{
 				throw ConstructParseException("expected '='");
 			}
 			invert = true;
-			++p;
+			AdvancePointer();
 			opChar = '=';
 		}
-		else if ((opChar == '>' || opChar == '<') && *p == '=')
+		else if ((opChar == '>' || opChar == '<') && CurrentCharacter() == '=')
 		{
 			invert = true;
-			++p;
+			AdvancePointer();
 			opChar ^= ('>' ^ '<');			// change < to > or vice versa
 		}
 
 		// Allow == && || as alternatives to = & |
-		if ((opChar == '=' || opChar == '&' || opChar == '|') && *p == opChar)
+		if ((opChar == '=' || opChar == '&' || opChar == '|') && CurrentCharacter() == opChar)
 		{
-			++p;
+			AdvancePointer();
 		}
 
 		// Handle operators that do not always evaluate their second operand
@@ -230,11 +230,11 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 			ConvertToBool(val, evaluate);
 			{
 				ExpressionValue val2 = Parse(evaluate && val.bVal, opPrio);		// get the second operand
-				if (*p != ':')
+				if (CurrentCharacter() != ':')
 				{
 					throw ConstructParseException("expected ':'");
 				}
-				++p;
+				AdvancePointer();
 				ExpressionValue val3 = Parse(evaluate && !val.bVal, opPrio - 1);	// get the third operand, which may be a further conditional expression
 				return (val.bVal) ? val2 : val3;
 			}
@@ -590,16 +590,17 @@ const char *ExpressionParser::GetAndFix()
 
 void ExpressionParser::SkipWhiteSpace() noexcept
 {
-	while (*p == ' ' || *p == '\t')
+	char c;
+	while ((c = CurrentCharacter()) == ' ' || c == '\t')
 	{
-		++p;
+		AdvancePointer();
 	}
 }
 
 void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 {
 	SkipWhiteSpace();
-	if (*p != 0)
+	if (CurrentCharacter() != 0)
 	{
 		throw ConstructParseException("Unexpected characters after expression");
 	}
@@ -611,7 +612,7 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 	// 2. Read digits before decimal point, E or e
 	unsigned long valueBeforePoint = 0;
 	char c;
-	while (isdigit((c = *p)))
+	while (isdigit((c = CurrentCharacter())))
 	{
 		const unsigned int digit = c - '0';
 		if (valueBeforePoint > ULONG_MAX/10 || (valueBeforePoint *= 10, valueBeforePoint > ULONG_MAX - digit))
@@ -619,7 +620,7 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 			throw ConstructParseException("too many digits");
 		}
 		valueBeforePoint += digit;
-		++p;
+		AdvancePointer();
 	}
 
 	// 3. Check for decimal point before E or e
@@ -628,10 +629,10 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 	bool isFloat = (c == '.');
 	if (isFloat)
 	{
-		++p;
+		AdvancePointer();
 
 		// 3b. Read the digits (if any) after the decimal point
-		while (isdigit((c = *p)))
+		while (isdigit((c = CurrentCharacter())))
 		{
 			const unsigned int digit = c - '0';
 			if (valueAfterPoint > LONG_MAX/10 || (valueAfterPoint *= 10, valueAfterPoint > LONG_MAX - digit))
@@ -640,7 +641,7 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 			}
 			valueAfterPoint += digit;
 			++digitsAfterPoint;
-			++p;
+			AdvancePointer();
 		}
 	}
 
@@ -649,21 +650,21 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 	if (toupper(c) == 'E')
 	{
 		isFloat = true;
-		++p;
-		c = *p;
+		AdvancePointer();
+		c = CurrentCharacter();
 
 		// 5a. Check for signed exponent
 		const bool expNegative = (c == '-');
 		if (expNegative || c == '+')
 		{
-			++p;
+			AdvancePointer();
 		}
 
 		// 5b. Read exponent digits
-		while (isdigit((c = *p)))
+		while (isdigit((c = CurrentCharacter())))
 		{
 			exponent = (10 * exponent) + (c - '0');	// could overflow, but anyone using such large numbers is being very silly
-			++p;
+			AdvancePointer();
 		}
 
 		if (expNegative)
@@ -707,7 +708,7 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 // Parse an identifier expression
 ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool applyLengthOperator) THROWS(GCodeException)
 {
-	if (!isalpha(*p))
+	if (!isalpha(CurrentCharacter()))
 	{
 		throw ConstructParseException("expected an identifier");
 	}
@@ -718,13 +719,13 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
 	char c;
-	while (isalpha((c = *p)) || isdigit(c) || c == '_' || c == '.' || c == '[')
+	while (isalpha((c = CurrentCharacter())) || isdigit(c) || c == '_' || c == '.' || c == '[')
 	{
-		++p;
+		AdvancePointer();
 		if (c == '[')
 		{
 			const ExpressionValue index = Parse(evaluate);
-			if (*p != ']')
+			if (CurrentCharacter() != ']')
 			{
 				throw ConstructParseException("expected ']'");
 			}
@@ -732,7 +733,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 			{
 				throw ConstructParseException("expected integer expression");
 			}
-			++p;										// skip the ']'
+			AdvancePointer();										// skip the ']'
 			context.ProvideIndex(index.iVal);
 			c = '^';									// add the marker
 		}
@@ -801,10 +802,10 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 
 	// Check whether it is a function call
 	SkipWhiteSpace();
-	if (*p == '(')
+	if (CurrentCharacter() == '(')
 	{
 		// It's a function call
-		++p;
+		AdvancePointer();
 		ExpressionValue rslt = Parse(evaluate);					// evaluate the first operand
 		const Function func(id.c_str());
 		if (!func.IsValid())
@@ -874,11 +875,11 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 			{
 				ConvertToFloat(rslt, evaluate);
 				SkipWhiteSpace();
-				if (*p != ',')
+				if (CurrentCharacter() != ',')
 				{
 					throw ConstructParseException("expected ','");
 				}
-				++p;
+				AdvancePointer();
 				SkipWhiteSpace();
 				ExpressionValue nextOperand = Parse(evaluate);
 				ConvertToFloat(nextOperand, evaluate);
@@ -930,11 +931,11 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		case Function::mod:
 			{
 				SkipWhiteSpace();
-				if (*p != ',')
+				if (CurrentCharacter() != ',')
 				{
 					throw ConstructParseException("expected ','");
 				}
-				++p;
+				AdvancePointer();
 				SkipWhiteSpace();
 				ExpressionValue nextOperand = Parse(evaluate);
 				BalanceNumericTypes(rslt, nextOperand, evaluate);
@@ -957,11 +958,11 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 			for (;;)
 			{
 				SkipWhiteSpace();
-				if (*p != ',')
+				if (CurrentCharacter() != ',')
 				{
 					break;
 				}
-				++p;
+				AdvancePointer();
 				SkipWhiteSpace();
 				ExpressionValue nextOperand = Parse(evaluate);
 				BalanceNumericTypes(rslt, nextOperand, evaluate);
@@ -981,11 +982,11 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 			for (;;)
 			{
 				SkipWhiteSpace();
-				if (*p != ',')
+				if (CurrentCharacter() != ',')
 				{
 					break;
 				}
-				++p;
+				AdvancePointer();
 				SkipWhiteSpace();
 				ExpressionValue nextOperand = Parse(evaluate);
 				BalanceNumericTypes(rslt, nextOperand, evaluate);
@@ -1006,11 +1007,11 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		}
 
 		SkipWhiteSpace();
-		if (*p != ')')
+		if (CurrentCharacter() != ')')
 		{
 			throw ConstructParseException("expected ')'");
 		}
-		++p;
+		AdvancePointer();
 		return rslt;
 	}
 
@@ -1022,33 +1023,35 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 void ExpressionParser::ParseQuotedString(const StringRef& str) THROWS(GCodeException)
 {
 	str.Clear();
-	++p;
+	AdvancePointer();
 	for (;;)
 	{
-		char c = *p++;
+		char c = CurrentCharacter();
+		AdvancePointer();
 		if (c < ' ')
 		{
 			throw ConstructParseException("control character in string");
 		}
 		if (c == '"')
 		{
-			if (*p != c)
+			if (CurrentCharacter() != c)
 			{
 				return;
 			}
-			++p;
+			AdvancePointer();
 		}
 		else if (c == '\'')
 		{
-			if (isalpha(*p))
+			if (isalpha(CurrentCharacter()))
 			{
 				// Single quote before an alphabetic character forces that character to lower case
-				c = tolower(*p++);
+				c = tolower(CurrentCharacter());
+				AdvancePointer();
 			}
-			else if (*p == c)
+			else if (CurrentCharacter() == c)
 			{
 				// Two backslashes are used to represent one
-				++p;
+				AdvancePointer();
 			}
 		}
 		if (str.cat(c))
@@ -1058,9 +1061,15 @@ void ExpressionParser::ParseQuotedString(const StringRef& str) THROWS(GCodeExcep
 	}
 }
 
+// Return the current character, or 0 if we have run out of string
+char ExpressionParser::CurrentCharacter() const noexcept
+{
+	return (currentp < endp) ? *currentp : 0;
+}
+
 int ExpressionParser::GetColumn() const noexcept
 {
-	return (column < 0) ? column : (p - startp) + column;
+	return (column < 0) ? column : (currentp - startp) + column;
 }
 
 GCodeException ExpressionParser::ConstructParseException(const char *str) const noexcept

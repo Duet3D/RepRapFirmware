@@ -100,7 +100,7 @@ struct HeightMapHeader
 
 struct LockUnlockHeader
 {
-	GCodeChannel channel;
+	GCodeChannel::BaseType channel;
 	uint8_t paddingA;
 	uint16_t paddingB;
 };
@@ -263,7 +263,7 @@ struct CodeParameter
 
 struct MacroCompleteHeader
 {
-	GCodeChannel channel;
+	GCodeChannel::RawType channel;
 	bool error;
 	uint16_t padding;
 };

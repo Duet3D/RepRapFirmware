@@ -148,6 +148,13 @@ constexpr ObjectModelArrayDescriptor RepRap::fansArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->fansManager->FindFan(context.GetLastIndex()).Ptr()); }
 };
 
+constexpr ObjectModelArrayDescriptor RepRap::inputsArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->gCodes->GetNumInputs(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->gCodes->GetInput(context.GetLastIndex())); }
+};
+
 constexpr ObjectModelArrayDescriptor RepRap::toolsArrayDescriptor =
 {
 	&toolListLock,
@@ -162,6 +169,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
 	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
+	{ "inputs",					OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor),						ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
 	{ "limits",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::verbose },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
@@ -208,7 +216,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 3, 10, 5, 20 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 3, 11, 5, 20 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 

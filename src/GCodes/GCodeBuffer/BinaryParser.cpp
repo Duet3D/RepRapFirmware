@@ -117,7 +117,7 @@ float BinaryParser::GetFValue()
 		break;
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, -1);
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			value = parser.ParseFloat();
 			parser.CheckForExtraCharacters();
 		}
@@ -152,7 +152,7 @@ int32_t BinaryParser::GetIValue()
 		break;
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, -1);
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			value = parser.ParseInteger();
 			parser.CheckForExtraCharacters();
 		}
@@ -187,7 +187,7 @@ uint32_t BinaryParser::GetUIValue()
 		break;
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, -1);
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			value = parser.ParseUnsigned();
 			parser.CheckForExtraCharacters();
 		}
@@ -365,7 +365,7 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str)
 
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, -1);
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			const ExpressionValue val = parser.Parse();
 			parser.CheckForExtraCharacters();
 			val.AppendAsString(str);

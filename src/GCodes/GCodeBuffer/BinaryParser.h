@@ -12,7 +12,7 @@
 
 #if HAS_LINUX_INTERFACE
 
-#include <Linux/MessageFormats.h>
+#include <Linux/LinuxMessageFormats.h>
 #include <MessageType.h>
 #include <GCodes/GCodeException.h>
 

@@ -1325,7 +1325,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) noe
 // Change a live extrusion factor
 void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 {
-	if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
+	if (segmentsLeft != 0 && moveBuffer.applyM220M221)
 	{
 		moveBuffer.coords[ExtruderToLogicalDrive(extruder)] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}

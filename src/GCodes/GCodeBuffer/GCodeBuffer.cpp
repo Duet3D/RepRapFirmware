@@ -33,8 +33,55 @@
 
 #endif
 
+#if SUPPORT_OBJECT_MODEL
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GCodeBuffer, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. inputs[] root
+	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),					ObjectModelEntryFlags::none },
+	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),			ObjectModelEntryFlags::none },
+	{ "distanceUnit",		OBJECT_MODEL_FUNC((self->machineState->usingInches) ? "inch" : "mm"),		ObjectModelEntryFlags::none },
+	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),				ObjectModelEntryFlags::none },
+	{ "feedRate",			OBJECT_MODEL_FUNC(self->machineState->feedRate, 1),							ObjectModelEntryFlags::live },
+	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),				ObjectModelEntryFlags::none },
+	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->machineState->lineNumber),					ObjectModelEntryFlags::live },
+	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),							ObjectModelEntryFlags::none },
+	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),							ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),									ObjectModelEntryFlags::live },
+	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),			ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 11 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
+
+const char *GCodeBuffer::GetStateText() const noexcept
+{
+	if (machineState->waitingForAcknowledgement)
+	{
+		return "awaitingAckmowledgement";
+	}
+
+	switch (bufferState)
+	{
+	case GCodeBufferState::parseNotStarted:		return "idle";
+	case GCodeBufferState::ready:				return "executing";
+	case GCodeBufferState::executing:			return "waiting";
+	default:									return "reading";
+	}
+}
+
+#endif
+
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c) noexcept
+GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
 	: codeChannel(channel), normalInput(normalIn),
 #if HAS_MASS_STORAGE
 	  fileInput(fileIn),
@@ -107,7 +154,7 @@ bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis) noexcept
 void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 {
 	String<StringLength256> scratchString;
-	scratchString.copy(GetIdentity());
+	scratchString.copy(codeChannel.ToString());
 #if HAS_LINUX_INTERFACE
 	scratchString.cat(IsBinary() ? "* " : " ");
 #else
@@ -564,16 +611,22 @@ float GCodeBuffer::InverseConvertDistance(float distance) const noexcept
 	return (machineState->usingInches) ? distance/InchToMm : distance;
 }
 
+// Return the  current stack depth
+unsigned int GCodeBuffer::GetStackDepth() const noexcept
+{
+	unsigned int depth = 0;
+	for (const GCodeMachineState *m1 = machineState; m1->previous != nullptr; m1 = m1->previous)
+	{
+		++depth;
+	}
+	return depth;
+}
+
 // Push state returning true if successful (i.e. stack not overflowed)
 bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 {
 	// Check the current stack depth
-	unsigned int depth = 0;
-	for (const GCodeMachineState *m1 = machineState; m1 != nullptr; m1 = m1->previous)
-	{
-		++depth;
-	}
-	if (depth >= MaxStackDepth + 1)					// the +1 is to allow for the initial state record
+	if (GetStackDepth() >= MaxStackDepth)
 	{
 		return false;
 	}
@@ -702,7 +755,7 @@ MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 #if HAS_LINUX_INTERFACE
 	if (isBinaryBuffer)
 	{
-		return (MessageType)((1 << (size_t)codeChannel) | BinaryCodeReplyFlag);
+		return (MessageType)((1u << codeChannel.ToBaseType()) | BinaryCodeReplyFlag);
 	}
 #endif
 	return responseMessageType;
