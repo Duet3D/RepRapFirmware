@@ -17,6 +17,8 @@ New features/changed behaviour:
 - M915 now reports the axis or extruder speed that corresponds to the fullsteps/second value of the H parameter
 - New object model variable inputs[] is provided, describing the state of each GCode input
 - M207 retraction parameters are now settable on a per-tool basis. The P parameter selects which tool to set. M207 with no P parameter applies the parameters provided to all existing tools. Retraction settings in the object model are moved from extruders[].retraction to tools[].retraction.
+- Each Z probe can now have its own deploy and retract files. Z probe number # (where # counts up from zero) looks first for deployprobe#.g and if that is not found it falls back to deployprobe.g. Similarly it used retractprobe#.g in preference to retractprobe.g.
+- The M401 (deploy probe) and M402 (retract probe) commands now accept an optional P parameter which is the Z probe number to deploy mor retract, default 0.
 
 Bug fixes:
 - If an array of items in the object model (e.g. heaters, sensors) included null entries because of gaps in the item numbers created, and an object model expression referred to a prioerty of such as null element, the firmware crashed
