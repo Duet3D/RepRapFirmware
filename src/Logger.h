@@ -28,11 +28,13 @@ public:
 	void LogMessage(time_t time, OutputBuffer *buf) noexcept;
 	void Flush(bool forced) noexcept;
 	bool IsActive() const noexcept { return logFile.IsLive(); }
+	const char *GetFileName() const noexcept { return logFileName.c_str(); }
 
 private:
 	bool WriteDateTime(time_t time) noexcept;
 	void InternalLogMessage(time_t time, const char *message) noexcept;
 
+	String<MaxFilenameLength> logFileName;
 	FileData logFile;
 	uint32_t lastFlushTime;
 	FilePosition lastFlushFileSize;

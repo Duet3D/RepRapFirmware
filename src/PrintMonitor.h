@@ -75,6 +75,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 	static const ObjectModelArrayDescriptor filamentArrayDescriptor;
+	static const ObjectModelArrayDescriptor extrudedRawArrayDescriptor;
 
 private:
 	Platform& platform;

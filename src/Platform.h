@@ -524,6 +524,7 @@ public:
 #if HAS_MASS_STORAGE
 	// Logging support
 	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	const char *GetLogFileName() const noexcept;
 #endif
 
 	// Ancillary PWM

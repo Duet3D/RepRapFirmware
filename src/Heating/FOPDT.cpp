@@ -15,6 +15,43 @@
 # include <CanMessageFormats.h>
 #endif
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(FopDt, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(FopDt, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. FopDt members
+	{ "deadTime",			OBJECT_MODEL_FUNC(self->deadTime, 1),												ObjectModelEntryFlags::none },
+	{ "enabled",			OBJECT_MODEL_FUNC(self->enabled),													ObjectModelEntryFlags::none },
+	{ "gain",				OBJECT_MODEL_FUNC(self->gain, 1),													ObjectModelEntryFlags::none },
+	{ "inverted",			OBJECT_MODEL_FUNC(self->inverted),													ObjectModelEntryFlags::none },
+	{ "maxPwm",				OBJECT_MODEL_FUNC(self->maxPwm, 2),													ObjectModelEntryFlags::none },
+	{ "pid",				OBJECT_MODEL_FUNC(self, 1),															ObjectModelEntryFlags::none },
+	{ "standardVoltage",	OBJECT_MODEL_FUNC(self->standardVoltage, 1),										ObjectModelEntryFlags::none },
+	{ "timeConstant",		OBJECT_MODEL_FUNC(self->timeConstant, 1),											ObjectModelEntryFlags::none },
+
+	// 1. PID members
+	{ "d",					OBJECT_MODEL_FUNC(self->loadChangeParams.tD * self->loadChangeParams.kP, 1),		ObjectModelEntryFlags::none },
+	{ "i",					OBJECT_MODEL_FUNC(self->loadChangeParams.recipTi * self->loadChangeParams.kP, 1),	ObjectModelEntryFlags::none },
+	{ "overridden",			OBJECT_MODEL_FUNC(self->pidParametersOverridden, 1),								ObjectModelEntryFlags::none },
+	{ "p",					OBJECT_MODEL_FUNC(self->loadChangeParams.kP, 1),									ObjectModelEntryFlags::none },
+	{ "used",				OBJECT_MODEL_FUNC(self->usePid, 1),													ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 8, 5 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
+
+#endif
+
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt() noexcept
@@ -93,7 +130,7 @@ bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept
 #endif
 
 /* Re-calculate the PID parameters.
- * For some possible formulas, see "Comparison of some well-known PID tuning formulas", Computers and Chemical Engineering 30 (2006) 1416–1423,
+ * For some possible formulas, see "Comparison of some well-known PID tuning formulas", Computers and Chemical Engineering 30 (2006) 1416ï¿½1423,
  * available at http://www.ece.ualberta.ca/~marquez/journal_publications_files/papers/tan_cce_06.pdf
  * Here are some examples, where r = td/tc:
  *    Cohen-Coon (modified to use half the original Kc value):

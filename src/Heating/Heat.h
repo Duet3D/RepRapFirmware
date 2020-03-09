@@ -146,6 +146,8 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(bedHeaters)
+	OBJECT_MODEL_ARRAY(chamberHeaters)
 	OBJECT_MODEL_ARRAY(heaters)
 
 private:

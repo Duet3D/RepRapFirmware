@@ -188,6 +188,7 @@ protected:
 	OBJECT_MODEL_ARRAY(boards)
 	OBJECT_MODEL_ARRAY(fans)
 	OBJECT_MODEL_ARRAY(inputs)
+	OBJECT_MODEL_ARRAY(spindles)
 	OBJECT_MODEL_ARRAY(tools)
 
 private:
@@ -257,7 +258,7 @@ private:
 
 	unsigned int beepFrequency, beepDuration;
 	String<MaxMessageLength> message;
-	uint16_t messageSequence;
+	uint16_t messageSequence;					// TODO replace this with seqs.state
 
 	MessageBox mbox;							// message box data
 

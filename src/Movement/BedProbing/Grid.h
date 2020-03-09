@@ -15,7 +15,7 @@ class DataTransfer;
 class Deviation;
 
 // This class defines the bed probing grid
-class GridDefinition
+class GridDefinition INHERIT_OBJECT_MODEL
 {
 public:
 	friend class DataTransfer;
@@ -39,6 +39,9 @@ public:
 
 	void PrintError(float originalXrange, float originalYrange, const StringRef& r) const noexcept
 	pre(!IsValid());
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	void CheckValidity() noexcept;
