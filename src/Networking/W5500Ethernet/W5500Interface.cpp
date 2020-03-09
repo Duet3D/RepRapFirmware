@@ -46,14 +46,17 @@ W5500Interface::W5500Interface(Platform& p) noexcept
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(W5500Interface, _ret)
 
-const ObjectModelTableEntry W5500Interface::objectModelTable[] =
+constexpr ObjectModelTableEntry W5500Interface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
-	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
-	{ "name", OBJECT_MODEL_FUNC_NOSELF("ethernet"), TYPE_OF(const char *), ObjectModelTableEntry::none },
-	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
+	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),		ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),	ObjectModelEntryFlags::none },
+	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),		ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),	ObjectModelEntryFlags::none },
 };
+
+constexpr uint8_t W5500Interface::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(W5500Interface)
 
@@ -68,7 +71,7 @@ void W5500Interface::Init() noexcept
 	lastTickMillis = millis();
 
 	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
-	memcpy(macAddress, platform.GetDefaultMacAddress(), sizeof(macAddress));
+	macAddress = platform.GetDefaultMacAddress();
 }
 
 GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
@@ -193,12 +196,10 @@ GCodeResult W5500Interface::GetNetworkState(const StringRef& reply) noexcept
 }
 
 // Update the MAC address
-void W5500Interface::SetMacAddress(const uint8_t mac[]) noexcept
+GCodeResult W5500Interface::SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept
 {
-	for (size_t i = 0; i < 6; i++)
-	{
-		macAddress[i] = mac[i];
-	}
+	macAddress = mac;
+	return GCodeResult::ok;
 }
 
 // Start up the network
@@ -221,7 +222,7 @@ void W5500Interface::Start() noexcept
 	setPHYCFGR(PHYCFGR_OPMD | PHYCFGR_OPMDC_ALLA);					// set auto negotiation and reset the PHY
 
 	wizchip_init(bufSizes, bufSizes);
-	setSHAR(macAddress);
+	setSHAR(macAddress.bytes);
 	setSIPR(ipAddress);
 	setGAR(gateway);
 	setSUBR(netmask);

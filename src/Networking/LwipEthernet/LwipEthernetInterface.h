@@ -34,7 +34,6 @@ public:
 	void Activate() noexcept override;
 	void Exit() noexcept override;
 	void Spin() noexcept override;
-	void Interrupt() noexcept override;
 	void Diagnostics(MessageType mtype) noexcept override;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
@@ -44,14 +43,13 @@ public:
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
-	bool InNetworkStack() const noexcept override;
 	bool IsWiFiInterface() const noexcept override { return false; }
 
 	void UpdateHostname(const char *hostname) noexcept override;
 	IPAddress GetIPAddress() const noexcept override;
 	void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept override;
-	void SetMacAddress(const uint8_t mac[]) noexcept override;
-	const uint8_t *GetMacAddress() const noexcept override { return macAddress; }
+	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
+	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
 	// LwIP interfaces
 	bool ConnectionEstablished(tcp_pcb *pcb) noexcept;
@@ -107,7 +105,7 @@ private:
 	IPAddress ipAddress;
 	IPAddress netmask;
 	IPAddress gateway;
-	uint8_t macAddress[6];
+	MacAddress macAddress;
 };
 
 #endif

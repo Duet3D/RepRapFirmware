@@ -28,13 +28,17 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT && CHAP_SUPPORT  /* don't build if not configured for use in lwipopts.h */
 
 #ifndef CHAP_H
 #define CHAP_H
 
-#include <Lwip/src/include/netif/ppp/ppp.h>
+#include "ppp.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * CHAP packets begin with a standard header with code, id, len (2 bytes).
@@ -187,6 +191,10 @@ extern void chap_auth_with_peer(ppp_pcb *pcb, const char *our_name, int digest_c
 
 /* Represents the CHAP protocol to the main pppd code */
 extern const struct protent chap_protent;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CHAP_H */
 #endif /* PPP_SUPPORT && CHAP_SUPPORT */

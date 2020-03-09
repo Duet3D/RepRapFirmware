@@ -13,8 +13,9 @@
 // Struct to hold Gcode file information
 struct GCodeFileInfo
 {
-	GCodeFileInfo() { Init(); }
-	void Init();
+	GCodeFileInfo() noexcept { Init(); }
+	void Init() noexcept;
+	unsigned int GetNumLayers() const noexcept;
 
 	FilePosition fileSize;
 	time_t lastModifiedTime;
@@ -27,7 +28,7 @@ struct GCodeFileInfo
 	unsigned int numFilaments;
 	bool isValid;
 	bool incomplete;
-	String<50> generatedBy;
+	String<StringLength50> generatedBy;
 };
 
 #endif /* SRC_GCODES_GCODEFILEINFO_H_ */

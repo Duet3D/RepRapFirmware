@@ -88,7 +88,7 @@ namespace DuetExpansion
 			{
 				taskWaiting = true;
 				cpu_irq_enable();
-				TaskBase::Take();
+				(void)TaskBase::Take();
 			}
 			else
 			{

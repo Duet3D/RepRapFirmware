@@ -109,12 +109,11 @@ void Filament::LoadAssignment() noexcept
 
 	// Write header
 	buf.copy(FilamentAssignmentFileComment);
-	if (reprap.GetPlatform().IsDateTimeSet())
+	tm timeInfo;
+	if (reprap.GetPlatform().GetDateTime(timeInfo))
 	{
-		time_t timeNow = reprap.GetPlatform().GetDateTime();
-		const struct tm * const timeInfo = gmtime(&timeNow);
 		buf.catf(" generated at %04u-%02u-%02u %02u:%02u",
-						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min);
 	}
 	buf.cat('\n');
 	file->Write(buf.c_str());

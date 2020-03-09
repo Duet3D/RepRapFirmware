@@ -20,13 +20,13 @@
  * $Id: eap.h,v 1.2 2003/06/11 23:56:26 paulus Exp $
  */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT && EAP_SUPPORT  /* don't build if not configured for use in lwipopts.h */
 
 #ifndef PPP_EAP_H
 #define	PPP_EAP_H
 
-#include <Lwip/src/include/netif/ppp/ppp.h>
+#include "ppp.h"
 
 #ifdef	__cplusplus
 extern "C" {

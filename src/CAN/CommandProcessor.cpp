@@ -14,6 +14,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Heating/Heat.h"
+#include "ExpansionManager.h"
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
@@ -111,7 +112,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 								CanInterface::SendResponse(buf);
 
 								reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
-								CanInterface::UpdateFinished();
+								reprap.GetExpansion().UpdateFailed(src);
 								return;
 							}
 							bytesSent = 0;
@@ -129,7 +130,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 				buf->dataLength = msgp->GetActualDataLength();
 				CanInterface::SendResponse(buf);
 				reprap.GetPlatform().MessageF(ErrorMessage, "Firmware file %s not found", fname.c_str());
-				CanInterface::UpdateFinished();
+				reprap.GetExpansion().UpdateFailed(src);
 				return;
 			}
 		}
@@ -178,7 +179,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 							CanInterface::SendResponse(buf);
 
 							reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
-							CanInterface::UpdateFinished();
+							reprap.GetExpansion().UpdateFailed(src);
 							return;
 						}
 						msgp->dataLength = lengthToSend;
@@ -215,11 +216,11 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 			CanInterface::SendResponse(buf);
 
 			reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request for missing file '%s'\n", fname.c_str());
-			CanInterface::UpdateFinished();
+			reprap.GetExpansion().UpdateFailed(src);
 		}
 		else if (fileOffset == fileLength)
 		{
-			CanInterface::UpdateFinished();
+			reprap.GetExpansion().UpdateFinished(src);
 		}
 	}
 	else
@@ -243,16 +244,23 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 	for (unsigned int i = 0; i < msg.numHandles; ++i)
 	{
 		const RemoteInputHandle handle(msg.handles[i]);
-		const bool state = (msg.states & (1 << i)) != 0;
+		const bool state = (msg.states & (1u << i)) != 0;
 		switch (handle.u.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
-			reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			reprap.GetPlatform().GetEndstops().HandleRemoteEndstopChange(src, handle.u.parts.major, handle.u.parts.minor, state);
 			endstopStatesChanged = true;
 			break;
 
-		case RemoteInputHandle::typeTrigger:
-			//TODO see if any triggers are waiting for this state change
+		case RemoteInputHandle::typeZprobe:
+			reprap.GetPlatform().GetEndstops().HandleRemoteZProbeChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			endstopStatesChanged = true;
+			break;
+
+		case RemoteInputHandle::typeGpIn:
+			reprap.GetPlatform().HandleRemoteGpInChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			break;
+
 		default:
 			break;
 		}
@@ -260,12 +268,12 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 
 	if (endstopStatesChanged)
 	{
-		reprap.GetPlatform().GetEndstops().OnEndstopStatesChanged();
+		reprap.GetPlatform().GetEndstops().OnEndstopOrZProbeStatesChanged();
 	}
 }
 
 // Process a received broadcast or request message and free the message buffer
-void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
+void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
 	if (buf->id.Src() == CanId::MasterAddress)
 	{
@@ -284,7 +292,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 			break;
 
 		case CanMessageType::firmwareBlockRequest:
-			HandleFirmwareBlockRequest(buf);		// this one reuses or frees the buffer
+			HandleFirmwareBlockRequest(buf);					// this one reuses or frees the buffer
 			break;
 
 		case CanMessageType::sensorTemperaturesReport:
@@ -300,6 +308,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 		case CanMessageType::fanRpmReport:
 			reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fanRpms);
 			CanMessageBuffer::Free(buf);
+			break;
+
+		case CanMessageType::announce:
+			reprap.GetExpansion().ProcessAnnouncement(buf);		// this one reuses or frees the buffer
 			break;
 
 		case CanMessageType::statusReport:

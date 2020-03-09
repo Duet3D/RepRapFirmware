@@ -52,8 +52,6 @@ extern "C" {
 
 extern void delay(uint32_t ms);
 
-#if LWIP_GMAC_TASK
-
 // We can't #include RepRapFirmware.h here because that leads to a duplicate definition of ERR_TIMEOUT
 #include <RTOSIface/RTOSIface.h>
 #include <TaskPriorities.h>
@@ -62,8 +60,6 @@ extern Mutex lwipMutex;
 
 constexpr size_t EthernetTaskStackWords = 250;
 static Task<EthernetTaskStackWords> ethernetTask;
-
-#endif
 
 // Error counters
 unsigned int rxErrorCount;
@@ -82,7 +78,6 @@ unsigned int txBufferTooShortCount;
 /** Network link speed. */
 #define NET_LINK_SPEED        100000000
 
-#if LWIP_GMAC_TASK
 /* Interrupt priorities. (lowest value = highest priority) */
 /* ISRs using FreeRTOS *FromISR APIs must have priorities below or equal to */
 /* configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY. */
@@ -95,16 +90,6 @@ unsigned int txBufferTooShortCount;
 
 /** The GMAC RX errors to handle */
 #define GMAC_RX_ERRORS (GMAC_RSR_RXOVR | GMAC_RSR_HNO)
-#elif 1		// chrishamm
-#define GMAC_INT_GROUP       (GMAC_ISR_RCOMP | GMAC_ISR_ROVR)		// call ISR only when a new frame has arrived
-#define GMAC_TX_ERRORS       0
-#define GMAC_RX_ERRORS       0
-#else
-#define INT_PRIORITY_GMAC    0
-#define GMAC_INT_GROUP       0
-#define GMAC_TX_ERRORS       0
-#define GMAC_RX_ERRORS       0
-#endif
 
 /** TX descriptor lists */
 COMPILER_ALIGNED(8)
@@ -169,16 +154,11 @@ uint32_t lwip_tx_rate = 0;
 uint32_t lwip_rx_rate = 0;
 #endif
 
-#if !LWIP_GMAC_TASK
-static gmac_dev_tx_cb_t gmac_rx_cb = nullptr;
-#endif
-
 /**
  * \brief GMAC interrupt handler.
  */
 extern "C" void GMAC_Handler() noexcept
 {
-#if LWIP_GMAC_TASK
 	/* Get interrupt status. */
 	const uint32_t ul_isr = gmac_get_interrupt_status(GMAC);
 
@@ -187,22 +167,6 @@ extern "C" void GMAC_Handler() noexcept
 	{
 		ethernetTask.GiveFromISR();
 	}
-#else
-# if 1
-	volatile uint32_t ul_isr;
-
-	/* Get interrupt status. */
-	ul_isr = gmac_get_interrupt_status(GMAC);
-
-	/* RX interrupts. */
-	if ((ul_isr & GMAC_INT_GROUP) != 0 && gmac_rx_cb != nullptr)
-	{
-		gmac_rx_cb(ul_isr);
-	}
-# else
-    NVIC_DisableIRQ(GMAC_IRQn);
-# endif
-#endif
 }
 
 /**
@@ -557,7 +521,6 @@ static pbuf *gmac_low_level_input(struct netif *netif) noexcept
 	return p;
 }
 
-#if LWIP_GMAC_TASK
 /**
  * \brief GMAC task function. This function waits for the notification
  * semaphore from the interrupt, processes the incoming packet and then
@@ -582,7 +545,6 @@ extern "C" [[noreturn]] void gmac_task(void *pvParameters) noexcept
 		TaskBase::Take((rxPbufsFullyPopulated) ? 1000 : 20);
 	}
 }
-#endif
 
 /**
  * \brief This function should be called when a packet is ready to be
@@ -676,10 +638,7 @@ err_t ethernetif_init(struct netif *netif) noexcept
 	/* Initialize the hardware */
 	gmac_low_level_init(netif);
 
-#if LWIP_GMAC_TASK
 	ethernetTask.Create(gmac_task, "ETHERNET", &gs_gmac_dev, TaskPriority::EthernetPriority);
-#endif
-
 	return ERR_OK;
 }
 
@@ -809,13 +768,6 @@ bool ethernetif_link_established() noexcept
 	return true;
 }
 
-#if !LWIP_GMAC_TASK
-void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback) noexcept
-{
-	gmac_rx_cb = callback;
-}
-#endif
-
 void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept
 {
 	// This function must be called once before low_level_init(), because that is where the
@@ -830,9 +782,7 @@ void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept
 void ethernetif_terminate() noexcept
 {
 	NVIC_DisableIRQ(GMAC_IRQn);
-#if LWIP_GMAC_TASK
 	ethernetTask.TerminateAndUnlink();
-#endif
 }
 
 extern "C" u32_t millis() noexcept;

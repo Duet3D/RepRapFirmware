@@ -34,13 +34,14 @@
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanInterface.h"
+# include <CAN/CanInterface.h>
+# include <CAN/ExpansionManager.h>
 #endif
 
 #include "Wire.h"
 
 // Deal with G60
-GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	const uint32_t sParam = (gb.Seen('S')) ? gb.GetUIValue() : 0;
 	if (sParam < ARRAY_SIZE(numberedRestorePoints))
@@ -59,20 +60,20 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 {
 	// Don't wait for the machine to stop if only extruder drives are being reset.
 	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
-	AxesBitmap axesIncluded = 0;
+	AxesBitmap axesIncluded;
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
 			const float axisValue = gb.GetFValue();
-			if (axesIncluded == 0)
+			if (axesIncluded.IsEmpty())
 			{
 				if (!LockMovementAndWaitForStandstill(gb))	// lock movement and get current coordinates
 				{
 					return GCodeResult::notFinished;
 				}
 			}
-			SetBit(axesIncluded, axis);
+			axesIncluded.SetBit(axis);
 			currentUserPosition[axis] = gb.ConvertDistance(axisValue);
 		}
 	}
@@ -83,10 +84,10 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 		virtualExtruderPosition = gb.GetDistance();
 	}
 
-	if (axesIncluded != 0)
+	if (axesIncluded.IsNonEmpty())
 	{
 		ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false, limitAxes)
+		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, AxesBitmap::MakeLowestNBits(numVisibleAxes), false, limitAxes)
 			!= LimitPositionResult::ok												// pretend that all axes are homed
 		   )
 		{
@@ -94,7 +95,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 		}
 		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
 		axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
-		if (IsBitSet(axesIncluded, Z_AXIS))
+		if (axesIncluded.IsBitSet(Z_AXIS))
 		{
 			zDatumSetByProbing -= false;
 		}
@@ -126,12 +127,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-#if SUPPORT_WORKPLACE_COORDINATES
-			workplaceCoordinates[currentCoordinateSystem][axis]
-#else
-			axisOffsets[axis]
-#endif
-						 = -gb.GetDistance();
+			workplaceCoordinates[currentCoordinateSystem][axis] = -gb.GetDistance();
 			seen = true;
 		}
 	}
@@ -141,13 +137,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 		reply.printf("Axis offsets:");
 		for (size_t axis = 0; axis < numVisibleAxes; axis++)
 		{
-			reply.catf(" %c%.2f", axisLetters[axis],
-#if SUPPORT_WORKPLACE_COORDINATES
-				-(double)(gb.InverseConvertDistance(workplaceCoordinates[0][axis]))
-#else
-				-(double)(gb.InverseConvertDistance(axisOffsets[axis]))
-#endif
-													 );
+			reply.catf(" %c%.2f", axisLetters[axis], -(double)(gb.InverseConvertDistance(workplaceCoordinates[0][axis])));
 		}
 	}
 
@@ -197,7 +187,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 # if HAS_MASS_STORAGE
 
 // Save all the workplace coordinate offsets to file returning true if successful. Used by M500 and by SaveResumeInfo.
-bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
+bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
 {
 	if (!f->Write("; Workplace coordinates\n"))
 	{
@@ -206,7 +196,7 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 
 	for (size_t cs = 0; cs < NumCoordinateSystems; ++cs)
 	{
-		String<ScratchStringLength> scratchString;
+		String<StringLength100> scratchString;
 		scratchString.printf("G10 L2 P%u", cs + 1);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
@@ -222,6 +212,7 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 }
 
 #endif
+
 #endif
 
 // Define the probing grid, called when we see an M557 command
@@ -382,7 +373,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		if (simulationMode == 0)
 		{
 			axesHomedBeforeSimulation = axesHomed;
-			axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
+			axesHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 			SavePosition(simulationRestorePoint, gb);
 			simulationRestorePoint.feedRate = gb.MachineState().feedRate;
 		}
@@ -420,7 +411,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 			{
 				// Starting a new simulation, so save the current position
 				axesHomedBeforeSimulation = axesHomed;
-				axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
+				axesHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 				SavePosition(simulationRestorePoint, gb);
 			}
 			simulationTime = 0.0;
@@ -437,130 +428,74 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 // Handle M577
 GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply)
 {
-	if (gb.Seen('P'))
+	AxesBitmap endstopsToWaitFor;
+	for (size_t axis = 0; axis < numTotalAxes; ++axis)
 	{
-		IoPort ports[MaxM577Ports];
-		IoPort *portAddrs[MaxM577Ports];
-		PinAccess access[MaxM577Ports];
-		for (size_t i = 0; i < MaxM577Ports; ++i)
+		if (gb.Seen(axisLetters[axis]))
 		{
-			portAddrs[i] = &ports[i];
-			access[i] = PinAccess::read;
-		}
-		const unsigned int numPortsUsed = IoPort::AssignPorts(gb, reply, PinUsedBy::temporaryInput, MaxM577Ports, portAddrs, access);
-		if (numPortsUsed == 0)
-		{
-			return GCodeResult::error;
-		}
-
-		for (unsigned int i = 0; i < numPortsUsed; ++i)
-		{
-			if (!ports[i].Read())
-			{
-				return GCodeResult::notFinished;
-			}
+			endstopsToWaitFor.SetBit(axis);
 		}
 	}
 
-	return GCodeResult::ok;
+	InputPortsBitmap portsToWaitFor;
+	if (gb.Seen('P'))
+	{
+		uint32_t inputNumbers[MaxGpInPorts];
+		size_t numValues = MaxGpInPorts;
+		gb.GetUnsignedArray(inputNumbers, numValues, false);
+		portsToWaitFor = InputPortsBitmap::MakeFromArray(inputNumbers, numValues);
+	}
+
+	const bool activeHigh = (!gb.Seen('S') || gb.GetUIValue() >= 1);
+	Platform& platform = reprap.GetPlatform();
+	const bool ok = endstopsToWaitFor.IterateWhile([&platform, activeHigh](unsigned int axis, bool)->bool
+								{
+									const bool stopped = platform.GetEndstops().Stopped(axis) == EndStopHit::atStop;
+									return stopped == activeHigh;
+								}
+							 )
+				&& portsToWaitFor.IterateWhile([&platform, activeHigh](unsigned int port, bool)->bool
+								{
+									return (port >= MaxGpInPorts || platform.GetGpInPort(port).GetState() == activeHigh);
+								}
+							 );
+	return (ok) ? GCodeResult::ok : GCodeResult::notFinished;
 }
 
 // Handle M581
-GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code)
+GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (gb.Seen('T'))
+	gb.MustSee('T');
+	const unsigned int triggerNumber = gb.GetUIValue();
+	if (triggerNumber < MaxTriggers)
 	{
-		const unsigned int triggerNumber = gb.GetIValue();
-		if (triggerNumber < MaxTriggers)
-		{
-			Trigger& tr = triggers[triggerNumber];
-			bool seen = false;
-			if (gb.Seen('C'))
-			{
-				seen = true;
-				tr.condition = gb.GetIValue();
-			}
-			else if (tr.IsUnused())
-			{
-				tr.condition = 0;					// this is a new trigger, so set no condition
-			}
-
-			if (gb.Seen('P'))
-			{
-				seen = true;
-				IoPort *portAddrs[ARRAY_SIZE(tr.ports)];
-				PinAccess access[ARRAY_SIZE(tr.ports)];
-				for (size_t i = 0; i < ARRAY_SIZE(tr.ports); ++i)
-				{
-					portAddrs[i] = &tr.ports[i];
-					access[i] = PinAccess::read;
-				}
-				const unsigned int numPortsUsed = IoPort::AssignPorts(gb, reply, PinUsedBy::temporaryInput, ARRAY_SIZE(tr.ports), portAddrs, access);
-				if (numPortsUsed == 0)
-				{
-					return GCodeResult::error;
-				}
-
-				tr.inputStates = 0;
-				(void)tr.Check();					// set up initial input states
-				return GCodeResult::ok;
-			}
-
-			if (!seen)
-			{
-				IoPort *portAddrs[ARRAY_SIZE(tr.ports)];
-				for (size_t i = 0; i < ARRAY_SIZE(tr.ports); ++i)
-				{
-					portAddrs[i] = &tr.ports[i];
-				}
-				reply.printf("Trigger %u fires on an edge on pin(s) ", triggerNumber);
-				IoPort::AppendPinNames(reply, ARRAY_SIZE(tr.ports), portAddrs);
-				if (triggers[triggerNumber].condition == 1)
-				{
-					reply.cat(" when printing from SD card");
-				}
-			}
-		}
-		else
-		{
-			reply.copy("Trigger number out of range");
-			return GCodeResult::error;
-		}
+		return triggers[triggerNumber].Configure(triggerNumber, gb, reply);
 	}
 
-	reply.copy("Missing T parameter");
+	reply.copy("Trigger number out of range");
 	return GCodeResult::error;
 }
 
 // Handle M582
-GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply, int code)
+GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (gb.Seen('T'))
+	gb.MustSee('T');
+	const unsigned int triggerNumber = gb.GetUIValue();
+	if (triggerNumber < MaxTriggers)
 	{
-		const unsigned int triggerNumber = gb.GetIValue();
-		if (triggerNumber < MaxTriggers)
+		if (triggers[triggerNumber].CheckLevel())
 		{
-			Trigger& tr = triggers[triggerNumber];
-			tr.inputStates = 0;
-			if (tr.Check())
-			{
-				SetBit(triggersPending, triggerNumber);
-			}
-			return GCodeResult::ok;
+			triggersPending.SetBit(triggerNumber);
 		}
-		else
-		{
-			reply.copy("Trigger number out of range");
-			return GCodeResult::error;
-		}
+		return GCodeResult::ok;
 	}
 
-	reply.copy("Missing T parameter");
+	reply.copy("Trigger number out of range");
 	return GCodeResult::error;
 }
 
 // Deal with a M584
-GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (!LockMovementAndWaitForStandstill(gb))				// we also rely on this to retrieve the current motor positions to moveBuffer
 	{
@@ -768,7 +703,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 	const size_t probeToUse = gb.Seen('P') ? gb.GetUIValue() : platform.GetEndstops().GetCurrentZProbeNumber();
 
 	// Check if this probe exists to not run into a nullptr dereference later
-	if (platform.GetEndstops().GetZProbe(probeToUse) == nullptr)
+	if (platform.GetEndstops().GetZProbe(probeToUse).IsNull())
 	{
 		reply.catf("Invalid probe number: %d", probeToUse);
 		return GCodeResult::error;
@@ -799,7 +734,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 	if (useProbe)
 	{
 		probeNumberToUse = gb.GetUIValue();
-		if (platform.GetEndstops().GetZProbe(probeNumberToUse) == nullptr)
+		if (platform.GetEndstops().GetZProbe(probeNumberToUse).IsNull())
 		{
 			reply.copy("Invalid probe number");
 			return GCodeResult::error;
@@ -840,7 +775,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
-										: platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+										: platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(axis), false);
 			if (!probeOk)
 			{
 				reply.copy("Failed to prime endstop or probe");
@@ -878,7 +813,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 	if (useProbe)
 	{
 		probeNumberToUse = gb.GetUIValue();
-		if (platform.GetEndstops().GetZProbe(probeNumberToUse) == nullptr)
+		if (platform.GetEndstops().GetZProbe(probeNumberToUse).IsNull())
 		{
 			reply.copy("Invalid probe number");
 			return GCodeResult::error;
@@ -898,21 +833,13 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 			moveBuffer.coords[axis] = towardsMin ? platform.AxisMinimum(axis) : platform.AxisMaximum(axis);
 
 			// Deal with feed rate
-			if (gb.Seen(feedrateLetter))
-			{
-				const float rate = gb.GetDistance();
-				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
-			}
-			else
-			{
-				reply.copy("No feed rate provided.");
-				return GCodeResult::badOrMissingParameter;
-			}
-			moveBuffer.feedRate = gb.MachineState().feedRate;
+			gb.MustSee(feedrateLetter);
+			const float rate = gb.GetDistance();
+			moveBuffer.feedRate = gb.MachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
-										: platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+										: platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(axis), false);
 			if (!probeOk)
 			{
 				reply.copy("Failed to prime endstop or probe");
@@ -941,11 +868,10 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 }
 
 // Deal with a M905
-GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-	const time_t now = platform.GetDateTime();
-	struct tm timeInfo;
-	gmtime_r(&now, &timeInfo);
+	tm timeInfo;
+	(void)platform.GetDateTime(timeInfo);
 	bool seen = false;
 
 	if (gb.Seen('P'))
@@ -1012,7 +938,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		const uint32_t boardNumber = gb.GetUIValue();
 		if (boardNumber != CanId::MasterAddress)
 		{
-			return CanInterface::UpdateRemoteFirmware((CanAddress)boardNumber, gb, reply);
+			return reprap.GetExpansion().UpdateRemoteFirmware(boardNumber, gb, reply);
 		}
 	}
 #endif
@@ -1188,7 +1114,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 }
 
 // Deal with M569
-GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (gb.Seen('P'))
 	{
@@ -1397,13 +1323,43 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Change a live extrusion factor
-void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor)
+void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 {
-	if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
+	if (segmentsLeft != 0 && moveBuffer.applyM220M221)
 	{
 		moveBuffer.coords[ExtruderToLogicalDrive(extruder)] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}
 	extrusionFactors[extruder] = factor;
+}
+
+// Deploy the Z probe unless it has already been deployed explicitly
+void GCodes::DeployZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept
+{
+	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
+	if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !zp->IsDeployedByUser())
+	{
+		String<StringLength20> fileName;
+		fileName.printf(DEPLOYPROBE "%u.g", probeNumber);
+		if (!DoFileMacro(gb, fileName.c_str(), false, -1))
+		{
+			DoFileMacro(gb, DEPLOYPROBE ".g", false, -1);
+		}
+	}
+}
+
+// Retract the Z probe unless it was deployed explicitly (in which case, wait for the user to retract it explicitly)
+void GCodes::RetractZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept
+{
+	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
+	if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !zp->IsDeployedByUser())
+	{
+		String<StringLength20> fileName;
+		fileName.printf(RETRACTPROBE "%u.g", probeNumber);
+		if (!DoFileMacro(gb, fileName.c_str(), false, -1))
+		{
+			DoFileMacro(gb, RETRACTPROBE ".g", false, -1);
+		}
+	}
 }
 
 // End

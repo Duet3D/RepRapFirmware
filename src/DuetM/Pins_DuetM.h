@@ -8,25 +8,14 @@
 #ifndef SRC_DUETM_PINS_DUETM_H_
 #define SRC_DUETM_PINS_DUETM_H_
 
-#define FIRMWARE_NAME "RepRapFirmware for Duet 2 Maestro"
-#define DEFAULT_BOARD_TYPE BoardType::DuetM_10
+#define BOARD_NAME				"Duet 2 Maestro"
+#define BOARD_SHORT_NAME		"2Maestro"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 2 Maestro"
+#define DEFAULT_BOARD_TYPE		 BoardType::DuetM_10
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
-#define IAP_FIRMWARE_FILE	"DuetMaestroFirmware.bin"
-
-#define IAP_IN_RAM				1
-
-#if IAP_IN_RAM
-
-# define IAP_UPDATE_FILE		"DuetMaestroIAP.bin"
+#define IAP_FIRMWARE_FILE		"DuetMaestroFirmware.bin"
+#define IAP_UPDATE_FILE			"DuetMaestroIAP.bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20010000;
-
-#else
-
-# define IAP_UPDATE_FILE		"iap4s.bin"
-constexpr uint32_t IAP_IMAGE_START = 0x00470000;
-constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;								// we allow a full 64K on the SAM4
-
-#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
@@ -40,7 +29,6 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;								// we allow a full 64K on 
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
-#define ACTIVE_LOW_HEAT_ON		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
@@ -54,7 +42,7 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;								// we allow a full 64K on 
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
-#define ALLOCATE_DEFAULT_PORTS	1
+#define ALLOCATE_DEFAULT_PORTS	0
 
 // The physical capabilities of the machine
 
@@ -64,7 +52,7 @@ constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 4;					// The maximum number of heaters in the machine
-constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors per heater
 
 constexpr size_t MaxBedHeaters = 2;
 constexpr size_t MaxChamberHeaters = 2;
@@ -75,7 +63,8 @@ constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 2;
 
 constexpr size_t MaxZProbes = 2;
-constexpr size_t MaxGpioPorts = 10;
+constexpr size_t MaxGpInPorts = 10;
+constexpr size_t MaxGpOutPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -91,7 +80,9 @@ constexpr size_t MaxExtrudersPerTool = 4;
 
 constexpr size_t MaxFans = 6;
 
-constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
+
+constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -126,6 +117,7 @@ constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
 // In testing I found that 500kbaud was not reliable, so now using 200kbaud.
 constexpr uint32_t DriversBaudRate = 200000;
 constexpr uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
+constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 constexpr Pin TMC22xxMuxPins[3] = { PortCPin(14), PortCPin(16), PortCPin(17) };	// Pins that control the UART multiplexer, LSB first
 
@@ -165,7 +157,7 @@ constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(8), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { PortCPin(2) };
+constexpr Pin SdSpiCSPins[1] = { PortBPin(13) };
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // 12864 LCD
@@ -263,14 +255,18 @@ constexpr PinEntry PinTable[] =
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
-// Function to look up a pin name pass back the corresponding index into the pin table
+// Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
+
+#if ALLOCATE_DEFAULT_PORTS
 
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
+
+#endif
 
 // Duet pin numbers to control the W5500 interface
 constexpr Pin W5500ResetPin = PortCPin(13);									// Low on this in holds the W5500 in reset

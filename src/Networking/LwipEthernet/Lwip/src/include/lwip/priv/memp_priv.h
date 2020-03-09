@@ -38,43 +38,21 @@
 #ifndef LWIP_HDR_MEMP_PRIV_H
 #define LWIP_HDR_MEMP_PRIV_H
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <Lwip/src/include/lwip/mem.h>
+#include "lwip/mem.h"
+#include "lwip/priv/mem_priv.h"
 
 #if MEMP_OVERFLOW_CHECK
-/* if MEMP_OVERFLOW_CHECK is turned on, we reserve some bytes at the beginning
- * and at the end of each element, initialize them as 0xcd and check
- * them later. */
-/* If MEMP_OVERFLOW_CHECK is >= 2, on every call to memp_malloc or memp_free,
- * every single element in each pool is checked!
- * This is VERY SLOW but also very helpful. */
-/* MEMP_SANITY_REGION_BEFORE and MEMP_SANITY_REGION_AFTER can be overridden in
- * lwipopts.h to change the amount reserved for checking. */
-#ifndef MEMP_SANITY_REGION_BEFORE
-#define MEMP_SANITY_REGION_BEFORE  16
-#endif /* MEMP_SANITY_REGION_BEFORE*/
-#if MEMP_SANITY_REGION_BEFORE > 0
-#define MEMP_SANITY_REGION_BEFORE_ALIGNED    LWIP_MEM_ALIGN_SIZE(MEMP_SANITY_REGION_BEFORE)
-#else
-#define MEMP_SANITY_REGION_BEFORE_ALIGNED    0
-#endif /* MEMP_SANITY_REGION_BEFORE*/
-#ifndef MEMP_SANITY_REGION_AFTER
-#define MEMP_SANITY_REGION_AFTER   16
-#endif /* MEMP_SANITY_REGION_AFTER*/
-#if MEMP_SANITY_REGION_AFTER > 0
-#define MEMP_SANITY_REGION_AFTER_ALIGNED     LWIP_MEM_ALIGN_SIZE(MEMP_SANITY_REGION_AFTER)
-#else
-#define MEMP_SANITY_REGION_AFTER_ALIGNED     0
-#endif /* MEMP_SANITY_REGION_AFTER*/
+
 
 /* MEMP_SIZE: save space for struct memp and for sanity check */
-#define MEMP_SIZE          (LWIP_MEM_ALIGN_SIZE(sizeof(struct memp)) + MEMP_SANITY_REGION_BEFORE_ALIGNED)
-#define MEMP_ALIGN_SIZE(x) (LWIP_MEM_ALIGN_SIZE(x) + MEMP_SANITY_REGION_AFTER_ALIGNED)
+#define MEMP_SIZE          (LWIP_MEM_ALIGN_SIZE(sizeof(struct memp)) + MEM_SANITY_REGION_BEFORE_ALIGNED)
+#define MEMP_ALIGN_SIZE(x) (LWIP_MEM_ALIGN_SIZE(x) + MEM_SANITY_REGION_AFTER_ALIGNED)
 
 #else /* MEMP_OVERFLOW_CHECK */
 
@@ -107,7 +85,7 @@ typedef enum {
 #define LWIP_MALLOC_MEMPOOL_START 1
 #define LWIP_MALLOC_MEMPOOL(num, size) * MEMP_POOL_##size + 0
 #define LWIP_MALLOC_MEMPOOL_END
-#include <Lwip/src/include/lwip/priv/memp_std.h>
+#include "lwip/priv/memp_std.h"
     ) ,
     /* Get the last (via:
        MEMP_POOL_HELPER_END = ((u8_t) 0 + MEMP_POOL_A*0 + MEMP_POOL_B*0 + MEMP_POOL_C*1) */
@@ -116,7 +94,7 @@ typedef enum {
 #define LWIP_MALLOC_MEMPOOL_START
 #define LWIP_MALLOC_MEMPOOL(num, size) 0 + MEMP_POOL_##size *
 #define LWIP_MALLOC_MEMPOOL_END 1
-#include <Lwip/src/include/lwip/priv/memp_std.h>
+#include "lwip/priv/memp_std.h"
     )
 } memp_pool_helper_t;
 

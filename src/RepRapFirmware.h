@@ -27,6 +27,9 @@ Licence: GPL
 #include <cstdarg>
 #include <climits>		// for CHAR_BIT
 
+#include <ctime>
+[[deprecated("use gmtime_r instead for thread-safety")]] tm* gmtime(const time_t* time);
+
 #include "ecv.h"
 #undef value			// needed because some files include include <optional>
 #undef array			// needed because some files include <functional>
@@ -46,6 +49,10 @@ Licence: GPL
 #else
 # define __nocache		// nothing
 #endif
+
+// API level definition.
+// ApiLevel 1 is the first level that supports rr_model.
+constexpr unsigned int ApiLevel = 1;
 
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control
@@ -77,7 +84,8 @@ enum class PinUsedBy : uint8_t
 	tacho,
 	spindle,
 	laser,
-	gpio,
+	gpin,
+	gpout,
 	filamentMonitor,
 	temporaryInput,
 	sensor
@@ -89,14 +97,26 @@ enum class PinUsedBy : uint8_t
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
 #if SUPPORT_CAN_EXPANSION
-# include "CanId.h"		// for type CanAddress
+# include "CanId.h"				// for type CanAddress
 #endif
 
-#include "General/StringRef.h"
+#include "General/String.h"
 #include "General/StringFunctions.h"
-#include "General/BitMap.h"
+#include "General/Bitmap.h"
 #include "General/SafeStrtod.h"
 #include "General/SafeVsnprintf.h"
+
+#define THROWS(...)				// expands to nothing, for providing exception specifications
+#define THROWS_GCODE_EXCEPTION	THROWS(GCodeException)
+#define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
+
+// Struct to hold min, max and current values
+struct MinMaxCurrent
+{
+	float min;
+	float max;
+	float current;
+};
 
 // Type of a driver identifier
 struct DriverId
@@ -111,7 +131,7 @@ struct DriverId
 	{
 		localDriver = val & 0x000000FF;
 		const uint32_t brdNum = val >> 16;
-		boardAddress = (brdNum <= CanId::MaxNormalAddress) ? (CanAddress)brdNum : CanId::NoAddress;
+		boardAddress = (brdNum <= CanId::MaxCanAddress) ? (CanAddress)brdNum : CanId::NoAddress;
 	}
 
 	void SetLocal(unsigned int driver) noexcept
@@ -144,6 +164,11 @@ struct DriverId
 		return boardAddress != other.boardAddress || localDriver != other.localDriver;
 	}
 
+	uint32_t AsU32() const noexcept
+	{
+		return (boardAddress << 8) | localDriver;
+	}
+
 #else
 
 	void SetFromBinary(uint32_t val) noexcept
@@ -160,6 +185,11 @@ struct DriverId
 
 	bool IsLocal() const noexcept { return true; }
 	bool IsRemote() const noexcept { return false; }
+
+	uint32_t AsU32() const noexcept
+	{
+		return localDriver;
+	}
 
 #endif
 };
@@ -234,33 +264,43 @@ class Display;
 class LinuxInterface;
 #endif
 
-// Define floating point type to use for calculations where we would like high precision in matrix calculations
-#if SAM4E || SAM4S || SAME70
-typedef double floatc_t;					// type of matrix element used for calibration
-#else
-// We are more memory-constrained on the SAM3X
-typedef float floatc_t;						// type of matrix element used for calibration
+#if SUPPORT_CAN_EXPANSION
+class ExpansionManager;
 #endif
 
-typedef uint16_t AxesBitmap;				// Type of a bitmap representing a set of axes
-typedef uint32_t ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
-typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of local driver numbers
-typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
-typedef uint32_t HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
-typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
+// Define floating point type to use for calculations where we would like high precision in matrix calculations
+#if SAME70
+typedef double floatc_t;						// type of matrix element used for calibration
+#else
+// We are more memory-constrained on the older processors
+typedef float floatc_t;							// type of matrix element used for calibration
+#endif
+
+typedef Bitmap<uint16_t> AxesBitmap;			// Type of a bitmap representing a set of axes
+typedef Bitmap<uint32_t> ExtrudersBitmap;		// Type of a bitmap representing a set of extruder drive numbers
+typedef Bitmap<uint32_t> DriversBitmap;			// Type of a bitmap representing a set of local driver numbers
+typedef Bitmap<uint32_t> FansBitmap;			// Type of a bitmap representing a set of fan numbers
+typedef Bitmap<uint32_t> HeatersBitmap;			// Type of a bitmap representing a set of heater numbers
+typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing a set of drivers that typically have a common cooling fan
+typedef Bitmap<uint16_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
+typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
+
+typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
 
 #if SUPPORT_CAN_EXPANSION
-typedef uint64_t SensorsBitmap;
+typedef Bitmap<uint64_t> SensorsBitmap;
 #else
-typedef uint32_t SensorsBitmap;
+typedef Bitmap<uint32_t> SensorsBitmap;
 #endif
 
-static_assert(MaxAxes <= sizeof(AxesBitmap) * CHAR_BIT);
-static_assert(MaxExtruders <= sizeof(ExtrudersBitmap) * CHAR_BIT);
-static_assert(MaxFans <= sizeof(FansBitmap) * CHAR_BIT);
-static_assert(MaxHeaters <= sizeof(HeatersBitmap) * CHAR_BIT);
-static_assert(NumDirectDrivers <= sizeof(DriversBitmap) * CHAR_BIT);
-static_assert(MaxSensors <= sizeof(SensorsBitmap) * CHAR_BIT);
+static_assert(MaxAxes <= AxesBitmap::MaxBits());
+static_assert(MaxExtruders <= ExtrudersBitmap::MaxBits());
+static_assert(MaxFans <= FansBitmap::MaxBits());
+static_assert(MaxHeaters <= HeatersBitmap::MaxBits());
+static_assert(NumDirectDrivers <= DriversBitmap::MaxBits());
+static_assert(MaxSensors <= SensorsBitmap::MaxBits());
+static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
+static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
 
 #if SUPPORT_IOBITS
 typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
@@ -371,9 +411,7 @@ private:
 
 // Common definitions used by more than one module
 
-constexpr size_t ScratchStringLength = 220;							// standard length of a scratch string, enough to print delta parameters to
-constexpr size_t ShortScratchStringLength = 50;
-
+constexpr size_t XY_AXES = 2;										// The number of Cartesian axes
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
 constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
@@ -394,8 +432,10 @@ constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 inline size_t ExtruderToLogicalDrive(size_t extruder) noexcept { return MaxAxesPlusExtruders - 1 - extruder; }
 inline size_t LogicalDriveToExtruder(size_t drive) noexcept { return MaxAxesPlusExtruders - 1 - drive; }
 
-constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
-constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y
+const AxesBitmap DefaultXAxisMapping = AxesBitmap::MakeFromBits(X_AXIS);	// by default, X is mapped to X
+const AxesBitmap DefaultYAxisMapping = AxesBitmap::MakeFromBits(Y_AXIS);	// by default, Y is mapped to Y
+const AxesBitmap XyzAxes = AxesBitmap::MakeLowestNBits(XYZ_AXES);
+const AxesBitmap XyAxes = AxesBitmap::MakeLowestNBits(XY_AXES);
 
 // Common conversion factors
 constexpr float MinutesToSeconds = 60.0;
@@ -407,6 +447,15 @@ constexpr float Pi = 3.141592653589793;
 constexpr float TwoPi = 3.141592653589793 * 2;
 constexpr float DegreesToRadians = 3.141592653589793/180.0;
 constexpr float RadiansToDegrees = 180.0/3.141592653589793;
+
+constexpr unsigned int MaxFloatDigitsDisplayedAfterPoint = 7;
+const char *GetFloatFormatString(unsigned int numDigitsAfterPoint) noexcept;
+
+#if SUPPORT_WORKPLACE_COORDINATES
+constexpr size_t NumCoordinateSystems = 9;							// G54 up to G59.3
+#else
+constexpr size_t NumCoordinateSystems = 1;
+#endif
 
 #define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 
@@ -441,8 +490,8 @@ const uint32_t NvicPriorityEthernet = 6;		// priority for Ethernet interface
 const uint32_t NvicPriorityDMA = 6;				// end-of-DMA interrupt used by TMC drivers and HSMCI
 const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 
-#elif __NVIC_PRIO_BITS == 4
-// We have 16 priority levels
+#elif __NVIC_PRIO_BITS >= 4
+// We have at least 16 priority levels
 // Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
 # if SAM4E || defined(__LPC17xx__)
@@ -451,6 +500,11 @@ const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the high
 
 const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const uint32_t NvicPriorityDriversSerialTMC = 2; // USART or UART used to control and monitor the smart drivers
+
+# if defined(__LPC17xx__)
+constexpr uint32_t NvicPriorityTimerPWM = 4;
+constexpr uint32_t NvicPriorityTimerServo = 5;
+# endif
 
 const uint32_t NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const uint32_t NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts

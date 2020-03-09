@@ -10,37 +10,84 @@
 
 #include <limits>
 
-GCodeMachineState *GCodeMachineState::freeList = nullptr;
-unsigned int GCodeMachineState::numAllocated = 0;
-
 #if HAS_LINUX_INTERFACE
 static unsigned int LastFileId = 1;
 #endif
 
 // Create a default initialised GCodeMachineState
-GCodeMachineState::GCodeMachineState()
-	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes), lockedResources(0), errorMessage(nullptr),
-	  lineNumber(0), compatibility(Compatibility::reprapFirmware), drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false),
-	  runningM502(false), volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), indentLevel(0), state(GCodeState::normal)
-{
+GCodeMachineState::GCodeMachineState() noexcept
+	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes),
 #if HAS_LINUX_INTERFACE
-	fileId = 0;
-	isFileFinished = fileError = false;
+	  fileId(0),
+#endif
+	  errorMessage(nullptr),
+	  lineNumber(0),
+	  compatibility(Compatibility::RepRapFirmware), drivesRelative(false), axesRelative(false),
+#if HAS_LINUX_INTERFACE
+	  isFileFinished(false), fileError(false),
+#endif
+	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
+	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting(0), state(GCodeState::normal)
+{
+	blockStates[0].SetPlainBlock(0);
+}
+
+// Copy constructor. This chains the new one to the previous one.
+GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept
+	: previous(&prev), feedRate(prev.feedRate),
+#if HAS_MASS_STORAGE
+	  fileState(prev.fileState),
+#endif
+#if HAS_LINUX_INTERFACE
+	  fileId(prev.fileId),
+#endif
+	  lockedResources(prev.lockedResources), errorMessage(nullptr),
+	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
+	  compatibility(prev.compatibility), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
+#if HAS_LINUX_INTERFACE
+	  isFileFinished(prev.isFileFinished), fileError(false),
+#endif
+	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501),  runningM502(prev.runningM502),
+	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting((withinSameFile) ? prev.blockNesting : 0), state(GCodeState::normal)
+{
+	if (withinSameFile)
+	{
+		for (size_t i = 0; i <= blockNesting; ++i)
+		{
+			blockStates[i] = prev.blockStates[i];
+		}
+	}
+	else
+	{
+		blockStates[0].SetPlainBlock(0);
+	}
+}
+
+GCodeMachineState::~GCodeMachineState() noexcept
+{
+#if HAS_MASS_STORAGE
+# if HAS_LINUX_INTERFACE
+	if (!reprap.UsingLinuxInterface())
+# endif
+	{
+		fileState.Close();
+	}
 #endif
 }
 
 #if HAS_LINUX_INTERFACE
 
 // Set the state to indicate a file is being processed
-void GCodeMachineState::SetFileExecuting()
+void GCodeMachineState::SetFileExecuting() noexcept
 {
 	fileId = LastFileId++;
 	isFileFinished = fileError = false;
 }
 
 // Mark the currently executing file as finished
-void GCodeMachineState::SetFileFinished(bool error)
+void GCodeMachineState::SetFileFinished(bool error) noexcept
 {
 	isFileFinished = true;
 	fileError = error;
@@ -48,7 +95,8 @@ void GCodeMachineState::SetFileFinished(bool error)
 
 #endif
 
-bool GCodeMachineState::DoingFile() const
+// Return true if we are reading GCode commands from a file or macro
+bool GCodeMachineState::DoingFile() const noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -64,7 +112,7 @@ bool GCodeMachineState::DoingFile() const
 }
 
 // Close the currently executing file
-void GCodeMachineState::CloseFile()
+void GCodeMachineState::CloseFile() noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -87,70 +135,61 @@ void GCodeMachineState::CloseFile()
 	}
 }
 
-// Allocate a new GCodeMachineState
-/*static*/ GCodeMachineState *GCodeMachineState::Allocate()
+void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 {
-	GCodeMachineState *ms = freeList;
-	if (ms != nullptr)
-	{
-		freeList = ms->previous;
-		ms->lockedResources = 0;
-		ms->errorMessage = nullptr;
-		ms->state = GCodeState::normal;
-	}
-	else
-	{
-		ms = new GCodeMachineState();
-		++numAllocated;
-	}
-	return ms;
+	drivesRelative = other.drivesRelative;
+	axesRelative = other.axesRelative;
+	feedRate = other.feedRate;
+	volumetricExtrusion = other.volumetricExtrusion;
+	usingInches = other.usingInches;
 }
 
-/*static*/ void GCodeMachineState::Release(GCodeMachineState *ms)
+GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState() noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+	return blockStates[blockNesting];
+}
+
+const GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState() const noexcept
+{
+	return blockStates[blockNesting];
+}
+
+// Get the number of iterations of the closest enclosing loop in the current file, or -1 if there is on enclosing loop
+int32_t GCodeMachineState::GetIterations() const noexcept
+{
+	uint8_t i = blockNesting;
+	while (true)
 	{
-		ms->fileId = 0;
-		ms->isFileFinished = false;
+		if (blockStates[i].GetType() == BlockType::loop)
+		{
+			return blockStates[i].GetIterations();
+		}
+		if (i == 0)
+		{
+			return -1;
+		}
+		--i;
 	}
-	else
-#endif
+}
+
+// Create a new block returning true if successful, false if maximum indent level exceeded
+bool GCodeMachineState::CreateBlock(uint16_t indentLevel) noexcept
+{
+	if (blockNesting + 1 == ARRAY_SIZE(blockStates))
 	{
-#if HAS_MASS_STORAGE
-		ms->fileState.Close();
-#endif
+		return false;
 	}
-	ms->previous = freeList;
-	freeList = ms;
+
+	++blockNesting;
+	CurrentBlockState().SetPlainBlock(indentLevel);
+	return true;
 }
 
-/*static*/ unsigned int GCodeMachineState::GetNumInUse()
+void GCodeMachineState::EndBlock() noexcept
 {
-	unsigned int inUse = numAllocated;
-	for (GCodeMachineState *ms = freeList; ms != nullptr; ms = ms->previous)
+	if (blockNesting != 0)
 	{
-		--inUse;
-	}
-	return inUse;
-}
-
-GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState()
-{
-	return blockStates[min<size_t>(indentLevel, ARRAY_SIZE(blockStates) - 1)];
-}
-
-void GCodeMachineState::CreateBlock()
-{
-	++indentLevel;
-	CurrentBlockState().SetPlainBlock();
-}
-
-void GCodeMachineState::EndBlock()
-{
-	if (indentLevel != 0)
-	{
-		--indentLevel;
+		--blockNesting;
 	}
 }
 

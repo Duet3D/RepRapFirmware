@@ -8,8 +8,8 @@
 #ifndef MOVE_H_
 #define MOVE_H_
 
-#include <Movement/StraightProbeSettings.h>
 #include "RepRapFirmware.h"
+#include <Movement/StraightProbeSettings.h>
 #include "MessageType.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
@@ -17,6 +17,7 @@
 #include "BedProbing/Grid.h"
 #include "Kinematics/Kinematics.h"
 #include "GCodes/RestorePoint.h"
+#include <Math/Deviation.h>
 
 #if SUPPORT_ASYNC_MOVES
 # include "HeightControl/HeightController.h"
@@ -59,10 +60,10 @@ public:
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept;
-																	// Return the position (after all queued moves have been executed) in transformed coords
+																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const noexcept;					 	// Get the current position of a motor
-	void LiveCoordinates(float m[MaxAxesPlusExtruders], const Tool *tool) noexcept;	// Gives the last point at the end of the last complete DDA transformed to user coords
-	bool AllMovesAreFinished() noexcept;									// Is the look-ahead ring empty?  Stops more moves being added as well.
+	float LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept;	// Gives the last point at the end of the last complete DDA
+	bool AllMovesAreFinished(bool waiting) noexcept;						// Is the look-ahead ring empty?
 	void DoLookAhead() noexcept __attribute__ ((hot));						// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept; // Set the current position to be this
 	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept;	// Force the live coordinates (see above) to be these
@@ -85,6 +86,10 @@ public:
 	bool IsUsingMesh() const noexcept { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const noexcept;						// Return the number of currently used probe points
 	unsigned int GetNumProbedProbePoints() const noexcept;					// Return the number of actually probed probe points
+	void SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) { latestCalibrationDeviation = d; numCalibratedFactors = numFactors; }
+	void SetInitialCalibrationDeviation(const Deviation& d) { initialCalibrationDeviation = d; }
+	void SetLatestMeshDeviation(const Deviation& d) { latestMeshDeviation = d; }
+
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept;		// process M204
@@ -138,8 +143,8 @@ public:
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
 
 #if HAS_MASS_STORAGE
-	bool LoadHeightMapFromFile(FileStore *f, const StringRef& r) noexcept;					// Load the height map from a file returning true if an error occurred
-	bool SaveHeightMapToFile(FileStore *f) const noexcept;									// Save the height map to a file returning true if an error occurred
+	bool LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred
+	bool SaveHeightMapToFile(FileStore *f, const char *fname) noexcept;						// Save the height map to a file returning true if an error occurred
 #endif
 
 #if HAS_LINUX_INTERFACE
@@ -152,6 +157,8 @@ public:
 	DDARing& GetMainDDARing() noexcept { return mainDDARing; }
 	float GetTopSpeed() const noexcept { return mainDDARing.GetTopSpeed(); }
 	float GetRequestedSpeed() const noexcept { return mainDDARing.GetRequestedSpeed(); }
+	float GetAcceleration() const noexcept { return mainDDARing.GetAcceleration(); }
+	float GetDeceleration() const noexcept { return mainDDARing.GetDeceleration(); }
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
@@ -204,8 +211,11 @@ private:
 	void InverseBedTransform(float move[MaxAxes],const  Tool *tool) const noexcept;		// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;	// Go from an axis transformed point back to user coordinates
-	void SetPositions(const float move[MaxAxesPlusExtruders]) noexcept { return mainDDARing.SetPositions(move); }	// Force the machine coordinates to be these;
 	float GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept;		// Get the height error at an XY position on the bed
+
+#if SUPPORT_OBJECT_MODEL
+	const char *GetCompensationTypeString() const noexcept;
+#endif
 
 	DDARing mainDDARing;								// The DDA ring used for regular moves
 
@@ -241,18 +251,26 @@ private:
 	float taperHeight;									// Height over which we taper
 	float recipTaperHeight;								// Reciprocal of the taper height
 	float zShift;										// Height to add to the bed transform
-	bool usingMesh;										// true if we are using the height map, false if we are using the random probe point set
-	bool useTaper;										// True to taper off the compensation
+
+	Deviation latestCalibrationDeviation;
+	Deviation initialCalibrationDeviation;
+	Deviation latestMeshDeviation;
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t lastStateChangeTime;						// The approximate time at which the state last changed, except we don't record timing->idle
 
 	Kinematics *kinematics;								// What kinematics we are using
 
-	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
-	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
-
 	StraightProbeSettings straightProbeSettings;		// G38 straight probe settings
+
+	float latestLiveCoordinates[MaxAxesPlusExtruders];
+	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
+
+	uint8_t numCalibratedFactors;
+	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
+	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
+	bool useTaper;										// True to taper off the compensation
+	bool executeAllMoves;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	static constexpr size_t LaserTaskStackWords = 100;	// stack size in dwords for the laser and IOBits task
@@ -281,14 +299,6 @@ inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotor
 	mainDDARing.AdjustMotorPositions(adjustment, numMotors);
 }
 
-// Return the current live XYZ and extruder coordinates
-// Interrupts are assumed enabled on entry
-inline void Move::LiveCoordinates(float m[MaxAxesPlusExtruders], const Tool *tool) noexcept
-{
-	mainDDARing.LiveCoordinates(m);
-	InverseAxisAndBedTransform(m, tool);
-}
-
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
 // The caller must make sure that no moves are in progress or pending when calling this
 inline void Move::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept
@@ -303,10 +313,11 @@ inline void Move::ResetExtruderPositions() noexcept
 
 // To wait until all the current moves in the buffers are complete, call this function repeatedly and wait for it to return true.
 // Then do whatever you wanted to do after all current moves have finished.
-// Then call ResumeMoving() otherwise nothing more will ever happen.
-inline bool Move::AllMovesAreFinished() noexcept
+inline bool Move::AllMovesAreFinished(bool waiting) noexcept
 {
-	return NoLiveMovement();
+	const bool finished = NoLiveMovement();
+	executeAllMoves = waiting && !finished;
+	return finished;
 }
 
 #if HAS_SMART_DRIVERS

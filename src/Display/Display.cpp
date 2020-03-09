@@ -26,13 +26,13 @@ constexpr size_t LargeFontNumber = 1;
 constexpr uint32_t NormalRefreshMillis = 250;
 constexpr uint32_t FastRefreshMillis = 50;
 
-Display::Display()
+Display::Display() noexcept
 	: lcd(nullptr), menu(nullptr), encoder(nullptr), lastRefreshMillis(0),
 	  mboxSeq(0), mboxActive(false), beepActive(false), updatingFirmware(false)
 {
 }
 
-void Display::Spin()
+void Display::Spin() noexcept
 {
 	if (lcd != nullptr)
 	{
@@ -104,7 +104,7 @@ void Display::Spin()
 	}
 }
 
-void Display::Exit()
+void Display::Exit() noexcept
 {
 	if (lcd != nullptr)
 	{
@@ -123,7 +123,7 @@ void Display::Exit()
 
 // NOTE: nothing enforces that this beep concludes before another is begun;
 //   that is, in rapid succession of commands, only the last beep issued will be heard by the user
-void Display::Beep(unsigned int frequency, unsigned int milliseconds)
+void Display::Beep(unsigned int frequency, unsigned int milliseconds) noexcept
 {
 	if (lcd != nullptr)
 	{
@@ -134,17 +134,17 @@ void Display::Beep(unsigned int frequency, unsigned int milliseconds)
 	}
 }
 
-void Display::SuccessBeep()
+void Display::SuccessBeep() noexcept
 {
 	Beep(2000, 100);
 }
 
-void Display::ErrorBeep()
+void Display::ErrorBeep() noexcept
 {
 	Beep(500, 1000);
 }
 
-GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	bool seen = false;
 
@@ -205,7 +205,7 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Suspend normal operation and display an "Updating firmware" message
-void Display::UpdatingFirmware()
+void Display::UpdatingFirmware() noexcept
 {
 	updatingFirmware = true;
 	if (lcd != nullptr)

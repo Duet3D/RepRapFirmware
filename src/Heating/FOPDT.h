@@ -65,7 +65,7 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) noexcept;
+	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) const noexcept;
 #endif
 
 private:

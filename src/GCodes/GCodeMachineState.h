@@ -8,8 +8,10 @@
 #ifndef SRC_GCODES_GCODEMACHINESTATE_H_
 #define SRC_GCODES_GCODEMACHINESTATE_H_
 
-#include "RepRapFirmware.h"
-#include "Storage/FileData.h"
+#include <RepRapFirmware.h>
+#include <Storage/FileData.h>
+#include <General/FreelistManager.h>
+#include <General/NamedEnum.h>
 
 // Enumeration to list all the possible states that the Gcode processing machine may be in
 enum class GCodeState : uint8_t
@@ -105,55 +107,60 @@ enum class GCodeState : uint8_t
 #endif
 };
 
-// Other firmware that we might switch to be compatible with.
-enum class Compatibility : uint8_t
+// Other firmware that we might switch to be compatible with. The ordering is as for M555 starting with 0.
+NamedEnum(Compatibility, uint8_t, Default, RepRapFirmware, Marlin, Teacup, Sprinter, Repetier, NanoDLP);
+
+// Type of the block we are in when processing conditional GCode
+enum class BlockType : uint8_t
 {
-	me = 0,
-	reprapFirmware = 1,
-	marlin = 2,
-	teacup = 3,
-	sprinter = 4,
-	repetier = 5,
-	nanoDLP = 6
+	plain,						// a normal block
+	ifTrue,						// the block immediately after 'if' when the condition was true, or after 'elif' when the condition was true and previous conditions were false
+	ifFalseNoneTrue,			// the block immediately after 'if' when the condition was false, or after 'elif' when all conditions so far were false
+	ifFalseHadTrue,				// the block immediately after 'elif' when we have already seem a true condition
+	loop						// block inside a 'while' command
 };
 
 // Class to hold the state of gcode execution for some input source
 class GCodeMachineState
 {
 public:
-	typedef uint32_t ResourceBitmap;
+	typedef Bitmap<uint32_t> ResourceBitmap;
 
-	// Class to record the state of blocks whe3n using conditional GCode
+	// Class to record the state of blocks when using conditional GCode
 	class BlockState
 	{
 	public:
-		BlockState() : blockType(PlainBlock) {}
+		BlockType GetType() const noexcept { return blockType; }
+		uint32_t GetIterations() const noexcept { return iterationsDone; }
+		uint32_t GetLineNumber() const noexcept { return lineNumber; }
+		FilePosition GetFilePosition() const noexcept { return fpos; }
+		uint16_t GetIndent() const noexcept { return indentLevel; }
 
-		bool IsLoop() const { return blockType == LoopBlock; }
-		bool IsIfTrueBlock() const { return blockType == IfTrueBlock; }
-		bool IsIfFalseBlock() const { return blockType == IfFalseBlock; }
-		bool IsPlainBlock() const { return blockType == PlainBlock; }
+		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) noexcept { blockType = BlockType::loop; fpos = filePos; lineNumber = lineNum; iterationsDone = 0; }
+		void SetPlainBlock() noexcept { blockType = BlockType::plain; iterationsDone = 0; }
+		void SetPlainBlock(uint16_t p_indentLevel) noexcept { blockType = BlockType::plain; iterationsDone = 0; indentLevel = p_indentLevel; }
+		void SetIfTrueBlock() noexcept { blockType = BlockType::ifTrue; iterationsDone = 0; }
+		void SetIfFalseNoneTrueBlock() noexcept { blockType = BlockType::ifFalseNoneTrue; iterationsDone = 0; }
+		void SetIfFalseHadTrueBlock() noexcept { blockType = BlockType::ifFalseHadTrue; iterationsDone = 0; }
 
-		uint32_t GetLineNumber() const { return lineNumber; }
-		FilePosition GetFilePosition() const { return fpos; }
-
-		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) { fpos = filePos; lineNumber = lineNum; }
-		void SetPlainBlock() { blockType = PlainBlock; }
-		void SetIfTrueBlock() { blockType = IfTrueBlock; }
-		void SetIfFalseBlock() { blockType = IfFalseBlock; }
+		void IncrementIterations() noexcept { ++iterationsDone; }
 
 	private:
 		FilePosition fpos;											// the file offset at which the current block started
-		uint32_t lineNumber : 30,									// the line number at which the current block started
-				 blockType : 2;										// the type of this block
-
-		static constexpr uint8_t PlainBlock = 0;
-		static constexpr uint8_t IfTrueBlock = 1;
-		static constexpr uint8_t IfFalseBlock = 2;
-		static constexpr uint8_t LoopBlock = 3;
+		uint32_t lineNumber;										// the line number at which the current block started
+		uint32_t iterationsDone;
+		uint16_t indentLevel;										// the indentation of this block
+		BlockType blockType;										// the type of this block
 	};
 
-	GCodeMachineState();
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<GCodeMachineState>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<GCodeMachineState>(p); }
+
+	GCodeMachineState() noexcept;
+	GCodeMachineState(GCodeMachineState&, bool withinSameFile) noexcept;	// this chains the new one to the previous one
+	GCodeMachineState(const GCodeMachineState&) = delete;			// copying these would be a bad idea
+
+	~GCodeMachineState() noexcept;
 
 	GCodeMachineState *previous;
 	float feedRate;
@@ -188,46 +195,32 @@ public:
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
 		messageCancelled : 1;
-	uint8_t indentLevel;
+
+	uint8_t blockNesting;
 	GCodeState state;
 	uint8_t toolChangeParam;
 
-	static GCodeMachineState *Allocate()
-	post(!result.IsLive(); result.state == GCodeState::normal);
-
-	bool DoingFile() const;
-	void CloseFile();
+	bool DoingFile() const noexcept;
+	void CloseFile() noexcept;
 
 #if HAS_LINUX_INTERFACE
-	void SetFileExecuting();
-	void SetFileFinished(bool error);
+	void SetFileExecuting() noexcept;
+	void SetFileFinished(bool error) noexcept;
 #endif
 
-	bool UsingMachineCoordinates() const { return g53Active || runningSystemMacro; }
+	bool UsingMachineCoordinates() const noexcept { return g53Active || runningSystemMacro; }
 
 	// Copy values that may have been altered into this state record
 	// Called after running config.g and after running resurrect.g
-	void CopyStateFrom(const GCodeMachineState& other)
-	{
-		drivesRelative = other.drivesRelative;
-		axesRelative = other.axesRelative;
-		feedRate = other.feedRate;
-		volumetricExtrusion = other.volumetricExtrusion;
-		usingInches = other.usingInches;
-	}
+	void CopyStateFrom(const GCodeMachineState& other) noexcept;
 
-	BlockState& CurrentBlockState();
+	BlockState& CurrentBlockState() noexcept;
+	const BlockState& CurrentBlockState() const noexcept;
+	int32_t GetIterations() const noexcept;
+	uint16_t CurrentBlockIndent() const noexcept { return CurrentBlockState().GetIndent(); }
 
-	void CreateBlock();
-	void EndBlock();
-
-	static void Release(GCodeMachineState *ms);
-	static unsigned int GetNumAllocated() { return numAllocated; }
-	static unsigned int GetNumInUse();
-
-private:
-	static GCodeMachineState *freeList;
-	static unsigned int numAllocated;
+	bool CreateBlock(uint16_t indentLevel) noexcept;
+	void EndBlock() noexcept;
 };
 
 #endif /* SRC_GCODES_GCODEMACHINESTATE_H_ */

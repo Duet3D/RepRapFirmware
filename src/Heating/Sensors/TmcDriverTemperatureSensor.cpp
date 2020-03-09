@@ -12,7 +12,7 @@
 #if HAS_SMART_DRIVERS
 
 TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int sensorNum, unsigned int chan) noexcept
-	: TemperatureSensor(sensorNum, "TMC2660 temperature warnings"), channel(chan)
+	: TemperatureSensor(sensorNum, "Stepper driver temperature warnings"), channel(chan)
 {
 }
 

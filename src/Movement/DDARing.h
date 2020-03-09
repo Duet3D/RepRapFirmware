@@ -57,15 +57,18 @@ public:
 	DDA *GetCurrentDDA() const noexcept { return currentDda; }							// Return the DDA of the currently-executing move, or nullptr
 
 	uint32_t GetClearNumHiccups() noexcept;
-	float GetTopSpeed() const noexcept;
 	float GetRequestedSpeed() const noexcept;
+	float GetTopSpeed() const noexcept;
+	float GetAcceleration() const noexcept;
+	float GetDeceleration() const noexcept;
 
 	int32_t GetEndPoint(size_t drive) const noexcept { return liveEndPoints[drive]; } 	// Get the current position of a motor
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 	void SetPositions(const float move[MaxAxesPlusExtruders]) noexcept;					// Force the machine coordinates to be these
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;		// Perform motor endpoint adjustment
-	void LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Gives the last point at the end of the last complete DDA transformed to user coords
+	bool LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Fetch the last point at the end of the last completed DDA if it has changed since we last called this
 	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept;			// Force the live coordinates (see above) to be these
+	bool HaveLiveCoordinatesChanged() const noexcept { return liveCoordinatesChanged; }
 	void ResetExtruderPositions() noexcept;												// Resets the extrusion amounts of the live coordinates
 
 	bool PauseMoves(RestorePoint& rp) noexcept;											// Pause the print as soon as we can, returning true if we were able to skip any
@@ -84,7 +87,7 @@ private:
 	bool StartNextMove(Platform& p, uint32_t startTime) noexcept __attribute__ ((hot));	// Start the next move, returning true if laser or IObits need to be controlled
 	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept;
 
-	static bool TimerCallback(CallbackParameter p, StepTimer::Ticks& when) noexcept;
+	static void TimerCallback(CallbackParameter p) noexcept;
 
 	DDA* volatile currentDda;
 	DDA* addPointer;
@@ -94,7 +97,6 @@ private:
 	StepTimer timer;															// Timer object to control getting step interrupts
 
 	volatile float liveCoordinates[MaxAxesPlusExtruders];						// The endpoint that the machine moved to in the last completed move
-	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates are reliable (the extruder ones always are)
 	volatile int32_t liveEndPoints[MaxAxesPlusExtruders];						// The XYZ endpoints of the last completed move in motor coordinates
 
 	unsigned int numDdasInRing;
@@ -112,7 +114,10 @@ private:
 	float extrusionPending[MaxExtruders];										// Extrusion not done due to rounding to nearest step
 	volatile int32_t extrusionAccumulators[MaxExtruders]; 						// Accumulated extruder motor steps
 	volatile uint32_t extrudersPrintingSince;									// The milliseconds clock time when extrudersPrinting was set to true
+
 	volatile bool extrudersPrinting;											// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
+	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates in liveCoordinates are reliable (the extruder ones always are)
+	volatile bool liveCoordinatesChanged;										// True if the live coordinates have changed since LiveCoordinates was last called
 };
 
 // Start the next move. Return true if laser or IO bits need to be active

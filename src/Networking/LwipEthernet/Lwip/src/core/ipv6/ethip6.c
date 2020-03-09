@@ -39,20 +39,20 @@
  * <delamer@inicotech.com>
  */
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 #if LWIP_IPV6 && LWIP_ETHERNET
 
-#include <Lwip/src/include/lwip/ethip6.h>
-#include <Lwip/src/include/lwip/nd6.h>
-#include <Lwip/src/include/lwip/pbuf.h>
-#include <Lwip/src/include/lwip/ip6.h>
-#include <Lwip/src/include/lwip/ip6_addr.h>
-#include <Lwip/src/include/lwip/inet_chksum.h>
-#include <Lwip/src/include/lwip/netif.h>
-#include <Lwip/src/include/lwip/icmp6.h>
-#include <Lwip/src/include/lwip/prot/ethernet.h>
-#include <Lwip/src/include/netif/ethernet.h>
+#include "lwip/ethip6.h"
+#include "lwip/nd6.h"
+#include "lwip/pbuf.h"
+#include "lwip/ip6.h"
+#include "lwip/ip6_addr.h"
+#include "lwip/inet_chksum.h"
+#include "lwip/netif.h"
+#include "lwip/icmp6.h"
+#include "lwip/prot/ethernet.h"
+#include "netif/ethernet.h"
 
 #include <string.h>
 
@@ -81,6 +81,11 @@ ethip6_output(struct netif *netif, struct pbuf *q, const ip6_addr_t *ip6addr)
   struct eth_addr dest;
   const u8_t *hwaddr;
   err_t result;
+
+  LWIP_ASSERT_CORE_LOCKED();
+
+  /* The destination IP address must be properly zoned from here on down. */
+  IP6_ADDR_ZONECHECK_NETIF(ip6addr, netif);
 
   /* multicast destination IP address? */
   if (ip6_addr_ismulticast(ip6addr)) {

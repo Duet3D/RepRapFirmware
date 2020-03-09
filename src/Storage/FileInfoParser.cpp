@@ -12,32 +12,16 @@
 #include "PrintMonitor.h"
 #include "GCodes/GCodes.h"
 
-void GCodeFileInfo::Init()
-{
-	isValid = false;
-	incomplete = true;
-	firstLayerHeight = 0.0;
-	objectHeight = 0.0;
-	layerHeight = 0.0;
-	printTime = simulatedTime = 0;
-	numFilaments = 0;
-	generatedBy.Clear();
-	for (size_t extr = 0; extr < MaxExtruders; extr++)
-	{
-		filamentNeeded[extr] = 0.0;
-	}
-}
-
 #if HAS_MASS_STORAGE
 
-FileInfoParser::FileInfoParser()
+FileInfoParser::FileInfoParser() noexcept
 	: parseState(notParsing), fileBeingParsed(nullptr), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0), fileOverlapLength(0)
 {
 	parsedFileInfo.Init();
 	parserMutex.Create("FileInfoParser");
 }
 
-bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly)
+bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
 	if (!lock)
@@ -367,7 +351,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 }
 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
-bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len)
+bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len) noexcept
 {
 	if (len < 4)
 	{
@@ -435,7 +419,7 @@ bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len)
 // This parsing algorithm needs to be fast. The old one sometimes took 5 seconds or more to parse about 120K of data.
 // To speed up parsing, we now parse forwards from the start of the buffer. This means we can't stop when we have found a G1 Z command,
 // we have to look for a later G1 Z command in the buffer. But it is faster in the (common) case that we don't find a match in the buffer at all.
-bool FileInfoParser::FindHeight(const char* buf, size_t len)
+bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 {
 	bool foundHeight = false;
 	bool inRelativeMode = false;
@@ -537,7 +521,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len)
 }
 
 // Scan the buffer for the layer height. The buffer is null-terminated.
-bool FileInfoParser::FindLayerHeight(const char *buf, size_t len)
+bool FileInfoParser::FindLayerHeight(const char *buf, size_t len) noexcept
 {
 	static const char* const layerHeightStrings[] =
 	{
@@ -585,7 +569,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len)
 	return false;
 }
 
-bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len)
+bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len) noexcept
 {
 	static const char * const GeneratedByStrings[] =
 	{
@@ -639,7 +623,7 @@ bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len)
 
 // Scan the buffer for the filament used. The buffer is null-terminated.
 // Returns the number of filaments found.
-unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
+unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexcept
 {
 	unsigned int filamentsFound = 0;
 	const size_t maxFilaments = reprap.GetGCodes().GetNumExtruders();
@@ -767,7 +751,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
 }
 
 // Scan the buffer for the estimated print time
-bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
+bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 {
 	static const char* const PrintTimeStrings[] =
 	{
@@ -838,7 +822,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 }
 
 // Scan the buffer for the simulated print time
-bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len)
+bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len) noexcept
 {
 	const char* pos = strstr(buf, SimulatedTimeString);
 	if (pos != nullptr)

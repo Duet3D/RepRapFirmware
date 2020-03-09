@@ -4,21 +4,17 @@
 // Pins definition file for Duet 2 WiFi/Ethernet
 // This file is normally #included by #including RepRapFirmware.h, which includes this file
 
+#define BOARD_NAME_WIFI			"Duet 2 WiFi"
+#define BOARD_NAME_ETHERNET		"Duet 2 Ethernet"
+#define BOARD_SHORT_NAME_WIFI	"2WiFi"
+#define BOARD_SHORT_NAME_ETHERNET	"2Ethernet"
+
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 2 WiFi/Ethernet"
 #define DEFAULT_BOARD_TYPE	 	BoardType::DuetWiFi_10
 #define IAP_FIRMWARE_FILE		"Duet2CombinedFirmware.bin"
 
-#define IAP_IN_RAM				1
-
-#if IAP_IN_RAM
 constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the second 64kb of RAM
-# define IAP_UPDATE_FILE		"Duet2CombinedIAP.bin"	// using the same IAP file for both Duet WiFi and Duet Ethernet
-#else
-constexpr uint32_t IAP_IMAGE_START = 0x00470000;
-constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
-# define IAP_UPDATE_FILE		"iap4e.bin"			// using the same IAP file for both Duet WiFi and Duet Ethernet
-#endif
-
+#define IAP_UPDATE_FILE			"Duet2CombinedIAP.bin"	// using the same IAP file for both Duet WiFi and Duet Ethernet
 #define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
 
 constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 is now unused)
@@ -49,7 +45,7 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
-#define ALLOCATE_DEFAULT_PORTS	1
+#define ALLOCATE_DEFAULT_PORTS	0
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
@@ -62,7 +58,7 @@ constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 10;					// The maximum number of heaters in the machine
-constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors per heater
 
 constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
@@ -73,13 +69,14 @@ constexpr size_t NumThermistorInputs = 8;
 constexpr size_t NumTmcDriversSenseChannels = 2;
 
 constexpr size_t MaxZProbes = 4;
-constexpr size_t MaxGpioPorts = 10;
+constexpr size_t MaxGpInPorts = 10;
+constexpr size_t MaxGpOutPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
-constexpr size_t MaxExtruders = 6;					// The maximum number of extruders
+constexpr size_t MaxExtruders = 7;					// The maximum number of extruders
 constexpr size_t NumDefaultExtruders = 1;			// The number of drivers that we configure as extruders by default
 
 constexpr size_t MaxAxesPlusExtruders = 12;
@@ -90,6 +87,8 @@ constexpr size_t MaxExtrudersPerTool = 8;
 constexpr size_t MaxFans = 12;
 
 constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+
+constexpr size_t MaxSpindles = 4;					// Maximum number of configurable spindles
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -135,6 +134,8 @@ constexpr IRQn TMC2660_SPI_IRQn = USART1_IRQn;
 constexpr Pin TMC2660MosiPin = PortAPin(22);
 constexpr Pin TMC2660MisoPin = PortAPin(21);
 constexpr Pin TMC2660SclkPin = PortAPin(23);
+
+constexpr uint32_t DefaultStandstillCurrentPercent = 100;					// it's not adjustable on Duet 2
 
 constexpr Pin DueX_SG = PortEPin(0);				// DueX stallguard detect pin = PE0 (was E2_STOP)
 constexpr Pin DueX_INT = PortAPin(17);				// DueX interrupt pin = PA17 (was E6_STOP)
@@ -319,11 +320,15 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
+#if ALLOCATE_DEFAULT_PORTS
+
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
+
+#endif
 
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
 constexpr Pin EspResetPin = PortEPin(4);			// Low on this in holds the WiFi module in reset (ESP_RESET)

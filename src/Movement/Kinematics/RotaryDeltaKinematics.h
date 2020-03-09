@@ -14,41 +14,44 @@ class RotaryDeltaKinematics : public Kinematics
 {
 public:
 	// Constructors
-	RotaryDeltaKinematics();
+	RotaryDeltaKinematics() noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
-	const char *GetName(bool forStatusReport) const override;
-	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) override;
-	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const override;
-	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
-	bool SupportsAutoCalibration() const override { return false; }		// TODO support autocalibration
-	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) override;
-	void SetCalibrationDefaults() override { Init(); }
+	const char *GetName(bool forStatusReport) const noexcept override;
+	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS_GCODE_EXCEPTION override;
+	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
+	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
+	bool SupportsAutoCalibration() const noexcept override { return false; }		// TODO support autocalibration
+	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
+	void SetCalibrationDefaults() noexcept override { Init(); }
 #if HAS_MASS_STORAGE
-	bool WriteCalibrationParameters(FileStore *f) const override;
+	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
 #endif
-	bool IsReachable(float x, float y, bool isCoordinated) const override;
-	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
-	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
-	AxesBitmap AxesToHomeBeforeProbing() const override { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS); }
-	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
-	HomingMode GetHomingMode() const override { return HomingMode::homeIndividualMotors; }
-	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
-	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const override;
-	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;
-	bool QueryTerminateHomingMove(size_t axis) const override;
-	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
+	bool IsReachable(float x, float y, bool isCoordinated) const noexcept override;
+	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept override;
+	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept override;
+	AxesBitmap AxesToHomeBeforeProbing() const noexcept override { return XyzAxes; }
+	size_t NumHomingButtons(size_t numVisibleAxes) const noexcept override { return 0; }
+	HomingMode GetHomingMode() const noexcept override { return HomingMode::homeIndividualMotors; }
+	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const noexcept override;
+	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept override;
+	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept override;
+	bool QueryTerminateHomingMove(size_t axis) const noexcept override;
+	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
 #if HAS_MASS_STORAGE
-	bool WriteResumeSettings(FileStore *f) const override;
+	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
-	AxesBitmap GetLinearAxes() const override;
+	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
+	AxesBitmap GetLinearAxes() const noexcept override;
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
-	void Init();
-	void Recalc();
-    float Transform(const float headPos[], size_t axis) const;						// Calculate the motor position for a single tower from a Cartesian coordinate
-    void ForwardTransform(float Ha, float Hb, float Hc, float headPos[]) const;		// Calculate the Cartesian position from the motor positions
+	void Init() noexcept;
+	void Recalc() noexcept;
+    float Transform(const float headPos[], size_t axis) const noexcept;						// Calculate the motor position for a single tower from a Cartesian coordinate
+    void ForwardTransform(float Ha, float Hb, float Hc, float headPos[]) const noexcept;	// Calculate the Cartesian position from the motor positions
 
 	// Axis names used internally
 	static constexpr size_t DELTA_AXES = 3;

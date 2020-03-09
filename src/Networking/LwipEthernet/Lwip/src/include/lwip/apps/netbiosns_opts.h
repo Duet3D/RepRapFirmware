@@ -32,7 +32,7 @@
 #ifndef LWIP_HDR_APPS_NETBIOS_OPTS_H
 #define LWIP_HDR_APPS_NETBIOS_OPTS_H
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 /**
  * @defgroup netbiosns_opts Options
@@ -50,6 +50,13 @@
  */
 #ifdef __DOXYGEN__
 #define NETBIOS_LWIP_NAME "NETBIOSLWIPDEV"
+#endif
+
+/** Respond to NetBIOS name queries
+ * Default is disabled
+ */
+#if !defined LWIP_NETBIOS_RESPOND_NAME_QUERY || defined __DOXYGEN__
+#define LWIP_NETBIOS_RESPOND_NAME_QUERY   0
 #endif
 
 /**

@@ -34,7 +34,7 @@ Licence: GPL
 #include <RTOSIface/RTOSIface.h>
 
 class TemperatureSensor;
-class HeaterProtection;
+class HeaterMonitor;
 class GCodeBuffer;
 class CanMessageSensorTemperatures;
 class CanMessageHeatersStatus;
@@ -43,6 +43,7 @@ class Heat INHERIT_OBJECT_MODEL
 {
 public:
 	Heat() noexcept;
+	Heat(const Heat&) = delete;
 
 	// Methods that don't relate to a particular heater
 	void HeaterTask() noexcept;
@@ -53,35 +54,33 @@ public:
 	bool ColdExtrude() const noexcept;									// Is cold extrusion allowed?
 	void AllowColdExtrude(bool b) noexcept;								// Allow or deny cold extrusion
 	float GetExtrusionMinTemp() const noexcept;							// Get minimum extrusion temperature
-	float GetRetractionMinTemp() const noexcept;							// Get minimum retraction temperature
+	float GetRetractionMinTemp() const noexcept;						// Get minimum retraction temperature
 	void SetExtrusionMinTemp(float t) noexcept;							// Set minimum extrusion temperature
-	void SetRetractionMinTemp(float t) noexcept;							// Set minimum retraction temperature
+	void SetRetractionMinTemp(float t) noexcept;						// Set minimum retraction temperature
 
 	int GetBedHeater(size_t index) const noexcept						// Get a hot bed heater number
 	pre(index < NumBedHeaters);
 	void SetBedHeater(size_t index, int heater)	 noexcept				// Set a hot bed heater number
 	pre(index < NumBedHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsBedHeater(int heater) const noexcept;							// Check if this heater is a bed heater
+	bool IsBedHeater(int heater) const noexcept;						// Check if this heater is a bed heater
 
 	int GetChamberHeater(size_t index) const noexcept					// Get a chamber heater number
 	pre(index < NumChamberHeaters);
 	void SetChamberHeater(size_t index, int heater)	 noexcept			// Set a chamber heater number
 	pre(index < NumChamberHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsChamberHeater(int heater) const noexcept;						// Check if this heater is a chamber heater
+	bool IsChamberHeater(int heater) const noexcept;					// Check if this heater is a chamber heater
 
 	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept;	// Is everything at temperature within tolerance?
 
-	void SwitchOffAll(bool includingChamberAndBed) noexcept;				// Turn all heaters off
+	void SwitchOffAll(bool includingChamberAndBed) noexcept;			// Turn all heaters off
+	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power or while probing
 	GCodeResult ResetFault(int heater, const StringRef& reply) noexcept;	// Reset a heater fault for a specific heater or all heaters
-	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) noexcept;
-	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) noexcept;
-	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Create a sensor or change the parameters for an existing sensor
-	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) noexcept; // Set the P/I/D parameters for a heater
 
-	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply) noexcept;	// Configure heater protection (M143)
-	void UpdateHeaterProtection(int heaterNumber) noexcept;				// Updates the PIDs and HeaterProtection items when a heater is remapped
-
-	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power
+	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;		// Create a sensor or change the parameters for an existing sensor
+	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION; // Set the P/I/D parameters for a heater
+	GCodeResult HandleM143(GCodeBuffer &gb, const StringRef &reply) THROWS_GCODE_EXCEPTION;	// Configure heater protection (M143)
 
 	void SensorsTask() noexcept;
 	static void EnsureSensorsTask() noexcept;
@@ -92,7 +91,8 @@ public:
 	float GetSensorTemperature(int sensorNum, TemperatureError& err) const noexcept; // Result is in degrees Celsius
 
 	float GetHighestTemperatureLimit() const noexcept;					// Get the highest temperature limit of any heater
-	size_t GetHighestUsedHeaterNumber() const noexcept;
+	size_t GetNumHeatersToReport() const noexcept;
+	size_t GetNumSensorsToReport() const noexcept;
 
 	void Diagnostics(MessageType mtype) noexcept;						// Output useful information
 
@@ -103,7 +103,7 @@ public:
 
 	bool IsBedOrChamberHeater(int heater) const noexcept;				// Queried by the Platform class
 
-	float GetHeaterTemperature(size_t heater) const noexcept;			 // Result is in degrees Celsius
+	float GetHeaterTemperature(size_t heater) const noexcept;			// Result is in degrees Celsius
 
 	const Tool* GetLastStandbyTool(int heater) const noexcept
 	pre(heater >= 0; heater < MaxHeaters)
@@ -118,19 +118,19 @@ public:
 	float GetStandbyTemperature(int heater) const noexcept;
 	float GetHighestTemperatureLimit(int heater) const noexcept;
 	float GetLowestTemperatureLimit(int heater) const noexcept;
-	float GetHeaterTemperature(int heater) const noexcept;				// Get the current temperature of a heater
 	float GetTargetTemperature(int heater) const noexcept;				// Get the target temperature
+	float GetHeaterTemperature(int heater) const noexcept;				// Get the current temperature of a heater
 	HeaterStatus GetStatus(int heater) const noexcept;					// Get the off/standby/active status
 	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const noexcept;
 
-	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept;
-	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply);
 
-	void SetActiveTemperature(int heater, float t) noexcept;
-	void SetStandbyTemperature(int heater, float t) noexcept;
+	void SetActiveTemperature(int heater, float t) THROWS(GCodeException) { SetTemperature(heater, t, true); }
+	void SetStandbyTemperature(int heater, float t) THROWS(GCodeException) { SetTemperature(heater, t, false); }
 	GCodeResult Activate(int heater, const StringRef& reply) noexcept;	// Turn on a heater
-	void Standby(int heater, const Tool* tool) noexcept;					// Set a heater to standby
-	void SwitchOff(int heater) noexcept;									// Turn off a specific heater
+	void Standby(int heater, const Tool* tool) noexcept;				// Set a heater to standby
+	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
 
 #if HAS_MASS_STORAGE
 	bool WriteModelParameters(FileStore *f) const noexcept;				// Write heater model parameters to file returning true if no error
@@ -142,22 +142,22 @@ public:
 	void ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept;
 #endif
 
+	static ReadWriteLock sensorsLock;							// needs to be public so that the OMT in EndstopsManager can lock it
+
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(heaters)
 
 private:
-	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying
-
 	ReadLockedPointer<Heater> FindHeater(int heater) const noexcept;
 	void DeleteSensor(unsigned int sn) noexcept;
 	void InsertSensor(TemperatureSensor *newSensor) noexcept;
+	void SetTemperature(int heater, float t, bool activeNotStandby) THROWS(GCodeException);
 
 	static ReadWriteLock heatersLock;
-	static ReadWriteLock sensorsLock;
 
 	uint8_t volatile sensorCount;
 	TemperatureSensor * volatile sensorsRoot;					// The sensor list
-	HeaterProtection *heaterProtections[MaxHeaters + MaxExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
 	Heater* heaters[MaxHeaters];								// A local or remote heater
 	const Tool* lastStandbyTools[MaxHeaters];					// The last tool that caused the corresponding heater to be set to standby

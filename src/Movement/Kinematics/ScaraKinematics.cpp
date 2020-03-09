@@ -14,7 +14,29 @@
 
 #include <limits>
 
-ScaraKinematics::ScaraKinematics()
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ScaraKinematics, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. kinematics members
+	{ "name",	OBJECT_MODEL_FUNC(self->GetName(false)), 	ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 1 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(ScaraKinematics)
+
+#endif
+
+ScaraKinematics::ScaraKinematics() noexcept
 	: ZLeadscrewKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true),
 	  proximalArmLength(DefaultProximalArmLength), distalArmLength(DefaultDistalArmLength), xOffset(0.0), yOffset(0.0)
 {
@@ -27,7 +49,7 @@ ScaraKinematics::ScaraKinematics()
 }
 
 // Return the name of the current kinematics
-const char *ScaraKinematics::GetName(bool forStatusReport) const
+const char *ScaraKinematics::GetName(bool forStatusReport) const noexcept
 {
 	return "Scara";
 }
@@ -36,7 +58,7 @@ const char *ScaraKinematics::GetName(bool forStatusReport) const
 // If the position is not reachable because it is out of radius limits, set theta and psi to NaN and return false.
 // Otherwise set theta and psi to the required values and return true if they are in range.
 // Note: theta and psi are now returned in degrees.
-bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoordinated, float& theta, float& psi, bool& armMode) const
+bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoordinated, float& theta, float& psi, bool& armMode) const noexcept
 {
 	const float x = machinePos[X_AXIS] + xOffset;
 	const float y = machinePos[Y_AXIS] + yOffset;
@@ -109,7 +131,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
 // In the following, theta is the proximal arm angle relative to the X axis, psi is the distal arm angle relative to the proximal arm
-bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
+bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	float theta, psi;
 	if (machinePos[0] == cachedX && machinePos[1] == cachedY)
@@ -144,7 +166,7 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 // For Scara, the X and Y components of stepsPerMm are actually steps per degree angle.
-void ScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
+void ScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	const float theta = ((float)motorPos[X_AXIS]/stepsPerMm[X_AXIS]);
     const float psi = ((float)motorPos[Y_AXIS]/stepsPerMm[Y_AXIS]) + (crosstalk[0] * theta);
@@ -220,7 +242,7 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 }
 
 // Return true if the specified XY position is reachable by the print head reference point, ignoring M208 limits.
-bool ScaraKinematics::IsReachable(float x, float y, bool isCoordinated) const
+bool ScaraKinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
 {
 	// See if we can transform the position
 	float coords[2] = {x, y};
@@ -230,7 +252,8 @@ bool ScaraKinematics::IsReachable(float x, float y, bool isCoordinated) const
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
-LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+													size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	// First limit all axes according to M208
 	bool limited = applyM208Limits && Kinematics::LimitPositionFromAxis(finalCoords, 0, numVisibleAxes, axesHomed);
@@ -310,7 +333,7 @@ LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const fl
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
-void ScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
+void ScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept
 {
 	positions[X_AXIS] = maxRadius - xOffset;
 	positions[Y_AXIS] = -yOffset;
@@ -321,29 +344,27 @@ void ScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
-AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
+AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noexcept
 {
 	// If both X and Y have been specified then we know the positions of both arm motors, otherwise we don't
-	const AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
-	if ((g92Axes & xyAxes) != xyAxes)
+	if ((g92Axes & XyAxes) != XyAxes)
 	{
-		g92Axes &= ~xyAxes;
+		g92Axes &= ~XyAxes;
 	}
 	return g92Axes;
 }
 
 // Return the set of axes that must be homed prior to regular movement of the specified axes
-AxesBitmap ScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
+AxesBitmap ScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept
 {
-	constexpr AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS);
-	if ((axesMoving & xyAxes) != 0)
+	if (axesMoving.Intersects(XyAxes))
 	{
-		axesMoving |= xyAxes;
+		axesMoving |= XyAxes;
 	}
 	return axesMoving;
 }
 
-size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
+size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const noexcept
 {
 #if HAS_MASS_STORAGE
 	const Platform& platform = reprap.GetPlatform();
@@ -366,12 +387,12 @@ size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
+AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept
 {
 	// Ask the base class which homing file we should call first
-	AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
+	const AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 
-	if (ret == 0)
+	if (ret.IsEmpty())
 	{
 		// Change the returned name if it is X or Y
 		if (StringEqualsIgnoreCase(filename.c_str(), "homex.g"))
@@ -396,7 +417,7 @@ AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
 // Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const
+bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 {
 	// If crosstalk causes the axis motor concerned to affect other axes then must terminate the entire move
 	return (axis == X_AXIS && (crosstalk[0] != 0.0 || crosstalk[1] != 0.0))
@@ -405,7 +426,7 @@ bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
+void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
 {
 	switch (axis)
 	{
@@ -444,7 +465,7 @@ void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void ScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
+void ScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	// For now we limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration.
 	// Limiting the angular rates of the arms would be better.
@@ -459,20 +480,20 @@ void ScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 }
 
 // Return true if the specified axis is a continuous rotation axis
-bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const
+bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 {
 	return axis < 2 && supportsContinuousRotation[axis];
 }
 
 // Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap ScaraKinematics::GetLinearAxes() const
+AxesBitmap ScaraKinematics::GetLinearAxes() const noexcept
 {
-	return (crosstalk[1] == 0.0 && crosstalk[2] == 0.0) ? MakeBitmap<AxesBitmap>(Z_AXIS) : 0;
+	return (crosstalk[1] == 0.0 && crosstalk[2] == 0.0) ? AxesBitmap::MakeFromBits(Z_AXIS) : AxesBitmap();
 }
 
 // Recalculate the derived parameters
-void ScaraKinematics::Recalc()
+void ScaraKinematics::Recalc() noexcept
 {
 	proximalArmLengthSquared = fsquare(proximalArmLength);
 	distalArmLengthSquared = fsquare(distalArmLength);

@@ -17,18 +17,18 @@ class RotaryEncoder
 	bool reverseDirection;
 	uint32_t whenSame;
 
-	unsigned int ReadEncoderState() const;
+	unsigned int ReadEncoderState() const noexcept;
 
 	static constexpr uint32_t DebounceMillis = 5;
 
 public:
-	RotaryEncoder(Pin p0, Pin p1, Pin pb);
+	RotaryEncoder(Pin p0, Pin p1, Pin pb) noexcept;
 
-	void Init(int pulsesPerClick);
-	void Poll();
-	int GetChange();
-	bool GetButtonPress();
-	int GetPulsesPerClick() const { return ppc; }
+	void Init(int pulsesPerClick) noexcept;
+	void Poll() noexcept;
+	int GetChange() noexcept;
+	bool GetButtonPress() noexcept;
+	int GetPulsesPerClick() const noexcept { return ppc; }
 };
 
 #endif

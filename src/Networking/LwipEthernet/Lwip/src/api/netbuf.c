@@ -42,12 +42,12 @@
  *
  */
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 #if LWIP_NETCONN /* don't build if not configured for use in lwipopts.h */
 
-#include <Lwip/src/include/lwip/netbuf.h>
-#include <Lwip/src/include/lwip/memp.h>
+#include "lwip/netbuf.h"
+#include "lwip/memp.h"
 
 #include <string.h>
 
@@ -109,10 +109,10 @@ netbuf_alloc(struct netbuf *buf, u16_t size)
   }
   buf->p = pbuf_alloc(PBUF_TRANSPORT, size, PBUF_RAM);
   if (buf->p == NULL) {
-     return NULL;
+    return NULL;
   }
   LWIP_ASSERT("check that first pbuf can hold size",
-             (buf->p->len >= size));
+              (buf->p->len >= size));
   buf->ptr = buf->p;
   return buf->p->payload;
 }
@@ -131,6 +131,10 @@ netbuf_free(struct netbuf *buf)
     pbuf_free(buf->p);
   }
   buf->p = buf->ptr = NULL;
+#if LWIP_CHECKSUM_ON_COPY
+  buf->flags = 0;
+  buf->toport_chksum = 0;
+#endif /* LWIP_CHECKSUM_ON_COPY */
 }
 
 /**
@@ -155,7 +159,7 @@ netbuf_ref(struct netbuf *buf, const void *dataptr, u16_t size)
     buf->ptr = NULL;
     return ERR_MEM;
   }
-  ((struct pbuf_rom*)buf->p)->payload = dataptr;
+  ((struct pbuf_rom *)buf->p)->payload = dataptr;
   buf->p->len = buf->p->tot_len = size;
   buf->ptr = buf->p;
   return ERR_OK;

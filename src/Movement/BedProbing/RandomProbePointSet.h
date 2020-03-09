@@ -14,47 +14,47 @@
 class RandomProbePointSet INHERIT_OBJECT_MODEL
 {
 public:
-	RandomProbePointSet();
+	RandomProbePointSet() noexcept;
 
-	unsigned int GetNumBedCompensationPoints() const { return numBedCompensationPoints; }
+	unsigned int GetNumBedCompensationPoints() const noexcept { return numBedCompensationPoints; }
 
-	float GetZHeight(size_t index) const
+	float GetZHeight(size_t index) const noexcept
 	pre(index < numPoints) { return zBedProbePoints[index]; }
 
-	float GetXCoord(size_t index) const
+	float GetXCoord(size_t index) const noexcept
 	pre(index < numPoints) { return xBedProbePoints[index]; }
 
-	float GetYCoord(size_t index) const
+	float GetYCoord(size_t index) const noexcept
 	pre(index < numPoints) { return yBedProbePoints[index]; }
 
-	bool PointWasCorrected(size_t index) const
+	bool PointWasCorrected(size_t index) const noexcept
 	pre(index < numPoints) { return (probePointSet[index] & xyCorrected) != 0; }
 
-	size_t NumberOfProbePoints() const;									// Return the number of points probed
+	size_t NumberOfProbePoints() const noexcept;								// Return the number of points probed
 
-	void SetXYBedProbePoint(size_t index, float x, float y);			// Record the X and Y coordinates of a probe point
-    void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
+	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;			// Record the X and Y coordinates of a probe point
+    void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point
 
-	void ClearProbeHeights();											// Clear out the Z heights so that we don't re-use old points
-	bool SetProbedBedEquation(size_t numPoints, const StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
-	void SetIdentity() { numBedCompensationPoints = 0; }				// Set identity transform
+	void ClearProbeHeights() noexcept;											// Clear out the Z heights so that we don't re-use old points
+	bool SetProbedBedEquation(size_t numPoints, const StringRef& reply) noexcept;	// When we have a full set of probed points, work out the bed's equation
+	void SetIdentity() noexcept { numBedCompensationPoints = 0; }				// Set identity transform
 
-	float GetInterpolatedHeightError(float x, float y) const;			// Compute the interpolated height error at the specified point
+	float GetInterpolatedHeightError(float x, float y) const noexcept;			// Compute the interpolated height error at the specified point
 
-	bool GoodProbePoints(size_t numPoints) const;						// Check whether the specified set of points has been successfully defined and probed
-	void ReportProbeHeights(size_t numPoints, const StringRef& reply) const;	// Print out the probe heights and any errors
-	void DebugPrint(size_t numPoints) const;
+	bool GoodProbePoints(size_t numPoints) const noexcept;						// Check whether the specified set of points has been successfully defined and probed
+	void ReportProbeHeights(size_t numPoints, const StringRef& reply) const noexcept;	// Print out the probe heights and any errors
+	void DebugPrint(size_t numPoints) const noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	bool GoodProbePointOrdering(size_t numPoints) const;				// Check that the probe points are in the right order
-    float SecondDegreeTransformZ(float x, float y) const;				// Used for second degree bed equation
-	float TriangleZ(float x, float y) const;							// Interpolate onto a triangular grid
-	void BarycentricCoordinates(size_t p0, size_t p1,   				// Compute the barycentric coordinates of a point in a triangle
-			size_t p2, float x, float y, float& l1,     				// (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
-			float& l2, float& l3) const;
+	bool GoodProbePointOrdering(size_t numPoints) const noexcept;				// Check that the probe points are in the right order
+    float SecondDegreeTransformZ(float x, float y) const noexcept;				// Used for second degree bed equation
+	float TriangleZ(float x, float y) const noexcept;							// Interpolate onto a triangular grid
+	void BarycentricCoordinates(size_t p0, size_t p1,   						// Compute the barycentric coordinates of a point in a triangle
+			size_t p2, float x, float y, float& l1,     						// (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
+			float& l2, float& l3) const noexcept;
 
 	// Enumeration to record what has been set
 	enum PointCoordinateSet
@@ -66,7 +66,7 @@ private:
 		probeError = 8
 	};
 
-	uint32_t numBedCompensationPoints;								// The number of points we are actually using for bed compensation, 0 means identity bed transform
+	uint32_t numBedCompensationPoints;									// The number of points we are actually using for bed compensation, 0 means identity bed transform
 
 	// Variables used to report what has been probed
 	float xBedProbePoints[MaxProbePoints];								// The X coordinates of the points on the bed at which to probe

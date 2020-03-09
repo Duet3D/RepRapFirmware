@@ -38,7 +38,7 @@
 #ifndef LWIP_HDR_MEMP_H
 #define LWIP_HDR_MEMP_H
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,17 +46,17 @@ extern "C" {
 
 /* run once with empty definition to handle all custom includes in lwippools.h */
 #define LWIP_MEMPOOL(name,num,size,desc)
-#include <Lwip/src/include/lwip/priv/memp_std.h>
+#include "lwip/priv/memp_std.h"
 
 /** Create the list of all memory pools managed by memp. MEMP_MAX represents a NULL pool at the end */
 typedef enum {
 #define LWIP_MEMPOOL(name,num,size,desc)  MEMP_##name,
-#include <Lwip/src/include/lwip/priv/memp_std.h>
+#include "lwip/priv/memp_std.h"
   MEMP_MAX
 } memp_t;
 
-#include <Lwip/src/include/lwip/priv/memp_priv.h>
-#include <Lwip/src/include/lwip/stats.h>
+#include "lwip/priv/memp_priv.h"
+#include "lwip/stats.h"
 
 extern const struct memp_desc* const memp_pools[MEMP_MAX];
 
@@ -90,7 +90,7 @@ extern const struct memp_desc* const memp_pools[MEMP_MAX];
  *   - free: LWIP_MEMPOOL_FREE(my_private_pool, my_new_mem);
  *
  * To relocate a pool, declare it as extern in cc.h. Example for GCC:
- *   extern u8_t __attribute__((section(".onchip_mem"))) memp_memory_my_private_pool[];
+ *   extern u8_t \_\_attribute\_\_((section(".onchip_mem"))) memp_memory_my_private_pool_base[];
  */
 #define LWIP_MEMPOOL_DECLARE(name,num,size,desc) \
   LWIP_DECLARE_MEMORY_ALIGNED(memp_memory_ ## name ## _base, ((num) * (MEMP_SIZE + MEMP_ALIGN_SIZE(size)))); \

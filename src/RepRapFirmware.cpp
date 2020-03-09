@@ -172,6 +172,14 @@ Licence: GPL
 
 RepRap reprap;
 
+// Get the format string to use for printing a floating point number to the specified number of decimal digits. Zero means the maximum sensible number.
+const char *GetFloatFormatString(unsigned int numDigitsAfterPoint) noexcept
+{
+	static constexpr const char *FormatStrings[] = { "%.7f", "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f", "%.7f" };
+	static_assert(ARRAY_SIZE(FormatStrings) == MaxFloatDigitsDisplayedAfterPoint + 1);
+	return FormatStrings[min<unsigned int>(numDigitsAfterPoint, MaxFloatDigitsDisplayedAfterPoint)];
+}
+
 static const char * const moduleName[] =
 {
 	"Platform",
@@ -259,14 +267,7 @@ double HideNan(float val) noexcept
 // Append a list of driver numbers to a string, with a space before each one
 void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept
 {
-	for (unsigned int d = 0; drivers != 0; ++d)
-	{
-		if ((drivers & 1) != 0)
-		{
-			str.catf(" %u", d);
-		}
-		drivers >>= 1;
-	}
+	drivers.Iterate([str](unsigned int d, bool) noexcept { str.catf(" %u", d); });
 }
 
 // End

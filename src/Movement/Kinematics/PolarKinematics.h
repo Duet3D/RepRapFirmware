@@ -13,26 +13,29 @@
 class PolarKinematics : public Kinematics
 {
 public:
-	PolarKinematics();
+	PolarKinematics() noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
-	const char *GetName(bool forStatusReport) const override;
-	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) override;
-	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const override;
-	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
-	bool IsReachable(float x, float y, bool isCoordinated) const override;
-	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
-	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
-	const char* HomingButtonNames() const override { return "RTZUVWABC"; }
-	HomingMode GetHomingMode() const override { return HomingMode::homeIndividualMotors; }
-	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
-	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const override;
-	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;
-	bool QueryTerminateHomingMove(size_t axis) const override;
-	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
-	bool IsContinuousRotationAxis(size_t axis) const override;
-	AxesBitmap GetLinearAxes() const override;
+	const char *GetName(bool forStatusReport) const noexcept override;
+	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS_GCODE_EXCEPTION override;
+	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
+	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
+	bool IsReachable(float x, float y, bool isCoordinated) const noexcept override;
+	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept override;
+	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept override;
+	const char* HomingButtonNames() const noexcept override { return "RTZUVWABC"; }
+	HomingMode GetHomingMode() const noexcept override { return HomingMode::homeIndividualMotors; }
+	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const noexcept override;
+	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept override;
+	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept override;
+	bool QueryTerminateHomingMove(size_t axis) const noexcept override;
+	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
+	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
+	bool IsContinuousRotationAxis(size_t axis) const noexcept override;
+	AxesBitmap GetLinearAxes() const noexcept override;
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;

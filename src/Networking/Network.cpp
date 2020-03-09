@@ -39,13 +39,30 @@
 #include <TaskPriorities.h>
 
 #ifdef __LPC17xx__
-constexpr size_t NetworkStackWords = 470;
+constexpr size_t NetworkStackWords = 375;
 #else
-constexpr size_t NetworkStackWords = 550;
+constexpr size_t NetworkStackWords = 550;				// need to be enough to support rr_model
 #endif
 
 static Task<NetworkStackWords> networkTask;
 
+// MacAddress members
+uint32_t MacAddress::LowWord() const noexcept
+{
+	return (((((bytes[3] << 8) | bytes[2]) << 8) | bytes[1]) << 8) | bytes[0];
+}
+
+uint16_t MacAddress::HighWord() const noexcept
+{
+	return (bytes[5] << 8) | bytes[4];
+}
+
+void MacAddress::SetFromBytes(const uint8_t mb[6]) noexcept
+{
+	memcpy(bytes, mb, sizeof(bytes));
+}
+
+// Network members
 Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
 #if defined(DUET3_V03)
@@ -58,7 +75,11 @@ Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextR
 #elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
 #elif defined(__LPC17xx__)
+# if HAS_WIFI_NETWORKING
+	interfaces[0] = new WiFiInterface(p);
+ #else
 	interfaces[0] = new RTOSPlusTCPEthernetInterface(p);
+ #endif
 #else
 # error Unknown board
 #endif
@@ -69,20 +90,24 @@ Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextR
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
-static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
+constexpr ObjectModelArrayDescriptor Network::interfacesArrayDescriptor =
 {
-	[] (ObjectModel *self) -> size_t { return NumNetworkInterfaces; },
-	[] (ObjectModel *self, size_t n) -> void* { return (void *)(((Network*)self)->GetInterface(n)); }
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetIndex(0)]); }
 };
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
 
-const ObjectModelTableEntry Network::objectModelTable[] =
+constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
+	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfacesArrayDescriptor),	ObjectModelEntryFlags::none },
+	{ "name",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetName()), 			ObjectModelEntryFlags::none },
 };
+
+constexpr uint8_t Network::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Network)
 
@@ -408,15 +433,6 @@ void Network::Spin() noexcept
 	}
 }
 
-// Process the network timer interrupt
-void Network::Interrupt() noexcept
-{
-	for (NetworkInterface *iface : interfaces)
-	{
-		iface->Interrupt();
-	}
-}
-
 void Network::Diagnostics(MessageType mtype) noexcept
 {
 	platform.Message(mtype, "=== Network ===\n");
@@ -438,18 +454,6 @@ void Network::Diagnostics(MessageType mtype) noexcept
 	{
 		iface->Diagnostics(mtype);
 	}
-}
-
-bool Network::InNetworkStack() const noexcept
-{
-	for (NetworkInterface *iface : interfaces)
-	{
-		if (iface->InNetworkStack())
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 int Network::EnableState(unsigned int interface) const noexcept
@@ -510,15 +514,17 @@ void Network::SetHostname(const char *name) noexcept
 }
 
 // Net the MAC address. Pass -1 as the interface number to set the default MAC address for interfaces that don't have one.
-void Network::SetMacAddress(unsigned int interface, const uint8_t mac[]) noexcept
+GCodeResult Network::SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
-		interfaces[interface]->SetMacAddress(mac);
+		return interfaces[interface]->SetMacAddress(mac, reply);
 	}
+	reply.copy("unknown interface ");
+	return GCodeResult::error;
 }
 
-const uint8_t *Network::GetMacAddress(unsigned int interface) const noexcept
+const MacAddress& Network::GetMacAddress(unsigned int interface) const noexcept
 {
 	if (interface >= NumNetworkInterfaces)
 	{

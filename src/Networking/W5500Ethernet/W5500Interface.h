@@ -48,14 +48,13 @@ public:
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
-	bool InNetworkStack() const noexcept override { return false; }
 	bool IsWiFiInterface() const noexcept override { return false; }
 
 	void UpdateHostname(const char *name) noexcept override;
 	IPAddress GetIPAddress() const noexcept override { return ipAddress; }
 	void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept override;
-	void SetMacAddress(const uint8_t mac[]) noexcept override;
-	const uint8_t *GetMacAddress() const noexcept override { return macAddress; }
+	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
+	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
 	void OpenDataPort(Port port) noexcept override;
 	void TerminateDataPort() noexcept override;
@@ -103,7 +102,7 @@ private:
 	IPAddress ipAddress;
 	IPAddress netmask;
 	IPAddress gateway;
-	uint8_t macAddress[6];
+	MacAddress macAddress;
 };
 
 #endif

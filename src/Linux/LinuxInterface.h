@@ -11,7 +11,7 @@
 #include "RTOSIface/RTOSIface.h"
 
 #include "GCodes/GCodeFileInfo.h"
-#include "MessageFormats.h"
+#include "LinuxMessageFormats.h"
 #include "MessageType.h"
 
 class Platform;

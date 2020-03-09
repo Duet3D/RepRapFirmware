@@ -20,6 +20,9 @@ public:
 	FilamentSensorStatus Clear() noexcept override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	static constexpr float DefaultMinMovementAllowed = 0.6;
 	static constexpr float DefaultMaxMovementAllowed = 1.6;
@@ -66,6 +69,9 @@ private:
 	void HandleIncomingData() noexcept;
 	float GetCurrentPosition() const noexcept;
 	FilamentSensorStatus CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept;
+
+	bool HaveCalibrationData() const noexcept;
+	float MeasuredSensitivity() const noexcept;
 
 	// Configuration parameters
 	float minMovementAllowed, maxMovementAllowed;

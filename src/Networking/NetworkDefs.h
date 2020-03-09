@@ -19,11 +19,24 @@ typedef uint8_t SocketNumber;
 typedef uint16_t Port;
 typedef uint8_t NetworkProtocol;
 
-constexpr uint8_t DefaultMacAddress[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };
+struct MacAddress
+{
+public:
+	uint8_t bytes[6];
 
-constexpr IPAddress DefaultIpAddress;		// will be initialised to 0 by constructor
-const IPAddress DefaultNetMask((const uint8_t[]){ 255, 255, 255, 0 });
-constexpr IPAddress DefaultGateway;			// will be initialised to 0 by constructor
+	uint32_t LowWord() const noexcept;
+	uint16_t HighWord() const noexcept;
+
+	void SetFromBytes(const uint8_t mb[6]) noexcept;
+	void SetDefault() noexcept { SetFromBytes(defaultBytes); }
+
+private:
+	static constexpr uint8_t defaultBytes[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };
+};
+
+constexpr IPAddress DefaultIpAddress;				// will be initialised to 0 by constructor
+constexpr IPAddress DefaultNetMask(0x00FFFFFF);		// equivalent to 255.255.255.0. Use constexpr constructor to avoid it being allocated in RAM.
+constexpr IPAddress DefaultGateway;					// will be initialised to 0 by constructor
 
 constexpr size_t NumProtocols = 3;					// number of network protocols we support, not counting FtpDataProtocol, MdnsProtocol or AnyProtocol
 constexpr NetworkProtocol HttpProtocol = 0, FtpProtocol = 1, TelnetProtocol = 2, FtpDataProtocol = 3, MdnsProtocol = 4, AnyProtocol = 255;
@@ -41,7 +54,7 @@ constexpr uint8_t MdnsIPAddress[4] = { 224, 0, 0, 251 };
 constexpr Port MdnsPort = 5353;
 
 #if defined(__LPC17xx__)
-const size_t NetworkBufferCount = 2;				// number of MSS sized buffers
+constexpr size_t NetworkBufferCount = 2;			// number of MSS sized buffers
 #else
 constexpr size_t NetworkBufferCount = 6;			// number of 2K network buffers
 #endif

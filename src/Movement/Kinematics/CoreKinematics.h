@@ -14,23 +14,30 @@
 class CoreKinematics : public ZLeadscrewKinematics
 {
 public:
-	CoreKinematics(KinematicsType k);
+	CoreKinematics(KinematicsType k) noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
-	const char *GetName(bool forStatusReport) const override;
-	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) override;
-	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const override;
-	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
-	bool QueryTerminateHomingMove(size_t axis) const override;
-	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
-	HomingMode GetHomingMode() const override { return HomingMode::homeCartesianAxes; }
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
-	AxesBitmap GetConnectedAxes(size_t axis) const override;
-	AxesBitmap GetLinearAxes() const override;
+	const char *GetName(bool forStatusReport) const noexcept override;
+	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS_GCODE_EXCEPTION override;
+	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
+	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
+	bool QueryTerminateHomingMove(size_t axis) const noexcept override;
+	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
+	HomingMode GetHomingMode() const noexcept override { return HomingMode::homeCartesianAxes; }
+	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
+	AxesBitmap GetConnectedAxes(size_t axis) const noexcept override;
+	AxesBitmap GetLinearAxes() const noexcept override;
+
+protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(forwardMatrix)
+	OBJECT_MODEL_ARRAY(forwardMatrixElement)
+	OBJECT_MODEL_ARRAY(inverseMatrix)
+	OBJECT_MODEL_ARRAY(inverseMatrixElement)
 
 private:
-	void Recalc();											// recalculate internal variables following a configuration change
-	bool HasSharedMotor(size_t axis) const;					// return true if the axis doesn't have a single dedicated motor
+	void Recalc() noexcept;									// recalculate internal variables following a configuration change
+	bool HasSharedMotor(size_t axis) const noexcept;		// return true if the axis doesn't have a single dedicated motor
 
 	// Primary parameters
 	FixedMatrix<float, MaxAxes, MaxAxes> inverseMatrix;		// maps coordinates to motor positions

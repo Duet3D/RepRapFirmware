@@ -54,14 +54,13 @@ class Network INHERIT_OBJECT_MODEL
 {
 public:
 	Network(Platform& p) noexcept;
+	Network(const Network&) = delete;
 
 	void Init() noexcept;
 	void Activate() noexcept;
 	void Exit() noexcept;
 	void Spin() noexcept;
-	void Interrupt() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
-	bool InNetworkStack() const noexcept;
 	bool IsWiFiInterface(unsigned int interface) const noexcept;
 
 	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept;
@@ -83,8 +82,8 @@ public:
 	IPAddress GetIPAddress(unsigned int interface) const noexcept;
 	const char *GetHostname() const noexcept { return hostname; }
 	void SetHostname(const char *name) noexcept;
-	void SetMacAddress(unsigned int interface, const uint8_t mac[]) noexcept;
-	const uint8_t *GetMacAddress(unsigned int interface) const noexcept;
+	GCodeResult SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept;
+	const MacAddress& GetMacAddress(unsigned int interface) const noexcept;
 
 	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
 
@@ -94,12 +93,9 @@ public:
 	void HandleTelnetGCodeReply(OutputBuffer *buf) noexcept;
 	uint32_t GetHttpReplySeq() noexcept;
 
-#if SUPPORT_OBJECT_MODEL
-	NetworkInterface *GetInterface(size_t n) const noexcept { return interfaces[n]; }
-#endif
-
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(interfaces)
 
 private:
 	WiFiInterface *FindWiFiInterface() const noexcept;

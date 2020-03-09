@@ -70,11 +70,13 @@ public:
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
 	bool FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]) noexcept;
-    void SetPositions(const float move[], size_t numDrives) noexcept;				// Force the endpoints to be these
-    FilePosition GetFilePosition() const noexcept { return filePos; }
-    float GetRequestedSpeed() const noexcept { return requestedSpeed; }
-    float GetTopSpeed() const noexcept { return topSpeed; }
-    float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
+	void SetPositions(const float move[], size_t numDrives) noexcept;				// Force the endpoints to be these
+	FilePosition GetFilePosition() const noexcept { return filePos; }
+	float GetRequestedSpeed() const noexcept { return requestedSpeed; }
+	float GetTopSpeed() const noexcept { return topSpeed; }
+	float GetAcceleration() const noexcept { return acceleration; }
+	float GetDeceleration() const noexcept { return deceleration; }
+	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
 	const Tool *GetTool() const noexcept { return tool; }
 	float GetTotalDistance() const noexcept { return totalDistance; }
@@ -265,7 +267,7 @@ private:
 			int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
 
 #if SUPPORT_CAN_EXPANSION
-			uint32_t drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
+			DriversBitmap drivesMoving;			// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
 			static_assert(MaxAxesPlusExtruders <= sizeof(drivesMoving) * CHAR_BIT);
 #endif
 		} afterPrepare;

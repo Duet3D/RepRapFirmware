@@ -37,7 +37,7 @@
 #ifndef LWIP_HDR_MEM_H
 #define LWIP_HDR_MEM_H
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,7 +45,7 @@ extern "C" {
 
 #if MEM_LIBC_MALLOC
 
-#include <Lwip/src/include/lwip/arch.h>
+#include "lwip/arch.h"
 
 typedef size_t mem_size_t;
 #define MEM_SIZE_F SZT_F

@@ -33,13 +33,17 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT && MPPE_SUPPORT  /* don't build if not configured for use in lwipopts.h */
 
 #ifndef MPPE_H
 #define MPPE_H
 
-#include <Lwip/src/include/netif/ppp/pppcrypt.h>
+#include "netif/ppp/pppcrypt.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define MPPE_PAD		4	/* MPPE growth per frame */
 #define MPPE_MAX_KEY_LEN	16	/* largest key length (128-bit) */
@@ -168,6 +172,10 @@ void mppe_comp_reset(ppp_pcb *pcb, ppp_mppe_state *state);
 err_t mppe_compress(ppp_pcb *pcb, ppp_mppe_state *state, struct pbuf **pb, u16_t protocol);
 void mppe_decomp_reset(ppp_pcb *pcb, ppp_mppe_state *state);
 err_t mppe_decompress(ppp_pcb *pcb, ppp_mppe_state *state, struct pbuf **pb);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MPPE_H */
 #endif /* PPP_SUPPORT && MPPE_SUPPORT */

@@ -13,8 +13,30 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Movement/DDA.h"
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(PolarKinematics, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry PolarKinematics::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. kinematics members
+	{ "name",	OBJECT_MODEL_FUNC(self->GetName(false)), 	ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 1 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(PolarKinematics)
+
+#endif
+
 // Constructor
-PolarKinematics::PolarKinematics()
+PolarKinematics::PolarKinematics() noexcept
 	: Kinematics(KinematicsType::polar, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true),
 	  minRadius(0.0), maxRadius(DefaultMaxRadius), homedRadius(0.0),
 	  maxTurntableSpeed(DefaultMaxTurntableSpeed), maxTurntableAcceleration(DefaultMaxTurntableAcceleration)
@@ -26,7 +48,7 @@ PolarKinematics::PolarKinematics()
 // If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
 // Otherwise it should be in a format suitable for printing.
 // For any new kinematics, the same string can be returned regardless of the parameter.
-const char *PolarKinematics::GetName(bool forStatusReport) const
+const char *PolarKinematics::GetName(bool forStatusReport) const noexcept
 {
 	return "Polar";
 }
@@ -94,7 +116,7 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 // 'numAxes' is the number of machine axes to convert, which will always be at least 3
 // 'motorPos' is the output vector of motor positions
 // Return true if successful, false if we were unable to convert
-bool PolarKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
+bool PolarKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	motorPos[0] = lrintf(sqrtf(fsquare(machinePos[0]) + fsquare(machinePos[1])) * stepsPerMm[0]);
 	motorPos[1] = (motorPos[0] == 0.0) ? 0 : lrintf(atan2f(machinePos[1], machinePos[0]) * RadiansToDegrees * stepsPerMm[1]);
@@ -112,7 +134,7 @@ bool PolarKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 // 'stepsPerMm' is as configured in M92. On a Scara or polar machine this would actually be steps per degree.
 // 'numDrives' is the number of machine drives to convert, which will always be at least 3
 // 'machinePos' is the output set of converted axis and extruder positions
-void PolarKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
+void PolarKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	const float angle = (motorPos[1] * DegreesToRadians)/stepsPerMm[1];
 	const float radius = (float)motorPos[0]/stepsPerMm[0];
@@ -127,14 +149,15 @@ void PolarKinematics::MotorStepsToCartesian(const int32_t motorPos[], const floa
 }
 
 // Return true if the specified XY position is reachable by the print head reference point.
-bool PolarKinematics::IsReachable(float x, float y, bool isCoordinated) const
+bool PolarKinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
 {
 	const float r2 = fsquare(x) + fsquare(y);
 	return r2 >= minRadiusSquared && r2 <= maxRadiusSquared;
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
-LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+													size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	const bool m208Limited = (applyM208Limits)
 								? Kinematics::LimitPositionFromAxis(finalCoords, Z_AXIS, numAxes, axesHomed)	// call base class function to limit Z and higher axes
@@ -172,7 +195,7 @@ LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const fl
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
-void PolarKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
+void PolarKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept
 {
 	for (size_t i = 0; i < numAxes; ++i)
 	{
@@ -181,24 +204,22 @@ void PolarKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
-AxesBitmap PolarKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
+AxesBitmap PolarKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noexcept
 {
 	// If both X and Y have been specified then we know the positions the radius motor and the turntable, otherwise we don't
-	const AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
-	if ((g92Axes & xyAxes) != xyAxes)
+	if ((g92Axes & XyAxes) != XyAxes)
 	{
-		g92Axes &= ~xyAxes;
+		g92Axes &= ~XyAxes;
 	}
 	return g92Axes;
 }
 
 // Return the set of axes that must be homed prior to regular movement of the specified axes
-AxesBitmap PolarKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
+AxesBitmap PolarKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	if (axesMoving.Intersects(XyzAxes))
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= XyzAxes;
 	}
 	return axesMoving;
 }
@@ -207,11 +228,11 @@ AxesBitmap PolarKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallow
 // If we can proceed with homing some axes, return the name of the homing file to be called. Optionally, update 'alreadyHomed' to indicate
 // that some additional axes should be considered not homed.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-AxesBitmap PolarKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
+AxesBitmap PolarKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept
 {
 	// Ask the base class which homing file we should call first
-	AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
-	if (ret == 0)
+	const AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
+	if (ret.IsNonEmpty())
 	{
 		// Change the returned name if it is X or Y
 		if (StringEqualsIgnoreCase(filename.c_str(), "homex.g"))
@@ -229,14 +250,14 @@ AxesBitmap PolarKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
 // Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool PolarKinematics::QueryTerminateHomingMove(size_t axis) const
+bool PolarKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 {
 	return false;
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
+void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
 {
 	switch(axis)
 	{
@@ -257,7 +278,7 @@ void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
+void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	int32_t turntableMovement = labs(dda.DriveCoordinates()[1] - dda.GetPrevious()->DriveCoordinates()[1]);
 	if (turntableMovement != 0)
@@ -284,16 +305,16 @@ void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 }
 
 // Return true if the specified axis is a continuous rotation axis
-bool PolarKinematics::IsContinuousRotationAxis(size_t axis) const
+bool PolarKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 {
 	return axis == 1;
 }
 
 // Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap PolarKinematics::GetLinearAxes() const
+AxesBitmap PolarKinematics::GetLinearAxes() const noexcept
 {
-	return MakeBitmap<AxesBitmap>(Z_AXIS);
+	return AxesBitmap::MakeFromBits(Z_AXIS);
 }
 
 // Update the derived parameters after the master parameters have been changed

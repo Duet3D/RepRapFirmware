@@ -29,8 +29,8 @@ struct RestorePoint
 	LaserPwmOrIoBits laserPwmOrIoBits;		// The output port bits setting for this move, or the laser power
 #endif
 
-	RestorePoint();
-	void Init();
+	RestorePoint() noexcept;
+	void Init() noexcept;
 };
 
 #endif /* SRC_GCODES_RESTOREPOINT_H_ */

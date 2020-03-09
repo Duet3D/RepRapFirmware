@@ -357,7 +357,7 @@ private:
 
 	volatile uint32_t newRegistersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
 	uint32_t registersToUpdate;								// bitmap of register indices whose values need to be sent to the driver chip
-	uint32_t driverBit;										// 1 << the driver number
+	DriversBitmap driverBit;								// bitmap of just this driver number
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t motorCurrent;									// the configured motor current in mA
@@ -404,11 +404,11 @@ void TmcDriverState::Init(uint32_t p_driverNumber) noexcept
 pre(!driversPowered)
 {
 	axisNumber = p_driverNumber;										// axes are mapped straight through to drivers initially
-	driverBit = 1ul << p_driverNumber;
+	driverBit = DriversBitmap::MakeFromBits(p_driverNumber);
 	enabled = false;
 	registersToUpdate = newRegistersToUpdate = 0;
 	motorCurrent = 0;
-	standstillCurrentFraction = 181; 									// default to 1/sqrt(2)
+	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
 
 	// Set default values for all registers and flag them to be updated
 	UpdateRegister(WriteGConf, DefaultGConfReg);
@@ -475,7 +475,7 @@ float TmcDriverState::GetStandstillCurrentPercent() const noexcept
 
 void TmcDriverState::SetStandstillCurrentPercent(float percent) noexcept
 {
-	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100.0), 0, 255);
+	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100), 0, 255);
 	UpdateCurrent();
 }
 
@@ -672,12 +672,15 @@ void TmcDriverState::UpdateCurrent() noexcept
 	else if (gs < 32)
 	{
 		// We can't regulate the current just through the global scaler because it has a minimum value of 32
-		iRun = gs - 1;
+		iRun = (gs == 0) ? gs : gs - 1;
 		gs = 32;
 	}
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets
-	const uint8_t limitedStandstillCurrentFraction = (uint8_t)min<uint32_t>(standstillCurrentFraction, (256 * (uint32_t)MaximumStandstillCurrent)/motorCurrent);
+	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
+	const uint8_t limitedStandstillCurrentFraction = (motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
+														? standstillCurrentFraction
+															: (uint8_t)(MaxStandstillCurrentTimes256/motorCurrent);
 	const uint32_t iHold = (iRun * limitedStandstillCurrentFraction)/256;
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
@@ -790,8 +793,10 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	{
 		threshold -= 128;
 	}
-	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 ", coolstep %" PRIx32,
-				threshold, ((filtered) ? "on" : "off"), StepTimer::StepClockRate/maxStallStepInterval, writeRegisters[WriteCoolConf] & 0xFFFF);
+	const uint32_t fullstepsPerSecond = StepTimer::StepClockRate/maxStallStepInterval;
+	const float speed = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
+				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, writeRegisters[WriteCoolConf] & 0xFFFF);
 }
 
 // In the following, only byte accesses to sendDataBlock are allowed, because accesses to non-cacheable memory must be aligned
@@ -1183,7 +1188,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			}
 
 			// Wait for the end-of-transfer interrupt
-			timedOut = (TaskBase::Take(TransferTimeout) == 0);
+			timedOut = TaskBase::Take(TransferTimeout);
 			DisableEndOfTransferInterrupt();
 			DisableDma();
 

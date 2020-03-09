@@ -20,18 +20,18 @@
 #endif
 
 // Switch endstop
-SwitchEndstop::SwitchEndstop(uint8_t axis, EndStopPosition pos) : Endstop(axis, pos), numPortsUsed(0)
+SwitchEndstop::SwitchEndstop(uint8_t axis, EndStopPosition pos) noexcept : Endstop(axis, pos), numPortsUsed(0)
 {
 	// ports will be initialised automatically by the IoPort default constructor
 }
 
-SwitchEndstop::~SwitchEndstop()
+SwitchEndstop::~SwitchEndstop() noexcept
 {
 	ReleasePorts();
 }
 
 // Release any local and remote ports we have allocated and set numPortsUsed to zero
-void SwitchEndstop::ReleasePorts()
+void SwitchEndstop::ReleasePorts() noexcept
 {
 	while (numPortsUsed != 0)
 	{
@@ -56,16 +56,11 @@ void SwitchEndstop::ReleasePorts()
 GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	String<StringLength50> portNames;
-	if (!gb.GetReducedString(portNames.GetRef()))
-	{
-		reply.copy("Missing port name string");
-		return GCodeResult::error;
-	}
-
+	gb.GetReducedString(portNames.GetRef());
 	return Configure(portNames.c_str(), reply);
 }
 
-GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& reply)
+GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& reply) noexcept
 {
 	ReleasePorts();
 
@@ -116,13 +111,13 @@ GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& repl
 	return GCodeResult::ok;
 }
 
-EndStopType SwitchEndstop::GetEndstopType() const
+EndStopType SwitchEndstop::GetEndstopType() const noexcept
 {
 	return EndStopType::inputPin;
 }
 
 // Test whether we are at or near the stop
-EndStopHit SwitchEndstop::Stopped() const
+EndStopHit SwitchEndstop::Stopped() const noexcept
 {
 	for (size_t i = 0; i < numPortsUsed; ++i)
 	{
@@ -135,12 +130,12 @@ EndStopHit SwitchEndstop::Stopped() const
 }
 
 // This is called to prime axis endstops
-bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
+bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Decide whether we stop just the driver, just the axis, or everything
-	stopAll = ((kin.GetConnectedAxes(GetAxis()) & ~MakeBitmap<AxesBitmap>(GetAxis())) != 0);
+	stopAll = kin.GetConnectedAxes(GetAxis()).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
 	numPortsLeftToTrigger = (numPortsUsed != axisDrivers.numDrivers) ? 1 : numPortsUsed;
-	portsLeftToTrigger = LowestNBits<PortsBitmap>(numPortsUsed);
+	portsLeftToTrigger = PortsBitmap::MakeLowestNBits(numPortsUsed);
 
 #if SUPPORT_CAN_EXPANSION
 	// For each remote switch, check that the expansion board knows about it, and make sure we have an up-to-date state
@@ -150,7 +145,7 @@ bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDr
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), i);
 			String<StringLength100> reply;
-			if (CanInterface::EnableHandle(boardNumbers[i], h, states[i], reply.GetRef()) != GCodeResult::ok)
+			if (CanInterface::EnableHandle(boardNumbers[i], h, true, states[i], reply.GetRef()) != GCodeResult::ok)
 			{
 				reply.cat('\n');
 				reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
@@ -165,14 +160,14 @@ bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDr
 
 // Check whether the endstop is triggered and return the action that should be performed. Don't update the state until Acknowledge is called.
 // Called from the step ISR.
-EndstopHitDetails SwitchEndstop::CheckTriggered(bool goingSlow)
+EndstopHitDetails SwitchEndstop::CheckTriggered(bool goingSlow) noexcept
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
-	if (portsLeftToTrigger != 0)
+	if (portsLeftToTrigger.IsNonEmpty())
 	{
 		for (size_t i = 0; i < numPortsUsed; ++i)
 		{
-			if (IsBitSet(portsLeftToTrigger, i) && IsTriggered(i))
+			if (portsLeftToTrigger.IsBitSet(i) && IsTriggered(i))
 			{
 				rslt.axis = GetAxis();
 				if (stopAll)
@@ -215,7 +210,7 @@ EndstopHitDetails SwitchEndstop::CheckTriggered(bool goingSlow)
 
 // This is called by the ISR to acknowledge that it is acting on the return from calling CheckTriggered. Called from the step ISR.
 // Return true if we have finished with this endstop or probe in this move.
-bool SwitchEndstop::Acknowledge(EndstopHitDetails what)
+bool SwitchEndstop::Acknowledge(EndstopHitDetails what) noexcept
 {
 	switch (what.GetAction())
 	{
@@ -224,7 +219,7 @@ bool SwitchEndstop::Acknowledge(EndstopHitDetails what)
 		return true;
 
 	case EndstopHitAction::stopDriver:
-		ClearBit(portsLeftToTrigger, what.internalUse);
+		portsLeftToTrigger.ClearBit(what.internalUse);
 		--numPortsLeftToTrigger;
 		return false;
 
@@ -233,7 +228,7 @@ bool SwitchEndstop::Acknowledge(EndstopHitDetails what)
 	}
 }
 
-void SwitchEndstop::AppendDetails(const StringRef& str)
+void SwitchEndstop::AppendDetails(const StringRef& str) noexcept
 {
 	str.catf((numPortsUsed == 1) ? "switch connected to pin" : "switches connected to pins");
 
@@ -267,7 +262,7 @@ void SwitchEndstop::AppendDetails(const StringRef& str)
 #if SUPPORT_CAN_EXPANSION
 
 // Process a remote endstop input change that relates to this endstop
-void SwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state)
+void SwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) noexcept
 {
 	if (handleMinor < numPortsUsed && boardNumbers[handleMinor] == src)
 	{

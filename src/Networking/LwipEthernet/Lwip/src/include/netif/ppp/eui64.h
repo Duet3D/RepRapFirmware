@@ -35,11 +35,15 @@
  * $Id: eui64.h,v 1.6 2002/12/04 23:03:32 paulus Exp $
 */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT && PPP_IPV6_SUPPORT  /* don't build if not configured for use in lwipopts.h */
 
 #ifndef EUI64_H
 #define EUI64_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * @todo:
@@ -89,6 +93,10 @@ typedef union
 #define eui64_setlo32(e, l)	eui64_set32(e, l)
 
 char *eui64_ntoa(eui64_t);	/* Returns ascii representation of id */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* EUI64_H */
 #endif /* PPP_SUPPORT && PPP_IPV6_SUPPORT */

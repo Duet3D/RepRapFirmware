@@ -6,23 +6,28 @@
  */
 
 #include "BinaryParser.h"
-#include "GCodeBuffer.h"
-#include "Platform.h"
-#include "RepRap.h"
 
-BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) : gb(gcodeBuffer)
+#if HAS_LINUX_INTERFACE
+
+#include "GCodeBuffer.h"
+#include "ExpressionParser.h"
+#include <Platform.h>
+#include <RepRap.h>
+#include <Networking/NetworkDefs.h>
+
+BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
 {
 	header = reinterpret_cast<const CodeHeader *>(gcodeBuffer.buffer);
 }
 
-void BinaryParser::Init()
+void BinaryParser::Init() noexcept
 {
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
 }
 
-void BinaryParser::Put(const char *data, size_t len)
+void BinaryParser::Put(const char *data, size_t len) noexcept
 {
 	memcpy(gb.buffer, data, len);
 	bufferLength = len;
@@ -37,7 +42,7 @@ void BinaryParser::Put(const char *data, size_t len)
 	}
 }
 
-bool BinaryParser::Seen(char c)
+bool BinaryParser::Seen(char c) noexcept
 {
 	if (bufferLength != 0 && header->numParameters != 0)
 	{
@@ -71,273 +76,319 @@ bool BinaryParser::Seen(char c)
 	return false;
 }
 
-char BinaryParser::GetCommandLetter() const
+char BinaryParser::GetCommandLetter() const noexcept
 {
 	return (bufferLength != 0) ? header->letter : 'Q';
 }
 
-bool BinaryParser::HasCommandNumber() const
+bool BinaryParser::HasCommandNumber() const noexcept
 {
 	return (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0);
 }
 
-int BinaryParser::GetCommandNumber() const
+int BinaryParser::GetCommandNumber() const noexcept
 {
 	return HasCommandNumber() ? header->majorCode : -1;
 }
 
-int8_t BinaryParser::GetCommandFraction() const
+int8_t BinaryParser::GetCommandFraction() const noexcept
 {
 	return (bufferLength != 0 && (header->flags & CodeFlags::HasMinorCommandNumber) != 0) ? header->minorCode : -1;
 }
 
 float BinaryParser::GetFValue()
 {
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		float value;
-		switch (seenParameter->type)
-		{
-		case DataType::Float:
-			value = seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0.0f;
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	INTERNAL_ERROR;
-	return 0.0f;
+	float value;
+	switch (seenParameter->type)
+	{
+	case DataType::Float:
+		value = seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			value = parser.ParseFloat();
+			parser.CheckForExtraCharacters();
+		}
+		break;
+	default:
+		value = 0.0;
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return value;
 }
 
 int32_t BinaryParser::GetIValue()
 {
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		int32_t value;
-		switch (seenParameter->type)
-		{
-		case DataType::Float:
-			value = seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0.0f;
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	INTERNAL_ERROR;
-	return 0;
+	int32_t value;
+	switch (seenParameter->type)
+	{
+	case DataType::Float:
+		value = seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			value = parser.ParseInteger();
+			parser.CheckForExtraCharacters();
+		}
+		break;
+	default:
+		value = 0;
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return value;
 }
 
 uint32_t BinaryParser::GetUIValue()
 {
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		uint32_t value;
-		switch (seenParameter->type)
-		{
-		case DataType::Float:
-			value = (uint32_t)seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = (uint32_t)seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0;
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	INTERNAL_ERROR;
-	return 0;
+	uint32_t value;
+	switch (seenParameter->type)
+	{
+	case DataType::Float:
+		value = (uint32_t)seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = (uint32_t)seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			value = parser.ParseUnsigned();
+			parser.CheckForExtraCharacters();
+		}
+		break;
+	default:
+		value = 0;
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return value;
 }
 
 // Get a driver ID
 DriverId BinaryParser::GetDriverId()
 {
-	DriverId value;
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		switch (seenParameter->type)
-		{
-		case DataType::Int:
-		case DataType::UInt:
-		case DataType::DriverId:
-			value.SetFromBinary(seenParameter->uintValue);
-			break;
-
-		default:
-			value.Clear();
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	INTERNAL_ERROR;
-	value.Clear();
+	DriverId value;
+	switch (seenParameter->type)
+	{
+	case DataType::Int:
+	case DataType::UInt:
+	case DataType::DriverId:
+		value.SetFromBinary(seenParameter->uintValue);
+		break;
+
+	default:
+		value.Clear();
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
 	return value;
 }
 
-bool BinaryParser::GetIPAddress(IPAddress& returnedIp)
+void BinaryParser::GetIPAddress(IPAddress& returnedIp)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		return false;
+		THROW_INTERNAL_ERROR;
 	}
 
-	if (seenParameter->type != DataType::String)
+	switch (seenParameter->type)
 	{
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return false;
+	case DataType::String:
+		{
+			const char* p = seenParameterValue;
+			uint8_t ip[4];
+			unsigned int n = 0;
+			for (;;)
+			{
+				const char *pp;
+				const unsigned long v = SafeStrtoul(p, &pp);
+				if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
+				{
+					throw ConstructParseException("invalid IP address");
+				}
+				ip[n] = (uint8_t)v;
+				++n;
+				p = pp;
+				if (*p != '.')
+				{
+					break;
+				}
+				if (n == 4)
+				{
+					throw ConstructParseException("invalid IP address");
+				}
+				++p;
+			}
+
+			if (n != 4)
+			{
+				throw ConstructParseException("invalid IP address");
+			}
+			returnedIp.SetV4(ip);
+		}
+		break;
+
+	case DataType::Expression:
+		//TODO not handled yet
+	default:
+		throw ConstructParseException("IP address string expected");
 	}
 
-	const char* p = seenParameterValue;
-	uint8_t ip[4];
-	unsigned int n = 0;
-	for (;;)
-	{
-		const char *pp;
-		const unsigned long v = SafeStrtoul(p, &pp);
-		if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
-		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
-		}
-		ip[n] = (uint8_t)v;
-		++n;
-		p = pp;
-		if (*p != '.')
-		{
-			break;
-		}
-		if (n == 4)
-		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
-		}
-		++p;
-	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	if (n == 4)
-	{
-		returnedIp.SetV4(ip);
-		return true;
-	}
-	returnedIp.SetNull();
-	return false;
 }
 
-bool BinaryParser::GetMacAddress(uint8_t mac[6])
+void BinaryParser::GetMacAddress(MacAddress& mac)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		return false;
+		THROW_INTERNAL_ERROR;
 	}
 
-	if (seenParameter->type != DataType::String)
+	switch (seenParameter->type)
 	{
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return false;
+	case DataType::String:
+		{
+			const char* p = seenParameterValue;
+			unsigned int n = 0;
+			for (;;)
+			{
+				const char *pp;
+				const unsigned long v = SafeStrtoul(p, &pp, 16);
+				if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
+				{
+					throw ConstructParseException("invalid MAC address");
+				}
+				mac.bytes[n] = (uint8_t)v;
+				++n;
+				p = pp;
+				if (*p != ':')
+				{
+					break;
+				}
+				if (n == 6)
+				{
+					throw ConstructParseException("invalid MAC address");
+				}
+				++p;
+			}
+
+			if (n != 6)
+			{
+				throw ConstructParseException("invalid MAC address");
+			}
+		}
+		break;
+
+	case DataType::Expression:
+		//TODO not handled yet
+	default:
+		throw ConstructParseException("MAC address string expected");
 	}
 
-	const char* p = seenParameterValue;
-	unsigned int n = 0;
-	for (;;)
-	{
-		const char *pp;
-		const unsigned long v = SafeStrtoul(p, &pp, 16);
-		if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
-		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
-		}
-		mac[n] = (uint8_t)v;
-		++n;
-		p = pp;
-		if (*p != ':')
-		{
-			break;
-		}
-		if (n == 6)
-		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
-		}
-		++p;
-	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return n == 6;
 }
 
-bool BinaryParser::GetUnprecedentedString(const StringRef& str)
+void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 {
+	//TODO DSF should know which commands take a string parameter without a preceding parameter letter,
+	// so it should send the argument as a string or as an expression with a dummy parameter letter.
 	str.Clear();
 	WriteParameters(str, false);
-	return !str.IsEmpty();
-}
-
-bool BinaryParser::GetQuotedString(const StringRef& str)
-{
-	return GetPossiblyQuotedString(str);
-}
-
-bool BinaryParser::GetPossiblyQuotedString(const StringRef& str)
-{
-	if (seenParameter != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
+	if (!allowEmpty && str.IsEmpty())
 	{
+		throw ConstructParseException("non-empty string expected");
+	}
+}
+
+void BinaryParser::GetQuotedString(const StringRef& str)
+{
+	GetPossiblyQuotedString(str);
+}
+
+void BinaryParser::GetPossiblyQuotedString(const StringRef& str)
+{
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	switch (seenParameter->type)
+	{
+	case DataType::String:
 		str.copy(seenParameterValue, seenParameter->intValue);
-	}
-	else
-	{
+		break;
+
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			const ExpressionValue val = parser.Parse();
+			parser.CheckForExtraCharacters();
+			val.AppendAsString(str);
+		}
+		break;
+
+	default:
 		str.Clear();
+		break;
 	}
+
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return !str.IsEmpty();
+	if (str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
-bool BinaryParser::GetReducedString(const StringRef& str)
+void BinaryParser::GetReducedString(const StringRef& str)
 {
 	str.Clear();
-	if (seenParameterValue != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
+	if (seenParameterValue != nullptr && seenParameter->type == DataType::String)
 	{
 		while (reducedBytesRead < seenParameter->intValue)
 		{
@@ -354,7 +405,7 @@ bool BinaryParser::GetReducedString(const StringRef& str)
 				{
 					seenParameter = nullptr;
 					seenParameterValue = nullptr;
-					return false;
+					throw ConstructParseException("control character in string");
 				}
 				str.cat(tolower(c));
 				break;
@@ -364,7 +415,10 @@ bool BinaryParser::GetReducedString(const StringRef& str)
 
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return !str.IsEmpty();
+	if (str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
 void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad)
@@ -387,9 +441,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		length = 0;
-		return;
+		THROW_INTERNAL_ERROR;
 	}
 
 	switch (seenParameter->type)
@@ -417,28 +469,28 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
 	}
 }
 
-void BinaryParser::SetFinished()
+void BinaryParser::SetFinished() noexcept
 {
 	gb.machineState->g53Active = false;		// G53 does not persist beyond the current command
 	Init();
 }
 
-FilePosition BinaryParser::GetFilePosition() const
+FilePosition BinaryParser::GetFilePosition() const noexcept
 {
 	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
 }
 
-const char* BinaryParser::DataStart() const
+const char* BinaryParser::DataStart() const noexcept
 {
 	return gb.buffer;
 }
 
-size_t BinaryParser::DataLength() const
+size_t BinaryParser::DataLength() const noexcept
 {
 	return bufferLength;
 }
 
-void BinaryParser::PrintCommand(const StringRef& s) const
+void BinaryParser::PrintCommand(const StringRef& s) const noexcept
 {
 	if (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0)
 	{
@@ -454,7 +506,7 @@ void BinaryParser::PrintCommand(const StringRef& s) const
 	}
 }
 
-void BinaryParser::AppendFullCommand(const StringRef &s) const
+void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 {
 	if (bufferLength != 0)
 	{
@@ -475,19 +527,12 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const
 	}
 }
 
-size_t BinaryParser::AddPadding(size_t bytesRead) const
-{
-    size_t padding = 4 - bytesRead % 4;
-    return bytesRead + ((padding == 4) ? 0 : padding);
-}
-
+//TODO need a way to pass arrays in which one or more elements is an expression from DSF to RRF
 template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		length = 0;
-		return;
+		THROW_INTERNAL_ERROR;
 	}
 
 	int lastIndex = -1;
@@ -547,7 +592,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 	}
 }
 
-void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
+void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const noexcept
 {
 	if (bufferLength != 0)
 	{
@@ -649,3 +694,21 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
 	}
 }
 
+GCodeException BinaryParser::ConstructParseException(const char *str) const noexcept
+{
+	return GCodeException(lineNumber, -1, str);
+}
+
+GCodeException BinaryParser::ConstructParseException(const char *str, const char *param) const noexcept
+{
+	return GCodeException(lineNumber, -1, str, param);
+}
+
+GCodeException BinaryParser::ConstructParseException(const char *str, uint32_t param) const noexcept
+{
+	return GCodeException(lineNumber, -1, str, param);
+}
+
+#endif
+
+// End

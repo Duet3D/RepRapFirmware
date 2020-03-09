@@ -10,6 +10,29 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(SimpleFilamentMonitor, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry SimpleFilamentMonitor::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	{ "enabled",			OBJECT_MODEL_FUNC(self->enabled),		 			ObjectModelEntryFlags::none },
+	{ "filamentPresent",	OBJECT_MODEL_FUNC(self->filamentPresent),		 	ObjectModelEntryFlags::live },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("simple"), 				ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t SimpleFilamentMonitor::objectModelTableDescriptor[] = { 1, 3 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(SimpleFilamentMonitor)
+
+#endif
+
 SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: FilamentMonitor(extruder, type), highWhenNoFilament(type == 2), filamentPresent(false), enabled(false)
 {

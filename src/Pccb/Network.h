@@ -5,20 +5,13 @@
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
 #include "General/IPAddress.h"
-
-const IPAddress DefaultIpAddress;
-const IPAddress DefaultNetMask;
-const IPAddress DefaultGateway;
-const uint8_t macAddress[6] = { 0, 0, 0, 0, 0, 0 };
-
-const uint8_t DefaultMacAddress[6] = { 0, 0, 0, 0, 0, 0 };
-const size_t SsidBufferLength = 32;				// maximum characters in an SSID
+#include <Networking/NetworkDefs.h>
 
 // The main network class that drives the network.
 class Network
 {
 public:
-	Network(Platform& p) noexcept { }
+	Network(Platform& p) noexcept { macAddress.SetDefault(); }
 	void Init() const noexcept { }
 	void Activate() const noexcept { }
 	void Exit() const noexcept { }
@@ -32,8 +25,8 @@ public:
 	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply) noexcept;
 
 	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept { }
-	void SetMacAddress(unsigned int interface, const uint8_t mac[]) noexcept { }
-	const uint8_t *GetMacAddress(unsigned int interface) const noexcept { return macAddress; }
+	GCodeResult SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept;
+	const MacAddress& GetMacAddress(unsigned int interface) const noexcept { return macAddress; }
 
 	void SetHostname(const char *name) const noexcept { }
 	bool IsWiFiInterface(unsigned int interface) const noexcept { return false; }
@@ -43,6 +36,9 @@ public:
 	void HandleHttpGCodeReply(OutputBuffer *buf) noexcept;
 	void HandleTelnetGCodeReply(OutputBuffer *buf) noexcept;
 	uint32_t GetHttpReplySeq() noexcept { return 0; }
+
+private:
+	MacAddress macAddress;
 };
 
 #endif

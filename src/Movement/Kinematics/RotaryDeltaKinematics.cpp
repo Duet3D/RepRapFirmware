@@ -13,14 +13,36 @@
 
 const float RotaryDeltaKinematics::NormalTowerAngles[DELTA_AXES] = { -150.0, -30.0, 90.0 };
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RotaryDeltaKinematics, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry RotaryDeltaKinematics::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. kinematics members
+	{ "name",	OBJECT_MODEL_FUNC(self->GetName(false)), 	ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t RotaryDeltaKinematics::objectModelTableDescriptor[] = { 1, 1 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(RotaryDeltaKinematics)
+
+#endif
+
 // Constructor
-RotaryDeltaKinematics::RotaryDeltaKinematics() : Kinematics(KinematicsType::rotaryDelta, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false)
+RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : Kinematics(KinematicsType::rotaryDelta, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false)
 {
 	Init();
 }
 
 // Initialise parameters to defaults
-void RotaryDeltaKinematics::Init()
+void RotaryDeltaKinematics::Init() noexcept
 {
 	radius = DefaultDeltaRadius;
 	printRadius = DefaultPrintRadius;
@@ -40,7 +62,7 @@ void RotaryDeltaKinematics::Init()
 }
 
 // Compute the derived parameters from the primary parameters
-void RotaryDeltaKinematics::Recalc()
+void RotaryDeltaKinematics::Recalc() noexcept
 {
 	printRadiusSquared = fsquare(printRadius);
 	for (size_t axis = 0; axis < DELTA_AXES; ++axis)
@@ -57,7 +79,7 @@ void RotaryDeltaKinematics::Recalc()
 // Return the name of the current kinematics.
 // If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
 // Otherwise it should be in a format suitable for printing.
-const char *RotaryDeltaKinematics::GetName(bool forStatusReport) const
+const char *RotaryDeltaKinematics::GetName(bool forStatusReport) const noexcept
 {
 	return "Rotary delta";
 }
@@ -167,7 +189,8 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 // 'numAxes' is the number of machine axes to convert, which will always be at least 3
 // 'motorPos' is the output vector of motor positions
 // Return true if successful, false if we were unable to convert
-bool RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
+bool RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
+													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	bool ok = true;
 	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)
@@ -205,7 +228,7 @@ bool RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 // 'stepsPerMm' is as configured in M92. On a Scara or polar machine this would actually be steps per degree.
 // 'numDrives' is the number of machine drives to convert, which will always be at least 3
 // 'machinePos' is the output set of converted axis and extruder positions
-void RotaryDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
+void RotaryDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	ForwardTransform(motorPos[DELTA_A_AXIS]/stepsPerMm[DELTA_A_AXIS], motorPos[DELTA_B_AXIS]/stepsPerMm[DELTA_B_AXIS], motorPos[DELTA_C_AXIS]/stepsPerMm[DELTA_C_AXIS], machinePos);
 
@@ -218,7 +241,7 @@ void RotaryDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 
 // Perform auto calibration. Caller already owns the movement lock.
 // Return true if an error occurred.
-bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply)
+bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	return true;	// auto calibration not implemented yet
 }
@@ -226,7 +249,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 #if HAS_MASS_STORAGE
 
 // Write the parameters that are set by auto calibration to a file, returning true if success
-bool RotaryDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
+bool RotaryDeltaKinematics::WriteCalibrationParameters(FileStore *f) const noexcept
 {
 	return true;	// auto calibration not implemented yet
 }
@@ -234,17 +257,17 @@ bool RotaryDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 #endif
 
 // Return true if the specified XY position is reachable by the print head reference point.
-bool RotaryDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) const
+bool RotaryDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
 {
 	return fsquare(x) + fsquare(y) < printRadiusSquared;
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+															size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
 {
-	constexpr AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
-	if ((axesHomed & allAxes) == allAxes)
+	if ((axesHomed & XyzAxes) == XyzAxes)
 	{
 		// If axes have been homed on a rotary delta printer and this isn't a homing move, check for movements outside limits.
 		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
@@ -280,7 +303,7 @@ LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], co
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
-void RotaryDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
+void RotaryDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept
 {
 	ForwardTransform(0.0, 0.0, 0.0, positions);			// assume that the arms are horizontal
 	for (size_t i = DELTA_AXES; i < numAxes; ++i)
@@ -290,24 +313,22 @@ void RotaryDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
-AxesBitmap RotaryDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
+AxesBitmap RotaryDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noexcept
 {
 	// If all of X, Y and Z have been specified then we know the positions of all 3 tower motors, otherwise we don't
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((g92Axes & xyzAxes) != xyzAxes)
+	if ((g92Axes & XyzAxes) != XyzAxes)
 	{
-		g92Axes &= ~xyzAxes;
+		g92Axes &= ~XyzAxes;
 	}
 	return g92Axes;
 }
 
 // Return the set of axes that must be homed prior to regular movement of the specified axes
-AxesBitmap RotaryDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
+AxesBitmap RotaryDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	if (axesMoving.Intersects(XyzAxes))
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= XyzAxes;
 	}
 	return axesMoving;
 }
@@ -315,13 +336,13 @@ AxesBitmap RotaryDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-AxesBitmap RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
+AxesBitmap RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept
 {
 	// If homing X, Y or Z we must home all the towers
-	if ((toBeHomed & LowestNBits<AxesBitmap>(DELTA_AXES)) != 0)
+	if (toBeHomed.Intersects(AxesBitmap::MakeLowestNBits(DELTA_AXES)))
 	{
 		filename.copy("homedelta.g");
-		return 0;
+		return AxesBitmap();
 	}
 
 	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
@@ -329,14 +350,14 @@ AxesBitmap RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBi
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
 // Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool RotaryDeltaKinematics::QueryTerminateHomingMove(size_t axis) const
+bool RotaryDeltaKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 {
 	return false;
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
+void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
 {
 	if (axis < DELTA_AXES)
 	{
@@ -357,7 +378,7 @@ void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 #if HAS_MASS_STORAGE
 
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
-bool RotaryDeltaKinematics::WriteResumeSettings(FileStore *f) const
+bool RotaryDeltaKinematics::WriteResumeSettings(FileStore *f) const noexcept
 {
 //	return !doneAutoCalibration || WriteCalibrationParameters(f);
 	return true;	// auto calibration not implemented yet
@@ -367,7 +388,7 @@ bool RotaryDeltaKinematics::WriteResumeSettings(FileStore *f) const
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void RotaryDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
+void RotaryDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
 	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
@@ -382,9 +403,9 @@ void RotaryDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *nor
 
 // Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap RotaryDeltaKinematics::GetLinearAxes() const
+AxesBitmap RotaryDeltaKinematics::GetLinearAxes() const noexcept
 {
-	return 0;
+	return AxesBitmap();
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.
@@ -400,7 +421,7 @@ AxesBitmap RotaryDeltaKinematics::GetLinearAxes() const
 //  (a^2 + b^2)sin^2(theta) - 2bc sin(theta) + (c^2 - a^2) = 0
 // which has solutions:
 // sin(theta) = (bc +/- a sqrt(a^2 + b^2 - c^2))/(a^2 + b^2)
-float RotaryDeltaKinematics::Transform(const float machinePos[], size_t axis) const
+float RotaryDeltaKinematics::Transform(const float machinePos[], size_t axis) const noexcept
 {
 	if (axis < DELTA_AXES)
 	{
@@ -428,7 +449,7 @@ float RotaryDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 }
 
 // Calculate the Cartesian coordinates from the motor coordinates. We do this by trilateration.
-void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const
+void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const noexcept
 {
 	// Calculate the Cartesian coordinates of the joints at the moving ends of the arms
 	const float angleA = Ha * DegreesToRadians;

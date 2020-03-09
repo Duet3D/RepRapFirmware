@@ -32,7 +32,11 @@ protected:
 	void SendData() noexcept override;
 
 private:
+#ifdef __LPC17xx__
+	static const size_t MaxHttpSessions = 2;            // maximum number of simultaneous HTTP sessions
+#else
 	static const size_t MaxHttpSessions = 8;			// maximum number of simultaneous HTTP sessions
+#endif
 	static const uint16_t WebMessageLength = 1460;		// maximum length of the web message we accept after decoding
 	static const size_t MaxCommandWords = 4;			// max number of space-separated words in the command
 	static const size_t MaxQualKeys = 5;				// max number of key/value pairs in the qualifier

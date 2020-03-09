@@ -12,8 +12,62 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Movement/DDA.h"
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(CoreKinematics, __VA_ARGS__)
+
+constexpr ObjectModelArrayDescriptor CoreKinematics::forwardMatrixElementArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+							{ return ExpressionValue(((const CoreKinematics*)self)->forwardMatrix(context.GetIndex(1), context.GetIndex(0)), 3); }
+};
+
+constexpr ObjectModelArrayDescriptor CoreKinematics::inverseMatrixElementArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+							{ return ExpressionValue(((const CoreKinematics*)self)->forwardMatrix(context.GetIndex(1), context.GetIndex(0)), 3); }
+};
+
+constexpr ObjectModelArrayDescriptor CoreKinematics::forwardMatrixArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&forwardMatrixElementArrayDescriptor); }
+};
+
+constexpr ObjectModelArrayDescriptor CoreKinematics::inverseMatrixArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&inverseMatrixElementArrayDescriptor); }
+};
+
+constexpr ObjectModelTableEntry CoreKinematics::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. kinematics members
+	{ "forwardMatrix",		OBJECT_MODEL_FUNC_NOSELF(&forwardMatrixArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "inverseMatrix",		OBJECT_MODEL_FUNC_NOSELF(&inverseMatrixArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->GetName(false)), 						ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 3 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(CoreKinematics)
+
+#endif
+
 // Recalculate internal variables following a configuration change
-void CoreKinematics::Recalc()
+void CoreKinematics::Recalc() noexcept
 {
 	// Calculate the forward matrix by inverting the inverse matrix
 	{
@@ -60,7 +114,7 @@ void CoreKinematics::Recalc()
 	{
 		firstMotor[i] = firstAxis[i] = MaxAxes;
 		lastMotor[i] = lastAxis[i] = 0;
-		connectedAxes[i] = 0;
+		connectedAxes[i].Clear();
 	}
 
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
@@ -77,7 +131,7 @@ void CoreKinematics::Recalc()
 				{
 					lastAxis[motor] = axis;
 				}
-				SetBit(connectedAxes[axis], motor);
+				connectedAxes[axis].SetBit(motor);
 			}
 
 			if (forwardMatrix(motor, axis) != 0.0)							// if this motor affects this axes
@@ -90,7 +144,7 @@ void CoreKinematics::Recalc()
 				{
 					lastMotor[axis] = motor;
 				}
-				SetBit(connectedAxes[axis], motor);
+				connectedAxes[axis].SetBit(motor);
 			}
 		}
 	}
@@ -118,12 +172,12 @@ void CoreKinematics::Recalc()
 }
 
 // Return true if the axis doesn't have a single dedicated motor
-inline bool CoreKinematics::HasSharedMotor(size_t axis) const
+inline bool CoreKinematics::HasSharedMotor(size_t axis) const noexcept
 {
-	return connectedAxes[axis] != MakeBitmap<AxesBitmap>(axis);
+	return connectedAxes[axis] != AxesBitmap::MakeFromBits(axis);
 }
 
-CoreKinematics::CoreKinematics(KinematicsType k) : ZLeadscrewKinematics(k), modified(false)
+CoreKinematics::CoreKinematics(KinematicsType k) noexcept : ZLeadscrewKinematics(k), modified(false)
 {
 	// Start by assuming 1:1 mapping of axes to motors by setting diagonal elements to 1 and other element to zero
 	inverseMatrix.Fill(0.0);
@@ -180,7 +234,7 @@ CoreKinematics::CoreKinematics(KinematicsType k) : ZLeadscrewKinematics(k), modi
 }
 
 // Return the name of the current kinematics
-const char* CoreKinematics::GetName(bool forStatusReport) const
+const char* CoreKinematics::GetName(bool forStatusReport) const noexcept
 {
 	// This reports the original kinematics that was requested. It doesn't allow for the matrix having been patched to change the kinematics.
 	switch (GetKinematicsType())
@@ -287,7 +341,7 @@ bool CoreKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const String
 // This is called frequently, so try to keep it efficient.
 // If a motor has no visible axes that affect it, leave the old motor coordinate unchanged.
 bool CoreKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes,
-	int32_t motorPos[], bool isCoordinated) const
+											int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	for (size_t motor = 0; motor < numTotalAxes; ++motor)
 	{
@@ -309,7 +363,7 @@ bool CoreKinematics::CartesianToMotorSteps(const float machinePos[], const float
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
-void CoreKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
+void CoreKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	// If there are more motors than visible axes (e.g. CoreXYU which has a V motor), we assume that we can ignore the trailing ones when calculating the machine position
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -330,14 +384,14 @@ void CoreKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
 // Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool CoreKinematics::QueryTerminateHomingMove(size_t axis) const
+bool CoreKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 {
 	return HasSharedMotor(axis);
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
+void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
 {
 	const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
 	if (HasSharedMotor(axis))
@@ -359,7 +413,7 @@ void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const fl
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle
 // The speeds along individual Cartesian axes have already been limited before this is called, so we need only be concerned with shared motors
-void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
+void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	// For each shared motor, calculate how much of the total move it contributes
 	float motorMovements[MaxAxes];
@@ -399,16 +453,16 @@ void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalised
 
 // Return a bitmap of the motors that are involved in homing a particular axis or tower. Used for implementing stall detection endstops.
 // Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
-AxesBitmap CoreKinematics::GetConnectedAxes(size_t axis) const
+AxesBitmap CoreKinematics::GetConnectedAxes(size_t axis) const noexcept
 {
 	return connectedAxes[axis];
 }
 
 // Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
 // This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap CoreKinematics::GetLinearAxes() const
+AxesBitmap CoreKinematics::GetLinearAxes() const noexcept
 {
-	return LowestNBits<AxesBitmap>(reprap.GetGCodes().GetVisibleAxes());	// we can babystep all axes
+	return AxesBitmap::MakeLowestNBits(reprap.GetGCodes().GetVisibleAxes());	// we can babystep all axes
 }
 
 // End

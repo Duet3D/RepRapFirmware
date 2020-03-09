@@ -27,19 +27,35 @@ const size_t NumFirmwareUpdateModules = 1;
 #define HAS_HIGH_SPEED_SD		0
 #define HAS_VOLTAGE_MONITOR		0
 #define HAS_VREF_MONITOR		0
-#define ACTIVE_LOW_HEAT_ON		0
+
+const size_t NumFirmwareUpdateModules = 1;
+#define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
+
+#define IAP_IN_RAM				0
+
+#if IAP_IN_RAM
+
+# define IAP_UPDATE_FILE "RaddsIAP.bin"
+constexpr uint32_t IAP_IMAGE_START = 0x20008000u;
+
+#else
+
+# define IAP_UPDATE_FILE "iapradds.bin"
+constexpr uint32_t IAP_IMAGE_START = 0x000F0000;
+constexpr uint32_t IAP_IMAGE_END = 0x000FFBFF;		// don't touch the last 1KB, it's used for NvData
+
+#endif
 
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::RADDS_15
 #define ELECTRONICS "RADDS"
 
-#define SUPPORT_INKJET		0					// set nonzero to support inkjet control
-#define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
-#define SUPPORT_SCANNER		0					// set nonzero to support FreeLSS scanners
-#define SUPPORT_IOBITS		0					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	0					// set nonzero to support DHT temperature/humidity sensors
-
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
+#define SUPPORT_INKJET			0				// set nonzero to support inkjet control
+#define SUPPORT_ROLAND			0				// set nonzero to support Roland mill
+#define SUPPORT_SCANNER			0				// set nonzero to support FreeLSS scanners
+#define SUPPORT_IOBITS			0				// set to support P parameter in G0/G1 commands
+#define SUPPORT_DHT_SENSOR		0				// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_OBJECT_MODEL	1
 
 // The physical capabilities of the machine
 

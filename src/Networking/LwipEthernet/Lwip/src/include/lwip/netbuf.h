@@ -37,15 +37,15 @@
 #ifndef LWIP_HDR_NETBUF_H
 #define LWIP_HDR_NETBUF_H
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 #if LWIP_NETCONN || LWIP_SOCKET /* don't build if not configured for use in lwipopts.h */
 /* Note: Netconn API is always available when sockets are enabled -
  * sockets are implemented on top of them */
 
-#include <Lwip/src/include/lwip/pbuf.h>
-#include <Lwip/src/include/lwip/ip_addr.h>
-#include <Lwip/src/include/lwip/ip6_addr.h>
+#include "lwip/pbuf.h"
+#include "lwip/ip_addr.h"
+#include "lwip/ip6_addr.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,9 +62,7 @@ struct netbuf {
   ip_addr_t addr;
   u16_t port;
 #if LWIP_NETBUF_RECVINFO || LWIP_CHECKSUM_ON_COPY
-#if LWIP_CHECKSUM_ON_COPY
   u8_t flags;
-#endif /* LWIP_CHECKSUM_ON_COPY */
   u16_t toport_chksum;
 #if LWIP_NETBUF_RECVINFO
   ip_addr_t toaddr;

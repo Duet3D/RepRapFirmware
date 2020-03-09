@@ -17,6 +17,8 @@
 
 #include <utility>
 
+ReadWriteLock FansManager::fansLock;
+
 FansManager::FansManager() noexcept
 {
 	for (Fan*& f : fans)
@@ -61,15 +63,15 @@ bool FansManager::CheckFans() noexcept
 	return thermostaticFanRunning;
 }
 
-// Return the highest used fan number. Used by RepRap.cpp to shorten responses by omitting unused trailing fan numbers. If no fans are configured, return 0.
-size_t FansManager::GetHighestUsedFanNumber() const noexcept
+// Return the number of fans to report on. Used by RepRap.cpp to shorten responses by omitting unused trailing fan numbers.
+size_t FansManager::GetNumFansToReport() const noexcept
 {
-	size_t highestFan = ARRAY_SIZE(fans);
-	do
+	size_t numFans = ARRAY_SIZE(fans);
+	while (numFans != 0 && fans[numFans - 1] == nullptr)
 	{
-		--highestFan;
-	} while (fans[highestFan] == nullptr && highestFan != 0);
-	return highestFan;
+		--numFans;
+	}
+	return numFans;
 }
 
 #if HAS_MASS_STORAGE
@@ -88,7 +90,7 @@ bool FansManager::WriteFanSettings(FileStore *f) const noexcept
 #endif
 
 // This is called by M950 to create a fan or change its PWM frequency
-GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply)
 {
 	if (fanNum < MaxFans)
 	{
@@ -96,16 +98,12 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 		if (seenPin)
 		{
 			String<StringLength50> pinName;
-			if (!gb.GetReducedString(pinName.GetRef()))
-			{
-				reply.copy("Missing pin name");
-				return GCodeResult::error;
-			}
+			gb.GetReducedString(pinName.GetRef());
 
 			WriteLocker lock(fansLock);
 
 			Fan *oldFan = nullptr;
-			std::swap(oldFan, fans[fanNum]);
+			std::swap<Fan*>(oldFan, fans[fanNum]);
 			delete oldFan;
 
 			const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
@@ -155,7 +153,7 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 // then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 // If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 // If no relevant parameters are found, print the existing ones to 'reply' and return false.
-bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) noexcept
+bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	auto fan = FindFan(fanNum);
 	if (fan.IsNull())
@@ -196,7 +194,7 @@ void FansManager::SetFanValue(size_t fanNum, float speed) noexcept
 bool FansManager::IsFanControllable(size_t fanNum) const noexcept
 {
 	auto fan = FindFan(fanNum);
-	return fan.IsNotNull() && !fan->HasMonitoredSensors() && fan->IsConfigured();
+	return fan.IsNotNull() && !fan->HasMonitoredSensors();
 }
 
 // Return the fan's name

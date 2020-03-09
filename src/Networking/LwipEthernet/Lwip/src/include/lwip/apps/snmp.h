@@ -39,7 +39,7 @@
 #ifndef LWIP_HDR_APPS_SNMP_H
 #define LWIP_HDR_APPS_SNMP_H
 
-#include <Lwip/src/include/lwip/apps/snmp_opts.h>
+#include "lwip/apps/snmp_opts.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,8 +47,8 @@ extern "C" {
 
 #if LWIP_SNMP /* don't build if not configured for use in lwipopts.h */
 
-#include <Lwip/src/include/lwip/err.h>
-#include <Lwip/src/include/lwip/apps/snmp_core.h>
+#include "lwip/err.h"
+#include "lwip/apps/snmp_core.h"
 
 /** SNMP variable binding descriptor (publically needed for traps) */
 struct snmp_varbind
@@ -105,6 +105,13 @@ err_t snmp_send_trap(const struct snmp_obj_id* oid, s32_t generic_trap, s32_t sp
 #define SNMP_AUTH_TRAPS_ENABLED  1
 void snmp_set_auth_traps_enabled(u8_t enable);
 u8_t snmp_get_auth_traps_enabled(void);
+
+u8_t snmp_v1_enabled(void);
+u8_t snmp_v2c_enabled(void);
+u8_t snmp_v3_enabled(void);
+void snmp_v1_enable(u8_t enable);
+void snmp_v2c_enable(u8_t enable);
+void snmp_v3_enable(u8_t enable);
 
 const char * snmp_get_community(void);
 const char * snmp_get_community_write(void);

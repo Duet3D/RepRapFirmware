@@ -38,7 +38,7 @@
 #ifndef LWIP_HDR_APPS_SNMP_THREADSYNC_H
 #define LWIP_HDR_APPS_SNMP_THREADSYNC_H
 
-#include <Lwip/src/include/lwip/apps/snmp_opts.h>
+#include "lwip/apps/snmp_opts.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,8 +46,8 @@ extern "C" {
 
 #if LWIP_SNMP /* don't build if not configured for use in lwipopts.h */
 
-#include <Lwip/src/include/lwip/apps/snmp_core.h>
-#include <Lwip/src/include/lwip/sys.h>
+#include "lwip/apps/snmp_core.h"
+#include "lwip/sys.h"
 
 typedef void (*snmp_threadsync_called_fn)(void* arg);
 typedef void (*snmp_threadsync_synchronizer_fn)(snmp_threadsync_called_fn fn, void* arg);

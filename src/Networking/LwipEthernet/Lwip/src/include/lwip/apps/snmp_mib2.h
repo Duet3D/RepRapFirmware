@@ -37,7 +37,7 @@
 #ifndef LWIP_HDR_APPS_SNMP_MIB2_H
 #define LWIP_HDR_APPS_SNMP_MIB2_H
 
-#include <Lwip/src/include/lwip/apps/snmp_opts.h>
+#include "lwip/apps/snmp_opts.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,12 +46,12 @@ extern "C" {
 #if LWIP_SNMP /* don't build if not configured for use in lwipopts.h */
 #if SNMP_LWIP_MIB2
 
-#include <Lwip/src/include/lwip/apps/snmp_core.h>
+#include "lwip/apps/snmp_core.h"
 
 extern const struct snmp_mib mib2;
 
 #if SNMP_USE_NETCONN
-#include <Lwip/src/include/lwip/apps/snmp_threadsync.h>
+#include "lwip/apps/snmp_threadsync.h"
 void snmp_mib2_lwip_synchronizer(snmp_threadsync_called_fn fn, void* arg);
 extern struct snmp_threadsync_instance snmp_mib2_lwip_locks;
 #endif

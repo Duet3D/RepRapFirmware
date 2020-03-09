@@ -65,24 +65,21 @@
  */
 extern "C" uint32_t get_fattime() noexcept
 {
-	const Platform& platform = reprap.GetPlatform();
-	if (!platform.IsDateTimeSet())
+	// Retrieve current date and time from RTC
+	tm timeInfo;
+	if (reprap.GetPlatform().GetDateTime(timeInfo))
 	{
-		// Date and time have not been set, return default timestamp instead
-		return 0x210001;
+		const uint32_t ul_time = ((timeInfo.tm_year + 1900 - 1980) << 25)
+								| ((timeInfo.tm_mon + 1) << 21)
+								| (timeInfo.tm_mday << 16)
+								| (timeInfo.tm_hour << 11)
+								| (timeInfo.tm_min << 5)
+								| (timeInfo.tm_sec >> 1);
+		return ul_time;
 	}
 
-	// Retrieve current date and time from RTC
-	time_t timeNow = platform.GetDateTime();
-	struct tm timeInfo;
-	gmtime_r(&timeNow, &timeInfo);
-
-	uint32_t ul_time = ((timeInfo.tm_year + 1900 - 1980) << 25)
-						| ((timeInfo.tm_mon + 1) << 21)
-						| (timeInfo.tm_mday << 16)
-						| (timeInfo.tm_hour << 11)
-						| (timeInfo.tm_min << 5)
-						| (timeInfo.tm_sec >> 1);
-	return ul_time;
+	// Date and time have not been set, return default timestamp instead
+	return 0x210001;
 }
 
+// End

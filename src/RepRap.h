@@ -29,6 +29,13 @@ Licence: GPL
 #include "Fans/FansManager.h"
 #include "Tools/Tool.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include <CAN/ExpansionManager.h>
+#endif
+
+#include "SoftwareReset.h"
+#include <functional>
+
 enum class ResponseSource
 {
 	HTTP,
@@ -54,6 +61,8 @@ class RepRap INHERIT_OBJECT_MODEL
 {
 public:
 	RepRap() noexcept;
+	RepRap(const RepRap&) = delete;
+
 	void EmergencyStop() noexcept;
 	void Init() noexcept;
 	void Spin() noexcept;
@@ -74,19 +83,24 @@ public:
 	bool CheckPassword(const char* pw) const noexcept;
 	void SetPassword(const char* pw) noexcept;
 
+	// Tool management
 	void AddTool(Tool* t) noexcept;
-	void DeleteTool(Tool* t) noexcept;
+	void DeleteTool(int toolNumber) noexcept;
 	void SelectTool(int toolNumber, bool simulating) noexcept;
 	void StandbyTool(int toolNumber, bool simulating) noexcept;
-	Tool* GetCurrentTool() const noexcept;
 	int GetCurrentToolNumber() const noexcept;
-	Tool* GetTool(int toolNumber) const noexcept;
-	Tool* GetCurrentOrDefaultTool() const noexcept;
-	const Tool* GetFirstTool() const noexcept { return toolList; }						// Return the lowest-numbered tool
-	AxesBitmap GetCurrentXAxes() const noexcept { return Tool::GetXAxes(currentTool); }	// Get the current axes used as X axes
-	AxesBitmap GetCurrentYAxes() const noexcept { return Tool::GetYAxes(currentTool); }	// Get the current axes used as Y axes
+	void SetPreviousToolNumber() noexcept;
+	Tool *GetCurrentTool() const noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentTool() const noexcept;
+	ReadLockedPointer<Tool> GetTool(int toolNumber) const noexcept;
+	ReadLockedPointer<Tool> GetCurrentOrDefaultTool() const noexcept;
+	ReadLockedPointer<Tool> GetFirstTool() const noexcept;										// Return the lowest-numbered tool
+	AxesBitmap GetCurrentXAxes() const noexcept { return Tool::GetXAxes(currentTool); }		// Get the current axes used as X axes
+	AxesBitmap GetCurrentYAxes() const noexcept { return Tool::GetYAxes(currentTool); }		// Get the current axes used as Y axes
 	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
 	unsigned int GetNumberOfContiguousTools() const noexcept;
+	void ReportAllToolTemperatures(const StringRef& reply) const noexcept;
+	void SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept;
 	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;
@@ -117,6 +131,9 @@ public:
  	bool UsingLinuxInterface() const noexcept { return usingLinuxInterface; }
  	LinuxInterface& GetLinuxInterface() const noexcept { return *linuxInterface; }
 #endif
+#if SUPPORT_CAN_EXPANSION
+ 	ExpansionManager& GetExpansion() const noexcept { return *expansion; }
+#endif
 
 	void Tick() noexcept;
 	bool SpinTimeoutImminent() const noexcept;
@@ -136,24 +153,31 @@ public:
 
 	bool GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept;
 
+#if SUPPORT_OBJECT_MODEL
+	OutputBuffer *GetModelResponse(const char *key, const char *flags);
+#endif
+
 	void Beep(unsigned int freq, unsigned int ms) noexcept;
 	void SetMessage(const char *msg) noexcept;
 	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept;
 	void ClearAlert() noexcept;
 
 #if HAS_MASS_STORAGE
-	bool WriteToolSettings(FileStore *f) const noexcept;				// save some information for the resume file
-	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept;			// save some information in config-override.g
+	bool WriteToolSettings(FileStore *f) noexcept;						// save some information for the resume file
+	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noexcept;	// save some information in config-override.g
 #endif
+
+	bool IsProcessingConfig() const noexcept { return processingConfig; }
 
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept;
 	void UpdateFirmware() noexcept;
 	void StartIap() noexcept;
 
-	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// Report an internal error
+	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error
+	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) noexcept;
 
-	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;		// helper function for diagnostic tests
+	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
 	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests
 	static double SinCos(double angle) noexcept;						// helper function for diagnostic tests
 
@@ -161,14 +185,27 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(boards)
+	OBJECT_MODEL_ARRAY(fans)
+	OBJECT_MODEL_ARRAY(inputs)
+	OBJECT_MODEL_ARRAY(tools)
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
+	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
+	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func) noexcept;
+	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func) noexcept;
 
+	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
+	const char* GetStatusString() const noexcept;
+	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
+	bool RunStartupFile(const char *filename) noexcept;
 
 	static constexpr uint32_t MaxTicksInSpinState = 20000;	// timeout before we reset the processor
 	static constexpr uint32_t HighTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
+
+	static ReadWriteLock toolListLock;
 
 	Platform* platform;
 	Network* network;
@@ -195,13 +232,19 @@ private:
 	Roland* roland;
 #endif
 
- 	Mutex toolListMutex, messageBoxMutex;
+#if SUPPORT_CAN_EXPANSION
+ 	ExpansionManager *expansion;
+#endif
+
+ 	Mutex messageBoxMutex;
+
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;
 	uint32_t lastWarningMillis;					// when we last sent a warning message for things that can happen very often
 
 	uint16_t activeExtruders;
 	uint16_t activeToolHeaters;
+	uint16_t numToolsToReport;
 
 	uint16_t ticksInSpinState;
 	uint16_t heatTaskIdleTicks;
@@ -217,6 +260,8 @@ private:
 	uint16_t messageSequence;
 
 	MessageBox mbox;							// message box data
+
+	int8_t previousToolNumber;
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;
@@ -235,7 +280,7 @@ private:
 // A single instance of the RepRap class contains all the others
 extern RepRap reprap;
 
-inline bool RepRap::Debug(Module m) const noexcept { return debug & (1 << m); }
+inline bool RepRap::Debug(Module m) const noexcept { return debug & (1u << m); }
 inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
 
 inline Tool* RepRap::GetCurrentTool() const noexcept { return currentTool; }
@@ -243,9 +288,13 @@ inline uint16_t RepRap::GetExtrudersInUse() const noexcept { return activeExtrud
 inline uint16_t RepRap::GetToolHeatersInUse() const noexcept { return activeToolHeaters; }
 inline bool RepRap::IsStopped() const noexcept { return stopped; }
 
-#define STRINGIZE(s)	#s
-#define INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
-#define INTERNAL_ERROR_MESSAGE "Internal error at " __FILE__ "(" STRINGIZE(__LINE__) ")"
+// Set the previous tool number. Inline because it is only called from one place.
+inline void RepRap::SetPreviousToolNumber() noexcept
+{
+	previousToolNumber = (currentTool != nullptr) ? currentTool->Number() : -1;
+}
+
+#define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 
 #endif
 

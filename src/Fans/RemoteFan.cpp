@@ -15,17 +15,23 @@
 
 RemoteFan::RemoteFan(unsigned int fanNum, CanAddress boardNum) noexcept
 	: Fan(fanNum),
-	  lastRpm(-1), whenLastRpmReceived(0), boardNumber(boardNum), thermostaticFanRunning(false)
+	  boardNumber(boardNum), thermostaticFanRunning(false)
 {
 }
 
 RemoteFan::~RemoteFan() noexcept
 {
 	CanMessageGenericConstructor cons(M950FanParams);
-	cons.AddUParam('F', fanNumber);
-	cons.AddStringParam('C', "nil");
-	String<1> dummy;
-	(void)cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, dummy.GetRef());
+	try
+	{
+		cons.AddUParam('F', fanNumber);
+		cons.AddStringParam('C', "nil");
+		String<1> dummy;
+		(void)cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, dummy.GetRef());
+	}
+	catch (...)
+	{
+	}
 }
 
 bool RemoteFan::Check() noexcept
@@ -50,18 +56,8 @@ void RemoteFan::UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept
 {
 	if (src == boardNumber)
 	{
-		lastRpm = rpm;
-		whenLastRpmReceived = millis();
+		SetLastRpm(rpm);
 	}
-}
-
-int32_t RemoteFan::GetRPM() noexcept
-{
-	if (millis() - whenLastRpmReceived > RpmReadingTimeout)
-	{
-		lastRpm = -1;
-	}
-	return lastRpm;
 }
 
 GCodeResult RemoteFan::ReportPortDetails(const StringRef& str) const noexcept
@@ -89,7 +85,7 @@ bool RemoteFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 	msg->maxVal = maxVal;
 	msg->triggerTemperatures[0] = triggerTemperatures[0];
 	msg->triggerTemperatures[1] = triggerTemperatures[1];
-	msg->sensorsMonitored = sensorsMonitored;
+	msg->sensorsMonitored = sensorsMonitored.GetRaw();
 
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply) == GCodeResult::ok;
 }

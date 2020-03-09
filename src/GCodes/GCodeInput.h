@@ -13,39 +13,39 @@
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
 
-const size_t GCodeInputBufferSize = 256;				// How many bytes can we cache per input source?
-const size_t GCodeInputFileReadThreshold = 128;			// How many free bytes must be available before data is read from the SD card?
+const size_t GCodeInputBufferSize = 256;						// How many bytes can we cache per input source?
+const size_t GCodeInputFileReadThreshold = 128;					// How many free bytes must be available before data is read from the SD card?
 
 // This base class provides incoming G-codes for the GCodeBuffer class
 class GCodeInput
 {
 public:
-	virtual void Reset() = 0;							// Clean all the cached data from this input
-	virtual bool FillBuffer(GCodeBuffer *gb) = 0;		// Fill a GCodeBuffer with the last available G-code
-	virtual size_t BytesCached() const = 0;				// How many bytes have been cached?
+	virtual void Reset() noexcept = 0;							// Clean all the cached data from this input
+	virtual bool FillBuffer(GCodeBuffer *gb) noexcept = 0;		// Fill a GCodeBuffer with the last available G-code
+	virtual size_t BytesCached() const noexcept = 0;			// How many bytes have been cached?
 };
 
 // This class provides a standard implementation of FillBuffer that calls ReadByte() to supply individual characters
 class StandardGCodeInput : public GCodeInput
 {
 public:
-	bool FillBuffer(GCodeBuffer *gb) override;			// Fill a GCodeBuffer with the last available G-code
+	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
 
 protected:
-	virtual char ReadByte() = 0;						// Get the next byte from the source
+	virtual char ReadByte() noexcept = 0;						// Get the next byte from the source
 };
 
 // This class wraps around an existing Stream device which lets us avoid double buffering.
 class StreamGCodeInput : public StandardGCodeInput
 {
 public:
-	StreamGCodeInput(Stream &dev) : device(dev) { }
+	StreamGCodeInput(Stream &dev) noexcept : device(dev) { }
 
-	void Reset() override;
-	size_t BytesCached() const override;				// How many bytes have been cached?
+	void Reset() noexcept override;
+	size_t BytesCached() const noexcept override;				// How many bytes have been cached?
 
 protected:
-	char ReadByte() override;
+	char ReadByte() noexcept override;
 
 private:
 	Stream &device;
@@ -73,14 +73,14 @@ enum class GCodeInputState
 class RegularGCodeInput : public StandardGCodeInput
 {
 public:
-	RegularGCodeInput();
+	RegularGCodeInput() noexcept;
 
-	void Reset() override;
-	size_t BytesCached() const override;				// How many bytes have been cached?
-	size_t BufferSpaceLeft() const;						// How much space do we have left?
+	void Reset() noexcept override;
+	size_t BytesCached() const noexcept override;				// How many bytes have been cached?
+	size_t BufferSpaceLeft() const noexcept;					// How much space do we have left?
 
 protected:
-	char ReadByte() override;
+	char ReadByte() noexcept override;
 
 	GCodeInputState state;
 	size_t writingPointer, readingPointer;
@@ -97,12 +97,12 @@ class FileGCodeInput : public RegularGCodeInput
 {
 public:
 
-	FileGCodeInput() : RegularGCodeInput(), lastFile(nullptr) { }
+	FileGCodeInput() noexcept : RegularGCodeInput(), lastFile(nullptr) { }
 
-	void Reset() override;								// Clears the buffer. Should be called when the associated file is being closed
-	void Reset(const FileData &file);					// Clears the buffer of a specific file. Should be called when it is closed or re-opened outside the reading context
+	void Reset() noexcept override;								// Clears the buffer. Should be called when the associated file is being closed
+	void Reset(const FileData &file) noexcept;					// Clears the buffer of a specific file. Should be called when it is closed or re-opened outside the reading context
 
-	GCodeInputReadResult ReadFromFile(FileData &file);	// Read another chunk of G-codes from the file and return true if more data is available
+	GCodeInputReadResult ReadFromFile(FileData &file) noexcept;	// Read another chunk of G-codes from the file and return true if more data is available
 
 private:
 	FileStore *lastFile;
@@ -114,13 +114,13 @@ private:
 class NetworkGCodeInput : public RegularGCodeInput
 {
 public:
-	NetworkGCodeInput();
+	NetworkGCodeInput() noexcept;
 
-	bool FillBuffer(GCodeBuffer *gb) override;			// Fill a GCodeBuffer with the last available G-code
-	void Put(MessageType mtype, const char *buf);		// Append a null-terminated string to the buffer
+	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
+	void Put(MessageType mtype, const char *buf) noexcept;		// Append a null-terminated string to the buffer
 
 private:
-	void Put(MessageType mtype, char c);				// Append a single character. This does NOT lock the mutex!
+	void Put(MessageType mtype, char c) noexcept;				// Append a single character. This does NOT lock the mutex!
 
 	Mutex bufMutex;
 };

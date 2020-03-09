@@ -41,13 +41,13 @@
 #ifndef LWIP_HDR_AUTOIP_H
 #define LWIP_HDR_AUTOIP_H
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 #if LWIP_IPV4 && LWIP_AUTOIP /* don't build if not configured for use in lwipopts.h */
 
-#include <Lwip/src/include/lwip/netif.h>
+#include "lwip/netif.h"
 /* #include "lwip/udp.h" */
-#include <Lwip/src/include/lwip/etharp.h>
+#include "lwip/etharp.h"
 
 #ifdef __cplusplus
 extern "C" {
