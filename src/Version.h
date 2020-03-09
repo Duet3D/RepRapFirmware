@@ -19,7 +19,7 @@
 #endif
 
 #ifndef DATE
-# define DATE "2020-03-08b4"
+# define DATE "2020-03-09b2"
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman, printm3d"

@@ -304,6 +304,7 @@ void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char
 }
 
 // Function to report a value or object as JSON
+// This function is recursive, so keep its stack usage low
 void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const
 {
 	if (context.WantArrayLength() && *filter == 0)
@@ -414,11 +415,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 
 #ifdef DUET3
 		case TYPE_OF(CanExpansionBoardDetails):
-			{
-				String<StringLength50> rslt;
-				val.ExtractRequestedPart(rslt.GetRef());
-				buf->EncodeString(rslt.c_str(), true);
-			}
+			ReportExpansionBoardDetail(buf, val);
 			break;
 #endif
 
@@ -551,13 +548,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TYPE_OF(DateTime):
-			{
-				const time_t time = val.Get56BitValue();
-				tm timeInfo;
-				gmtime_r(&time, &timeInfo);
-				buf->catf("\"%04u-%02u-%02uT%02u:%02u:%02u\"",
-							timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-			}
+			ReportDateTime(buf, val);
 			break;
 
 		case TYPE_OF(DriverId):
@@ -828,9 +819,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, E
 		{
 			if (context.WantArrayLength())
 			{
-				String<StringLength50> rslt;
-				val.ExtractRequestedPart(rslt.GetRef());
-				return ExpressionValue((int32_t)rslt.strlen());
+				return GetExpansionBoardDetailLength(val);
 			}
 			return val;
 		}
@@ -853,6 +842,35 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, E
 
 	throw context.ConstructParseException("reached primitive type before end of selector string");
 }
+
+// Separate function to avoid the tm object (44 bytes) being allocated on the stack frame of a recursive function
+void ObjectModel::ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcept
+{
+	const time_t time = val.Get56BitValue();
+	tm timeInfo;
+	gmtime_r(&time, &timeInfo);
+	buf->catf("\"%04u-%02u-%02uT%02u:%02u:%02u\"",
+				timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+}
+
+#ifdef DUET3
+
+// Separate functions to avoid the string being allocated on the stack frame of a recursive function
+void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, ExpressionValue val) noexcept
+{
+	String<StringLength50> rslt;
+	val.ExtractRequestedPart(rslt.GetRef());
+	buf->EncodeString(rslt.c_str(), true);
+}
+
+ExpressionValue ObjectModel::GetExpansionBoardDetailLength(ExpressionValue val) noexcept
+{
+	String<StringLength50> rslt;
+	val.ExtractRequestedPart(rslt.GetRef());
+	return ExpressionValue((int32_t)rslt.strlen());
+}
+
+#endif
 
 #endif
 

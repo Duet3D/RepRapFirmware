@@ -234,6 +234,15 @@ protected:
 	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) const noexcept;
 
 	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept = 0;
+
+private:
+	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcept;
+
+#ifdef DUET3
+	__attribute__ ((noinline)) static void ReportExpansionBoardDetail(OutputBuffer *buf, ExpressionValue val) noexcept;
+	__attribute__ ((noinline)) static ExpressionValue GetExpansionBoardDetailLength(ExpressionValue val) noexcept;
+#endif
+
 };
 
 // Function used for compile-time check for the correct number of entries in an object model table
