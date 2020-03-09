@@ -26,6 +26,7 @@ Bug fixes:
 - If an extruder-only move specified a feed rate, and the following printing move didn't specify a feed rate because it happened to be the same as the feed rate of the extruder-only move, then the speed factor wouldn't get applied to that move. Likewise if a GCode file used a G1 Fxxx line with no movement in order to dset the feed rate of the following moves, the speed factor would not be applied to those moves.
 - M409 incorrectly allowed a '.' to be omitted between the closing square bracket of an index and the following field name
 - On Duet 3 in standalone mode, on the Ethernet interface the limit on the number of MDNS services was set too low, so only the 'echo' service was created
+- The HTTP rr_model call sometimes caused a reset due to stack overflow on the Duet WiFi
 
 RepRapFirmware 3.01-RC3
 =======================
