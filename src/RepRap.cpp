@@ -171,6 +171,13 @@ constexpr ObjectModelArrayDescriptor RepRap::toolsArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->GetTool(context.GetLastIndex()).Ptr()); }
 };
 
+constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(MassStorage::GetVolume(context.GetLastIndex())); }
+};
+
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
@@ -189,17 +196,8 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "seqs",					OBJECT_MODEL_FUNC(self, 6),												ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF(&spindlesArrayDescriptor),						ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC(self, 3),												ObjectModelEntryFlags::live },
-	// TODO Add storages here in the format
-	/*
-		mounted = false
-		speed = null				// in Bytes/s
-		capacity = null				// in Bytes
-		free = null					// in Bytes
-		openFiles = null
-		path = null
-	*/
 	{ "tools",					OBJECT_MODEL_FUNC_NOSELF(&toolsArrayDescriptor),						ObjectModelEntryFlags::live },
-	// TODO Add userVariables here with items in the format { name, value }
+	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF(&volumesArrayDescriptor),						ObjectModelEntryFlags::none },
 
 	// 1. MachineModel.directories
 	{ "filaments",				OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),							ObjectModelEntryFlags::none },
@@ -207,7 +205,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macros",					OBJECT_MODEL_FUNC(self->platform->GetMacroDir()),						ObjectModelEntryFlags::none },
 	{ "menu",					OBJECT_MODEL_FUNC_NOSELF(MENU_DIR),										ObjectModelEntryFlags::none },
 	{ "scans",					OBJECT_MODEL_FUNC_NOSELF(SCANS_DIRECTORY),								ObjectModelEntryFlags::none },
-	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir),			ObjectModelEntryFlags::none },
+	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir, 0),		ObjectModelEntryFlags::none },
 	{ "web",					OBJECT_MODEL_FUNC(self->platform->GetWebDir()),							ObjectModelEntryFlags::none },
 
 	// 2. MachineModel.limits
@@ -259,6 +257,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logFile",				OBJECT_MODEL_FUNC(nullptr),												ObjectModelEntryFlags::none },
 #endif
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
+	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
@@ -289,12 +288,11 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "sensors",				OBJECT_MODEL_FUNC((int32_t)self->sensorsSeq),							ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC((int32_t)self->spindlesSeq),							ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
-	// TODO Add storages here
 	{ "tools",					OBJECT_MODEL_FUNC((int32_t)self->toolsSeq),								ObjectModelEntryFlags::live },
-
+	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 7, 15, 7, 22, 10, 2, 6, 13 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 7, 16, 7, 22, 11, 2, 6, 14 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
@@ -308,7 +306,7 @@ ReadWriteLock RepRap::toolListLock;
 
 RepRap::RepRap() noexcept
 	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), moveSeq(0),
-	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0),
+	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
 	  toolList(nullptr), currentTool(nullptr), lastWarningMillis(0),
 	  activeExtruders(0), activeToolHeaters(0), numToolsToReport(0),
 	  ticksInSpinState(0), heatTaskIdleTicks(0), debug(0),

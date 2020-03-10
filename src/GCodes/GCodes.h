@@ -220,6 +220,8 @@ public:
 	{
 		return gcodeSources[n];
 	}
+
+	const char *GetPowerFailScript() const noexcept { return powerFailScript; }
 #endif
 
 	static constexpr const char *AllowedAxisLetters = "XYZUVWABCD";

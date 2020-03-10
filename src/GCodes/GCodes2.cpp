@@ -4067,6 +4067,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						strcpy(newPowerFailScript, powerFailString.c_str());
 						std::swap(newPowerFailScript, powerFailScript);
 						delete[] newPowerFailScript;
+						reprap.StateUpdated();
 					}
 					else if (powerFailScript == nullptr)
 					{

@@ -21,6 +21,8 @@ struct FileInfo
 	bool isDirectory;
 };
 
+class ObjectModel;
+
 namespace MassStorage
 {
 	bool CombineName(const StringRef& out, const char* directory, const char* fileName) noexcept;	// returns false if error i.e. filename too long
@@ -65,6 +67,12 @@ namespace MassStorage
 	};
 
 	InfoResult GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize) noexcept;
+
+# if SUPPORT_OBJECT_MODEL
+	inline size_t GetNumVolumes() noexcept { return NumSdCards; }
+	const ObjectModel *GetVolume(size_t vol) noexcept;
+# endif
+
 #endif
 
 };

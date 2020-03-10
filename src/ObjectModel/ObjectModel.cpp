@@ -41,6 +41,10 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.catf("%" PRIu32, uVal);			// convert unsigned integer to string
 		break;
 
+	case TypeCode::Uint64:
+		str.catf("%" PRIu64, ((uint64_t)param << 32) | uVal);	// convert unsigned integer to string
+		break;
+
 	case TypeCode::Int32:
 		str.catf("%" PRIi32, uVal);			// convert signed integer to string
 		break;
@@ -425,6 +429,10 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 
 		case TypeCode::Uint32:
 			buf->catf("%" PRIu32, val.uVal);
+			break;
+
+		case TypeCode::Uint64:
+			buf->catf("%" PRIu64, ((uint64_t)val.param << 32) | val.uVal);	// convert unsigned integer to string
 			break;
 
 		case TypeCode::Int32:

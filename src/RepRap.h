@@ -194,6 +194,7 @@ public:
 	void SpindlesUpdated() noexcept { ++spindlesSeq; }
 	void StateUpdated() noexcept { ++stateSeq; }
 	void ToolsUpdated() noexcept { ++toolsSeq; }
+	void VolumesUpdated() noexcept { ++volumesSeq; }
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -202,6 +203,7 @@ protected:
 	OBJECT_MODEL_ARRAY(inputs)
 	OBJECT_MODEL_ARRAY(spindles)
 	OBJECT_MODEL_ARRAY(tools)
+	OBJECT_MODEL_ARRAY(volumes)
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
@@ -251,8 +253,8 @@ private:
 
  	Mutex messageBoxMutex;
 
-	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq;
-	uint16_t moveSeq, networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq;
+	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, moveSeq;
+	uint16_t networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
 
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;
