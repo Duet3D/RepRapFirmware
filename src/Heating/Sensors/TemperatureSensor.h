@@ -34,6 +34,11 @@ public:
 	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
 
+#if SUPPORT_OBJECT_MODEL
+	// Report the sensor type in the form corresponding to the Y parameter of M308.
+	virtual const char *GetShortSensorType() const noexcept = 0;
+#endif
+
 	// Return the sensor type
 	const char *GetSensorType() const noexcept { return sensorType; }
 

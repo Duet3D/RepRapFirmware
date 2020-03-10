@@ -57,13 +57,13 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 	case '-':
 		AdvancePointer();
 		val = Parse(evaluate, UnaryPriority);
-		switch (val.type)
+		switch (val.GetType())
 		{
-		case TYPE_OF(int32_t):
+		case TypeCode::Int32:
 			val.iVal = -val.iVal;		//TODO overflow check
 			break;
 
-		case TYPE_OF(float):
+		case TypeCode::Float:
 			val.fVal = -val.fVal;
 			break;
 
@@ -75,16 +75,16 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 	case '+':
 		AdvancePointer();
 		val = Parse(evaluate, UnaryPriority);
-		switch (val.type)
+		switch (val.GetType())
 		{
-		case TYPE_OF(uint32_t):
+		case TypeCode::Uint32:
 			// Convert enumeration to integer
 			val.iVal = (int32_t)val.uVal;
-			val.type = TYPE_OF(int32_t);
+			val.SetType(TypeCode::Int32);
 			break;
 
-		case TYPE_OF(int32_t):
-		case TYPE_OF(float):
+		case TypeCode::Int32:
+		case TypeCode::Float:
 			break;
 
 		default:
@@ -103,12 +103,12 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		else
 		{
 			val = Parse(evaluate, UnaryPriority);
-			if (val.type == TYPE_OF(const char*))
+			if (val.GetType() == TypeCode::CString)
 			{
 				const char* s = val.sVal;
 				val.Set((int32_t)strlen(s));
 				stringBuffer.FinishedUsing(s);
-				val.type = TYPE_OF(int32_t);
+				val.SetType(TypeCode::Int32);
 			}
 			else
 			{
@@ -247,7 +247,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 				{
 				case '+':
 					BalanceNumericTypes(val, val2, evaluate);
-					if (val.type == TYPE_OF(float))
+					if (val.GetType() == TypeCode::Float)
 					{
 						val.fVal += val2.fVal;
 						val.param = max(val.param, val2.param);
@@ -260,7 +260,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 				case '-':
 					BalanceNumericTypes(val, val2, evaluate);
-					if (val.type == TYPE_OF(float))
+					if (val.GetType() == TypeCode::Float)
 					{
 						val.fVal -= val2.fVal;
 						val.param = max(val.param, val2.param);
@@ -273,7 +273,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 				case '*':
 					BalanceNumericTypes(val, val2, evaluate);
-					if (val.type == TYPE_OF(float))
+					if (val.GetType() == TypeCode::Float)
 					{
 						val.fVal *= val2.fVal;
 						val.param = max(val.param, val2.param);
@@ -293,24 +293,24 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 				case '>':
 					BalanceTypes(val, val2, evaluate);
-					switch (val.type)
+					switch (val.GetType())
 					{
-					case TYPE_OF(int32_t):
+					case TypeCode::Int32:
 						val.bVal = (val.iVal > val2.iVal);
 						break;
 
-					case TYPE_OF(float_t):
+					case TypeCode::Float:
 						val.bVal = (val.fVal > val2.fVal);
 						break;
 
-					case TYPE_OF(bool):
+					case TypeCode::Bool:
 						val.bVal = (val.bVal && !val2.bVal);
 						break;
 
 					default:
 						throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
 					}
-					val.type = TYPE_OF(bool);
+					val.SetType(TypeCode::Bool);
 					if (invert)
 					{
 						val.bVal = !val.bVal;
@@ -319,24 +319,24 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 				case '<':
 					BalanceTypes(val, val2, evaluate);
-					switch (val.type)
+					switch (val.GetType())
 					{
-					case TYPE_OF(int32_t):
+					case TypeCode::Int32:
 						val.bVal = (val.iVal < val2.iVal);
 						break;
 
-					case TYPE_OF(float_t):
+					case TypeCode::Float:
 						val.bVal = (val.fVal < val2.fVal);
 						break;
 
-					case TYPE_OF(bool):
+					case TypeCode::Bool:
 						val.bVal = (!val.bVal && val2.bVal);
 						break;
 
 					default:
 						throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
 					}
-					val.type = TYPE_OF(bool);
+					val.SetType(TypeCode::Bool);
 					if (invert)
 					{
 						val.bVal = !val.bVal;
@@ -345,39 +345,39 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 				case '=':
 					// Before balancing, handle comparisons with null
-					if (val.type == NoType)
+					if (val.GetType() == TypeCode::None)
 					{
-						val.bVal = (val2.type == NoType);
+						val.bVal = (val2.GetType() == TypeCode::None);
 					}
-					else if (val2.type == NoType)
+					else if (val2.GetType() == TypeCode::None)
 					{
 						val.bVal = false;
 					}
 					else
 					{
 						BalanceTypes(val, val2, evaluate);
-						switch (val.type)
+						switch (val.GetType())
 						{
-						case TYPE_OF(const ObjectModel*):
+						case TypeCode::ObjectModel:
 							throw ConstructParseException("cannot compare objects");
 
-						case TYPE_OF(int32_t):
+						case TypeCode::Int32:
 							val.bVal = (val.iVal == val2.iVal);
 							break;
 
-						case TYPE_OF(uint32_t):
+						case TypeCode::Uint32:
 							val.bVal = (val.uVal == val2.uVal);
 							break;
 
-						case TYPE_OF(float_t):
+						case TypeCode::Float:
 							val.bVal = (val.fVal == val2.fVal);
 							break;
 
-						case TYPE_OF(bool):
+						case TypeCode::Bool:
 							val.bVal = (val.bVal == val2.bVal);
 							break;
 
-						case TYPE_OF(const char*):
+						case TypeCode::CString:
 							val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
 							break;
 
@@ -385,7 +385,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 							throw ConstructParseException("unexpected operand type to equality operator");
 						}
 					}
-					val.type = TYPE_OF(bool);
+					val.SetType(TypeCode::Bool);
 					if (invert)
 					{
 						val.bVal = !val.bVal;
@@ -425,12 +425,12 @@ float ExpressionParser::ParseFloat() THROWS(GCodeException)
 int32_t ExpressionParser::ParseInteger() THROWS(GCodeException)
 {
 	ExpressionValue val = Parse();
-	switch (val.type)
+	switch (val.GetType())
 	{
-	case TYPE_OF(int32_t):
+	case TypeCode::Int32:
 		return val.iVal;
 
-	case TYPE_OF(uint32_t):
+	case TypeCode::Uint32:
 		if (val.uVal > (uint32_t)std::numeric_limits<int32_t>::max())
 		{
 			throw ConstructParseException("unsigned integer too large");
@@ -445,12 +445,12 @@ int32_t ExpressionParser::ParseInteger() THROWS(GCodeException)
 uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 {
 	ExpressionValue val = Parse();
-	switch (val.type)
+	switch (val.GetType())
 	{
-	case TYPE_OF(uint32_t):
+	case TypeCode::Uint32:
 		return val.uVal;
 
-	case TYPE_OF(int32_t):
+	case TypeCode::Int32:
 		if (val.iVal >= 0)
 		{
 			return (uint32_t)val.iVal;
@@ -464,15 +464,15 @@ uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 
 void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
 {
-	if (val1.type == TYPE_OF(float))
+	if (val1.GetType() == TypeCode::Float)
 	{
 		ConvertToFloat(val2, evaluate);
 	}
-	else if (val2.type == TYPE_OF(float))
+	else if (val2.GetType() == TypeCode::Float)
 	{
 		ConvertToFloat(val1, evaluate);
 	}
-	else if (val1.type != TYPE_OF(int32_t) || val2.type != TYPE_OF(int32_t))
+	else if (val1.GetType() != TypeCode::Int32 || val2.GetType() != TypeCode::Int32)
 	{
 		if (evaluate)
 		{
@@ -485,15 +485,15 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 
 void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
 {
-	if (val1.type == TYPE_OF(float))
+	if (val1.GetType() == TypeCode::Float)
 	{
 		ConvertToFloat(val2, evaluate);
 	}
-	else if (val2.type == TYPE_OF(float))
+	else if (val2.GetType() == TypeCode::Float)
 	{
 		ConvertToFloat(val1, evaluate);
 	}
-	else if (val1.type != val2.type)
+	else if (val1.GetType() != val2.GetType())
 	{
 		if (evaluate)
 		{
@@ -506,15 +506,15 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 
 void ExpressionParser::EnsureNumeric(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
 {
-	switch (val.type)
+	switch (val.GetType())
 	{
-	case TYPE_OF(uint32_t):
-		val.type = TYPE_OF(int32_t);
+	case TypeCode::Uint32:
+		val.SetType(TypeCode::Int32);
 		val.iVal = val.uVal;
 		break;
 
-	case TYPE_OF(int32_t):
-	case TYPE_OF(float):
+	case TypeCode::Int32:
+	case TypeCode::Float:
 		break;
 
 	default:
@@ -528,15 +528,15 @@ void ExpressionParser::EnsureNumeric(ExpressionValue& val, bool evaluate) const 
 
 void ExpressionParser::ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
 {
-	switch (val.type)
+	switch (val.GetType())
 	{
-	case TYPE_OF(int32_t):
+	case TypeCode::Int32:
 		val.fVal = (float)val.iVal;
-		val.type = TYPE_OF(float);
+		val.SetType(TypeCode::Float);
 		val.param = 1;
 		break;
 
-	case TYPE_OF(float):
+	case TypeCode::Float:
 		break;
 
 	default:
@@ -550,7 +550,7 @@ void ExpressionParser::ConvertToFloat(ExpressionValue& val, bool evaluate) const
 
 void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
 {
-	if (val.type != TYPE_OF(bool))
+	if (val.GetType() != TypeCode::Bool)
 	{
 		if (evaluate)
 		{
@@ -562,7 +562,7 @@ void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const 
 
 void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) THROWS(GCodeException)
 {
-	if (val.type != TYPE_OF(const char*))
+	if (val.GetType() != TypeCode::CString)
 	{
 		if (evaluate)
 		{
@@ -678,7 +678,7 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 
 	if (isFloat)
 	{
-		retvalue.type = TYPE_OF(float);
+		retvalue.SetType(TypeCode::Float);
 		retvalue.param = constrain<long>(digitsAfterPoint, 1, MaxFloatDigitsDisplayedAfterPoint);
 		if (valueAfterPoint != 0)
 		{
@@ -698,7 +698,7 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 	}
 	else
 	{
-		retvalue.type = TYPE_OF(int32_t);
+		retvalue.SetType(TypeCode::Int32);
 		retvalue.iVal = (int32_t)valueBeforePoint;
 	}
 
@@ -729,7 +729,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 			{
 				throw ConstructParseException("expected ']'");
 			}
-			if (index.type != TYPE_OF(int32_t))
+			if (index.GetType() != TypeCode::Int32)
 			{
 				throw ConstructParseException("expected integer expression");
 			}
@@ -816,13 +816,13 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		switch (func.RawValue())
 		{
 		case Function::abs:
-			switch (rslt.type)
+			switch (rslt.GetType())
 			{
-			case TYPE_OF(int32_t):
+			case TypeCode::Int32:
 				rslt.iVal = labs(rslt.iVal);
 				break;
 
-			case TYPE_OF(float):
+			case TypeCode::Float:
 				rslt.fVal = fabsf(rslt.fVal);
 				break;
 
@@ -908,7 +908,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 
 		case Function::isnan:
 			ConvertToFloat(rslt, evaluate);
-			rslt.type = TYPE_OF(bool);
+			rslt.SetType(TypeCode::Bool);
 			rslt.bVal = (isnan(rslt.fVal) != 0);
 			break;
 
@@ -918,7 +918,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 				const float f = floorf(rslt.fVal);
 				if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
 				{
-					rslt.type = TYPE_OF(int32_t);
+					rslt.SetType(TypeCode::Int32);
 					rslt.iVal = (int32_t)f;
 				}
 				else
@@ -939,7 +939,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 				SkipWhiteSpace();
 				ExpressionValue nextOperand = Parse(evaluate);
 				BalanceNumericTypes(rslt, nextOperand, evaluate);
-				if (rslt.type == TYPE_OF(float))
+				if (rslt.GetType() == TypeCode::Float)
 				{
 					rslt.fVal = fmod(rslt.fVal, nextOperand.fVal);
 				}
@@ -966,7 +966,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 				SkipWhiteSpace();
 				ExpressionValue nextOperand = Parse(evaluate);
 				BalanceNumericTypes(rslt, nextOperand, evaluate);
-				if (rslt.type == TYPE_OF(float))
+				if (rslt.GetType() == TypeCode::Float)
 				{
 					rslt.fVal = max<float>(rslt.fVal, nextOperand.fVal);
 					rslt.param = max(rslt.param, nextOperand.param);
@@ -990,7 +990,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 				SkipWhiteSpace();
 				ExpressionValue nextOperand = Parse(evaluate);
 				BalanceNumericTypes(rslt, nextOperand, evaluate);
-				if (rslt.type == TYPE_OF(float))
+				if (rslt.GetType() == TypeCode::Float)
 				{
 					rslt.fVal = min<float>(rslt.fVal, nextOperand.fVal);
 					rslt.param = max(rslt.param, nextOperand.param);

@@ -22,12 +22,12 @@ class Thermistor : public SensorWithPort
 {
 public:
 	Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept;					// create an instance with default values
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override; // configure the sensor from M305 parameters
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException); // configure the sensor from M305 parameters
+	void Poll() noexcept override;
+	const char *GetShortSensorType() const noexcept override { return (isPT1000) ? TypeNamePT1000 : TypeNameThermistor; }
 
 	static constexpr const char *TypeNameThermistor = "thermistor";
 	static constexpr const char *TypeNamePT1000 = "pt1000";
-
-	void Poll() noexcept override;
 
 private:
 	// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf

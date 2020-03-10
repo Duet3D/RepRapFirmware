@@ -2795,7 +2795,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			else
 			{
 				String<MaxFilenameLength> path;
-				platform.GetSysDir(path.GetRef());
+				platform.AppendSysDir(path.GetRef());
 				reply.printf("Sys file path is %s", path.c_str());
 			}
 			break;
@@ -2989,7 +2989,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					platform.GetSysDir(sysDir.GetRef());
+					platform.AppendSysDir(sysDir.GetRef());
 					folder = sysDir.c_str();
 					defaultFile = CONFIG_FILE;
 				}

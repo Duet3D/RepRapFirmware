@@ -18,13 +18,38 @@
 #include <RTOSIface/RTOSIface.h>
 #include <Networking/NetworkDefs.h>
 
-typedef uint8_t TypeCode;
-constexpr TypeCode NoType = 0;							// code for an invalid or unknown type
+// Type codes to indicate what type of expression we have and how it is represented.
+// The "Special" type is for items that we have to evaluate when we are ready to write them out, in particular strings whose storage might disappear.
+enum class TypeCode : uint8_t
+{
+	None = 0,
+	Bool,
+	Char,
+	Uint32,
+	Int32,
+	Float,
+	Bitmap16,
+	Bitmap32,
+	Bitmap64,		// only 56 bits actually available
+	Enum32,
+	ObjectModel,
+	CString,
+	IPAddress,
+	Array,
+	DateTime,
+	DriverId,
+	MacAddress,
+	Special,
+#if SUPPORT_CAN_EXPANSION
+	CanExpansionBoardDetails
+#endif
+};
 
 // Dummy types, used to define type codes
 class Bitmap32;
 class Bitmap64;
 class Enum32;
+class SpecialString;
 
 #if SUPPORT_CAN_EXPANSION
 
@@ -48,33 +73,6 @@ struct DateTime
 	time_t tim;
 };
 
-// Function template used to get constexpr type codes
-// Each type must return a unique type code in the range 1 to 127 (0 is NoType)
-template<class T> constexpr TypeCode TypeOf() noexcept;
-
-template<> constexpr TypeCode TypeOf<bool>								() noexcept { return 1; }
-template<> constexpr TypeCode TypeOf<char>								() noexcept { return 2; }
-template<> constexpr TypeCode TypeOf<uint32_t>							() noexcept { return 3; }
-template<> constexpr TypeCode TypeOf<int32_t>							() noexcept { return 4; }
-template<> constexpr TypeCode TypeOf<float>								() noexcept { return 5; }
-template<> constexpr TypeCode TypeOf<Bitmap<uint16_t>>					() noexcept { return 6; }
-template<> constexpr TypeCode TypeOf<Bitmap<uint32_t>>					() noexcept { return 7; }
-template<> constexpr TypeCode TypeOf<Bitmap<uint64_t>>					() noexcept { return 8; }
-template<> constexpr TypeCode TypeOf<Enum32>							() noexcept { return 9; }
-template<> constexpr TypeCode TypeOf<const ObjectModel*>				() noexcept { return 10; }
-template<> constexpr TypeCode TypeOf<const char*>						() noexcept { return 11; }
-template<> constexpr TypeCode TypeOf<IPAddress>							() noexcept { return 12; }
-template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>	() noexcept { return 13; }
-template<> constexpr TypeCode TypeOf<DateTime>							() noexcept	{ return 14; }
-template<> constexpr TypeCode TypeOf<DriverId>							() noexcept { return 15; }
-template<> constexpr TypeCode TypeOf<MacAddress>						() noexcept { return 16; }
-
-#if SUPPORT_CAN_EXPANSION
-template<> constexpr TypeCode TypeOf<CanExpansionBoardDetails>			() noexcept { return 17; }
-#endif
-
-#define TYPE_OF(_t) (TypeOf<_t>())
-
 // Forward declarations
 class ObjectModelTableEntry;
 class ObjectModel;
@@ -97,33 +95,42 @@ struct ExpressionValue
 		const ObjectModelArrayDescriptor *omadVal;
 	};
 
-	ExpressionValue() noexcept : type(NoType) { }
-	explicit constexpr ExpressionValue(bool b) noexcept : type(TYPE_OF(bool)), param(0), bVal(b) { }
-	explicit constexpr ExpressionValue(char c) noexcept : type(TYPE_OF(char)), param(0), cVal(c) { }
-	explicit constexpr ExpressionValue(float f) noexcept : type(TYPE_OF(float)), param(MaxFloatDigitsDisplayedAfterPoint), fVal(f) { }
-	constexpr ExpressionValue(float f, uint8_t numDecimalPlaces) noexcept : type(TYPE_OF(float)), param(numDecimalPlaces), fVal(f) { }
-	explicit constexpr ExpressionValue(int32_t i) noexcept : type(TYPE_OF(int32_t)), param(0), iVal(i) { }
-	explicit constexpr ExpressionValue(const ObjectModel *om) noexcept : type((om == nullptr) ? NoType : TYPE_OF(const ObjectModel*)), param(0), omVal(om) { }
-	constexpr ExpressionValue(const ObjectModel *om, uint8_t tableNumber) noexcept : type((om == nullptr) ? NoType : TYPE_OF(const ObjectModel*)), param(tableNumber), omVal(om) { }
-	explicit constexpr ExpressionValue(const char *s) noexcept : type(TYPE_OF(const char*)), param(0), sVal(s) { }
-	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type(TYPE_OF(const ObjectModelArrayDescriptor*)), param(0), omadVal(omad) { }
-	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type(TYPE_OF(IPAddress)), param(0), uVal(ip.GetV4LittleEndian()) { }
-	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type(NoType), param(0), uVal(0) { }
-	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? NoType : TYPE_OF(DateTime)), param(t.tim >> 32), uVal((uint32_t)t.tim) { }
-	explicit ExpressionValue(DriverId id) noexcept : type(TYPE_OF(DriverId)), param(0), uVal(id.AsU32()) { }
-	explicit ExpressionValue(Bitmap<uint16_t> bm) noexcept : type(TYPE_OF(Bitmap<uint16_t>)), param(0), uVal(bm.GetRaw()) { }
-	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type(TYPE_OF(Bitmap<uint32_t>)), param(0), uVal(bm.GetRaw()) { }
-	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type(TYPE_OF(Bitmap<uint64_t>)), param(bm.GetRaw() >> 32), uVal((uint32_t)bm.GetRaw()) { }
+	enum class SpecialType : uint32_t
+	{
+		sysDir = 0
+	};
+
+	ExpressionValue() noexcept : type((uint32_t)TypeCode::None) { }
+	explicit constexpr ExpressionValue(bool b) noexcept : type((uint32_t)TypeCode::Bool), param(0), bVal(b) { }
+	explicit constexpr ExpressionValue(char c) noexcept : type((uint32_t)TypeCode::Char), param(0), cVal(c) { }
+	explicit constexpr ExpressionValue(float f) noexcept : type((uint32_t)TypeCode::Float), param(MaxFloatDigitsDisplayedAfterPoint), fVal(f) { }
+	constexpr ExpressionValue(float f, uint8_t numDecimalPlaces) noexcept : type((uint32_t)TypeCode::Float), param(numDecimalPlaces), fVal(f) { }
+	explicit constexpr ExpressionValue(int32_t i) noexcept : type((uint32_t)TypeCode::Int32), param(0), iVal(i) { }
+	explicit constexpr ExpressionValue(const ObjectModel *om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel), param(0), omVal(om) { }
+	constexpr ExpressionValue(const ObjectModel *om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel), param(tableNumber), omVal(om) { }
+	explicit constexpr ExpressionValue(const char *s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
+	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type((uint32_t)TypeCode::Array), param(0), omadVal(omad) { }
+	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress), param(0), uVal(ip.GetV4LittleEndian()) { }
+	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
+	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::DateTime), param(t.tim >> 32), uVal((uint32_t)t.tim) { }
+	explicit ExpressionValue(DriverId id) noexcept : type((uint32_t)TypeCode::DriverId), param(0), uVal(id.AsU32()) { }
+	explicit ExpressionValue(Bitmap<uint16_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap16), param(0), uVal(bm.GetRaw()) { }
+	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap32), param(0), uVal(bm.GetRaw()) { }
+	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap64), param(bm.GetRaw() >> 32), uVal((uint32_t)bm.GetRaw()) { }
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
+	explicit ExpressionValue(SpecialType s) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(0) { }
 #if SUPPORT_CAN_EXPANSION
-	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type(TYPE_OF(CanExpansionBoardDetails)), param((uint32_t)p), sVal(s) { }
+	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif
 
-	void Set(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
-	void Set(char c) noexcept { type = TYPE_OF(char); cVal = c; }
-	void Set(int32_t i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
-	void Set(float f) noexcept { type = TYPE_OF(float); fVal = f; param = 1; }
-	void Set(const char *s) noexcept { type = TYPE_OF(const char*); sVal = s; }
+	TypeCode GetType() const noexcept { return (TypeCode)type; }
+	void SetType(TypeCode t) noexcept { type = (uint32_t)t; }
+
+	void Set(bool b) noexcept { type = (uint32_t)TypeCode::Bool; bVal = b; }
+	void Set(char c) noexcept { type = (uint32_t)TypeCode::Char; cVal = c; }
+	void Set(int32_t i) noexcept { type = (uint32_t)TypeCode::Int32; iVal = i; }
+	void Set(float f) noexcept { type = (uint32_t)TypeCode::Float; fVal = f; param = 1; }
+	void Set(const char *s) noexcept { type = (uint32_t)TypeCode::CString; sVal = s; }
 
 	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.
 	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }

@@ -35,6 +35,17 @@ DhtTemperatureSensor::~DhtTemperatureSensor() noexcept
 {
 }
 
+const char *DhtTemperatureSensor::GetShortSensorType() const noexcept
+{
+	switch (type)
+	{
+	case DhtSensorType::Dht11:			return TypeNameDht11;
+	case DhtSensorType::Dht21:			return TypeNameDht21;
+	case DhtSensorType::Dht22:			return TypeNameDht22;
+	default:							return "unknown";
+	}
+}
+
 GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;

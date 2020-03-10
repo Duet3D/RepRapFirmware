@@ -167,6 +167,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
 	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "directories",			OBJECT_MODEL_FUNC(self->platform, 6),									ObjectModelEntryFlags::live },
 	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor),						ObjectModelEntryFlags::live },
@@ -216,7 +217,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 3, 11, 5, 20 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 3, 12, 5, 20 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
@@ -1695,12 +1696,8 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 #if HAS_MASS_STORAGE
 	// System files folder
-	{
-		String<MaxFilenameLength> sysdir;
-		platform->GetSysDir(sysdir.GetRef());
-		response->catf(", \"sysdir\":");
-		response->EncodeString(sysdir, false);
-	}
+	response->catf(", \"sysdir\":");
+	platform->EncodeSysDir(response);
 #endif
 
 	// Motor idle parameters

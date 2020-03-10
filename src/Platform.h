@@ -359,7 +359,8 @@ public:
 	FileStore* OpenSysFile(const char *filename, OpenMode mode) const noexcept;
 	bool DeleteSysFile(const char *filename) const noexcept;
 	bool MakeSysFileName(const StringRef& result, const char *filename) const noexcept;
-	void GetSysDir(const StringRef & path) const noexcept;
+	void AppendSysDir(const StringRef & path) const noexcept;
+	void EncodeSysDir(OutputBuffer *buf) const noexcept;
 #endif
 
 	// Message output (see MessageType for further details)

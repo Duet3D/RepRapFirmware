@@ -239,7 +239,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
 # endif
 #if HAS_12V_MONITOR
-	{ "v12",				OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC(self, 7),																			ObjectModelEntryFlags::live },
 #endif
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
 
@@ -280,8 +280,16 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionB[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
 	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusionLimit[context.GetLastIndex()], 2),						ObjectModelEntryFlags::none },
 
+	// 6. directories members
+	{ "filaments",			OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),														ObjectModelEntryFlags::verbose },
+	{ "gcodes",				OBJECT_MODEL_FUNC(self->GetGCodeDir()),																ObjectModelEntryFlags::verbose },
+	{ "macros",				OBJECT_MODEL_FUNC(self->GetMacroDir()),																ObjectModelEntryFlags::verbose },
+	{ "menu",				OBJECT_MODEL_FUNC_NOSELF(MENU_DIR),																	ObjectModelEntryFlags::verbose },
+	{ "system",				OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir),										ObjectModelEntryFlags::none },
+	{ "web",				OBJECT_MODEL_FUNC(self->GetWebDir()),																ObjectModelEntryFlags::verbose },
+
 #if HAS_12V_MONITOR
-	// 6. v12 members
+	// 7. v12 members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),												ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max, 1),													ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min, 1),													ObjectModelEntryFlags::none },
@@ -291,13 +299,14 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	6 + HAS_12V_MONITOR,													// number of sections
+	7 + HAS_12V_MONITOR,													// number of sections
 	9 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION,		// section 0: boards[]
 	3,																		// section 1: mcuTemp
 	3,																		// section 2: vIn
 	13,																		// section 3: move.axes[]
 	5,																		// section 4: move.extruders[]
 	3,																		// section 5: move.extruders[].nonlinear
+	6,																		// section 6: directories
 #if HAS_12V_MONITOR
 	3																		// section 7: v12
 #endif
@@ -3777,10 +3786,16 @@ bool Platform::MakeSysFileName(const StringRef& result, const char *filename) co
 	return MassStorage::CombineName(result, InternalGetSysDir(), filename);
 }
 
-void Platform::GetSysDir(const StringRef & path) const noexcept
+void Platform::AppendSysDir(const StringRef & path) const noexcept
 {
 	MutexLocker lock(Tasks::GetSysDirMutex());
-	path.copy(InternalGetSysDir());
+	path.cat(InternalGetSysDir());
+}
+
+void Platform::EncodeSysDir(OutputBuffer *buf) const noexcept
+{
+	MutexLocker lock(Tasks::GetSysDirMutex());
+	buf->EncodeString(InternalGetSysDir(), false);
 }
 
 #endif

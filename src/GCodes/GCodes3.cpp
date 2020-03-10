@@ -1333,6 +1333,7 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 }
 
 // Deploy the Z probe unless it has already been deployed explicitly
+// The required next state must be set up (e.g. by gb.SetState()) before calling this
 void GCodes::DeployZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept
 {
 	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
@@ -1348,6 +1349,7 @@ void GCodes::DeployZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept
 }
 
 // Retract the Z probe unless it was deployed explicitly (in which case, wait for the user to retract it explicitly)
+// The required next state must be set up (e.g. by gb.SetState()) before calling this
 void GCodes::RetractZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept
 {
 	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);

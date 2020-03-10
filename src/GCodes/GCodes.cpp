@@ -2680,8 +2680,8 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
 	ClearBedMapping();
 	gridXindex = gridYindex = 0;
-	gb.SetState(GCodeState::gridProbing1);
 
+	gb.SetState(GCodeState::gridProbing1);
 	if (platform.GetCurrentZProbeType() != ZProbeType::blTouch)
 	{
 		DeployZProbe(gb, 0);

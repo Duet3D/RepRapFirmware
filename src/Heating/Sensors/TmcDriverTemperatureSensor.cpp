@@ -16,6 +16,15 @@ TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int sensorNum, u
 {
 }
 
+const char *TmcDriverTemperatureSensor::GetShortSensorType() const noexcept
+{
+#ifdef DUET_NG
+	return (channel == 1) ? DuexTypeName : PrimaryTypeName;
+#else
+	return PrimaryTypeName;
+#endif
+}
+
 void TmcDriverTemperatureSensor::Poll() noexcept
 {
 	SetResult(reprap.GetPlatform().GetTmcDriversTemperature(channel), TemperatureError::success);
