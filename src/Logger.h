@@ -28,7 +28,7 @@ public:
 	void LogMessage(time_t time, OutputBuffer *buf) noexcept;
 	void Flush(bool forced) noexcept;
 	bool IsActive() const noexcept { return logFile.IsLive(); }
-	const char *GetFileName() const noexcept { return logFileName.c_str(); }
+	const char *GetFileName() const noexcept { return (IsActive()) ? logFileName.c_str() : nullptr; }
 
 private:
 	bool WriteDateTime(time_t time) noexcept;

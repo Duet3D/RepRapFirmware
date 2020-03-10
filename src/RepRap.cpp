@@ -256,7 +256,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if HAS_MASS_STORAGE
 	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
 #else
-	{ "logFile",				OBJECT_MODEL_FUNC(""),													ObjectModelEntryFlags::none },
+	{ "logFile",				OBJECT_MODEL_FUNC(nullptr),												ObjectModelEntryFlags::none },
 #endif
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },

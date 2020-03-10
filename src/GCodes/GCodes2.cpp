@@ -2594,6 +2594,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				return false;
 			}
 			machineType = MachineType::fff;
+			reprap.StateUpdated();
 			break;
 
 #if SUPPORT_LASER
@@ -2632,6 +2633,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					laserMaxPower = max<float>(1.0, gb.GetFValue());
 				}
 			}
+			reprap.StateUpdated();
 			break;
 #endif
 
@@ -2646,31 +2648,45 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				const uint32_t slot = gb.Seen('S') ? gb.GetLimitedUIValue('S', MaxSpindles) : 0;
 
 				Spindle& spindle = platform.AccessSpindle(slot);
+				bool seenSpindle = false;
 				if (gb.Seen('C'))
 				{
+					seenSpindle = true;
 					if (!spindle.AllocatePins(gb, reply))
 					{
 						result = GCodeResult::error;
 						break;
 					}
 				}
-				if (gb.Seen('F'))
+				if (result == GCodeResult::ok)
 				{
-					spindle.SetFrequency(gb.GetPwmFrequency());
-				}
-				if (gb.Seen('R'))
-				{
-					spindle.SetMaxRpm(max<float>(1.0, gb.GetFValue()));
-				}
-				if (gb.Seen('T'))
-				{
-					spindle.SetToolNumber(gb.GetIValue());
+					if (gb.Seen('F'))
+					{
+						seenSpindle = true;
+						spindle.SetFrequency(gb.GetPwmFrequency());
+					}
+					if (gb.Seen('R'))
+					{
+						seenSpindle = true;
+						spindle.SetMaxRpm(max<float>(1.0, gb.GetFValue()));
+					}
+					if (gb.Seen('T'))
+					{
+						seenSpindle = true;
+						spindle.SetToolNumber(gb.GetIValue());
+					}
 				}
 
 				// M453 may be repeated to set up multiple spindles, so only print the message on the initial switch
 				if (oldMachineType != MachineType::cnc)
 				{
+					reprap.StateUpdated();
 					reply.copy("CNC mode selected");
+				}
+
+				if (seenSpindle)
+				{
+					reprap.SpindlesUpdated();
 				}
 			}
 			break;
