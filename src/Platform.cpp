@@ -2720,6 +2720,8 @@ float Platform::GetMotorCurrent(size_t drive, int code) const noexcept
 void Platform::SetIdleCurrentFactor(float f) noexcept
 {
 	idleCurrentFactor = constrain<float>(f, 0.0, 1.0);
+	reprap.MoveUpdated();
+
 #if SUPPORT_CAN_EXPANSION
 	CanDriversData canDriversToUpdate;
 #endif
@@ -3837,6 +3839,7 @@ void Platform::SetAxisMaximum(size_t axis, float value, bool byProbing) noexcept
 	{
 		axisMaximaProbed.SetBit(axis);
 	}
+	reprap.MoveUpdated();
 }
 
 void Platform::SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept
@@ -3846,6 +3849,7 @@ void Platform::SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept
 	{
 		axisMinimaProbed.SetBit(axis);
 	}
+	reprap.MoveUpdated();
 }
 
 ZProbeType Platform::GetCurrentZProbeType() const noexcept

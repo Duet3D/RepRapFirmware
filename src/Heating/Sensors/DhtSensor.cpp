@@ -46,25 +46,24 @@ const char *DhtTemperatureSensor::GetShortSensorType() const noexcept
 	}
 }
 
-GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	if (!ConfigurePort(gb, reply, PinAccess::write0, seen))
+	if (!ConfigurePort(gb, reply, PinAccess::write0, changed))
 	{
 		return GCodeResult::error;
 	}
 
-	TryConfigureSensorName(gb, seen);
+	TryConfigureSensorName(gb, changed);
 
 	// It's a new sensor
 	if (gb.Seen('Y'))
 	{
-		seen = true;
+		changed = true;
 		TakeReading();
 		reprap.GetHeat().EnsureSensorsTask();
 	}
 
-	if (!seen)
+	if (!changed)
 	{
 		CopyBasicDetails(reply);
 

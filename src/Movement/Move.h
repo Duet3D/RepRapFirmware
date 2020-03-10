@@ -86,9 +86,9 @@ public:
 	bool IsUsingMesh() const noexcept { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const noexcept;						// Return the number of currently used probe points
 	unsigned int GetNumProbedProbePoints() const noexcept;					// Return the number of actually probed probe points
-	void SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) { latestCalibrationDeviation = d; numCalibratedFactors = numFactors; }
-	void SetInitialCalibrationDeviation(const Deviation& d) { initialCalibrationDeviation = d; }
-	void SetLatestMeshDeviation(const Deviation& d) { latestMeshDeviation = d; }
+	void SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept;
+	void SetInitialCalibrationDeviation(const Deviation& d) noexcept;
+	void SetLatestMeshDeviation(const Deviation& d) noexcept;
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 

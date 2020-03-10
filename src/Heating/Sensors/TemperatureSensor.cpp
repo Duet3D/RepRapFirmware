@@ -88,11 +88,10 @@ void TemperatureSensor::SetSensorName(const char *newName) noexcept
 }
 
 // Default implementation of Configure, for sensors that have no configurable parameters
-GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	TryConfigureSensorName(gb, seen);
-	if (!seen && !gb.Seen('Y'))
+	TryConfigureSensorName(gb, changed);
+	if (!changed && !gb.Seen('Y'))
 	{
 		// No parameters were provided, so report the current configuration
 		CopyBasicDetails(reply);

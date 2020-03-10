@@ -14,7 +14,7 @@ class ThermocoupleSensor31855 : public SpiTemperatureSensor
 {
 public:
 	ThermocoupleSensor31855(unsigned int sensorNum) noexcept;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 	void Poll() noexcept override;
 	const char *GetShortSensorType() const noexcept override { return TypeName; }
 

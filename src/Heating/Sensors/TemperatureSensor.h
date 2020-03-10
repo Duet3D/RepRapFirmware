@@ -32,7 +32,7 @@ public:
 	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
 	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.
 	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
-	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
+	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed);
 
 #if SUPPORT_OBJECT_MODEL
 	// Report the sensor type in the form corresponding to the Y parameter of M308.

@@ -31,15 +31,14 @@ Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept
 }
 
 // Configure the temperature sensor
-GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, seen))
+	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, changed))
 	{
 		return GCodeResult::error;
 	}
 
-	gb.TryGetFValue('R', seriesR, seen);
+	gb.TryGetFValue('R', seriesR, changed);
 	if (!isPT1000)
 	{
 		bool seenB = false;
@@ -47,11 +46,11 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 		if (seenB)
 		{
 			shC = 0.0;						// if user changes B and doesn't define C, assume C=0
-			seen = true;
+			changed = true;
 		}
-		gb.TryGetFValue('C', shC, seen);
-		gb.TryGetFValue('T', r25, seen);
-		if (seen)
+		gb.TryGetFValue('C', shC, changed);
+		gb.TryGetFValue('T', r25, changed);
+		if (changed)
 		{
 			CalcDerivedParameters();
 		}
@@ -62,18 +61,18 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('L'))
 	{
 		adcLowOffset = (int16_t)constrain<int>(gb.GetIValue(), -maxOffset, maxOffset);
-		seen = true;
+		changed = true;
 	}
 	if (gb.Seen('H'))
 	{
 		adcHighOffset = (int16_t)constrain<int>(gb.GetIValue(), -maxOffset, maxOffset);
-		seen = true;
+		changed = true;
 	}
 #endif
 
-	TryConfigureSensorName(gb, seen);
+	TryConfigureSensorName(gb, changed);
 
-	if (seen)
+	if (changed)
 	{
 		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
 		if (adcFilterChannel >= 0)
