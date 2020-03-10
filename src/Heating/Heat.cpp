@@ -173,6 +173,7 @@ GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const S
 		if (seen)
 		{
 			h->SetM301PidParameters(pp);
+			reprap.HeatUpdated();
 		}
 		else if (!model.UsePid())
 		{
@@ -480,6 +481,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 			Heater *oldHeater = nullptr;
 			std::swap(oldHeater, heaters[heater]);
 			delete oldHeater;
+			reprap.HeatUpdated();
 			return GCodeResult::ok;
 		}
 
@@ -512,6 +514,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 		{
 			delete newHeater;
 		}
+		reprap.HeatUpdated();
 		return rslt;
 	}
 
@@ -530,7 +533,9 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 
 	if (gb.Seen('Q'))
 	{
-		return h->SetPwmFrequency(gb.GetPwmFrequency(), reply);
+		const GCodeResult rslt = h->SetPwmFrequency(gb.GetPwmFrequency(), reply);
+		reprap.HeatUpdated();
+		return rslt;
 	}
 
 	return h->ReportDetails(reply);
@@ -593,6 +598,7 @@ void Heat::SetBedHeater(size_t index, int heater) noexcept
 			h->SetDefaultMonitors();
 		}
 	}
+	reprap.HeatUpdated();
 }
 
 bool Heat::IsBedHeater(int heater) const noexcept
@@ -622,6 +628,7 @@ void Heat::SetChamberHeater(size_t index, int heater) noexcept
 	{
 		h->SetDefaultMonitors();
 	}
+	reprap.HeatUpdated();
 }
 
 bool Heat::IsChamberHeater(int heater) const noexcept

@@ -85,12 +85,14 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 		port.Release();
 		currentState = false;
 
+		GCodeResult rslt;
+
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress newBoard = IoPort::RemoveBoardAddress(pinName.GetRef());
 		if (newBoard != CanId::MasterAddress)
 		{
 			handle.Set(RemoteInputHandle::typeGpIn, gpinNumber, 0);
-			const GCodeResult rslt = CanInterface::CreateHandle(newBoard, handle, pinName.c_str(), 0, MinimumGpinReportInterval, currentState, reply);
+			rslt = CanInterface::CreateHandle(newBoard, handle, pinName.c_str(), 0, MinimumGpinReportInterval, currentState, reply);
 			if (rslt == GCodeResult::ok)
 			{
 				boardAddress = newBoard;
@@ -99,14 +101,22 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 			{
 				currentState = false;
 			}
-			return rslt;
 		}
+		else
 #endif
-		if (!port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpin, PinAccess::read))
 		{
-			return GCodeResult::error;
+			if (port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpin, PinAccess::read))
+			{
+				currentState = port.Read();
+			}
+			else
+			{
+				rslt = GCodeResult::error;
+			}
 		}
-		currentState = port.Read();
+
+		reprap.InputsUpdated();
+		return rslt;
 	}
 	else
 	{
@@ -168,6 +178,8 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 			freq = (isServo) ? ServoRefreshFrequency : DefaultPinWritePwmFreq;
 		}
 
+		GCodeResult rslt;
+
 #if SUPPORT_CAN_EXPANSION
 		boardAddress = IoPort::RemoveBoardAddress(pinName.GetRef());
 		if (boardAddress != CanId::MasterAddress)
@@ -177,14 +189,25 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 			cons.AddUParam('Q', freq);
 			cons.AddUParam('S', (isServo) ? 1 : 0);
 			cons.AddStringParam('C', pinName.c_str());
-			return cons.SendAndGetResponse(CanMessageType::m950Gpio, boardAddress, reply);
+			rslt = cons.SendAndGetResponse(CanMessageType::m950Gpio, boardAddress, reply);
 		}
+		else
 #endif
-		if (!port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpout, (isServo) ? PinAccess::servo : PinAccess::pwm))
 		{
-			return GCodeResult::error;
+			if (port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpout, (isServo) ? PinAccess::servo : PinAccess::pwm))
+			{
+				rslt = GCodeResult::ok;
+				port.SetFrequency(freq);
+			}
+			else
+			{
+				rslt = GCodeResult::error;
+			}
 		}
-		port.SetFrequency(freq);
+
+		// GPOut pins are not yet in the object model
+		// reprap.OutputsUpdated();
+		return rslt;
 	}
 	else if (seenFreq)
 	{
@@ -194,10 +217,12 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 			CanMessageGenericConstructor cons(M950GpioParams);
 			cons.AddUParam('P', gpioNumber);
 			cons.AddUParam('Q', freq);
+			// reprap.OutputsUpdated();
 			return cons.SendAndGetResponse(CanMessageType::m950Gpio, boardAddress, reply);
 		}
 #endif
 		port.SetFrequency(freq);
+		// reprap.OutputsUpdated();
 	}
 	else
 	{

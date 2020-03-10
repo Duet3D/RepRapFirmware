@@ -182,7 +182,11 @@ public:
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
 	void BoardsUpdated() noexcept { ++boardsSeq; }
+	void DirectoriesUpdated() noexcept { ++directoriesSeq; }
 	void FansUpdated() noexcept { ++fansSeq; }
+	void HeatUpdated() noexcept { ++heatSeq; }
+	void InputsUpdated() noexcept { ++inputsSeq; }
+	void JobUpdated() noexcept { ++jobSeq; }
 	void ToolsUpdated() noexcept { ++toolsSeq; }
 
 protected:
