@@ -72,7 +72,6 @@ public:
 	void ResetWiFi() noexcept;
 	void ResetWiFiForUpload(bool external) noexcept;
 	const char *GetWiFiServerVersion() const noexcept { return wiFiServerVersion; }
-	const char* TranslateNetworkState() const noexcept;
 	static const char* TranslateWiFiState(WiFiState w) noexcept;
 	void SpiInterrupt() noexcept;
 	void EspRequestsTransfer() noexcept;
@@ -82,15 +81,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	enum class NetworkState
-	{
-		disabled,					// WiFi module disabled
-		starting1,					// starting up
-		starting2,					// starting up
-		active,						// running, but not necessarily in the requested mode
-		changingMode,				// running and in the process of switching between modes
-	};
-
 	void InitSockets() noexcept;
 	void TerminateSockets() noexcept;
 	void TerminateSockets(Port port) noexcept;
@@ -136,7 +126,6 @@ private:
 	bool closeDataPort;
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 
-	NetworkState state;
 	WiFiState requestedMode;
 	WiFiState currentMode;
 	bool activated;

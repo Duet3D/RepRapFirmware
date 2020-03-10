@@ -142,7 +142,7 @@ static inline void DisableEspInterrupt() noexcept
 // WiFi interface class
 
 WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullptr), espWaitingTask(nullptr), ftpDataPort(0), closeDataPort(false),
-		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
+		requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
 		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
 	wifiInterface = this;
@@ -179,11 +179,12 @@ constexpr ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion),		ObjectModelEntryFlags::none },
 	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),				ObjectModelEntryFlags::none },
 	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),			ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),		ObjectModelEntryFlags::none },
 	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),				ObjectModelEntryFlags::none },
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),				ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 6 };
+constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 7 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
 
@@ -219,7 +220,7 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		MutexLocker lock(interfaceMutex);
 
-		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
+		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
 			ShutdownProtocol(protocol);
@@ -229,7 +230,7 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 		if (!protocolEnabled[protocol])
 		{
 			protocolEnabled[protocol] = true;
-			if (state == NetworkState::active)
+			if (GetState() == NetworkState::active)
 			{
 				StartProtocol(protocol);
 				// mDNS announcement is done by the WiFi Server firmware
@@ -249,7 +250,7 @@ GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const Strin
 	{
 		MutexLocker lock(interfaceMutex);
 
-		if (state == NetworkState::active)
+		if (GetState() == NetworkState::active)
 		{
 			ShutdownProtocol(protocol);
 		}
@@ -383,7 +384,7 @@ void WiFiInterface::Exit() noexcept
 // Get the network state into the reply buffer, returning true if there is some sort of error
 GCodeResult WiFiInterface::GetNetworkState(const StringRef& reply) noexcept
 {
-	switch (state)
+	switch (GetState())
 	{
 	case NetworkState::disabled:
 		reply.copy("WiFi module is disabled");
@@ -465,13 +466,13 @@ void WiFiInterface::Start() noexcept
 	transferAlreadyPendingCount = readyTimeoutCount = responseTimeoutCount = 0;
 
 	lastTickMillis = millis();
-	state = NetworkState::starting1;
+	SetState(NetworkState::starting1);
 }
 
 // Stop the ESP
 void WiFiInterface::Stop() noexcept
 {
-	if (state != NetworkState::disabled)
+	if (GetState() != NetworkState::disabled)
 	{
 		MutexLocker lock(interfaceMutex);
 
@@ -485,7 +486,7 @@ void WiFiInterface::Stop() noexcept
 		spi_dma_check_rx_complete();
 		spi_dma_disable();
 
-		state = NetworkState::disabled;
+		SetState(NetworkState::disabled);
 		currentMode = WiFiState::disabled;
 	}
 }
@@ -493,7 +494,7 @@ void WiFiInterface::Stop() noexcept
 void WiFiInterface::Spin() noexcept
 {
 	// Main state machine.
-	switch (state)
+	switch (GetState())
 	{
 	case NetworkState::starting1:
 		{
@@ -502,7 +503,7 @@ void WiFiInterface::Spin() noexcept
 			if (now - lastTickMillis >= WiFiStartupMillis)
 			{
 				lastTickMillis = now;
-				state = NetworkState::starting2;
+				SetState(NetworkState::starting2);
 			}
 		}
 		break;
@@ -533,7 +534,7 @@ void WiFiInterface::Spin() noexcept
 							reprap.GetPlatform().Message(NetworkInfoMessage, "Error: Could not set WiFi hostname\n");
 						}
 
-						state = NetworkState::active;
+						SetState(NetworkState::active);
 						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
 					}
 					else
@@ -592,7 +593,7 @@ void WiFiInterface::Spin() noexcept
 
 			if (rslt >= 0)
 			{
-				state = NetworkState::changingMode;
+				SetState(NetworkState::changingMode);
 			}
 			else
 			{
@@ -657,7 +658,7 @@ void WiFiInterface::Spin() noexcept
 
 			case WiFiState::connected:
 			case WiFiState::runningAsAccessPoint:
-				state = NetworkState::active;
+				SetState(NetworkState::active);
 				{
 					// Get our IP address, this needs to be correct for FTP to work
 					Receiver<NetworkStatusResponse> status;
@@ -680,7 +681,7 @@ void WiFiInterface::Spin() noexcept
 				{
 					requestedMode = currentMode;				// don't keep repeating the request if it failed and it wasn't a connect request
 				}
-				state = NetworkState::active;
+				SetState(NetworkState::active);
 				platform.MessageF(NetworkInfoMessage, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 				break;
 			}
@@ -731,7 +732,6 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 	// Mapping from known ESP reset codes to reasons
 	static const char * const resetReasonTexts[] =
 	{
-		"Power on",
 		"Hardware watchdog",
 		"Exception",
 		"Software watchdog",
@@ -745,23 +745,9 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 			: "Unknown";
 }
 
-const char* WiFiInterface::TranslateNetworkState() const noexcept
-{
-	switch (state)
-	{
-	case NetworkState::disabled:		return "disabled";
-	case NetworkState::starting1:
-	case NetworkState::starting2:		return "starting";
-	case NetworkState::active:			return "running";
-	case NetworkState::changingMode:	return "changing mode";
-	default:							return "unknown";
-	}
-}
-
 void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 {
-	platform.Message(mtype, "- WiFi -\n");
-	platform.MessageF(mtype, "Network state is %s\n", TranslateNetworkState());
+	platform.MessageF(mtype, "- WiFi -\nNetwork state is %s\n", GetStateName());
 	platform.MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 	platform.MessageF(mtype, "Failed messages: pending %u, notready %u, noresp %u\n", transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount);
 
@@ -770,7 +756,7 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 	platform.MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
 #endif
 
-	if (state != NetworkState::disabled && state != NetworkState::starting1 && state != NetworkState::starting2)
+	if (GetState() != NetworkState::disabled && GetState() != NetworkState::starting1 && GetState() != NetworkState::starting2)
 	{
 		Receiver<NetworkStatusResponse> status;
 		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
@@ -838,7 +824,7 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 		{
 			// Shut down WiFi module completely
 			requestedMode = modeRequested;
-			if (state != NetworkState::disabled)
+			if (GetState() != NetworkState::disabled)
 			{
 				Stop();
 				platform.Message(GenericMessage, "WiFi module stopped\n");
@@ -846,7 +832,7 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 		}
 		else
 		{
-			if (state == NetworkState::disabled)
+			if (GetState() == NetworkState::disabled)
 			{
 				requestedMode = modeRequested;
 				Start();
@@ -1110,7 +1096,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 void WiFiInterface::UpdateHostname(const char *hostname) noexcept
 {
 	// Update the hostname if possible
-	if (state == NetworkState::active)
+	if (GetState() == NetworkState::active)
 	{
 		if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
 		{
@@ -1551,7 +1537,7 @@ void WiFiInterface::SetupSpi() noexcept
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
-	if (state == NetworkState::disabled)
+	if (GetState() == NetworkState::disabled)
 	{
 		if (reprap.Debug(moduleNetwork))
 		{

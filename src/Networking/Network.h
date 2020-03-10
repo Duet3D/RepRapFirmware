@@ -9,11 +9,12 @@
 #define SRC_NETWORK_NETWORK_H_
 
 #include "NetworkDefs.h"
-#include "RepRapFirmware.h"
-#include "MessageType.h"
-#include "GCodes/GCodeResult.h"
-#include "RTOSIface/RTOSIface.h"
-#include "ObjectModel/ObjectModel.h"
+#include <RepRapFirmware.h>
+#include <MessageType.h>
+#include <GCodes/GCodeResult.h>
+#include <RTOSIface/RTOSIface.h>
+#include <ObjectModel/ObjectModel.h>
+#include <General/NamedEnum.h>
 
 #if defined(DUET3_V03)
 const size_t NumNetworkInterfaces = 2;
@@ -48,6 +49,18 @@ class NetworkInterface;
 class Socket;
 class WiFiInterface;
 class WifiFirmwareUploader;
+
+NamedEnum(NetworkState, uint8_t,
+	disabled,					// Network disabled
+	enabled,					// Network enabled but not started yet
+	starting1,					// starting up (used by WiFi networking)
+	starting2,					// starting up (used by WiFi networking)
+	changingMode,				// running and in the process of switching between modes (used by WiFi networking)
+	establishingLink,			// starting up, waiting for link
+	obtainingIP,				// link established, waiting for DHCP
+	connected,					// just established a connection
+	active						// network running
+);
 
 // The main network class that drives the network.
 class Network INHERIT_OBJECT_MODEL

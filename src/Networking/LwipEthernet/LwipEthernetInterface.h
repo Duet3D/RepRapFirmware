@@ -61,16 +61,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	enum class NetworkState
-	{
-		disabled,					// Network disabled
-		enabled,					// Network enabled but not started yet
-		establishingLink,			// starting up, waiting for link
-		obtainingIP,				// link established, waiting for DHCP
-		connected,					// just established a connection
-		active						// network running
-	};
-
 	void Start() noexcept;
 	void Stop() noexcept;
 	void InitSockets() noexcept;
@@ -97,7 +87,6 @@ private:
 	bool closeDataPort;
 	tcp_pcb *listeningPcbs[NumTcpPorts];
 
-	NetworkState state;
 	bool activated;
 	bool initialised;
 	bool usingDhcp;

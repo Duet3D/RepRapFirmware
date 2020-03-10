@@ -14,7 +14,7 @@
 class NetworkInterface INHERIT_OBJECT_MODEL
 {
 public:
-	NetworkInterface() { }
+	NetworkInterface() : state(NetworkState::disabled) { }
 	NetworkInterface(const NetworkInterface&) = delete;
 
 	virtual void Init() noexcept = 0;
@@ -47,8 +47,15 @@ public:
 	Mutex interfaceMutex;							// mutex to protect against multiple tasks using the same interface concurrently. Public so that sockets can lock it.
 
 protected:
+	NetworkState::RawType GetState() const noexcept { return state.RawValue(); }
+	void SetState(NetworkState::RawType newState) noexcept;
+	const char *GetStateName() const noexcept { return state.ToString(); }
+
 	Port portNumbers[NumProtocols];					// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+
+private:
+	NetworkState state;
 };
 
 #endif /* SRC_NETWORKING_NETWORKINTERFACE_H_ */

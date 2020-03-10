@@ -187,6 +187,12 @@ public:
 	void HeatUpdated() noexcept { ++heatSeq; }
 	void InputsUpdated() noexcept { ++inputsSeq; }
 	void JobUpdated() noexcept { ++jobSeq; }
+	void MoveUpdated() noexcept { ++moveSeq; }
+	void NetworkUpdated() noexcept { ++networkSeq; }
+	void ScannerUpdated() noexcept { ++scannerSeq; }
+	void SensorsUpdated() noexcept { ++sensorsSeq; }
+	void SpindlesUpdated() noexcept { ++spindlesSeq; }
+	void StateUpdated() noexcept { ++stateSeq; }
 	void ToolsUpdated() noexcept { ++toolsSeq; }
 
 protected:

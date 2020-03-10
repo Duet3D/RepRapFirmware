@@ -19,7 +19,7 @@
 #include "General/IP4String.h"
 
 W5500Interface::W5500Interface(Platform& p) noexcept
-	: platform(p), lastTickMillis(0), ftpDataSocket(0), state(NetworkState::disabled), activated(false)
+	: platform(p), lastTickMillis(0), ftpDataSocket(0), activated(false)
 {
 	// Create the sockets
 	for (W5500Socket*& skt : sockets)
@@ -49,14 +49,15 @@ W5500Interface::W5500Interface(Platform& p) noexcept
 constexpr ObjectModelTableEntry W5500Interface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
-	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),		ObjectModelEntryFlags::none },
-	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),	ObjectModelEntryFlags::none },
-	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),		ObjectModelEntryFlags::none },
-	{ "type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),	ObjectModelEntryFlags::none },
+	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),			ObjectModelEntryFlags::none },
+	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),			ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),		ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),	ObjectModelEntryFlags::none },
+	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),			ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),		ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t W5500Interface::objectModelTableDescriptor[] = { 1, 5 };
+constexpr uint8_t W5500Interface::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(W5500Interface)
 
@@ -87,7 +88,7 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 		MutexLocker lock(interfaceMutex);
 
 		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
-		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
+		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
 			protocolEnabled[protocol] = false;
@@ -97,10 +98,10 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 		if (!protocolEnabled[protocol])
 		{
 			protocolEnabled[protocol] = true;
-			if (state == NetworkState::active)
+			if (GetState() == NetworkState::active)
 			{
 				ResetSockets();
-				if (state == NetworkState::active)
+				if (GetState() == NetworkState::active)
 				{
 					mdnsResponder->Announce();
 				}
@@ -125,7 +126,7 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 	{
 		MutexLocker lock(interfaceMutex);
 
-		if (state == NetworkState::active)
+		if (GetState() == NetworkState::active)
 		{
 			ResetSockets();
 		}
@@ -168,7 +169,7 @@ void W5500Interface::Activate() noexcept
 	if (!activated)
 	{
 		activated = true;
-		if (state == NetworkState::enabled)
+		if (GetState() == NetworkState::enabled)
 		{
 			Start();
 		}
@@ -229,13 +230,13 @@ void W5500Interface::Start() noexcept
 
 	setPHYCFGR(PHYCFGR_OPMD | PHYCFGR_OPMDC_ALLA | ~PHYCFGR_RST);	// remove the reset
 
-	state = NetworkState::establishingLink;
+	SetState(NetworkState::establishingLink);
 }
 
 // Stop the network
 void W5500Interface::Stop() noexcept
 {
-	if (state != NetworkState::disabled)
+	if (GetState() != NetworkState::disabled)
 	{
 		MutexLocker lock(interfaceMutex);
 
@@ -244,14 +245,14 @@ void W5500Interface::Stop() noexcept
 			DHCP_stop();
 		}
 		digitalWrite(W5500ResetPin, false);		// put the W5500 back into reset
-		state = NetworkState::disabled;
+		SetState(NetworkState::disabled);
 	}
 }
 
 // Main spin loop
 void W5500Interface::Spin() noexcept
 {
-	switch(state)
+	switch (GetState())
 	{
 	case NetworkState::enabled:
 	case NetworkState::disabled:
@@ -272,12 +273,12 @@ void W5500Interface::Spin() noexcept
 //					debugPrintf("Link established, getting IP address\n");
 					DHCP_init(DhcpSocketNumber, platform.Random(), reprap.GetNetwork().GetHostname());
 					lastTickMillis = millis();
-					state = NetworkState::obtainingIP;
+					SetState(NetworkState::obtainingIP);
 				}
 				else
 				{
 //					debugPrintf("Link established, network running\n");
-					state = NetworkState::connected;
+					SetState(NetworkState::connected);
 				}
 			}
 		}
@@ -300,7 +301,7 @@ void W5500Interface::Spin() noexcept
 				{
 //					debugPrintf("IP address obtained, network running\n");
 					getSIPR(ipAddress);
-					state = NetworkState::connected;
+					SetState(NetworkState::connected);
 				}
 			}
 			else
@@ -308,7 +309,7 @@ void W5500Interface::Spin() noexcept
 //				debugPrintf("Lost phy link\n");
 				DHCP_stop();
 				TerminateSockets();
-				state = NetworkState::establishingLink;
+				SetState(NetworkState::establishingLink);
 			}
 		}
 		break;
@@ -317,7 +318,7 @@ void W5500Interface::Spin() noexcept
 		InitSockets();
 		platform.MessageF(NetworkInfoMessage, "Network running, IP address = %s\n", IP4String(ipAddress).c_str());
 		mdnsResponder->Announce();
-		state = NetworkState::active;
+		SetState(NetworkState::active);
 		break;
 
 	case NetworkState::active:
@@ -367,7 +368,7 @@ void W5500Interface::Spin() noexcept
 					DHCP_stop();
 				}
 				TerminateSockets();
-				state = NetworkState::establishingLink;
+				SetState(NetworkState::establishingLink);
 			}
 		}
 		break;
@@ -383,7 +384,7 @@ void W5500Interface::Diagnostics(MessageType mtype) noexcept
 	}
 	const char * const linkSpeed = ((phycfgr & 1) == 0) ? "down" : ((phycfgr & 2) != 0) ? "100Mbps" : "10Mbps";
 	const char * const linkDuplex = ((phycfgr & 1) == 0) ? "" : ((phycfgr & 4) != 0) ? " full duplex" : " half duplex";
-	platform.MessageF(mtype, "Interface state %d, link %s%s\n", (int)state, linkSpeed, linkDuplex);
+	platform.MessageF(mtype, "Interface state %s, link %s%s\n", GetStateName(), linkSpeed, linkDuplex);
 }
 
 // Enable or disable the network
@@ -391,20 +392,20 @@ GCodeResult W5500Interface::EnableInterface(int mode, const StringRef& ssid, con
 {
 	if (!activated)
 	{
-		state = (mode <= 0) ? NetworkState::disabled : NetworkState::enabled;
+		SetState((mode <= 0) ? NetworkState::disabled : NetworkState::enabled);
 	}
 	else if (mode <= 0)
 	{
-		if (state != NetworkState::disabled)
+		if (GetState() != NetworkState::disabled)
 		{
 			Stop();
 			platform.Message(NetworkInfoMessage, "Network stopped\n");
 		}
 
 	}
-	else if (state == NetworkState::disabled)
+	else if (GetState() == NetworkState::disabled)
 	{
-		state = NetworkState::enabled;
+		SetState(NetworkState::enabled);
 		Start();
 	}
 	return GCodeResult::ok;
@@ -412,7 +413,7 @@ GCodeResult W5500Interface::EnableInterface(int mode, const StringRef& ssid, con
 
 int W5500Interface::EnableState() const noexcept
 {
-	return (state == NetworkState::disabled) ? 0 : 1;
+	return (GetState() == NetworkState::disabled) ? 0 : 1;
 }
 
 void W5500Interface::UpdateHostname(const char *name) noexcept /*override*/
