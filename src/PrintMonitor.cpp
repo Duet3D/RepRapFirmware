@@ -44,22 +44,36 @@ const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
 			{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)], 1); }
 };
 
+const ObjectModelArrayDescriptor PrintMonitor::extrudedRawArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumExtruders(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetIndex(0)), 1); }
+};
+
 constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. PrintMonitor members
+	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintDuration(), 1), 												ObjectModelEntryFlags::live },
+	{ "extrudedRaw",		OBJECT_MODEL_FUNC_NOSELF(&extrudedRawArrayDescriptor),							 									ObjectModelEntryFlags::none },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
+	{ "filePosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetFilePosition(), 0),													ObjectModelEntryFlags::live },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
-	{ "layer",				OBJECT_MODEL_FUNC((int32_t)self->currentLayer), 																	ObjectModelEntryFlags::none },
+	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
+	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), (int32_t)self->currentLayer), 												ObjectModelEntryFlags::none },
+	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetCurrentLayerTime(), 1), 											ObjectModelEntryFlags::none },
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::none },
+	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetWarmUpDuration(), 1),												ObjectModelEntryFlags::none },
 
 	// 1. ParsedFileInfo members
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 										ObjectModelEntryFlags::none },
+	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), &self->filenameBeingPrinted),																		ObjectModelEntryFlags::none },
 	{ "firstLayerHeight",	OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight, 2), 														ObjectModelEntryFlags::none },
 	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
 	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight, 2), 															ObjectModelEntryFlags::none },
 	{ "lastModified",		OBJECT_MODEL_FUNC(DateTime(self->printingFileInfo.lastModifiedTime)), 												ObjectModelEntryFlags::none },
-	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight, 2), 																ObjectModelEntryFlags::none },
+	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight, 2), 															ObjectModelEntryFlags::none },
 	{ "numLayers",			OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.GetNumLayers()), 													ObjectModelEntryFlags::none },
 	{ "printTime",			OBJECT_MODEL_FUNC_IF(self->printingFileInfo.printTime != 0, (int32_t)self->printingFileInfo.printTime), 			ObjectModelEntryFlags::none },
 	{ "simulatedTime",		OBJECT_MODEL_FUNC_IF(self->printingFileInfo.simulatedTime != 0, (int32_t)self->printingFileInfo.simulatedTime), 	ObjectModelEntryFlags::none },
@@ -71,7 +85,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "layer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(layerBased)),													ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 4, 10, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 9, 11, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 

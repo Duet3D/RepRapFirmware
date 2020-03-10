@@ -128,6 +128,7 @@ private:
 
 	Tool* next;
 	Filament *filament;
+	int filamentExtruder;
 	const char *name;
 	float offset[MaxAxes];
 	float mix[MaxExtrudersPerTool];

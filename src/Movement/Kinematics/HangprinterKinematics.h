@@ -46,6 +46,9 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(anchorA)
+	OBJECT_MODEL_ARRAY(anchorB)
+	OBJECT_MODEL_ARRAY(anchorC)
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;

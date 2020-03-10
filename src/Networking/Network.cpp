@@ -103,11 +103,12 @@ constexpr ObjectModelArrayDescriptor Network::interfacesArrayDescriptor =
 constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
+	{ "hostname",	OBJECT_MODEL_FUNC(self->GetHostname()),					ObjectModelEntryFlags::none },
 	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfacesArrayDescriptor),	ObjectModelEntryFlags::none },
 	{ "name",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetName()), 			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Network::objectModelTableDescriptor[] = { 1, 2 };
+constexpr uint8_t Network::objectModelTableDescriptor[] = { 1, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Network)
 

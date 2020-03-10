@@ -29,14 +29,40 @@ constexpr float DefaultPrintRadius = 1500.0;
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(HangprinterKinematics, __VA_ARGS__)
 
+constexpr ObjectModelArrayDescriptor HangprinterKinematics::anchorAArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 3; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const HangprinterKinematics *)self)->anchorA[context.GetLastIndex()], 3); }
+};
+
+constexpr ObjectModelArrayDescriptor HangprinterKinematics::anchorBArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 3; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const HangprinterKinematics *)self)->anchorB[context.GetLastIndex()], 3); }
+};
+
+constexpr ObjectModelArrayDescriptor HangprinterKinematics::anchorCArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 3; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const HangprinterKinematics *)self)->anchorC[context.GetLastIndex()], 3); }
+};
+
 constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",	OBJECT_MODEL_FUNC(self->GetName(false)), 	ObjectModelEntryFlags::none },
+	{ "anchorA",	OBJECT_MODEL_FUNC_NOSELF(&anchorAArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "anchorB",	OBJECT_MODEL_FUNC_NOSELF(&anchorBArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "anchorC",	OBJECT_MODEL_FUNC_NOSELF(&anchorCArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "anchorDz",	OBJECT_MODEL_FUNC(self->anchorDz, 3), 				ObjectModelEntryFlags::none },
+	{ "name",		OBJECT_MODEL_FUNC(self->GetName(true)), 			ObjectModelEntryFlags::none },
+	{ "printRadius",	OBJECT_MODEL_FUNC(self->printRadius, 1), 		ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 1 };
+constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(HangprinterKinematics)
 

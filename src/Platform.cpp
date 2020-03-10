@@ -262,7 +262,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),				ObjectModelEntryFlags::none },
 	{ "machinePosition",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().LiveCoordinate(context.GetLastIndex(), reprap.GetCurrentTool()), 3),	ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
+	{ "maxProbed",			OBJECT_MODEL_FUNC(self->axisMaximaProbed.IsBitSet(context.GetLastIndex())),							ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->AxisMinimum(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
+	{ "minProbed",			OBJECT_MODEL_FUNC(self->axisMinimaProbed.IsBitSet(context.GetLastIndex())),							ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->MaxFeedrate(context.GetLastIndex()), 1),					ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3),			ObjectModelEntryFlags::live },
 	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),	ObjectModelEntryFlags::none },
@@ -303,7 +305,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	9 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION,		// section 0: boards[]
 	3,																		// section 1: mcuTemp
 	3,																		// section 2: vIn
-	13,																		// section 3: move.axes[]
+	15,																		// section 3: move.axes[]
 	5,																		// section 4: move.extruders[]
 	3,																		// section 5: move.extruders[].nonlinear
 	6,																		// section 6: directories
@@ -3331,6 +3333,11 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 		reply.printf("Event logging is %s", (logger != nullptr && logger->IsActive()) ? "enabled" : "disabled");
 	}
 	return GCodeResult::ok;
+}
+
+const char *Platform::GetLogFileName() const noexcept
+{
+	return logger->GetFileName();
 }
 
 #endif

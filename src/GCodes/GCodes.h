@@ -189,6 +189,7 @@ public:
 	bool GetLastPrintingHeight(float& height) const noexcept;					// Get the height in user coordinates of the last printing move
 	bool AtxPowerControlled() const noexcept { return atxPowerControlled; }
 
+	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };		// Get the default grid definition
 	void AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
 	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
 

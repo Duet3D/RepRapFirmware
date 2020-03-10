@@ -125,6 +125,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RepRap, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(RepRap, _condition,__VA_ARGS__)
 
 constexpr ObjectModelArrayDescriptor RepRap::boardsArrayDescriptor =
 {
@@ -155,6 +156,13 @@ constexpr ObjectModelArrayDescriptor RepRap::inputsArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->gCodes->GetInput(context.GetLastIndex())); }
 };
 
+constexpr ObjectModelArrayDescriptor RepRap::spindlesArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return MaxSpindles; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const RepRap*)self)->platform->AccessSpindle(context.GetLastIndex())); }
+};
+
 constexpr ObjectModelArrayDescriptor RepRap::toolsArrayDescriptor =
 {
 	&toolListLock,
@@ -167,7 +175,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
 	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
-	{ "directories",			OBJECT_MODEL_FUNC(self->platform, 6),									ObjectModelEntryFlags::live },
+	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::verbose },
 	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor),						ObjectModelEntryFlags::live },
@@ -175,16 +183,31 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "limits",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::verbose },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
 	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
+	{ "scanner",				OBJECT_MODEL_FUNC(self->scanner),										ObjectModelEntryFlags::none },
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::none },
-	{ "state",					OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::live },
+	// TODO Add seqs here
+	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF(&spindlesArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "state",					OBJECT_MODEL_FUNC(self, 3),												ObjectModelEntryFlags::live },
+	// TODO Add storages here in the format
+	/*
+		mounted = false
+		speed = null				// in Bytes/s
+		capacity = null				// in Bytes
+		free = null					// in Bytes
+		openFiles = null
+		path = null
+	*/
 	{ "tools",					OBJECT_MODEL_FUNC_NOSELF(&toolsArrayDescriptor),						ObjectModelEntryFlags::live },
+	// TODO Add userVariables here with items in the format { name, value }
 
-	// 1. MachineModel.state
-	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
-	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
-	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
-	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
-	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
+	// 1. MachineModel.directories
+	{ "filaments",				OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),							ObjectModelEntryFlags::none },
+	{ "gCodes",					OBJECT_MODEL_FUNC(self->platform->GetGCodeDir()),						ObjectModelEntryFlags::none },
+	{ "macros",					OBJECT_MODEL_FUNC(self->platform->GetMacroDir()),						ObjectModelEntryFlags::none },
+	{ "menu",					OBJECT_MODEL_FUNC_NOSELF(MENU_DIR),										ObjectModelEntryFlags::none },
+	{ "scans",					OBJECT_MODEL_FUNC_NOSELF(SCANS_DIRECTORY),								ObjectModelEntryFlags::none },
+	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir),			ObjectModelEntryFlags::none },
+	{ "web",					OBJECT_MODEL_FUNC(self->platform->GetWebDir()),							ObjectModelEntryFlags::none },
 
 	// 2. MachineModel.limits
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxAxes),								ObjectModelEntryFlags::verbose },
@@ -212,12 +235,47 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "monitorsPerHeater",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxMonitorsPerHeater),				ObjectModelEntryFlags::verbose },
 	{ "sensors",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxSensors),							ObjectModelEntryFlags::verbose },
 	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxSpindles),							ObjectModelEntryFlags::verbose },
+#if HAS_MASS_STORAGE
+	{ "storages",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumSdCards),							ObjectModelEntryFlags::verbose },
+#else
+	{ "storages",				OBJECT_MODEL_FUNC_NOSELF(0),											ObjectModelEntryFlags::verbose },
+#endif
 	{ "triggers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTriggers),							ObjectModelEntryFlags::verbose },
+	// TODO userVariables
+	{ "workplaces",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumCoordinateSystems),				ObjectModelEntryFlags::verbose },
 	{ "zProbeProgramBytes",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbeProgramBytes),				ObjectModelEntryFlags::verbose },
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
+
+	// 3. MachineModel.state
+	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->gCodes->AtxPowerControlled(), self->platform->AtxPower()),	ObjectModelEntryFlags::live },
+	{ "beep",					OBJECT_MODEL_FUNC(self, 4),												ObjectModelEntryFlags::live },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
+	{ "displayMessage",			OBJECT_MODEL_FUNC(&self->message),										ObjectModelEntryFlags::live },
+	{ "laserPwm",				OBJECT_MODEL_FUNC(self->platform->GetLaserPwm(), 2),					ObjectModelEntryFlags::live },
+#if HAS_MASS_STORAGE
+	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
+#else
+	{ "logFile",				OBJECT_MODEL_FUNC(""),													ObjectModelEntryFlags::none },
+#endif
+	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
+	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
+	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
+
+	// 4. MachineModel.state.beep
+	{ "duration",				OBJECT_MODEL_FUNC((int32_t)self->beepDuration),							ObjectModelEntryFlags::none },
+	{ "frequency",				OBJECT_MODEL_FUNC((int32_t)self->beepFrequency),						ObjectModelEntryFlags::none },
+
+	// 5. MachineModel.state.messageBox (FIXME add wrapper that acquires the lock when reading from mbox)
+	{ "axisControls",			OBJECT_MODEL_FUNC((int32_t)self->mbox.controls.GetRaw()),				ObjectModelEntryFlags::none },
+	{ "message",				OBJECT_MODEL_FUNC(self->mbox.message.c_str()),							ObjectModelEntryFlags::none },
+	{ "mode",					OBJECT_MODEL_FUNC((int32_t)self->mbox.mode),							ObjectModelEntryFlags::none },
+	{ "seq",					OBJECT_MODEL_FUNC((int32_t)self->mbox.seq),								ObjectModelEntryFlags::none },
+	{ "timeout",				OBJECT_MODEL_FUNC((int32_t)self->mbox.timeout),							ObjectModelEntryFlags::none },
+	{ "title",					OBJECT_MODEL_FUNC(self->mbox.title.c_str()),							ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 3, 12, 5, 20 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 6, 14, 7, 22, 10, 2, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
@@ -2343,18 +2401,18 @@ const char* RepRap::GetStatusString() const noexcept
 {
 	static const char *const StatusStrings[] =
 	{
-		"Starting",
-		"Updating",
-		"Halted",
-		"Off",
-		"Pausing",
-		"Resuming",
-		"Paused",
-		"Simulating",
-		"Processing",
-		"ChangingTool",
-		"Busy",
-		"Idle"
+		"starting",
+		"updating",
+		"halted",
+		"off",
+		"pausing",
+		"resuming",
+		"paused",
+		"simulating",
+		"processing",
+		"changingTool",
+		"busy",
+		"idle"
 	};
 	return StatusStrings[GetStatusIndex()];
 }

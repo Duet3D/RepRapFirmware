@@ -57,7 +57,7 @@ constexpr ObjectModelTableEntry CoreKinematics::objectModelTable[] =
 	// 0. kinematics members
 	{ "forwardMatrix",		OBJECT_MODEL_FUNC_NOSELF(&forwardMatrixArrayDescriptor), 		ObjectModelEntryFlags::none },
 	{ "inverseMatrix",		OBJECT_MODEL_FUNC_NOSELF(&inverseMatrixArrayDescriptor), 		ObjectModelEntryFlags::none },
-	{ "name",				OBJECT_MODEL_FUNC(self->GetName(false)), 						ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 						ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 3 };

@@ -1,3 +1,86 @@
+RepRapFirmware 3.01beta2
+========================
+
+Recommended compatible firmware:
+- DuetWebControl 2.06
+- DuetWiFiServer 1.23
+- Duet Software Framework 1.2.3.0 (for Duet 3/Raspberry Pi users)
+
+Upgrade notes:
+- No significant changes since 3.01beta1
+
+Limitations:
+- The new conditional GCode commands and expressions and parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
+
+New features and changed behaviour:
+- Many new object model fields have been added
+
+Bug fixes:
+- Object model properties move.initialDeviation, move.calibrationDeviation.mean and move.meshDeviation.mean were inaccessible
+- Equality between floating point numbers gave the wrong result
+- Function calls in GCode meta commands didn't work unless extra brackets were used
+- If a GCode line was too long after stripping line numbers, leading white space and comments, the firmware restarted instead of reporting an error
+- When an under-voltage event occurs, all axes are now flagged as not homed
+- The maximum step rate possible was reduced in earlier RRF3 releases. Some of that loss has been restored.
+
+RepRapFirmware 3.01beta1
+========================
+
+Recommended compatible firmware:
+- DuetWebControl 2.06
+- DuetWiFiServer 1.23
+- Duet Software Framework 1.2.2 (for Duet 3/Raspberry Pi users)
+
+Upgrade notes:
+- You cannot upgrade a Duet WiFi, Ethernet or Maestro direct to this release from RRF 1.x or 2.x because the firmware binary is too large for the old IAP. You must upgrade to version 3.0 first, then from 3.0 you can upgrade to this release.
+- If upgrading a Duet WiFi/Ethernet/Maestro from the 3.0 release, note that default fans are no longer created. Unless your config.g file already used M950 to create the fans explicitly, add commands M950 F0 C"fan0", M950 F1 C"fan1" and M950 F2 C"fan2" to config.g before your M106 commands. Likewise, default endstop switches are not set up, so you will need to set up X and Y endstops (and Z if needed) explicitly, using one M574 line for each, and specifying the port name. Example: M574 X1 S1 P"xstop".
+
+Limitations:
+- The new conditional GCode commands and expressions and parameters in GCode commands will not work on Duet 3 with a Raspberry Pi or other SBC attached, until this support has been added to Duet Software Framework
+
+New features and changed behaviour:
+- The **if**, **elif**, **else**, **while**, **break**, **continue**, **echo** and **abort** GCode meta commands are implemented, along with expression evaluation. See https://duet3d.dozuki.com/Wiki/GCode_Meta_Commands.
+- M409 and a corresponding HTTP call rr_model have been added, to allow parts of the object model to be queried
+- Parts of the RepRapFirmware Object Model have been implemented. Values can be retrieved from the OM within GCode command parameters, by M409, and by the new rr_model HTTP command. See https://duet3d.dozuki.com/Wiki/Object_Model_of_RepRapFirmware.
+- The MakeDirectory and RenameFile local SD card functions now create the full path recursively if necessary
+- The rr_connect message returns additional field "apiLevel":1 if it succeeds. This can be used as an indication that the rr_model command is supported.
+
+Bug fixes:
+- When the C (temperature coefficient) parameter was used in the G31 command, if the temperature could not be read from the sensor specified in the H parameter then the error message was not clear; and it didn't allow time for the sensor to become ready in case it had only just been configured.
+- The M917 command didn't work on Duet 3 and Duet Maestro.
+- Fixed two instances of possible 1-character buffer overflow in class OutputBuffer
+- If no heaters were configured, one spurious heater was reported in the status response
+- On delta printers, M564 S0 didn't allow movement outside the print radius defined in M665
+- On Duet 3 with attached SBC, when a job was paused and then cancelled, a spurious move sometimes occurred
+
+RepRapFirmware 3.0
+==================
+
+Recommended compatible firmware:
+- Duet Web Control 2.0.4
+- DuetWiFiServer 1.23
+- DuetSoftwareFramework 1.2.2.0
+- Duet3Firmware_EXP3HC 3.0
+
+Upgrade notes:
+- **If you are upgrading from RepRapFirmware 2.x then you will need to make substantial changes to your config.g file.** See https://duet3d.dozuki.com/Wiki/RepRapFirmware_3_overview#Section_Summary_of_what_you_need_to_do_to_convert_your_configuration_and_other_files for details.
+- Duet Maestro users: the M917 command does not work in this release. If you use M917 in config.g or any other files, we suggest you comment it out all M917 commands until you can upgrade to version 3.01.
+
+The remaining items affect users of RepRapFirmware 3.0 beta (but not RC) versions:
+- Endstop type S0 (active low switch) is no longer supported in M574 commands. Instead, use type S1 and invert the input by prefixing the pin name with '!'.
+- If you are using Duet 3 expansion or tool boards, you must upgrade those to 3.0 too
+- You should also upload the new IAP file for your system. You will need it when upgrading firmware in future. These files are called Duet2CombinedIAP.bin, DuetMaestroIAP.bin, Duet3_SBCiap_MB6HC.bin (for Duet 3+SBC) and Duet3_SDiap.bin (for Duet 3 standalone systems). Leave the old IAP files on your system, they have different names and you will need them again if you downgrade to older firmware.
+- Duet 3 users: there is no longer a default bed heater. To use Heater 0 as the bed heater, put M140 H0 in config.g (later in config.g than your M950 H0 command).
+
+Known limitations:
+- Duet 3 users: connector IO_0 of the MB6HC board is currently reserved for PanelDue. We recommend that you do not use it for any other purpose.
+- Duet 3 users: support for expansion boards has some limitations. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations for details.
+- Duet Maestro and Duet 3 users: the M917 command does not work properly and must not be used.
+
+Bug fixes since 3.0RC2:
+- Fixed issue where a missing start.g could disrupt the G-code flow with an attached SBC
+- When RRF requested a macro file but had to wait for the SBC to connect, the final code replies to DSF were omitted
+
 RepRapFirmware 3.0RC2
 =====================
 
@@ -50,7 +133,7 @@ Upgrade notes:
 - If you are using Duet 3 expansion or tool boards, you must upgrade those to 3.0RC1 too
 - Duet 3+SBC users must use DSF 1.1.0.5 or a compatible later version with this version of RRF
 - You should also upload the new IAP file for your system. You will need it when upgrading firmware in future. These files are called Duet2CombinedIAP.bin, DuetMaestroIAP.bin, Duet3_SBCiap_MB6HC.bin (for Duet 3+SBC) and Duet3_SDiap.bin (for Duet 3 standalone systems). You can leave the old IAP files on your system, they have different names and you will need them if you downgrade to earlier firmware.
-- Duet 3 users: there is no longer a defualt bed heater. To use Heater 0 as the bed heater, put M140 H0 in config.g (later in config.g than your M950 H0 command).
+- Duet 3 users: there is no longer a default bed heater. To use Heater 0 as the bed heater, put M140 H0 in config.g (later in config.g than your M950 H0 command).
 
 Feature changes since beta 12:
 - Duet 3 only: Switch-type endstops connected to expansion boards are supported

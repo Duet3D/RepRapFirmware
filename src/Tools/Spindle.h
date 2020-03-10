@@ -10,16 +10,21 @@
 
 #include "RepRapFirmware.h"
 #include "Hardware/IoPorts.h"
+#include "ObjectModel/ObjectModel.h"
 
-class Spindle
+class Spindle INHERIT_OBJECT_MODEL
 {
 private:
 	PwmPort spindleForwardPort, spindleReversePort;
 	float currentRpm, configuredRpm, maxRpm;
+	PwmFrequency frequency;
 	int toolNumber;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 public:
-	Spindle() noexcept : currentRpm(0.0), configuredRpm(0.0), maxRpm(DefaultMaxSpindleRpm), toolNumber(-1) { }
+	Spindle() noexcept : currentRpm(0.0), configuredRpm(0.0), maxRpm(DefaultMaxSpindleRpm), frequency(0), toolNumber(-1) { }
 
 	bool AllocatePins(GCodeBuffer& gb, const StringRef& reply) noexcept;			// Allocate the pins returning true if successful
 

@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include "ObjectModel/ObjectModel.h"
 
 #if SUPPORT_SCANNER
 
@@ -39,7 +40,7 @@ enum class ScannerState
 	Uploading			// uploading a binary file
 };
 
-class Scanner
+class Scanner INHERIT_OBJECT_MODEL
 {
 public:
 	friend class GCodes;
@@ -67,6 +68,9 @@ public:
 	bool DoingGCodes() const noexcept { return doingGCodes; }	// Has the scanner run any G-codes since the last state transition?
 	const char GetStatusCharacter() const noexcept;				// Returns the status char for the status response
 	float GetProgress() const noexcept;							// Returns the progress of the current action
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	GCodeBuffer *serialGCode;

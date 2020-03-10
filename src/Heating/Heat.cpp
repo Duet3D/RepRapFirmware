@@ -60,6 +60,20 @@ extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters) noexcept
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
+constexpr ObjectModelArrayDescriptor Heat::bedHeatersArrayDescriptor =
+{
+	&heatersLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxBedHeaters; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->bedHeaters[context.GetLastIndex()]); }
+};
+
+constexpr ObjectModelArrayDescriptor Heat::chamberHeatersArrayDescriptor =
+{
+	&heatersLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxChamberHeaters; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->chamberHeaters[context.GetLastIndex()]); }
+};
+
 constexpr ObjectModelArrayDescriptor Heat::heatersArrayDescriptor =
 {
 	&heatersLock,
@@ -74,12 +88,14 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	// 0. Heat class
-	{ "coldExtrudeTemperature",	OBJECT_MODEL_FUNC(self->extrusionMinTemp, 1),		ObjectModelEntryFlags::none},
-	{ "coldRetractTemperature", OBJECT_MODEL_FUNC(self->retractionMinTemp, 1),		ObjectModelEntryFlags::none},
-	{ "heaters",				OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor),	ObjectModelEntryFlags::live },
+	{ "bedHeaters",				OBJECT_MODEL_FUNC_NOSELF(&bedHeatersArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "chamberHeaters",			OBJECT_MODEL_FUNC_NOSELF(&chamberHeatersArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "coldExtrudeTemperature",	OBJECT_MODEL_FUNC(self->extrusionMinTemp, 1),				ObjectModelEntryFlags::none},
+	{ "coldRetractTemperature", OBJECT_MODEL_FUNC(self->retractionMinTemp, 1),				ObjectModelEntryFlags::none},
+	{ "heaters",				OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor),			ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 

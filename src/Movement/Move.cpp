@@ -122,6 +122,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 #endif
 									, self->heightMap.GetFileName()),													ObjectModelEntryFlags::none },
 	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 8),											ObjectModelEntryFlags::none },
+	{ "probeGrid",				OBJECT_MODEL_FUNC_NOSELF((const GridDefinition *)&reprap.GetGCodes().GetDefaultGrid()),	ObjectModelEntryFlags::none },
 	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),									ObjectModelEntryFlags::none },
 
 	// 8. move.compensation.meshDeviation members
@@ -129,7 +130,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4, 3, 2, 2, 3, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4, 3, 2, 2, 4, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
