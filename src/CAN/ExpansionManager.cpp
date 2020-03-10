@@ -103,6 +103,7 @@ void ExpansionManager::UpdateBoardState(CanAddress address, BoardState newState)
 			--numExpansionBoards;
 			lastIndexSearched = 0;
 		}
+		reprap.BoardsUpdated();
 	}
 }
 

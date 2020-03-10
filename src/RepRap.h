@@ -26,8 +26,6 @@ Licence: GPL
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
 #include "GCodes/GCodeResult.h"
-#include "Fans/FansManager.h"
-#include "Tools/Tool.h"
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/ExpansionManager.h>
@@ -95,8 +93,8 @@ public:
 	ReadLockedPointer<Tool> GetTool(int toolNumber) const noexcept;
 	ReadLockedPointer<Tool> GetCurrentOrDefaultTool() const noexcept;
 	ReadLockedPointer<Tool> GetFirstTool() const noexcept;										// Return the lowest-numbered tool
-	AxesBitmap GetCurrentXAxes() const noexcept { return Tool::GetXAxes(currentTool); }		// Get the current axes used as X axes
-	AxesBitmap GetCurrentYAxes() const noexcept { return Tool::GetYAxes(currentTool); }		// Get the current axes used as Y axes
+	AxesBitmap GetCurrentXAxes() const noexcept;												// Get the current axes used as X axes
+	AxesBitmap GetCurrentYAxes() const noexcept;												// Get the current axes used as Y axes
 	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
 	unsigned int GetNumberOfContiguousTools() const noexcept;
 	void ReportAllToolTemperatures(const StringRef& reply) const noexcept;
@@ -183,6 +181,10 @@ public:
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
+	void BoardsUpdated() noexcept { ++boardsSeq; }
+	void FansUpdated() noexcept { ++fansSeq; }
+	void ToolsUpdated() noexcept { ++toolsSeq; }
+
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(boards)
@@ -239,6 +241,9 @@ private:
 
  	Mutex messageBoxMutex;
 
+	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq;
+	uint16_t moveSeq, networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq;
+
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;
 	uint32_t lastWarningMillis;					// when we last sent a warning message for things that can happen very often
@@ -288,12 +293,6 @@ inline Tool* RepRap::GetCurrentTool() const noexcept { return currentTool; }
 inline uint16_t RepRap::GetExtrudersInUse() const noexcept { return activeExtruders; }
 inline uint16_t RepRap::GetToolHeatersInUse() const noexcept { return activeToolHeaters; }
 inline bool RepRap::IsStopped() const noexcept { return stopped; }
-
-// Set the previous tool number. Inline because it is only called from one place.
-inline void RepRap::SetPreviousToolNumber() noexcept
-{
-	previousToolNumber = (currentTool != nullptr) ? currentTool->Number() : -1;
-}
 
 #define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 

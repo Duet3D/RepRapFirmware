@@ -15,6 +15,7 @@
 #include "Endstops/ZProbe.h"
 #include "Tasks.h"
 #include "Hardware/Cache.h"
+#include "Fans/FansManager.h"
 #include "Version.h"
 
 #ifdef DUET_NG
@@ -185,7 +186,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
 	{ "scanner",				OBJECT_MODEL_FUNC(self->scanner),										ObjectModelEntryFlags::none },
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::none },
-	// TODO Add seqs here
+	{ "seqs",					OBJECT_MODEL_FUNC(self, 6),												ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF(&spindlesArrayDescriptor),						ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC(self, 3),												ObjectModelEntryFlags::live },
 	// TODO Add storages here in the format
@@ -273,9 +274,27 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "seq",					OBJECT_MODEL_FUNC((int32_t)self->mbox.seq),								ObjectModelEntryFlags::none },
 	{ "timeout",				OBJECT_MODEL_FUNC((int32_t)self->mbox.timeout),							ObjectModelEntryFlags::none },
 	{ "title",					OBJECT_MODEL_FUNC(self->mbox.title.c_str()),							ObjectModelEntryFlags::none },
+
+	// 6. MachineModel.seqs
+	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
+	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
+	{ "fans",					OBJECT_MODEL_FUNC((int32_t)self->fansSeq),								ObjectModelEntryFlags::live },
+	{ "heat",					OBJECT_MODEL_FUNC((int32_t)self->heatSeq),								ObjectModelEntryFlags::live },
+	{ "inputs",					OBJECT_MODEL_FUNC((int32_t)self->inputsSeq),							ObjectModelEntryFlags::live },
+	{ "job",					OBJECT_MODEL_FUNC((int32_t)self->jobSeq),								ObjectModelEntryFlags::live },
+	// no need for 'limits' because it never changes
+	{ "move",					OBJECT_MODEL_FUNC((int32_t)self->moveSeq),								ObjectModelEntryFlags::live },
+	{ "network",				OBJECT_MODEL_FUNC((int32_t)self->networkSeq),							ObjectModelEntryFlags::live },
+	{ "scanner",				OBJECT_MODEL_FUNC((int32_t)self->scannerSeq),							ObjectModelEntryFlags::live },
+	{ "sensors",				OBJECT_MODEL_FUNC((int32_t)self->sensorsSeq),							ObjectModelEntryFlags::live },
+	{ "spindles",				OBJECT_MODEL_FUNC((int32_t)self->spindlesSeq),							ObjectModelEntryFlags::live },
+	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
+	// TODO Add storages here
+	{ "tools",					OBJECT_MODEL_FUNC((int32_t)self->toolsSeq),								ObjectModelEntryFlags::live },
+
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 6, 14, 7, 22, 10, 2, 6 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 7, 15, 7, 22, 10, 2, 6, 13 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
@@ -288,7 +307,9 @@ ReadWriteLock RepRap::toolListLock;
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
 RepRap::RepRap() noexcept
-	: toolList(nullptr), currentTool(nullptr), lastWarningMillis(0),
+	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), moveSeq(0),
+	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0),
+	  toolList(nullptr), currentTool(nullptr), lastWarningMillis(0),
 	  activeExtruders(0), activeToolHeaters(0), numToolsToReport(0),
 	  ticksInSpinState(0), heatTaskIdleTicks(0), debug(0),
 	  beepFrequency(0), beepDuration(0),
@@ -877,6 +898,7 @@ void RepRap::AddTool(Tool* tool) noexcept
 	*t = tool;
 	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
 	platform->UpdateConfiguredHeaters();
+	ToolsUpdated();
 }
 
 void RepRap::DeleteTool(int toolNumber) noexcept
@@ -918,6 +940,7 @@ void RepRap::DeleteTool(int toolNumber) noexcept
 		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
 	}
 	platform->UpdateConfiguredHeaters();
+	ToolsUpdated();
 }
 
 // Select the specified tool, putting the existing current tool into standby
@@ -1091,6 +1114,24 @@ void RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& rep
 	{
 		tool->SetFirmwareRetraction(gb, reply);
 	}
+}
+
+// Get the current axes used as X axes
+AxesBitmap RepRap::GetCurrentXAxes() const noexcept
+{
+	return Tool::GetXAxes(currentTool);
+}
+
+// Get the current axes used as Y axes
+AxesBitmap RepRap::GetCurrentYAxes() const noexcept
+{
+	return Tool::GetYAxes(currentTool);
+}
+
+// Set the previous tool number. Inline because it is only called from one place.
+void RepRap::SetPreviousToolNumber() noexcept
+{
+	previousToolNumber = (currentTool != nullptr) ? currentTool->Number() : -1;
 }
 
 void RepRap::Tick() noexcept

@@ -520,6 +520,7 @@ void Tool::SetOffset(size_t axis, float offs, bool byProbing) noexcept
 	{
 		axisOffsetsProbed.SetBit(axis);
 	}
+	ToolUpdated();
 }
 
 float Tool::GetToolHeaterActiveTemperature(size_t heaterNumber) const noexcept
@@ -655,7 +656,12 @@ void Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply) THROWS
 		retractHop = max<float>(gb.GetFValue(), 0.0);
 		seen = true;
 	}
-	if (!seen)
+
+	if (seen)
+	{
+		ToolUpdated();
+	}
+	else
 	{
 		reply.lcatf("Tool %u retract/reprime: length %.2f/%.2fmm, speed %.1f/%.1fmm/sec, Z hop %.2fmm",
 			myNumber, (double)retractLength, (double)(retractLength + retractExtra), (double)retractSpeed, (double)unRetractSpeed, (double)retractHop);

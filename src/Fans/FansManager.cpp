@@ -9,7 +9,8 @@
 
 #include "LocalFan.h"
 #include "RemoteFan.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <RepRap.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanMessageFormats.h>
@@ -126,6 +127,7 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 			}
 #endif
 			fans[fanNum] = CreateLocalFan(fanNum, pinName.c_str(), freq, reply);
+			reprap.FansUpdated();
 			return (fans[fanNum] == nullptr) ? GCodeResult::error : GCodeResult::ok;
 		}
 
@@ -138,7 +140,9 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 
 		if (gb.Seen('Q'))
 		{
-			return fan->SetPwmFrequency(gb.GetPwmFrequency(), reply);
+			const GCodeResult rslt = fan->SetPwmFrequency(gb.GetPwmFrequency(), reply);
+			reprap.FansUpdated();
+			return rslt;
 		}
 
 		return fan->ReportPortDetails(reply);

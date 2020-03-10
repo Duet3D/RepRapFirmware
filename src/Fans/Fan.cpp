@@ -6,7 +6,8 @@
  */
 
 #include "Fan.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <RepRap.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -150,6 +151,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			{
 				error = true;
 			}
+			reprap.FansUpdated();
 		}
 		else if (!gb.Seen('R') && !gb.Seen('S'))
 		{

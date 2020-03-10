@@ -251,6 +251,7 @@ class GCodeQueue;
 class FilamentMonitor;
 class RandomProbePointSet;
 class Logger;
+class FansManager;
 
 #if SUPPORT_IOBITS
 class PortControl;

@@ -66,7 +66,7 @@ const char *GCodeBuffer::GetStateText() const noexcept
 {
 	if (machineState->waitingForAcknowledgement)
 	{
-		return "awaitingAckmowledgement";
+		return "awaitingAcknowledgement";
 	}
 
 	switch (bufferState)

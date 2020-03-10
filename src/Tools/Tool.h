@@ -27,6 +27,7 @@ Licence: GPL
 #define TOOL_H_
 
 #include <RepRapFirmware.h>
+#include <RepRap.h>
 #include <ObjectModel/ObjectModel.h>
 #include <General/FreelistManager.h>
 #include <General/NamedEnum.h>
@@ -125,6 +126,8 @@ private:
 	void ResetTemperatureFault(int8_t wasDudHeater) noexcept;
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const noexcept;
 	bool UsesHeater(int8_t heater) const noexcept;
+
+	static void ToolUpdated() noexcept { reprap.ToolsUpdated(); }	// call this whenever we change a variable that is reported in the OM as non-live
 
 	Tool* next;
 	Filament *filament;
