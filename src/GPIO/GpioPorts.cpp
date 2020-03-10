@@ -108,6 +108,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 			if (port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpin, PinAccess::read))
 			{
 				currentState = port.Read();
+				rslt = GCodeResult::ok;
 			}
 			else
 			{

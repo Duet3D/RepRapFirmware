@@ -55,8 +55,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
-constexpr size_t MaxCanDrivers = 18;
-constexpr size_t MaxCanBoards = 18;
+constexpr size_t MaxCanDrivers = 20;
+constexpr size_t MaxCanBoards = 20;
 
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 

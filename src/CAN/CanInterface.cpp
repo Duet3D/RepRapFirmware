@@ -28,7 +28,7 @@
 
 #include <memory>
 
-const unsigned int NumCanBuffers = 40;
+const unsigned int NumCanBuffers = 2 * MaxCanBoards + 10;
 
 constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
 constexpr uint32_t MaxUrgentSendWait = 20;		// milliseconds
