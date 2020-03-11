@@ -485,9 +485,6 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		// Delay 1 second, then try to open and run daemon.g. No error if it is not found.
 		if (   !reprap.IsProcessingConfig()
-#if HAS_LINUX_INTERFACE
-			&& !reprap.UsingLinuxInterface()		// DSF gets confused by the daemon, so disable it for now
-#endif
 			&& gb.DoDwellTime(1000)
 		   )
 		{

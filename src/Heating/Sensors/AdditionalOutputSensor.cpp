@@ -20,12 +20,11 @@ AdditionalOutputSensor::~AdditionalOutputSensor() noexcept
 {
 }
 
-GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
 	if (gb.Seen('P'))
 	{
-		seen = true;
+		changed = true;
 		String<StringLength20> pParam;
 		gb.GetQuotedString(pParam.GetRef());
 
@@ -84,8 +83,8 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 		Poll();
 	}
 
-	TryConfigureSensorName(gb, seen);
-	if (!seen && !gb.Seen('Y'))
+	TryConfigureSensorName(gb, changed);
+	if (!changed && !gb.Seen('Y'))
 	{
 		// No parameters were provided, so report the current configuration
 		CopyBasicDetails(reply);

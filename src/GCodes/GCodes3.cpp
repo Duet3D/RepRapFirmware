@@ -132,7 +132,11 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 		}
 	}
 
-	if (!seen)
+	if (seen)
+	{
+		reprap.MoveUpdated();
+	}
+	else
 	{
 		reply.printf("Axis offsets:");
 		for (size_t axis = 0; axis < numVisibleAxes; axis++)
@@ -170,7 +174,11 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 			}
 		}
 
-		if (!seen)
+		if (seen)
+		{
+			reprap.MoveUpdated();
+		}
+		else
 		{
 			reply.printf("Origin of workplace %" PRIu32 ":", cs);
 			for (size_t axis = 0; axis < numVisibleAxes; axis++)
@@ -342,7 +350,9 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 		}
 	}
 
-	if (defaultGrid.Set(xValues, yValues, radius, spacings))
+	const bool ok = defaultGrid.Set(xValues, yValues, radius, spacings);
+	reprap.MoveUpdated();
+	if (ok)
 	{
 		return GCodeResult::ok;
 	}
@@ -537,6 +547,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) noex
 					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
 					moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+					reprap.MoveUpdated();
 				}
 				platform.SetAxisDriversConfig(drive, numValues, drivers);
 			}

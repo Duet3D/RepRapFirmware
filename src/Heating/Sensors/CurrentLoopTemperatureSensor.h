@@ -14,7 +14,7 @@ class CurrentLoopTemperatureSensor : public SpiTemperatureSensor
 {
 public:
 	CurrentLoopTemperatureSensor(unsigned int sensorNum) noexcept;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 	const char *GetShortSensorType() const noexcept override { return TypeName; }
 	void Poll() noexcept override;
 

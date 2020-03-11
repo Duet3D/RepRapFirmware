@@ -27,6 +27,7 @@ enum class TypeCode : uint8_t
 	Char,
 	Uint32,
 	Int32,
+	Uint64,
 	Float,
 	Bitmap16,
 	Bitmap32,
@@ -97,7 +98,7 @@ struct ExpressionValue
 
 	enum class SpecialType : uint32_t
 	{
-		sysDir = 0
+		sysDir = 0,
 	};
 
 	ExpressionValue() noexcept : type((uint32_t)TypeCode::None) { }
@@ -106,6 +107,7 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(float f) noexcept : type((uint32_t)TypeCode::Float), param(MaxFloatDigitsDisplayedAfterPoint), fVal(f) { }
 	constexpr ExpressionValue(float f, uint8_t numDecimalPlaces) noexcept : type((uint32_t)TypeCode::Float), param(numDecimalPlaces), fVal(f) { }
 	explicit constexpr ExpressionValue(int32_t i) noexcept : type((uint32_t)TypeCode::Int32), param(0), iVal(i) { }
+	explicit ExpressionValue(uint64_t u) noexcept : type((uint32_t)TypeCode::Uint64), param(u >> 32), uVal((uint32_t)u) { }
 	explicit constexpr ExpressionValue(const ObjectModel *om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel), param(0), omVal(om) { }
 	constexpr ExpressionValue(const ObjectModel *om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel), param(tableNumber), omVal(om) { }
 	explicit constexpr ExpressionValue(const char *s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
@@ -118,7 +120,7 @@ struct ExpressionValue
 	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap32), param(0), uVal(bm.GetRaw()) { }
 	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap64), param(bm.GetRaw() >> 32), uVal((uint32_t)bm.GetRaw()) { }
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
-	explicit ExpressionValue(SpecialType s) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(0) { }
+	explicit ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
 #if SUPPORT_CAN_EXPANSION
 	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif

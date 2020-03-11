@@ -17,7 +17,7 @@ class RemoteSensor : public TemperatureSensor
 public:
 	RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress) noexcept;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 	CanAddress GetBoardAddress() const noexcept override { return boardAddress; }
 	void Poll() noexcept override { }				// nothing to do here because reception of CAN messages update the reading
 	void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept override;

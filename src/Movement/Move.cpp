@@ -115,6 +115,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
 	// 7. move.compensation members
+	{ "fadeHeight",				OBJECT_MODEL_FUNC(self->taperHeight, 1),												ObjectModelEntryFlags::none },
 	{ "file",					OBJECT_MODEL_FUNC_IF(
 									self->usingMesh
 #if HAS_LINUX_INTERFACE
@@ -130,7 +131,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4, 3, 2, 2, 4, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4, 3, 2, 2, 5, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -350,6 +351,7 @@ bool Move::SetKinematics(KinematicsType k) noexcept
 		}
 		delete kinematics;
 		kinematics = nk;
+		reprap.MoveUpdated();
 	}
 	return true;
 }
@@ -709,6 +711,7 @@ void Move::SetIdentityTransform() noexcept
 	heightMap.UseHeightMap(false);
 	usingMesh = false;
 	zShift = 0.0;
+	reprap.MoveUpdated();
 }
 
 #if HAS_MASS_STORAGE
@@ -725,6 +728,7 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRe
 	{
 		zShift = 0.0;
 	}
+	reprap.MoveUpdated();
 	return ret;
 }
 
@@ -754,12 +758,14 @@ void Move::SetTaperHeight(float h) noexcept
 		taperHeight = h;
 		recipTaperHeight = 1.0/h;
 	}
+	reprap.MoveUpdated();
 }
 
 // Enable mesh bed compensation
 bool Move::UseMesh(bool b) noexcept
 {
 	usingMesh = heightMap.UseHeightMap(b);
+	reprap.MoveUpdated();
 	return usingMesh;
 }
 
@@ -930,6 +936,7 @@ float Move::IdleTimeout() const noexcept
 void Move::SetIdleTimeout(float timeout) noexcept
 {
 	idleTimeout = (uint32_t)lrintf(timeout * 1000.0);
+	reprap.MoveUpdated();
 }
 
 #if HAS_MASS_STORAGE
@@ -964,7 +971,11 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 		seen = true;
 		maxTravelAcceleration = gb.GetFValue();
 	}
-	if (!seen)
+	if (seen)
+	{
+		reprap.MoveUpdated();
+	}
+	else
 	{
 		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", (double)maxPrintingAcceleration, (double)maxTravelAcceleration);
 	}
@@ -995,7 +1006,11 @@ GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef&
 		drcMinimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
 	}
 
-	if (!seen)
+	if (seen)
+	{
+		reprap.MoveUpdated();
+	}
+	else
 	{
 		if (reprap.GetMove().IsDRCenabled())
 		{
@@ -1019,6 +1034,24 @@ float Move::LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexce
 		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
 	}
 	return latestLiveCoordinates[axisOrExtruder];
+}
+
+void Move::SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept
+{
+	latestCalibrationDeviation = d;
+	numCalibratedFactors = numFactors;
+	reprap.MoveUpdated();
+}
+
+void Move::SetInitialCalibrationDeviation(const Deviation& d) noexcept
+{
+	initialCalibrationDeviation = d;
+	reprap.MoveUpdated();
+}
+
+void Move::SetLatestMeshDeviation(const Deviation& d) noexcept
+{
+	latestMeshDeviation = d; reprap.MoveUpdated();
 }
 
 #if SUPPORT_OBJECT_MODEL

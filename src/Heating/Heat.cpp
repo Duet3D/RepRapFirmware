@@ -924,7 +924,8 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 			return GCodeResult::error;
 		}
 
-		const GCodeResult rslt = newSensor->Configure(gb, reply);
+		bool changed = false;
+		const GCodeResult rslt = newSensor->Configure(gb, reply, changed);
 		if (rslt == GCodeResult::ok)
 		{
 			InsertSensor(newSensor);
@@ -956,7 +957,14 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::error;
 	}
 #endif
-	return sensor->Configure(gb, reply);
+
+	bool changed = false;
+	const GCodeResult rslt = sensor->Configure(gb, reply, changed);
+	if (changed)
+	{
+		reprap.SensorsUpdated();
+	}
+	return rslt;
 }
 
 // Get the name of a heater, or nullptr if it hasn't been named
@@ -1066,6 +1074,7 @@ void Heat::DeleteSensor(unsigned int sn) noexcept
 			}
 			delete sensorToDelete;
 			--sensorCount;
+			reprap.SensorsUpdated();
 			break;
 		}
 
@@ -1093,6 +1102,7 @@ void Heat::InsertSensor(TemperatureSensor *newSensor) noexcept
 				prev->SetNext(newSensor);
 			}
 			++sensorCount;
+			reprap.SensorsUpdated();
 			break;
 		}
 		prev = ts;

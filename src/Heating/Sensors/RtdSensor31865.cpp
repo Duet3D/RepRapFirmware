@@ -42,17 +42,16 @@ RtdSensor31865::RtdSensor31865(unsigned int sensorNum) noexcept
 }
 
 // Configure this temperature sensor
-GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	if (!ConfigurePort(gb, reply, seen))
+	if (!ConfigurePort(gb, reply, changed))
 	{
 		return GCodeResult::error;
 	}
-	TryConfigureSensorName(gb, seen);
+	TryConfigureSensorName(gb, changed);
 	if (gb.Seen('F'))
 	{
-		seen = true;
+		changed = true;
 		if (gb.GetIValue() == 60)
 		{
 			cr0 &= ~0x01;		// set 60Hz rejection
@@ -65,7 +64,7 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply)
 
 	if (gb.Seen('W'))
 	{
-		seen = true;
+		changed = true;
 		if (gb.GetUIValue() == 3)
 		{
 			cr0 |= 0x10;		// 3 wire configuration
@@ -78,11 +77,11 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply)
 
 	if (gb.Seen('R'))
 	{
-		seen = true;
+		changed = true;
 		rref = (uint16_t)gb.GetUIValue();
 	}
 
-	if (seen)
+	if (changed)
 	{
 		// Initialise the sensor
 		InitSpi();

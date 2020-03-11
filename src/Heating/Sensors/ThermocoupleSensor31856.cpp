@@ -60,17 +60,16 @@ ThermocoupleSensor31856::ThermocoupleSensor31856(unsigned int sensorNum) noexcep
 }
 
 // Configure this temperature sensor
-GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	if (!ConfigurePort(gb, reply, seen))
+	if (!ConfigurePort(gb, reply, changed))
 	{
 		return GCodeResult::error;
 	}
-	TryConfigureSensorName(gb, seen);
+	TryConfigureSensorName(gb, changed);
 	if (gb.Seen('F'))
 	{
-		seen = true;
+		changed = true;
 		if (gb.GetIValue() == 60)
 		{
 			cr0 &= ~0x01;		// set 60Hz rejection
@@ -82,7 +81,7 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 	}
 
 	String<2> buf;
-	if (gb.TryGetQuotedString('K', buf.GetRef(), seen))
+	if (gb.TryGetQuotedString('K', buf.GetRef(), changed))
 	{
 		const char *p;
 		if (buf.strlen() == 1 && (p = strchr(TypeLetters, toupper(buf.c_str()[0]))) != nullptr)
@@ -96,7 +95,7 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 		}
 	}
 
-	if (seen)
+	if (changed)
 	{
 		// Initialise the sensor
 		InitSpi();

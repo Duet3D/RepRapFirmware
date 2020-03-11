@@ -468,10 +468,11 @@ bool Tool::DisplayColdExtrudeWarning() noexcept
 
 void Tool::DefineMix(const float m[]) noexcept
 {
-	for(size_t drive = 0; drive < driveCount; drive++)
+	for (size_t drive = 0; drive < driveCount; drive++)
 	{
 		mix[drive] = m[drive];
 	}
+	reprap.ToolsUpdated();
 }
 
 #if HAS_MASS_STORAGE

@@ -17,24 +17,23 @@ LinearAnalogSensor::LinearAnalogSensor(unsigned int sensorNum) noexcept
 	CalcDerivedParameters();
 }
 
-GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, seen))
+	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, changed))
 	{
 		return GCodeResult::error;
 	}
 
-	gb.TryGetFValue('B', lowTemp, seen);
-	gb.TryGetFValue('C', highTemp, seen);
-	TryConfigureSensorName(gb, seen);
+	gb.TryGetFValue('B', lowTemp, changed);
+	gb.TryGetFValue('C', highTemp, changed);
+	TryConfigureSensorName(gb, changed);
 	if (gb.Seen('F'))
 	{
-		seen = true;
+		changed = true;
 		filtered = gb.GetIValue() >= 1;
 	}
 
-	if (seen)
+	if (changed)
 	{
 		CalcDerivedParameters();
 		if (adcFilterChannel >= 0)
