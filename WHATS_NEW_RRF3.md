@@ -15,7 +15,7 @@ New features/changed behaviour:
 - Round brackets in GCode lines are no longer treated as enclosing comments if the machine is not in CNC mode
 - Added functions radians(arg) and degrees(arg) which convert the argument from degrees to radians, and from radians to degrees
 - M915 now reports the axis or extruder speed that corresponds to the fullsteps/second value of the H parameter
-- New object model variable inputs[] is provided, describing the state of each GCode input
+- Added more object model properties, including inputs[] describing the state of each GPin, volumes[] describing the attached SD cards, and seqs{} to help DSF and UIs know which non-live object model properties have changed
 - M207 retraction parameters are now settable on a per-tool basis. The P parameter selects which tool to set. M207 with no P parameter applies the parameters provided to all existing tools. Retraction settings in the object model are moved from extruders[].retraction to tools[].retraction.
 - Each Z probe can now have its own deploy and retract files. Z probe number # (where # counts up from zero) looks first for deployprobe#.g and if that is not found it falls back to deployprobe.g. Similarly it used retractprobe#.g in preference to retractprobe.g.
 - The M401 (deploy probe) and M402 (retract probe) commands now accept an optional P parameter which is the Z probe number to deploy mor retract, default 0.
@@ -27,6 +27,7 @@ Bug fixes:
 - M409 incorrectly allowed a '.' to be omitted between the closing square bracket of an index and the following field name
 - On Duet 3 in standalone mode, on the Ethernet interface the limit on the number of MDNS services was set too low, so only the 'echo' service was created
 - The HTTP rr_model call sometimes caused a reset due to stack overflow on the Duet WiFi
+- When running true bed levelling or auto calibration, if all probe points had zero height error then the initial deviation could be reported as 'nan'
 
 RepRapFirmware 3.01-RC3
 =======================
