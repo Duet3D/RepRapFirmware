@@ -24,6 +24,7 @@ public:
 	static constexpr const char *PrimaryTypeName = "drivers";
 #ifdef DUET_NG
 	static constexpr const char *DuexTypeName = "drivers-duex";
+	static constexpr const char *DuexTypeShortName = "driversduex";
 #endif
 
 private:

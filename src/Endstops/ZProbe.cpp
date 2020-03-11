@@ -80,7 +80,7 @@ ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe()
 void ZProbe::SetDefaults() noexcept
 {
 	adcValue = DefaultZProbeADValue;
-	xOffset= yOffset = 0.0;
+	xOffset = yOffset = 0.0;
 	triggerHeight = DefaultZProbeTriggerHeight;
 	calibTemperature = DefaultZProbeTemperature;
 	temperatureCoefficient = 0.0;

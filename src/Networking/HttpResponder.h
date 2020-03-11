@@ -23,7 +23,7 @@ public:
 	static void Disable() noexcept;
 	static void HandleGCodeReply(const char *reply) noexcept;
 	static void HandleGCodeReply(OutputBuffer *reply) noexcept;
-	static uint32_t GetReplySeq() noexcept { return seq; }
+	static uint16_t GetReplySeq() noexcept { return seq; }
 	static void CheckSessions() noexcept;
 	static void CommonDiagnostics(MessageType mtype) noexcept;
 
@@ -126,7 +126,7 @@ private:
 	static unsigned int clientsServed;
 
 	// Responses from GCodes class
-	static volatile uint32_t seq;					// Sequence number for G-Code replies
+	static volatile uint16_t seq;					// Sequence number for G-Code replies
 	static volatile OutputStack gcodeReply;
 	static Mutex gcodeReplyMutex;
 };

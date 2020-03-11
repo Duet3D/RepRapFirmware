@@ -44,19 +44,11 @@ const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
 			{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)], 1); }
 };
 
-const ObjectModelArrayDescriptor PrintMonitor::extrudedRawArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumExtruders(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetIndex(0)), 1); }
-};
-
 constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. PrintMonitor members
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintDuration(), 1), 												ObjectModelEntryFlags::live },
-	{ "extrudedRaw",		OBJECT_MODEL_FUNC_NOSELF(&extrudedRawArrayDescriptor),							 									ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
 	{ "filePosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetFilePosition(), 0),													ObjectModelEntryFlags::live },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
@@ -85,7 +77,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "layer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(layerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 9, 11, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 8, 11, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 

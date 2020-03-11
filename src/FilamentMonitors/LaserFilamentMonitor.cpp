@@ -45,7 +45,7 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 	// 2. LaserFilamentMonitor.configured members
 	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 										ObjectModelEntryFlags::none },
 	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 										ObjectModelEntryFlags::none },
-	{ "sampleDistance",	 OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 												ObjectModelEntryFlags::none },
+	{ "sampleDistance",	 	OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 												ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] = { 3, 5, 4, 3 };

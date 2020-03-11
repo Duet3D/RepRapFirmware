@@ -23,13 +23,14 @@
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GpInputPort, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(GpInputPort, _condition,__VA_ARGS__)
 
 constexpr ObjectModelTableEntry GpInputPort::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. sensors members
 	{ "configured",			OBJECT_MODEL_FUNC(!self->IsUnused()),							ObjectModelEntryFlags::none },
-	{ "value",				OBJECT_MODEL_FUNC(self->GetState()),							ObjectModelEntryFlags::live },
+	{ "value",				OBJECT_MODEL_FUNC_IF(!self->IsUnused(), self->GetState()),		ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t GpInputPort::objectModelTableDescriptor[] = { 1, 2 };

@@ -222,7 +222,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if SUPPORT_CAN_EXPANSION
 	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)0),																ObjectModelEntryFlags::none },
 #endif
+	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DATE),																		ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
+	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
 #if HAS_LINUX_INTERFACE
 	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),														ObjectModelEntryFlags::none },
@@ -238,6 +240,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),																ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
 # endif
+	{ "supports12864",		OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),											ObjectModelEntryFlags::none },
 #if HAS_12V_MONITOR
 	{ "v12",				OBJECT_MODEL_FUNC(self, 7),																			ObjectModelEntryFlags::live },
 #endif
@@ -256,6 +259,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 3. move.axes[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),		ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetMotorCurrent(context.GetLastIndex(), 906), 3),							ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_NOSELF(&axisDriversArrayDescriptor),												ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),					ObjectModelEntryFlags::live },
 	{ "jerk",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->GetInstantDv(context.GetLastIndex()), 1),				ObjectModelEntryFlags::none },
@@ -271,13 +275,19 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_NOSELF(&workplaceOffsetsArrayDescriptor),											ObjectModelEntryFlags::none },
 
 	// 4. move.extruders[] members
+	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex())), 1),			ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906), 3),	ObjectModelEntryFlags::none },
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),									ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 1),			ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),									ObjectModelEntryFlags::none },
+	{ "jerk",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex())), 1),	ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																			ObjectModelEntryFlags::none },
+	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(context.GetLastIndex()), reprap.GetCurrentTool()), 1)),	ObjectModelEntryFlags::live },
 	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvance(context.GetLastIndex()), 2),								ObjectModelEntryFlags::none },
+	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), ObjectModelEntryFlags::live },
+	{ "speed",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex())), 1),	ObjectModelEntryFlags::none },
 
-	// 5. move.extruders[].nonlinear members
+	// 5. move.extruders[].pressureAdvance members
 	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionA[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
 	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionB[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
 	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusionLimit[context.GetLastIndex()], 2),						ObjectModelEntryFlags::none },
@@ -294,12 +304,12 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	6 + HAS_12V_MONITOR,													// number of sections
-	9 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION,		// section 0: boards[]
+	12 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION,		// section 0: boards[]
 	3,																		// section 1: mcuTemp
 	3,																		// section 2: vIn
-	15,																		// section 3: move.axes[]
-	5,																		// section 4: move.extruders[]
-	3,																		// section 5: move.extruders[].nonlinear
+	16,																		// section 3: move.axes[]
+	11,																		// section 4: move.extruders[]
+	3,																		// section 5: move.extruders[].pressureAdvance
 #if HAS_12V_MONITOR
 	3																		// section 7: v12
 #endif
