@@ -45,7 +45,7 @@ void RotaryEncoder::Poll() noexcept
 		 0, +1, -1,  0,		// position 3 = 00 to 11, can't really do anything, so 0
 		-1,  0, -2, +1,		// position 2 = 01 to 10, assume it was a bounce and should be 01 -> 00 -> 10
 		+1, +2,  0, -1,		// position 1 = 10 to 01, assume it was a bounce and should be 10 -> 00 -> 01
-		 0, -1, +1,  0		// position 0 = 11 to 10, can't really do anything
+		 0, -1, +1,  0		// position 0 = 11 to 00, can't really do anything
 	};
 
 	// Poll the encoder
