@@ -54,7 +54,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
 	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), (int32_t)self->currentLayer), 												ObjectModelEntryFlags::none },
-	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetCurrentLayerTime(), 1), 											ObjectModelEntryFlags::none },
+	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetCurrentLayerTime(), 1), 											ObjectModelEntryFlags::live },
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::live },
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetWarmUpDuration(), 1),												ObjectModelEntryFlags::none },
 
@@ -203,31 +203,34 @@ void PrintMonitor::Spin() noexcept
 						printingFileInfo.firstLayerHeight = currentZ;
 					}
 				}
-				else if (currentLayer == 1)
+				else if (printingFileInfo.layerHeight > 0.0)			// if layer height is known
 				{
-					// Check if we've finished the first layer
-					if (currentZ > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
+					if (currentLayer == 1)
 					{
-						FirstLayerComplete();
+						// Check if we've finished the first layer
+						if (currentZ > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
+						{
+							FirstLayerComplete();
+							currentLayer++;
+
+							lastLayerZ = currentZ;
+							lastLayerChangeTime = GetPrintDuration();
+							reprap.JobUpdated();
+						}
+					}
+					// Else check for following layer changes
+					else if (currentZ > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
+					{
+						LayerComplete();
 						currentLayer++;
 
-						lastLayerZ = currentZ;
+						// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
+						lastLayerZ = (printingFileInfo.layerHeight > 0.0)
+										? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
+											: currentZ;
 						lastLayerChangeTime = GetPrintDuration();
 						reprap.JobUpdated();
 					}
-				}
-				// Else check for following layer changes
-				else if (currentZ > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
-				{
-					LayerComplete();
-					currentLayer++;
-
-					// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
-					lastLayerZ = (printingFileInfo.layerHeight > 0.0)
-									? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
-										: currentZ;
-					lastLayerChangeTime = GetPrintDuration();
-					reprap.JobUpdated();
 				}
 			}
 		}
