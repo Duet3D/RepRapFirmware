@@ -55,10 +55,11 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),							ObjectModelEntryFlags::none },
 	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),							ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),									ObjectModelEntryFlags::live },
+	{ "toolNumberAdjust",	OBJECT_MODEL_FUNC((int32_t)self->GetToolNumberAdjust()),					ObjectModelEntryFlags::live },
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 11 };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 12 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 

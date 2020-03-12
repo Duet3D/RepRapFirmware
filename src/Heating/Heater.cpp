@@ -36,12 +36,14 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Heater members
+	{ "active",		OBJECT_MODEL_FUNC(self->GetActiveTemperature(), 1), 									ObjectModelEntryFlags::live },
 	{ "current",	OBJECT_MODEL_FUNC(self->GetTemperature(), 1), 											ObjectModelEntryFlags::live },
 	{ "max",		OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
 	{ "min",		OBJECT_MODEL_FUNC(self->GetLowestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
 	{ "model",		OBJECT_MODEL_FUNC((const FopDt *)&self->GetModel()),									ObjectModelEntryFlags::verbose },
 	{ "monitors",	OBJECT_MODEL_FUNC_NOSELF(&monitorsArrayDescriptor), 									ObjectModelEntryFlags::none },
 	{ "sensor",		OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 									ObjectModelEntryFlags::none },
+	{ "standby",	OBJECT_MODEL_FUNC(self->GetStandbyTemperature(), 1), 									ObjectModelEntryFlags::live },
 	{ "state",		OBJECT_MODEL_FUNC(self->GetStatus().ToString()), 										ObjectModelEntryFlags::live },
 
 	// 1. Heater.monitors[] members
@@ -52,7 +54,7 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 										self->monitors[context.GetLastIndex()].GetTemperatureLimit(), 1),	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 7, 3 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 9, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 

@@ -7,6 +7,9 @@
 #include "Heating/Heat.h"
 #include "Heating/Sensors/TemperatureSensor.h"
 #include "Network.h"
+#if HAS_NETWORKING
+# include "Networking/HttpResponder.h"
+#endif
 #include "Platform.h"
 #include "Scanner.h"
 #include "PrintMonitor.h"
@@ -249,7 +252,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->gCodes->AtxPowerControlled(), self->platform->AtxPower()),	ObjectModelEntryFlags::live },
 	{ "beep",					OBJECT_MODEL_FUNC(self, 4),												ObjectModelEntryFlags::live },
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
-	{ "displayMessage",			OBJECT_MODEL_FUNC(&self->message),										ObjectModelEntryFlags::live },
+	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::live },
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->platform->GetLaserPwm(), 2),					ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE
 	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
@@ -257,6 +260,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logFile",				OBJECT_MODEL_FUNC(nullptr),												ObjectModelEntryFlags::none },
 #endif
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
+	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetNewToolNumber()),			ObjectModelEntryFlags::live },
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
@@ -285,6 +289,9 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	// no need for 'limits' because it never changes
 	{ "move",					OBJECT_MODEL_FUNC((int32_t)self->moveSeq),								ObjectModelEntryFlags::live },
 	{ "network",				OBJECT_MODEL_FUNC((int32_t)self->networkSeq),							ObjectModelEntryFlags::live },
+#if HAS_NETWORKING
+	{ "reply",					OBJECT_MODEL_FUNC_NOSELF((int32_t)HttpResponder::GetReplySeq()),		ObjectModelEntryFlags::live },
+#endif
 	{ "scanner",				OBJECT_MODEL_FUNC((int32_t)self->scannerSeq),							ObjectModelEntryFlags::live },
 	{ "sensors",				OBJECT_MODEL_FUNC((int32_t)self->sensorsSeq),							ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC((int32_t)self->spindlesSeq),							ObjectModelEntryFlags::live },
@@ -293,7 +300,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 7, 16, 7, 22, 12, 2, 6, 14 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 7, 16, 7, 22, 12 + HAS_MASS_STORAGE, 2, 6, 14 + HAS_NETWORKING };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 

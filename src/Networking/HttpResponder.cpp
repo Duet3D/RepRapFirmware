@@ -1515,7 +1515,7 @@ HttpResponder::HttpSession HttpResponder::sessions[MaxHttpSessions];
 unsigned int HttpResponder::numSessions = 0;
 unsigned int HttpResponder::clientsServed = 0;
 
-volatile uint32_t HttpResponder::seq = 0;
+volatile uint16_t HttpResponder::seq = 0;
 volatile OutputStack HttpResponder::gcodeReply;
 Mutex HttpResponder::gcodeReplyMutex;
 
