@@ -203,6 +203,7 @@ void PrintMonitor::Spin() noexcept
 					{
 						printingFileInfo.firstLayerHeight = currentZ;
 					}
+					reprap.JobUpdated();
 				}
 				else if (printingFileInfo.layerHeight > 0.0)			// if layer height is known
 				{
@@ -257,6 +258,7 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 #if HAS_MASS_STORAGE
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
 	printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+	reprap.JobUpdated();
 #endif
 }
 
@@ -267,6 +269,7 @@ void PrintMonitor::StartedPrint() noexcept
 	heatingUp = false;
 	printStartTime = millis64();
 	warmUpDuration = 0.0;
+	reprap.JobUpdated();					// needed because isPrinting true makes filenameBeingPrinted available
 }
 
 // Called when the first layer has been finished
