@@ -113,7 +113,7 @@ public:
 	void SetAxisNotHomed(unsigned int axis) noexcept;							// Tell us that the axis is not homed
 	void SetAllAxesNotHomed() noexcept;											// Flag all axes as not homed
 
-	float GetSpeedFactor() const noexcept;										// Return the current speed factor
+	float GetSpeedFactor() const noexcept { return speedFactor; }				// Return the current speed factor
 #if SUPPORT_12864_LCD
 	void SetSpeedFactor(float factor) noexcept;									// Set the speed factor
 #endif

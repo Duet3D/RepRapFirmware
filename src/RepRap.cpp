@@ -1296,8 +1296,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		}
 
 		// Speed and Extrusion factors in %
-		response->catf(",\"speedFactor\":%.1f,", (double)(gCodes->GetSpeedFactor()));
-		AppendFloatArray(response, "extrFactors", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetExtrusionFactor(extruder); }, 1);
+		response->catf(",\"speedFactor\":%.1f,", (double)(gCodes->GetSpeedFactor() * 100.0));
+		AppendFloatArray(response, "extrFactors", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetExtrusionFactor(extruder) * 100.0; }, 1);
 
 		// Z babystepping
 		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetTotalBabyStepOffset(Z_AXIS));
@@ -1887,8 +1887,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 	AppendFloatArray(response, "machine", numVisibleAxes, [this](size_t axis) noexcept { return move->LiveCoordinate(axis, currentTool); }, 3);
 
 	// Send the speed and extruder override factors
-	response->catf(",\"sfactor\":%.2f,", (double)(gCodes->GetSpeedFactor()));
-	AppendFloatArray(response, "efactor", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetExtrusionFactor(extruder); }, 2);
+	response->catf(",\"sfactor\":%.1f,", (double)(gCodes->GetSpeedFactor() * 100.0));
+	AppendFloatArray(response, "efactor", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetExtrusionFactor(extruder) * 100.0; }, 1);
 
 	// Send the baby stepping offset
 	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetTotalBabyStepOffset(Z_AXIS)));

@@ -35,7 +35,15 @@ constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detectio
 
 static size_t numTmc2660Drivers;
 
-static bool driversPowered = false;
+enum class DriversState : uint8_t
+{
+	noPower = 0,			// no VIN power
+	notInitialised,			// have VIN power but not started initialising drivers
+	initialising,			// in the process of initialising the drivers
+	ready					// drivers are initialised and ready
+};
+
+static DriversState driversState = DriversState::noPower;
 
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips take too much of the CPU time
@@ -199,6 +207,7 @@ public:
 	void Init(uint32_t driverNumber, uint32_t p_pin) noexcept;
 	void SetAxisNumber(size_t p_axisNumber) noexcept;
 	void WriteAll() noexcept;
+	bool UpdatePending() const noexcept { return registersToUpdate != 0; }
 
 	bool SetMicrostepping(uint32_t shift, bool interpolate) noexcept;
 	unsigned int GetMicrostepping(bool& interpolation) const noexcept;
@@ -724,7 +733,7 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 inline void TmcDriverState::TransferDone() noexcept
 {
 	fastDigitalWriteHigh(pin);									// set the CS pin high for the driver we just polled
-	if (driversPowered)											// if the power is still good, update the status
+	if (driversState != DriversState::noPower)					// if the power is still good, update the status
 	{
 		Cache::InvalidateAfterDMAReceive(&spiDataIn, sizeof(spiDataIn));
 		uint32_t status = be32_to_cpu(spiDataIn) >> 12;			// get the status
@@ -835,7 +844,7 @@ void TMC2660_SPI_Handler(void) noexcept
 	if (driver != nullptr)
 	{
 		driver->TransferDone();							// tidy up after the transfer we just completed
-		if (driversPowered)
+		if (driversState != DriversState::noPower)
 		{
 			// Power is still good, so send/receive to/from the next driver
 			++driver;									// advance to the next driver
@@ -916,7 +925,7 @@ namespace SmartDrivers
 		SPI_TMC2660->SPI_CSR[0] = csr;
 #endif
 
-		driversPowered = false;
+		driversState = DriversState::noPower;
 		EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 		for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 		{
@@ -936,7 +945,7 @@ namespace SmartDrivers
 	{
 		digitalWrite(GlobalTmc2660EnablePin, HIGH);
 		NVIC_DisableIRQ(TMC2660_SPI_IRQn);
-		driversPowered = false;
+		driversState = DriversState::noPower;
 	}
 
 	void SetAxisNumber(size_t driver, uint32_t axisNumber) noexcept
@@ -1020,22 +1029,45 @@ namespace SmartDrivers
 	// Before the first call to this function with powered true, you must call Init().
 	void Spin(bool powered) noexcept
 	{
-		const bool wasPowered = driversPowered;
-		driversPowered = powered;
 		if (powered)
 		{
-			if (!wasPowered)
+			switch (driversState)
 			{
+			case DriversState::noPower:
 				// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
 				EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
-				digitalWrite(GlobalTmc2660EnablePin, LOW);
-				delayMicroseconds(10);
-
 				for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 				{
 					driverStates[driver].WriteAll();
 				}
+				driversState = DriversState::initialising;
+				break;
+
+			case DriversState::initialising:
+				// If all drivers have been initialised, set the global enable
+				{
+					bool allInitialised = true;
+					for (size_t i = 0; i < numTmc2660Drivers; ++i)
+					{
+						if (driverStates[i].UpdatePending())
+						{
+							allInitialised = false;
+							break;
+						}
+					}
+
+					if (allInitialised)
+					{
+						digitalWrite(GlobalTmc2660EnablePin, LOW);
+						driversState = DriversState::ready;
+					}
+				}
+				break;
+
+			default:
+				break;
 			}
+
 			if (currentDriver == nullptr && numTmc2660Drivers != 0)
 			{
 				// Kick off the first transfer
@@ -1043,9 +1075,10 @@ namespace SmartDrivers
 				driverStates[0].StartTransfer();
 			}
 		}
-		else if (wasPowered)
+		else if (driversState != DriversState::noPower)
 		{
 			digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
+			driversState = DriversState::noPower;
 			EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 		}
 	}
@@ -1054,7 +1087,7 @@ namespace SmartDrivers
 	void TurnDriversOff() noexcept
 	{
 		digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
-		driversPowered = false;
+		driversState = DriversState::noPower;
 		EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 	}
 

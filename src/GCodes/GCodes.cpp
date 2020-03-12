@@ -4394,16 +4394,10 @@ void GCodes::CheckHeaterFault() noexcept
 	}
 }
 
-// Return the current speed factor as a percentage
-float GCodes::GetSpeedFactor() const noexcept
-{
-	return speedFactor * 100.0;
-}
-
 // Return a current extrusion factor as a percentage
 float GCodes::GetExtrusionFactor(size_t extruder) noexcept
 {
-	return (extruder < numExtruders) ? extrusionFactors[extruder] * 100.0 : 0.0;
+	return (extruder < numExtruders) ? extrusionFactors[extruder] : 0.0;
 }
 
 // Set a percentage extrusion factor
