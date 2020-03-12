@@ -1451,7 +1451,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 	if (scanner->IsEnabled())
 	{
 		response->catf(",\"scanner\":{\"status\":\"%c\"", scanner->GetStatusCharacter());
-		response->catf(",\"progress\":%.1f}", (double)(scanner->GetProgress()));
+		response->catf(",\"progress\":%.1f}", (double)(scanner->GetProgress() * 100.0));
 	}
 #endif
 

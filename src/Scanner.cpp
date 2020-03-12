@@ -36,7 +36,7 @@ constexpr ObjectModelTableEntry Scanner::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Scanner members
-	{ "progress",		OBJECT_MODEL_FUNC(self->GetProgress(), 1),			ObjectModelEntryFlags::none },
+	{ "progress",		OBJECT_MODEL_FUNC(self->GetProgress(), 3),			ObjectModelEntryFlags::none },
 	{ "status",			OBJECT_MODEL_FUNC(self->GetStatusCharacter()),		ObjectModelEntryFlags::none },
 };
 
@@ -581,7 +581,7 @@ float Scanner::GetProgress() const noexcept
 {
 	if (state == ScannerState::Uploading)
 	{
-		return ((float)(uploadSize - uploadBytesLeft) / (float)uploadSize) * 100.0f;
+		return (float)(uploadSize - uploadBytesLeft) / (float)uploadSize;
 	}
 
 	return progress;
