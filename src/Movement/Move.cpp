@@ -78,7 +78,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "compensation",			OBJECT_MODEL_FUNC(self, 7),																ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 3),																ObjectModelEntryFlags::live },
 	{ "daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
-	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::none },
+	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },

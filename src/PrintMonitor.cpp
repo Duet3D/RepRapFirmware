@@ -51,6 +51,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintDuration(), 1), 												ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
 	{ "filePosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetFilePosition(), 0),													ObjectModelEntryFlags::live },
+	{ "firstLayerDuration", OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetFirstLayerDuration()), 											ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
 	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), (int32_t)self->currentLayer), 												ObjectModelEntryFlags::none },
@@ -77,7 +78,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "layer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(layerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 8, 11, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 9, 11, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
