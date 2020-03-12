@@ -87,8 +87,6 @@ class StraightProbeSettings;
 class GCodes
 {
 public:
-	friend class LinuxInterface;
-
 	GCodes(Platform& p) noexcept;
 	void Spin() noexcept;														// Called in a tight loop to make this class work
 	void Init() noexcept;														// Set it up
@@ -193,6 +191,12 @@ public:
 	void AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
 	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
 
+	int GetNewToolNumber() const noexcept { return newToolNumber; }
+
+	// These next two are public because they are used by class LinuxInterface
+	void UnlockAll(const GCodeBuffer& gb) noexcept;								// Release all locks
+	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
+
 #if HAS_MASS_STORAGE
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Start timing SD card file writing
 #endif
@@ -278,9 +282,7 @@ private:
 	void GrabMovement(const GCodeBuffer& gb) noexcept;							// Grab the movement lock even if it is already owned
 	void UnlockResource(const GCodeBuffer& gb, Resource r) noexcept;			// Unlock the resource if we own it
 	void UnlockMovement(const GCodeBuffer& gb) noexcept;						// Unlock the movement resource if we own it
-	void UnlockAll(const GCodeBuffer& gb) noexcept;								// Release all locks
 
-	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
 	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Execute a step of the state machine
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps);
@@ -526,6 +528,10 @@ private:
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
 #endif
+
+	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
+	int16_t newToolNumber;
+	uint8_t toolChangeParam;
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box

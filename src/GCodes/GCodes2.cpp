@@ -1370,8 +1370,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;
 					}
 
-					gb.MachineState().newToolNumber = applicableTool->Number();
-					gb.MachineState().toolChangeParam = (simulationMode != 0) ? 0 : DefaultToolChangeParam;
+					newToolNumber = applicableTool->Number();
+					toolChangeParam = (simulationMode != 0) ? 0 : DefaultToolChangeParam;
 					gb.SetState(GCodeState::m109ToolChange0);
 					result = GCodeResult::ok;
 				}
@@ -4318,10 +4318,10 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
 		if (oldTool == nullptr || oldTool->Number() != toolNum)
 		{
-			gb.MachineState().newToolNumber = toolNum;
-			gb.MachineState().toolChangeParam = (simulationMode != 0) ? 0
-													: gb.Seen('P') ? gb.GetUIValue()
-														: DefaultToolChangeParam;
+			newToolNumber = toolNum;
+			toolChangeParam = (simulationMode != 0) ? 0
+								: gb.Seen('P') ? gb.GetUIValue()
+									: DefaultToolChangeParam;
 			gb.SetState(GCodeState::toolChange0);
 			return true;							// proceeding with state machine, so don't unlock or send a reply
 		}

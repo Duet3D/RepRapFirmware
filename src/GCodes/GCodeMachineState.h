@@ -176,7 +176,6 @@ public:
 	uint32_t lineNumber;
 
 	Compatibility compatibility;
-	int16_t newToolNumber;
 	uint16_t
 		drivesRelative : 1,
 		axesRelative : 1,
@@ -198,7 +197,6 @@ public:
 
 	uint8_t blockNesting;
 	GCodeState state;
-	uint8_t toolChangeParam;
 
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;

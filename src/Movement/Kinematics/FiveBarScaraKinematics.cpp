@@ -32,6 +32,7 @@ constexpr ObjectModelTableEntry FiveBarScaraKinematics::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
 	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
+	//TODO lots more to be added here
 };
 
 constexpr uint8_t FiveBarScaraKinematics::objectModelTableDescriptor[] = { 1, 1 };
@@ -54,7 +55,7 @@ const char *FiveBarScaraKinematics::GetName(bool forStatusReport) const noexcept
 
 //////////////////////// private functions /////////////////////////
 
-// no results returnes. All results are stored in the cached variables.
+// no results returned. All results are stored in the cached variables.
 // The constraints are not checked
 void FiveBarScaraKinematics::getInverse(const float coords[]) const noexcept
 {
@@ -541,6 +542,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 {
 	if (mCode == 669)
 	{
+		//TODO this should print the existing values if no parameters are given, instead of insisting that all parameters are present
 		// must be defined: X, Y, P, D
 		gb.MustSee('X');
 		gb.MustSee('Y');
@@ -579,7 +581,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 			workmode = 1;	// default
 		}
 
-		// proximal arm lenghts
+		// proximal arm lengths
 		float proximalLengths[2];
 		gb.TryGetFloatArray('P', 2, proximalLengths, reply, seen);
 		proximalL = proximalLengths[0];
@@ -588,6 +590,8 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		// distal arm lengths and optional lengths of cantilevered arm
 		bool dseen = false;
 		float distalLengths[4];
+		//TODO TryGetFloatArray will report an error if the wrong number of values is provided. But we want to allow either 2 or 4.
+		//TODO So this code should call Seen() followed by GetFloatArray() instead, then check the number of returned values.
 		if (!gb.TryGetFloatArray('D', 4, distalLengths, reply, dseen) && dseen)
 		{
 			distalL = distalLengths[0];
@@ -619,6 +623,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		}
 		else
 		{
+			//TODO instead of doing this, set these values up up during initialisation or when changing workmode, and leave them alone here
 			if (workmode == 1)
 			{
 				homingAngleL = 20.0;	// default
@@ -681,10 +686,11 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		}
 
 		// optional rectangle definition of a print area. Must match the workmode reachable area
+		//TODO is this needed? Why not use the M208 limits instead?
 		if (gb.Seen('Z'))
 		{
 			float coordinates[4];
-			gb.TryGetFloatArray('Z', 4, coordinates, reply, seen);
+			gb.TryGetFloatArray('Z', 4, coordinates, reply, seenNonGeometry);
 			for (int i=0; i < 4; i++)
 			{
 				printArea[i] = coordinates[i];
@@ -699,12 +705,13 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);		// value defined in Kinematics.h
 		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);		// value defined in Kinematics.h
 
-		if (seen || seenNonGeometry)
+		if (seen)
 		{
 			Recalc();
 		}
-		else if (!gb.Seen('K'))
+		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
+			//TODO print all the parameters here
 			reply.printf("Kinematics is FiveBarScara, documented in https://duet3d.dozuki.com/Guide/Five+Bar+Parallel+SCARA/24?lang=en");
 		}
 

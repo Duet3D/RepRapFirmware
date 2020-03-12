@@ -279,7 +279,7 @@ private:
 
 	MessageBox mbox;							// message box data
 
-	int8_t previousToolNumber;
+	int16_t previousToolNumber;					// the tool number we were using before the last tool change, or -1 if we weren't using a tool
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;

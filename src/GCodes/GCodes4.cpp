@@ -234,7 +234,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		currentUserPosition[Z_AXIS] += currentZHop;
 		currentZHop = 0.0;
 
-		if ((gb.MachineState().toolChangeParam & TFreeBit) != 0)
+		if ((toolChangeParam & TFreeBit) != 0)
 		{
 			const Tool * const oldTool = reprap.GetCurrentTool();
 			if (oldTool != nullptr && AllAxesAreHomed())
@@ -257,10 +257,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				UpdateCurrentUserPosition();			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();
-			if (reprap.GetTool(gb.MachineState().newToolNumber).IsNotNull() && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
+			if (reprap.GetTool(newToolNumber).IsNotNull() && AllAxesAreHomed() && (toolChangeParam & TPreBit) != 0)
 			{
 				String<StringLength20> scratchString;
-				scratchString.printf("tpre%d.g", gb.MachineState().newToolNumber);
+				scratchString.printf("tpre%d.g", newToolNumber);
 				DoFileMacro(gb, scratchString.c_str(), false, 0);
 			}
 		}
@@ -270,16 +270,16 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChange2:					// select the new tool if it exists and run tpost
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
-			reprap.SelectTool(gb.MachineState().newToolNumber, simulationMode != 0);
+			reprap.SelectTool(newToolNumber, simulationMode != 0);
 			UpdateCurrentUserPosition();				// get the actual position of the new tool
 
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				if (reprap.GetCurrentTool() != nullptr && (gb.MachineState().toolChangeParam & TPostBit) != 0)
+				if (reprap.GetCurrentTool() != nullptr && (toolChangeParam & TPostBit) != 0)
 				{
 					String<StringLength20> scratchString;
-					scratchString.printf("tpost%d.g", gb.MachineState().newToolNumber);
+					scratchString.printf("tpost%d.g", newToolNumber);
 					DoFileMacro(gb, scratchString.c_str(), false, 0);
 				}
 			}
