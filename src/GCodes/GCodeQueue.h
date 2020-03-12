@@ -55,7 +55,6 @@ private:
 	size_t dataLength;
 
 	uint32_t executeAtMove;
-	int toolNumberAdjust;
 
 	void AssignFrom(GCodeBuffer &gb) noexcept;
 	void AssignTo(GCodeBuffer *gb) noexcept;

@@ -154,9 +154,6 @@ public:
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
 
-	int GetToolNumberAdjust() const noexcept { return toolNumberAdjust; }
-	void SetToolNumberAdjust(int arg) noexcept { toolNumberAdjust = arg; }
-
 #if HAS_MASS_STORAGE
 	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
 																// open a file to write to
@@ -208,8 +205,6 @@ private:
 #endif
 
 	const MessageType responseMessageType;				// The message type we use for responses to string codes coming from this channel
-
-	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 
 	GCodeResult lastResult;
 

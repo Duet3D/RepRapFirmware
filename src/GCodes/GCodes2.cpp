@@ -1343,7 +1343,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				int32_t toolNumber = 0;
 				bool seenT = false;
 				gb.TryGetIValue('T', toolNumber, seenT);
-				toolNumber += gb.GetToolNumberAdjust();
 				ReadLockedPointer<Tool> const applicableTool = (seenT) ? reprap.GetTool(toolNumber) : reprap.GetCurrentOrDefaultTool();
 
 				// Check that we have a tool
@@ -1498,9 +1497,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('P'))
 				{
 					// Wait for the heaters associated with the specified tool to be ready
-					int toolNumber = gb.GetIValue();
-					toolNumber += gb.GetToolNumberAdjust();
-					if (!ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber).Ptr(), true, tolerance))
+					if (!ToolHeatersAtSetTemperatures(reprap.GetTool(gb.GetIValue()).Ptr(), true, tolerance))
 					{
 						CheckReportDue(gb, reply);				// check whether we need to send a temperature or status report
 						isWaiting = true;
@@ -4289,7 +4286,6 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 	{
 		seen = true;
 		toolNum = gb.GetCommandNumber();
-		toolNum += gb.GetToolNumberAdjust();
 	}
 	else if (gb.Seen('R'))
 	{

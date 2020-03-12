@@ -61,7 +61,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 
 	// 1. ParsedFileInfo members
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 										ObjectModelEntryFlags::none },
-	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), &self->filenameBeingPrinted),												ObjectModelEntryFlags::none },
+	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->filenameBeingPrinted.c_str()),										ObjectModelEntryFlags::none },
 	{ "firstLayerHeight",	OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight, 2), 														ObjectModelEntryFlags::none },
 	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
 	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight, 2), 															ObjectModelEntryFlags::none },
