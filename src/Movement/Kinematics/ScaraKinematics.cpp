@@ -27,7 +27,7 @@ constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",	OBJECT_MODEL_FUNC(self->GetName(false)), 	ObjectModelEntryFlags::none },
+	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 1 };

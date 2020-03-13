@@ -1582,7 +1582,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 117:	// Display message
 			{
 				String<MediumStringLength> msg;
-				gb.GetUnprecedentedString(msg.GetRef());
+				gb.GetUnprecedentedString(msg.GetRef(), true);
 				reprap.SetMessage(msg.c_str());
 			}
 			break;
