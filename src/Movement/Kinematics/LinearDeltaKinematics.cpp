@@ -26,7 +26,7 @@ constexpr ObjectModelArrayDescriptor LinearDeltaKinematics::towersArrayDescripto
 {
 	nullptr,					// no lock needed
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const LinearDeltaKinematics*)self)->numTowers; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 2); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
 };
 
 constexpr ObjectModelTableEntry LinearDeltaKinematics::objectModelTable[] =
