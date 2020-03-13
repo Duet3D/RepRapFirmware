@@ -3053,8 +3053,10 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 {
 	// Check tool number
-	bool seen = false;
+	gb.MustSee('P');
 	const unsigned int toolNumber = gb.GetUIValue();
+
+	bool seen = false;
 
 	// Check tool name
 	String<ToolNameLength> name;
