@@ -3341,7 +3341,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 // Return the log file name, or nullptr if logging is not active
 const char *Platform::GetLogFileName() const noexcept
 {
-	return logger->GetFileName();
+	return (logger == nullptr) ? nullptr : logger->GetFileName();
 }
 
 #endif
