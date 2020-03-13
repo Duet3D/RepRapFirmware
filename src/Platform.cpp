@@ -242,7 +242,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 # endif
 	{ "supports12864",		OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),											ObjectModelEntryFlags::none },
 #if HAS_12V_MONITOR
-	{ "v12",				OBJECT_MODEL_FUNC(self, 7),																			ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::live },
 #endif
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
 
