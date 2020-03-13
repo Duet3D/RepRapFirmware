@@ -603,7 +603,7 @@ void FtpResponder::ProcessLine() noexcept
 			const char *filename = GetParameter("MKD");
 			String<MaxFilenameLength> location;
 			if (MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
-				&& MassStorage::MakeDirectory(location.c_str()))
+				&& MassStorage::MakeDirectory(location.c_str(), false))
 			{
 				outBuf->printf("257 \"%s\" created\r\n", location.c_str());
 			}
@@ -635,7 +635,7 @@ void FtpResponder::ProcessLine() noexcept
 			String<MaxFilenameLength> location;
 			if (haveFileToMove
 				&& MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
-				&& MassStorage::Rename(filenameBeingProcessed.c_str(), location.c_str()))
+				&& MassStorage::Rename(filenameBeingProcessed.c_str(), location.c_str(), false))
 			{
 				outBuf->copy("250 Rename successful.\r\n");
 			}

@@ -939,7 +939,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				String<MaxFilenameLength> filename;
 				gb.GetUnprecedentedString(filename.GetRef());
-				platform.Delete(platform.GetGCodeDir(), filename.c_str());
+				result = (platform.Delete(platform.GetGCodeDir(), filename.c_str())) ? GCodeResult::ok : GCodeResult::error;
 			}
 			break;
 #endif
@@ -2704,7 +2704,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				gb.MustSee('P');
 				String<MaxFilenameLength> dirName;
 				gb.GetQuotedString(dirName.GetRef());
-				MassStorage::MakeDirectory(dirName.c_str());
+				result = (MassStorage::MakeDirectory(dirName.c_str(), true)) ? GCodeResult::ok : GCodeResult::error;
 			}
 			break;
 
@@ -2718,9 +2718,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				gb.GetQuotedString(newVal.GetRef());
 				if (gb.Seen('D') && gb.GetUIValue() == 1 && MassStorage::FileExists(oldVal.c_str()) && MassStorage::FileExists(newVal.c_str()))
 				{
-					MassStorage::Delete(newVal.c_str());
+					if (MassStorage::Delete(newVal.c_str(), true))
+					{
+						result = GCodeResult::error;
+						break;
+					}
 				}
-				MassStorage::Rename(oldVal.c_str(), newVal.c_str());
+				result = (MassStorage::Rename(oldVal.c_str(), newVal.c_str(), true)) ? GCodeResult::ok : GCodeResult::error;
 			}
 			break;
 

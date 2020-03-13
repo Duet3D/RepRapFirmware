@@ -64,7 +64,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 
 	if (writing)
 	{
-		if (!MassStorage::EnsurePath(filePath))
+		if (!MassStorage::EnsurePath(filePath, true))
 		{
 			return false;
 		}

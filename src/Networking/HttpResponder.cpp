@@ -532,7 +532,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
 	{
-		const bool ok = GetPlatform().Delete(FS_PREFIX, GetKeyValue("name"));
+		const bool ok = MassStorage::Delete(GetKeyValue("name"), false);
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
@@ -565,9 +565,9 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		{
 			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && MassStorage::FileExists(oldVal) && MassStorage::FileExists(newVal))
 			{
-				MassStorage::Delete(newVal);
+				MassStorage::Delete(newVal, false);
 			}
-			success = MassStorage::Rename(oldVal, newVal);
+			success = MassStorage::Rename(oldVal, newVal, false);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
@@ -577,7 +577,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		bool success = false;
 		if (dirVal != nullptr)
 		{
-			success = MassStorage::MakeDirectory(dirVal);
+			success = MassStorage::MakeDirectory(dirVal, false);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}

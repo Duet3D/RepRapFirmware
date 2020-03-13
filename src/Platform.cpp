@@ -3735,7 +3735,7 @@ FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode
 bool Platform::Delete(const char* folder, const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str());
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
 }
 
 bool Platform::FileExists(const char* folder, const char *filename) const noexcept
@@ -3789,7 +3789,7 @@ FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const noex
 bool Platform::DeleteSysFile(const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
-	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str());
+	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
 }
 
 bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const noexcept
