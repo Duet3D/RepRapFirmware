@@ -2,13 +2,23 @@ RepRapFirmware 3.01-RC4 (in preparation)
 =======================
 
 Recommended compatible firmware:
-- DuetWebControl 2.0.7
+- DuetWebControl 2.1.0 (but 2.0.7 should also work with this release)
 - DuetWiFiServer 1.24
-- Duet Software Framework 1.2.4.0 (for Duet 3/Raspberry Pi users)
+- Duet Software Framework version TBA (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01-RC4
 
 Upgrade notes:
-- M207 (set firmware retraction parameters) without the new P paramneter is applied to all existing tools but not to any tools created after the M207 command. Therefore, make sure that your M207 command is later in config.g that all your M563 tool creation commands.
+- M207 (set firmware retraction parameters) without the new P parameter is applied to all existing tools but not to any tools created after the M207 command. Therefore, make sure that your M207 command is later in config.g than all your M563 tool creation commands.
+- The M563 S (tool number adjustment) parameter is no longer supported. This parameter was only needed when using very old versions of RRF with old versions of slic3r.
+- Until DSF is updated, users of Duet 3 with attached SBC and a Z probe that uses deploy/retract files will need to rename file deployprobe.g to deployprobe0.g, and retractprobe.g to retractprobe0.g.
+
+Known issues
+- You can only have one Z probe of type 1, 2 or 5 and if using Duet 3 it must be attached to the main board. You can have multiple Z probes of types 8 and 9 including probes attached to Duet 3 expansion and tool boards.
+- The G29 and G30 commands only allow the use of Z probe 0
+- Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
+- Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
+- Duet 3: the values of vin, v12 and mcuTemp in the object model always read as zero for expansion and tool boards. You can get the actual values using M122.
+- Additional limitations apply to Duet 3 systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
 
 New features/changed behaviour:
 - Parameters in commands received from the SBC attached to a Duet 3 may now be expressions, except for array parameters
@@ -17,17 +27,19 @@ New features/changed behaviour:
 - M915 now reports the axis or extruder speed that corresponds to the fullsteps/second value of the H parameter
 - Added more object model properties, including inputs[] describing the state of each GPin, volumes[] describing the attached SD cards, and seqs{} to help DSF and UIs know which non-live object model properties have changed
 - M207 retraction parameters are now settable on a per-tool basis. The P parameter selects which tool to set. M207 with no P parameter applies the parameters provided to all existing tools. Retraction settings in the object model are moved from extruders[].retraction to tools[].retraction.
-- Each Z probe can now have its own deploy and retract files. Z probe number # (where # counts up from zero) looks first for deployprobe#.g and if that is not found it falls back to deployprobe.g. Similarly it used retractprobe#.g in preference to retractprobe.g.
+- Each Z probe can now have its own deploy and retract files. Z probe number # (where # counts up from zero) looks first for deployprobe#.g and if that is not found it falls back to deployprobe.g. Similarly it uses retractprobe#.g in preference to retractprobe.g.
 - The M401 (deploy probe) and M402 (retract probe) commands now accept an optional P parameter which is the Z probe number to deploy mor retract, default 0.
+- The daemon GCode task is now enabled even on Duet 3 with attached SBC
 
 Bug fixes:
 - If an array of items in the object model (e.g. heaters, sensors) included null entries because of gaps in the item numbers created, and an object model expression referred to a prioerty of such as null element, the firmware crashed
 - If a while-loop was not followed by at least one GCode command or meta command outside the loop before the end of the file, the loop was never executed more than once
 - If an extruder-only move specified a feed rate, and the following printing move didn't specify a feed rate because it happened to be the same as the feed rate of the extruder-only move, then the speed factor wouldn't get applied to that move. Likewise if a GCode file used a G1 Fxxx line with no movement in order to dset the feed rate of the following moves, the speed factor would not be applied to those moves.
-- M409 incorrectly allowed a '.' to be omitted between the closing square bracket of an index and the following field name
+- M409 incorrectly allowed the '.' to be omitted between the closing square bracket of an index and the following field name
 - On Duet 3 in standalone mode, on the Ethernet interface the limit on the number of MDNS services was set too low, so only the 'echo' service was created
-- The HTTP rr_model call sometimes caused a reset due to stack overflow on the Duet WiFi
+- On Duet WiFi, the HTTP rr_model call sometimes caused a reset due to stack overflow
 - When running true bed levelling or auto calibration, if all probe points had zero height error then the initial deviation could be reported as 'nan'
+- After triggering for the first time, the status of a Z probe on a tool or expansion board that was not a BLTouch was not subsequently updated, so the state remained as triggered, which prevented further probing
 
 RepRapFirmware 3.01-RC3
 =======================
