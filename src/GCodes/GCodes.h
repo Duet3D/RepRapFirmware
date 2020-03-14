@@ -404,8 +404,8 @@ private:
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); // Do manual probe in arbitrary direction
 	void DoManualBedProbe(GCodeBuffer& gb);										// Do a manual bed probe
-	void DeployZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept;
-	void RetractZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept;
+	void DeployZProbe(GCodeBuffer& gb, unsigned int probeNumber, int code) noexcept;
+	void RetractZProbe(GCodeBuffer& gb, unsigned int probeNumber, int code) noexcept;
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 

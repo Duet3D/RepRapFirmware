@@ -513,7 +513,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (platform.GetCurrentZProbeType() == ZProbeType::blTouch)
 			{
-				DeployZProbe(gb, 0);
+				DeployZProbe(gb, 0, 29);
 			}
 		}
 		break;
@@ -551,7 +551,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					reprap.GetHeat().SuspendHeaters(false);
 					platform.Message(ErrorMessage, "Z probe already triggered before probing move started\n");
 					gb.SetState(GCodeState::normal);
-					RetractZProbe(gb, 0);
+					RetractZProbe(gb, 0, 29);
 					break;
 				}
 				else
@@ -596,7 +596,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					platform.Message(ErrorMessage, "Z probe was not triggered during probing move\n");
 					gb.SetState(GCodeState::normal);
-					RetractZProbe(gb, 0);
+					RetractZProbe(gb, 0, 29);
 					break;
 				}
 
@@ -607,7 +607,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (zp->GetProbeType() == ZProbeType::blTouch)		// bltouch needs to be retracted when it triggers
 			{
-				RetractZProbe(gb, 0);
+				RetractZProbe(gb, 0, 29);
 			}
 		}
 		break;
@@ -668,7 +668,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				platform.Message(ErrorMessage, "Z probe readings not consistent\n");
 				gb.SetState(GCodeState::normal);
-				RetractZProbe(gb, 0);
+				RetractZProbe(gb, 0, 29);
 			}
 		}
 		break;
@@ -705,7 +705,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Done all the points
 				gb.AdvanceState();
-				RetractZProbe(gb, 0);
+				RetractZProbe(gb, 0, 29);
 			}
 			else
 			{
@@ -792,7 +792,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (platform.GetCurrentZProbeType() == ZProbeType::blTouch)	// bltouch needs to be redeployed prior to each probe point
 			{
-				DeployZProbe(gb, 0);
+				DeployZProbe(gb, 0, 30);
 			}
 		}
 		break;
@@ -836,7 +836,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(), true, true);
 					}
 					gb.SetState(GCodeState::normal);										// no point in doing anything else
-					RetractZProbe(gb, 0);
+					RetractZProbe(gb, 0, 30);
 				}
 				else
 				{
@@ -906,7 +906,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// G30 S-1 command taps once and reports the height, S-2 sets the tool offset to the negative of the current height, S-3 sets the Z probe trigger height
 					gb.SetState(GCodeState::probingAtPoint7);					// special state for reporting the stopped height at the end
-					RetractZProbe(gb, 0);										// retract the probe before moving to the new state
+					RetractZProbe(gb, 0, 30);									// retract the probe before moving to the new state
 					break;
 				}
 
@@ -933,7 +933,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (zp->GetProbeType() == ZProbeType::blTouch)						// bltouch needs to be retracted when it triggers
 			{
-				RetractZProbe(gb, 0);
+				RetractZProbe(gb, 0, 30);
 			}
 		}
 		break;
@@ -1009,7 +1009,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}
 			gb.AdvanceState();
-			RetractZProbe(gb, 0);
+			RetractZProbe(gb, 0, 30);
 		}
 		break;
 
@@ -1073,7 +1073,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
-			DeployZProbe(gb, reprap.GetMove().GetStraightProbeSettings().GetZProbeToUse());
+			DeployZProbe(gb, reprap.GetMove().GetStraightProbeSettings().GetZProbeToUse(), 38);
 		}
 		break;
 
@@ -1119,7 +1119,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						error = true;
 					}
 					gb.SetState(GCodeState::normal);									// no point in doing anything else
-					RetractZProbe(gb, 0);
+					RetractZProbe(gb, 0, 38);
 				}
 				else
 				{
@@ -1165,7 +1165,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 			gb.SetState(GCodeState::normal);
-			RetractZProbe(gb, 0);							// retract the probe before moving to the new state
+			RetractZProbe(gb, 0, 38);						// retract the probe before moving to the new state
 		}
 		break;
 

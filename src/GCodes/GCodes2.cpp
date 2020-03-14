@@ -2509,7 +2509,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none)
 				{
 					zp->SetDeployedByUser(false);							// pretend that the probe isn't deployed, to make sure we deploy it unconditionally
-					DeployZProbe(gb, probeNumber);
+					DeployZProbe(gb, probeNumber, 401);
 					zp->SetDeployedByUser(true);							// probe is now deployed
 				}
 			}
@@ -2522,7 +2522,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none)
 				{
 					zp->SetDeployedByUser(false);							// do this first, otherwise the probe won't be retracted
-					RetractZProbe(gb, probeNumber);
+					RetractZProbe(gb, probeNumber, 402);
 				}
 			}
 			break;

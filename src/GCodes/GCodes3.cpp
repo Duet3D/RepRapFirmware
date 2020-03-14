@@ -1345,32 +1345,32 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 
 // Deploy the Z probe unless it has already been deployed explicitly
 // The required next state must be set up (e.g. by gb.SetState()) before calling this
-void GCodes::DeployZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept
+void GCodes::DeployZProbe(GCodeBuffer& gb, unsigned int probeNumber, int code) noexcept
 {
 	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !zp->IsDeployedByUser())
 	{
 		String<StringLength20> fileName;
 		fileName.printf(DEPLOYPROBE "%u.g", probeNumber);
-		if (!DoFileMacro(gb, fileName.c_str(), false, -1))
+		if (!DoFileMacro(gb, fileName.c_str(), false, code))
 		{
-			DoFileMacro(gb, DEPLOYPROBE ".g", false, -1);
+			DoFileMacro(gb, DEPLOYPROBE ".g", false, code);
 		}
 	}
 }
 
 // Retract the Z probe unless it was deployed explicitly (in which case, wait for the user to retract it explicitly)
 // The required next state must be set up (e.g. by gb.SetState()) before calling this
-void GCodes::RetractZProbe(GCodeBuffer& gb, unsigned int probeNumber) noexcept
+void GCodes::RetractZProbe(GCodeBuffer& gb, unsigned int probeNumber, int code) noexcept
 {
 	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !zp->IsDeployedByUser())
 	{
 		String<StringLength20> fileName;
 		fileName.printf(RETRACTPROBE "%u.g", probeNumber);
-		if (!DoFileMacro(gb, fileName.c_str(), false, -1))
+		if (!DoFileMacro(gb, fileName.c_str(), false, code))
 		{
-			DoFileMacro(gb, RETRACTPROBE ".g", false, -1);
+			DoFileMacro(gb, RETRACTPROBE ".g", false, code);
 		}
 	}
 }

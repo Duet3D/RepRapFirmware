@@ -486,6 +486,9 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		// Delay 1 second, then try to open and run daemon.g. No error if it is not found.
 		if (   !reprap.IsProcessingConfig()
+#ifdef DUET3
+			&& !reprap.UsingLinuxInterface()
+#endif
 			&& gb.DoDwellTime(1000)
 		   )
 		{
@@ -2614,7 +2617,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 				gb.SetState(GCodeState::probingAtPoint0);
 				if (platform.GetCurrentZProbeType() != ZProbeType::blTouch)
 				{
-					DeployZProbe(gb, 0);
+					DeployZProbe(gb, 0, 30);
 				}
 			}
 		}
@@ -2625,7 +2628,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
 		InitialiseTaps();
 		gb.SetState(GCodeState::probingAtPoint2a);
-		DeployZProbe(gb, 0);
+		DeployZProbe(gb, 0, 30);
 	}
 	return GCodeResult::ok;
 }
@@ -2682,7 +2685,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	gb.SetState(GCodeState::gridProbing1);
 	if (platform.GetCurrentZProbeType() != ZProbeType::blTouch)
 	{
-		DeployZProbe(gb, 0);
+		DeployZProbe(gb, 0, 29);
 	}
 	return GCodeResult::ok;
 }
