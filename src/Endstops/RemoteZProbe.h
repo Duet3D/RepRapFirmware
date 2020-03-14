@@ -37,7 +37,8 @@ private:
 	RemoteInputHandle handle;
 	bool state;
 
-	static constexpr uint16_t MinimumProbeReportInterval = 5;
+	static constexpr uint16_t ActiveProbeReportInterval = 2;
+	static constexpr uint16_t InactiveProbeReportInterval = 25;
 };
 
 #endif
