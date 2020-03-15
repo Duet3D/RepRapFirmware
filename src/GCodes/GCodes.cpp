@@ -282,11 +282,12 @@ void GCodes::Reset() noexcept
 	}
 }
 
+// Return true if any channel other than the daemon is executing a file macro
 bool GCodes::DoingFileMacro() const noexcept
 {
 	for (const GCodeBuffer *gbp : gcodeSources)
 	{
-		if (gbp != nullptr && gbp->IsDoingFileMacro())
+		if (gbp != nullptr && gbp != daemonGCode && gbp->IsDoingFileMacro())
 		{
 			return true;
 		}
@@ -486,9 +487,6 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		// Delay 1 second, then try to open and run daemon.g. No error if it is not found.
 		if (   !reprap.IsProcessingConfig()
-#ifdef DUET3
-			&& !reprap.UsingLinuxInterface()
-#endif
 			&& gb.DoDwellTime(1000)
 		   )
 		{
