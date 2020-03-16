@@ -21,7 +21,7 @@ Known issues
 - Additional limitations apply to Duet 3 systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
 
 New features/changed behaviour:
-- Parameters in commands received from the SBC attached to a Duet 3 may now be expressions, except for array parameters
+- Parameters in commands received from the SBC attached to a Duet 3 may now be expressions, except in parameters that take a colon-separated list of values
 - Round brackets in GCode lines are no longer treated as enclosing comments if the machine is not in CNC mode
 - Added functions radians(arg) and degrees(arg) which convert the argument from degrees to radians, and from radians to degrees
 - M915 now reports the axis or extruder speed that corresponds to the fullsteps/second value of the H parameter
