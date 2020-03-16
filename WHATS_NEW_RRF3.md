@@ -1,16 +1,16 @@
-RepRapFirmware 3.01-RC4 (in preparation)
+RepRapFirmware 3.01-RC4
 =======================
 
 Recommended compatible firmware:
 - DuetWebControl 2.1.0 (but 2.0.7 should also work with this release)
 - DuetWiFiServer 1.24
-- Duet Software Framework version TBA (for Duet 3/Raspberry Pi users)
+- Duet Software Framework version 1.2.5 (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01-RC4
 
 Upgrade notes:
 - M207 (set firmware retraction parameters) without the new P parameter is applied to all existing tools but not to any tools created after the M207 command. Therefore, make sure that your M207 command is later in config.g than all your M563 tool creation commands.
 - The M563 S (tool number adjustment) parameter is no longer supported. This parameter was only needed when using very old versions of RRF with old versions of slic3r.
-- Until DSF is updated, users of Duet 3 with attached SBC and a Z probe that uses deploy/retract files will need to rename file deployprobe.g to deployprobe0.g, and retractprobe.g to retractprobe0.g.
+- If you have a Z probe that needs to be deployed/retracted, please test that deployment and retraction are working before relying on the Z probe. This is especially important if you are using Duet 3 with attached SBC.
 
 Known issues
 - You can only have one Z probe of type 1, 2 or 5 and if using Duet 3 it must be attached to the main board. You can have multiple Z probes of types 8 and 9 including probes attached to Duet 3 expansion and tool boards.
@@ -30,6 +30,8 @@ New features/changed behaviour:
 - Each Z probe can now have its own deploy and retract files. Z probe number # (where # counts up from zero) looks first for deployprobe#.g and if that is not found it falls back to deployprobe.g. Similarly it uses retractprobe#.g in preference to retractprobe.g.
 - The M401 (deploy probe) and M402 (retract probe) commands now accept an optional P parameter which is the Z probe number to deploy mor retract, default 0.
 - The daemon GCode task is now enabled even on Duet 3 with attached SBC
+- The status no longer shows as Busy when the daemon macro file is running, if no other macro is running or movement in progress
+- Increased maximum number of axes on Duet WiFi/Ethernet from 9 to 10
 
 Bug fixes:
 - If an array of items in the object model (e.g. heaters, sensors) included null entries because of gaps in the item numbers created, and an object model expression referred to a prioerty of such as null element, the firmware crashed
