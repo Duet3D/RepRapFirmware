@@ -2,8 +2,8 @@ RepRapFirmware 3.01-RC4
 =======================
 
 Recommended compatible firmware:
-- DuetWebControl 2.1.0 (but 2.0.7 should also work with this release)
-- DuetWiFiServer 1.24
+- DuetWebControl 2.1.0 when available, 2.0.7 until then
+- DuetWiFiServer 1.23
 - Duet Software Framework version 1.2.5 (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01-RC4
 
@@ -17,7 +17,7 @@ Known issues
 - The G29 and G30 commands only allow the use of Z probe 0
 - Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
 - Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
-- Duet 3: the values of vin, v12 and mcuTemp in the object model always read as zero for expansion and tool boards. You can get the actual values using M122.
+- Duet 3: the values of vin, v12 and mcuTemp in the object model always read as zero for expansion and tool boards. You can see the actual values using M122.
 - Additional limitations apply to Duet 3 systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
 
 New features/changed behaviour:
@@ -25,7 +25,7 @@ New features/changed behaviour:
 - Round brackets in GCode lines are no longer treated as enclosing comments if the machine is not in CNC mode
 - Added functions radians(arg) and degrees(arg) which convert the argument from degrees to radians, and from radians to degrees
 - M915 now reports the axis or extruder speed that corresponds to the fullsteps/second value of the H parameter
-- Added more object model properties, including inputs[] describing the state of each GPin, volumes[] describing the attached SD cards, and seqs{} to help DSF and UIs know which non-live object model properties have changed
+- Added many more object model properties, including inputs[] describing the state of each GPin, volumes[] describing the attached SD cards, and seqs{} to help DSF and UIs know which non-live object model properties have changed
 - M207 retraction parameters are now settable on a per-tool basis. The P parameter selects which tool to set. M207 with no P parameter applies the parameters provided to all existing tools. Retraction settings in the object model are moved from extruders[].retraction to tools[].retraction.
 - Each Z probe can now have its own deploy and retract files. Z probe number # (where # counts up from zero) looks first for deployprobe#.g and if that is not found it falls back to deployprobe.g. Similarly it uses retractprobe#.g in preference to retractprobe.g.
 - The M401 (deploy probe) and M402 (retract probe) commands now accept an optional P parameter which is the Z probe number to deploy mor retract, default 0.
