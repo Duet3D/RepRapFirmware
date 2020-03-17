@@ -313,7 +313,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 		}
 		if (!added)
 		{
-			buf->cat("null");
+			buf->cat((*filter == 0) ? "{}" : "null");
 		}
 		context.DecreaseDepth();
 	}
