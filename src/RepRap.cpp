@@ -177,8 +177,13 @@ constexpr ObjectModelArrayDescriptor RepRap::toolsArrayDescriptor =
 constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
 {
 	nullptr,
+#if HAS_MASS_STORAGE
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(MassStorage::GetVolume(context.GetLastIndex())); }
+#else
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 0; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(nullptr); }
+#endif
 };
 
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
@@ -203,6 +208,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF(&volumesArrayDescriptor),						ObjectModelEntryFlags::none },
 
 	// 1. MachineModel.directories
+#if HAS_MASS_STORAGE
 	{ "filaments",				OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),							ObjectModelEntryFlags::none },
 	{ "gCodes",					OBJECT_MODEL_FUNC(self->platform->GetGCodeDir()),						ObjectModelEntryFlags::none },
 	{ "macros",					OBJECT_MODEL_FUNC(self->platform->GetMacroDir()),						ObjectModelEntryFlags::none },
@@ -210,6 +216,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "scans",					OBJECT_MODEL_FUNC_NOSELF(SCANS_DIRECTORY),								ObjectModelEntryFlags::none },
 	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir, 0),		ObjectModelEntryFlags::none },
 	{ "web",					OBJECT_MODEL_FUNC(self->platform->GetWebDir()),							ObjectModelEntryFlags::none },
+#endif
 
 	// 2. MachineModel.limits
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxAxes),								ObjectModelEntryFlags::verbose },
@@ -242,7 +249,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if HAS_MASS_STORAGE
 	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumSdCards),							ObjectModelEntryFlags::verbose },
 #else
-	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF(0),											ObjectModelEntryFlags::verbose },
+	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)0),											ObjectModelEntryFlags::verbose },
 #endif
 	{ "workplaces",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumCoordinateSystems),				ObjectModelEntryFlags::verbose },
 	{ "zProbeProgramBytes",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbeProgramBytes),				ObjectModelEntryFlags::verbose },
@@ -257,12 +264,14 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if HAS_MASS_STORAGE
 	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
 #else
-	{ "logFile",				OBJECT_MODEL_FUNC(nullptr),												ObjectModelEntryFlags::none },
+	{ "logFile",				OBJECT_MODEL_FUNC_NOSELF(nullptr),										ObjectModelEntryFlags::none },
 #endif
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetNewToolNumber()),			ObjectModelEntryFlags::live },
+#if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
+#endif
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
@@ -300,7 +309,17 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 7, 16, 7, 22, 12 + HAS_MASS_STORAGE, 2, 6, 14 + HAS_NETWORKING };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] =
+{
+	7,						// number of sub-tables
+	16,
+#if HAS_MASS_STORAGE
+	7, 						// directories
+#else
+	0,
+#endif
+	22, 12 + HAS_VOLTAGE_MONITOR, 2, 6, 14 + HAS_NETWORKING
+};
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 

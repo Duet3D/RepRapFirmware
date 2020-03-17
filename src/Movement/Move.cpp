@@ -116,12 +116,14 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 	// 7. move.compensation members
 	{ "fadeHeight",				OBJECT_MODEL_FUNC(self->taperHeight, 1),												ObjectModelEntryFlags::none },
+#if HAS_MASS_STORAGE
 	{ "file",					OBJECT_MODEL_FUNC_IF(
 									self->usingMesh
-#if HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
 									&& !reprap.UsingLinuxInterface()
-#endif
+# endif
 									, self->heightMap.GetFileName()),													ObjectModelEntryFlags::none },
+#endif
 	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 8),											ObjectModelEntryFlags::none },
 	{ "probeGrid",				OBJECT_MODEL_FUNC_NOSELF((const GridDefinition *)&reprap.GetGCodes().GetDefaultGrid()),	ObjectModelEntryFlags::none },
 	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),									ObjectModelEntryFlags::none },
@@ -131,7 +133,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4, 3, 2, 2, 5, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4, 3, 2, 2, 4 + HAS_MASS_STORAGE, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 

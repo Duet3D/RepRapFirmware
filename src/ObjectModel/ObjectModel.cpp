@@ -92,12 +92,14 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 #endif
 
 	case TypeCode::Special:
+#if HAS_MASS_STORAGE
 		switch ((SpecialType)param)
 		{
 		case SpecialType::sysDir:
 			reprap.GetPlatform().AppendSysDir(str);
 			break;
 		}
+#endif
 		break;
 
 	// We don't fully handle the remaining types
@@ -596,12 +598,14 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TypeCode::Special:
+#if HAS_MASS_STORAGE
 			switch ((ExpressionValue::SpecialType)val.param)
 			{
 			case ExpressionValue::SpecialType::sysDir:
 				reprap.GetPlatform().EncodeSysDir(buf);
 				break;
 			}
+#endif
 			break;
 
 		case TypeCode::None:

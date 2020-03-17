@@ -252,9 +252,11 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min, 1),												ObjectModelEntryFlags::none },
 
 	// 2. vIn members
+#if HAS_VOLTAGE_MONITOR
 	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage(), 1),												ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().max, 1),													ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().min, 1),													ObjectModelEntryFlags::none },
+#endif
 
 	// 3. move.axes[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
@@ -306,7 +308,11 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	6 + HAS_12V_MONITOR,													// number of sections
 	12 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION,		// section 0: boards[]
 	3,																		// section 1: mcuTemp
+#if HAS_VOLTAGE_MONITOR
 	3,																		// section 2: vIn
+#else
+	0,																		// section 2: vIn
+#endif
 	16,																		// section 3: move.axes[]
 	11,																		// section 4: move.extruders[]
 	3,																		// section 5: move.extruders[].pressureAdvance

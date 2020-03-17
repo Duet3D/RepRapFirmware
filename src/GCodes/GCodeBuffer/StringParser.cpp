@@ -1376,6 +1376,12 @@ void StringParser::AppendFullCommand(const StringRef &s) const noexcept
 	s.cat(gb.buffer);
 }
 
+// Called when we start a new file
+void StringParser::StartNewFile() noexcept
+{
+	seenLeadingSpace = seenLeadingTab = seenMetaCommand = warnedAboutMixedSpacesAndTabs = false;
+}
+
 #if HAS_MASS_STORAGE
 
 // Open a file to write to
@@ -1473,12 +1479,6 @@ void StringParser::FinishWritingBinary() noexcept
 	{
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::error, "CRC32 checksum doesn't match");
 	}
-}
-
-// Called when we start a new file
-void StringParser::StartNewFile() noexcept
-{
-	seenLeadingSpace = seenLeadingTab = seenMetaCommand = warnedAboutMixedSpacesAndTabs = false;
 }
 
 // This is called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.
