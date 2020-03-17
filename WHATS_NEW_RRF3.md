@@ -9,7 +9,7 @@ Recommended compatible firmware:
 
 Upgrade notes:
 - M207 (set firmware retraction parameters) without the new P parameter is applied to all existing tools but not to any tools created after the M207 command. Therefore, make sure that your M207 command is later in config.g than all your M563 tool creation commands.
-- The M563 S (tool number adjustment) parameter is no longer supported. This parameter was only needed when using very old versions of RRF with old versions of slic3r.
+- Previously, a M563 command with no P parameter could be used to add a constant (specified in the S parameter) to all tool numbers in GCode commands. This is no longer supported. It was only needed when using very old versions of RRF with old versions of slic3r.
 - If you have a Z probe that needs to be deployed/retracted, please test that deployment and retraction are working before relying on the Z probe. This is especially important if you are using Duet 3 with attached SBC.
 
 Known issues
