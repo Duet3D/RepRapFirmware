@@ -37,10 +37,11 @@ static size_t numTmc2660Drivers;
 
 enum class DriversState : uint8_t
 {
-	noPower = 0,			// no VIN power
-	notInitialised,			// have VIN power but not started initialising drivers
-	initialising,			// in the process of initialising the drivers
-	ready					// drivers are initialised and ready
+	noPower = 0,					// no VIN power
+	initialising,					// in the process of initialising the drivers for setting microstep positions
+	stepping,						// resetting the microstep counters to 0 in case of phantom steps during power up
+	reinitialising,					// re-initialising the drivers with the correct values
+	ready							// drivers are initialised and ready
 };
 
 static DriversState driversState = DriversState::noPower;
@@ -232,6 +233,7 @@ public:
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
 
 	uint32_t ReadMicrostepPosition() const noexcept { return mstepPosition; }
+	void ClearMicrostepPosition() noexcept { mstepPosition = 0xFFFFFFFF; }
 
 private:
 	bool SetChopConf(uint32_t newVal) noexcept;
@@ -796,6 +798,17 @@ inline void TmcDriverState::StartTransfer() noexcept
 		const size_t regNum = LowestSetBitNumber(registersToUpdate);
 		registersToUpdate &= ~(1u << regNum);
 		regVal = registers[regNum];
+		if (driversState < DriversState::reinitialising)
+		{
+			if (regNum == DriveControl)
+			{
+				regVal &= ~(TMC_DRVCTRL_INTPOL | TMC_DRVCTRL_MRES_MASK);	// set x256 microstepping, no interpolation
+			}
+			else if (regNum == DriveConfig)
+			{
+				regVal &= ~TMC_DRVCONF_RDSEL_MASK;							// set RDSEL=0 so that we read the microstep counter
+			}
+		}
 	}
 
 	// Kick off a transfer for that register
@@ -1044,6 +1057,67 @@ namespace SmartDrivers
 				break;
 
 			case DriversState::initialising:
+				// If all drivers have been initialised, move to checking the microstep counters
+				{
+					bool allInitialised = true;
+					for (size_t i = 0; i < numTmc2660Drivers; ++i)
+					{
+						if (driverStates[i].UpdatePending())
+						{
+							allInitialised = false;
+							break;
+						}
+						driverStates[i].ClearMicrostepPosition();
+					}
+
+					if (allInitialised)
+					{
+						driversState = DriversState::stepping;
+					}
+				}
+				break;
+
+			case DriversState::stepping:
+				{
+					bool moreNeeded = false;
+					for (size_t i = 0; i < numTmc2660Drivers; ++i)
+					{
+						uint32_t count = driverStates[i].ReadMicrostepPosition();
+						if (count != 0)
+						{
+							moreNeeded = true;
+							if (count < 1024)
+							{
+								const bool backwards = (count > 512);
+								reprap.GetPlatform().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
+								if (backwards)
+								{
+									count = 1024 - count;
+								}
+								do
+								{
+									delayMicroseconds(1);
+									StepPins::StepDriversHigh(StepPins::CalcDriverBitmap(i));
+									delayMicroseconds(1);
+									StepPins::StepDriversLow();
+									--count;
+								} while (count != 0);
+								driverStates[i].ClearMicrostepPosition();
+							}
+						}
+					}
+					if (!moreNeeded)
+					{
+						driversState = DriversState::reinitialising;
+						for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
+						{
+							driverStates[driver].WriteAll();
+						}
+					}
+				}
+				break;
+
+			case DriversState::reinitialising:
 				// If all drivers have been initialised, set the global enable
 				{
 					bool allInitialised = true;
@@ -1064,7 +1138,7 @@ namespace SmartDrivers
 				}
 				break;
 
-			default:
+			case DriversState::ready:
 				break;
 			}
 

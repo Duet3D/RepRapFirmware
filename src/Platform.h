@@ -378,6 +378,7 @@ public:
 	void SetDirection(size_t axisOrExtruder, bool direction) noexcept;
 	void SetDirectionValue(size_t driver, bool dVal) noexcept;
 	bool GetDirectionValue(size_t driver) const noexcept;
+	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
 	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
 	int8_t GetEnableValue(size_t driver) const noexcept;
 	void EnableLocalDrivers(size_t axisOrExtruder) noexcept;
@@ -912,6 +913,14 @@ inline void Platform::SetDriverDirection(uint8_t driver, bool direction) noexcep
 	{
 		const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
 		digitalWrite(DIRECTION_PINS[driver], d);
+	}
+}
+
+inline void Platform::SetDriverAbsoluteDirection(size_t driver, bool direction) noexcept
+{
+	if (driver < NumDirectDrivers)
+	{
+		digitalWrite(DIRECTION_PINS[driver], direction);
 	}
 }
 
