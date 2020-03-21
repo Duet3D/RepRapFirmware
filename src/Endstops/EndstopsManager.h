@@ -36,9 +36,6 @@ public:
 	// Set up the active endstops for Z probing returning true if successful
 	bool EnableZProbe(size_t probeNumber, bool probingAway = false) noexcept __attribute__ ((warn_unused_result));
 
-	// Set up the active endstops for Z probing with the current probe
-	bool EnableCurrentZProbe(bool probingAway = false) noexcept __attribute__ ((warn_unused_result)) { return EnableZProbe(currentZProbeNumber, probingAway); }
-
 	// Enable extruder endstops
 	bool EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept;
 
@@ -60,9 +57,8 @@ public:
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;		// G31
 
 	ReadLockedPointer<ZProbe> GetZProbe(size_t index) const noexcept;
-	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
-	ReadLockedPointer<ZProbe> GetCurrentOrDefaultZProbe() const noexcept;
-	ZProbe& GetCurrentOrDefaultZProbeFromISR() const noexcept;
+	ReadLockedPointer<ZProbe> GetZProbeOrDefault(size_t index) const noexcept;
+	ZProbe& GetDefaultZProbeFromISR() const noexcept;
 
 	void SetZProbeDefaults() noexcept;
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
@@ -102,7 +98,6 @@ private:
 	static ReadWriteLock zProbesLock;
 
 	EndstopOrZProbe * volatile activeEndstops;			// linked list of endstops and Z probes that are active for the current move
-	size_t currentZProbeNumber;							// which Z probe we are using
 
 	Endstop *axisEndstops[MaxAxes];						// the endstops assigned to each axis (each one may have several switches), each may be null
 	StallDetectionEndstop *extrudersEndstop;				// the endstop used for extruder stall detection, one will do for all extruders

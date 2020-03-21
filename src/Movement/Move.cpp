@@ -367,7 +367,7 @@ bool Move::IsRawMotorMove(uint8_t moveType) const noexcept
 // Return true if the specified point is accessible to the Z probe
 bool Move::IsAccessibleProbePoint(float x, float y) const noexcept
 {
-	const auto zp = reprap.GetPlatform().GetCurrentZProbe();
+	const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(reprap.GetGCodes().GetCurrentZProbeNumber());
 	if (zp.IsNotNull())
 	{
 		x -= zp->GetXOffset();
@@ -896,7 +896,7 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 	y = probePoints.GetYCoord(count);
 	if (wantNozzlePosition)
 	{
-		const auto zp = reprap.GetPlatform().GetCurrentZProbe();
+		const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(reprap.GetGCodes().GetCurrentZProbeNumber());
 		if (zp.IsNotNull())
 		{
 			x -= zp->GetXOffset();

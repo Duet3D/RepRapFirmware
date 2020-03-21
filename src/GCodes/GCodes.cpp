@@ -28,7 +28,6 @@
 #include "GCodeBuffer/GCodeBuffer.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
-//#include "Heating/HeaterProtection.h"
 #include "Platform.h"
 #include "Movement/Move.h"
 #include "Scanner.h"
@@ -272,6 +271,7 @@ void GCodes::Reset() noexcept
 	moveBuffer.filePos = noFilePosition;
 	firmwareUpdateModuleMap = 0;
 	lastFilamentError = FilamentSensorStatus::ok;
+	currentZProbeNumber = 0;
 
 	codeQueue->Clear();
 	cancelWait = isWaiting = displayNoToolWarning = false;
@@ -2616,10 +2616,11 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 			else
 			{
 				// Do a Z probe at the specified point.
+				const auto zp = SetZProbeNumber(gb);			// may throw, so do this before changing the state
 				gb.SetState(GCodeState::probingAtPoint0);
-				if (platform.GetCurrentZProbeType() != ZProbeType::blTouch)
+				if (zp->GetProbeType() != ZProbeType::blTouch)
 				{
-					DeployZProbe(gb, 0, 30);
+					DeployZProbe(gb, 30);
 				}
 			}
 		}
@@ -2628,11 +2629,26 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 	{
 		// G30 without P parameter. This probes the current location starting from the current position.
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
+		(void)SetZProbeNumber(gb);								// may throw, so do this before changing the state
+
 		InitialiseTaps();
 		gb.SetState(GCodeState::probingAtPoint2a);
-		DeployZProbe(gb, 0, 30);
+		DeployZProbe(gb, 30);
 	}
 	return GCodeResult::ok;
+}
+
+// Set up currentZProbeNumber and return the probe
+ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb) THROWS(GCodeException)
+{
+	const uint32_t probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
+	if (zp.IsNull())
+	{
+		throw GCodeException(gb.GetLineNumber(), -1, "Z probe %" PRIu32 " not found", probeNumber);
+	}
+	currentZProbeNumber = (uint8_t)probeNumber;
+	return zp;
 }
 
 // Decide which device to display a message box on
@@ -2680,14 +2696,16 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::error;
 	}
 
+	const auto zp = SetZProbeNumber(gb);			// may throw, so do this before changing the state
+
 	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
 	ClearBedMapping();
 	gridXindex = gridYindex = 0;
 
 	gb.SetState(GCodeState::gridProbing1);
-	if (platform.GetCurrentZProbeType() != ZProbeType::blTouch)
+	if (zp->GetProbeType() != ZProbeType::blTouch)
 	{
-		DeployZProbe(gb, 0, 29);
+		DeployZProbe(gb, 29);
 	}
 	return GCodeResult::ok;
 }
@@ -2735,7 +2753,7 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	reply.Clear();						// get rid of the error message
-	if (!zDatumSetByProbing && platform.GetCurrentZProbeType() != ZProbeType::none)
+	if (!zDatumSetByProbing && platform.GetZProbeOrDefault(0)->GetProbeType() != ZProbeType::none)	//TODO store Z probe number in height map
 	{
 		reply.copy("the height map was loaded when the current Z=0 datum was not determined probing. This may result in a height offset.");
 		return GCodeResult::warning;

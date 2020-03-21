@@ -192,6 +192,7 @@ public:
 	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
 
 	int GetNewToolNumber() const noexcept { return newToolNumber; }
+	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
 
 	// These next two are public because they are used by class LinuxInterface
 	void UnlockAll(const GCodeBuffer& gb) noexcept;								// Release all locks
@@ -311,9 +312,6 @@ private:
 
 	GCodeResult DoDwell(GCodeBuffer& gb) noexcept;									// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);					// Home some axes
-	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply);				// Probes at a given position - see the comment at the head of the function itself
-	void InitialiseTaps() noexcept;													// Set up to do the first of a possibly multi-tap probe
-	void SetBedEquationWithProbe(int sParam, const StringRef& reply);				// Probes a series of points and sets the bed equation
 	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);		// Deal with a G10
 	GCodeResult SetPositions(GCodeBuffer& gb);										// Deal with a G92
 	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply);				// Deal with a G38.x
@@ -384,7 +382,12 @@ private:
 	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;	// Save the height map to the file specified by P parameter
 #endif
 	void ClearBedMapping();														// Stop using bed compensation
-	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);				// Start probing the grid, returning true if we didn't because of an error
+	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start probing the grid, returning true if we didn't because of an error
+	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb) THROWS(GCodeException);		// Set up currentZProbeNumber and return the probe
+	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Probes at a given position - see the comment at the head of the function itself
+	void InitialiseTaps() noexcept;												// Set up to do the first of a possibly multi-tap probe
+	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
+
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply);		// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply);			// Handle M582
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
@@ -406,8 +409,8 @@ private:
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); // Do manual probe in arbitrary direction
 	void DoManualBedProbe(GCodeBuffer& gb);										// Do a manual bed probe
-	void DeployZProbe(GCodeBuffer& gb, unsigned int probeNumber, int code) noexcept;
-	void RetractZProbe(GCodeBuffer& gb, unsigned int probeNumber, int code) noexcept;
+	void DeployZProbe(GCodeBuffer& gb, int code) noexcept;
+	void RetractZProbe(GCodeBuffer& gb, int code) noexcept;
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 
@@ -542,7 +545,7 @@ private:
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 
-	float pausedFanSpeeds[MaxFans];			// Fan speeds when the print was paused or a tool change started
+	float pausedFanSpeeds[MaxFans];				// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
 	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
 	float speedFactor;							// speed factor as a percentage (normally 100.0)
@@ -567,6 +570,7 @@ private:
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
 	uint8_t tapsDone;							// how many times we tapped the current point
+	uint8_t currentZProbeNumber;				// which Z probe a G29 or G30 command is using
 
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging

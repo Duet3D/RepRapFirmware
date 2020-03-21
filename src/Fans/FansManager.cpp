@@ -91,65 +91,60 @@ bool FansManager::WriteFanSettings(FileStore *f) const noexcept
 #endif
 
 // This is called by M950 to create a fan or change its PWM frequency
-GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (fanNum < MaxFans)
+	const uint32_t fanNum = gb.GetLimitedUIValue('F', MaxFans);
+	const bool seenPin = gb.Seen('C');
+	if (seenPin)
 	{
-		const bool seenPin = gb.Seen('C');
-		if (seenPin)
-		{
-			String<StringLength50> pinName;
-			gb.GetReducedString(pinName.GetRef());
+		String<StringLength50> pinName;
+		gb.GetReducedString(pinName.GetRef());
 
-			WriteLocker lock(fansLock);
+		WriteLocker lock(fansLock);
 
-			Fan *oldFan = nullptr;
-			std::swap<Fan*>(oldFan, fans[fanNum]);
-			delete oldFan;
+		Fan *oldFan = nullptr;
+		std::swap<Fan*>(oldFan, fans[fanNum]);
+		delete oldFan;
 
-			const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
+		const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
 
 #if SUPPORT_CAN_EXPANSION
-			const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
-			if (board != CanId::MasterAddress)
+		const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
+		if (board != CanId::MasterAddress)
+		{
+			auto *newFan = new RemoteFan(fanNum, board);
+			const GCodeResult rslt = newFan->ConfigurePort(pinName.c_str(), freq, reply);
+			if (rslt == GCodeResult::ok)
 			{
-				auto *newFan = new RemoteFan(fanNum, board);
-				const GCodeResult rslt = newFan->ConfigurePort(pinName.c_str(), freq, reply);
-				if (rslt == GCodeResult::ok)
-				{
-					fans[fanNum] = newFan;
-				}
-				else
-				{
-					delete newFan;
-				}
-				return rslt;
+				fans[fanNum] = newFan;
 			}
-#endif
-			fans[fanNum] = CreateLocalFan(fanNum, pinName.c_str(), freq, reply);
-			reprap.FansUpdated();
-			return (fans[fanNum] == nullptr) ? GCodeResult::error : GCodeResult::ok;
-		}
-
-		const auto fan = FindFan(fanNum);
-		if (fan.IsNull())
-		{
-			reply.printf("Fan %u does not exist", (unsigned int)fanNum);
-			return GCodeResult::error;
-		}
-
-		if (gb.Seen('Q'))
-		{
-			const GCodeResult rslt = fan->SetPwmFrequency(gb.GetPwmFrequency(), reply);
-			reprap.FansUpdated();
+			else
+			{
+				delete newFan;
+			}
 			return rslt;
 		}
-
-		return fan->ReportPortDetails(reply);
+#endif
+		fans[fanNum] = CreateLocalFan(fanNum, pinName.c_str(), freq, reply);
+		reprap.FansUpdated();
+		return (fans[fanNum] == nullptr) ? GCodeResult::error : GCodeResult::ok;
 	}
 
-	reply.copy("Fan number out of range");
-	return GCodeResult::error;
+	const auto fan = FindFan(fanNum);
+	if (fan.IsNull())
+	{
+		reply.printf("Fan %u does not exist", (unsigned int)fanNum);
+		return GCodeResult::error;
+	}
+
+	if (gb.Seen('Q'))
+	{
+		const GCodeResult rslt = fan->SetPwmFrequency(gb.GetPwmFrequency(), reply);
+		reprap.FansUpdated();
+		return rslt;
+	}
+
+	return fan->ReportPortDetails(reply);
 }
 
 // Set or report the parameters for the specified fan
@@ -157,7 +152,7 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 // then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 // If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 // If no relevant parameters are found, print the existing ones to 'reply' and return false.
-bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException)
 {
 	auto fan = FindFan(fanNum);
 	if (fan.IsNull())

@@ -132,7 +132,6 @@ void EndstopsManager::Init() noexcept
 #endif
 
 	defaultZProbe = new DummyZProbe(0);			// we must always have a non-null current Z probe so we use this one if none is defined
-	currentZProbeNumber = 0;
 }
 
 ReadLockedPointer<Endstop> EndstopsManager::FindEndstop(size_t axis) const noexcept
@@ -148,19 +147,19 @@ ReadLockedPointer<ZProbe> EndstopsManager::GetZProbe(size_t index) const noexcep
 }
 
 // Return the current Z probe if there is one, else a default Z probe
-ReadLockedPointer<ZProbe> EndstopsManager::GetCurrentOrDefaultZProbe() const noexcept
+ReadLockedPointer<ZProbe> EndstopsManager::GetZProbeOrDefault(size_t index) const noexcept
 {
 	ReadLocker lock(zProbesLock);
 	return ReadLockedPointer<ZProbe>(lock,
-										(currentZProbeNumber < ARRAY_SIZE(zProbes) && zProbes[currentZProbeNumber] != nullptr)
-										? zProbes[currentZProbeNumber]
+										(index < ARRAY_SIZE(zProbes) && zProbes[index] != nullptr)
+										? zProbes[index]
 										: defaultZProbe);
 }
 
-ZProbe& EndstopsManager::GetCurrentOrDefaultZProbeFromISR() const noexcept
+ZProbe& EndstopsManager::GetDefaultZProbeFromISR() const noexcept
 {
-	return (currentZProbeNumber < ARRAY_SIZE(zProbes) && zProbes[currentZProbeNumber] != nullptr)
-			? *zProbes[currentZProbeNumber]
+	return (zProbes[0] != nullptr)
+			? *zProbes[0]
 			: *defaultZProbe;
 }
 
@@ -489,7 +488,7 @@ void EndstopsManager::GetM119report(const StringRef& reply) noexcept
 											: TranslateEndStopResult(axisEndstops[axis]->Stopped(), axisEndstops[axis]->GetAtHighEnd());
 		reply.catf("%c: %s, ", reprap.GetGCodes().GetAxisLetters()[axis], status);
 	}
-	reply.catf("Z probe: %s", TranslateEndStopResult(GetCurrentOrDefaultZProbe()->Stopped(), false));
+	reply.catf("Z probe: %s", TranslateEndStopResult(GetZProbeOrDefault(0)->Stopped(), false));
 }
 
 const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEnd) noexcept
@@ -520,14 +519,15 @@ void EndstopsManager::SetZProbeDefaults() noexcept
 // Program the Z probe
 GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
 {
-	const uint32_t probeNumber = (gb.Seen('K')) ? gb.GetUIValue() : currentZProbeNumber;
-	if (probeNumber >= MaxZProbes || zProbes[probeNumber] == nullptr)
+	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+	ReadLocker lock(zProbesLock);
+	ZProbe * const zProbe = zProbes[probeNumber];
+	if (zProbe == nullptr)
 	{
 		reply.copy("Invalid Z probe index");
 		return GCodeResult::error;
 	}
 
-	ZProbe * const zProbe = zProbes[probeNumber];
 	if (gb.Seen('S'))
 	{
 		uint32_t zProbeProgram[MaxZProbeProgramBytes];
@@ -577,14 +577,9 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 #endif
 
 // Handle M558
-GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
+GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetUIValue() : currentZProbeNumber;
-	if (probeNumber >= MaxZProbes)
-	{
-		reply.copy("Invalid Z probe index");
-		return GCodeResult::error;
-	}
+	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
 
 	// Check what sort of Z probe we need and where it is, so see whether we need to delete any existing one and create a new one.
 	// If there is no probe, we need a new one; and if it is not a motor stall one then a port number must be given.
@@ -606,7 +601,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		return GCodeResult::error;
 	}
 
-	WriteLocker lock(endstopsLock);
+	WriteLocker lock(zProbesLock);
 
 	ZProbe * const existingProbe = zProbes[probeNumber];
 	if (existingProbe == nullptr && !seenType)
@@ -698,16 +693,16 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 // Note that G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
 GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 {
-	uint32_t probeNumber = currentZProbeNumber;
-	bool seenK = false;
-	gb.TryGetUIValue('K', probeNumber, seenK);
-	if (probeNumber >= MaxZProbes || zProbes[probeNumber] == nullptr)
+	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+	ReadLocker lock(zProbesLock);
+	ZProbe * const zp = zProbes[probeNumber];
+	if (zp == nullptr)
 	{
 		reply.copy("Invalid Z probe index");
 		return GCodeResult::error;
 	}
 
-	return zProbes[probeNumber]->HandleG31(gb, reply);
+	return zp->HandleG31(gb, reply);
 }
 
 #if SUPPORT_OBJECT_MODEL

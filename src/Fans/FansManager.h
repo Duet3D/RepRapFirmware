@@ -29,8 +29,8 @@ public:
 
 	void Init() noexcept;
 	bool CheckFans() noexcept;
-	GCodeResult ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);
-	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
+	GCodeResult ConfigureFanPort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException);
 	float GetFanValue(size_t fanNum) const noexcept;
 	GCodeResult SetFanValue(size_t fanNum, float speed, const StringRef& reply) noexcept;
 	void SetFanValue(size_t fanNum, float speed) noexcept;

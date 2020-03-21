@@ -123,7 +123,7 @@ public:
 	HeaterStatus GetStatus(int heater) const noexcept;					// Get the off/standby/active status
 	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const noexcept;
 
-	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureHeater(GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply);
 
 	void SetActiveTemperature(int heater, float t) THROWS(GCodeException) { SetTemperature(heater, t, true); }

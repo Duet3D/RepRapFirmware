@@ -2504,12 +2504,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 401: // Deploy Z probe
 			{
-				const size_t probeNumber = (gb.Seen('P')) ? gb.GetUIValue() : 0;
-				auto zp = platform.GetEndstops().GetZProbe(probeNumber);
+				currentZProbeNumber = (gb.Seen('P')) ? gb.GetUIValue() : 0;
+				auto zp = platform.GetEndstops().GetZProbe(currentZProbeNumber);
 				if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none)
 				{
 					zp->SetDeployedByUser(false);							// pretend that the probe isn't deployed, to make sure we deploy it unconditionally
-					DeployZProbe(gb, probeNumber, 401);
+					DeployZProbe(gb, 401);
 					zp->SetDeployedByUser(true);							// probe is now deployed
 				}
 			}
@@ -2517,12 +2517,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 402: // Retract Z probe
 			{
-				const size_t probeNumber = (gb.Seen('P')) ? gb.GetUIValue() : 0;
-				auto zp = platform.GetEndstops().GetZProbe(probeNumber);
+				currentZProbeNumber = (gb.Seen('P')) ? gb.GetUIValue() : 0;
+				auto zp = platform.GetEndstops().GetZProbe(currentZProbeNumber);
 				if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none)
 				{
 					zp->SetDeployedByUser(false);							// do this first, otherwise the probe won't be retracted
-					RetractZProbe(gb, probeNumber, 402);
+					RetractZProbe(gb, 402);
 				}
 			}
 			break;
@@ -3244,7 +3244,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 573: // Report heater average PWM
-			if (gb.Seen('P'))
 			{
 				const unsigned int heater = gb.GetLimitedUIValue('P', MaxHeaters);
 				reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
@@ -3960,7 +3959,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 851: // Set Z probe offset, only for Marlin compatibility
 			{
-				auto zp = platform.GetCurrentZProbe();
+				auto zp = platform.GetZProbeOrDefault(0);
 				if (gb.Seen('Z'))
 				{
 					zp->SetTriggerHeight(-gb.GetFValue());

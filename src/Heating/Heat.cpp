@@ -458,13 +458,9 @@ void Heat::Diagnostics(MessageType mtype) noexcept
 }
 
 // Configure a heater. Invoked by M950.
-GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (heater >= MaxHeaters)
-	{
-		reply.copy("Heater number out of range");
-		return GCodeResult::error;
-	}
+	const size_t heater = gb.GetLimitedUIValue('H', MaxHeaters);
 
 	if (gb.Seen('C'))
 	{
@@ -485,11 +481,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 			return GCodeResult::ok;
 		}
 
-		if (!gb.Seen('T'))
-		{
-			reply.copy("Missing sensor number");
-			return GCodeResult::error;
-		}
+		gb.MustSee('T');
 		const unsigned int sensorNumber = gb.GetUIValue();
 
 		WriteLocker lock(heatersLock);

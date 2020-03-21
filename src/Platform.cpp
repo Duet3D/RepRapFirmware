@@ -3868,11 +3868,6 @@ void Platform::SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept
 	reprap.MoveUpdated();
 }
 
-ZProbeType Platform::GetCurrentZProbeType() const noexcept
-{
-	return endstops.GetCurrentOrDefaultZProbe()->GetProbeType();
-}
-
 void Platform::InitZProbeFilters() noexcept
 {
 	zProbeOnFilter.Init(0);
@@ -4209,13 +4204,11 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 {
 	// Exactly one of FHJPS is allowed
 	unsigned int charsPresent = 0;
-	uint32_t deviceNumber = 0;
 	for (char c : (const char[]){'J', 'F', 'H', 'P', 'S'})
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
 		{
-			deviceNumber = gb.GetUIValue();
 			charsPresent |= 1;
 		}
 	}
@@ -4223,48 +4216,33 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 	switch (charsPresent)
 	{
 	case 1:
-		return ConfigureGpOutOrServo(deviceNumber, true, gb, reply);
+		{
+			const uint32_t gpioNumber = gb.GetLimitedUIValue('S', MaxGpOutPorts);
+			return gpoutPorts[gpioNumber].Configure(gpioNumber, true, gb, reply);
+		}
 
 	case 2:
-		return ConfigureGpOutOrServo(deviceNumber, false, gb, reply);
+		{
+			const uint32_t gpioNumber = gb.GetLimitedUIValue('P', MaxGpOutPorts);
+			return gpoutPorts[gpioNumber].Configure(gpioNumber, false, gb, reply);
+		}
 
 	case 4:
-		return reprap.GetHeat().ConfigureHeater(deviceNumber, gb, reply);
+		return reprap.GetHeat().ConfigureHeater(gb, reply);
 
 	case 8:
-		return reprap.GetFansManager().ConfigureFanPort(deviceNumber, gb, reply);
+		return reprap.GetFansManager().ConfigureFanPort(gb, reply);
 
 	case 16:
-		return ConfigureGpIn(deviceNumber, gb, reply);
+		{
+			const uint32_t gpinNumber = gb.GetLimitedUIValue('J', MaxGpInPorts);
+			return gpinPorts[gpinNumber].Configure(gpinNumber, gb, reply);
+		}
 
 	default:
 		reply.copy("exactly one of FHJPS must be given");
 		return GCodeResult::error;
 	}
-}
-
-// Configure a general purpose output pin
-GCodeResult Platform::ConfigureGpOutOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-{
-	if (gpioNumber < MaxGpOutPorts)
-	{
-		return gpoutPorts[gpioNumber].Configure(gpioNumber, isServo, gb, reply);
-	}
-
-	reply.copy("GPIO port number out of range");
-	return GCodeResult::error;
-}
-
-// Configure a general purpose input pin
-GCodeResult Platform::ConfigureGpIn(uint32_t gpinNumber, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-{
-	if (gpinNumber < MaxGpInPorts)
-	{
-		return gpinPorts[gpinNumber].Configure(gpinNumber, gb, reply);
-	}
-
-	reply.copy("GPIO port number out of range");
-	return GCodeResult::error;
 }
 
 #if SUPPORT_CAN_EXPANSION
@@ -4393,7 +4371,7 @@ void Platform::Tick() noexcept
 	}
 #endif
 
-	const ZProbe& currentZProbe = endstops.GetCurrentOrDefaultZProbeFromISR();
+	const ZProbe& currentZProbe = endstops.GetDefaultZProbeFromISR();
 	switch (tickState)
 	{
 	case 1:

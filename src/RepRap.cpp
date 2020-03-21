@@ -1341,7 +1341,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		response->cat(",\"sensors\":{");
 
 		// Probe
-		const auto zp = platform->GetCurrentZProbe();
+		const auto zp = platform->GetZProbeOrDefault(0);
 		const int v0 = zp->GetReading();
 		int v1;
 		switch (zp->GetSecondaryValues(v1))
@@ -1592,7 +1592,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 
 		/* Probe */
 		{
-			const auto zp = platform->GetCurrentZProbe();
+			const auto zp = platform->GetZProbeOrDefault(0);
 
 			// Trigger threshold, trigger height, type
 			response->catf(",\"probe\":{\"threshold\":%d,\"height\":%.2f,\"type\":%u}",
@@ -1926,7 +1926,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 	response->catf(",\"tool\":%d", GetCurrentToolNumber());
 
 	// Send the Z probe value
-	const auto zp = platform->GetCurrentZProbe();
+	const auto zp = platform->GetZProbeOrDefault(0);
 	const int v0 = zp->GetReading();
 	int v1;
 	switch (zp->GetSecondaryValues(v1))
