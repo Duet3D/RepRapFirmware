@@ -1,3 +1,18 @@
+RepRapFirmware 3.01-RC5 (in preparation)
+=======================
+
+Recommended compatible firmware:
+- DuetWebControl 2.1.0
+- DuetWiFiServer 1.23
+- Duet Software Framework version TBA (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware TBA
+
+Upgrade notes:
+- See 3.01-RC4
+
+New features/changed behaviour:
+- On Duet WiFi/Ethernet the stepper driver microstep counters are checked and cleared whenever VIN power is applied or reapplied. This is to combat the phantom stepping that sometimes occurs.
+
 RepRapFirmware 3.01-RC4
 =======================
 
