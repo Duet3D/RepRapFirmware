@@ -113,12 +113,12 @@ public:
 	void SetAxisNotHomed(unsigned int axis) noexcept;							// Tell us that the axis is not homed
 	void SetAllAxesNotHomed() noexcept;											// Flag all axes as not homed
 
-	float GetSpeedFactor() const noexcept { return speedFactor; }				// Return the current speed factor
+	float GetSpeedFactor() const noexcept { return speedFactor; }				// Return the current speed factor as a fraction
+	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
 #if SUPPORT_12864_LCD
 	void SetSpeedFactor(float factor) noexcept;									// Set the speed factor
+	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
 #endif
-	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factors
-	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor
 
 	float GetRawExtruderTotalByDrive(size_t extruder) const noexcept;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const noexcept { return rawExtruderTotal; }	// Get the total extrusion since start of print, all drives
@@ -548,7 +548,7 @@ private:
 	float pausedFanSpeeds[MaxFans];				// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
 	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
-	float speedFactor;							// speed factor as a percentage (normally 100.0)
+	float speedFactor;							// speed factor as a fraction (normally 1.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests

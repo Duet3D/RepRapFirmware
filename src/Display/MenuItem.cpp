@@ -337,15 +337,15 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			switch (valIndex/100)
 			{
 			case 0:		// heater current temperature
-				currentValue.f = max<float>(reprap.GetGCodes().GetItemCurrentTemperature(itemNumber), 0.0f);
+				currentValue.f = max<float>(reprap.GetGCodes().GetItemCurrentTemperature(itemNumber), 0.0);
 				break;
 
 			case 1:		// heater active temperature
-				currentValue.f = max<float>(reprap.GetGCodes().GetItemActiveTemperature(itemNumber), 0.0f);
+				currentValue.f = max<float>(reprap.GetGCodes().GetItemActiveTemperature(itemNumber), 0.0);
 				break;
 
 			case 2:		// heater standby temperature
-				currentValue.f = max<float>(reprap.GetGCodes().GetItemStandbyTemperature(itemNumber), 0.0f);
+				currentValue.f = max<float>(reprap.GetGCodes().GetItemStandbyTemperature(itemNumber), 0.0);
 				break;
 
 			case 3:		// fan %
@@ -357,7 +357,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				break;
 
 			case 4:		// extruder %
-				currentValue.f = reprap.GetGCodes().GetExtrusionFactor(itemNumber);
+				currentValue.f = reprap.GetGCodes().GetExtrusionFactor(itemNumber) * 100.0;
 				currentFormat = PrintFormat::asPercent;
 				break;
 
@@ -365,7 +365,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				switch (itemNumber)
 				{
 				case 0:
-					currentValue.f = reprap.GetGCodes().GetSpeedFactor();
+					currentValue.f = reprap.GetGCodes().GetSpeedFactor() * 100.0;
 					currentFormat = PrintFormat::asPercent;
 					break;
 
@@ -554,14 +554,14 @@ bool ValueMenuItem::Adjust_SelectHelper() noexcept
 			break;
 
 		case 4: // extruder %
-			reprap.GetGCodes().SetExtrusionFactor(itemNumber, currentValue.f);
+			reprap.GetGCodes().SetExtrusionFactor(itemNumber, currentValue.f * 0.01);
 			break;
 
 		case 5: // misc.
 			switch (itemNumber)
 			{
 			case 0:
-				reprap.GetGCodes().SetSpeedFactor(currentValue.f);
+				reprap.GetGCodes().SetSpeedFactor(currentValue.f * 0.01);
 				break;
 
 			case 20:

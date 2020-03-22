@@ -4407,19 +4407,10 @@ void GCodes::CheckHeaterFault() noexcept
 	}
 }
 
-// Return a current extrusion factor as a percentage
+// Return a current extrusion factor as a fraction
 float GCodes::GetExtrusionFactor(size_t extruder) noexcept
 {
 	return (extruder < numExtruders) ? extrusionFactors[extruder] : 0.0;
-}
-
-// Set a percentage extrusion factor
-void GCodes::SetExtrusionFactor(size_t extruder, float factor) noexcept
-{
-	if (extruder < numExtruders)
-	{
-		extrusionFactors[extruder] = constrain<float>(factor, 0.0, 200.0)/100.0;
-	}
 }
 
 Pwm_t GCodes::ConvertLaserPwm(float reqVal) const noexcept
@@ -4483,10 +4474,19 @@ GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexc
 
 #if SUPPORT_12864_LCD
 
-// Set the speed factor. Value passed is in percent.
+// Set the speed factor. Value passed is a fraction.
 void GCodes::SetSpeedFactor(float factor) noexcept
 {
-	speedFactor = constrain<float>(factor, 10.0, 500.0);
+	speedFactor = constrain<float>(factor, 0.1, 5.0);
+}
+
+// Set an extrusion factor
+void GCodes::SetExtrusionFactor(size_t extruder, float factor) noexcept
+{
+	if (extruder < numExtruders)
+	{
+		extrusionFactors[extruder] = constrain<float>(factor, 0.0, 2.0);
+	}
 }
 
 // Process a GCode command from the 12864 LCD returning true if the command was accepted
