@@ -303,15 +303,11 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 	else
 	{
 		const int v0 = GetReading();
+		reply.printf("Z probe %u: current reading %d", number, v0);
 		int v1;
-		switch (GetSecondaryValues(v1))
+		if (GetSecondaryValues(v1) == 1)
 		{
-		case 1:
-			reply.printf("Current reading %d (%d)", v0, v1);
-			break;
-		default:
-			reply.printf("Current reading %d", v0);
-			break;
+			reply.catf(" (%d)", v1);
 		}
 		reply.catf(", threshold %d, trigger height %.3f", adcValue, (double)triggerHeight);
 		if (temperatureCoefficient != 0.0)
