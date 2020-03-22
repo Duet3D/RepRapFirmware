@@ -14,6 +14,9 @@ New features/changed behaviour:
 - G29 and G30 now accept an optional K parameter to specify which Z probe to use
 - On Duet WiFi/Ethernet the stepper driver microstep counters are checked and cleared whenever VIN power is applied or reapplied. This is to combat the phantom stepping that sometimes occurs.
 
+Bug fixes:
+- On the Duet Maestro 12864 display the speed factor and extrusion factor items were not converted to and from percentages
+
 RepRapFirmware 3.01-RC4
 =======================
 
