@@ -32,6 +32,7 @@ Upgrade notes:
 - If you have a Z probe that needs to be deployed/retracted, please test that deployment and retraction are working before relying on the Z probe. This is especially important if you are using Duet 3 with attached SBC.
 
 Known issues
+- On the Duet Maestro 12864 display, speed factor and extrusion factor display and control doesn't work correctly
 - You can only have one Z probe of type 1, 2 or 5 and if using Duet 3 it must be attached to the main board. You can have multiple Z probes of types 8 and 9 including probes attached to Duet 3 expansion and tool boards.
 - The G29 and G30 commands only allow the use of Z probe 0
 - Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
