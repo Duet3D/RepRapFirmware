@@ -8,7 +8,7 @@ Recommended compatible firmware:
 - Duet 3 expansion board and tool board firmware TBA
 
 Upgrade notes:
-- See 3.01-RC4
+- None since 3.01-RC4. Reminders for those upgrading from version 2.x firmware: (1) you cannot upgrade to this release directly from 2.x, you must upgrade to the 3.0 release first; and (2) you will need to make substantial changes to your config.g file.
 
 New features/changed behaviour:
 - G29 and G30 now accept an optional K parameter to specify which Z probe to use
