@@ -158,7 +158,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			return false;
 		}
 		{
-			const char* err = DoArcMove(gb, code == 2);
+			const char* err = nullptr;
+			if (!DoArcMove(gb, code == 2, err))
+			{
+				return false;
+			}
 			if (err != nullptr)
 			{
 				AbortPrint(gb);
@@ -2728,6 +2732,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			break;
 
+		case 486: // number object or cancel object
+			result = buildObjects.HandleM486(gb, reply);
+			break;
+
 		case 500: // Store parameters in config-override.g
 			result = WriteConfigOverrideFile(gb, reply);
 			break;
@@ -4313,22 +4321,25 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 			return false;
 		}
 
-		const Tool * const oldTool = reprap.GetCurrentTool();
-		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
-		if (oldTool == nullptr || oldTool->Number() != toolNum)
+		if (buildObjects.IsCurrentObjectCancelled())
 		{
-			newToolNumber = toolNum;
-			toolChangeParam = (simulationMode != 0) ? 0
-								: gb.Seen('P') ? gb.GetUIValue()
-									: DefaultToolChangeParam;
-			gb.SetState(GCodeState::toolChange0);
-			return true;							// proceeding with state machine, so don't unlock or send a reply
+			buildObjects.SetVirtualTool(toolNum);				// don't do the tool change, just remember which one we are supposed to use
 		}
 		else
 		{
-			// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared.
-			// So make sure the tool heaters are on.
-			reprap.SelectTool(toolNum, simulationMode != 0);
+			const Tool * const oldTool = reprap.GetCurrentTool();
+			// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
+			if (oldTool == nullptr || oldTool->Number() != toolNum)
+			{
+				StartToolChange(gb, toolNum, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
+				return true;									// proceeding with state machine, so don't unlock or send a reply
+			}
+			else
+			{
+				// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared.
+				// So make sure the tool heaters are on.
+				reprap.SelectTool(toolNum, simulationMode != 0);
+			}
 		}
 	}
 	else

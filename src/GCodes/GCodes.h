@@ -25,6 +25,7 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "RepRap.h"			// for type ResponseSource
 #include "GCodeResult.h"
+#include "ObjectTracker.h"
 #include "Movement/RawMove.h"
 #include "Libraries/sha1/sha1.h"
 #include "Platform.h"		// for type EndStopHit
@@ -202,29 +203,26 @@ public:
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Start timing SD card file writing
 #endif
 
+	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;	// Save position to a restore point
+	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t toolChangeParam) noexcept;
+
 	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return currentCoordinateSystem + 1; }
 
 	// This function is called by other functions to account correctly for workplace coordinates
-	inline float GetWorkplaceOffset(size_t axis) const noexcept
+	float GetWorkplaceOffset(size_t axis) const noexcept
 	{
 		return workplaceCoordinates[currentCoordinateSystem][axis];
 	}
 
 #if SUPPORT_OBJECT_MODEL
-	inline float GetWorkplaceOffset(size_t axis, size_t workplaceNumber) const noexcept
+	float GetWorkplaceOffset(size_t axis, size_t workplaceNumber) const noexcept
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
 
-	inline size_t GetNumInputs() const noexcept
-	{
-		return NumGCodeChannels;
-	}
-
-	inline const GCodeBuffer* GetInput(size_t n) const noexcept
-	{
-		return gcodeSources[n];
-	}
+	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
+	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
+	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
 # if HAS_VOLTAGE_MONITOR
 	const char *GetPowerFailScript() const noexcept { return powerFailScript; }
@@ -305,10 +303,11 @@ private:
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
 
 	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) __attribute__((hot));	// Execute a straight move
-	const char* DoArcMove(GCodeBuffer& gb, bool clockwise)							// Execute an arc move returning any error message
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)				// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(GCodeBuffer& gb) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;						// Check that enough axes have been homed
+	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;								// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) noexcept;									// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);					// Home some axes
@@ -346,7 +345,6 @@ private:
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const;			// Check whether we need to report temperatures or status
 
-	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;	// Save position to a restore point
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;		// Restore user position from a restore point
 
 	void UpdateCurrentUserPosition() noexcept;									// Get the current position from the Move class
@@ -401,7 +399,7 @@ private:
 
 #if HAS_MASS_STORAGE
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept; // Write the config-override file
-	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;							// Write the config-override header
+	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;				// Write the config-override header
 #endif
 
 	void CopyConfigFinalValues(GCodeBuffer& gb) noexcept;						// Copy the feed rate etc. from the daemon to the input channels
@@ -608,6 +606,9 @@ private:
 	HeaterFaultState heaterFaultState;			// whether there is a heater fault and what we have done about it so far
 	uint32_t heaterFaultTime;					// when the heater fault occurred
 	uint32_t heaterFaultTimeout;				// how long we wait for the user to fix it before turning everything off
+
+	// Object cancellation
+	ObjectTracker buildObjects;
 
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
