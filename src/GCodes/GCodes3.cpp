@@ -1373,4 +1373,91 @@ void GCodes::RetractZProbe(GCodeBuffer& gb, int code) noexcept
 	}
 }
 
+// Process a whole-line comment returning true if completed
+bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	static const char * const StartStrings[] =
+	{
+		"printing object",			// slic3r
+		"MESH",						// Cura
+		"process",					// S3D
+		"stop printing object",		// slic3r
+		"layer",					// S3D "; layer 1, z=0.200"
+		"LAYER",					// Ideamaker, Cura (followed by layer number starting at zero)
+		"BEGIN_LAYER_OBJECT z=",	// KISSlicer (followed by Z height)
+		"HEIGHT"					// Ideamaker
+	};
+
+	const char * text = gb.GetCompleteParameters();
+	while (*text == ' ')
+	{
+		++text;
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(StartStrings); ++i)
+	{
+		if (StringStartsWith(text, StartStrings[i]))
+		{
+			text += strlen(StartStrings[i]);
+			if (*text == ' ' || *text == ':')			// need this test to avoid recognising "processName" as "process"
+			{
+				do
+				{
+					++text;
+				}
+				while (*text == ' ' || *text == ':');
+
+				switch (i)
+				{
+				case 0:		// printing object (slic3r)
+				case 1:		// MESH (Cura)
+				case 2:		// process (S3D)
+#if TRACK_OBJECT_NAMES
+					buildObjects.StartObject(gb, text);
+#endif
+					break;
+
+				case 3:		// stop printing object
+#if TRACK_OBJECT_NAMES
+					buildObjects.StopObject(gb);
+#endif
+					break;
+
+				case 4:		// layer (counting from 1)
+				case 5:		// layer (counting from 0)
+					{
+						const char *endptr;
+						const uint32_t layer = SafeStrtoul(text, &endptr);
+						if (endptr != text)
+						{
+							reprap.GetPrintMonitor().SetLayerNumber((i == 5) ? layer + 1 : layer);
+						}
+						text = endptr;
+						if (!StringStartsWith(text, ", z = "))		// S3D gives us the height too
+						{
+							break;
+						}
+						text += 6;			// skip ", z = "
+					}
+					// no break
+
+				case 6:		// new layer, but we are given the Z height, not the layer number
+				case 7:
+					{
+						const char *endptr;
+						const float layerZ = SafeStrtof(text, &endptr);
+						if (endptr != text)
+						{
+							reprap.GetPrintMonitor().SetLayerZ(layerZ);
+						}
+					}
+					break;
+				}
+				break;
+			}
+		}
+	}
+	return true;
+}
+
 // End

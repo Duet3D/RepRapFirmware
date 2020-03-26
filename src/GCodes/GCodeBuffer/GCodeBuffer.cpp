@@ -279,6 +279,11 @@ int GCodeBuffer::GetCommandNumber() const noexcept
 	return PARSER_OPERATION(GetCommandNumber());
 }
 
+const char *GCodeBuffer::GetCompleteParameters() noexcept
+{
+	return PARSER_OPERATION(GetCompleteParameters());
+}
+
 int8_t GCodeBuffer::GetCommandFraction() const noexcept
 {
 	return PARSER_OPERATION(GetCommandFraction());

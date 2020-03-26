@@ -51,6 +51,7 @@ public:
 	void GetIPAddress(IPAddress& returnedIp) THROWS_GCODE_EXCEPTION;			// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS_GCODE_EXCEPTION;					// Get a MAC address sextet after a key letter
 	void GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS_GCODE_EXCEPTION;	// Get a string with no preceding key letter
+	const char *GetCompleteParameters() const noexcept;							// Get the complete parameter string
 	void GetQuotedString(const StringRef& str, bool allowEmpty = false) THROWS_GCODE_EXCEPTION;	// Get and copy a quoted string
 	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty = false) THROWS_GCODE_EXCEPTION;	// Get and copy a string which may or may not be quoted
 	void GetReducedString(const StringRef& str) THROWS_GCODE_EXCEPTION;			// Get and copy a quoted string, removing certain characters

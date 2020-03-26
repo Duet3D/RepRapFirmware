@@ -51,6 +51,8 @@ public:
 	void StartingPrint(const char *filename) noexcept;		// Called to indicate a file will be printed (see M23)
 	void StartedPrint() noexcept;							// Called whenever a new live print starts (see M24)
 	void StoppedPrint() noexcept;							// Called whenever a file print has stopped
+	void SetLayerNumber(uint32_t layerNumber) noexcept;		// Set the current layer number
+	void SetLayerZ(float layerZ) noexcept;					// Set the printing height of the new layer
 	float FractionOfFilePrinted() const noexcept;			// Return the fraction printed (0..1)
 
 	// Return an estimate in seconds based on a specific estimation method
@@ -83,6 +85,7 @@ private:
 	// Information/Events concerning the file being printed
 	void FirstLayerComplete() noexcept;
 	void LayerComplete() noexcept;
+	void Reset() noexcept;
 
 	bool isPrinting;
 	bool heatingUp;
@@ -100,6 +103,9 @@ private:
 	float filamentUsagePerLayer[MAX_LAYER_SAMPLES];
 	float fileProgressPerLayer[MAX_LAYER_SAMPLES];
 	float layerEstimatedTimeLeft;
+
+	unsigned int lastLayerNumberNotified;
+	float lastLayerStartHeightNotified;
 
 	bool printingFileParsed;
 	GCodeFileInfo printingFileInfo;

@@ -217,7 +217,7 @@ void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
 void ObjectDirectoryEntry::Init(const char *label) noexcept
 {
 	name = label;
-	x[0] = std::numeric_limits<float>::quiet_NaN();
+	x[0] = x[1] = y[0] = y[1] = std::numeric_limits<float>::quiet_NaN();
 }
 
 // Update the min and max object coordinates to include the coordinates passed
@@ -304,9 +304,11 @@ void ObjectTracker::StartObject(GCodeBuffer& gb, const char *label) noexcept
 			CreateObject(newObjectNumber, label);
 			ChangeToObject(gb, newObjectNumber);
 		}
-
-		// Here if the new object won't fit in the directory
-		ChangeToObject(gb, -1);
+		else
+		{
+			// Here if the new object won't fit in the directory
+			ChangeToObject(gb, -1);
+		}
 	}
 }
 

@@ -174,7 +174,15 @@ bool StringParser::Put(char c) noexcept
 				break;
 
 			case ';':
-				gb.bufferState = GCodeBufferState::discarding;
+				if (commandIndent == 0 && gcodeLineEnd == 0)
+				{
+					StoreAndAddToChecksum(c);
+					gb.bufferState = GCodeBufferState::parsingComment;
+				}
+				else
+				{
+					gb.bufferState = GCodeBufferState::discarding;
+				}
 				break;
 
 			case '(':
@@ -210,6 +218,12 @@ bool StringParser::Put(char c) noexcept
 			default:
 				StoreAndAddToChecksum(c);
 			}
+			break;
+
+		case GCodeBufferState::parsingComment:
+			// We are parsing a whole-line comment, which may possibly be of interest
+			// For now we assume that a '*' character is not the start of a checksum
+			StoreAndAddToChecksum(c);
 			break;
 
 		case GCodeBufferState::parsingBracketedComment:		// inside a (...) comment
@@ -271,11 +285,15 @@ bool StringParser::LineFinished()
 	}
 
 	gb.buffer[gcodeLineEnd] = 0;
-	const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
-	const bool missingChecksum = (checksumRequired && !hadChecksum && gb.machineState->previous == nullptr);
-	if (reprap.Debug(moduleGcodes) && fileBeingWritten == nullptr)
+
+	if (gb.bufferState != GCodeBufferState::parsingComment)			// we don't checksum comment lines
 	{
-		reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
+		const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
+		const bool missingChecksum = (checksumRequired && !hadChecksum && gb.machineState->previous == nullptr);
+		if (reprap.Debug(moduleGcodes) && fileBeingWritten == nullptr)
+		{
+			reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
+		}
 	}
 
 	commandStart = 0;
@@ -752,6 +770,15 @@ void StringParser::DecodeCommand() noexcept
 			}
 		}
 	}
+	else if (cl == ';')
+	{
+		// It's a whole line comment without indentation. Turn it into an internal Q0 command.
+		commandLetter = 'Q';
+		commandNumber = 0;
+		hasCommandNumber = true;
+		parameterStart = 1;															// there is a single unquoted string parameter, which is the remainder of the line
+		commandEnd = gcodeLineEnd;
+	}
 	else if (   hasCommandNumber
 			 && commandLetter == 'G'
 			 && commandNumber <= 3
@@ -761,7 +788,7 @@ void StringParser::DecodeCommand() noexcept
 			 && (   reprap.GetGCodes().GetMachineType() == MachineType::cnc			// Fanuc style CNC
 				 || reprap.GetGCodes().GetMachineType() == MachineType::laser		// LaserWeb style
 				)
-			 && !isalpha(gb.buffer[commandStart + 1])			// make sure it isn't an if-command or other meta command
+			 && !isalpha(gb.buffer[commandStart + 1])								// make sure it isn't an if-command or other meta command
 			)
 	{
 		// Fanuc or LaserWeb-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
@@ -1237,6 +1264,12 @@ void StringParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 	{
 		throw ConstructParseException("non-empty string expected");
 	}
+}
+
+// Get the complete parameter string
+const char *StringParser::GetCompleteParameters() const noexcept
+{
+	return gb.buffer + parameterStart;
 }
 
 // Get an int32 after a G Code letter

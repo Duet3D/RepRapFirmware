@@ -297,6 +297,7 @@ private:
 	bool HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do a G code
 	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do a T code
+	bool HandleQcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do an internal code
 	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf)
 		pre(outBuf == nullptr || rslt == GCodeResult::ok) noexcept;
 
@@ -319,7 +320,9 @@ private:
 	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin = true) THROWS(GCodeException);	// Deal with a M675
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply) noexcept;		// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply) noexcept;		// Deal with G60
-	GCodeResult ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply) noexcept;	// Deal with M569
+	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Deal with M569
+
+	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
 	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
 

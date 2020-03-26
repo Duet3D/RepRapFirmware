@@ -345,6 +345,12 @@ void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 	}
 }
 
+// Get the complete parameter string
+const char *BinaryParser::GetCompleteParameters() const noexcept
+{
+	return "";			// If we decide to support Q codes from DSF then change this to copy the single parameter to gb.buffer and return a pointer to it
+}
+
 void BinaryParser::GetQuotedString(const StringRef& str)
 {
 	GetPossiblyQuotedString(str);

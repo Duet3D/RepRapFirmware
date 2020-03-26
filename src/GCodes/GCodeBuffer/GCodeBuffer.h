@@ -27,6 +27,7 @@ enum class GCodeBufferState : uint8_t
 	parseNotStarted,								// we haven't started parsing yet
 	parsingLineNumber,								// we saw N at the start and we are parsing the line number
 	parsingWhitespace,								// parsing whitespace after the line number
+	parsingComment,									// parsing a whole-line comment that we may be interested in
 	parsingGCode,									// parsing GCode words
 	parsingBracketedComment,						// inside a (...) comment
 	parsingQuotedString,							// inside a double-quoted string
@@ -64,6 +65,7 @@ public:
 	bool HasCommandNumber() const noexcept;
 	int GetCommandNumber() const noexcept;
 	int8_t GetCommandFraction() const noexcept;
+	const char *GetCompleteParameters() noexcept;								// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return machineState->lineNumber; }
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }

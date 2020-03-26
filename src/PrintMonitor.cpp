@@ -197,6 +197,7 @@ void PrintMonitor::Spin() noexcept
 			if (gCodes.GetLastPrintingHeight(currentZ))
 			{
 				// Print is in progress and filament is being extruded
+				//TODO use lastLayerNumberNotified and lastLayerStartHeightNotified if available
 				if (currentLayer == 0)
 				{
 					currentLayer = 1;
@@ -265,14 +266,45 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 #endif
 }
 
+void PrintMonitor::Reset() noexcept
+{
+	currentLayer = numLayerSamples = 0;
+	pauseStartTime = totalPauseTime = 0;
+	firstLayerDuration = firstLayerFilament = firstLayerProgress = 0.0;
+	layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
+	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
+	lastLayerNumberNotified = 0;
+	lastLayerStartHeightNotified = 0.0;
+	reprap.JobUpdated();
+}
+
 // Tell this class that the file set for printing is now actually processed
 void PrintMonitor::StartedPrint() noexcept
 {
 	isPrinting = true;
 	heatingUp = false;
 	printStartTime = millis64();
-	warmUpDuration = 0.0;
-	reprap.JobUpdated();					// needed because isPrinting true makes filenameBeingPrinted available
+	Reset();
+}
+
+void PrintMonitor::StoppedPrint() noexcept
+{
+	isPrinting = heatingUp = printingFileParsed = false;
+	Reset();
+}
+
+// Set the current layer number as given in a comment
+// The Z move to the new layer probably hasn't been done yet, so just store the layer number.
+void PrintMonitor::SetLayerNumber(uint32_t layerNumber) noexcept
+{
+	lastLayerNumberNotified = layerNumber;
+}
+
+// Set the printing height of the new layer
+// The Z move to the new layer probably hasn't been done yet, so just store the layer print height.
+void PrintMonitor::SetLayerZ(float layerZ) noexcept
+{
+	lastLayerStartHeightNotified = layerZ;
 }
 
 // Called when the first layer has been finished
@@ -352,17 +384,6 @@ void PrintMonitor::LayerComplete() noexcept
 			layerEstimatedTimeLeft = 0.1;
 		}
 	}
-}
-
-void PrintMonitor::StoppedPrint() noexcept
-{
-	isPrinting = heatingUp = printingFileParsed = false;
-	currentLayer = numLayerSamples = 0;
-	pauseStartTime = totalPauseTime = 0;
-	firstLayerDuration = firstLayerFilament = firstLayerProgress = 0.0;
-	layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
-	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
-	reprap.JobUpdated();
 }
 
 float PrintMonitor::FractionOfFilePrinted() const noexcept

@@ -92,6 +92,9 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		case 'T':
 			return HandleTcode(gb, reply);
 
+		case 'Q':
+			return HandleQcode(gb, reply);
+
 		default:
 			break;
 		}
@@ -413,7 +416,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	if (   simulationMode != 0
 		&& (code < 20 || code > 37)
 		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
-		&& code != 200 && code != 204 && code != 207 && code != 408 && code != 999)
+		&& code != 200 && code != 204 && code != 207 && code != 408 && code != 409 && code != 999)
 	{
 		HandleReply(gb, GCodeResult::ok, "");
 		return true;			// we don't simulate most M codes
@@ -4360,6 +4363,20 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 	UnlockAll(gb);
 	HandleReply(gb, GCodeResult::ok, reply.c_str());
 	return true;
+}
+
+// This is called to handle internally-generated codes
+bool GCodes::HandleQcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	// Currently we don't need to worry about whether we are simulating or not
+	switch (gb.GetCommandNumber())
+	{
+	case 0:	// process a whole-line comment in the print file
+		return ProcessWholeLineComment(gb, reply);
+
+	default:
+		return true;					// at present these are always internally-generated, so no handling of unknown codes
+	}
 }
 
 // This is called to deal with the result of processing a G- or M-code
