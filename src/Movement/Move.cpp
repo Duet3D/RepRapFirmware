@@ -115,7 +115,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
 	// 7. move.compensation members
-	{ "fadeHeight",				OBJECT_MODEL_FUNC(self->taperHeight, 1),												ObjectModelEntryFlags::none },
+	{ "fadeHeight",				OBJECT_MODEL_FUNC((self->useTaper) ? self->taperHeight : std::numeric_limits<float>::quiet_NaN(), 1),	ObjectModelEntryFlags::none },
 #if HAS_MASS_STORAGE
 	{ "file",					OBJECT_MODEL_FUNC_IF(
 									self->usingMesh
