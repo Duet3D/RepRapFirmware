@@ -1,11 +1,11 @@
-RepRapFirmware 3.01-RC5 (in preparation)
+RepRapFirmware 3.01-RC5
 =======================
 
 Recommended compatible firmware:
-- DuetWebControl 2.1.0
+- DuetWebControl 2.0.7 (or 2.1.0 when available)
 - DuetWiFiServer 1.23
-- Duet Software Framework version TBA (for Duet 3/Raspberry Pi users)
-- Duet 3 expansion board and tool board firmware TBA
+- Duet Software Framework version 1.2.5 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC4
 
 Upgrade notes:
 - None since 3.01-RC4. Reminders for those upgrading from version 2.x firmware: (1) you cannot upgrade to this release directly from 2.x, you must upgrade to the 3.0 release first; and (2) you will need to make substantial changes to your config.g file.
@@ -13,9 +13,18 @@ Upgrade notes:
 New features/changed behaviour:
 - G29 and G30 now accept an optional K parameter to specify which Z probe to use
 - On Duet WiFi/Ethernet the stepper driver microstep counters are checked and cleared whenever VIN power is applied or reapplied. This is to combat the phantom stepping that sometimes occurs.
+- M486 object cancellation is now implemented. Object labels are read from comments in the file if provided. When printing from SD card the object model has an extra subtree "job.build" to describe the known objects, so that a future version of Duet Web Control will be able to offer an object cancellation interface. Caution: although the code has been designed to handle multi-tool machines, it has not yet been tested with prints that use more than one tool.
+
+Known issues
+- Z probe types 1, 2 and 5 are only supported for Z probe 0, and if using Duet 3 only for a probe connected to the main board. All other Z probes may only be of type 8 or 9.
+- Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
+- Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
+- Duet 3: the values of vin, v12 and mcuTemp in the object model always read as zero for expansion and tool boards. You can see the actual values using M122.
+- Additional limitations apply to Duet 3 systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
 
 Bug fixes:
 - On the Duet Maestro 12864 display the speed factor and extrusion factor items were not converted to and from percentages
+- Inverting the sense of input pins in analog mode (e.g. for a type 1 Z probe) didn't work
 
 RepRapFirmware 3.01-RC4
 =======================
