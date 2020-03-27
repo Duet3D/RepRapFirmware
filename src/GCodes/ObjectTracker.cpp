@@ -293,7 +293,7 @@ void ObjectTracker::StartObject(GCodeBuffer& gb, const char *label) noexcept
 			if (strcmp(objectDirectory[i].name, label) == 0)
 			{
 				ChangeToObject(gb, i);
-				break;
+				return;
 			}
 		}
 

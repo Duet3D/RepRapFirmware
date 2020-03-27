@@ -56,11 +56,11 @@ inline void StringParser::AddToChecksum(char c) noexcept
 inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 {
 	computedChecksum ^= (uint8_t)c;
-	if (gcodeLineEnd + 1 < ARRAY_SIZE(gb.buffer))			// if there is space for this characate and a trailing null
+	if (gcodeLineEnd + 1 < ARRAY_SIZE(gb.buffer))					// if there is space for this character and a trailing null
 	{
 		gb.buffer[gcodeLineEnd++] = c;
 	}
-	else
+	else if (gb.bufferState != GCodeBufferState::parsingComment)	// we don't care if comment lines overflow
 	{
 		overflowed = true;
 	}
@@ -773,6 +773,7 @@ void StringParser::DecodeCommand() noexcept
 	else if (cl == ';')
 	{
 		// It's a whole line comment without indentation. Turn it into an internal Q0 command.
+		overflowed = false;															// we can get very long comment lines and we don't mind if they are truncated
 		commandLetter = 'Q';
 		commandNumber = 0;
 		hasCommandNumber = true;
