@@ -493,10 +493,10 @@ bool IoPort::Read() const noexcept
 	return false;
 }
 
-// Note, for speed when this is called from the ISR we do not apply 'invert' to the analog reading
 uint16_t IoPort::ReadAnalog() const noexcept
 {
-	return AnalogInReadChannel(GetAnalogChannel());
+	const uint16_t val = AnalogInReadChannel(GetAnalogChannel());
+	return (totalInvert) ? ((1u << AdcBits) - 1) - val : val;
 }
 
 #if SUPPORT_CAN_EXPANSION
