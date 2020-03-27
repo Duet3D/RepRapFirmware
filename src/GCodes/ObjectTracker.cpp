@@ -38,15 +38,16 @@ constexpr ObjectModelTableEntry ObjectDirectoryEntry::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. ObjectDirectoryEntry root
-	{ "name",	OBJECT_MODEL_FUNC_ODE(self->name),					ObjectModelEntryFlags::live },
-	{ "x",		OBJECT_MODEL_FUNC_NOSELF(&xArrayDescriptor),		ObjectModelEntryFlags::live },
-	{ "y",		OBJECT_MODEL_FUNC_NOSELF(&yArrayDescriptor),		ObjectModelEntryFlags::live },
+	{ "cancelled",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetBuildObjects()->IsCancelled(context.GetLastIndex())),	ObjectModelEntryFlags::none },
+	{ "name",		OBJECT_MODEL_FUNC_ODE(self->name),																		ObjectModelEntryFlags::none },
+	{ "x",			OBJECT_MODEL_FUNC_NOSELF(&xArrayDescriptor),															ObjectModelEntryFlags::none },
+	{ "y",			OBJECT_MODEL_FUNC_NOSELF(&yArrayDescriptor),															ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t ObjectDirectoryEntry::objectModelTableDescriptor[] =
 {
 	1,		// number of sub-tables
-	3
+	4
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ObjectDirectoryEntry)
@@ -69,15 +70,16 @@ constexpr ObjectModelTableEntry ObjectTracker::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. BuildObjects root
-	{ "m486Names",		OBJECT_MODEL_FUNC_OT(self->usingM486Naming),							ObjectModelEntryFlags::live },
-	{ "m486Numbers",	OBJECT_MODEL_FUNC_OT(self->usingM486Labelling),						ObjectModelEntryFlags::live },
-	{ "objects",		OBJECT_MODEL_FUNC_NOSELF(&objectsArrayDescriptor),					ObjectModelEntryFlags::live },
+	{ "currentObject",	OBJECT_MODEL_FUNC_OT((int32_t)self->currentObjectNumber),			ObjectModelEntryFlags::live },
+	{ "m486Names",		OBJECT_MODEL_FUNC_OT(self->usingM486Naming),						ObjectModelEntryFlags::none },
+	{ "m486Numbers",	OBJECT_MODEL_FUNC_OT(self->usingM486Labelling),						ObjectModelEntryFlags::none },
+	{ "objects",		OBJECT_MODEL_FUNC_NOSELF(&objectsArrayDescriptor),					ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t ObjectTracker::objectModelTableDescriptor[] =
 {
 	1,		// number of sub-tables
-	3
+	4
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ObjectTracker)
@@ -126,12 +128,17 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 		// Specify how many objects. May be useful for a user interface.
 		numObjects = gb.GetUIValue();
 		objectsCancelled.Clear();						// assume this command is only used at the start of a print
+		reprap.JobUpdated();
 	}
 
 	if (gb.Seen('S'))
 	{
 		// Specify which object we are about to print
-		usingM486Labelling = true;
+		if (!usingM486Labelling)
+		{
+			usingM486Labelling = true;
+			reprap.JobUpdated();
+		}
 		const int num = gb.GetIValue();
 #if TRACK_OBJECT_NAMES
 		if (num >= 0 && num < (int)MaxTrackedObjects && gb.Seen('A'))
@@ -148,6 +155,7 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 			{
 				objectNames.FinishedUsing(objectDirectory[num].name);
 				SetObjectName(num, objectName.c_str());
+				reprap.JobUpdated();
 			}
 		}
 #endif
@@ -165,8 +173,10 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 			{
 				StopPrinting(gb);
 			}
+			reprap.JobUpdated();
 		}
 	}
+
 	if (gb.Seen('U'))
 	{
 		// Resume an object
@@ -178,8 +188,10 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 			{
 				ResumePrinting(gb);
 			}
+			reprap.JobUpdated();
 		}
 	}
+
 	if (gb.Seen('C') && currentObjectNumber >= 0 && currentObjectNumber < (int)objectsCancelled.MaxBits())
 	{
 		// Cancel current object
@@ -188,7 +200,9 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 		{
 			StopPrinting(gb);
 		}
+		reprap.JobUpdated();
 	}
+
 	return GCodeResult::ok;
 }
 
@@ -220,34 +234,41 @@ void ObjectDirectoryEntry::Init(const char *label) noexcept
 	x[0] = x[1] = y[0] = y[1] = std::numeric_limits<float>::quiet_NaN();
 }
 
-// Update the min and max object coordinates to include the coordinates passed
-void ObjectDirectoryEntry::UpdateObjectCoordinates(const float coords[]) noexcept
+// Update the min and max object coordinates to include the coordinates passed, returning true if anything was changed
+bool ObjectDirectoryEntry::UpdateObjectCoordinates(const float coords[]) noexcept
 {
+	bool updated = false;
 	if (isnan(x[0]))
 	{
 		x[0] = x[1] = coords[X_AXIS];
 		y[0] = y[1] = coords[Y_AXIS];
+		updated = true;
 	}
 	else
 	{
 		if (coords[X_AXIS] < x[0])
 		{
 			x[0] = coords[X_AXIS];
+			updated = true;
 		}
 		else if (coords[X_AXIS] > x[1])
 		{
 			x[1] = coords[X_AXIS];
+			updated = true;
 		}
 
 		if (coords[Y_AXIS] < y[0])
 		{
 			y[0] = coords[Y_AXIS];
+			updated = true;
 		}
 		else if (coords[Y_AXIS] > y[1])
 		{
 			y[1] = coords[Y_AXIS];
+			updated = true;
 		}
 	}
+	return updated;
 }
 
 // Update the min and max object coordinates to include the coordinates passed
@@ -257,7 +278,10 @@ void ObjectTracker::UpdateObjectCoordinates(const float coords[]) noexcept
 {
 	if (currentObjectNumber >= 0 && currentObjectNumber < (int)numObjects)
 	{
-		objectDirectory[currentObjectNumber].UpdateObjectCoordinates(coords);
+		if (objectDirectory[currentObjectNumber].UpdateObjectCoordinates(coords))
+		{
+			reprap.JobUpdated();
+		}
 	}
 }
 
@@ -280,6 +304,7 @@ void ObjectTracker::CreateObject(unsigned int number, const char *label) noexcep
 			++numObjects;
 		}
 		SetObjectName(number, label);
+		reprap.JobUpdated();
 	}
 }
 
