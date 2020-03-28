@@ -23,7 +23,7 @@ enum MessageType : uint32_t
 	TriggerMessage = 0x20,				// A message that is to be sent to a trigger processor
 	CodeQueueMessage = 0x40,			// A message that is to be sent to the code queue channel
 	LcdMessage = 0x80,					// A message that is to be sent to the panel
-	SpiMessage = 0x100,					// A message that is to be sent to the SPI master
+	SbcMessage = 0x100,					// A message that is to be sent to the SBC
 	DaemonMessage = 0x200,				// A message that is sent to the daemon processor
 	AutoPauseMessage = 0x400,			// A message that is to be sent to an auto-pause processor
 

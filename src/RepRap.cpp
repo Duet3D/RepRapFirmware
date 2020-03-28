@@ -201,7 +201,9 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "limits",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::none },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
 	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
+#if SUPPORT_SCANNER
 	{ "scanner",				OBJECT_MODEL_FUNC(self->scanner),										ObjectModelEntryFlags::none },
+#endif
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::live },
 	{ "seqs",					OBJECT_MODEL_FUNC(self, 6),												ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF(&spindlesArrayDescriptor),						ObjectModelEntryFlags::live },
@@ -304,24 +306,28 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if HAS_NETWORKING
 	{ "reply",					OBJECT_MODEL_FUNC_NOSELF((int32_t)HttpResponder::GetReplySeq()),		ObjectModelEntryFlags::live },
 #endif
+#if SUPPORT_SCANNER
 	{ "scanner",				OBJECT_MODEL_FUNC((int32_t)self->scannerSeq),							ObjectModelEntryFlags::live },
+#endif
 	{ "sensors",				OBJECT_MODEL_FUNC((int32_t)self->sensorsSeq),							ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC((int32_t)self->spindlesSeq),							ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC((int32_t)self->toolsSeq),								ObjectModelEntryFlags::live },
+#if HAS_MASS_STORAGE
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
+#endif
 };
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
 	6 + HAS_MASS_STORAGE,		// number of sub-tables
-	16,
+	15 + SUPPORT_SCANNER,
 #if HAS_MASS_STORAGE
 	8, 							// directories
 #else
 	0,
 #endif
-	22, 12 + HAS_VOLTAGE_MONITOR, 2, 6, 14 + HAS_NETWORKING
+	22, 12 + HAS_VOLTAGE_MONITOR, 2, 6, 12 + HAS_NETWORKING + SUPPORT_SCANNER + HAS_MASS_STORAGE
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -2242,7 +2248,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		}
 
 		response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
-					HideNan(info.objectHeight), HideNan(info.firstLayerHeight), HideNan(info.layerHeight));
+					(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
 		if (info.printTime != 0)
 		{
 			response->catf("\"printTime\":%" PRIu32 ",", info.printTime);
@@ -2262,7 +2268,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			for (size_t i = 0; i < info.numFilaments; ++i)
 			{
-				response->catf("%c%.1f", ch, HideNan(info.filamentNeeded[i]));
+				response->catf("%c%.1f", ch, (double)info.filamentNeeded[i]);
 				ch = ',';
 			}
 		}
