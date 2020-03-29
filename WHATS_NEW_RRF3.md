@@ -16,10 +16,14 @@ New features/changed behaviour:
 - M486 object cancellation is now implemented. Object labels are read from comments in the file if provided. When printing from SD card the object model has an extra subtree "job.build" to describe the known objects, so that a future version of Duet Web Control will be able to offer an object cancellation interface. Caution: although the code has been designed to handle multi-tool machines, it has not yet been tested with prints that use more than one tool.
 
 Known issues
+- On Duet Maestro, M291 S3 commands initiated from the 12864 display do not work
+- When a print completes, the total print time reported in the completion message is incorrect
+- On Duet 3 the values of vin, v12 and mcuTemp in the object model always read as zero for expansion and tool boards. You can see the actual values using M122.
+
+Known limitations:
 - Z probe types 1, 2 and 5 are only supported for Z probe 0, and if using Duet 3 only for a probe connected to the main board. All other Z probes may only be of type 8 or 9.
 - Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
 - Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
-- Duet 3: the values of vin, v12 and mcuTemp in the object model always read as zero for expansion and tool boards. You can see the actual values using M122.
 - Additional limitations apply to Duet 3 systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
 
 Bug fixes:
