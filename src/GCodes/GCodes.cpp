@@ -3858,7 +3858,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	}
 
 	updateFileWhenSimulationComplete = false;
-	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details because it clears the filename
+	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
 }
 
