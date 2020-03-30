@@ -2751,8 +2751,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *tit
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
-		gb.MachineState().CloseFile();									// stop reading from file if we were
-		gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
+		gb.MachineState().WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
 		platform.SendAlert(mt, message, title, 2, 0.0, axes);
 	}

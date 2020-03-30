@@ -135,6 +135,19 @@ void GCodeMachineState::CloseFile() noexcept
 	}
 }
 
+void GCodeMachineState::WaitForAcknowledgement() noexcept
+{
+	waitingForAcknowledgement = true;
+#if HAS_LINUX_INTERFACE
+	waitingForAcknowledgementSent = false;
+	if (!reprap.UsingLinuxInterface())
+#endif
+	{
+		// Stop reading from the current file
+		CloseFile();
+	}
+}
+
 void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 {
 	drivesRelative = other.drivesRelative;

@@ -20,8 +20,6 @@
 #include "RepRapFirmware.h"
 #include <Hardware/Cache.h>
 
-#include <General/IP4String.h>
-
 LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), wasConnected(false), numDisconnects(0),
 	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),
 	iapWritePointer(IAP_IMAGE_START), gcodeReply(new OutputStack())
@@ -53,7 +51,7 @@ void LinuxInterface::Spin()
 
 			if (packet->request >= (uint16_t)LinuxRequest::InvalidRequest)
 			{
-				REPORT_INTERNAL_ERROR;		//TODO this isn't really an internal error, it's bad data received over SPI
+				REPORT_INTERNAL_ERROR;
 				return;
 			}
 
@@ -174,7 +172,7 @@ void LinuxInterface::Spin()
 				}
 				else
 				{
-					REPORT_INTERNAL_ERROR;		//TODO this isn't really an internal error, it's bad data received over SPI
+					REPORT_INTERNAL_ERROR;
 				}
 				break;
 			}
@@ -192,7 +190,7 @@ void LinuxInterface::Spin()
 			// Lock movement and wait for standstill
 			case LinuxRequest::LockMovementAndWaitForStandstill:
 			{
-				const GCodeChannel channel = transfer->ReadLockUnlockRequest();
+				const GCodeChannel channel = transfer->ReadCodeChannel();
 				if (channel.IsValid())
 				{
 					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
@@ -207,7 +205,7 @@ void LinuxInterface::Spin()
 				}
 				else
 				{
-					REPORT_INTERNAL_ERROR;		//TODO this isn't really an internal error, it's bad data received over SPI
+					REPORT_INTERNAL_ERROR;
 				}
 				break;
 			}
@@ -215,7 +213,7 @@ void LinuxInterface::Spin()
 			// Unlock everything
 			case LinuxRequest::Unlock:
 			{
-				const GCodeChannel channel = transfer->ReadLockUnlockRequest();
+				const GCodeChannel channel = transfer->ReadCodeChannel();
 				if (channel.IsValid())
 				{
 					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
@@ -223,7 +221,7 @@ void LinuxInterface::Spin()
 				}
 				else
 				{
-					REPORT_INTERNAL_ERROR;		//TODO this isn't really an internal error, it's bad data received over SPI
+					REPORT_INTERNAL_ERROR;
 				}
 				break;
 			}
@@ -279,61 +277,28 @@ void LinuxInterface::Spin()
 			{
 				String<StringLength100> expression;
 				StringRef expressionRef = expression.GetRef();
-				GCodeChannel channel = transfer->ReadEvaluateExpression(expressionRef);
-				const GCodeBuffer *gb = reprap.GetGCodes().GetInput(channel);
-				try
+				GCodeChannel channel = transfer->ReadEvaluateExpression(packet->length, expressionRef);
+				if (channel.IsValid())
 				{
-					ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
-					const ExpressionValue val = parser.Parse();
-					switch (val.GetType())
+					try
 					{
-					case TypeCode::Bool:
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::Bool, &val.bVal, 0);
-						break;
-					case TypeCode::CString:
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::String, val.sVal, strlen(val.sVal));
-						break;
-					case TypeCode::DriverId:
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::DriverId, &val.uVal, 0);
-						break;
-					case TypeCode::Float:
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::Float, &val.fVal, 0);
-						break;
-					case TypeCode::IPAddress:
-					{
-						const char *ipAddress = IP4String(val.uVal).c_str();
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::String, ipAddress, strlen(ipAddress));
+						// Evaluate the expression and send the result to DSF
+						const GCodeBuffer *gb = reprap.GetGCodes().GetInput(channel);
+						ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
+						const ExpressionValue val = parser.Parse();
+						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), val);
 					}
-					case TypeCode::Int32:
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::Int, &val.iVal, 0);
-						break;
-					case TypeCode::MacAddress:
+					catch (GCodeException& e)
 					{
-						String<StringLength20> macAddress;
-						macAddress.printf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
-									(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
-									(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::String, macAddress.c_str(), macAddress.strlen());
-						break;
-					}
-					case TypeCode::Uint32:
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::UInt, &val.uVal, 0);
-						break;
-					default:
-					{
-						String<StringLength20> errorMessage;
-						errorMessage.printf("unsupported type code %d", (int)val.type);
-						packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::Expression, errorMessage.c_str(), errorMessage.strlen());
-						break;
-					}
+						// Get the error message and send it back to DSF
+						String<StringLength100> errorMessage;
+						e.GetMessage(errorMessage.GetRef(), nullptr);
+						packetAcknowledged = transfer->WriteEvaluationError(expression.c_str(), errorMessage.c_str());
 					}
 				}
-				catch (GCodeException& e)
+				else
 				{
-					// Send error messages back to DSF
-					String<StringLength100> errorMessage;
-					e.GetMessage(errorMessage.GetRef(), gb);
-					packetAcknowledged = transfer->WriteEvaluationResult(expression.c_str(), DataType::Expression, errorMessage.c_str(), errorMessage.strlen());
+					REPORT_INTERNAL_ERROR;
 				}
 				break;
 			}
@@ -341,7 +306,7 @@ void LinuxInterface::Spin()
 			// Send a firmware message
 			case LinuxRequest::Message:
 			{
-				String<StringLength100> message;
+				String<StringLength256> message;
 				StringRef messageRef = message.GetRef();
 				MessageType type = transfer->ReadMessage(messageRef);
 				reprap.GetPlatform().Message(type, message.c_str());
@@ -350,7 +315,7 @@ void LinuxInterface::Spin()
 
 			// Invalid request
 			default:
-				REPORT_INTERNAL_ERROR;		//TODO this isn't really an internal error, it's bad data received over SPI
+				REPORT_INTERNAL_ERROR;
 				break;
 			}
 
@@ -416,22 +381,41 @@ void LinuxInterface::Spin()
 
 			// Handle macro start requests
 			const char * const requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
-			if (requestedMacroFile != nullptr && transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
+			if (requestedMacroFile != nullptr)
 			{
-				if (reprap.Debug(moduleLinuxInterface))
+				if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
 				{
-					reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
+					if (reprap.Debug(moduleLinuxInterface))
+					{
+						reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
+					}
+					gb->RequestMacroFile(nullptr, reportMissing, fromCode);
 				}
-				gb->RequestMacroFile(nullptr, reportMissing, fromCode);
 				gb->Invalidate();
 			}
 
 			// Handle file abort requests
-			if (gb->IsAbortRequested() && transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
+			if (gb->IsAbortRequested())
 			{
-				gb->AcknowledgeAbort();
+				if (transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
+				{
+					gb->AcknowledgeAbort();
+				}
 				gb->Invalidate();
 			}
+
+			// Handle blocking messages
+			if (gb->MachineState().waitingForAcknowledgement && !gb->MachineState().waitingForAcknowledgementSent)
+			{
+				if (transfer->WriteWaitForAcknowledgement(channel))
+				{
+					gb->MachineState().waitingForAcknowledgementSent = true;
+				}
+				gb->Invalidate();
+			}
+
+			// TODO add new flags to the GBs to indicate if a string code is supposed to be sent to DSF (like above)
+			// and call transfer->WriteDoCode(GCodeChannel, const char *) with the GB content
 		}
 
 		// Send pause notification on demand
@@ -500,9 +484,11 @@ void LinuxInterface::Diagnostics(MessageType mtype)
 
 bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
 {
-	if (gb.IsInvalidated() || gb.IsMacroRequested() || gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File))
+	if (gb.IsInvalidated() ||
+		gb.IsMacroRequested() || gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
+		(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 	{
-		// Don't interpret codes that are supposed to be suspended...
+		// Don't process codes that are supposed to be suspended...
 		return false;
 	}
 
@@ -519,7 +505,7 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
 
 			if (bufHeader->isPending)
 			{
-				if (gb.GetChannel() == header->channel)
+				if (gb.GetChannel().RawValue() == header->channel)
 				{
 					gb.PutAndDecode(reinterpret_cast<const char *>(header), bufHeader->length, true);
 					bufHeader->isPending = false;
@@ -622,7 +608,7 @@ void LinuxInterface::InvalidateBufferChannel(GCodeChannel channel)
 			if (bufHeader->isPending)
 			{
 				const CodeHeader *header = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
-				if (header->channel == channel)
+				if (header->channel == channel.RawValue())
 				{
 					bufHeader->isPending = false;
 				}

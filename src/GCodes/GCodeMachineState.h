@@ -192,6 +192,9 @@ public:
 		runningSystemMacro : 1,					// true if running a system macro file
 		usingInches : 1,						// true if units are inches not mm
 		waitingForAcknowledgement : 1,
+#if HAS_LINUX_INTERFACE
+		waitingForAcknowledgementSent : 1,
+#endif
 		messageAcknowledged : 1,
 		messageCancelled : 1;
 
@@ -200,6 +203,8 @@ public:
 
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;
+
+	void WaitForAcknowledgement() noexcept;
 
 #if HAS_LINUX_INTERFACE
 	void SetFileExecuting() noexcept;

@@ -13,7 +13,6 @@
 #include <ctime>
 
 #include "RepRapFirmware.h"
-#include "GCodes/GCodeChannel.h"
 #include "MessageType.h"
 
 constexpr uint8_t LinuxFormatCode = 0x5F;
@@ -49,6 +48,13 @@ enum class DataType : uint8_t
 	BoolArray = 11			// bool[] (uint8_t[])
 };
 
+struct CodeChannelHeader
+{
+	uint8_t channel;
+	uint8_t paddingA;
+	uint16_t paddingB;
+};
+
 struct HeightMapHeader
 {
 	float xMin;
@@ -60,13 +66,6 @@ struct HeightMapHeader
 	float radius;
 	uint16_t numX;
 	uint16_t numY;
-};
-
-struct LockUnlockHeader
-{
-	GCodeChannel::BaseType channel;
-	uint8_t paddingA;
-	uint16_t paddingB;
 };
 
 struct MessageHeader
@@ -116,7 +115,7 @@ enum TransferResponse : uint32_t
 // RepRapFirmware to Linux
 struct AbortFileHeader
 {
-	GCodeChannel channel;
+	uint8_t channel;
 	bool abortAll;
 	uint16_t padding;
 };
@@ -149,7 +148,7 @@ struct EvaluationResultHeader
 
 struct ExecuteMacroHeader
 {
-	GCodeChannel channel;
+	uint8_t channel;
 	bool reportMissing;
 	bool fromCode;
 	uint8_t length;
@@ -164,19 +163,20 @@ struct FileChunkHeader
 
 enum class FirmwareRequest : uint16_t
 {
-	ResendPacket = 0,			// Request the retransmission of the given packet
-	ObjectModel = 1,			// Response to an object model request
-	CodeBufferUpdate = 2,		// Update about the available code buffer size
-	Message = 3,				// Message from the firmware
-	ExecuteMacro = 4,			// Request execution of a macro file
-	AbortFile = 5,				// Request the current file to be closed
-	StackEvent_Obsolete = 6,	// Stack has been changed
-	PrintPaused = 7,			// Print has been paused
-	HeightMap = 8,				// Response to a heightmap request
-	Locked = 9,					// Movement has been locked and machine is in standstill
-	FileChunk = 10,				// Request another chunk of a file
-	EvaluationResult = 11,		// Response to an expression evaluation request
-	DoCode = 12					// Perofrm a G/M/T-code from a code input
+	ResendPacket = 0,					// Request the retransmission of the given packet
+	ObjectModel = 1,					// Response to an object model request
+	CodeBufferUpdate = 2,				// Update about the available code buffer size
+	Message = 3,						// Message from the firmware
+	ExecuteMacro = 4,					// Request execution of a macro file
+	AbortFile = 5,						// Request the current file to be closed
+	StackEvent_Obsolete = 6,			// Stack has been changed
+	PrintPaused = 7,					// Print has been paused
+	HeightMap = 8,						// Response to a heightmap request
+	Locked = 9,							// Movement has been locked and machine is in standstill
+	FileChunk = 10,						// Request another chunk of a file
+	EvaluationResult = 11,				// Response to an expression evaluation request
+	DoCode = 12,						// Perform a G/M/T-code from a code input
+	WaitForMessageAcknowledgment = 13	// Wait for a message to be acknowledged
 };
 
 enum class PrintPausedReason : uint8_t
@@ -219,7 +219,7 @@ enum class LinuxRequest : uint16_t
 	AssignFilament = 14,						// Assign filament to an extruder
 	FileChunk = 15,								// Response to a file chunk request
 	EvaluateExpression = 16,					// Evaluate an arbitrary expression
-	Message = 17,								// Send an arbitrary RepRapFirmware message
+	Message = 17,								// Send an arbitrary message
 
 	InvalidRequest = 18
 };
@@ -248,14 +248,14 @@ struct BufferedCodeHeader
 
 struct CodeHeader
 {
-	GCodeChannel channel;
+	uint8_t channel;
 	CodeFlags flags;
 	uint8_t numParameters;
 	char letter;
 	int32_t majorCode;
 	int32_t minorCode;
 	uint32_t filePosition;
-	uint32_t lineNumber;
+	int32_t lineNumber;
 };
 
 struct CodeParameter
@@ -269,13 +269,6 @@ struct CodeParameter
 		uint32_t uintValue;
 		float floatValue;
 	};
-};
-
-struct EvaluateExpressionHeader
-{
-	uint8_t channel;
-	uint8_t dummy;
-	uint16_t expressionLength;
 };
 
 struct FileChunk
@@ -292,7 +285,7 @@ struct GetObjectModelHeader
 
 struct MacroCompleteHeader
 {
-	GCodeChannel::RawType channel;
+	uint8_t channel;
 	bool error;
 	uint16_t padding;
 };

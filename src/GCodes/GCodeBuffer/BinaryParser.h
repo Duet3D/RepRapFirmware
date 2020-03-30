@@ -76,8 +76,6 @@ private:
 	int reducedBytesRead;
 	const CodeParameter *seenParameter;
 	const char *seenParameterValue;
-
-	static constexpr int lineNumber = -1;							//TODO the Linux interface should pass us the line number
 };
 
 #endif

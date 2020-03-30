@@ -262,9 +262,9 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 
 	// 3. MachineModel.state
 	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->gCodes->AtxPowerControlled(), self->platform->AtxPower()),	ObjectModelEntryFlags::live },
-	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::live },
+	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
-	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::live },
+	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->platform->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE
 	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
@@ -272,7 +272,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logFile",				OBJECT_MODEL_FUNC_NOSELF(nullptr),										ObjectModelEntryFlags::none },
 #endif
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
-	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::live },
+	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::none },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetNewToolNumber()),			ObjectModelEntryFlags::live },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
@@ -282,10 +282,10 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 
 	// 4. MachineModel.state.beep
-	{ "duration",				OBJECT_MODEL_FUNC((int32_t)self->beepDuration),							ObjectModelEntryFlags::live },
-	{ "frequency",				OBJECT_MODEL_FUNC((int32_t)self->beepFrequency),						ObjectModelEntryFlags::live },
+	{ "duration",				OBJECT_MODEL_FUNC((int32_t)self->beepDuration),							ObjectModelEntryFlags::none },
+	{ "frequency",				OBJECT_MODEL_FUNC((int32_t)self->beepFrequency),						ObjectModelEntryFlags::none },
 
-	// 5. MachineModel.state.messageBox (FIXME add wrapper that acquires the lock when reading from mbox)
+	// 5. MachineModel.state.messageBox (FIXME acquire MutexLocker when accessing the following)
 	{ "axisControls",			OBJECT_MODEL_FUNC((int32_t)self->mbox.controls.GetRaw()),				ObjectModelEntryFlags::none },
 	{ "message",				OBJECT_MODEL_FUNC(self->mbox.message.c_str()),							ObjectModelEntryFlags::none },
 	{ "mode",					OBJECT_MODEL_FUNC((int32_t)self->mbox.mode),							ObjectModelEntryFlags::none },
@@ -346,7 +346,7 @@ RepRap::RepRap() noexcept
 	  toolList(nullptr), currentTool(nullptr), lastWarningMillis(0),
 	  activeExtruders(0), activeToolHeaters(0), numToolsToReport(0),
 	  ticksInSpinState(0), heatTaskIdleTicks(0), debug(0),
-	  beepFrequency(0), beepDuration(0),
+	  beepFrequency(0), beepDuration(0), beepTimer(0),
 	  previousToolNumber(-1),
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
 	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
@@ -384,7 +384,6 @@ RepRap::RepRap() noexcept
 
 	SetPassword(DEFAULT_PASSWORD);
 	message.Clear();
-	messageSequence = 0;
 }
 
 void RepRap::Init() noexcept
@@ -637,6 +636,23 @@ void RepRap::Spin() noexcept
 				platform->MessageF(WarningMessage, "Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
 				lastWarningMillis = now;
 			}
+		}
+	}
+
+	// Check if the beep request can be cleared
+	if (beepTimer != 0 && now - beepTimer >= beepDuration)
+	{
+		beepDuration = beepFrequency = beepTimer = 0;
+		StateUpdated();
+	}
+
+	// Check if the message box can be hidden
+	{
+		MutexLocker lock(messageBoxMutex);
+		if (mbox.active && mbox.timer != 0 && now - mbox.timer >= mbox.timeout)
+		{
+			mbox.active = false;
+			StateUpdated();
 		}
 	}
 
@@ -1211,7 +1227,7 @@ bool RepRap::SpinTimeoutImminent() const noexcept
 // Type 1 is the ordinary JSON status response.
 // Type 2 is the same except that static parameters are also included.
 // Type 3 is the same but instead of static parameters we report print estimation values.
-OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noexcept
+OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) const noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1262,10 +1278,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 
 		float timeLeft = 0.0;
 		MutexLocker lock(messageBoxMutex);
+
 		if (mbox.active && mbox.timer != 0)
 		{
 			timeLeft = (float)(mbox.timeout) / 1000.0 - (float)(millis() - mbox.timer) / 1000.0;
-			mbox.active = (timeLeft > 0.0);
 		}
 
 		if (sendBeep || sendMessage || mbox.active)
@@ -1280,7 +1296,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 				{
 					response->cat(',');
 				}
-				beepFrequency = beepDuration = 0;
 			}
 
 			// Report message
@@ -1292,7 +1307,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 				{
 					response->cat(',');
 				}
-				message.Clear();
 			}
 
 			// Report message box
@@ -1856,7 +1870,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 // Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
 // Type 3 is the M105 S3 response, which is like the M105 S2 response except that static values are also included.
 // 'seq' is the response sequence number, if it is not -1 and we have a different sequence number then we send the gcode response
-OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
+OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1981,7 +1995,6 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 		if (mbox.active && mbox.timer != 0)
 		{
 			timeLeft = (float)(mbox.timeout) / 1000.0 - (float)(millis() - mbox.timer) / 1000.0;
-			mbox.active = (timeLeft > 0.0);
 		}
 
 		if (mbox.active)
@@ -2406,6 +2419,8 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	{
 		beepFrequency = freq;
 		beepDuration = ms;
+		beepTimer = millis();
+		StateUpdated();
 	}
 }
 
@@ -2413,7 +2428,7 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 void RepRap::SetMessage(const char *msg) noexcept
 {
 	message.copy(msg);
-	++messageSequence;
+	StateUpdated();
 
 	if (platform->HaveAux())
 	{
@@ -2433,6 +2448,7 @@ void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeou
 	mbox.controls = controls;
 	mbox.active = true;
 	++mbox.seq;
+	StateUpdated();
 }
 
 // Clear pending message box
@@ -2440,6 +2456,7 @@ void RepRap::ClearAlert() noexcept
 {
 	MutexLocker lock(messageBoxMutex);
 	mbox.active = false;
+	StateUpdated();
 }
 
 // Get the status index
