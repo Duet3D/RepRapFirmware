@@ -281,16 +281,16 @@ void PrintMonitor::Reset() noexcept
 // Tell this class that the file set for printing is now actually processed
 void PrintMonitor::StartedPrint() noexcept
 {
+	Reset();
 	isPrinting = true;
 	heatingUp = false;
 	printStartTime = millis64();
-	Reset();
 }
 
 void PrintMonitor::StoppedPrint() noexcept
 {
-	isPrinting = heatingUp = printingFileParsed = false;
 	Reset();
+	isPrinting = heatingUp = printingFileParsed = false;
 }
 
 // Set the current layer number as given in a comment

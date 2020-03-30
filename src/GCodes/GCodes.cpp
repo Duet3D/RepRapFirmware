@@ -1883,14 +1883,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	}
 
 	const bool isPrintingMove = moveBuffer.hasExtrusion && axesMentioned.IsNonEmpty();
-#if TRACK_OBJECT_NAMES
-	if (isPrintingMove)
-	{
-		buildObjects.UpdateObjectCoordinates(initialXY);
-		buildObjects.UpdateObjectCoordinates(currentUserPosition);
-	}
-#endif
-
 	if (buildObjects.IsFirstMoveSincePrintingResumed())							// if this is the first move after skipping an object
 	{
 		if (isPrintingMove)
@@ -1901,11 +1893,19 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 			}
 			return false;
 		}
+		else if (axesMentioned.IsNonEmpty())									// don't count G1 Fxxx as a travel move
+		{
+			buildObjects.DoneMoveSincePrintingResumed();
+		}
 	}
-	else
+
+#if TRACK_OBJECT_NAMES
+	if (isPrintingMove)
 	{
-		buildObjects.DoneMoveSincePrintingResumed();
+		buildObjects.UpdateObjectCoordinates(initialXY);
+		buildObjects.UpdateObjectCoordinates(currentUserPosition);
 	}
+#endif
 
 	// Set up the move. We must assign segmentsLeft last, so that when Move runs as a separate task the move won't be picked up by the Move process before it is complete.
 	// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.
@@ -2226,6 +2226,22 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		return true;
 	}
 
+	if (buildObjects.IsFirstMoveSincePrintingResumed())
+	{
+		if (moveBuffer.hasExtrusion)							// check whether this is the first move after skipping an object and is extruding
+		{
+			if (TravelToStartPoint(gb))							// don't start a printing move from the wrong point
+			{
+				buildObjects.DoneMoveSincePrintingResumed();
+			}
+			return false;
+		}
+		else
+		{
+			buildObjects.DoneMoveSincePrintingResumed();
+		}
+	}
+
 #if TRACK_OBJECT_NAMES
 	if (moveBuffer.hasExtrusion)
 	{
@@ -2234,19 +2250,6 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		buildObjects.UpdateObjectCoordinates(currentUserPosition);
 	}
 #endif
-
-	if (buildObjects.IsFirstMoveSincePrintingResumed() && moveBuffer.hasExtrusion)	// check whether this is the first move after skipping an object
-	{
-		if (TravelToStartPoint(gb))							// don't start a printing move from the wrong point
-		{
-			buildObjects.DoneMoveSincePrintingResumed();
-		}
-		return false;
-	}
-	else
-	{
-		buildObjects.DoneMoveSincePrintingResumed();
-	}
 
 #if SUPPORT_LASER
 	if (machineType == MachineType::laser)
@@ -3855,7 +3858,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	}
 
 	updateFileWhenSimulationComplete = false;
-	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details because it clears the filename
+	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
 }
 
