@@ -161,7 +161,7 @@ bool StringParser::Put(char c) noexcept
 			switch (c)
 			{
 			case '*':
-				if (braceCount == 0)
+				if (hadLineNumber && braceCount == 0)
 				{
 					declaredChecksum = 0;
 					hadChecksum = true;

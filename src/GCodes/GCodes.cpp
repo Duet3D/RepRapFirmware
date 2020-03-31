@@ -841,6 +841,11 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg) noexc
 	{
 		// Pausing a file print via another input source or for some other reason
 		pauseRestorePoint.feedRate = fileGCode->MachineState().feedRate;				// set up the default
+
+		// Save the spindle speeds if we are in CNC mode
+		//TODO if we have to execute some more moves, there might be a pending M3 command in the GCodeQueue and we should allow for that
+		SaveSpindleSpeeds(pauseRestorePoint);
+
 		const bool movesSkipped = reprap.GetMove().PausePrint(pauseRestorePoint);		// tell Move we wish to pause the current print
 		if (movesSkipped)
 		{
@@ -3885,7 +3890,7 @@ void GCodes::UpdateCurrentUserPosition() noexcept
 	ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 }
 
-// Save position to a restore point.
+// Save position etc. to a restore point.
 // Note that restore point coordinates are not affected by workplace coordinate offsets. This allows them to be used in resume.g.
 void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept
 {
@@ -3898,6 +3903,16 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcep
 	rp.virtualExtruderPosition = virtualExtruderPosition;
 	rp.filePos = gb.GetFilePosition();
 
+	SaveSpindleSpeeds(rp);
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
+#endif
+}
+
+// Save spindle speeds to a restore point
+void GCodes::SaveSpindleSpeeds(RestorePoint& rp) const noexcept
+{
 	if (machineType == MachineType::cnc)
 	{
 		for (unsigned int i = 0; i < MaxSpindles; ++i)
@@ -3905,10 +3920,6 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcep
 			rp.spindleSpeeds[i] = platform.AccessSpindle(i).GetRpm();
 		}
 	}
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
-#endif
 }
 
 // Restore user position from a restore point. Also restore the laser power, but not the spindle speed (the user must do that explicitly).
