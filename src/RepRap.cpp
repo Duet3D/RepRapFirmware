@@ -384,6 +384,9 @@ RepRap::RepRap() noexcept
 
 	SetPassword(DEFAULT_PASSWORD);
 	message.Clear();
+#if SUPPORT_12864_LCD
+	messageSequence = 0;
+#endif
 }
 
 void RepRap::Init() noexcept
@@ -2428,6 +2431,9 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 void RepRap::SetMessage(const char *msg) noexcept
 {
 	message.copy(msg);
+#if SUPPORT_12864_LCD
+	++messageSequence;
+#endif
 	StateUpdated();
 
 	if (platform->HaveAux())
@@ -2862,7 +2868,7 @@ void RepRap::ReportInternalError(const char *file, const char *func, int line) c
 
 const char *RepRap::GetLatestMessage(uint16_t& sequence) const noexcept
 {
-	sequence = stateSeq;
+	sequence = messageSequence;
 	return message.c_str();
 }
 

@@ -276,6 +276,9 @@ private:
 	unsigned int beepFrequency, beepDuration;
 	uint32_t beepTimer;
 	String<MaxMessageLength> message;
+#if SUPPORT_12864_LCD
+	uint16_t messageSequence;					// used by 12864 display to detect when there is a new message
+#endif
 
 	MessageBox mbox;							// message box data
 
