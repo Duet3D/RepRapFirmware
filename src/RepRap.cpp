@@ -2862,7 +2862,7 @@ void RepRap::ReportInternalError(const char *file, const char *func, int line) c
 
 const char *RepRap::GetLatestMessage(uint16_t& sequence) const noexcept
 {
-	sequence = messageSequence;
+	sequence = stateSeq;
 	return message.c_str();
 }
 
