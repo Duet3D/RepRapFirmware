@@ -23,6 +23,8 @@ class OutputBuffer;
 class GCodeMachineState;
 class HeightMap;
 
+struct ExpressionValue;
+
 class DataTransfer
 {
 public:
@@ -31,33 +33,38 @@ public:
 	void Diagnostics(MessageType mtype) noexcept;
 
 	bool IsConnected() const noexcept;														// Check if the connection to DCS is live
-	bool IsReady() noexcept;																	// Returns true when data can be read
+	bool IsReady() noexcept;																// Returns true when data can be read
 	void StartNextTransfer() noexcept;														// Kick off the next transfer
-	bool LinuxHadReset() const noexcept;														// Check if the remote end reset
+	bool LinuxHadReset() const noexcept;													// Check if the remote end reset
 
 	size_t PacketsToRead() const noexcept;
 	const PacketHeader *ReadPacket() noexcept;												// Attempt to read the next packet header or return null. Advances the read pointer to the next packet or the packet's data
 	const char *ReadData(size_t packetLength) noexcept;										// Read the packet data and advance to the next packet (if any)
-	uint8_t ReadGetObjectModel() noexcept;													// Read an object model request
+	void ReadGetObjectModel(size_t packetLength, StringRef &key, StringRef &flags) noexcept;	// Read an object model request
 	void ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo &info) noexcept;	// Read info about the started file print
 	PrintStoppedReason ReadPrintStoppedInfo() noexcept;										// Read info about why the print has been stopped
 	GCodeChannel ReadMacroCompleteInfo(bool &error) noexcept;								// Read info about a completed macro file
 	void ReadHeightMap() noexcept;															// Read heightmap parameters
-	GCodeChannel ReadLockUnlockRequest() noexcept;											// Read a lock/unlock request
+	GCodeChannel ReadCodeChannel() noexcept;												// Read a code channel
 	void ReadAssignFilament(int& extruder, StringRef& filamentName) noexcept;				// Read a request to assign the given filament to an extruder drive
 	void ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept;	// Read another chunk of a file
+	GCodeChannel ReadEvaluateExpression(size_t packetLength, StringRef& expression) noexcept;	// Read an expression request
+	MessageType ReadMessage(StringRef& message) noexcept;									// Read a request to output a message
 
 	void ResendPacket(const PacketHeader *packet) noexcept;
-	bool WriteObjectModel(uint8_t module, OutputBuffer *data) noexcept;
+	bool WriteObjectModel(OutputBuffer *data) noexcept;
 	bool WriteCodeBufferUpdate(uint16_t bufferSpace) noexcept;
 	bool WriteCodeReply(MessageType type, OutputBuffer *&response) noexcept;
 	bool WriteMacroRequest(GCodeChannel channel, const char *filename, bool reportMissing, bool fromBinaryCode) noexcept;
 	bool WriteAbortFileRequest(GCodeChannel channel, bool abortAll) noexcept;
-	bool WriteStackEvent(GCodeChannel channel, GCodeMachineState& state) noexcept;
 	bool WritePrintPaused(FilePosition position, PrintPausedReason reason) noexcept;
 	bool WriteHeightMap() noexcept;
 	bool WriteLocked(GCodeChannel channel) noexcept;
 	bool WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength) noexcept;
+	bool WriteEvaluationResult(const char *expression, const ExpressionValue& value) noexcept;
+	bool WriteEvaluationError(const char *expression, const char *errorMessage) noexcept;
+	bool WriteDoCode(GCodeChannel channel, const char *code) noexcept;
+	bool WriteWaitForAcknowledgement(GCodeChannel channel) noexcept;
 
 	static void SpiInterrupt() noexcept;
 

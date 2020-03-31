@@ -25,6 +25,7 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 	// 0. Fan members
 	{ "actualValue",		OBJECT_MODEL_FUNC(self->lastVal, 2), 															ObjectModelEntryFlags::live },
 	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime, 2), 											ObjectModelEntryFlags::none },
+	// TODO add frequency here
 	{ "max",				OBJECT_MODEL_FUNC(self->maxVal, 2), 															ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->minVal, 2), 															ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->name.c_str()), 															ObjectModelEntryFlags::none },

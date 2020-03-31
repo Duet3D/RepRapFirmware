@@ -139,10 +139,6 @@ public:
 	bool IsAbortAllRequested() const noexcept;					// Is the cancellation of all files being executed on this channel requested?
 	void AcknowledgeAbort() noexcept;							// Indicates that the current macro file is being cancelled
 
-	void ReportStack() noexcept { reportStack = true; }			// Flags current stack details to be reported
-	bool IsStackEventFlagged() const noexcept;					// Did the stack change?
-	void AcknowledgeStackEvent() noexcept;						// Indicates that the last stack event has been written
-
 	bool IsInvalidated() const noexcept { return invalidated; }	// Indicates if the channel is invalidated
 	void Invalidate(bool i = true) noexcept { invalidated = i; }	// Invalidate this channel (or not)
 #endif
@@ -242,8 +238,7 @@ private:
 		isMacroFromCode: 1,
 		abortFile : 1,
 		abortAllFiles : 1,
-		invalidated : 1,
-		reportStack : 1;
+		invalidated : 1;
 #endif
 };
 
@@ -309,16 +304,6 @@ inline bool GCodeBuffer::IsAbortAllRequested() const noexcept
 inline void GCodeBuffer::AcknowledgeAbort() noexcept
 {
 	abortFile = abortAllFiles = false;
-}
-
-inline bool GCodeBuffer::IsStackEventFlagged() const noexcept
-{
-	return reportStack;
-}
-
-inline void GCodeBuffer::AcknowledgeStackEvent() noexcept
-{
-	reportStack = false;
 }
 
 #endif

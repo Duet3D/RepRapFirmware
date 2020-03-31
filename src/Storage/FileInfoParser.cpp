@@ -487,8 +487,12 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 							}
 							else
 							{
-								parsedFileInfo.objectHeight = SafeStrtof(zpos, nullptr);
-								foundHeight = true;
+								float objectHeight = SafeStrtof(zpos, nullptr);
+								if (!isnan(objectHeight) && !isinf(objectHeight))
+								{
+									parsedFileInfo.objectHeight = objectHeight;
+									foundHeight = true;
+								}
 							}
 							break;		// carry on looking for a later G1 Z command
 						}
@@ -512,8 +516,12 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 			static const char kisslicerHeightString[] = " END_LAYER_OBJECT z=";
 			if (len > 31 && StringStartsWithIgnoreCase(buf, kisslicerHeightString))
 			{
-				parsedFileInfo.objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
-				return true;
+				float objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
+				if (!isnan(objectHeight) && !isinf(objectHeight))
+				{
+					parsedFileInfo.objectHeight = objectHeight;
+					return true;
+				}
 			}
 		}
 	}
@@ -556,7 +564,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len) noexcept
 					}
 					const char *tailPtr;
 					const float val = SafeStrtof(pos, &tailPtr);
-					if (tailPtr != pos)								// if we found and converted a number
+					if (tailPtr != pos && !isnan(val) && !isinf(val))	// if we found and converted a number
 					{
 						parsedFileInfo.layerHeight = val;
 						return true;
@@ -641,21 +649,25 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 		while (isDigit(*p))
 		{
 			const char* q;
-			parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, &q);
+			float filamentLength = SafeStrtof(p, &q);
 			p = q;
-			if (*p == 'm')
+			if (!isnan(filamentLength) && !isinf(filamentLength))
 			{
-				++p;
+				parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 				if (*p == 'm')
 				{
 					++p;
+					if (*p == 'm')
+					{
+						++p;
+					}
+					else
+					{
+						parsedFileInfo.filamentNeeded[filamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
+					}
 				}
-				else
-				{
-					parsedFileInfo.filamentNeeded[filamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
-				}
+				++filamentsFound;
 			}
-			++filamentsFound;
 			while (strchr(", \t", *p) != nullptr)
 			{
 				++p;
@@ -680,8 +692,12 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			}
 			if (isDigit(*p))
 			{
-				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr);
-				++filamentsFound;
+				float filamentLength = SafeStrtof(p, nullptr);
+				if (!isnan(filamentLength) && !isinf(filamentLength))
+				{
+					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
+					++filamentsFound;
+				}
 			}
 		}
 	}
@@ -700,8 +716,12 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			}
 			if (isDigit(*p))
 			{
-				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr); // S3D reports filament usage in mm, no conversion needed
-				++filamentsFound;
+				float filamentLength = SafeStrtof(p, nullptr);
+				if (!isnan(filamentLength) && !isinf(filamentLength))
+				{
+					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
+					++filamentsFound;
+				}
 			}
 		}
 	}
@@ -729,21 +749,28 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 
 			if (isDigit(*p))
 			{
-				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr);
-				++filamentsFound;
+				float filamentLength = SafeStrtof(p, nullptr);
+				if (!isnan(filamentLength) && !isinf(filamentLength))
+				{
+					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
+					++filamentsFound;
+				}
 			}
 		}
 	}
 
 	// Special case: Old KISSlicer only generates the filament volume, so we need to calculate the length from it
-	if (filamentsFound == 0)
+	if (filamentsFound == 0 && reprap.GetPlatform().GetFilamentWidth() > 0.0)
 	{
 		const char *filamentVolumeStr = "; Estimated Build Volume: ";
 		p = strstr(buf, filamentVolumeStr);
 		if (p != nullptr)
 		{
 			const float filamentCMM = SafeStrtof(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
-			parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
+			if (!isnan(filamentCMM) && !isinf(filamentCMM))
+			{
+				parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
+			}
 		}
 	}
 

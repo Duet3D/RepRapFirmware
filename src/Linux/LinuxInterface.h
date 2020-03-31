@@ -10,6 +10,7 @@
 
 #include "RTOSIface/RTOSIface.h"
 
+#include "GCodes/GCodeChannel.h"
 #include "GCodes/GCodeFileInfo.h"
 #include "LinuxMessageFormats.h"
 #include "MessageType.h"

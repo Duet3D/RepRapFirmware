@@ -223,6 +223,7 @@ public:
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
+	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
 # if HAS_VOLTAGE_MONITOR

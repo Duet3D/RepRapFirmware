@@ -9,18 +9,21 @@
 
 #if HAS_LINUX_INTERFACE
 
+#include <algorithm>
+
+#include "xdmac/xdmac.h"
+
 #include "RepRapFirmware.h"
 #include "GCodes/GCodeMachineState.h"
 #include "Movement/Move.h"
 #include "Movement/BedProbing/Grid.h"
+#include "ObjectModel/ObjectModel.h"
 #include "OutputMemory.h"
 #include "RepRap.h"
 #include "RTOSIface/RTOSIface.h"
 #include "Hardware/DmacManager.h"
 
-#include <algorithm>
-
-#include "xdmac/xdmac.h"
+#include <General/IP4String.h>
 
 // XDMAC hardware, see datasheet
 constexpr uint32_t SBC_SPI_TX_PERID = (uint32_t)DmaTrigSource::spi1tx;
@@ -229,10 +232,18 @@ template<typename T> const T *DataTransfer::ReadDataHeader() noexcept
 	return header;
 }
 
-uint8_t DataTransfer::ReadGetObjectModel() noexcept
+void DataTransfer::ReadGetObjectModel(size_t packetLength, StringRef &key, StringRef &flags) noexcept
 {
-	const ObjectModelHeader *header = ReadDataHeader<ObjectModelHeader>();
-	return header->module;
+	// Read header
+	const GetObjectModelHeader *header = ReadDataHeader<GetObjectModelHeader>();
+	const char *data = ReadData(packetLength - sizeof(PrintStartedHeader));
+
+	// Read key
+	key.copy(data, header->keyLength);
+	data += header->keyLength;
+
+	// Read flags
+	flags.copy(data, header->flagsLength);
 }
 
 void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo& info) noexcept
@@ -304,9 +315,9 @@ void DataTransfer::ReadHeightMap() noexcept
 	reprap.GetGCodes().ActivateHeightmap(true);
 }
 
-GCodeChannel DataTransfer::ReadLockUnlockRequest() noexcept
+GCodeChannel DataTransfer::ReadCodeChannel() noexcept
 {
-	const LockUnlockHeader *header = ReadDataHeader<LockUnlockHeader>();
+	const CodeChannelHeader *header = ReadDataHeader<CodeChannelHeader>();
 	return GCodeChannel(header->channel);
 }
 
@@ -317,7 +328,7 @@ void DataTransfer::ReadAssignFilament(int& extruder, StringRef& filamentName) no
 	extruder = header->extruder;
 
 	// Read filament name
-	const char *name = ReadData(header->filamentLength + sizeof(PrintStartedHeader));
+	const char *name = ReadData(header->filamentLength + sizeof(AssignFilamentHeader));
 	filamentName.copy(name, header->filamentLength);
 }
 
@@ -333,6 +344,31 @@ void DataTransfer::ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fi
 	{
 		memcpy(buffer, ReadData(header->dataLength), header->dataLength);
 	}
+}
+
+GCodeChannel DataTransfer::ReadEvaluateExpression(size_t packetLength, StringRef& expression) noexcept
+{
+	// Read header
+	const CodeChannelHeader *header = ReadDataHeader<CodeChannelHeader>();
+
+	// Read expression
+	size_t expressionLength = packetLength - sizeof(CodeChannelHeader);
+	const char *expressionData = ReadData(expressionLength);
+	expression.copy(expressionData, expressionLength);
+
+	return GCodeChannel(header->channel);
+}
+
+MessageType DataTransfer::ReadMessage(StringRef& message) noexcept
+{
+	// Read header
+	const MessageHeader *header = ReadDataHeader<MessageHeader>();
+
+	// Read message data
+	const char *messageData = ReadData(header->length);
+	message.copy(messageData, header->length);
+
+	return header->messageType;
 }
 
 void DataTransfer::ExchangeHeader() noexcept
@@ -583,7 +619,7 @@ void DataTransfer::StartNextTransfer() noexcept
 	ExchangeHeader();
 }
 
-bool DataTransfer::WriteObjectModel(uint8_t module, OutputBuffer *data) noexcept
+bool DataTransfer::WriteObjectModel(OutputBuffer *data) noexcept
 {
 	// Try to write the packet header. This packet type cannot deal with truncated messages
 	if (!CanWritePacket(data->Length()))
@@ -592,12 +628,11 @@ bool DataTransfer::WriteObjectModel(uint8_t module, OutputBuffer *data) noexcept
 	}
 
 	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::ObjectModel, sizeof(ObjectModelHeader) + data->Length());
+	(void)WritePacketHeader(FirmwareRequest::ObjectModel, sizeof(StringHeader) + data->Length());
 
 	// Write header
-	ObjectModelHeader *header = WriteDataHeader<ObjectModelHeader>();
+	StringHeader *header = WriteDataHeader<StringHeader>();
 	header->length = data->Length();
-	header->module = module;
 	header->padding = 0;
 
 	// Write data
@@ -630,17 +665,17 @@ bool DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *&response) noe
 {
 	// Try to write the packet header. This packet type can deal with truncated messages
 	const size_t minBytesToWrite = min<size_t>(16, (response == nullptr) ? 0 : response->Length());
-	if (!CanWritePacket(sizeof(CodeReplyHeader) + minBytesToWrite))
+	if (!CanWritePacket(sizeof(MessageHeader) + minBytesToWrite))
 	{
 		// Not enough space left
 		return false;
 	}
 
 	// Write packet header
-	PacketHeader *header = WritePacketHeader(FirmwareRequest::CodeReply);
+	PacketHeader *header = WritePacketHeader(FirmwareRequest::Message);
 
 	// Write code reply header
-	CodeReplyHeader *replyHeader = WriteDataHeader<CodeReplyHeader>();
+	MessageHeader *replyHeader = WriteDataHeader<MessageHeader>();
 	replyHeader->messageType = type;
 	replyHeader->padding = 0;
 
@@ -677,7 +712,7 @@ bool DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *&response) noe
 
 	// Finish the packet
 	replyHeader->length = bytesWritten;
-	header->length = sizeof(CodeReplyHeader) + bytesWritten;
+	header->length = sizeof(MessageHeader) + bytesWritten;
 	return true;
 }
 
@@ -694,7 +729,7 @@ bool DataTransfer::WriteMacroRequest(GCodeChannel channel, const char *filename,
 
 	// Write header
 	ExecuteMacroHeader *header = WriteDataHeader<ExecuteMacroHeader>();
-	header->channel = channel;
+	header->channel = channel.RawValue();
 	header->reportMissing = reportMissing;
 	header->fromCode = fromCode;
 	header->length = filenameLength;
@@ -716,51 +751,9 @@ bool DataTransfer::WriteAbortFileRequest(GCodeChannel channel, bool abortAll) no
 
 	// Write header
 	AbortFileHeader *header = WriteDataHeader<AbortFileHeader>();
-	header->channel = channel;
+	header->channel = channel.RawValue();
 	header->abortAll = abortAll;
 	header->padding = 0;
-	return true;
-}
-
-bool DataTransfer::WriteStackEvent(GCodeChannel channel, GCodeMachineState& state) noexcept
-{
-	if (!CanWritePacket(sizeof(StackEventHeader)))
-	{
-		return false;
-	}
-
-	// Get stack depth
-	uint8_t stackDepth = 0;
-	for (GCodeMachineState *ms = &state; ms != nullptr; ms = ms->previous)
-	{
-		stackDepth++;
-	}
-
-	// Write packet header
-	WritePacketHeader(FirmwareRequest::StackEvent, sizeof(StackEventHeader));
-
-	// Write header
-	StackEventHeader *header = WriteDataHeader<StackEventHeader>();
-	header->channel = channel;
-	header->depth = stackDepth;
-	header->flags = StackEventFlags::none;
-	if (state.axesRelative)
-	{
-		header->flags = (StackEventFlags)(header->flags | StackEventFlags::axesRelative);
-	}
-	if (state.drivesRelative)
-	{
-		header->flags = (StackEventFlags)(header->flags | StackEventFlags::drivesRelative);
-	}
-	if (state.volumetricExtrusion)
-	{
-		header->flags = (StackEventFlags)(header->flags | StackEventFlags::volumetricExtrusion);
-	}
-	if (state.usingInches)
-	{
-		header->flags = (StackEventFlags)(header->flags | StackEventFlags::usingInches);
-	}
-	header->feedrate = state.feedRate;
 	return true;
 }
 
@@ -820,16 +813,16 @@ bool DataTransfer::WriteHeightMap() noexcept
 
 bool DataTransfer::WriteLocked(GCodeChannel channel) noexcept
 {
-	if (!CanWritePacket(sizeof(LockUnlockHeader)))
+	if (!CanWritePacket(sizeof(CodeChannelHeader)))
 	{
 		return false;
 	}
 
 	// Write packet header
-	WritePacketHeader(FirmwareRequest::Locked, sizeof(LockUnlockHeader));
+	WritePacketHeader(FirmwareRequest::Locked, sizeof(CodeChannelHeader));
 
 	// Write header
-	LockUnlockHeader * const header = WriteDataHeader<LockUnlockHeader>();
+	CodeChannelHeader * const header = WriteDataHeader<CodeChannelHeader>();
 	header->channel = channel.ToBaseType();
 	header->paddingA = 0;
 	header->paddingB = 0;
@@ -839,21 +832,188 @@ bool DataTransfer::WriteLocked(GCodeChannel channel) noexcept
 bool DataTransfer::WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength) noexcept
 {
 	const size_t filenameLength = strlen(filename);
-	if (!CanWritePacket(sizeof(FileChunkRequest) + filenameLength))
+	if (!CanWritePacket(sizeof(FileChunkHeader) + filenameLength))
 	{
 		return false;
 	}
 	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::RequestFileChunk, sizeof(FileChunkRequest) + filenameLength);
+	(void)WritePacketHeader(FirmwareRequest::FileChunk, sizeof(FileChunkHeader) + filenameLength);
 
 	// Write header
-	FileChunkRequest *header = WriteDataHeader<FileChunkRequest>();
+	FileChunkHeader *header = WriteDataHeader<FileChunkHeader>();
 	header->offset = offset;
 	header->maxLength = maxLength;
 	header->filenameLength = filenameLength;
 
 	// Write data
 	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteEvaluationResult(const char *expression, const ExpressionValue& value) noexcept
+{
+	// Calculate payload length
+	size_t expressionLength = strlen(expression), payloadLength;
+	switch (value.GetType())
+	{
+	// FIXME Add support for arrays
+	case TypeCode::Bool:
+	case TypeCode::DriverId:
+	case TypeCode::Uint32:
+	case TypeCode::Float:
+	case TypeCode::Int32:
+		payloadLength = expressionLength;
+		break;
+	case TypeCode::CString:
+		payloadLength = expressionLength + strlen(value.sVal);
+		break;
+	case TypeCode::IPAddress:
+		payloadLength = expressionLength + 15;
+		break;
+	case TypeCode::MacAddress:
+		payloadLength = expressionLength + 17;
+		break;
+	default:
+		payloadLength = expressionLength + StringLength50;
+		break;
+	}
+
+	// Check if it fits
+	if (!CanWritePacket(sizeof(EvaluationResultHeader) + payloadLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::EvaluationResult, sizeof(EvaluationResultHeader) + payloadLength);
+
+	// Write partial header
+	EvaluationResultHeader *header = WriteDataHeader<EvaluationResultHeader>();
+	header->expressionLength = expressionLength;
+
+	// Write expression
+	WriteData(expression, expressionLength);
+
+	// Write data type and expression value
+	switch (value.GetType())
+	{
+	case TypeCode::Bool:
+		header->dataType = DataType::Bool;
+		header->intValue = value.bVal ? 1 : 0;
+		break;
+	case TypeCode::CString:
+		header->dataType = DataType::String;
+		header->intValue = strlen(value.sVal);
+		WriteData(value.sVal, header->intValue);
+		break;
+	case TypeCode::DriverId:
+		header->dataType = DataType::DriverId;
+		header->uintValue = value.uVal;
+		break;
+	case TypeCode::Uint32:
+		header->dataType = DataType::UInt;
+		header->uintValue = value.uVal;
+		break;
+	case TypeCode::Float:
+		header->dataType = DataType::Float;
+		header->floatValue = value.fVal;
+		break;
+	case TypeCode::IPAddress:
+	{
+		const char *ipAddress = IP4String(value.uVal).c_str();
+		header->dataType = DataType::String;
+		header->intValue = strlen(ipAddress);
+		WriteData(ipAddress, header->intValue);
+		break;
+	}
+	case TypeCode::Int32:
+		header->dataType = DataType::Int;
+		header->intValue = value.iVal;
+		break;
+	case TypeCode::MacAddress:
+	{
+		String<StringLength20> macAddress;
+		macAddress.printf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
+					(unsigned int)(value.uVal & 0xFF), (unsigned int)((value.uVal >> 8) & 0xFF),
+					(unsigned int)((value.uVal >> 16) & 0xFF), (unsigned int)((value.uVal >> 24) & 0xFF),
+					(unsigned int)(value.param & 0xFF), (unsigned int)((value.param >> 8) & 0xFF));
+		header->dataType = DataType::String;
+		header->intValue = macAddress.strlen();
+		WriteData(macAddress.c_str(), macAddress.strlen());
+		break;
+	}
+	default:
+	{
+		String<StringLength50> errorMessage;
+		errorMessage.printf("unsupported type code %d", (int)value.type);
+		header->dataType = DataType::Expression;
+		header->intValue = errorMessage.strlen();
+		WriteData(errorMessage.c_str(), errorMessage.strlen());
+		break;
+	}
+	}
+	return true;
+}
+
+bool DataTransfer::WriteEvaluationError(const char *expression, const char *errorMessage) noexcept
+{
+	// Check if it fits
+	size_t expressionLength = strlen(expression), errorLength = strlen(errorMessage);
+	if (!CanWritePacket(sizeof(EvaluationResultHeader) + expressionLength + errorLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::EvaluationResult, sizeof(EvaluationResultHeader) + expressionLength + errorLength);
+
+	// Write partial header
+	EvaluationResultHeader *header = WriteDataHeader<EvaluationResultHeader>();
+	header->dataType = DataType::Expression;
+	header->expressionLength = expressionLength;
+	header->intValue = errorLength;
+
+	// Write expression and error message
+	WriteData(expression, expressionLength);
+	WriteData(errorMessage, errorLength);
+	return true;
+}
+
+bool DataTransfer::WriteDoCode(GCodeChannel channel, const char *code) noexcept
+{
+	size_t codeLength = strlen(code);
+	if (!CanWritePacket(sizeof(DoCodeHeader) + codeLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::DoCode, sizeof(DoCodeHeader) + codeLength);
+
+	// Write header
+	DoCodeHeader *header = WriteDataHeader<DoCodeHeader>();
+	header->channel = channel.RawValue();
+	header->length = codeLength;
+
+	// Write code
+	WriteData(code, codeLength);
+	return true;
+}
+
+bool DataTransfer::WriteWaitForAcknowledgement(GCodeChannel channel) noexcept
+{
+	if (!CanWritePacket(sizeof(CodeChannelHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::WaitForMessageAcknowledgment, sizeof(CodeChannelHeader));
+
+	// Write header
+	CodeChannelHeader *header = WriteDataHeader<CodeChannelHeader>();
+	header->channel = channel.RawValue();
+
 	return true;
 }
 
