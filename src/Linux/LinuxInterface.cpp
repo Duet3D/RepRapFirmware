@@ -381,41 +381,37 @@ void LinuxInterface::Spin()
 
 			// Handle macro start requests
 			const char * const requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
-			if (requestedMacroFile != nullptr)
+			if (requestedMacroFile != nullptr &&
+				transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
 			{
-				if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
+				if (reprap.Debug(moduleLinuxInterface))
 				{
-					if (reprap.Debug(moduleLinuxInterface))
-					{
-						reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
-					}
-					gb->RequestMacroFile(nullptr, reportMissing, fromCode);
+					reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
 				}
+				gb->RequestMacroFile(nullptr, reportMissing, fromCode);
 				gb->Invalidate();
 			}
 
 			// Handle file abort requests
-			if (gb->IsAbortRequested())
+			if (gb->IsAbortRequested() && transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
 			{
-				if (transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
-				{
-					gb->AcknowledgeAbort();
-				}
+				gb->AcknowledgeAbort();
 				gb->Invalidate();
 			}
 
 			// Handle blocking messages
-			if (gb->MachineState().waitingForAcknowledgement && !gb->MachineState().waitingForAcknowledgementSent)
+			if (gb->MachineState().waitingForAcknowledgement && !gb->MachineState().waitingForAcknowledgementSent &&
+				transfer->WriteWaitForAcknowledgement(channel))
 			{
-				if (transfer->WriteWaitForAcknowledgement(channel))
-				{
-					gb->MachineState().waitingForAcknowledgementSent = true;
-				}
+				gb->MachineState().waitingForAcknowledgementSent = true;
 				gb->Invalidate();
 			}
 
-			// TODO add new flags to the GBs to indicate if a string code is supposed to be sent to DSF (like above)
-			// and call transfer->WriteDoCode(GCodeChannel, const char *) with the GB content
+			// Send pending firmware codes
+			if (gb->IsSendRequested() && transfer->WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
+			{
+				gb->SetFinished(true);
+			}
 		}
 
 		// Send pause notification on demand

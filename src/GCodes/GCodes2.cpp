@@ -422,6 +422,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		return true;			// we don't simulate most M codes
 	}
 
+#if HAS_LINUX_INTERFACE
+	// TODO add more codes
+	if (reprap.UsingLinuxInterface() && !gb.IsBinary() && code == 20)
+	{
+		gb.SendToSbc();
+		return false;
+	}
+#endif
+
 	OutputBuffer *outBuf = nullptr;
 
 	try

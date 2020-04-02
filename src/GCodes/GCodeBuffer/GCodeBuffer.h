@@ -131,7 +131,7 @@ public:
 	void SetPrintFinished() noexcept;							// Mark the print file as finished
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 
-	bool IsMacroRequested() const noexcept { return !requestedMacroFile.IsEmpty(); }					// Indicates if a macro file is being requested
+	bool IsMacroRequested() const noexcept { return !requestedMacroFile.IsEmpty(); }			// Indicates if a macro file is being requested
 	void RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept;	// Request execution of a file macro
 	const char *GetRequestedMacroFile(bool& reportMissing, bool &fromCode) const noexcept;		// Return requested macro file or nullptr if none
 
@@ -141,6 +141,9 @@ public:
 
 	bool IsInvalidated() const noexcept { return invalidated; }	// Indicates if the channel is invalidated
 	void Invalidate(bool i = true) noexcept { invalidated = i; }	// Invalidate this channel (or not)
+
+	bool IsSendRequested() const noexcept { return sendToSbc; }	// Is this code supposed to be sent to the SBC
+	void SendToSbc() noexcept { sendToSbc = true; }				// Send this code to the attached SBC
 #endif
 
 	GCodeState GetState() const noexcept;
@@ -238,7 +241,8 @@ private:
 		isMacroFromCode: 1,
 		abortFile : 1,
 		abortAllFiles : 1,
-		invalidated : 1;
+		invalidated : 1,
+		sendToSbc : 1;
 #endif
 };
 

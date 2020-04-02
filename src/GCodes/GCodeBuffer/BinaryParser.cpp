@@ -33,6 +33,7 @@ void BinaryParser::Put(const char *data, size_t len) noexcept
 	bufferLength = len;
 	gb.bufferState = GCodeBufferState::ready;
 	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
+	gb.machineState->lineNumber = header->lineNumber;
 
 	if (reprap.Debug(moduleGcodes))
 	{

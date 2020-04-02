@@ -117,6 +117,7 @@ void GCodeBuffer::Reset() noexcept
 void GCodeBuffer::Init() noexcept
 {
 #if HAS_LINUX_INTERFACE
+	sendToSbc = false;
 	binaryParser.Init();
 #endif
 	stringParser.Init();
@@ -580,6 +581,9 @@ void GCodeBuffer::SetFinished(bool f) noexcept
 {
 	if (f)
 	{
+#if HAS_LINUX_INTERFACE
+		sendToSbc = false;
+#endif
 		PARSER_OPERATION(SetFinished());
 	}
 	else

@@ -377,7 +377,11 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 	}
 
 # if HAS_MASS_STORAGE
-	if (QueueFileToPrint(file.c_str(), reply))
+	if (
+#  if HAS_LINUX_INTERFACE
+		reprap.UsingLinuxInterface() ||
+#  endif
+		QueueFileToPrint(file.c_str(), reply))
 # endif
 	{
 		if (simulationMode == 0)
@@ -389,7 +393,11 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
+#if HAS_LINUX_INTERFACE
+		updateFileWhenSimulationComplete = updateFile && !reprap.UsingLinuxInterface();
+#else
 		updateFileWhenSimulationComplete = updateFile;
+#endif
 		simulationMode = 1;
 		reprap.GetMove().Simulate(simulationMode);
 		reprap.GetPrintMonitor().StartingPrint(file.c_str());

@@ -63,7 +63,7 @@ public:
 	bool WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength) noexcept;
 	bool WriteEvaluationResult(const char *expression, const ExpressionValue& value) noexcept;
 	bool WriteEvaluationError(const char *expression, const char *errorMessage) noexcept;
-	bool WriteDoCode(GCodeChannel channel, const char *code) noexcept;
+	bool WriteDoCode(GCodeChannel channel, const char *code, size_t length) noexcept;
 	bool WriteWaitForAcknowledgement(GCodeChannel channel) noexcept;
 
 	static void SpiInterrupt() noexcept;

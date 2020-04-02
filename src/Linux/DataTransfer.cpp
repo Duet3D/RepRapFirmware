@@ -979,24 +979,23 @@ bool DataTransfer::WriteEvaluationError(const char *expression, const char *erro
 	return true;
 }
 
-bool DataTransfer::WriteDoCode(GCodeChannel channel, const char *code) noexcept
+bool DataTransfer::WriteDoCode(GCodeChannel channel, const char *code, size_t length) noexcept
 {
-	size_t codeLength = strlen(code);
-	if (!CanWritePacket(sizeof(DoCodeHeader) + codeLength))
+	if (!CanWritePacket(sizeof(DoCodeHeader) + length))
 	{
 		return false;
 	}
 
 	// Write packet header
-	WritePacketHeader(FirmwareRequest::DoCode, sizeof(DoCodeHeader) + codeLength);
+	WritePacketHeader(FirmwareRequest::DoCode, sizeof(DoCodeHeader) + length);
 
 	// Write header
 	DoCodeHeader *header = WriteDataHeader<DoCodeHeader>();
 	header->channel = channel.RawValue();
-	header->length = codeLength;
+	header->length = length;
 
 	// Write code
-	WriteData(code, codeLength);
+	WriteData(code, length);
 	return true;
 }
 
