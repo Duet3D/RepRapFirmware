@@ -34,13 +34,12 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 	{ "thermostatic",		OBJECT_MODEL_FUNC(self, 1), 																	ObjectModelEntryFlags::none },
 
 	// 1. Fan.thermostatic members
-	{ "control",			OBJECT_MODEL_FUNC(self->sensorsMonitored.IsNonEmpty()), 										ObjectModelEntryFlags::none },
-	{ "heaters",			OBJECT_MODEL_FUNC(self->sensorsMonitored),														ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC(self->sensorsMonitored),														ObjectModelEntryFlags::none },	// empty if not thermostatic
 	{ "highTemperature",	OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[1], 1), 	ObjectModelEntryFlags::none },
 	{ "lowTemperature",		OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[0], 1), 	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 8, 4 };
+constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 8, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Fan)
 
