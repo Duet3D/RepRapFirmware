@@ -35,7 +35,7 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 
 	// 1. Fan.thermostatic members
 	{ "control",			OBJECT_MODEL_FUNC(self->sensorsMonitored.IsNonEmpty()), 										ObjectModelEntryFlags::none },
-	{ "heaters",			OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->sensorsMonitored),				ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC(self->sensorsMonitored),														ObjectModelEntryFlags::none },
 	{ "highTemperature",	OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[1], 1), 	ObjectModelEntryFlags::none },
 	{ "lowTemperature",		OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[0], 1), 	ObjectModelEntryFlags::none },
 };

@@ -41,9 +41,9 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	// 1. PID members
 	{ "d",					OBJECT_MODEL_FUNC(self->loadChangeParams.tD * self->loadChangeParams.kP, 1),		ObjectModelEntryFlags::none },
 	{ "i",					OBJECT_MODEL_FUNC(self->loadChangeParams.recipTi * self->loadChangeParams.kP, 1),	ObjectModelEntryFlags::none },
-	{ "overridden",			OBJECT_MODEL_FUNC(self->pidParametersOverridden, 1),								ObjectModelEntryFlags::none },
+	{ "overridden",			OBJECT_MODEL_FUNC(self->pidParametersOverridden),									ObjectModelEntryFlags::none },
 	{ "p",					OBJECT_MODEL_FUNC(self->loadChangeParams.kP, 1),									ObjectModelEntryFlags::none },
-	{ "used",				OBJECT_MODEL_FUNC(self->usePid, 1),													ObjectModelEntryFlags::none },
+	{ "used",				OBJECT_MODEL_FUNC(self->usePid),													ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 8, 5 };
