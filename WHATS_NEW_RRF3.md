@@ -1,3 +1,35 @@
+RepRapFirmware 3.01-RC6
+=======================
+
+Recommended compatible firmware:
+- DuetWebControl 2.1.0
+- DuetWiFiServer 1.23
+- Duet Software Framework version 1.3.0 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC5
+
+Upgrade notes:
+- Users of Duet 3 with attached SBC should upgrade to DSF 1.3.0 at the same time as upgrading to this release
+- If you were using M308 H or L parameters for thermistors attached to a Duet 3 main board, you will need to adjust those values
+- Reminders for those upgrading from version 2.x firmware: (1) you cannot upgrade to this release directly from 2.x, you must upgrade to the 3.0 release first; and (2) you will need to make substantial changes to your config.g file.
+
+New features/changed behaviour:
+- When pausing a job in CNC mode, the spindle speed is now saved in restore point 1
+- The M308 thermistor H and L parameters on Duet 3 main boards have been re-scaled to match the scaling used on Duet 3 expansion and tool boards.
+- M308 thermistor H and L parameters are now constrained to the range -128 to +127.
+
+Known issues
+- On Duet 3 the values of vin, v12 and mcuTemp in the object model always read as zero for expansion and tool boards. You can see the actual values using M122.
+
+Known limitations:
+- Z probe types 1, 2 and 5 are only supported for Z probe 0, and if using Duet 3 only for a probe connected to the main board. All other Z probes must be of type 8 or 9.
+- Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
+- Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
+- Additional limitations apply to Duet 3 systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
+
+Bug fixes:
+- On Duet Maestro, M291 S3 commands initiated from the 12864 display did not work
+- When printing a file, the first layer time was reported incorrectly, and when the print completed the total print time reported was incorrect
+
 RepRapFirmware 3.01-RC5
 =======================
 
@@ -8,7 +40,7 @@ Recommended compatible firmware:
 - Duet 3 expansion board and tool board firmware 3.01-RC4
 
 Upgrade notes:
-- None since 3.01-RC4. Reminders for those upgrading from version 2.x firmware: (1) you cannot upgrade to this release directly from 2.x, you must upgrade to the 3.0 release first; and (2) you will need to make substantial changes to your config.g file.
+- Reminders for those upgrading from version 2.x firmware: (1) you cannot upgrade to this release directly from 2.x, you must upgrade to the 3.0 release first; and (2) you will need to make substantial changes to your config.g file.
 
 New features/changed behaviour:
 - G29 and G30 now accept an optional K parameter to specify which Z probe to use
