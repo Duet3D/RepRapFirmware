@@ -288,8 +288,8 @@ void LocalHeater::Spin() noexcept
 					++heatingFaultCount;
 					if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
 					{
-						RaiseHeaterFault("Heating fault on heater %u, temperature excursion exceeded %.1f" DEGREE_SYMBOL "C\n",
-											GetHeaterNumber(), (double)GetMaxTemperatureExcursion());
+						RaiseHeaterFault("Heating fault on heater %u, temperature excursion exceeded %.1f" DEGREE_SYMBOL "C.  Expected: %.1f" DEGREE_SYMBOL "C.  Actual: %.1f" DEGREE_SYMBOL "C.\n",
+											GetHeaterNumber(), (double)GetMaxTemperatureExcursion(), (double)targetTemperature, (double)temperature);
 					}
 				}
 				else if (heatingFaultCount != 0)
