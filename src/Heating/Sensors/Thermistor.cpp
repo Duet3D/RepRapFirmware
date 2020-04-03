@@ -57,15 +57,14 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 	}
 
 #if !HAS_VREF_MONITOR || defined(DUET3)
-	constexpr int maxOffset = (int)(30u << (AdcBits + AdcOversampleBits - 12));
 	if (gb.Seen('L'))
 	{
-		adcLowOffset = (int16_t)constrain<int>(gb.GetIValue(), -maxOffset, maxOffset);
+		adcLowOffset = (int8_t)constrain<int>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
 		changed = true;
 	}
 	if (gb.Seen('H'))
 	{
-		adcHighOffset = (int16_t)constrain<int>(gb.GetIValue(), -maxOffset, maxOffset);
+		adcHighOffset = (int8_t)constrain<int>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
 		changed = true;
 	}
 #endif
@@ -129,11 +128,11 @@ void Thermistor::Poll() noexcept
 		// Version 1.01 and later boards have the series resistors connected to VrefMon.
 		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		const int32_t averagedVssaReading = rawAveragedVssaReading + adcLowOffset;
+		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits - 12 + Thermistor::AdcOversampleBits - 1)));
 		const int32_t averagedVrefReading = ((reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
 											? ((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0)) + rawAveragedVssaReading
 												: rawAveragedVrefReading
-											) + adcHighOffset;
+											) + (adcHighOffset * (1 << (AdcBits - 12 + Thermistor::AdcOversampleBits - 1)));
 # else
 		const int32_t averagedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t averagedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);

@@ -64,15 +64,19 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb)
 				break;
 
 			case ParamDescriptor::uint16:
-				StoreValue((uint16_t)gb.GetUIValue());
+				StoreValue((uint16_t)min<uint32_t>(gb.GetUIValue(), std::numeric_limits<uint16_t>::max()));
 				break;
 
 			case ParamDescriptor::int16:
-				StoreValue((int16_t)gb.GetIValue());
+				StoreValue((int16_t)constrain<int32_t>(gb.GetIValue(), std::numeric_limits<int16_t>::min(), std::numeric_limits<int16_t>::max()));
 				break;
 
 			case ParamDescriptor::uint8:
-				StoreValue((uint8_t)gb.GetUIValue());
+				StoreValue((uint8_t)min<uint32_t>(gb.GetUIValue(), std::numeric_limits<uint8_t>::max()));
+				break;
+
+			case ParamDescriptor::int8:
+				StoreValue((int8_t)constrain<int32_t>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max()));
 				break;
 
 			case ParamDescriptor::localDriver:
@@ -80,10 +84,6 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb)
 					const DriverId id = gb.GetDriverId();
 					StoreValue(id.localDriver);
 				}
-				break;
-
-			case ParamDescriptor::int8:
-				StoreValue((int8_t)gb.GetIValue());
 				break;
 
 			case ParamDescriptor::float_p:
