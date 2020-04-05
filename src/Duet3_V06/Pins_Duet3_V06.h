@@ -150,7 +150,6 @@ constexpr Pin DotStarMosiPin = PortAPin(13);
 constexpr Pin DotStarSclkPin = PortAPin(14);
 constexpr uint32_t DotStarClockId = ID_QSPI;
 constexpr IRQn DotStarIRQn = QSPI_IRQn;
-const uint32_t DotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 
 // Ethernet
 constexpr Pin PhyInterruptPin = PortCPin(6);

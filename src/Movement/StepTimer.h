@@ -54,7 +54,7 @@ public:
 	static uint16_t GetTimerTicks16() noexcept;
 
 	// Get the tick rate (can also access it directly as StepClockRate)
-	static uint32_t GetTickRate() noexcept { return StepClockRate; }
+	static constexpr uint32_t GetTickRate() noexcept { return StepClockRate; }
 
 	// ISR called from StepTimer
 	static void Interrupt() noexcept;

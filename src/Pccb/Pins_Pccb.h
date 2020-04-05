@@ -226,7 +226,6 @@ constexpr Pin DotStarMosiPin = PortAPin(22);
 constexpr Pin DotStarSclkPin = PortAPin(23);
 constexpr uint32_t DotStarClockId = ID_USART1;
 constexpr IRQn DotStarIRQn = USART1_IRQn;
-const uint32_t DotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 
 // SD cards
 constexpr size_t NumSdCards = 1;

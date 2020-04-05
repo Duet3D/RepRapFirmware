@@ -440,6 +440,24 @@ bool GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 	return ret;
 }
 
+// Try to get a signed integer value, throw if outside limits
+bool GCodeBuffer::TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
+{
+	const bool b = TryGetIValue(c, val, seen);
+	if (b)
+	{
+		if (val < minValue)
+		{
+			throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too low", (uint32_t)c);
+		}
+		if (val > maxValue)
+		{
+			throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+		}
+	}
+	return b;
+}
+
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
 {
@@ -450,6 +468,17 @@ bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
 		seen = true;
 	}
 	return ret;
+}
+
+// Try to get an unsigned integer value, throw if >= limit
+bool GCodeBuffer::TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException)
+{
+	const bool b = TryGetUIValue(c, val, seen);
+	if (b && val >= maxValuePlusOne)
+	{
+		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+	}
+	return b;
 }
 
 // If the specified parameter character is found, fetch 'value' as a Boolean and set 'seen'. Otherwise leave val and seen alone.
