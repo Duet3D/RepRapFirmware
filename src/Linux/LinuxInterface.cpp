@@ -262,6 +262,7 @@ void LinuxInterface::Spin()
 					{
 						filament->Load(filamentName.c_str());
 					}
+					reprap.MoveUpdated();
 				}
 				break;
 			}
