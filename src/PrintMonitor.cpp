@@ -88,7 +88,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
 int32_t PrintMonitor::GetPrintOrSimulatedDuration() const noexcept
 {
-	return lrintf((reprap.GetGCodes().IsSimulating()) ? reprap.GetGCodes().GetSimulationTime() : GetPrintDuration());
+	return lrintf((reprap.GetGCodes().IsSimulating()) ? reprap.GetGCodes().GetSimulationTime() + reprap.GetMove().GetSimulationTime() : GetPrintDuration());
 }
 
 #endif
