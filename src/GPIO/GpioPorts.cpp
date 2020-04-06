@@ -139,7 +139,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 			reply.copy("Pin ");
 			port.AppendPinName(reply);
 		}
-		reply.catf(", active: %s", (currentState) ? "true" : "false");
+		reply.catf(", active: %s", (GetState()) ? "true" : "false");
 	}
 	return GCodeResult::ok;
 }
