@@ -813,9 +813,13 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 				if (*pos == 'h')
 				{
 					hours = secs;
-					if (StringStartsWithIgnoreCase(pos, "hours"))
+					if (StringStartsWithIgnoreCase(pos, "hours"))		// S3D
 					{
 						pos += 5;
+					}
+					else if (StringStartsWithIgnoreCase(pos, "hour"))	// S3D now prints "1 hour 42 minutes"
+					{
+						pos += 4;
 					}
 					else
 					{
