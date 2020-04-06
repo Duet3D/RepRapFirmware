@@ -87,6 +87,10 @@ private:
 	void LayerComplete() noexcept;
 	void Reset() noexcept;
 
+#if SUPPORT_OBJECT_MODEL
+	int32_t GetPrintOrSimulatedDuration() const noexcept;
+#endif
+
 	bool isPrinting;
 	bool heatingUp;
 	uint64_t printStartTime;

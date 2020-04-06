@@ -98,7 +98,6 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "axes",				OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 				ObjectModelEntryFlags::none },
 	{ "extruders",			OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 			ObjectModelEntryFlags::none },
 	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 							ObjectModelEntryFlags::none },
-	{ "filament",			OBJECT_MODEL_FUNC(self->GetFilamentName()), 					ObjectModelEntryFlags::none },
 	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),				ObjectModelEntryFlags::none },
 	{ "heaters",			OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 				ObjectModelEntryFlags::none },
 	{ "mix",				OBJECT_MODEL_FUNC_NOSELF(&mixArrayDescriptor), 					ObjectModelEntryFlags::none },
@@ -118,7 +117,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "zHop",				OBJECT_MODEL_FUNC(self->retractHop, 2),							ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 15, 5 };
+constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 14, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 

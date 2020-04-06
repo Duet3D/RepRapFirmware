@@ -261,6 +261,8 @@ void GCodes::Reset() noexcept
 	simulationMode = 0;
 	exitSimulationWhenFileComplete = updateFileWhenSimulationComplete = false;
 	simulationTime = 0.0;
+	lastDuration = 0;
+
 	isPaused = false;
 #if HAS_VOLTAGE_MONITOR
 	isPowerFailPaused = false;
@@ -3686,6 +3688,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.c_str(), true, 701);
+		reprap.MoveUpdated();
 	}
 	else if (tool->GetFilament()->IsLoaded())
 	{
@@ -3714,16 +3717,14 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::error;
 	}
 
-	if (!tool->GetFilament()->IsLoaded())
+	if (tool->GetFilament()->IsLoaded())			// if no filament is loaded, nothing to do
 	{
-		// Filament already unloaded - nothing to do
-		return GCodeResult::ok;
+		gb.SetState(GCodeState::unloadingFilament);
+		String<StringLength256> scratchString;
+		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
+		DoFileMacro(gb, scratchString.c_str(), true, 702);
+		reprap.MoveUpdated();
 	}
-
-	gb.SetState(GCodeState::unloadingFilament);
-	String<StringLength256> scratchString;
-	scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
-	DoFileMacro(gb, scratchString.c_str(), true, 702);
 	return GCodeResult::ok;
 }
 
@@ -3805,11 +3806,13 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		const uint32_t simMinutes = lrintf(simSeconds/60.0);
 		if (reason == StopPrintReason::normalCompletion)
 		{
+			lastDuration = simSeconds;
 			platform.MessageF(LoggedGenericMessage, "File %s will print in %" PRIu32 "h %" PRIu32 "m plus heating time\n",
 									printingFilename, simMinutes/60u, simMinutes % 60u);
 		}
 		else
 		{
+			lastDuration = 0;
 			platform.MessageF(LoggedGenericMessage, "Cancelled simulating file %s after %" PRIu32 "h %" PRIu32 "m simulated time\n",
 									printingFilename, simMinutes/60u, simMinutes % 60u);
 		}
@@ -3848,7 +3851,9 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 			platform.Message(TelnetMessage, "Done printing file\n");
 		}
 #endif
-		const uint32_t printMinutes = lrintf(reprap.GetPrintMonitor().GetPrintDuration()/60.0);
+		const uint32_t printSeconds = lrintf(reprap.GetPrintMonitor().GetPrintDuration());
+		const uint32_t printMinutes = printSeconds/60;
+		lastDuration = (reason == StopPrintReason::normalCompletion) ? printSeconds : 0;
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);

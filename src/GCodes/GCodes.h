@@ -143,6 +143,9 @@ public:
 	bool IsDoingToolChange() const noexcept { return doingToolChange; }
 	bool IsHeatingUp() const noexcept;											// Return true if the SD card print is waiting for a heater to reach temperature
 
+	uint32_t GetLastDuration() const noexcept { return lastDuration; }			// The most recent print time or simulated time
+	float GetSimulationTime() const noexcept { return simulationTime; }
+
 	bool AllAxesAreHomed() const noexcept;										// Return true if all axes are homed
 
 	void StopPrint(StopPrintReason reason) noexcept;							// Stop the current print
@@ -575,7 +578,9 @@ private:
 	uint8_t tapsDone;							// how many times we tapped the current point
 	uint8_t currentZProbeNumber;				// which Z probe a G29 or G30 command is using
 
+	// Simulation and print time
 	float simulationTime;						// Accumulated simulation time
+	uint32_t lastDuration;						// Time or simulated time of the last successful print or simulation, in seconds
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
 	bool exitSimulationWhenFileComplete;		// true if simulating a file
 	bool updateFileWhenSimulationComplete;		// true if simulated time should be appended to the file
