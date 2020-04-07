@@ -31,8 +31,12 @@ Licence: GPL
 [[deprecated("use gmtime_r instead for thread-safety")]] tm* gmtime(const time_t* time);
 
 #include "ecv.h"
-#undef value			// needed because some files include include <optional>
-#undef array			// needed because some files include <functional>
+#ifdef value
+# undef value			// needed because some files include include <optional>
+#endif
+#ifdef array
+# undef array			// needed because some files include <functional>
+#endif
 
 #include "Core.h"
 
@@ -107,7 +111,6 @@ static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logica
 #include "General/SafeVsnprintf.h"
 
 #define THROWS(...)				// expands to nothing, for providing exception specifications
-#define THROWS_GCODE_EXCEPTION	THROWS(GCodeException)
 #define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
 
 // Struct to hold min, max and current values

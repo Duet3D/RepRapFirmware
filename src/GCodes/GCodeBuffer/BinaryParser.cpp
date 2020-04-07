@@ -97,7 +97,7 @@ int8_t BinaryParser::GetCommandFraction() const noexcept
 	return (bufferLength != 0 && (header->flags & CodeFlags::HasMinorCommandNumber) != 0) ? header->minorCode : -1;
 }
 
-float BinaryParser::GetFValue()
+float BinaryParser::GetFValue() THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -132,7 +132,7 @@ float BinaryParser::GetFValue()
 	return value;
 }
 
-int32_t BinaryParser::GetIValue()
+int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -167,7 +167,7 @@ int32_t BinaryParser::GetIValue()
 	return value;
 }
 
-uint32_t BinaryParser::GetUIValue()
+uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -203,7 +203,7 @@ uint32_t BinaryParser::GetUIValue()
 }
 
 // Get a driver ID
-DriverId BinaryParser::GetDriverId()
+DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -228,7 +228,7 @@ DriverId BinaryParser::GetDriverId()
 	return value;
 }
 
-void BinaryParser::GetIPAddress(IPAddress& returnedIp)
+void BinaryParser::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -282,7 +282,7 @@ void BinaryParser::GetIPAddress(IPAddress& returnedIp)
 	seenParameterValue = nullptr;
 }
 
-void BinaryParser::GetMacAddress(MacAddress& mac)
+void BinaryParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -334,7 +334,7 @@ void BinaryParser::GetMacAddress(MacAddress& mac)
 	seenParameterValue = nullptr;
 }
 
-void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
+void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
 	//TODO DSF should know which commands take a string parameter without a preceding parameter letter,
 	// so it should send the argument as a string or as an expression with a dummy parameter letter.
@@ -352,12 +352,12 @@ const char *BinaryParser::GetCompleteParameters() const noexcept
 	return "";			// If we decide to support Q codes from DSF then change this to copy the single parameter to gb.buffer and return a pointer to it
 }
 
-void BinaryParser::GetQuotedString(const StringRef& str)
+void BinaryParser::GetQuotedString(const StringRef& str) THROWS(GCodeException)
 {
 	GetPossiblyQuotedString(str);
 }
 
-void BinaryParser::GetPossiblyQuotedString(const StringRef& str)
+void BinaryParser::GetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -392,7 +392,7 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str)
 	}
 }
 
-void BinaryParser::GetReducedString(const StringRef& str)
+void BinaryParser::GetReducedString(const StringRef& str) THROWS(GCodeException)
 {
 	str.Clear();
 	if (seenParameterValue != nullptr && seenParameter->type == DataType::String)
@@ -428,23 +428,23 @@ void BinaryParser::GetReducedString(const StringRef& str)
 	}
 }
 
-void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad)
+void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	GetArray(arr, length, doPad);
 }
 
-void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad)
+void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	GetArray(arr, length, doPad);
 }
 
-void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
+void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	GetArray(arr, length, doPad);
 }
 
 // Get a :-separated list of drivers after a key letter
-void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
+void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -535,7 +535,7 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 }
 
 //TODO need a way to pass arrays in which one or more elements is an expression from DSF to RRF
-template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
+template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{

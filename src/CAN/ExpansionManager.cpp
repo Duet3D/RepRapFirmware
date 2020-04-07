@@ -142,7 +142,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 }
 
 // Tell an expansion board to update
-GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
+GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
 
@@ -198,7 +198,7 @@ void ExpansionManager::UpdateFailed(CanAddress address) noexcept
 	UpdateBoardState(address, BoardState::flashFailed);
 }
 
-GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
 	CanMessageBuffer * const buf = CanInterface::AllocateBuffer(gb);

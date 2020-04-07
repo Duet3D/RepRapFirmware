@@ -53,15 +53,15 @@ public:
 	void GetM119report(const StringRef& reply) noexcept;
 
 	// Z probe
-	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS_GCODE_EXCEPTION;		// M558
-	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;		// G31
+	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// M558
+	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// G31
 
 	ReadLockedPointer<ZProbe> GetZProbe(size_t index) const noexcept;
 	ReadLockedPointer<ZProbe> GetZProbeOrDefault(size_t index) const noexcept;
 	ZProbe& GetDefaultZProbeFromISR() const noexcept;
 
 	void SetZProbeDefaults() noexcept;
-	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
@@ -100,7 +100,7 @@ private:
 	EndstopOrZProbe * volatile activeEndstops;			// linked list of endstops and Z probes that are active for the current move
 
 	Endstop *axisEndstops[MaxAxes];						// the endstops assigned to each axis (each one may have several switches), each may be null
-	StallDetectionEndstop *extrudersEndstop;				// the endstop used for extruder stall detection, one will do for all extruders
+	StallDetectionEndstop *extrudersEndstop;			// the endstop used for extruder stall detection, one will do for all extruders
 	ZProbe *zProbes[MaxZProbes];						// the Z probes used. The first one is always non-null.
 	ZProbe *defaultZProbe;
 

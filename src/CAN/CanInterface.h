@@ -73,13 +73,13 @@ namespace CanInterface
 	void SendBroadcast(CanMessageBuffer *buf) noexcept;
 	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
-	CanMessageBuffer *AllocateBuffer(const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION;
-	void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION;
+	CanMessageBuffer *AllocateBuffer(const GCodeBuffer& gb) THROWS(GCodeException);
+	void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS(GCodeException);
 
 	// Info functions
-	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-	GCodeResult RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	// Motor control functions
 	void SendMotion(CanMessageBuffer *buf) noexcept;
@@ -89,8 +89,8 @@ namespace CanInterface
 	bool SetRemoteDriverCurrents(const CanDriversData& data, const StringRef& reply) noexcept;
 	bool SetRemoteDriverMicrostepping(const CanDriversData& data, const StringRef& reply) noexcept;
 	bool SetRemotePressureAdvance(const CanDriversData& data, const StringRef& reply) noexcept;
-	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS_GCODE_EXCEPTION;
+	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
 	void WakeCanSender() noexcept;
 
 	// Remote handle functions
@@ -101,9 +101,9 @@ namespace CanInterface
 	GCodeResult ChangeHandleResponseTime(CanAddress boardAddress, RemoteInputHandle h, uint16_t responseMillis, bool &currentState, const StringRef &reply) noexcept;
 
 	// Misc functions
-	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply)THROWS_GCODE_EXCEPTION;
-	GCodeResult ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply)THROWS_GCODE_EXCEPTION;
+	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply)THROWS(GCodeException);
+	GCodeResult ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply)THROWS(GCodeException);
 }
 
 #endif

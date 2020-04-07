@@ -517,7 +517,7 @@ void EndstopsManager::SetZProbeDefaults() noexcept
 }
 
 // Program the Z probe
-GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
 	ReadLocker lock(zProbesLock);
@@ -691,7 +691,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 
 // Set or print the Z probe. Called by G31.
 // Note that G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
-GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
 	ReadLocker lock(zProbesLock);

@@ -2100,6 +2100,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						moveBuffer.feedRate *= newSpeedFactor / speedFactor;
 					}
 					speedFactor = newSpeedFactor;
+					reprap.MoveUpdated();
 				}
 				else
 				{

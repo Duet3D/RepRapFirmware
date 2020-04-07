@@ -170,12 +170,12 @@ public:
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
 	void DecreaseDepth() noexcept { --currentDepth; }
-	void AddIndex(int32_t index) THROWS_GCODE_EXCEPTION;
-	void AddIndex() THROWS_GCODE_EXCEPTION;
-	void RemoveIndex() THROWS_GCODE_EXCEPTION;
-	void ProvideIndex(int32_t index) THROWS_GCODE_EXCEPTION;
-	int32_t GetIndex(size_t n) const THROWS_GCODE_EXCEPTION;
-	int32_t GetLastIndex() const THROWS_GCODE_EXCEPTION;
+	void AddIndex(int32_t index) THROWS(GCodeException);
+	void AddIndex() THROWS(GCodeException);
+	void RemoveIndex() THROWS(GCodeException);
+	void ProvideIndex(int32_t index) THROWS(GCodeException);
+	int32_t GetIndex(size_t n) const THROWS(GCodeException);
+	int32_t GetLastIndex() const THROWS(GCodeException);
 	size_t GetNumIndicesCounted() const noexcept { return numIndicesCounted; }
 	bool ShortFormReport() const noexcept { return shortForm; }
 	bool ShouldReport(const ObjectModelEntryFlags f) const noexcept;
@@ -218,26 +218,26 @@ public:
 	virtual ~ObjectModel() { }
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
-	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS_GCODE_EXCEPTION;
+	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const char *idString, uint8_t tableNumber = 0) const THROWS_GCODE_EXCEPTION;
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
 
 	// Function to report a value or object as JSON
-	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const THROWS_GCODE_EXCEPTION;
+	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const THROWS(GCodeException);
 
 	// Skip the current element in the ID or filter string
 	static const char* GetNextElement(const char *id) noexcept;
 
 protected:
 	// Construct a JSON representation of those parts of the object model requested by the user
-	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, uint8_t tableNumber, const char *filter) const THROWS_GCODE_EXCEPTION;
+	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
 
 	// Report an entire array as JSON
-	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS_GCODE_EXCEPTION;
+	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException);
 
 	// Get the value of an object that we hold
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, ExpressionValue val, const char *idString) const THROWS_GCODE_EXCEPTION;
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, ExpressionValue val, const char *idString) const THROWS(GCodeException);
 
 	// Get the object model table entry for the current level object in the query
 	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) const noexcept;

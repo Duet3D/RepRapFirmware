@@ -91,7 +91,7 @@ const char *RotaryDeltaKinematics::GetName(bool forStatusReport) const noexcept
 // If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 // If no relevant parameters are found, print the existing ones to 'reply' and return false.
 // If 'mCode' does not apply to this kinematics, call the base class version of this function, which will print a suitable error message.
-bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException)
 {
 	switch(mCode)
 	{

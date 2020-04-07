@@ -26,7 +26,7 @@ ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, float segsPerSecond
 }
 
 // Configure this kinematics. We only deal with the leadscrew coordinates here
-bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException)
 {
 	if (mCode == 671 && GetKinematicsType() != KinematicsType::coreXZ)
 	{

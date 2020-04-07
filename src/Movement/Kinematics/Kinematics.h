@@ -80,7 +80,7 @@ public:
 	// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 	// If no relevant parameters are found, print the existing ones to 'reply' and return false.
 	// If 'mCode' does not apply to this kinematics, call the base class version of this function, which will print a suitable error message.
-	virtual bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS_GCODE_EXCEPTION;
+	virtual bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException);
 
 	// Convert Cartesian coordinates to motor positions measured in steps from reference position
 	// 'machinePos' is a set of axis and extruder positions to convert

@@ -30,7 +30,7 @@ Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength
 
 // Set or report the parameters from a M665, M666 or M669 command
 // This is the fallback function for when the derived class doesn't use the specified M-code
-bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException)
 {
 	if (mCode == 669)
 	{

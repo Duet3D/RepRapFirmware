@@ -34,7 +34,7 @@ public:
 	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) noexcept override;
 #endif
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult Configure(const char *pinNames, const StringRef& reply) noexcept;
 
 private:

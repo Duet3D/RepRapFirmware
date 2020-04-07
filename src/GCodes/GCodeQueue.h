@@ -30,7 +30,7 @@ public:
 
 	void Diagnostics(MessageType mtype) noexcept;
 
-	static bool ShouldQueueCode(GCodeBuffer &gb) THROWS_GCODE_EXCEPTION;	// Return true if this code should be queued
+	static bool ShouldQueueCode(GCodeBuffer &gb) THROWS(GCodeException);	// Return true if this code should be queued
 
 private:
 	QueuedCode *freeItems;

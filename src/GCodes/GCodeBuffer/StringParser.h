@@ -34,7 +34,7 @@ public:
 	void PutAndDecode(const char *str) noexcept;							// Add a null-terminated string, overwriting any existing content
 	void StartNewFile() noexcept;											// Called when we start a new file
 	bool FileEnded() noexcept;												// Called when we reach the end of the file we are reading from
-	bool CheckMetaCommand(const StringRef& reply) THROWS_GCODE_EXCEPTION;	// Check whether the current command is a meta command, or we are skipping block
+	bool CheckMetaCommand(const StringRef& reply) THROWS(GCodeException);	// Check whether the current command is a meta command, or we are skipping block
 
 	// The following may be called after calling DecodeCommand
 	char GetCommandLetter() const noexcept { return commandLetter; }
@@ -43,22 +43,22 @@ public:
 	int8_t GetCommandFraction() const noexcept { return commandFraction; }
 
 	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?
-	float GetFValue() THROWS_GCODE_EXCEPTION __attribute__((hot));				// Get a float after a key letter
-	float GetDistance() THROWS_GCODE_EXCEPTION;									// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() THROWS_GCODE_EXCEPTION __attribute__((hot));			// Get an integer after a key letter
-	uint32_t GetUIValue() THROWS_GCODE_EXCEPTION;								// Get an unsigned integer value
-	DriverId GetDriverId() THROWS_GCODE_EXCEPTION;								// Get a driver ID
-	void GetIPAddress(IPAddress& returnedIp) THROWS_GCODE_EXCEPTION;			// Get an IP address quad after a key letter
-	void GetMacAddress(MacAddress& mac) THROWS_GCODE_EXCEPTION;					// Get a MAC address sextet after a key letter
-	void GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS_GCODE_EXCEPTION;	// Get a string with no preceding key letter
+	float GetFValue() THROWS(GCodeException) __attribute__((hot));				// Get a float after a key letter
+	float GetDistance() THROWS(GCodeException);									// Get a distance or coordinate and convert it from inches to mm if necessary
+	int32_t GetIValue() THROWS(GCodeException) __attribute__((hot));			// Get an integer after a key letter
+	uint32_t GetUIValue() THROWS(GCodeException);								// Get an unsigned integer value
+	DriverId GetDriverId() THROWS(GCodeException);								// Get a driver ID
+	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);			// Get an IP address quad after a key letter
+	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);					// Get a MAC address sextet after a key letter
+	void GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);	// Get a string with no preceding key letter
 	const char *GetCompleteParameters() const noexcept;							// Get the complete parameter string
-	void GetQuotedString(const StringRef& str, bool allowEmpty = false) THROWS_GCODE_EXCEPTION;	// Get and copy a quoted string
-	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty = false) THROWS_GCODE_EXCEPTION;	// Get and copy a string which may or may not be quoted
-	void GetReducedString(const StringRef& str) THROWS_GCODE_EXCEPTION;			// Get and copy a quoted string, removing certain characters
-	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS_GCODE_EXCEPTION __attribute__((hot)); // Get a colon-separated list of floats after a key letter
-	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS_GCODE_EXCEPTION;		// Get a :-separated list of ints after a key letter
-	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS_GCODE_EXCEPTION;	// Get a :-separated list of unsigned ints after a key letter
-	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS_GCODE_EXCEPTION;	// Get a :-separated list of drivers after a key letter
+	void GetQuotedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);	// Get and copy a quoted string
+	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);	// Get and copy a string which may or may not be quoted
+	void GetReducedString(const StringRef& str) THROWS(GCodeException);			// Get and copy a quoted string, removing certain characters
+	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
+	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
 
 	void SetFinished() noexcept;											// Set the G Code finished
 	void SetCommsProperties(uint32_t arg) noexcept { checksumRequired = (arg & 1); }
@@ -91,31 +91,31 @@ private:
 
 	void AddToChecksum(char c) noexcept;
 	void StoreAndAddToChecksum(char c) noexcept;
-	bool LineFinished() THROWS_GCODE_EXCEPTION;									// Deal with receiving end-of-line and return true if we have a command
-	void InternalGetQuotedString(const StringRef& str) THROWS_GCODE_EXCEPTION
+	bool LineFinished() THROWS(GCodeException);									// Deal with receiving end-of-line and return true if we have a command
+	void InternalGetQuotedString(const StringRef& str) THROWS(GCodeException)
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
-	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS_GCODE_EXCEPTION
+	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
 		pre (readPointer >= 0);
-	float ReadFloatValue() THROWS_GCODE_EXCEPTION;
-	uint32_t ReadUIValue() THROWS_GCODE_EXCEPTION;
-	int32_t ReadIValue() THROWS_GCODE_EXCEPTION;
-	DriverId ReadDriverIdValue() THROWS_GCODE_EXCEPTION;
+	float ReadFloatValue() THROWS(GCodeException);
+	uint32_t ReadUIValue() THROWS(GCodeException);
+	int32_t ReadIValue() THROWS(GCodeException);
+	DriverId ReadDriverIdValue() THROWS(GCodeException);
 
 	void CheckForMixedSpacesAndTabs() noexcept;
-	bool ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile) THROWS_GCODE_EXCEPTION;
+	bool ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile) THROWS(GCodeException);
 																			// Check for and process a conditional GCode language command returning true if we found one
-	void ProcessIfCommand() THROWS_GCODE_EXCEPTION;
-	void ProcessElseCommand(BlockType skippedBlockType) THROWS_GCODE_EXCEPTION;
-	void ProcessElifCommand(BlockType skippedBlockType) THROWS_GCODE_EXCEPTION;
-	void ProcessWhileCommand() THROWS_GCODE_EXCEPTION;
-	void ProcessBreakCommand() THROWS_GCODE_EXCEPTION;
-	void ProcessContinueCommand() THROWS_GCODE_EXCEPTION;
-	void ProcessVarCommand() THROWS_GCODE_EXCEPTION;
-	void ProcessSetCommand() THROWS_GCODE_EXCEPTION;
+	void ProcessIfCommand() THROWS(GCodeException);
+	void ProcessElseCommand(BlockType skippedBlockType) THROWS(GCodeException);
+	void ProcessElifCommand(BlockType skippedBlockType) THROWS(GCodeException);
+	void ProcessWhileCommand() THROWS(GCodeException);
+	void ProcessBreakCommand() THROWS(GCodeException);
+	void ProcessContinueCommand() THROWS(GCodeException);
+	void ProcessVarCommand() THROWS(GCodeException);
+	void ProcessSetCommand() THROWS(GCodeException);
 	void ProcessAbortCommand(const StringRef& reply) noexcept;
-	void ProcessEchoCommand(const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	void ProcessEchoCommand(const StringRef& reply) THROWS(GCodeException);
 
-	bool EvaluateCondition() THROWS_GCODE_EXCEPTION;
+	bool EvaluateCondition() THROWS(GCodeException);
 
 	void SkipWhiteSpace() noexcept;
 

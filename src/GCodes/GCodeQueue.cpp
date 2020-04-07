@@ -23,7 +23,7 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 }
 
 // Return true if the move in the GCodeBuffer should be queued
-/*static*/ bool GCodeQueue::ShouldQueueCode(GCodeBuffer &gb)
+/*static*/ bool GCodeQueue::ShouldQueueCode(GCodeBuffer &gb) THROWS(GCodeException)
 {
 #if SUPPORT_ROLAND
 	// Don't queue codes if the Roland module is active

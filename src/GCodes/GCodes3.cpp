@@ -1347,6 +1347,7 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 		moveBuffer.coords[ExtruderToLogicalDrive(extruder)] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}
 	extrusionFactors[extruder] = factor;
+	reprap.MoveUpdated();
 }
 
 // Deploy the Z probe unless it has already been deployed explicitly

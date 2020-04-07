@@ -76,11 +76,11 @@ public:
 	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power or while probing
 	GCodeResult ResetFault(int heater, const StringRef& reply) noexcept;	// Reset a heater fault for a specific heater or all heaters
 
-	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
-	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;		// Create a sensor or change the parameters for an existing sensor
-	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION; // Set the P/I/D parameters for a heater
-	GCodeResult HandleM143(GCodeBuffer &gb, const StringRef &reply) THROWS_GCODE_EXCEPTION;	// Configure heater protection (M143)
+	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Create a sensor or change the parameters for an existing sensor
+	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException); // Set the P/I/D parameters for a heater
+	GCodeResult HandleM143(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException);	// Configure heater protection (M143)
 
 	void SensorsTask() noexcept;
 	static void EnsureSensorsTask() noexcept;

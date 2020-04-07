@@ -23,7 +23,7 @@ CanMessageGenericConstructor::CanMessageGenericConstructor(const ParamDescriptor
 }
 
 // Append a value to the data, throwing if it wouldn't fit
-void CanMessageGenericConstructor::StoreValue(const void *vp, size_t sz)
+void CanMessageGenericConstructor::StoreValue(const void *vp, size_t sz) THROWS(GCodeException)
 {
 	if (dataLen + sz > sizeof(msg.data))
 	{
@@ -34,7 +34,7 @@ void CanMessageGenericConstructor::StoreValue(const void *vp, size_t sz)
 }
 
 // Insert a value in the data, throwing if it wouldn't fit
-void CanMessageGenericConstructor::InsertValue(const void *vp, size_t sz, size_t pos)
+void CanMessageGenericConstructor::InsertValue(const void *vp, size_t sz, size_t pos) THROWS(GCodeException)
 {
 	if (dataLen + sz > sizeof(msg.data))
 	{
@@ -46,7 +46,7 @@ void CanMessageGenericConstructor::InsertValue(const void *vp, size_t sz, size_t
 }
 
 // Populate the CAN message from a GCode message returning true if successful. Throws if an error occurs.
-void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb)
+void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(GCodeException)
 {
 	uint32_t paramBit = 1;
 	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
@@ -159,7 +159,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb)
 }
 
 //TODO factor out the common code in the following several routines
-void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v)
+void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -211,7 +211,7 @@ void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v)
 	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddUParam(char c, uint32_t v)
+void CanMessageGenericConstructor::AddUParam(char c, uint32_t v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -277,7 +277,7 @@ void CanMessageGenericConstructor::AddUParam(char c, uint32_t v)
 	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddIParam(char c, int32_t v)
+void CanMessageGenericConstructor::AddIParam(char c, int32_t v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -343,7 +343,7 @@ void CanMessageGenericConstructor::AddIParam(char c, int32_t v)
 	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddFParam(char c, float v)
+void CanMessageGenericConstructor::AddFParam(char c, float v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -386,7 +386,7 @@ void CanMessageGenericConstructor::AddFParam(char c, float v)
 	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddCharParam(char c, char v)
+void CanMessageGenericConstructor::AddCharParam(char c, char v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -429,7 +429,7 @@ void CanMessageGenericConstructor::AddCharParam(char c, char v)
 	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddStringParam(char c, const char *v)
+void CanMessageGenericConstructor::AddStringParam(char c, const char *v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;

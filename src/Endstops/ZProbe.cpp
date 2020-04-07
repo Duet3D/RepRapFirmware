@@ -227,7 +227,7 @@ bool ZProbe::Acknowledge(EndstopHitDetails what) noexcept
 	return what.GetAction() == EndstopHitAction::stopAll;
 }
 
-GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	GCodeResult err = GCodeResult::ok;
 	bool seen = false;
@@ -319,7 +319,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 	return err;
 }
 
-GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen)
+GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen) THROWS(GCodeException)
 {
 	gb.TryGetFValue('H', diveHeight, seen);					// dive height
 	if (gb.Seen('F'))										// feed rate i.e. probing speed

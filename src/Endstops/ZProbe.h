@@ -20,7 +20,7 @@ public:
 	virtual uint16_t GetRawReading() const noexcept = 0;
 	virtual void SetProbing(bool isProbing) noexcept = 0;
 	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
-	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS_GCODE_EXCEPTION;		// 'seen' is an in-out parameter
+	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
 
 #if SUPPORT_CAN_EXPANSION
@@ -54,7 +54,7 @@ public:
 	bool IsDeployedByUser() const noexcept { return isDeployedByUser; }
 
 	void SetProbingAway(const bool probingAway) noexcept { misc.parts.probingAway = probingAway; }
-	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetTriggerHeight(float height) noexcept { triggerHeight = height; }
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }

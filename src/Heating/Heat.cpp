@@ -139,7 +139,7 @@ ReadLockedPointer<Heater> Heat::FindHeater(int heater) const noexcept
 }
 
 // Process M307
-GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const unsigned int heater = gb.GetLimitedUIValue('H', MaxHeaters);
 	const auto h = FindHeater(heater);
@@ -153,7 +153,7 @@ GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply
 }
 
 // Process M301 or M304. 'heater' is the default heater number to use.
-GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (gb.Seen('H'))
 	{
@@ -868,7 +868,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCo
 }
 
 // Process M308
-GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	gb.MustSee('S');
 	const unsigned sensorNum = gb.GetUIValue();
@@ -967,7 +967,7 @@ const char *Heat::GetHeaterSensorName(size_t heater) const noexcept
 }
 
 // Configure heater protection (M143). Returns true if an error occurred
-GCodeResult Heat::HandleM143(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::HandleM143(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const size_t heaterNumber = (gb.Seen('H')) ? gb.GetLimitedUIValue('H', MaxHeaters) : 1;
 	const auto h = FindHeater(heaterNumber);

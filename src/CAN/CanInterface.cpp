@@ -128,7 +128,7 @@ static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
 // MCAN module initialization.
-static void configure_mcan()
+static void configure_mcan() noexcept
 {
 	// Initialise the CAN hardware
 	mcan_config config_mcan;
@@ -170,7 +170,7 @@ static void configure_mcan()
 	mcan_start(&mcan_instance);
 }
 
-static void GetLocalCanTiming(CanTiming& timing)
+static void GetLocalCanTiming(CanTiming& timing) noexcept
 {
 	const uint32_t nbtp = MCAN_MODULE->MCAN_NBTP;
 	const uint32_t tseg1 = (nbtp & MCAN_NBTP_NTSEG1_Msk) >> MCAN_NBTP_NTSEG1_Pos;
@@ -182,7 +182,7 @@ static void GetLocalCanTiming(CanTiming& timing)
 	timing.jumpWidth = (jw + 1) * (brp + 1);
 }
 
-static void ChangeLocalCanTiming(const CanTiming& timing)
+static void ChangeLocalCanTiming(const CanTiming& timing) noexcept
 {
 	// Sort out the bit timing
 	uint32_t period = timing.period;
@@ -254,7 +254,7 @@ CanRequestId CanInterface::AllocateRequestId(CanAddress destination) noexcept
 }
 
 // Allocate a CAN message buffer, throw if failed
-CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION
+CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer& gb) THROWS(GCodeException)
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -264,7 +264,7 @@ CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer& gb) THROWS_GCO
 	return buf;
 }
 
-void CanInterface::CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS_GCODE_EXCEPTION
+void CanInterface::CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS(GCodeException)
 {
 	if (address == 0 || address > CanId::MaxCanAddress)
 	{
@@ -839,7 +839,7 @@ bool CanInterface::SetRemotePressureAdvance(const CanDriversData& data, const St
 }
 
 // Handle M569 for a remote driver
-GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 pre(driver.IsRemote())
 {
 	CanMessageGenericConstructor cons(M569Params);
@@ -848,7 +848,7 @@ pre(driver.IsRemote())
 }
 
 // Handle M915 for a collection of remote drivers
-GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf)
+GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException)
 {
 	size_t start = 0;
 	for (;;)
@@ -899,7 +899,7 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_
 }
 
 // Get diagnostics from an expansion board
-GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
 
@@ -938,12 +938,12 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	return SendRequestAndGetStandardReply(buf, rid, reply);			// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
-GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	return GetRemoteInfo(CanMessageReturnInfo::typeM408, boardAddress, type, gb, reply, nullptr);
 }
 
-GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, 0, gb, reply);
 }
@@ -1039,7 +1039,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	longestWaitMessageType = 0;
 }
 
-GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef &reply)
+GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	CanMessageBuffer * const buf = AllocateBuffer(gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
@@ -1050,7 +1050,7 @@ GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber,
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, nullptr);
 }
 
-GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
+GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	// Get the address of the board whose parameters we are changing
 	gb.MustSee('B');
@@ -1128,7 +1128,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	return CanInterface::SendRequestAndGetStandardReply(buf.HandOver(), rid, reply, nullptr);
 }
 
-GCodeResult CanInterface::ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION
+GCodeResult CanInterface::ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	return GCodeResult::errorNotSupported;
 }

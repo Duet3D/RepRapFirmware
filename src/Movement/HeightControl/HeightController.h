@@ -21,7 +21,7 @@ class HeightController
 public:
 	HeightController() noexcept;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Start/stop height following
 	void Stop() noexcept;							// stop height following mode
 

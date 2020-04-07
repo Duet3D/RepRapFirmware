@@ -24,27 +24,27 @@ public:
 	CanMessageGenericConstructor(const ParamDescriptor *p_param) noexcept;
 
 	// Populate from a GCode message. Throws if an error occurs.
-	void PopulateFromCommand(GCodeBuffer& gb) THROWS_GCODE_EXCEPTION;
+	void PopulateFromCommand(GCodeBuffer& gb) THROWS(GCodeException);
 
 	// Methods to add parameters
-	void AddU64Param(char c, uint64_t v) THROWS_GCODE_EXCEPTION;
-	void AddUParam(char c, uint32_t v) THROWS_GCODE_EXCEPTION;
-	void AddIParam(char c, int32_t v) THROWS_GCODE_EXCEPTION;
-	void AddFParam(char c, float v) THROWS_GCODE_EXCEPTION;
-	void AddCharParam(char c, char v) THROWS_GCODE_EXCEPTION;
-	void AddStringParam(char c, const char* v) THROWS_GCODE_EXCEPTION;
+	void AddU64Param(char c, uint64_t v) THROWS(GCodeException);
+	void AddUParam(char c, uint32_t v) THROWS(GCodeException);
+	void AddIParam(char c, int32_t v) THROWS(GCodeException);
+	void AddFParam(char c, float v) THROWS(GCodeException);
+	void AddCharParam(char c, char v) THROWS(GCodeException);
+	void AddStringParam(char c, const char* v) THROWS(GCodeException);
 
 	GCodeResult SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) noexcept;
 
 private:
 	// Append a value to the data, returning true if it wouldn't fit
-	void StoreValue(const void *vp, size_t sz) THROWS_GCODE_EXCEPTION;
+	void StoreValue(const void *vp, size_t sz) THROWS(GCodeException);
 
 	// Append a value to the data, returning true if it wouldn't fit
-	template<class T> void StoreValue(const T& val) THROWS_GCODE_EXCEPTION { StoreValue(&val, sizeof(T)); }
+	template<class T> void StoreValue(const T& val) THROWS(GCodeException) { StoreValue(&val, sizeof(T)); }
 
 	// Insert a value in the data, returning true if it wouldn't fit
-	void InsertValue(const void *vp, size_t sz, size_t pos) THROWS_GCODE_EXCEPTION;
+	void InsertValue(const void *vp, size_t sz, size_t pos) THROWS(GCodeException);
 
 	static GCodeException ConstructParseException(const char *msg) noexcept
 	{

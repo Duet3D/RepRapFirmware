@@ -30,7 +30,7 @@ extern "C" [[noreturn]] void HeightControllerTaskStart(void *p) noexcept
 	static_cast<HeightController*>(p)->RunTask();
 }
 
-GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	uint32_t sn;

@@ -18,7 +18,7 @@ LocalZProbe::~LocalZProbe() noexcept
 	modulationPort.Release();
 }
 
-GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen)
+GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen) THROWS(GCodeException)
 {
 	// We must get and set the Z probe type first before setting the dive height etc. because different probe types need different port settings
 	if (gb.Seen('P'))
