@@ -716,12 +716,16 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 				machineState->CloseFile();
 			}
 		} while (PopState(false) && (abortAll || !machineState->DoingFile()));
-	}
 
 #if HAS_LINUX_INTERFACE
-	abortFile = requestAbort;
-	abortAllFiles = requestAbort && abortAll;
+		abortFile = requestAbort;
+		abortAllFiles = requestAbort && abortAll;
+	}
+	else if (!requestAbort)
+	{
+		abortFile = abortAllFiles = false;
 #endif
+	}
 }
 
 #if HAS_LINUX_INTERFACE
