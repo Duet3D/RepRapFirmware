@@ -1,3 +1,29 @@
+RepRapFirmware 3.01-RC7 (in preparation)
+=======================
+
+Recommended compatible firmware:
+- DuetWebControl 2.1.2 (TBC)
+- DuetWiFiServer 1.23
+- Duet Software Framework version 1.3.2 (TBC) (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC5
+
+Upgrade notes:
+- See notes for 3.01-RC6
+
+New features/changed behaviour:
+- Experimental support for NeoPixel LED strips has been added for Duet 3. See the M150 X parameter.
+- When running a simulation, object model property job.duration is now the simulated time not the actual time
+- Added object model property job.lastDuration
+- Times in the object model related to the current job are now repoorted as integers instead of floating point values
+- The heater fault messages have been improved (thanks gtj0)
+- Recent versions of S3D changed the print time comment when the print time is at least 1 hour but less than 2 hours. RRF now recognises the new format.
+
+Bug fixes:
+- The object model sequence numbers were not updated when several object model variables were changed, so DSF and DWC did not know they had changed and did not update their copies of them
+- M950 J# command with no other parameters reported the incorrect state of the input
+
+Known issues and limitations: as for 3.01-RC6
+
 RepRapFirmware 3.01-RC6
 =======================
 
