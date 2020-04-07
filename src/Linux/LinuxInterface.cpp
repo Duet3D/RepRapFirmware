@@ -105,12 +105,31 @@ void LinuxInterface::Spin()
 				StringRef flagsRef = flags.GetRef();
 				transfer->ReadGetObjectModel(packet->length, keyRef, flagsRef);
 
-				OutputBuffer *outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
-				if (outBuf != nullptr && !transfer->WriteObjectModel(outBuf))
+				try
 				{
-					// Failed to write the whole object model, try again later
-					packetAcknowledged = false;
-					OutputBuffer::ReleaseAll(outBuf);
+					OutputBuffer *outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
+					if (outBuf == nullptr || !transfer->WriteObjectModel(outBuf))
+					{
+						// Failed to write the whole object model, try again later
+						packetAcknowledged = false;
+						OutputBuffer::ReleaseAll(outBuf);
+					}
+				}
+				catch (GCodeException& e)
+				{
+					// Get the error message and send it back to DSF
+					OutputBuffer *buf;
+					if (OutputBuffer::Allocate(buf))
+					{
+						String<StringLength100> errorMessage;
+						e.GetMessage(errorMessage.GetRef(), nullptr);
+						buf->cat(errorMessage.c_str());
+						packetAcknowledged = transfer->WriteObjectModel(buf);
+					}
+					else
+					{
+						packetAcknowledged = false;
+					}
 				}
 				break;
 			}

@@ -236,7 +236,7 @@ void DataTransfer::ReadGetObjectModel(size_t packetLength, StringRef &key, Strin
 {
 	// Read header
 	const GetObjectModelHeader *header = ReadDataHeader<GetObjectModelHeader>();
-	const char *data = ReadData(packetLength - sizeof(PrintStartedHeader));
+	const char *data = ReadData(packetLength - sizeof(GetObjectModelHeader));
 
 	// Read key
 	key.copy(data, header->keyLength);
