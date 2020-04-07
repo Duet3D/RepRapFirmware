@@ -266,7 +266,7 @@ void LocalHeater::Spin() noexcept
 							++heatingFaultCount;
 							if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
 							{
-								RaiseHeaterFault("Heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
+								RaiseHeaterFault("Heater %u fault: temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
 													GetHeaterNumber(), (double)expectedRate);
 							}
 						}
@@ -288,7 +288,7 @@ void LocalHeater::Spin() noexcept
 					++heatingFaultCount;
 					if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
 					{
-						RaiseHeaterFault("Heating fault on heater %u, temperature excursion exceeded %.1f" DEGREE_SYMBOL "C.  Expected: %.1f" DEGREE_SYMBOL "C.  Actual: %.1f" DEGREE_SYMBOL "C.\n",
+						RaiseHeaterFault("Heater %u fault: temperature excursion exceeded %.1f" DEGREE_SYMBOL "C (target %.1f" DEGREE_SYMBOL "C, actual %.1f" DEGREE_SYMBOL "C)\n",
 											GetHeaterNumber(), (double)GetMaxTemperatureExcursion(), (double)targetTemperature, (double)temperature);
 					}
 				}
@@ -390,8 +390,9 @@ void LocalHeater::Spin() noexcept
 				}
 
 				// Verify that everything is operating in the required temperature range
-				for (HeaterMonitor& prot : monitors)
+				for (size_t i = 0; i < ARRAY_SIZE(monitors); ++i)
 				{
+					HeaterMonitor& prot = monitors[i];
 					if (!prot.Check())
 					{
 						lastPwm = 0.0;
@@ -403,7 +404,7 @@ void LocalHeater::Spin() noexcept
 							break;
 
 						case HeaterMonitorAction::GenerateFault:
-							RaiseHeaterFault("Heating fault on heater %u: heater monitor was triggered\n", GetHeaterNumber());
+							RaiseHeaterFault("Heater %u fault: heater monitor %u was triggered\n", GetHeaterNumber(), i);
 							break;
 
 						case HeaterMonitorAction::TemporarySwitchOff:
