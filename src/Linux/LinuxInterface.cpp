@@ -400,16 +400,18 @@ void LinuxInterface::Spin()
 			}
 
 			// Handle macro start requests
-			const char * const requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
-			if (requestedMacroFile != nullptr &&
-				transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
+			if (gb->IsMacroRequested())
 			{
-				if (reprap.Debug(moduleLinuxInterface))
+				const char * const requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
+				if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
 				{
-					reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
+					if (reprap.Debug(moduleLinuxInterface))
+					{
+						reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
+					}
+					gb->MacroRequestSent();
+					gb->Invalidate();
 				}
-				gb->RequestMacroFile(nullptr, reportMissing, fromCode);
-				gb->Invalidate();
 			}
 
 			// Handle file abort requests

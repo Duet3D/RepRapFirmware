@@ -107,7 +107,7 @@ void GCodeBuffer::Reset() noexcept
 	while (PopState(false)) { }
 #if HAS_LINUX_INTERFACE
 	requestedMacroFile.Clear();
-	reportMissingMacro = isMacroFromCode = abortFile = abortAllFiles = false;
+	reportMissingMacro = isMacroFromCode = macroRequested = abortFile = abortAllFiles = false;
 	isBinaryBuffer = false;
 #endif
 	Init();
@@ -751,25 +751,25 @@ void GCodeBuffer::SetPrintFinished() noexcept
 void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept
 {
 	machineState->SetFileExecuting();
-	if (filename == nullptr)
+	if (!fromCode)
 	{
-		requestedMacroFile.Clear();
+		// This suppresses unwanted replies in the USB console
+		isBinaryBuffer = true;
 	}
-	else
-	{
-		requestedMacroFile.copy(filename);
-	}
+
+	requestedMacroFile.copy(filename);
 	reportMissingMacro = reportMissing;
 	isMacroFromCode = fromCode;
+	macroRequested = true;
+
 	abortFile = abortAllFiles = false;
-	isBinaryBuffer = true;
 }
 
 const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCode) const noexcept
 {
 	reportMissing = reportMissingMacro;
 	fromCode = isMacroFromCode;
-	return requestedMacroFile.IsEmpty() ? nullptr : requestedMacroFile.c_str();
+	return requestedMacroFile.c_str();
 }
 
 #endif

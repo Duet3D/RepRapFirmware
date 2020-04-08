@@ -558,7 +558,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					runningConfigFile = false;
 				}
 
-				const bool hadFileError = gb.MachineState().fileError;
+				const bool hadFileError = gb.MachineState().fileError, wasBinary = gb.IsBinary();
 				Pop(gb, false);
 				gb.Init();
 				if (gb.GetState() == GCodeState::doingUnsupportedCode)
@@ -583,11 +583,8 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					// Output a warning message on demand
 					if (hadFileError)
 					{
-						(void)gb.Seen('P');
-						String<MaxFilenameLength + 32> reply;
-						gb.GetPossiblyQuotedString(reply.GetRef());
-						reply.Prepend("Macro file ");
-						reply.cat(" not found");
+						bool reportMissing, fromCode;
+						reply.printf("Macro file %s not found", gb.GetRequestedMacroFile(reportMissing, fromCode));
 						HandleReply(gb, GCodeResult::warning, reply.c_str());
 					}
 					else
@@ -605,6 +602,13 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					UnlockAll(gb);
 					HandleReply(gb, GCodeResult::ok, "");
+				}
+
+				// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
+				if (!wasBinary)
+				{
+					MessageType type = (MessageType)((1u << gb.GetChannel().ToBaseType()) | BinaryCodeReplyFlag);
+					platform.Message(type, "");
 				}
 			}
 		}

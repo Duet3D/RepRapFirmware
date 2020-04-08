@@ -133,9 +133,10 @@ public:
 	void SetPrintFinished() noexcept;							// Mark the print file as finished
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 
-	bool IsMacroRequested() const noexcept { return !requestedMacroFile.IsEmpty(); }			// Indicates if a macro file is being requested
+	bool IsMacroRequested() const noexcept { return macroRequested; }	// Indicates if a macro file is being requested
 	void RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept;	// Request execution of a file macro
 	const char *GetRequestedMacroFile(bool& reportMissing, bool &fromCode) const noexcept;		// Return requested macro file or nullptr if none
+	void MacroRequestSent() noexcept { macroRequested = false; }		// Called when a macro file request has been sent
 
 	bool IsAbortRequested() const noexcept;						// Is the cancellation of the current file requested?
 	bool IsAbortAllRequested() const noexcept;					// Is the cancellation of all files being executed on this channel requested?
@@ -240,7 +241,8 @@ private:
 	String<MaxFilenameLength> requestedMacroFile;
 	uint8_t
 		reportMissingMacro : 1,
-		isMacroFromCode: 1,
+		isMacroFromCode : 1,
+		macroRequested : 1,
 		abortFile : 1,
 		abortAllFiles : 1,
 		invalidated : 1,
