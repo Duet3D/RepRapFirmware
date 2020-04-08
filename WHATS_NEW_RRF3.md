@@ -8,7 +8,8 @@ Recommended compatible firmware:
 - Duet 3 expansion board and tool board firmware 3.01-RC5
 
 Upgrade notes:
-- See notes for 3.01-RC6
+- The maximum allowed tool number in a M563 command is now 31
+- See also the notes for 3.01-RC6 if upgrading from an earlier version
 
 New features/changed behaviour:
 - Experimental support for NeoPixel LED strips has been added for Duet 3. See the M150 X parameter.
