@@ -1437,7 +1437,8 @@ void Platform::DisableAutoSave() noexcept
 
 bool Platform::IsPowerOk() const noexcept
 {
-	return !autoSaveEnabled || currentVin > autoPauseReading;
+	// FIXME Implement auto-save for the SBC
+	return (!autoSaveEnabled || reprap.UsingLinuxInterface()) || currentVin > autoPauseReading;
 }
 
 void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage) noexcept
