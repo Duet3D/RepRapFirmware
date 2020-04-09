@@ -847,6 +847,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 226: // Synchronous pause, normally initiated from within the file being printed
+		case 601:
 			if (!isPaused && !IsPausing())
 			{
 				if (gb.IsDoingFileMacro())
@@ -3476,7 +3477,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 #endif
 
-		// For case 600, see 226
+		// For cases 600 and 601, see 226
 
 		// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
 

@@ -365,22 +365,32 @@ void DDARing::Interrupt(Platform& p) noexcept
 			const uint16_t clocksTaken = StepTimer::GetTimerTicks16() - isrStartTime;
 			if (clocksTaken >= DDA::MaxStepInterruptTime)
 			{
-				// Force a break by updating the move start time
-				cdda->InsertHiccup(DDA::HiccupTime);
-				for (DDA *nextDda = cdda->GetNext(); nextDda->GetState() == DDA::frozen; nextDda = nextDda->GetNext())
+				// Force a break by updating the move start time.
+				++numHiccups;
+#if SUPPORT_CAN_EXPANSION
+				uint32_t cumulativeHiccupTime = 0;
+#endif
+				// If the inserted hiccup is too short then it won't help. So we double the hiccup time on each iteration.
+				for (uint32_t hiccupTime = DDA::HiccupTime ; ; hiccupTime *= 2)
 				{
-					nextDda->InsertHiccup(DDA::HiccupTime);
-				}
+					DDA *nextDda = cdda;
+					do
+					{
+						nextDda->InsertHiccup(hiccupTime);
+						nextDda = nextDda->GetNext();
+					} while (nextDda->GetState() == DDA::frozen);
 
 #if SUPPORT_CAN_EXPANSION
-				CanMotion::InsertHiccup(DDA::HiccupTime);
+					cumulativeHiccupTime += hiccupTime;
 #endif
-				++numHiccups;
-
-				// Reschedule the next step interrupt. This time it should succeed.
-				if (!cdda->ScheduleNextStepInterrupt(timer))
-				{
-					return;
+					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
+					if (!cdda->ScheduleNextStepInterrupt(timer))
+					{
+#if SUPPORT_CAN_EXPANSION
+						CanMotion::InsertHiccup(cumulativeHiccupTime);
+#endif
+						return;
+					}
 				}
 			}
 		}
