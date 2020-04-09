@@ -295,15 +295,17 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 
 	// 6. MachineModel.seqs
 	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
+#if HAS_MASS_STORAGE
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
+#endif
 	{ "fans",					OBJECT_MODEL_FUNC((int32_t)self->fansSeq),								ObjectModelEntryFlags::live },
 	{ "heat",					OBJECT_MODEL_FUNC((int32_t)self->heatSeq),								ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC((int32_t)self->inputsSeq),							ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC((int32_t)self->jobSeq),								ObjectModelEntryFlags::live },
 	// no need for 'limits' because it never changes
 	{ "move",					OBJECT_MODEL_FUNC((int32_t)self->moveSeq),								ObjectModelEntryFlags::live },
-	{ "network",				OBJECT_MODEL_FUNC((int32_t)self->networkSeq),							ObjectModelEntryFlags::live },
 #if HAS_NETWORKING
+	{ "network",				OBJECT_MODEL_FUNC((int32_t)self->networkSeq),							ObjectModelEntryFlags::live },
 	{ "reply",					OBJECT_MODEL_FUNC_NOSELF((int32_t)HttpResponder::GetReplySeq()),		ObjectModelEntryFlags::live },
 #endif
 #if SUPPORT_SCANNER
@@ -320,14 +322,18 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
-	6 + HAS_MASS_STORAGE,		// number of sub-tables
-	15 + SUPPORT_SCANNER,
+	7,		// number of sub-tables
+	14 + SUPPORT_SCANNER + HAS_MASS_STORAGE,
 #if HAS_MASS_STORAGE
-	8, 							// directories
+	8, 																		// directories
 #else
 	0,
 #endif
-	22, 12 + HAS_VOLTAGE_MONITOR, 2, 6, 12 + HAS_NETWORKING + SUPPORT_SCANNER + HAS_MASS_STORAGE
+	22,
+	12 + HAS_VOLTAGE_MONITOR,
+	2,
+	6,
+	10 + 2 * HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE		// seqs
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
