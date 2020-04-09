@@ -401,7 +401,13 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		simulationMode = 1;
 		reprap.GetMove().Simulate(simulationMode);
 		reprap.GetPrintMonitor().StartingPrint(file.c_str());
-		StartPrinting(true);
+#if HAS_LINUX_INTERFACE
+		if (!reprap.UsingLinuxInterface())
+#endif
+		{
+			// If using a SBC, this is already called when the print file info is set
+			StartPrinting(true);
+		}
 		reply.printf("Simulating print of file %s", file.c_str());
 		return GCodeResult::ok;
 	}
