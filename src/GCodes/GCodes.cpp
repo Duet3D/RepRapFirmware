@@ -3168,8 +3168,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 {
 	// Check tool number
-	gb.MustSee('P');
-	const unsigned int toolNumber = gb.GetUIValue();
+	const unsigned int toolNumber = gb.GetLimitedUIValue('P', MaxTools);
 
 	bool seen = false;
 

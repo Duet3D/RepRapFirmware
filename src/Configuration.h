@@ -52,6 +52,8 @@ constexpr float DefaultMinFeedrate = 0.5;				// The minimum movement speed (extr
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
 
+constexpr uint32_t MaxTools = 50;						// this limit is to stop the serialised object model getting too large
+
 // Timeouts
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
 constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds
