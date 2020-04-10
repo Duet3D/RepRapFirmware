@@ -344,14 +344,22 @@ bool GCodes::IsDaemonBusy() const noexcept
 	return triggerGCode->IsDoingFile();
 }
 
-// Copy the feed rate etc. from the daemon to the input channels
-void GCodes::CopyConfigFinalValues(GCodeBuffer& gb) noexcept
+// Copy the feed rate etc. from the channel that was running config.g to the input channels
+void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 {
-	for (GCodeBuffer *gb2 : gcodeSources)
+	if (runningConfigFile)
 	{
-		if (gb2 != nullptr)
+		gb.MachineState().previous->CopyStateFrom(gb.MachineState());	// so that M83 etc. in  nested file don't get forgotten
+		if (gb.MachineState().previous->previous == nullptr)
 		{
-			gb2->MachineState().CopyStateFrom(gb.MachineState());
+			for (GCodeBuffer *gb2 : gcodeSources)
+			{
+				if (gb2 != nullptr && gb2 != &gb)
+				{
+					gb2->MachineState().CopyStateFrom(gb.MachineState());
+				}
+			}
+			runningConfigFile = false;
 		}
 	}
 }
@@ -552,12 +560,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Finished a macro or finished processing config.g
 				gb.MachineState().CloseFile();
-				if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
-				{
-					CopyConfigFinalValues(gb);
-					runningConfigFile = false;
-				}
-
+				CheckFinishedRunningConfigFile(gb);
 				const bool hadFileError = gb.MachineState().fileError, wasBinary = gb.IsBinary();
 				Pop(gb, false);
 				gb.Init();
@@ -724,11 +727,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// Finished a macro or finished processing config.g
 				gb.GetFileInput()->Reset(fd);
 				fd.Close();
-				if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
-				{
-					CopyConfigFinalValues(gb);
-					runningConfigFile = false;
-				}
+				CheckFinishedRunningConfigFile(gb);
 				Pop(gb, false);
 				gb.Init();
 				if (gb.GetState() == GCodeState::normal)
