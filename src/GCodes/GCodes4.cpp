@@ -1306,7 +1306,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 	}
 
-	if (gb.GetState() == GCodeState::normal && !gb.MachineState().waitingForAcknowledgement)
+	if (gb.GetState() == GCodeState::normal)
 	{
 		// We completed a command, so unlock resources and tell the host about it
 		gb.StopTimer();
