@@ -410,7 +410,7 @@ private:
 	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;				// Write the config-override header
 #endif
 
-	void CopyConfigFinalValues(GCodeBuffer& gb) noexcept;						// Copy the feed rate etc. from the daemon to the input channels
+	void CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept;						// Copy the feed rate etc. from the daemon to the input channels
 
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); // Do manual probe in arbitrary direction
