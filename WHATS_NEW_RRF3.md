@@ -24,7 +24,8 @@ Bug fixes:
 - The object model sequence numbers were not updated when several object model variables were changed, so DSF and DWC did not know they had changed and did not update their copies of them
 - M950 J# command with no other parameters reported the incorrect state of the input
 - If nested config.g files were used (e.g. because M505 was used to change the system folder) then the effect of M83, G1 Fxxx etc. commands in the nested file were lost
-- G30 and G29 commands did not set variable 'result' when some types of error occurred, e.g. when the Z probe was already triggered at the start of the proibing move.
+- G30 and G29 commands did not set variable 'result' when some types of error occurred, e.g. when the Z probe was already triggered at the start of the probing move.
+- In the object model the speed factor and extrusion factors were only reported to one decimal place
 - Other fixes related to communication with DSF
 
 Known issues and limitations: as for 3.01-RC6
