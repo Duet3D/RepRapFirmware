@@ -2610,10 +2610,11 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 			FileData &file = gb.MachineState().fileState;
 			gb.GetFileInput()->Reset(file);
 			file.Close();
+
+			gb.PopState(true);
 #endif
 		}
 
-		gb.PopState(true);
 		gb.Init();
 	}
 }
