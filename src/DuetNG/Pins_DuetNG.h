@@ -102,7 +102,7 @@ constexpr Pin UsbVBusPin = PortCPin(22);			// Pin used to monitor VBUS on USB po
 #define I2C_IRQn	WIRE_ISR_ID						// The interrupt number it uses
 
 constexpr Pin DueXnExpansionStart = 200;			// Pin numbers 200-215 are on the I/O expander
-constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on the additional I/O expander
+constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-251 are on the additional I/O expander
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -298,22 +298,38 @@ constexpr PinEntry PinTable[] =
 	{ 210,			PinCapability::rwpwm,	"duex.gp2" },
 	{ 209,			PinCapability::rwpwm,	"duex.gp3" },
 	{ 208,			PinCapability::rwpwm,	"duex.gp4" },
-	{ 220,			PinCapability::rwpwm,	"sx1509b.0" },
-	{ 221,			PinCapability::rwpwm,	"sx1509b.1" },
-	{ 222,			PinCapability::rwpwm,	"sx1509b.2" },
-	{ 223,			PinCapability::rwpwm,	"sx1509b.3" },
-	{ 224,			PinCapability::rwpwm,	"sx1509b.4" },
-	{ 225,			PinCapability::rwpwm,	"sx1509b.5" },
-	{ 226,			PinCapability::rwpwm,	"sx1509b.6" },
-	{ 227,			PinCapability::rwpwm,	"sx1509b.7" },
-	{ 228,			PinCapability::rwpwm,	"sx1509b.8" },
-	{ 229,			PinCapability::rwpwm,	"sx1509b.9" },
-	{ 230,			PinCapability::rwpwm,	"sx1509b.10" },
-	{ 231,			PinCapability::rwpwm,	"sx1509b.11" },
-	{ 232,			PinCapability::rwpwm,	"sx1509b.12" },
-	{ 233,			PinCapability::rwpwm,	"sx1509b.13" },
-	{ 234,			PinCapability::rwpwm,	"sx1509b.14" },
-	{ 235,			PinCapability::rwpwm,	"sx1509b.15" }
+	{ 220,			PinCapability::rwpwm,	"sx1509b.0,0x71.0" },
+	{ 221,			PinCapability::rwpwm,	"sx1509b.1,0x71.1" },
+	{ 222,			PinCapability::rwpwm,	"sx1509b.2,0x71.2" },
+	{ 223,			PinCapability::rwpwm,	"sx1509b.3,0x71.3" },
+	{ 224,			PinCapability::rwpwm,	"sx1509b.4,0x71.4" },
+	{ 225,			PinCapability::rwpwm,	"sx1509b.5,0x71.5" },
+	{ 226,			PinCapability::rwpwm,	"sx1509b.6,0x71.6" },
+	{ 227,			PinCapability::rwpwm,	"sx1509b.7,0x71.7" },
+	{ 228,			PinCapability::rwpwm,	"sx1509b.8,0x71.8" },
+	{ 229,			PinCapability::rwpwm,	"sx1509b.9,0x71.9" },
+	{ 230,			PinCapability::rwpwm,	"sx1509b.10,0x71.10" },
+	{ 231,			PinCapability::rwpwm,	"sx1509b.11,0x71.11" },
+	{ 232,			PinCapability::rwpwm,	"sx1509b.12,0x71.12" },
+	{ 233,			PinCapability::rwpwm,	"sx1509b.13,0x71.13" },
+	{ 234,			PinCapability::rwpwm,	"sx1509b.14,0x71.14" },
+	{ 235,			PinCapability::rwpwm,	"sx1509b.15,0x71.15" },
+	{ 236,			PinCapability::rwpwm,	"sx1509b2.0,0x3F.0" },
+	{ 237,			PinCapability::rwpwm,	"sx1509b2.1,0x3F.1" },
+	{ 238,			PinCapability::rwpwm,	"sx1509b2.2,0x3F.2" },
+	{ 239,			PinCapability::rwpwm,	"sx1509b2.3,0x3F.3" },
+	{ 240,			PinCapability::rwpwm,	"sx1509b2.4,0x3F.4" },
+	{ 241,			PinCapability::rwpwm,	"sx1509b2.5,0x3F.5" },
+	{ 242,			PinCapability::rwpwm,	"sx1509b2.6,0x3F.6" },
+	{ 243,			PinCapability::rwpwm,	"sx1509b2.7,0x3F.7" },
+	{ 244,			PinCapability::rwpwm,	"sx1509b2.8,0x3F.8" },
+	{ 245,			PinCapability::rwpwm,	"sx1509b2.9,0x3F.9" },
+	{ 246,			PinCapability::rwpwm,	"sx1509b2.10,0x3F.10" },
+	{ 247,			PinCapability::rwpwm,	"sx1509b2.11,0x3F.11" },
+	{ 248,			PinCapability::rwpwm,	"sx1509b2.12,0x3F.12" },
+	{ 249,			PinCapability::rwpwm,	"sx1509b2.13,0x3F.13" },
+	{ 250,			PinCapability::rwpwm,	"sx1509b2.14,0x3F.14" },
+	{ 251,			PinCapability::rwpwm,	"sx1509b2.15,0x3F.15" }
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);

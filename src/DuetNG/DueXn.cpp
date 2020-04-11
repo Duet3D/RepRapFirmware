@@ -24,10 +24,15 @@ namespace DuetExpansion
 	static ExpansionBoardType dueXnBoardType = ExpansionBoardType::none;
 
 	const uint8_t AdditionalIoExpanderAddress = 0x71;	// address of the SX1509B we allow for general I/O expansion
+	const uint8_t AdditionalIoExpanderAddress2 = 0x3F;
 
 	static SX1509 additionalIoExpander;
 	static bool additionalIoExpanderPresent = false;
 	static uint16_t additionalIoInputBits = 0;
+
+	static SX1509 additionalIoExpander2;
+	static bool additionalIoExpanderPresent2 = false;
+	static uint16_t additionalIoInputBits2 = 0;
 
 	static volatile bool taskWaiting = false;
 	static volatile bool inputsChanged = false;
@@ -178,6 +183,24 @@ namespace DuetExpansion
 			additionalIoInputBits = additionalIoExpander.digitalReadAll();
 			additionalIoExpanderPresent = true;
 		}
+
+		bool ret2;
+		unsigned int attempts2 = 0;
+		do
+		{
+			++attempts2;
+			delay(50);
+			ret2 = additionalIoExpander2.begin(AdditionalIoExpanderAddress2);
+		} while (!ret2 && attempts2 < 5);
+		(void)I2C_IFACE.GetErrorCounts(true);				// clear the error counts in case there wasn't a device there or we didn't find it first time
+
+		if (ret2)
+		{
+			additionalIoExpander2.pinModeMultiple((1u << 16) - 1, INPUT_PULLDOWN);
+			additionalIoInputBits2 = additionalIoExpander2.digitalReadAll();
+			additionalIoExpanderPresent2 = true;
+		}
+
 	}
 
 	// Return the name of the expansion board, or nullptr if no expansion board
@@ -199,7 +222,19 @@ namespace DuetExpansion
 	// Return the name of the additional expansion board, or nullptr if no expansion board
 	const char* _ecv_array null GetAdditionalExpansionBoardName()
 	{
-		return (additionalIoExpanderPresent) ? "SX1509B expander" : nullptr;
+		if (additionalIoExpanderPresent && additionalIoExpanderPresent2)
+		{
+			return "SX1509B expander (0x71), SX1509B expander (0x3E)";
+		}
+		else if (additionalIoExpanderPresent)
+		{
+			return "SX1509B expander (0x71)";
+		}
+		else if (additionalIoExpanderPresent2)
+		{
+			return "SX1509B expander (0x3E)";
+		}
+		return nullptr;
 	}
 
 	// Set the I/O mode of a pin
@@ -236,11 +271,15 @@ namespace DuetExpansion
 				dueXnExpander.pinMode(pin, mode);
 			}
 		}
-		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
+		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 32)
 		{
-			if (additionalIoExpanderPresent)
+			if (additionalIoExpanderPresent && pin < AdditionalIoExpansionStart + 16)
 			{
 				additionalIoExpander.pinMode(pin - AdditionalIoExpansionStart, mode);
+			}
+			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16)
+			{
+				additionalIoExpander2.pinMode(pin - (AdditionalIoExpansionStart+16), mode);
 			}
 		}
 	}
@@ -262,9 +301,9 @@ namespace DuetExpansion
 				return (dueXnInputBits & (1u << (pin - DueXnExpansionStart))) != 0;
 			}
 		}
-		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
+		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 32)
 		{
-			if (additionalIoExpanderPresent)
+			if (additionalIoExpanderPresent && pin < AdditionalIoExpansionStart + 16)
 			{
 				// We don't have an interrupt from the additional I/O expander, so always read fresh data.
 				// If this is called from inside an ISR, we will get stale data.
@@ -274,6 +313,17 @@ namespace DuetExpansion
 				}
 
 				return (additionalIoInputBits & (1u << (pin - AdditionalIoExpansionStart))) != 0;
+			}
+			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16)
+			{
+				// We don't have an interrupt from the additional I/O expander, so always read fresh data.
+				// If this is called from inside an ISR, we will get stale data.
+				if (!inInterrupt() && __get_BASEPRI() == 0)								// we must not call expander.digitalRead() from within an ISR
+				{
+					additionalIoInputBits2 = additionalIoExpander2.digitalReadAll();
+				}
+
+				return (additionalIoInputBits2 & (1u << (pin - (AdditionalIoExpansionStart+16))) != 0;
 			}
 		}
 
@@ -290,11 +340,15 @@ namespace DuetExpansion
 				dueXnExpander.digitalWrite(pin - DueXnExpansionStart, high);
 			}
 		}
-		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
+		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 32)
 		{
-			if (additionalIoExpanderPresent)
+			if (additionalIoExpanderPresent && pin < AdditionalIoExpansionStart + 16)
 			{
 				additionalIoExpander.digitalWrite(pin - AdditionalIoExpansionStart, high);
+			}
+			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16) {
+			}
+				additionalIoExpander.digitalWrite(pin - (AdditionalIoExpansionStart+16), high);
 			}
 		}
 	}
@@ -309,11 +363,15 @@ namespace DuetExpansion
 				dueXnExpander.analogWrite(pin - DueXnExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
 			}
 		}
-		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
+		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 32)
 		{
-			if (additionalIoExpanderPresent)
+			if (additionalIoExpanderPresent && pin < AdditionalIoExpansionStart + 16)
 			{
 				additionalIoExpander.analogWrite(pin - AdditionalIoExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
+			}
+			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16)
+			{
+				additionalIoExpander2.analogWrite(pin - (AdditionalIoExpansionStart+16), (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
 			}
 		}
 	}
