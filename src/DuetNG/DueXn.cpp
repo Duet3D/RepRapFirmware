@@ -279,7 +279,7 @@ namespace DuetExpansion
 			}
 			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16)
 			{
-				additionalIoExpander2.pinMode(pin - (AdditionalIoExpansionStart+16), mode);
+				additionalIoExpander2.pinMode(pin - (AdditionalIoExpansionStart + 16), mode);
 			}
 		}
 	}
@@ -323,7 +323,7 @@ namespace DuetExpansion
 					additionalIoInputBits2 = additionalIoExpander2.digitalReadAll();
 				}
 
-				return (additionalIoInputBits2 & (1u << (pin - (AdditionalIoExpansionStart+16))) != 0;
+				return (additionalIoInputBits2 & (1u << (pin - (AdditionalIoExpansionStart + 16)))) != 0;
 			}
 		}
 
@@ -346,9 +346,9 @@ namespace DuetExpansion
 			{
 				additionalIoExpander.digitalWrite(pin - AdditionalIoExpansionStart, high);
 			}
-			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16) {
-			}
-				additionalIoExpander.digitalWrite(pin - (AdditionalIoExpansionStart+16), high);
+			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16)
+			{
+				additionalIoExpander.digitalWrite(pin - (AdditionalIoExpansionStart + 16), high);
 			}
 		}
 	}
@@ -371,7 +371,7 @@ namespace DuetExpansion
 			}
 			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16)
 			{
-				additionalIoExpander2.analogWrite(pin - (AdditionalIoExpansionStart+16), (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
+				additionalIoExpander2.analogWrite(pin - (AdditionalIoExpansionStart + 16), (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
 			}
 		}
 	}
