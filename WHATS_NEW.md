@@ -9,7 +9,7 @@ Compatible files:
 
 Bug fixes:
 - On delta printers, M564 S0 did not allow you to exceed the M665 print radius parameter
-- Fixed a possible 1-character buffer overflow in class OutputBuffer
+- Fixed a 1-character buffer overflow in class OutputBuffer. The effects of this overflow were unknown but potentially severe.
 - On tool changers, if the different tools did not have equal XY offsets then G1 X moves in the tpre and tpost tool change files might perform uncommanded Y movement, and vice versa
 
 Version 2.05
