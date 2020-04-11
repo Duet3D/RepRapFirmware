@@ -18,11 +18,13 @@ New features/changed behaviour:
 - Times in the object model related to the current job are now reported as integers instead of floating point values
 - The heater fault messages have been improved (thanks gtj0)
 - Recent versions of S3D changed the print time comment when the print time is at least 1 hour but less than 2 hours. RRF now recognises the new format.
+- Added restore points to the object model
 
 Bug fixes:
 - The object model sequence numbers were not updated when several object model variables were changed, so DSF and DWC did not know they had changed and did not update their copies of them
 - M950 J# command with no other parameters reported the incorrect state of the input
 - If nested config.g files were used (e.g. because M505 was used to change the system folder) then the effect of M83, G1 Fxxx etc. commands in the nested file were lost
+- G30 and G29 commands did not set variable 'result' when some types of error occurred, e.g. when the Z probe was already triggered at the start of the proibing move.
 - Other fixes related to communication with DSF
 
 Known issues and limitations: as for 3.01-RC6
