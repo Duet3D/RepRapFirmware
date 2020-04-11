@@ -19,6 +19,7 @@ New features/changed behaviour:
 - The heater fault messages have been improved (thanks gtj0)
 - Recent versions of S3D changed the print time comment when the print time is at least 1 hour but less than 2 hours. RRF now recognises the new format.
 - Added restore points to the object model
+- Added tools and trackedObjects to the Limits section of the object model
 
 Bug fixes:
 - The object model sequence numbers were not updated when several object model variables were changed, so DSF and DWC did not know they had changed and did not update their copies of them
