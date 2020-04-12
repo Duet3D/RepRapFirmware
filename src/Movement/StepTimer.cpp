@@ -161,19 +161,21 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	{
 		for (;;)
 		{
-			pendingList = tmr->next;									// remove it from the pending list
+			StepTimer * const nextTimer = tmr->next;
+			pendingList = nextTimer;								// remove it from the pending list
+
 			tmr->active = false;
-			tmr->callback(tmr->cbParam);								// execute its callback. This may schedule another callback and hence change the pending list.
+			tmr->callback(tmr->cbParam);							// execute its callback. This may schedule another callback and hence change the pending list.
 
 			tmr = pendingList;
-			if (tmr == nullptr)
+			if (tmr == nullptr || tmr != nextTimer)
 			{
-				break;
+				break;												// no more timers, or another timer has been inserted and an interrupt scheduled
 			}
 
 			if (!StepTimer::ScheduleTimerInterrupt(tmr->whenDue))
 			{
-				break;													// interrupt isn't due yet and a new one has been scheduled
+				break;												// interrupt isn't due yet and a new one has been scheduled
 			}
 		}
 	}

@@ -477,14 +477,14 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		catch (GCodeException& e)
 		{
 			e.GetMessage(reply, &gb);
-			HandleReply(gb, GCodeResult::error, reply.c_str());
+			HandleReplyPreserveResult(gb, GCodeResult::error, reply.c_str());
 			gb.Init();
 			return;
 		}
 
 		if (done)
 		{
-			HandleReply(gb, GCodeResult::ok, reply.c_str());
+			HandleReplyPreserveResult(gb, GCodeResult::ok, reply.c_str());
 		}
 		else
 		{
@@ -650,7 +650,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				catch (GCodeException& e)
 				{
 					e.GetMessage(reply, &gb);
-					HandleReply(gb, GCodeResult::error, reply.c_str());
+					HandleReplyPreserveResult(gb, GCodeResult::error, reply.c_str());
 					gb.Init();
 					AbortPrint(gb);
 					break;
@@ -658,7 +658,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 				if (done)
 				{
-					HandleReply(gb, GCodeResult::ok, reply.c_str());
+					HandleReplyPreserveResult(gb, GCodeResult::ok, reply.c_str());
 				}
 				else
 				{
@@ -3325,12 +3325,18 @@ void GCodes::SaveFanSpeeds() noexcept
 	pausedDefaultFanSpeed = lastDefaultFanSpeed;
 }
 
-// Handle sending a reply back to the appropriate interface(s).
+// Handle sending a reply back to the appropriate interface(s) and update lastResult
 // Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
 void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply) noexcept
 {
 	gb.SetLastResult(rslt);
+	HandleReplyPreserveResult(gb, rslt, reply);
+}
 
+// Handle sending a reply back to the appropriate interface(s) but dpm't update lastResult
+// Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
+void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept
+{
 #if HAS_LINUX_INTERFACE
 	// Deal with replies to the Linux interface
 	if (gb.IsBinary())
