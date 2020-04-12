@@ -224,7 +224,7 @@ namespace DuetExpansion
 	{
 		if (additionalIoExpanderPresent && additionalIoExpanderPresent2)
 		{
-			return "SX1509B expander (0x71), SX1509B expander (0x3E)";
+			return "SX1509B expander (0x71 & 0x3E)";
 		}
 		else if (additionalIoExpanderPresent)
 		{
@@ -233,8 +233,10 @@ namespace DuetExpansion
 		else if (additionalIoExpanderPresent2)
 		{
 			return "SX1509B expander (0x3E)";
+		} else
+		{
+			return nullptr;
 		}
-		return nullptr;
 	}
 
 	// Set the I/O mode of a pin
@@ -348,7 +350,7 @@ namespace DuetExpansion
 			}
 			else if (additionalIoExpanderPresent2 && pin >= AdditionalIoExpansionStart + 16)
 			{
-				additionalIoExpander.digitalWrite(pin - (AdditionalIoExpansionStart + 16), high);
+				additionalIoExpander2.digitalWrite(pin - (AdditionalIoExpansionStart + 16), high);
 			}
 		}
 	}
