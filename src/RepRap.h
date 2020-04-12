@@ -203,6 +203,7 @@ protected:
 	OBJECT_MODEL_ARRAY(inputs)
 	OBJECT_MODEL_ARRAY(spindles)
 	OBJECT_MODEL_ARRAY(tools)
+	OBJECT_MODEL_ARRAY(restorePoints)
 	OBJECT_MODEL_ARRAY(volumes)
 
 private:

@@ -349,8 +349,8 @@ void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 {
 	if (runningConfigFile)
 	{
-		gb.MachineState().previous->CopyStateFrom(gb.MachineState());	// so that M83 etc. in  nested file don't get forgotten
-		if (gb.MachineState().previous->previous == nullptr)
+		gb.MachineState().GetPrevious()->CopyStateFrom(gb.MachineState());	// so that M83 etc. in  nested file don't get forgotten
+		if (gb.MachineState().GetPrevious()->GetPrevious() == nullptr)
 		{
 			for (GCodeBuffer *gb2 : gcodeSources)
 			{
@@ -425,7 +425,7 @@ void GCodes::Spin() noexcept
 
 			if (wasCancelled)
 			{
-				if (gb.MachineState().previous == nullptr)
+				if (gb.MachineState().GetPrevious() == nullptr)
 				{
 					StopPrint(StopPrintReason::userCancelled);
 				}
@@ -543,7 +543,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			gb.Init();								// mark buffer as empty
 
-			if (gb.MachineState().previous == nullptr)
+			if (gb.MachineState().GetPrevious() == nullptr)
 			{
 				// Finished printing SD card file.
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
@@ -709,7 +709,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			gb.Init();								// mark buffer as empty
 
-			if (gb.MachineState().previous == nullptr)
+			if (gb.MachineState().GetPrevious() == nullptr)
 			{
 				// Finished printing SD card file.
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
@@ -1009,40 +1009,12 @@ bool GCodes::IsPaused() const noexcept
 
 bool GCodes::IsPausing() const noexcept
 {
-	GCodeState topState = fileGCode->OriginalMachineState().state;
-	if (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
-		|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
-	   )
-	{
-		return true;
-	}
-
-	topState = triggerGCode->OriginalMachineState().state;
-	if (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
-		|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
-	   )
-	{
-		return true;
-	}
-
-	topState = autoPauseGCode->OriginalMachineState().state;
-	if (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
-		|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
-#if HAS_VOLTAGE_MONITOR
-		|| topState == GCodeState::powerFailPausing1
-#endif
-	   )
-	{
-		return true;
-	}
-
-	return pausePending;
+	return pausePending || fileGCode->IsPausing() || triggerGCode->IsPausing() || autoPauseGCode->IsPausing() || daemonGCode->IsPausing();
 }
 
 bool GCodes::IsResuming() const noexcept
 {
-	const GCodeState topState = fileGCode->OriginalMachineState().state;
-	return topState == GCodeState::resuming1 || topState == GCodeState::resuming2 || topState == GCodeState::resuming3;
+	return fileGCode->IsResuming();
 }
 
 bool GCodes::IsRunning() const noexcept
@@ -4387,7 +4359,7 @@ void GCodes::GrabResource(const GCodeBuffer& gb, Resource r) noexcept
 			do
 			{
 				m->lockedResources.ClearBit(r);
-				m = m->previous;
+				m = m->GetPrevious();
 			}
 			while (m != nullptr);
 		}
@@ -4426,7 +4398,7 @@ void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 		do
 		{
 			mc->lockedResources.ClearBit(r);
-			mc = mc->previous;
+			mc = mc->GetPrevious();
 		} while (mc != nullptr);
 		resourceOwners[r] = nullptr;
 	}
@@ -4435,7 +4407,7 @@ void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 // Release all locks, except those that were owned when the current macro was started
 void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 {
-	const GCodeMachineState * const mc = gb.MachineState().previous;
+	const GCodeMachineState * const mc = gb.MachineState().GetPrevious();
 	const GCodeMachineState::ResourceBitmap resourcesToKeep = (mc == nullptr) ? GCodeMachineState::ResourceBitmap() : mc->lockedResources;
 	for (size_t i = 0; i < NumResources; ++i)
 	{

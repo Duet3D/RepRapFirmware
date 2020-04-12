@@ -111,6 +111,7 @@ public:
 	bool IsReady() const noexcept;								// Return true if a gcode is ready but hasn't been started yet
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
+
 	void SetCommsProperties(uint32_t arg) noexcept;
 
 	GCodeMachineState& MachineState() const noexcept { return *machineState; }
@@ -120,6 +121,9 @@ public:
 	unsigned int GetStackDepth() const noexcept;
 	bool PushState(bool withinSameFile) noexcept;				// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool withinSameFile) noexcept;				// Pop state returning true if successful (i.e. no stack underrun)
+
+	bool IsPausing() const;
+	bool IsResuming() const;
 
 	void AbortFile(bool abortAll, bool requestAbort = true) noexcept;
 	bool IsDoingFile() const noexcept;							// Return true if this source is executing a file
@@ -151,7 +155,6 @@ public:
 
 	GCodeState GetState() const noexcept;
 	void SetState(GCodeState newState) noexcept;
-	void SetState(GCodeState newState, const char *err) noexcept;
 	void AdvanceState() noexcept;
 	void MessageAcknowledged(bool cancelled) noexcept;
 
@@ -257,23 +260,17 @@ inline bool GCodeBuffer::IsDoingFileMacro() const noexcept
 
 inline GCodeState GCodeBuffer::GetState() const noexcept
 {
-	return machineState->state;
+	return machineState->GetState();
 }
 
 inline void GCodeBuffer::SetState(GCodeState newState) noexcept
 {
-	machineState->state = newState;
-}
-
-inline void GCodeBuffer::SetState(GCodeState newState, const char *err) noexcept
-{
-	machineState->state = newState;
-	machineState->errorMessage = err;
+	machineState->SetState(newState);
 }
 
 inline void GCodeBuffer::AdvanceState() noexcept
 {
-	machineState->state = static_cast<GCodeState>(static_cast<uint8_t>(machineState->state) + 1);
+	machineState->AdvanceState();
 }
 
 // Return true if we can queue gcodes from this source. This is the case if a file is being executed

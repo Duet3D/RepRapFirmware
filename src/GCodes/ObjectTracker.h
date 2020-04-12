@@ -69,6 +69,7 @@ protected:
 
 private:
 	typedef Bitmap<uint32_t> ObjectCancellationBitmap;	// Type of a bitmap used to represent objects on the build plate that have been cancelled
+	static_assert(MaxTrackedObjects <= ObjectCancellationBitmap::MaxBits());
 
 	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
 	void StopPrinting(GCodeBuffer& gb) noexcept;
