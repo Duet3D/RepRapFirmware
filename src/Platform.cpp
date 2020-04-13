@@ -1444,7 +1444,6 @@ bool Platform::IsPowerOk() const noexcept
 #endif
 		   )
 		|| currentVin > autoPauseReading;
-
 }
 
 void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage) noexcept
