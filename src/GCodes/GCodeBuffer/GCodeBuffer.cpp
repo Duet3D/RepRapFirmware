@@ -187,8 +187,8 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 	const GCodeMachineState *ms = machineState;
 	do
 	{
-		scratchString.catf(" %d", (int)ms->state);
-		ms = ms->previous;
+		scratchString.catf(" %d", (int)ms->GetState());
+		ms = ms->GetPrevious();
 	} while (ms != nullptr);
 	if (IsDoingFileMacro())
 	{
@@ -630,9 +630,9 @@ void GCodeBuffer::SetCommsProperties(uint32_t arg) noexcept
 GCodeMachineState& GCodeBuffer::OriginalMachineState() const noexcept
 {
 	GCodeMachineState *ms = machineState;
-	while (ms->previous != nullptr)
+	while (ms->GetPrevious() != nullptr)
 	{
-		ms = ms->previous;
+		ms = ms->GetPrevious();
 	}
 	return *ms;
 }
@@ -653,7 +653,7 @@ float GCodeBuffer::InverseConvertDistance(float distance) const noexcept
 unsigned int GCodeBuffer::GetStackDepth() const noexcept
 {
 	unsigned int depth = 0;
-	for (const GCodeMachineState *m1 = machineState; m1->previous != nullptr; m1 = m1->previous)
+	for (const GCodeMachineState *m1 = machineState; m1->GetPrevious() != nullptr; m1 = m1->GetPrevious())
 	{
 		++depth;
 	}
@@ -677,14 +677,14 @@ bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 {
 	GCodeMachineState * const ms = machineState;
-	if (ms->previous == nullptr)
+	if (ms->GetPrevious() == nullptr)
 	{
 		ms->messageAcknowledged = false;			// avoid getting stuck in a loop trying to pop
 		ms->waitingForAcknowledgement = false;
 		return false;
 	}
 
-	machineState = ms->previous;
+	machineState = ms->GetPrevious();
 	if (withinSameFile)
 	{
 		machineState->lineNumber = ms->lineNumber;
@@ -738,7 +738,7 @@ bool GCodeBuffer::IsFileFinished() const noexcept
 void GCodeBuffer::SetPrintFinished() noexcept
 {
 	const uint32_t fileId = OriginalMachineState().fileId;
-	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->previous)
+	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
 		if (ms->fileId == fileId)
 		{
@@ -778,7 +778,7 @@ const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCo
 // Allow for the possibility that the source may have started running a macro since it started waiting
 void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 {
-	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->previous)
+	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
 		if (ms->waitingForAcknowledgement)
 		{
@@ -866,6 +866,23 @@ void GCodeBuffer::PrintCommand(const StringRef& s) const noexcept
 void GCodeBuffer::AppendFullCommand(const StringRef &s) const noexcept
 {
 	PARSER_OPERATION(AppendFullCommand(s));
+}
+
+bool GCodeBuffer::IsPausing() const
+{
+	const GCodeState topState = OriginalMachineState().GetState();
+	return (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
+			|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
+#if HAS_VOLTAGE_MONITOR
+			|| topState == GCodeState::powerFailPausing1
+#endif
+	   	   );
+}
+
+bool GCodeBuffer::IsResuming() const
+{
+	const GCodeState topState = OriginalMachineState().GetState();
+	return topState == GCodeState::resuming1 || topState == GCodeState::resuming2 || topState == GCodeState::resuming3;
 }
 
 // End

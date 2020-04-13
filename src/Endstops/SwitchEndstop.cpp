@@ -42,10 +42,11 @@ void SwitchEndstop::ReleasePorts() noexcept
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
 			String<StringLength100> reply;
-			if (CanInterface::DeleteHandle(bn, h, reply.GetRef()) != GCodeResult::ok)
+			const GCodeResult rslt = CanInterface::DeleteHandle(bn, h, reply.GetRef());
+			if (rslt != GCodeResult::ok)
 			{
 				reply.cat('\n');
-				reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
+				reprap.GetPlatform().Message(GetGenericMessageType(rslt), reply.c_str());
 			}
 		}
 #endif

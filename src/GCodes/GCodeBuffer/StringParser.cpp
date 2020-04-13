@@ -289,7 +289,7 @@ bool StringParser::LineFinished()
 	if (gb.bufferState != GCodeBufferState::parsingComment)			// we don't checksum comment lines
 	{
 		const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
-		const bool missingChecksum = (checksumRequired && !hadChecksum && gb.machineState->previous == nullptr);
+		const bool missingChecksum = (checksumRequired && !hadChecksum && gb.machineState->GetPrevious() == nullptr);
 		if (reprap.Debug(moduleGcodes) && fileBeingWritten == nullptr)
 		{
 			reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);

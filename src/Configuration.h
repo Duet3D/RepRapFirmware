@@ -266,8 +266,13 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved ou
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 // These two definitions are only used if TRACK_OBJECT_NAMES is defined, however that definition isn't available in this file
+#if SAME70
+constexpr size_t MaxTrackedObjects = 30;				// How many build plate objects we track. Each one needs 24 bytes of storage, in addition to the string space.
+constexpr size_t ObjectNamesStringSpace = 600;			// How much space we reserve for the names of objects on the build plate
+#else
 constexpr size_t MaxTrackedObjects = 10;				// How many build plate objects we track. Each one needs 24 bytes of storage, in addition to the string space.
 constexpr size_t ObjectNamesStringSpace = 200;			// How much space we reserve for the names of objects on the build plate
+#endif
 
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min

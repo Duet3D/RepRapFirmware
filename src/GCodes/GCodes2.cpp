@@ -144,7 +144,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			if (err != nullptr)
 			{
 				AbortPrint(gb);
-				gb.SetState(GCodeState::waitingForSpecialMoveToComplete, err);	// force the user position to be restored
+				gb.MachineState().SetError(err);
+				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);	// force the user position to be restored
 			}
 		}
 		break;
@@ -169,7 +170,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			if (err != nullptr)
 			{
 				AbortPrint(gb);
-				gb.SetState(GCodeState::waitingForSpecialMoveToComplete, err);	// force the user position to be restored
+				gb.MachineState().SetError(err);
+				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);	// force the user position to be restored
 			}
 		}
 		break;
@@ -4467,7 +4469,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 	}
 
-	if (gb.MachineState().state == GCodeState::normal)
+	if (gb.MachineState().GetState() == GCodeState::normal)
 	{
 		gb.StopTimer();
 		UnlockAll(gb);

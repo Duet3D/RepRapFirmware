@@ -168,8 +168,7 @@ GCodeResult Heater::SetModel(float gain, float tc, float td, float maxPwm, float
 				const float noWarnTemp = (GetHighestTemperatureLimit() - NormalAmbientTemperature) * 1.5 + 50.0;		// allow 50% extra power plus enough for an extra 50C
 				if (predictedMaxTemp > noWarnTemp)
 				{
-					reply.printf("heater %u appears to be over-powered. If left on at full power, its temperature is predicted to reach %dC.\n",
-							GetHeaterNumber(), (int)predictedMaxTemp);
+					reply.printf("Heater %u appears to be over-powered. If left on at full power, its temperature is predicted to reach %dC", GetHeaterNumber(), (int)predictedMaxTemp);
 					rslt = GCodeResult::warning;
 				}
 			}

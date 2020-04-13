@@ -16,11 +16,10 @@ static unsigned int LastFileId = 1;
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState() noexcept
-	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes),
+	: feedRate(DefaultFeedRate * SecondsToMinutes),
 #if HAS_LINUX_INTERFACE
 	  fileId(0),
 #endif
-	  errorMessage(nullptr),
 	  lineNumber(0),
 	  compatibility(Compatibility::RepRapFirmware), drivesRelative(false), axesRelative(false),
 #if HAS_LINUX_INTERFACE
@@ -28,21 +27,23 @@ GCodeMachineState::GCodeMachineState() noexcept
 #endif
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting(0), state(GCodeState::normal)
+	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting(0),
+	  previous(nullptr), errorMessage(nullptr),
+	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 {
 	blockStates[0].SetPlainBlock(0);
 }
 
 // Copy constructor. This chains the new one to the previous one.
 GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept
-	: previous(&prev), feedRate(prev.feedRate),
+	: feedRate(prev.feedRate),
 #if HAS_MASS_STORAGE
 	  fileState(prev.fileState),
 #endif
 #if HAS_LINUX_INTERFACE
 	  fileId(prev.fileId),
 #endif
-	  lockedResources(prev.lockedResources), errorMessage(nullptr),
+	  lockedResources(prev.lockedResources),
 	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
 	  compatibility(prev.compatibility), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 #if HAS_LINUX_INTERFACE
@@ -50,7 +51,9 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 #endif
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501),  runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting((withinSameFile) ? prev.blockNesting : 0), state(GCodeState::normal)
+	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting((withinSameFile) ? prev.blockNesting : 0),
+	  previous(&prev), errorMessage(nullptr),
+	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 {
 	if (withinSameFile)
 	{
@@ -155,6 +158,45 @@ void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 	feedRate = other.feedRate;
 	volumetricExtrusion = other.volumetricExtrusion;
 	usingInches = other.usingInches;
+}
+
+// Set the error message and associated state
+void GCodeMachineState::SetError(const char *msg) noexcept
+{
+	if (stateMachineResult != GCodeResult::error)
+	{
+		errorMessage = msg;
+		stateMachineResult = GCodeResult::error;
+	}
+}
+
+void GCodeMachineState::SetWarning(const char *msg) noexcept
+{
+	if (stateMachineResult == GCodeResult::ok)
+	{
+		errorMessage = msg;
+		stateMachineResult = GCodeResult::warning;
+	}
+}
+
+// Retrieve the result and error message if it is worse than the one we already have
+void GCodeMachineState::RetrieveStateMachineResult(GCodeResult& rslt, const StringRef& reply) const noexcept
+{
+	if (stateMachineResult > rslt)
+	{
+		rslt = stateMachineResult;
+		reply.copy(errorMessage);
+	}
+}
+
+void GCodeMachineState::SetState(GCodeState newState) noexcept
+{
+	if (state == GCodeState::normal && newState != GCodeState::normal)
+	{
+		stateMachineResult = GCodeResult::ok;
+		errorMessage = nullptr;
+	}
+	state = newState;
 }
 
 GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState() noexcept

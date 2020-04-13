@@ -8,14 +8,12 @@
 #ifndef SRC_GCODES_RESTOREPOINT_H_
 #define SRC_GCODES_RESTOREPOINT_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
+#include <ObjectModel/ObjectModel.h>
 
-#if SUPPORT_IOBITS
-# include "PortControl.h"
-#endif
-
-struct RestorePoint
+class RestorePoint INHERIT_OBJECT_MODEL
 {
+public:
 	float moveCoords[MaxAxes];				// The axis locations when we paused
 	float feedRate;							// The feed rate for the current move
 	float virtualExtruderPosition;			// The virtual extruder position at the start of this move
@@ -31,6 +29,11 @@ struct RestorePoint
 
 	RestorePoint() noexcept;
 	void Init() noexcept;
+
+protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(coordinates)
+	OBJECT_MODEL_ARRAY(spindleSpeeds)
 };
 
 #endif /* SRC_GCODES_RESTOREPOINT_H_ */

@@ -12,6 +12,7 @@
 #include <Storage/FileData.h>
 #include <General/FreelistManager.h>
 #include <General/NamedEnum.h>
+#include <GCodes/GCodeResult.h>
 
 // Enumeration to list all the possible states that the Gcode processing machine may be in
 enum class GCodeState : uint8_t
@@ -162,7 +163,12 @@ public:
 
 	~GCodeMachineState() noexcept;
 
-	GCodeMachineState *previous;
+	GCodeState GetState() const noexcept { return state; }
+	void SetState(GCodeState newState) noexcept;
+	inline void AdvanceState() noexcept { state = static_cast<GCodeState>(static_cast<uint8_t>(state) + 1); }
+
+	GCodeMachineState *GetPrevious() const noexcept { return previous; }
+
 	float feedRate;
 #if HAS_MASS_STORAGE
 	FileData fileState;
@@ -172,7 +178,6 @@ public:
 #endif
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];
-	const char *errorMessage;
 	uint32_t lineNumber;
 
 	Compatibility compatibility;
@@ -199,7 +204,6 @@ public:
 		messageCancelled : 1;
 
 	uint8_t blockNesting;
-	GCodeState state;
 
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;
@@ -213,6 +217,11 @@ public:
 
 	bool UsingMachineCoordinates() const noexcept { return g53Active || runningSystemMacro; }
 
+	// Set the error message and associated state
+	void SetError(const char *msg) noexcept;
+	void SetWarning(const char *msg) noexcept;
+	void RetrieveStateMachineResult(GCodeResult& rslt, const StringRef& reply) const noexcept;
+
 	// Copy values that may have been altered into this state record
 	// Called after running config.g and after running resurrect.g
 	void CopyStateFrom(const GCodeMachineState& other) noexcept;
@@ -224,6 +233,12 @@ public:
 
 	bool CreateBlock(uint16_t indentLevel) noexcept;
 	void EndBlock() noexcept;
+
+private:
+	GCodeMachineState *previous;
+	const char *errorMessage;
+	GCodeState state;
+	GCodeResult stateMachineResult;				// the worst status (ok, warning or error) that we encountered while running the state machine
 };
 
 #endif /* SRC_GCODES_GCODEMACHINESTATE_H_ */

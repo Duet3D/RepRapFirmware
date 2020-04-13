@@ -228,6 +228,7 @@ public:
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
+	const RestorePoint *GetRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &numberedRestorePoints[n]; }
 
 # if HAS_VOLTAGE_MONITOR
 	const char *GetPowerFailScript() const noexcept { return powerFailScript; }
@@ -307,6 +308,7 @@ private:
 		pre(outBuf == nullptr || rslt == GCodeResult::ok) noexcept;
 
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
+	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
 
 	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) __attribute__((hot));	// Execute a straight move
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)				// Execute an arc move

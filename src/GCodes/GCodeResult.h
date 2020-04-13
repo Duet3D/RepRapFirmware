@@ -12,13 +12,14 @@
 #include <MessageType.h>
 
 // Enumeration to specify the result of attempting to process a GCode command
+// These are ordered such that errors > warnings > ok
 enum class GCodeResult : uint8_t
 {
 	notFinished,					// we haven't finished processing this command
 	ok,								// we have finished processing this code
-	error,
 	warning,
 	warningNotSupported,
+	error,
 	errorNotSupported,
 	notSupportedInCurrentMode,
 	badOrMissingParameter,

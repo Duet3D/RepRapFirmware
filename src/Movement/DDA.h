@@ -64,7 +64,12 @@ public:
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
 	int32_t GetTimeLeft() const noexcept;
-	void InsertHiccup(uint32_t delayClocks) noexcept { afterPrepare.moveStartTime += delayClocks; }
+
+#if SUPPORT_CAN_EXPANSION
+	uint32_t InsertHiccup(uint32_t now) noexcept;
+#else
+	void InsertHiccup(uint32_t now) noexcept;
+#endif
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
@@ -335,6 +340,28 @@ inline bool DDA::ScheduleNextStepInterrupt(StepTimer& timer) const noexcept
 	}
 	return false;
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Insert a hiccup, returning the amount of time inserted
+inline uint32_t DDA::InsertHiccup(uint32_t now) noexcept
+{
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
+	const uint32_t oldStartTime = afterPrepare.moveStartTime;
+	afterPrepare.moveStartTime = now + DDA::HiccupTime - ticksDueAfterStart;
+	return afterPrepare.moveStartTime - oldStartTime;
+}
+
+#else
+
+// Insert a hiccup
+inline void DDA::InsertHiccup(uint32_t now) noexcept
+{
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
+	afterPrepare.moveStartTime = now + DDA::HiccupTime - ticksDueAfterStart;
+}
+
+#endif
 
 #if HAS_SMART_DRIVERS
 

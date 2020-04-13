@@ -41,8 +41,12 @@
 #include "Endstops/ZProbe.h"
 #include <TaskPriorities.h>
 
+#if SUPPORT_IOBITS
+# include <PortControl.h>
+#endif
+
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanMotion.h"
+# include <CAN/CanMotion.h>
 #endif
 
 #if SUPPORT_OBJECT_MODEL
@@ -82,7 +86,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
-	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 1),						ObjectModelEntryFlags::none },
+	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),						ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
 	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),	ObjectModelEntryFlags::none },
 
