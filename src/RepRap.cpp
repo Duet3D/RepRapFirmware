@@ -714,6 +714,8 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	platform->MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 	platform->MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
+	const char* additionalExpansionName = DuetExpansion::GetAdditionalExpansionBoardName();
+	platform->MessageF(mtype, (additionalExpansionName == nullptr) ? "\n" : " + %s\n", additionalExpansionName);
 #elif defined(__LPC17xx__)
     platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
 #else

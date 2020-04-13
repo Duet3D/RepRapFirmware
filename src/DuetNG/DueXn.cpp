@@ -166,6 +166,7 @@ namespace DuetExpansion
 	void AdditionalOutputInit()
 	{
 		I2C::Init();										// initialise I2C
+		delay(200);											// the SX1509B has an independent power on reset, so give it some time
 
 		bool ret;
 		unsigned int attempts = 0;
