@@ -12,6 +12,14 @@ Upgrade notes:
 - Duet 3 users with expansion or tool boards must use firmware version 3.01-RC7 on those boards too, otherwise tool/expansion board warnings may be reported as errors, and vice versa. It doesn't matter whether you upgrade the main board firmware before or after the expansion or tool board firmware.
 - See also the notes for 3.01-RC6 if upgrading from an earlier version
 
+Known issues and limitations:
+- If a pause is commanded and resumed when the axes are not all flagged as having been homed, the pause.g file is not run but the resume.g file is still run. This is inconsistent. This applies to most/all previous versions of RRF too.
+- The response to the M122 P1 command is sent as multiple fragments, so the Duet3D ATE doesn't find the board ID in it. This applies to previous 3.01-RC versions too.
+- Z probe types 1, 2 and 5 are only supported for Z probe 0, and if using Duet 3 only for a probe connected to the main board. All other Z probes must be of type 8 or 9.
+- Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
+- Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
+- Additional limitations apply to Duet 3 systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
+
 New features/changed behaviour:
 - Experimental support for NeoPixel LED strips has been added for Duet 3. See the M150 X parameter.
 - When running a simulation, object model property job.duration is now the simulated time not the actual time
@@ -30,8 +38,6 @@ Bug fixes:
 - G30 and G29 commands did not set variable 'result' when some types of error occurred, e.g. when the Z probe was already triggered at the start of the probing move.
 - In the object model the speed factor and extrusion factors were only reported to one decimal place
 - Other fixes related to communication with DSF
-
-Known issues and limitations: as for 3.01-RC6
 
 RepRapFirmware 3.01-RC6
 =======================
