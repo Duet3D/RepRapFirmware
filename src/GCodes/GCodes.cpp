@@ -2593,7 +2593,7 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 
 // Home one or more of the axes
 // 'reply' is only written if there is an error.
-GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (!LockMovementAndWaitForStandstill(gb))
 	{
@@ -2999,7 +2999,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 }
 
 // Function to handle dwell delays. Returns true for dwell finished, false otherwise.
-GCodeResult GCodes::DoDwell(GCodeBuffer& gb) noexcept
+GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 {
 	int32_t dwell;
 	if (gb.Seen('S'))
@@ -3048,7 +3048,7 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) noexcept
 }
 
 // Set offset, working and standby temperatures for a tool. I.e. handle a G10.
-GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
+GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException)
 {
 	int32_t toolNumber = 0;
 	bool seenP = false;

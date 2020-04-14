@@ -317,17 +317,17 @@ private:
 	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;						// Check that enough axes have been homed
 	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;								// Set up a move to travel to the resume point
 
-	GCodeResult DoDwell(GCodeBuffer& gb) noexcept;									// Wait for a bit
-	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);					// Home some axes
-	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);		// Deal with a G10
-	GCodeResult SetPositions(GCodeBuffer& gb);										// Deal with a G92
-	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply);				// Deal with a G38.x
-	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Deal with a M584
-	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);					// Deal with a M585
+	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);									// Wait for a bit
+	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Home some axes
+	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with a G10
+	GCodeResult SetPositions(GCodeBuffer& gb) THROWS(GCodeException);								// Deal with a G92
+	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Deal with a G38.x
+	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Deal with a M584
+	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Deal with a M585
 	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin = true) THROWS(GCodeException);	// Deal with a M675
-	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply) noexcept;		// Deal with a M905
-	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply) noexcept;		// Deal with G60
-	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Deal with M569
+	GCodeResult SetDateTime(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);			// Deal with a M905
+	GCodeResult SavePosition(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);		// Deal with G60
+	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M569
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
