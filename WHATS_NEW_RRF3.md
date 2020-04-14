@@ -1,14 +1,15 @@
-RepRapFirmware 3.01-RC7 (in preparation)
+RepRapFirmware 3.01-RC7
 =======================
 
 Recommended compatible firmware:
 - DuetWebControl 2.1.2 (TBC)
 - DuetWiFiServer 1.23
-- Duet Software Framework version 1.3.2 (TBC) (for Duet 3/Raspberry Pi users)
-- Duet 3 expansion board and tool board firmware 3.01-RC5
+- Duet Software Framework version 1.3.2 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC7
 
 Upgrade notes:
 - The tool number (P parameter) in a M563 command must now be in the range 0-49
+- Duet 3 users with expansion or tool boards must use firmware version 3.01-RC7 on those boards too, otherwise tool/expansion board warnings may be reported as errors, and vice versa. It doesn't matter whether you upgrade the main board firmware before or after the expansion or tool board firmware.
 - See also the notes for 3.01-RC6 if upgrading from an earlier version
 
 New features/changed behaviour:
@@ -20,6 +21,7 @@ New features/changed behaviour:
 - Recent versions of S3D changed the print time comment when the print time is at least 1 hour but less than 2 hours. RRF now recognises the new format.
 - Added restore points to the object model
 - Added tools and trackedObjects to the Limits section of the object model
+- Increased the maximum number of tracked object to 30 on Duet 3
 
 Bug fixes:
 - The object model sequence numbers were not updated when several object model variables were changed, so DSF and DWC did not know they had changed and did not update their copies of them
