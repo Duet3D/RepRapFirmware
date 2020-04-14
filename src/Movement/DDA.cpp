@@ -118,6 +118,7 @@ void DDA::LogProbePosition() noexcept
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 {
 	activeDMs = completedDMs = nullptr;
+	tool = nullptr;						// needed in case we pause before any moves have been done
 
 	// Set the endpoints to zero, because Move will ask for them.
 	// They will be wrong if we are on a delta. We take care of that when we process the M665 command in config.g.
