@@ -225,7 +225,7 @@ namespace DuetExpansion
 	{
 		if (additionalIoExpanderPresent && additionalIoExpanderPresent2)
 		{
-			return "SX1509B expander (0x71 & 0x3E)";
+			return "SX1509B expander (0x71 & 0x3F)";
 		}
 		else if (additionalIoExpanderPresent)
 		{
@@ -233,7 +233,7 @@ namespace DuetExpansion
 		}
 		else if (additionalIoExpanderPresent2)
 		{
-			return "SX1509B expander (0x3E)";
+			return "SX1509B expander (0x3F)";
 		} else
 		{
 			return nullptr;
