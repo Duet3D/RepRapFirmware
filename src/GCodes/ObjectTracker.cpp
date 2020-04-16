@@ -24,14 +24,14 @@ constexpr ObjectModelArrayDescriptor ObjectDirectoryEntry::xArrayDescriptor =
 {
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ObjectDirectoryEntry*)self)->x[context.GetLastIndex()]); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ObjectDirectoryEntry*)self)->x[context.GetLastIndex()], 1); }
 };
 
 constexpr ObjectModelArrayDescriptor ObjectDirectoryEntry::yArrayDescriptor =
 {
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ObjectDirectoryEntry*)self)->y[context.GetLastIndex()]); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ObjectDirectoryEntry*)self)->y[context.GetLastIndex()], 1); }
 };
 
 constexpr ObjectModelTableEntry ObjectDirectoryEntry::objectModelTable[] =

@@ -118,8 +118,18 @@ private:
 
 inline bool PrintMonitor::IsPrinting() const noexcept { return isPrinting; }
 inline unsigned int PrintMonitor::GetCurrentLayer() const noexcept { return currentLayer; }
-inline float PrintMonitor::GetCurrentLayerTime() const noexcept { return (lastLayerChangeTime > 0.0) ? (GetPrintDuration() - lastLayerChangeTime) : 0.0; }
-inline float PrintMonitor::GetFirstLayerHeight() const noexcept { return printingFileParsed ? printingFileInfo.firstLayerHeight : 0.0; }
+
+inline float PrintMonitor::GetCurrentLayerTime() const noexcept
+{
+	return (currentLayer == 0) ? 0.0
+			: (currentLayer == 1) ? GetPrintDuration()
+				: GetPrintDuration() - lastLayerChangeTime;
+}
+
+inline float PrintMonitor::GetFirstLayerHeight() const noexcept
+{
+	return printingFileParsed ? printingFileInfo.firstLayerHeight : 0.0;
+}
 
 #endif /* PRINTMONITOR_H */
 
