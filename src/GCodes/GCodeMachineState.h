@@ -94,6 +94,8 @@ enum class GCodeState : uint8_t
 	loadingFilament,
 	unloadingFilament,
 
+	checkError,						// go to this state after doing a macro when we need to check for a stored error message
+
 #if HAS_MASS_STORAGE
 	timingSDwrite,
 #endif

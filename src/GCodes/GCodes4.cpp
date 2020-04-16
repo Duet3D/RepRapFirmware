@@ -549,7 +549,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					reprap.GetHeat().SuspendHeaters(false);
 					gb.MachineState().SetError("Z probe already triggered before probing move started");
-					gb.SetState(GCodeState::normal);
+					gb.SetState(GCodeState::checkError);
 					RetractZProbe(gb, 29);
 					break;
 				}
@@ -560,7 +560,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber))
 					{
 						gb.MachineState().SetError("Failed to enable Z probe");
-						gb.SetState(GCodeState::normal);
+						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb, 29);
 						break;
 					}
@@ -594,7 +594,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if (!zProbeTriggered)
 				{
 					gb.MachineState().SetError("Z probe was not triggered during probing move");
-					gb.SetState(GCodeState::normal);
+					gb.SetState(GCodeState::checkError);
 					RetractZProbe(gb, 29);
 					break;
 				}
@@ -666,7 +666,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			else
 			{
 				gb.MachineState().SetError("Z probe readings not consistent");
-				gb.SetState(GCodeState::normal);
+				gb.SetState(GCodeState::checkError);
 				RetractZProbe(gb, 29);
 			}
 		}
@@ -836,7 +836,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					{
 						reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(), true, true);
 					}
-					gb.SetState(GCodeState::normal);										// no point in doing anything else
+					gb.SetState(GCodeState::checkError);									// no point in doing anything else
 					RetractZProbe(gb, 30);
 				}
 				else
@@ -846,7 +846,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber))
 					{
 						gb.MachineState().SetError("Failed to enable Z probe");
-						gb.SetState(GCodeState::normal);
+						gb.SetState(GCodeState::checkError);
+						RetractZProbe(gb, 30);
 						break;
 					}
 
@@ -1121,7 +1122,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						{
 							gb.MachineState().SetError((probingAway) ? "Probe not triggered at start of probing move" : "Probe already triggered at start of probing move");
 						}
-						gb.SetState(GCodeState::normal);									// no point in doing anything else
+						gb.SetState(GCodeState::checkError);								// no point in doing anything else
 						RetractZProbe(gb, 38);
 					}
 					else
@@ -1131,7 +1132,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						if (!platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway))
 						{
 							gb.MachineState().SetError("Failed to enable Z probe");
-							gb.SetState(GCodeState::normal);
+							gb.SetState(GCodeState::checkError);
 							RetractZProbe(gb, 38);
 							break;
 						}
@@ -1167,7 +1168,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 			}
 
-			gb.SetState(GCodeState::normal);
+			gb.SetState(GCodeState::checkError);
 			RetractZProbe(gb, 38);							// retract the probe before moving to the new state
 		}
 		break;
@@ -1298,6 +1299,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		gb.SetState(GCodeState::normal);
 		break;
 #endif
+
+	case GCodeState::checkError:				// we return to this state after running the retractprobe macro when there may be a stored error message
+		gb.SetState(GCodeState::normal);
+		break;
 
 	default:				// should not happen
 		gb.MachineState().SetError("Undefined GCodeState");
