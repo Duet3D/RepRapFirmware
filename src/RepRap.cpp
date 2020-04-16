@@ -733,7 +733,11 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 #endif
 
 #if SAM4E || SAM4S || SAME70
-	platform->PrintUniqueId(mtype);
+	{
+		String<StringLength100> id;
+		platform->AppendUniqueId(id.GetRef());
+		platform->Message(mtype, id.c_str());
+	}
 #endif
 
 	// Show the used and free buffer counts. Do this early in case we are running out of them and the diagnostics get truncated.

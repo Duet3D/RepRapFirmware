@@ -282,7 +282,7 @@ public:
 	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(MessageType mtype) noexcept;
-	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d);
+	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException);
 	bool WasDeliberateError() const noexcept { return deliberateError; }
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
 
@@ -551,7 +551,7 @@ public:
 
 #if SAM4E || SAM4S || SAME70
 	uint32_t Random() noexcept;
-	void PrintUniqueId(MessageType mtype) noexcept;
+	void AppendUniqueId(const StringRef& reply) noexcept;
 #endif
 
 #if SUPPORT_CAN_EXPANSION

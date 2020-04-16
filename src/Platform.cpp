@@ -1589,7 +1589,7 @@ void Platform::InitialiseInterrupts() noexcept
 #if SAM4E || SAM4S || SAME70
 
 // Print the unique processor ID
-void Platform::PrintUniqueId(MessageType mtype) noexcept
+void Platform::AppendUniqueId(const StringRef& reply) noexcept
 {
 	// Print the unique ID and checksum as 30 base5 alphanumeric digits
 	char digits[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
@@ -1639,7 +1639,7 @@ void Platform::PrintUniqueId(MessageType mtype) noexcept
 		*digitPtr++ = c;
 	}
 	*digitPtr = 0;
-	MessageF(mtype, "Board ID: %s\n", digits);
+	reply.lcatf("Board ID: %s", digits);
 }
 
 #endif
@@ -1873,7 +1873,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #endif
 }
 
-GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d)
+GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException)
 {
 	static const uint32_t dummy[2] = { 0, 0 };
 
@@ -1881,59 +1881,54 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 	{
 	case (unsigned int)DiagnosticTestType::PrintTestReport:
 		{
-			const MessageType mtype = gb.GetResponseMessageType();
 			bool testFailed = false;
+			if (!OutputBuffer::Allocate(buf))
+			{
+				reply.copy("No output buffer");
+				return GCodeResult::error;
+			}
 
 #if HAS_MASS_STORAGE
 			// Check the SD card detect and speed
 			if (!MassStorage::IsCardDetected(0))
 			{
-				Message(AddError(mtype), "SD card 0 not detected\n");
+				buf->copy("SD card 0 not detected");
 				testFailed = true;
 			}
 # if HAS_HIGH_SPEED_SD
 			else if (hsmci_get_speed() != ExpectedSdCardSpeed)
 			{
-				MessageF(AddError(mtype), "SD card speed %.2fMbytes/sec is unexpected\n", (double)((float)hsmci_get_speed() * 0.000001));
+				buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)hsmci_get_speed() * 0.000001));
 				testFailed = true;
 			}
 # endif
 			else
 			{
-				Message(mtype, "SD card interface OK\n");
+				buf->copy("SD card interface OK");
 			}
 #endif
 
 #if HAS_CPU_TEMP_SENSOR
 			// Check the MCU temperature
 			{
+				gb.MustSee('T');
 				float tempMinMax[2];
 				size_t numTemps = 2;
-				bool seen = false;
-				if (gb.TryGetFloatArray('T', numTemps, tempMinMax, reply, seen, false))
-				{
-					return GCodeResult::error;
-				}
-				if (!seen)
-				{
-					reply.copy("Missing T parameter");
-					return GCodeResult::error;
-				}
-
+				gb.GetFloatArray(tempMinMax, numTemps, false);
 				const float currentMcuTemperature = AdcReadingToCpuTemperature(adcFilters[CpuTempFilterIndex].GetSum());
 				if (currentMcuTemperature < tempMinMax[0])
 				{
-					MessageF(AddError(mtype), "MCU temperature %.1f is lower than expected\n", (double)currentMcuTemperature);
+					buf->lcatf("MCU temperature %.1f is lower than expected", (double)currentMcuTemperature);
 					testFailed = true;
 				}
 				else if (currentMcuTemperature > tempMinMax[1])
 				{
-					MessageF(AddError(mtype), "MCU temperature %.1f is higher than expected\n", (double)currentMcuTemperature);
+					buf->lcatf("MCU temperature %.1f is higher than expected", (double)currentMcuTemperature);
 					testFailed = true;
 				}
 				else
 				{
-					Message(mtype, "MCU temperature reading OK\n");
+					buf->lcat("MCU temperature reading OK");
 				}
 			}
 #endif
@@ -1941,33 +1936,24 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 #if HAS_VOLTAGE_MONITOR
 			// Check the supply voltage
 			{
+				gb.MustSee('V');
 				float voltageMinMax[2];
 				size_t numVoltages = 2;
-				bool seen = false;
-				if (gb.TryGetFloatArray('V', numVoltages, voltageMinMax, reply, seen, false))
-				{
-					return GCodeResult::error;
-				}
-				if (!seen)
-				{
-					reply.copy("Missing V parameter (VIN voltage range)");
-					return GCodeResult::error;
-				}
-
+				gb.GetFloatArray(voltageMinMax, numVoltages, false);
 				const float voltage = AdcReadingToPowerVoltage(currentVin);
 				if (voltage < voltageMinMax[0])
 				{
-					MessageF(AddError(mtype), "VIN voltage reading %.1f is lower than expected\n", (double)voltage);
+					buf->lcatf("VIN voltage reading %.1f is lower than expected", (double)voltage);
 					testFailed = true;
 				}
 				else if (voltage > voltageMinMax[1])
 				{
-					MessageF(AddError(mtype), "VIN voltage reading %.1f is higher than expected\n", (double)voltage);
+					buf->lcatf("VIN voltage reading %.1f is higher than expected", (double)voltage);
 					testFailed = true;
 				}
 				else
 				{
-					Message(mtype, "VIN voltage reading OK\n");
+					buf->lcat("VIN voltage reading OK");
 				}
 			}
 #endif
@@ -1975,33 +1961,25 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 #if HAS_12V_MONITOR
 			// Check the 12V rail voltage
 			{
+				gb.MustSee('W');
 				float voltageMinMax[2];
 				size_t numVoltages = 2;
-				bool seen = false;
-				if (gb.TryGetFloatArray('W', numVoltages, voltageMinMax, reply, seen, false))
-				{
-					return GCodeResult::error;
-				}
-				if (!seen)
-				{
-					reply.copy("Missing W parameter (12V rail voltage range)");
-					return GCodeResult::error;
-				}
+				gb.GetFloatArray(voltageMinMax, numVoltages, false);
 
 				const float voltage = AdcReadingToPowerVoltage(currentV12);
 				if (voltage < voltageMinMax[0])
 				{
-					MessageF(AddError(mtype), "12V voltage reading %.1f is lower than expected\n", (double)voltage);
+					buf->lcatf("12V voltage reading %.1f is lower than expected", (double)voltage);
 					testFailed = true;
 				}
 				else if (voltage > voltageMinMax[1])
 				{
-					MessageF(AddError(mtype), "12V voltage reading %.1f is higher than expected\n", (double)voltage);
+					buf->lcatf("12V voltage reading %.1f is higher than expected", (double)voltage);
 					testFailed = true;
 				}
 				else
 				{
-					Message(mtype, "12V voltage reading OK\n");
+					buf->lcat("12V voltage reading OK");
 				}
 			}
 #endif
@@ -2014,30 +1992,31 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(driver, 0xFFFFFFFF);
 				if ((stat & (TMC_RR_OT || TMC_RR_OTPW)) != 0)
 				{
-					MessageF(AddError(mtype), "Driver %u reports over temperature\n", driver);
+					buf->lcatf("Driver %u reports over temperature", driver);
 					driversOK = false;
 				}
 				if ((stat & TMC_RR_S2G) != 0)
 				{
-					MessageF(AddError(mtype), "Driver %u reports short-to-ground\n", driver);
+					buf->lcatf("Driver %u reports short-to-ground", driver);
 					driversOK = false;
 				}
 			}
 			if (driversOK)
 			{
-				Message(mtype, "Driver status OK\n");
+				buf->lcat("Driver status OK");
 			}
 			else
 			{
 				testFailed = true;
 			}
 #endif
-			Message(mtype, (testFailed) ? "***** ONE OR MORE CHECKS FAILED *****\n" : "All checks passed\n");
+			buf->lcat((testFailed) ? "***** ONE OR MORE CHECKS FAILED *****" : "All checks passed");
 
-#if SAM4E || SAM4S || SAME70
+	#if SAM4E || SAM4S || SAME70
 			if (!testFailed)
 			{
-				PrintUniqueId(mtype);
+				AppendUniqueId(reply);
+				buf->lcat(reply.c_str());
 			}
 #endif
 		}

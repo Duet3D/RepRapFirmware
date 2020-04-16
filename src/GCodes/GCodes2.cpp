@@ -1685,7 +1685,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					result = platform.DiagnosticTest(gb, reply, type);
+					result = platform.DiagnosticTest(gb, reply, outBuf, type);
 				}
 			}
 			break;
