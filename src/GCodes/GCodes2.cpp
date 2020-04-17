@@ -431,8 +431,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26
 			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
 			|| code == 112
+			|| code == 374 || code == 375
 			|| code == 470 || code == 471
-			|| code == 999
+			|| code == 500 || code == 501 || code == 503 || code == 505 || code == 550
+			|| code == 703
+			|| code == 905 || code == 929 || code == 997 || code == 999
 		   )
 	   )
 	{
