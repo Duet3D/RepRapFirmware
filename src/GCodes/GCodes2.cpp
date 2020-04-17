@@ -425,8 +425,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 
 #if HAS_LINUX_INTERFACE
-	// TODO add more codes
-	if (reprap.UsingLinuxInterface() && !gb.IsBinary() && code == 20)
+	// Pass file- and system-related commands to DSF if they came from somewhere else. They will be passed back to us via a binary buffer or separate SPI message if necessary.
+	if (   reprap.UsingLinuxInterface() && !gb.IsBinary()
+		&& (   code == 0 || code == 1
+			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26
+			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
+			|| code == 112
+			|| code == 470 || code == 471
+			|| code == 999
+		   )
+	   )
 	{
 		gb.SendToSbc();
 		return false;
