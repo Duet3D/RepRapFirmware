@@ -749,10 +749,14 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, E
 	{
 	case TypeCode::Array:
 		{
-			if (*idString == 0 && context.WantArrayLength())
+			if (*idString == 0)
 			{
-				ReadLocker lock(val.omadVal->lockPointer);
-				return ExpressionValue((int32_t)val.omadVal->GetNumElements(this, context));
+				if (context.WantArrayLength())
+				{
+					ReadLocker lock(val.omadVal->lockPointer);
+					return ExpressionValue((int32_t)val.omadVal->GetNumElements(this, context));
+				}
+				return ExpressionValue(static_cast<const ObjectModelArrayDescriptor*>(nullptr));	// return a dummy array so that caller can report "[array]" or compare it with null
 			}
 			if (*idString != '^')
 			{

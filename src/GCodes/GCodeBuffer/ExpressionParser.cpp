@@ -13,7 +13,7 @@
 
 #include <limits>
 
-// These can't be declared locally inside ParseIdentifierExpression because it contains static data
+// These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true);
 NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, floor, isnan, max, min, mod, radians, sin, sqrt, tan);
 
@@ -706,6 +706,8 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 }
 
 // Parse an identifier expression
+// If 'evaluate' is false then the object model path may not exist, in which case we must ignore error that and parse it all anyway
+// This means we can use expressions such as: if {a.b == null || a.b.c == 1}
 ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool applyLengthOperator) THROWS(GCodeException)
 {
 	if (!isalpha(CurrentCharacter()))
@@ -1015,7 +1017,8 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		return rslt;
 	}
 
-	return reprap.GetObjectValue(context, id.c_str());
+	// If we are not evaluating then the object expression doesn't have to exist, so don't retrieve it because that might throw an error
+	return (evaluate) ? reprap.GetObjectValue(context, id.c_str()) : ExpressionValue(nullptr);
 }
 
 // Parse a quoted string, given that the current character is double-quote
