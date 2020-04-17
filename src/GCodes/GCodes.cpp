@@ -891,21 +891,30 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg) noexc
 			pauseRestorePoint.moveCoords[axis] = currentUserPosition[axis];
 		}
 
-#if HAS_MASS_STORAGE
-		// If we skipped any moves, reset the file pointer to the start of the first move we need to replay
-		// The following could be delayed until we resume the print
-		if (pauseRestorePoint.filePos != noFilePosition)
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
 		{
-			FileData& fdata = fileGCode->MachineState().fileState;
-			if (fdata.IsLive())
-			{
-				fileGCode->RestartFrom(pauseRestorePoint.filePos);						// TODO we ought to restore the line number too, but currently we don't save it
-				UnlockAll(*fileGCode);													// release any locks it had
-			}
+			fileGCode->Init();															// clear the next move
+			UnlockAll(*fileGCode);														// release any locks it had
 		}
-#else
-		fileGCode->Init();																// clear the next move
-		UnlockAll(*fileGCode);															// release any locks it had
+		else
+		{
+#endif
+#if HAS_MASS_STORAGE
+			// If we skipped any moves, reset the file pointer to the start of the first move we need to replay
+			// The following could be delayed until we resume the print
+			if (pauseRestorePoint.filePos != noFilePosition)
+			{
+				FileData& fdata = fileGCode->MachineState().fileState;
+				if (fdata.IsLive())
+				{
+					fileGCode->RestartFrom(pauseRestorePoint.filePos);						// TODO we ought to restore the line number too, but currently we don't save it
+					UnlockAll(*fileGCode);													// release any locks it had
+				}
+			}
+#endif
+#if HAS_LINUX_INTERFACE
+		}
 #endif
 
 		codeQueue->PurgeEntries();
