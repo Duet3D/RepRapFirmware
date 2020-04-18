@@ -50,8 +50,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t) noexcept
-		: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
-		  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
+    : next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
+     lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
 
 // Virtual destructor
 TemperatureSensor::~TemperatureSensor() noexcept
