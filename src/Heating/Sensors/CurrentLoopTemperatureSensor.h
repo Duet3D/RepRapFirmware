@@ -9,6 +9,7 @@
 #define SRC_HEATING_LINEARADCTEMPERATURESENSOR_H_
 
 #include "SpiTemperatureSensor.h"
+#include "AdditionalOutputSensor.h"
 
 class CurrentLoopTemperatureSensor : public SpiTemperatureSensor
 {
