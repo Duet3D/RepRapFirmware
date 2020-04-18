@@ -359,14 +359,14 @@ GCodeChannel DataTransfer::ReadEvaluateExpression(size_t packetLength, StringRef
 	return GCodeChannel(header->channel);
 }
 
-MessageType DataTransfer::ReadMessage(StringRef& message) noexcept
+MessageType DataTransfer::ReadMessage(OutputBuffer *buf) noexcept
 {
 	// Read header
 	const MessageHeader *header = ReadDataHeader<MessageHeader>();
 
 	// Read message data
 	const char *messageData = ReadData(header->length);
-	message.copy(messageData, header->length);
+	buf->copy(messageData, header->length);
 
 	return header->messageType;
 }

@@ -323,13 +323,16 @@ void LinuxInterface::Spin()
 				break;
 			}
 
-			// Send a firmware message
+			// Send a firmware message, typically a response to a command that has been passed to DSF.
+			// These responses can get quite long (e.g. responses to M20) so receive it into an OutputBuffer.
 			case LinuxRequest::Message:
 			{
-				String<StringLength256> message;
-				StringRef messageRef = message.GetRef();
-				MessageType type = transfer->ReadMessage(messageRef);
-				reprap.GetPlatform().Message(type, message.c_str());
+				OutputBuffer *buf;
+				if (OutputBuffer::Allocate(buf))
+				{
+					const MessageType type = transfer->ReadMessage(buf);
+					reprap.GetPlatform().Message(type, buf);
+				}
 				break;
 			}
 

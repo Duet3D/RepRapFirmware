@@ -689,7 +689,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					if (!OutputBuffer::Allocate(outBuf))
 					{
-						return false;													// cannot allocate an output buffer, try again later
+						return false;												// cannot allocate an output buffer, try again later
 					}
 
 					// To mimic the behaviour of the official RepRapPro firmware:
@@ -701,7 +701,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						outBuf->copy("GCode files:\n");
 					}
 
-					bool encapsulateList = gb.MachineState().compatibility != Compatibility::Marlin;
+					const bool encapsulateList = gb.MachineState().compatibility != Compatibility::Marlin;
 					FileInfo fileInfo;
 					if (MassStorage::FindFirst(dir.c_str(), fileInfo))
 					{
