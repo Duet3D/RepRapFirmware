@@ -223,13 +223,13 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 	}
 #endif
 #if HAS_CPU_TEMP_SENSOR
-		else if (ReducedStringEquals(typeName, CpuTemperatureSensor::TypeName))
+	else if (ReducedStringEquals(typeName, CpuTemperatureSensor::TypeName))
 	{
 		ts = new CpuTemperatureSensor(sensorNum);
 	}
 #endif
 #if HAS_SMART_DRIVERS
-		else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::PrimaryTypeName))
+	else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::PrimaryTypeName))
 	{
 		ts = new TmcDriverTemperatureSensor(sensorNum, 0);
 	}
