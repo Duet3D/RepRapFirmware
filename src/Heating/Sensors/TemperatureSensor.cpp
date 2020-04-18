@@ -50,8 +50,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t) noexcept
-	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
-	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
+		: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
+		  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
 
 // Virtual destructor
 TemperatureSensor::~TemperatureSensor() noexcept
@@ -200,8 +200,12 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 	{
 		ts = new CurrentLoopTemperatureSensor(sensorNum);
 	}
+	else if (ReducedStringEquals(typeName, CurrentLoopTemperatureExtraSensor::TypeName))
+	{
+		ts = new CurrentLoopTemperatureExtraSensor(sensorNum);
+	}
 #if SUPPORT_DHT_SENSOR
-	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeNameDht11))
+		else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeNameDht11))
 	{
 		ts = new DhtTemperatureSensor(sensorNum, DhtSensorType::Dht11);
 	}
@@ -219,13 +223,13 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 	}
 #endif
 #if HAS_CPU_TEMP_SENSOR
-	else if (ReducedStringEquals(typeName, CpuTemperatureSensor::TypeName))
+		else if (ReducedStringEquals(typeName, CpuTemperatureSensor::TypeName))
 	{
 		ts = new CpuTemperatureSensor(sensorNum);
 	}
 #endif
 #if HAS_SMART_DRIVERS
-	else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::PrimaryTypeName))
+		else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::PrimaryTypeName))
 	{
 		ts = new TmcDriverTemperatureSensor(sensorNum, 0);
 	}
@@ -259,18 +263,18 @@ const float CelsiusMin = -100.0;					// starting temperature of the temp table b
 const float CelsiusInterval = 10.0;
 
 static const uint16_t tempTable[] =
-{
-	6026,  6430,  6833,  7233,  7633,  8031,  8427,  8822,  9216,  9609,
-	10000, 10390, 10779, 11167, 11554, 11940, 12324, 12708, 13090, 13471,
-	13851, 14229, 14607, 14983, 15358, 15733, 16105, 16477, 16848, 17217,
-	17586, 17953, 18319, 18684, 19047, 19410, 19771, 20131, 20490, 20848,
-	21205, 21561, 21915, 22268, 22621, 22972, 23321, 23670, 24018, 24364,
-	24709, 25053, 25396, 25738, 26078, 26418, 26756, 27093, 27429, 27764,
-	28098, 28430, 28762, 29092, 29421, 29749, 30075, 30401, 30725, 31048,
-	31371, 31692, 32012, 32330, 32648, 32964, 33279, 33593, 33906, 34218,
-	34528, 34838, 35146, 35453, 35759, 36064, 36367, 36670, 36971, 37271,
-	37570, 37868, 38165, 38460, 38755, 39048
-};
+		{
+				6026,  6430,  6833,  7233,  7633,  8031,  8427,  8822,  9216,  9609,
+				10000, 10390, 10779, 11167, 11554, 11940, 12324, 12708, 13090, 13471,
+				13851, 14229, 14607, 14983, 15358, 15733, 16105, 16477, 16848, 17217,
+				17586, 17953, 18319, 18684, 19047, 19410, 19771, 20131, 20490, 20848,
+				21205, 21561, 21915, 22268, 22621, 22972, 23321, 23670, 24018, 24364,
+				24709, 25053, 25396, 25738, 26078, 26418, 26756, 27093, 27429, 27764,
+				28098, 28430, 28762, 29092, 29421, 29749, 30075, 30401, 30725, 31048,
+				31371, 31692, 32012, 32330, 32648, 32964, 33279, 33593, 33906, 34218,
+				34528, 34838, 35146, 35453, 35759, 36064, 36367, 36670, 36971, 37271,
+				37570, 37868, 38165, 38460, 38755, 39048
+		};
 
 const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 
@@ -280,7 +284,7 @@ const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 	// Formally-verified binary search routine, adapted from one of the eCv examples
 	size_t low = 0u, high = NumTempTableEntries;
 	while (high > low)
-	keep(low <= high; high <= NumTempTableEntries)
+		keep(low <= high; high <= NumTempTableEntries)
 	keep(low == 0u || tempTable[low - 1u] < ohmsx100)
 	keep(high == NumTempTableEntries || ohmsx100 <= tempTable[high])
 	decrease(high - low)
