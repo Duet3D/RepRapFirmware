@@ -74,7 +74,7 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 
 			if (outputNumber > parent->GetNumAdditionalOutputs())
 			{
-				reply.printf("Parent sensor only has %d addtional outputs", parent->GetNumAdditionalOutputs());
+				reply.printf("Parent sensor only has %d additional outputs", parent->GetNumAdditionalOutputs());
 				return GCodeResult::error;
 			}
 		}
@@ -83,8 +83,11 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 		Poll();
 	}
 
+    const auto parent = reprap.GetHeat().FindSensor(parentSensor);
+	parent->Configure(gb, reply, changed);
+
 	TryConfigureSensorName(gb, changed);
-	if (!changed && !gb.Seen('Y'))
+	if (!changed)
 	{
 		// No parameters were provided, so report the current configuration
 		CopyBasicDetails(reply);
