@@ -86,11 +86,11 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
     const auto parent = reprap.GetHeat().FindSensor(parentSensor);
 	parent->Configure(gb, reply, changed);
 
-	TryConfigureSensorName(gb, changed);
+	//TryConfigureSensorName(gb, changed);
 	if (!changed)
 	{
 		// No parameters were provided, so report the current configuration
-		CopyBasicDetails(reply);
+		//CopyBasicDetails(reply);
 		reply.catf(", additional output %d of sensor %d", outputNumber, parentSensor);
 	}
 	return GCodeResult::ok;
