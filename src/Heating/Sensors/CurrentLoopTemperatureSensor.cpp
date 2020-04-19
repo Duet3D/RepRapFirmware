@@ -136,7 +136,7 @@ TemperatureError CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature(float&
 }
 
 CurrentLoopTemperatureExtraSensor::CurrentLoopTemperatureExtraSensor(unsigned int sensorNum) noexcept
-		: AdditionalOutputSensor(sensorNum, "Current Loop Extra", false)
+		: AdditionalOutputSensor(sensorNum, "Current-Loop-Extra", false)
 {
 }
 
