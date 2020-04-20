@@ -323,10 +323,20 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Platform)
 
-size_t Platform::GetNumInputsToReport() const noexcept
+size_t Platform::GetNumGpInputsToReport() const noexcept
 {
 	size_t ret = MaxGpInPorts;
 	while (ret != 0 && gpinPorts[ret - 1].IsUnused())
+	{
+		--ret;
+	}
+	return ret;
+}
+
+size_t Platform::GetNumGpOutputsToReport() const noexcept
+{
+	size_t ret = MaxGpOutPorts;
+	while (ret != 0 && gpoutPorts[ret - 1].IsUnused())
 	{
 		--ret;
 	}
@@ -2012,11 +2022,12 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #endif
 			buf->lcat((testFailed) ? "***** ONE OR MORE CHECKS FAILED *****" : "All checks passed");
 
-	#if SAM4E || SAM4S || SAME70
+#if SAM4E || SAM4S || SAME70
 			if (!testFailed)
 			{
 				AppendUniqueId(reply);
 				buf->lcat(reply.c_str());
+				reply.Clear();
 			}
 #endif
 		}
@@ -2984,7 +2995,7 @@ void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage) noexcept
 		}
 		else
 		{
-			// Other responses are stored for M105/M408
+			// Other responses are stored for M408
 			auxSeq++;
 			auxGCodeReply.Push(reply);
 		}

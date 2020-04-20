@@ -78,7 +78,7 @@ protected:
 	OBJECT_MODEL_ARRAY(sensors)
 	OBJECT_MODEL_ARRAY(endstops)
 	OBJECT_MODEL_ARRAY(filamentMonitors)
-	OBJECT_MODEL_ARRAY(inputs)
+	OBJECT_MODEL_ARRAY(gpin)
 	OBJECT_MODEL_ARRAY(probes)
 
 private:

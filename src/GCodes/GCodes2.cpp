@@ -1130,7 +1130,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				const uint32_t gpioPortNumber = gb.GetLimitedUIValue('P', MaxGpOutPorts);
 				gb.MustSee('S');
-				result = platform.GetGpioPort(gpioPortNumber).WriteAnalog(gpioPortNumber, false, gb.GetPwmValue(), gb, reply);
+				result = platform.GetGpOutPort(gpioPortNumber).WriteAnalog(gpioPortNumber, false, gb.GetPwmValue(), gb, reply);
 			}
 			break;
 
@@ -2201,7 +2201,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 
 				const float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
-				result = platform.GetGpioPort(gpioPortNumber).WriteAnalog(gpioPortNumber, true, pwm, gb, reply);
+				result = platform.GetGpOutPort(gpioPortNumber).WriteAnalog(gpioPortNumber, true, pwm, gb, reply);
 			}
 			break;
 

@@ -160,6 +160,17 @@ constexpr ObjectModelArrayDescriptor RepRap::inputsArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->gCodes->GetInput(context.GetLastIndex())); }
 };
 
+constexpr ObjectModelArrayDescriptor RepRap::gpoutArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpOutputsToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{
+						const GpOutputPort& port = reprap.GetPlatform().GetGpOutPort(context.GetLastIndex());
+						return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
+					}
+};
+
 constexpr ObjectModelArrayDescriptor RepRap::spindlesArrayDescriptor =
 {
 	nullptr,					// no lock needed
@@ -276,6 +287,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
 	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
+	{ "gpOut",					OBJECT_MODEL_FUNC_NOSELF(&gpoutArrayDescriptor),						ObjectModelEntryFlags::live },
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->platform->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE
 	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
@@ -342,7 +354,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																		// directories
 #endif
 	25,																		// limits
-	13 + HAS_VOLTAGE_MONITOR,												// state
+	14 + HAS_VOLTAGE_MONITOR,												// state
 	2,																		// state/beep
 	6,																		// state.messageBox
 	10 + 2 * HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE		// seqs
@@ -2059,14 +2071,18 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 	}
 
 	// Send the response to the last command. Do this last because it can be long and may need to be truncated.
-	const int auxSeq = (int)platform->GetAuxSeq();
-	if (type < 2 || (seq != -1 && auxSeq != seq))
+	// auxSeq is the last sequence number that PanelDue has received from us.
+	// It's possible that we have queued several messages since PanelDue last polled us.
+	if (type < 2 || seq != -1)
 	{
-
-		response->catf(",\"seq\":%d,\"resp\":", auxSeq);					// send the response sequence number
-
-		// Send the JSON response
-		response->EncodeReply(platform->GetAuxGCodeReply());				// also releases the OutputBuffer chain
+		// PanelDue has asked us for any new responses
+		OutputBuffer * const buf = platform->GetAuxGCodeReply();
+		const int auxSeq = (int)platform->GetAuxSeq();
+		if (buf != nullptr || auxSeq != seq)
+		{
+			response->catf(",\"seq\":%d,\"resp\":", auxSeq);				// send the response sequence number
+			response->EncodeReply(buf);										// also releases the OutputBuffer chain
+		}
 	}
 
 	response->cat('}');

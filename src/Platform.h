@@ -36,7 +36,8 @@ Licence: GPL
 #include "MessageType.h"
 #include "Tools/Spindle.h"
 #include "Endstops/EndstopsManager.h"
-#include <GPIO/GpioPorts.h>
+#include <GPIO/GpInPort.h>
+#include <GPIO/GpOutPort.h>
 #include <General/IPAddress.h>
 
 #if defined(DUET_NG)
@@ -296,7 +297,8 @@ public:
 	const char* GetBoardString() const noexcept;
 
 #if SUPPORT_OBJECT_MODEL
-	size_t GetNumInputsToReport() const noexcept;
+	size_t GetNumGpInputsToReport() const noexcept;
+	size_t GetNumGpOutputsToReport() const noexcept;
 #endif
 
 #ifdef DUET_NG
@@ -544,8 +546,8 @@ public:
 	// Misc
 	GCodeResult ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
-	const GpOutputPort& GetGpioPort(size_t gpoutPortNumber) const noexcept
-		pre(gpioPortNumber < MaxGpOutPorts) 	{ return gpoutPorts[gpoutPortNumber]; }
+	GpOutputPort& GetGpOutPort(size_t gpoutPortNumber) noexcept
+		pre(gpioPortNumber < MaxGpOutPorts)	{ return gpoutPorts[gpoutPortNumber]; }
 	const GpInputPort& GetGpInPort(size_t gpinPortNumber) const noexcept
 		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
 

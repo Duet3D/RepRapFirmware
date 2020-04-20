@@ -62,12 +62,15 @@ constexpr ObjectModelArrayDescriptor EndstopsManager::filamentMonitorsArrayDescr
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(FilamentMonitor::GetMonitorAlreadyLocked(context.GetLastIndex())); }
 };
 
-constexpr ObjectModelArrayDescriptor EndstopsManager::inputsArrayDescriptor =
+constexpr ObjectModelArrayDescriptor EndstopsManager::gpinArrayDescriptor =
 {
 	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumInputsToReport(); },
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpInputsToReport(); },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{ return ExpressionValue(&reprap.GetPlatform().GetGpInPort(context.GetLastIndex())); }
+					{
+						const GpInputPort& port = reprap.GetPlatform().GetGpInPort(context.GetLastIndex());
+						return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
+					}
 };
 
 constexpr ObjectModelArrayDescriptor EndstopsManager::probesArrayDescriptor =
@@ -85,7 +88,7 @@ constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
 	{ "analog",				OBJECT_MODEL_FUNC_NOSELF(&sensorsArrayDescriptor),				ObjectModelEntryFlags::live },
 	{ "endstops",			OBJECT_MODEL_FUNC_NOSELF(&endstopsArrayDescriptor), 			ObjectModelEntryFlags::live },
 	{ "filamentMonitors",	OBJECT_MODEL_FUNC_NOSELF(&filamentMonitorsArrayDescriptor),		ObjectModelEntryFlags::live },
-	{ "inputs",				OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor), 				ObjectModelEntryFlags::live },
+	{ "gpIn",				OBJECT_MODEL_FUNC_NOSELF(&gpinArrayDescriptor), 				ObjectModelEntryFlags::live },
 	{ "probes",				OBJECT_MODEL_FUNC_NOSELF(&probesArrayDescriptor),				ObjectModelEntryFlags::live },
 };
 

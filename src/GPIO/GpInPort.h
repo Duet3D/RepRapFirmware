@@ -1,12 +1,12 @@
 /*
- * GpioPorts.h
+ * GpInPort.h
  *
  *  Created on: 11 Feb 2020
  *      Author: David
  */
 
-#ifndef SRC_GPIO_GPIOPORTS_H_
-#define SRC_GPIO_GPIOPORTS_H_
+#ifndef SRC_GPIO_GPINPORT_H_
+#define SRC_GPIO_GPINPORT_H_
 
 #include <RepRapFirmware.h>
 #include <Hardware/IoPorts.h>
@@ -48,29 +48,4 @@ private:
 	bool currentState;
 };
 
-class GpOutputPort
-{
-public:
-	GpOutputPort() noexcept
-#if SUPPORT_CAN_EXPANSION
-		: boardAddress(CanId::MasterAddress)
-#endif
-	{ }
-
-	GpOutputPort(const GpOutputPort&) = delete;
-
-	GCodeResult WriteAnalog(uint32_t gpioPortNumber, bool isServo, float pwm, const GCodeBuffer& gb, const StringRef& reply) const noexcept;
-	GCodeResult Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-
-#ifdef PCCB
-	void Assign(const char *pinName) noexcept;
-#endif
-
-private:
-	PwmPort port;									// will be initialised by PwmPort default constructor
-#if SUPPORT_CAN_EXPANSION
-	CanAddress boardAddress;
-#endif
-};
-
-#endif /* SRC_GPIO_GPIOPORTS_H_ */
+#endif /* SRC_GPIO_GPINPORT_H_ */
