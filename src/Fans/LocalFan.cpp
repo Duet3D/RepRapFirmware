@@ -65,15 +65,16 @@ void LocalFan::SetHardwarePwm(float pwmVal) noexcept
 }
 
 // Refresh the fan PWM
+// Checking all the sensors is expensive, so only do this if checkSensors is true.
 // If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
-void LocalFan::InternalRefresh() noexcept
+void LocalFan::InternalRefresh(bool checkSensors) noexcept
 {
 	float reqVal;
 #if HAS_SMART_DRIVERS
 	DriverChannelsBitmap driverChannelsMonitored;
 #endif
 
-	if (sensorsMonitored.IsEmpty())
+	if (sensorsMonitored.IsEmpty() || !checkSensors)
 	{
 		reqVal = val;
 	}
@@ -165,19 +166,21 @@ void LocalFan::InternalRefresh() noexcept
 
 GCodeResult LocalFan::Refresh(const StringRef& reply) noexcept
 {
-	InternalRefresh();
+	InternalRefresh(true);
 	return GCodeResult::ok;
 }
 
 bool LocalFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 {
-	InternalRefresh();
+	InternalRefresh(true);
 	return true;
 }
 
-bool LocalFan::Check() noexcept
+// Update the fan, returning true if the fan is thermostatic and running.
+// Checking the sensors is expensive, so only check them if checkSensors is true.
+bool LocalFan::Check(bool checkSensors) noexcept
 {
-	InternalRefresh();
+	InternalRefresh(checkSensors);
 	return sensorsMonitored.IsNonEmpty() && lastVal != 0.0;
 }
 
@@ -200,7 +203,7 @@ bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply) noexcep
 		tachoPort.AttachInterrupt(FanInterrupt, INTERRUPT_MODE_FALLING, this);
 	}
 
-	InternalRefresh();
+	InternalRefresh(true);
 	return true;
 }
 

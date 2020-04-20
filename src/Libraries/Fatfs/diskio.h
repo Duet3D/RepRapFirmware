@@ -1,15 +1,12 @@
 /*-----------------------------------------------------------------------
-/  Low level disk interface modlue include file
+/  Low level disk interface module include file
 /-----------------------------------------------------------------------*/
 
 #ifndef _DISKIO
 
 #ifdef __cplusplus
 unsigned int DiskioGetAndClearMaxRetryCount() noexcept;
-# define NOEXCEPT	noexcept
 extern "C" {
-#else
-# define NOEXCEPT
 #endif
 
 #define _READONLY	0	/* 1: Remove write functions */
@@ -30,18 +27,17 @@ typedef enum {
 	RES_PARERR		/* 4: Invalid Parameter */
 } DRESULT;
 
-
 /*---------------------------------------*/
 /* Prototypes for disk control functions */
 
-int assign_drives (int, int) NOEXCEPT;
-DSTATUS disk_initialize (BYTE) NOEXCEPT;
-DSTATUS disk_status (BYTE) NOEXCEPT;
-DRESULT disk_read (BYTE, BYTE*, DWORD, BYTE) NOEXCEPT;
+int assign_drives (int, int) noexcept;
+DSTATUS disk_initialize (BYTE) noexcept;
+DSTATUS disk_status (BYTE) noexcept;
+DRESULT disk_read (BYTE, BYTE*, DWORD, BYTE) noexcept;
 #if	_READONLY == 0
-DRESULT disk_write (BYTE, const BYTE*, DWORD, BYTE) NOEXCEPT;
+DRESULT disk_write (BYTE, const BYTE*, DWORD, BYTE) noexcept;
 #endif
-DRESULT disk_ioctl (BYTE, BYTE, void*) NOEXCEPT;
+DRESULT disk_ioctl (BYTE, BYTE, void*) noexcept;
 
 /* Disk Status Bits (DSTATUS) */
 

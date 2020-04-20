@@ -53,7 +53,12 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 
 // The physical capabilities of the machine
 
+#if SUPPORT_12864_LCD
+constexpr size_t NumDirectDrivers = 11;				// The maximum number of drives supported directly by the electronics
+#else
 constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives supported directly by the electronics
+#endif
+
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
 constexpr size_t MaxSensors = 32;
@@ -112,18 +117,27 @@ constexpr Pin ENABLE_PINS[NumDirectDrivers] =
 {
 	PortDPin(14), PortCPin(9), PortCPin(10), PortCPin(17), PortCPin(25),	// Duet
 	PortDPin(23), PortDPin(24), PortDPin(25), PortDPin(26), PortBPin(14),	// DueX5
-	PortDPin(18), PortCPin(28)												// CONN_LCD
+	PortDPin(18),															// CONN_LCD
+#if !SUPPORT_12864_LCD
+	PortCPin(28)
+#endif
 };
 constexpr Pin STEP_PINS[NumDirectDrivers] =
 {
 	PortDPin(6), PortDPin(7), PortDPin(8), PortDPin(5), PortDPin(4),		// Duet
 	PortDPin(2), PortDPin(1), PortDPin(0), PortDPin(3), PortDPin(27),		// DueX5
-	PortDPin(20), PortDPin(21)												// CONN_LCD
+	PortDPin(20),															// CONN_LCD
+#if !SUPPORT_12864_LCD
+	PortDPin(21)
+#endif
 };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =
 {	PortDPin(11), PortDPin(12), PortDPin(13), PortAPin(1), PortDPin(9),		// Duet
 	PortDPin(28), PortDPin(22), PortDPin(16), PortDPin(17), PortCPin(0),	// DueX5
-	PortDPin(19), PortAPin(25)												// CONN_LCD
+	PortDPin(19),															// CONN_LCD
+#if !SUPPORT_12864_LCD
+	PortAPin(25)
+#endif
 };
 
 // Pin assignments etc. using USART1 in SPI mode
@@ -186,6 +200,26 @@ constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(21), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { PortCPin(24) };
 constexpr uint32_t ExpectedSdCardSpeed = 20000000;
+
+#if SUPPORT_12864_LCD
+// The ST7920 datasheet specifies minimum clock cycle time 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low.
+// This assumes that the Vih specification is met, which is 0.7 * Vcc = 3.5V @ Vcc=5V
+// The Duet Maestro level shifts all 3 LCD signals to 5V, so we meet the Vih specification and can reliably run at 2MHz.
+// For other electronics, there are reports that operation with 3.3V LCD signals may work if you reduce the clock frequency.
+constexpr uint32_t LcdSpiClockFrequency = 2000000;             // 2.0MHz
+constexpr Pin LcdCSPin = PortDPin(21);      //connlcd.10 --> gate -> exp2.4
+constexpr Pin LcdBeepPin = PortAPin(8);     //connlcd.4           -> exp1.1
+constexpr Pin EncoderPinA = PortAPin(25);   //connlcd.8           -> exp2.5
+constexpr Pin EncoderPinB = PortCPin(28);   //connlcd.6           -> exp2.3
+constexpr Pin EncoderPinSw = PortAPin(7);   //connsd.7            -> exp1.2
+                                            //adittional spi wiring:
+                                            //connsd.6            <- exp2.1
+                                            //connsd.5   --> gate -> exp1.3
+                                            //            `->     -> exp2.6
+                                            //connsd.4   --> gate -> exp1.5
+                                            //            `->     -> exp2.2
+                                            //connsd.3            -> exp2.4
+#endif
 
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board

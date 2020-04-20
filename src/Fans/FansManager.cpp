@@ -50,13 +50,13 @@ LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *pinNames, Pwm
 }
 
 // Check and if necessary update all fans. Return true if a thermostatic fan is running.
-bool FansManager::CheckFans() noexcept
+bool FansManager::CheckFans(bool checkSensors) noexcept
 {
 	ReadLocker lock(fansLock);
 	bool thermostaticFanRunning = false;
 	for (Fan* fan : fans)
 	{
-		if (fan != nullptr && fan->Check())
+		if (fan != nullptr && fan->Check(checkSensors))
 		{
 			thermostaticFanRunning = true;
 		}

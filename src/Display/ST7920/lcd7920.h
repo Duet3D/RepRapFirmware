@@ -49,7 +49,7 @@ public:
 	// Write a single character in the current font. Called by the 'print' functions.
 	//  c = character to write
 	// Returns the number of characters written (1 if we wrote it, 0 otherwise)
-	virtual size_t write(uint8_t c) noexcept;		// write a character
+	size_t write(uint8_t c) noexcept override;		// write a character
 
 	// Write a space
 	void WriteSpaces(PixelNumber numPixels) noexcept;

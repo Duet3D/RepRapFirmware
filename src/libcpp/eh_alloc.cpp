@@ -123,7 +123,7 @@ __cxxabiv1::__cxa_allocate_dependent_exception() noexcept
 
 extern "C" void
 __cxxabiv1::__cxa_free_dependent_exception
-  (__cxa_dependent_exception *vptr) _GLIBCXX_NOTHROW
+  (__cxa_dependent_exception *vptr) noexcept
 {
   free (vptr);
 }

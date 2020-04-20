@@ -35,7 +35,7 @@ RemoteFan::~RemoteFan() noexcept
 	}
 }
 
-bool RemoteFan::Check() noexcept
+bool RemoteFan::Check(bool checkSensors) noexcept
 {
 	return thermostaticFanRunning;
 }

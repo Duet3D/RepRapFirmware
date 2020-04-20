@@ -20,7 +20,7 @@ public:
 	RemoteFan(unsigned int fanNum, CanAddress boardNum) noexcept;
 	~RemoteFan() noexcept;
 
-	bool Check() noexcept override;									// update the fan PWM returning true if it is a thermostatic fan that is on
+	bool Check(bool checkSensors) noexcept override;						// update the fan PWM returning true if it is a thermostatic fan that is on
 	bool IsEnabled() const noexcept override;
 	int32_t GetRPM() const noexcept override;
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;

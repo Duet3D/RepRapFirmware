@@ -16,7 +16,7 @@ public:
 	LocalFan(unsigned int fanNum) noexcept;
 	~LocalFan() noexcept;
 
-	bool Check() noexcept override;								// update the fan PWM returning true if it is a thermostatic fan that is on
+	bool Check(bool checkSensors) noexcept override;						// update the fan PWM returning true if it is a thermostatic fan that is on
 	bool IsEnabled() const noexcept override { return port.IsValid(); }
 	int32_t GetRPM() const noexcept override;
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
@@ -36,7 +36,7 @@ protected:
 
 private:
 	void SetHardwarePwm(float pwmVal) noexcept;
-	void InternalRefresh() noexcept;
+	void InternalRefresh(bool checkSensors) noexcept;
 
 	PwmPort port;											// port used to control the fan
 	IoPort tachoPort;										// port used to read the tacho

@@ -26,7 +26,7 @@ public:
 	Fan(const Fan&) = delete;
 
 	virtual ~Fan() noexcept { }
-	virtual bool Check() noexcept = 0;								// update the fan PWM returning true if it is a thermostatic fan that is on
+	virtual bool Check(bool checkSensors) noexcept = 0;						// update the fan PWM returning true if it is a thermostatic fan that is on
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept = 0;
 	virtual bool IsEnabled() const noexcept = 0;
 	virtual int32_t GetRPM() const noexcept = 0;

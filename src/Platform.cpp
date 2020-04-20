@@ -1234,10 +1234,12 @@ void Platform::Spin() noexcept
 	}
 
 	// Thermostatically-controlled fans (do this after getting TMC driver status)
-	if (now - lastFanCheckTime >= FanCheckInterval)
+	// We should call CheckFans frequently so that blip time is terminated at the right time, but we don't need or want to check sensors that often
+	const bool checkFanSensors = (now - lastFanCheckTime >= FanCheckInterval);
+	const bool thermostaticFanRunning = reprap.GetFansManager().CheckFans(checkFanSensors);
+	if (checkFanSensors)
 	{
 		lastFanCheckTime = now;
-		bool thermostaticFanRunning = reprap.GetFansManager().CheckFans();
 
 		if (deferredPowerDown && !thermostaticFanRunning)
 		{

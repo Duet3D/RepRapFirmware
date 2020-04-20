@@ -59,6 +59,7 @@
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
 									<listOptionValue builtIn="false" value="__RADDS__"/>
 									<listOptionValue builtIn="false" value="RTOS"/>
+									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.1035432363" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.110609707" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
@@ -212,6 +213,7 @@
 									<listOptionValue builtIn="false" value="__SAM4E8E__"/>
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET_NG"/>
+									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1370424675" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.1078349416" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -372,6 +374,7 @@
 									<listOptionValue builtIn="false" value="__SAM4S8C__"/>
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET_M"/>
+									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.1483343823" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.667707888" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
@@ -532,6 +535,7 @@
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="PCCB"/>
 									<listOptionValue builtIn="false" value="PCCB_10"/>
+									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.2138987417" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1697017655" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
@@ -700,6 +704,7 @@
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET3_V06"/>
+									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1738681846" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.1952106689" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -883,6 +888,7 @@
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET3_V06"/>
+									<listOptionValue builtIn="false" value="noexcept="/>
 									<listOptionValue builtIn="false" value="DEBUG"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1475182191" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
@@ -1065,6 +1071,7 @@
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET3_V06"/>
 									<listOptionValue builtIn="false" value="USE_CAN0"/>
+									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1589331260" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.344980217" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
