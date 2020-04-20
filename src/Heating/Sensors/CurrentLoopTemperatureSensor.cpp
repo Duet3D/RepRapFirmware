@@ -114,7 +114,7 @@ TemperatureError CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature(float&
 	 */
 
 	const uint8_t channelByte = ((isDifferential) ? 0x80 : 0xC0) | (chipChannel * 0x08);
-	static const uint8_t adcData[] = { channelByte, 0x00, 0x00 };
+	const uint8_t adcData[] = { channelByte, 0x00, 0x00 };
 	uint32_t rawVal;
 	TemperatureError rslt = DoSpiTransaction(adcData, 3, rawVal);
 	//debugPrintf("ADC data %u\n", rawVal);
