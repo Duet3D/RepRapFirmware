@@ -29,6 +29,7 @@ public:
 	virtual bool Check() noexcept = 0;								// update the fan PWM returning true if it is a thermostatic fan that is on
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept = 0;
 	virtual bool IsEnabled() const noexcept = 0;
+	virtual int32_t GetRPM() const noexcept = 0;
 	virtual GCodeResult ReportPortDetails(const StringRef& str) const noexcept = 0;
 #if SUPPORT_CAN_EXPANSION
 	virtual void UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept = 0;
@@ -42,7 +43,6 @@ public:
 	bool Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
 
 	float GetConfiguredPwm() const noexcept { return val; }			// returns the configured PWM. Actual PWM may be different, e.g. due to blipping or for thermostatic fans.
-	int32_t GetRPM() const noexcept;
 
 	GCodeResult SetPwm(float speed, const StringRef& reply) noexcept;
 	bool HasMonitoredSensors() const noexcept { return sensorsMonitored.IsNonEmpty(); }
@@ -60,8 +60,6 @@ protected:
 	virtual GCodeResult Refresh(const StringRef& reply) noexcept = 0;
 	virtual bool UpdateFanConfiguration(const StringRef& reply) noexcept = 0;
 
-	void SetLastRpm(float rpm) noexcept { lastRpm = rpm; whenLastRpmSet = millis(); }
-
 	unsigned int fanNumber;
 
 	// Variables that control the fan
@@ -69,8 +67,6 @@ protected:
 	float lastVal;
 	float minVal;
 	float maxVal;
-	mutable int32_t lastRpm;
-	uint32_t whenLastRpmSet;
 	float triggerTemperatures[2];
 	uint32_t blipTime;										// in milliseconds
 	SensorsBitmap sensorsMonitored;

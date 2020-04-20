@@ -18,6 +18,7 @@ public:
 
 	bool Check() noexcept override;								// update the fan PWM returning true if it is a thermostatic fan that is on
 	bool IsEnabled() const noexcept override { return port.IsValid(); }
+	int32_t GetRPM() const noexcept override;
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 	GCodeResult ReportPortDetails(const StringRef& str) const noexcept override;
 

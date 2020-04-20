@@ -22,6 +22,7 @@ public:
 
 	bool Check() noexcept override;									// update the fan PWM returning true if it is a thermostatic fan that is on
 	bool IsEnabled() const noexcept override;
+	int32_t GetRPM() const noexcept override;
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 	GCodeResult ReportPortDetails(const StringRef& str) const noexcept override;
 	void UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept override;
@@ -33,6 +34,8 @@ protected:
 	GCodeResult Refresh(const StringRef& reply) noexcept override;
 
 private:
+	mutable int32_t lastRpm;
+	uint32_t whenLastRpmReceived;
 	CanAddress boardNumber;
 	bool thermostaticFanRunning;
 };

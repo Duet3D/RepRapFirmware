@@ -50,7 +50,6 @@ Fan::Fan(unsigned int fanNum) noexcept
 	  val(0.0), lastVal(0.0),
 	  minVal(DefaultMinFanPwm),
 	  maxVal(1.0),										// 100% maximum fan speed
-	  lastRpm(-1), whenLastRpmSet(0),
 	  blipTime(DefaultFanBlipTime)
 {
 	triggerTemperatures[0] = triggerTemperatures[1] = DefaultHotEndFanTemperature;
@@ -184,15 +183,6 @@ GCodeResult Fan::SetPwm(float speed, const StringRef& reply) noexcept
 {
 	val = speed;
 	return Refresh(reply);
-}
-
-int32_t Fan::GetRPM() const noexcept
-{
-	if (millis() - whenLastRpmSet > RpmReadingTimeout)
-	{
-		lastRpm = -1;
-	}
-	return lastRpm;
 }
 
 #if HAS_MASS_STORAGE
