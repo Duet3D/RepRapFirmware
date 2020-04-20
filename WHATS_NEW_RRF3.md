@@ -1,35 +1,33 @@
-RepRapFirmware 3.01-RC8
+RepRapFirmware 3.01-RC9 (in preparation)
 =======================
 
 Recommended compatible firmware:
-- DuetWebControl 2.1.3
+- DuetWebControl 2.1.?
 - DuetWiFiServer 1.23 (same as for previous RC)
-- Duet Software Framework version 2.0.0 (for Duet 3/Raspberry Pi users)
+- Duet Software Framework version 2.1.? (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01-RC7 (same as for previous RC)
-- PanelDueFirmware 1.24RC1 (but version 1.23.1 still acceptable unless running on Duet 3 with attached SBC)
+- PanelDueFirmware 1.24
 
 Upgrade notes:
-- See also the notes for 3.01-RC7 if upgrading from an earlier version
+- If you were using object model variable sensors.inputs, see the note under "Changed behaviour" below..
+- See also the notes for 3.01-RC8 if upgrading from an earlier version
 
 Known issues and limitations:
 - All boards: Z probe types 1, 2 and 5 are only supported for Z probe 0, and if using Duet 3 only for a probe connected to the main board. All other Z probes must be of type 8 or 9.
 - Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
 - Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
-- Additional limitations apply to Duet 3 systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
+- Duet 3: additional limitations apply to systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
 
 New features/changed behaviour:
-- Duet 3+SBC: File- and system-related commands originating from PanelDue and other local GCode sources are now sent to DSF when running with attached SBC. Note, PanelDue firmware needs to be upgraded to 1.24 for this to work fully.
+- Object model property 'sensors.inputs' is renamed to 'sensors.gpIn'. The 'configured' field of each array element is gone, instead the whole array element is null if that GPIn port has not been configured.
+- Object model property 'state.gpOut' is added
 
 Bug fixes:
-- Duet 3+SBC: on resuming a paused print some additional moves would get executed
-- While printing from SD card, if wipe-while-retract was enabled in the slicer then the values displayed in DWC and PanelDue for filament consumed, % print completed and filament-based estimated time left were incorrect 
-- Duet Maestro with 12864 display: a spurious heater fault message might appear temporarily on the display during startup
-- The response to M122 P1 was generated as multiple messages, which meant that the ATE did not see the whole response
-- G29/G30 "Z probe already triggered" and similar messages were missing when there was a retractprobe.g file
-- Current layer time was shown as zero throughout the first layer
-- Object XY limits were reported to too many decimal places
-- Non-existent object properties were ignored when evaluation of the expression is disabled, e.g. second operand of && or ||
-- It was not possible to compare an array-valued object model property with null in an expression
+- Fan RPM reporting latency was sometimes greater than 1 second which caused the ATE to report errors. It has been reduced back to under 650ms.
+- The fan blip time was longer than had been configured by a random time up to 500ms
+- Under some conditions a PanelDue or similar client might not fetch all the waiting responses, leading to responses being delayed or lost, or temporarily running out of output buffers
+- Empty responses from commands were being sent to PanelDue instead of being suppressed
+- Duet 3 + attached SBC: when file-related commands from PanelDue (e.g. M20, M36) were sent to DCS for processing, the JSON response sent to PanelDue was corrupted after the first 256 bytes. This meant that PanelDue was only able to retrieve file and macro lists when there were no more than about 9 files, and that file information displayed by PanelDue was often incomplete
 
 RepRapFirmware 3.01-RC7
 =======================
