@@ -230,7 +230,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 	if (lp != NoLogicalPin)					// if not assigning "nil"
 	{
 		bool doSetMode = true;
-		if (portUsedBy[lp] == PinUsedBy::unused || (portUsedBy[lp] == PinUsedBy::temporaryInput && neededFor != PinUsedBy::temporaryInput))
+		if (portUsedBy[lp] == PinUsedBy::unused || (portUsedBy[lp] == PinUsedBy::temporaryInput && neededFor != PinUsedBy::temporaryInput) || (portUsedBy[lp] == PinUsedBy::chipSelect && neededFor == PinUsedBy::chipSelect))
 		{
 			portUsedBy[lp] = neededFor;
 		}
@@ -248,7 +248,13 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 		}
 		logicalPin = lp;
 		hardwareInvert = hwInvert;
-		isSharedInput = (neededFor == PinUsedBy::temporaryInput);
+		if (neededFor == PinUsedBy::temporaryInput || neededFor == PinUsedBy::chipSelect){
+		    isSharedInput = true;
+		}
+		else
+        {
+		    isSharedInput = false;
+        }
 		SetInvert(inverted);
 
 		if (doSetMode && !SetMode(access))
