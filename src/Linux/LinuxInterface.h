@@ -35,6 +35,7 @@ public:
 	void Init();
 	void Spin();
 	void Diagnostics(MessageType mtype);
+	bool IsConnected() const;
 
 	bool FillBuffer(GCodeBuffer &gb);		// Try to fill up the G-code buffer with the next available G-code
 

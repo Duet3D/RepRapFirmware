@@ -13,6 +13,9 @@
 #include "GCodeException.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
+#if HAS_LINUX_INTERFACE
+# include "Linux/LinuxInterface.h"
+#endif
 #include "Movement/Move.h"
 #include "Network.h"
 #include "Scanner.h"
@@ -426,7 +429,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_LINUX_INTERFACE
 	// Pass file- and system-related commands to DSF if they came from somewhere else. They will be passed back to us via a binary buffer or separate SPI message if necessary.
-	if (   reprap.UsingLinuxInterface() && !gb.IsBinary()
+	if (   reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().IsConnected() && !gb.IsBinary()
 		&& (   code == 0 || code == 1
 			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26
 			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
@@ -899,7 +902,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 25: // Pause the print
 			if (isPaused)
 			{
-				reply.copy("Printing is already paused!!");
+				reply.copy("Printing is already paused!");
 				result = GCodeResult::error;
 			}
 			else if (!reprap.GetPrintMonitor().IsPrinting())

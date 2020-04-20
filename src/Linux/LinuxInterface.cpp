@@ -330,8 +330,18 @@ void LinuxInterface::Spin()
 				OutputBuffer *buf;
 				if (OutputBuffer::Allocate(buf))
 				{
-					const MessageType type = transfer->ReadMessage(buf);
-					reprap.GetPlatform().Message(type, buf);
+					MessageType type;
+					if (transfer->ReadMessage(type, buf))
+					{
+						// FIXME Push flag is not supported yet
+						reprap.GetPlatform().Message(type, buf);
+					}
+					else
+					{
+						// Not enough memory for reading the whole message, try again later
+						OutputBuffer::ReleaseAll(buf);
+						packetAcknowledged = false;
+					}
 				}
 				break;
 			}
@@ -501,6 +511,11 @@ void LinuxInterface::Diagnostics(MessageType mtype)
 	transfer->Diagnostics(mtype);
 	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 "\n", numDisconnects);
 	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d\n", (int)rxPointer, (int)txPointer, (int)txLength);
+}
+
+bool LinuxInterface::IsConnected() const
+{
+	return transfer->IsConnected();
 }
 
 bool LinuxInterface::FillBuffer(GCodeBuffer &gb)

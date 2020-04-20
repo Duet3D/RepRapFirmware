@@ -49,7 +49,7 @@ public:
 	void ReadAssignFilament(int& extruder, StringRef& filamentName) noexcept;				// Read a request to assign the given filament to an extruder drive
 	void ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept;	// Read another chunk of a file
 	GCodeChannel ReadEvaluateExpression(size_t packetLength, StringRef& expression) noexcept;	// Read an expression request
-	MessageType ReadMessage(OutputBuffer *buf) noexcept;									// Read a request to output a message
+	bool ReadMessage(MessageType& type, OutputBuffer *buf) noexcept;						// Read a request to output a message
 
 	void ResendPacket(const PacketHeader *packet) noexcept;
 	bool WriteObjectModel(OutputBuffer *data) noexcept;
