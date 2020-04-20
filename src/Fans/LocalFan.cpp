@@ -74,9 +74,13 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 	DriverChannelsBitmap driverChannelsMonitored;
 #endif
 
-	if (sensorsMonitored.IsEmpty() || !checkSensors)
+	if (sensorsMonitored.IsEmpty())
 	{
 		reqVal = val;
+	}
+	else if (!checkSensors)
+	{
+		reqVal = (lastVal == 0.0) ? 0.0 : val;
 	}
 	else
 	{
