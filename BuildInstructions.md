@@ -38,7 +38,7 @@ As at 08 January 2020, the latest RRF 3.x source code is on these branches:
 
 4. Modify your PATH environment variable to include the 'bin' folder of the GNU ARM Eclipse installation.
 
-5. Run "which rm" and "which make" to make sure that rm and make will be fetched from that folder.
+5. Run "which rm" and "which make" to make sure that rm and make will be fetched from that folder. In Windows 10, you can run `(Get-Command make).Path` to check the path for rm and make.
 
 6. In Eclipse create new workspace C:/Eclipse/Firmware. Then exit Eclipse.
 
