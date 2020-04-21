@@ -17,6 +17,7 @@ protected:
 	~SensorWithPort() noexcept;
 
 	// Try to configure the port
+	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinAccess access, PinUsedBy usedBy, bool& seen);
 	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinAccess access, bool& seen);
 
 	// Copy the basic details to the reply buffer. This hides the version in the base class.
