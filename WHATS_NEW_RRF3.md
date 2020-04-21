@@ -1,4 +1,4 @@
-RepRapFirmware 3.01-RC9 (in preparation)
+RepRapFirmware 3.01-RC9
 =======================
 
 Recommended compatible firmware:
@@ -20,13 +20,13 @@ Known issues and limitations:
 
 New features/changed behaviour:
 - Object model property 'sensors.inputs' is renamed to 'sensors.gpIn'. The 'configured' field of each array element is gone, instead the whole array element is null if that GPIn port has not been configured. The type of the 'value' field has been changed from Boolean to numeric so that we can return analog values in future firmware versions.
-- Object model property 'state.gpOut' is added
+- Object model properties 'state.gpOut', 'move.axes[].stepsPerMm', 'move.axes[].microstepping', 'move.extruders[].stepsPerMm' and 'move.extruders[].microstepping' have been added
 
 Bug fixes:
 - Fan RPM reporting latency was sometimes greater than 1 second which caused the ATE to report errors. It has been reduced back to under 650ms.
 - The fan blip time was longer than had been configured by a random time up to 500ms
 - Under some conditions a PanelDue or similar client might not fetch all the waiting responses, leading to responses being delayed or lost, or temporarily running out of output buffers
-- Empty responses from commands were being sent to PanelDue instead of being suppressed
+- Empty responses to commands were being sent to PanelDue instead of being suppressed
 - Duet 3 + attached SBC: when file-related commands from PanelDue (e.g. M20, M36) were sent to DCS for processing, the JSON response sent to PanelDue was corrupted after the first 256 bytes. This meant that PanelDue was only able to retrieve file and macro lists when there were no more than about 9 files, and that file information displayed by PanelDue was often incomplete
 
 RepRapFirmware 3.01-RC7
