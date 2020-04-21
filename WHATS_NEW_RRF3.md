@@ -2,14 +2,14 @@ RepRapFirmware 3.01-RC9 (in preparation)
 =======================
 
 Recommended compatible firmware:
-- DuetWebControl 2.1.?
+- DuetWebControl 2.1.4
 - DuetWiFiServer 1.23 (same as for previous RC)
-- Duet Software Framework version 2.1.? (for Duet 3/Raspberry Pi users)
+- Duet Software Framework version 2.1.0 (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01-RC7 (same as for previous RC)
 - PanelDueFirmware 1.24
 
 Upgrade notes:
-- If you were using object model variable sensors.inputs, see the note under "Changed behaviour" below..
+- If you were using object model variable 'sensors.inputs' then see the note under "Changed behaviour" below.
 - See also the notes for 3.01-RC8 if upgrading from an earlier version
 
 Known issues and limitations:
@@ -19,7 +19,7 @@ Known issues and limitations:
 - Duet 3: additional limitations apply to systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
 
 New features/changed behaviour:
-- Object model property 'sensors.inputs' is renamed to 'sensors.gpIn'. The 'configured' field of each array element is gone, instead the whole array element is null if that GPIn port has not been configured.
+- Object model property 'sensors.inputs' is renamed to 'sensors.gpIn'. The 'configured' field of each array element is gone, instead the whole array element is null if that GPIn port has not been configured. The type of the 'value' field has been changed from Boolean to numeric so that we can return analog values in future firmware versions.
 - Object model property 'state.gpOut' is added
 
 Bug fixes:
