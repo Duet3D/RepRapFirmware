@@ -14,6 +14,7 @@ Upgrade notes:
 
 Known issues and limitations:
 - All boards: Z probe types 1, 2 and 5 are only supported for Z probe 0, and if using Duet 3 only for a probe connected to the main board. All other Z probes must be of type 8 or 9.
+- All boards: if a print is cancelled automatically because of a serious error, the cancellation message is shown on the DWC console but the original error message reporting the problem is often missing
 - Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
 - Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
 - Duet 3: additional limitations apply to systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
