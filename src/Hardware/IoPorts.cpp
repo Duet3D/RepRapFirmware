@@ -248,7 +248,8 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 		}
 		logicalPin = lp;
 		hardwareInvert = hwInvert;
-		if (neededFor == PinUsedBy::temporaryInput || neededFor == PinUsedBy::chipSelect){
+		if (neededFor == PinUsedBy::temporaryInput || neededFor == PinUsedBy::chipSelect)
+		{
 			isSharedInput = true;
 		}
 		else
