@@ -183,6 +183,7 @@ inline bool Heat::ColdExtrude() const noexcept
 inline void Heat::AllowColdExtrude(bool b) noexcept
 {
 	coldExtrude = b;
+	reprap.HeatUpdated();
 }
 
 inline float Heat::GetExtrusionMinTemp() const noexcept
@@ -198,11 +199,13 @@ inline float Heat::GetRetractionMinTemp() const noexcept
 inline void Heat::SetExtrusionMinTemp(float t) noexcept
 {
 	extrusionMinTemp = t;
+	reprap.HeatUpdated();
 }
 
 inline void Heat::SetRetractionMinTemp(float t) noexcept
 {
 	retractionMinTemp = t;
+	reprap.HeatUpdated();
 }
 
 inline int Heat::GetBedHeater(size_t index) const noexcept

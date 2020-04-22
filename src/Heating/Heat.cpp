@@ -88,11 +88,11 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	// 0. Heat class
-	{ "bedHeaters",				OBJECT_MODEL_FUNC_NOSELF(&bedHeatersArrayDescriptor), 		ObjectModelEntryFlags::none },
-	{ "chamberHeaters",			OBJECT_MODEL_FUNC_NOSELF(&chamberHeatersArrayDescriptor), 	ObjectModelEntryFlags::none },
-	{ "coldExtrudeTemperature",	OBJECT_MODEL_FUNC(self->extrusionMinTemp, 1),				ObjectModelEntryFlags::none},
-	{ "coldRetractTemperature", OBJECT_MODEL_FUNC(self->retractionMinTemp, 1),				ObjectModelEntryFlags::none},
-	{ "heaters",				OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor),			ObjectModelEntryFlags::live },
+	{ "bedHeaters",				OBJECT_MODEL_FUNC_NOSELF(&bedHeatersArrayDescriptor), 							ObjectModelEntryFlags::none },
+	{ "chamberHeaters",			OBJECT_MODEL_FUNC_NOSELF(&chamberHeatersArrayDescriptor),				 		ObjectModelEntryFlags::none },
+	{ "coldExtrudeTemperature",	OBJECT_MODEL_FUNC((self->coldExtrude) ? 0.0f : self->extrusionMinTemp, 1),		ObjectModelEntryFlags::none },
+	{ "coldRetractTemperature", OBJECT_MODEL_FUNC((self->coldExtrude) ? 0.0f : self->retractionMinTemp, 1),		ObjectModelEntryFlags::none },
+	{ "heaters",				OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor),								ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 5 };
@@ -111,9 +111,6 @@ Heat::Heat() noexcept
 	{
 		h = -1;
 	}
-#if !defined(DUET3)
-	bedHeaters[0] = DefaultBedHeater;
-#endif
 
 	for (int8_t& h : chamberHeaters)
 	{

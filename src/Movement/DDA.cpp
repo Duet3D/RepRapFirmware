@@ -1804,7 +1804,7 @@ pre(state == frozen)
 		}
 
 		bool extruding = false;
-		if (extrusions != 0 || retractions != 0)
+		if ((extrusions | retractions) != 0)
 		{
 			// Check for trying to extrude or retract when the hot end temperature is too low
 			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
