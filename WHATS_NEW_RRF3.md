@@ -1,3 +1,23 @@
+RepRapFirmware 3.01 (in preparation)
+===================
+
+Recommended compatible firmware:
+- DuetWebControl 2.1.4 (TBC)
+- DuetWiFiServer 1.23 (same as for previous RC)
+- Duet Software Framework version 2.1.0 (TBC) (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC7 (same as for previous RC)
+- PanelDueFirmware 1.24
+
+Upgrade notes:
+- Duet WiFi, Ethernet and Maestro: a default bed heater is no longer created, so you need to use M140 H0 in config.g if you want to replicate the prevous behaviour. The online configurator already generates this command automatically when you configure a bed heater. Any M143 H0 command must come later in config.g than the M140 H0 command, because M140 resets the temperature limit for the heater to the default for bed heaters.
+
+Known issues and limitations: as for 3.01-RC9
+
+Bug fixes:
+- The minimum extrusion and retraction temperatures in the object model were not reported as zero when cold extrusion was enabled, so the DWC extrude and retract buttons remained greyed-out
+- When the minimum extrusion or retraction temperature was changed using M302, the updated values were not reported in the rr_status and M308 responses (this is long-standing bug)
+- When the minimum extrusion or retraction temperature was changed using M302, the appropriate object model sequence number was not upated, so DWC and DSF were not aware of the change
+
 RepRapFirmware 3.01-RC9
 =======================
 
