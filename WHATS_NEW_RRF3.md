@@ -23,7 +23,8 @@ Bug fixes:
 - When the minimum extrusion or retraction temperature was changed using M302, the updated values were not reported in the rr_status and M308 responses (this is long-standing bug)
 - When the minimum extrusion or retraction temperature was changed using M302, the appropriate object model sequence number was not upated, so DWC and DSF were not aware of the change
 - Non-movement commands that needed to be synchronised to the movement queue were sometimes executed too early
-- M3 and M5 commands in laser mode were sometimes executed too early
+- M3 and M5 commands in laser mode were sometimes executed too early, often by 1 move
+- Error messages from G1 and G2/G3 commands were lost
 
 RepRapFirmware 3.01-RC9
 =======================
