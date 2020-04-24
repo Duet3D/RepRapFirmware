@@ -4561,6 +4561,15 @@ void GCodes::ActivateHeightmap(bool activate) noexcept
 		// Update the current position to allow for any bed compensation at the current XY coordinates
 		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentTool());
 		ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect any height map offset at the current position
+
+#if HAS_LINUX_INTERFACE
+		// Set a dummy heightmap filename
+		if (reprap.UsingLinuxInterface())
+		{
+			HeightMap& map = reprap.GetMove().AccessHeightMap();
+			map.SetFileName(DefaultHeightMapFile);
+		}
+#endif
 	}
 }
 

@@ -124,13 +124,8 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 	// 7. move.compensation members
 	{ "fadeHeight",				OBJECT_MODEL_FUNC((self->useTaper) ? self->taperHeight : std::numeric_limits<float>::quiet_NaN(), 1),	ObjectModelEntryFlags::none },
-#if HAS_MASS_STORAGE
-	{ "file",					OBJECT_MODEL_FUNC_IF(
-									self->usingMesh
-# if HAS_LINUX_INTERFACE
-									&& !reprap.UsingLinuxInterface()
-# endif
-									, self->heightMap.GetFileName()),													ObjectModelEntryFlags::none },
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	{ "file",					OBJECT_MODEL_FUNC_IF(self->usingMesh, self->heightMap.GetFileName()),					ObjectModelEntryFlags::none },
 #endif
 	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 8),											ObjectModelEntryFlags::none },
 	{ "probeGrid",				OBJECT_MODEL_FUNC_NOSELF((const GridDefinition *)&reprap.GetGCodes().GetDefaultGrid()),	ObjectModelEntryFlags::none },

@@ -448,6 +448,12 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 
 #if HAS_LINUX_INTERFACE
 
+// Update the filename
+void HeightMap::SetFileName(const char *name) noexcept
+{
+	fileName.copy(name);
+}
+
 // Save the grid to a sequential array in the same way as to a regular CSV file
 void HeightMap::SaveToArray(float *arr, float zOffset) const noexcept
 {

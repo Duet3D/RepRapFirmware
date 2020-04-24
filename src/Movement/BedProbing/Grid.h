@@ -83,6 +83,7 @@ public:
 #endif
 
 #if HAS_LINUX_INTERFACE
+	void SetFileName(const char *name) noexcept;								// Update the filename
 	void SaveToArray(float *array, float zOffset) const noexcept				// Save the grid Z coordinates to an array
 	pre(IsValid());
 #endif

@@ -313,6 +313,15 @@ void DataTransfer::ReadHeightMap() noexcept
 
 	// Activate it
 	reprap.GetGCodes().ActivateHeightmap(true);
+
+	// Recalculate the deviations
+	float minError, maxError;
+	Deviation deviation;
+	const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(deviation, minError, maxError);
+	if (numPointsProbed >= 4)
+	{
+		reprap.GetMove().SetLatestMeshDeviation(deviation);
+	}
 }
 
 GCodeChannel DataTransfer::ReadCodeChannel() noexcept
