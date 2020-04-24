@@ -2330,10 +2330,12 @@ void GCodes::FinaliseMove(GCodeBuffer& gb) noexcept
 
 	if (buildObjects.IsCurrentObjectCancelled())
 	{
+#if SUPPORT_LASER
 		if (machineType == MachineType::laser)
 		{
 			platform.SetLaserPwm(0);
 		}
+#endif
 	}
 	else
 	{
@@ -2509,6 +2511,9 @@ void GCodes::EmergencyStop() noexcept
 			AbortPrint(*gbp);
 		}
 	}
+#if SUPPORT_LASER
+	moveBuffer.laserPwmOrIoBits.laserPwm = 0;
+#endif
 }
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
@@ -3822,9 +3827,12 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 				}
 				break;
 
+#if SUPPORT_LASER
 			case MachineType::laser:
 				platform.SetLaserPwm(0);
+				moveBuffer.laserPwmOrIoBits.laserPwm = 0;
 				break;
+#endif
 
 			default:
 				break;

@@ -288,7 +288,10 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
 	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
 	{ "gpOut",					OBJECT_MODEL_FUNC_NOSELF(&gpoutArrayDescriptor),						ObjectModelEntryFlags::live },
-	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->platform->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
+#if SUPPORT_LASER
+	// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
+	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->gCodes->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
+#endif
 #if HAS_MASS_STORAGE
 	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
 #else
@@ -354,7 +357,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																		// directories
 #endif
 	25,																		// limits
-	14 + HAS_VOLTAGE_MONITOR,												// state
+	13 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
 	2,																		// state/beep
 	6,																		// state.messageBox
 	10 + 2 * HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE		// seqs
@@ -792,9 +795,11 @@ void RepRap::EmergencyStop() noexcept
 		}
 		break;
 
+#if SUPPORT_LASER
 	case MachineType::laser:
 		platform->SetLaserPwm(0);
 		break;
+#endif
 
 	default:
 		break;
@@ -1568,10 +1573,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		}
 	}
 
+#if SUPPORT_LASER
 	if (gCodes->GetMachineType() == MachineType::laser)
 	{
-		response->catf(",\"laser\":%.1f", (double)(platform->GetLaserPwm() * 100.0));
+		response->catf(",\"laser\":%.1f", (double)(gCodes->GetLaserPwm() * 100.0));		// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
 	}
+#endif
 
 	/* Extended Status Response */
 	if (type == 2)

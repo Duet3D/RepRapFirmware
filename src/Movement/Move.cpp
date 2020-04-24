@@ -102,6 +102,10 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// 3. move.currentMove members
 	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAcceleration(), 1),											ObjectModelEntryFlags::live },
 	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDeceleration(), 1),											ObjectModelEntryFlags::live },
+# if SUPPORT_LASER
+	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
+															reprap.GetPlatform().GetLaserPwm(), 2),						ObjectModelEntryFlags::live },
+# endif
 	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed(), 1),										ObjectModelEntryFlags::live },
 	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed(), 1),												ObjectModelEntryFlags::live },
 
@@ -137,7 +141,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4, 3, 2, 2, 4 + HAS_MASS_STORAGE, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 12, 3, 2, 4 + SUPPORT_LASER, 3, 2, 2, 4 + HAS_MASS_STORAGE, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 

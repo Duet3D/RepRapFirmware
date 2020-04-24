@@ -233,6 +233,14 @@ public:
 # if HAS_VOLTAGE_MONITOR
 	const char *GetPowerFailScript() const noexcept { return powerFailScript; }
 # endif
+
+# if SUPPORT_LASER
+	// Return laser PWM in 0..1
+	float GetLaserPwm() const noexcept
+	{
+		return (float)moveBuffer.laserPwmOrIoBits.laserPwm * (1.0/65535);
+	}
+# endif
 #endif
 
 	static constexpr const char *AllowedAxisLetters = "XYZUVWABCD";
