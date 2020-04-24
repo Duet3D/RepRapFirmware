@@ -13,10 +13,16 @@ Upgrade notes:
 
 Known issues and limitations: as for 3.01-RC9
 
+New features and changed behaviour:
+- The "laser" field in the rr_status and M408 responses and in state.laserPwm in the object model are now the power that will be used for the next G1, G2 or G3 move instead of the current laser power. This is to allow user interfaces to warn that the laser will turn on as soon as movement starts. New object model field move.current.laserPwm gives the current laser PWM.
+- When in laser mode, at the end of a SD file print the laser power for the next move is set to zero automatically even if the job file didn't request it
+
 Bug fixes:
 - The minimum extrusion and retraction temperatures in the object model were not reported as zero when cold extrusion was enabled, so the DWC extrude and retract buttons remained greyed-out
 - When the minimum extrusion or retraction temperature was changed using M302, the updated values were not reported in the rr_status and M308 responses (this is long-standing bug)
 - When the minimum extrusion or retraction temperature was changed using M302, the appropriate object model sequence number was not upated, so DWC and DSF were not aware of the change
+- Non-movement commands that needed to be synchronised to the movement queue were sometimes executed too early
+- M3 and M5 commands in laser mode were sometimes executed too early
 
 RepRapFirmware 3.01-RC9
 =======================
