@@ -23,7 +23,7 @@ public:
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;					// If there is another move to execute at this time, fill a buffer
 	size_t BytesCached() const noexcept override;						// How many bytes have been cached?
 
-	bool QueueCode(GCodeBuffer &gb) noexcept;							// Queue a G-code
+	bool QueueCode(GCodeBuffer &gb, uint32_t scheduleAt) noexcept;		// Queue a G-code
 	void PurgeEntries() noexcept;										// Remove stored codes when a print is being paused
 	void Clear() noexcept;												// Clean up all the stored codes
 	bool IsIdle() const noexcept;										// Return true if there is nothing to do

@@ -182,10 +182,13 @@ void GCodeMachineState::SetWarning(const char *msg) noexcept
 // Retrieve the result and error message if it is worse than the one we already have
 void GCodeMachineState::RetrieveStateMachineResult(GCodeResult& rslt, const StringRef& reply) const noexcept
 {
-	if (stateMachineResult > rslt)
+	if (stateMachineResult >= rslt)
 	{
 		rslt = stateMachineResult;
-		reply.copy(errorMessage);
+		if (errorMessage != nullptr)
+		{
+			reply.copy(errorMessage);
+		}
 	}
 }
 

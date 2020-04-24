@@ -93,7 +93,7 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 // Try to queue the command in the passed GCodeBuffer.
 // If successful, return true to indicate it has been queued.
 // If the queue is full or the command is too long to be queued, return false.
-bool GCodeQueue::QueueCode(GCodeBuffer &gb) noexcept
+bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t scheduleAt) noexcept
 {
 	// Can we queue this code somewhere?
 	if (freeItems == nullptr || gb.DataLength() > BufferSizePerQueueItem)
@@ -105,7 +105,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb) noexcept
 	QueuedCode * const code = freeItems;
 	freeItems = code->next;
 	code->AssignFrom(gb);
-	code->executeAtMove = reprap.GetMove().GetScheduledMoves();
+	code->executeAtMove = scheduleAt;
 	code->next = nullptr;
 
 	// Append it to the list of queued codes

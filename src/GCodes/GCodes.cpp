@@ -2967,10 +2967,11 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 }
 #endif
 
-// Start printing the file already selected
+// Start printing the file already selected. We must hold the movement lock and wait for all moves to finish before calling this, because of the call to ResetMoveCounters.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
 	buildObjects.Init();
+	reprap.GetMove().ResetMoveCounters();
 
 	if (fromStart)													// if not resurrecting a print
 	{
@@ -3764,7 +3765,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 #endif
 	}
 
-	reprap.GetMove().ResetMoveCounters();
+	// Don't call ReserMoveCounters here because we can't be sure that the movement queue is empty
 	codeQueue->Clear();
 
 	UnlockAll(*fileGCode);

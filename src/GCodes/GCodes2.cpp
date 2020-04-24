@@ -67,7 +67,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 				return false;
 			}
 
-			if (codeQueue->QueueCode(gb))
+			if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + segmentsLeft))
 			{
 				HandleReply(gb, GCodeResult::ok, "");
 				return true;
@@ -147,8 +147,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			if (err != nullptr)
 			{
 				AbortPrint(gb);
-				gb.MachineState().SetError(err);
 				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);	// force the user position to be restored
+				gb.MachineState().SetError(err);	// must do this *after* calling SetState
 			}
 		}
 		break;
@@ -173,8 +173,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			if (err != nullptr)
 			{
 				AbortPrint(gb);
-				gb.MachineState().SetError(err);
 				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);	// force the user position to be restored
+				gb.MachineState().SetError(err);	// must do this *after* calling SetState
 			}
 		}
 		break;
@@ -503,6 +503,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_LASER
 					case MachineType::laser:
+						if (segmentsLeft != 0)
+						{
+							return false;						// don't modify moves that haven't gone yet
+						}
 						moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 						break;
 #endif
@@ -571,8 +575,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-	#if SUPPORT_LASER
+#if SUPPORT_LASER
 			case MachineType::laser:
+				if (segmentsLeft != 0)
+				{
+					return false;						// don't modify moves that haven't gone yet
+				}
 				moveBuffer.laserPwmOrIoBits.Clear();
 				break;
 #endif
