@@ -27,6 +27,7 @@ Bug fixes:
 - M3 and M5 commands in laser mode were sometimes executed too early, typically by 1 move
 - Error messages from G1 and G2/G3 commands were lost
 - Literals in conditional GCode were sometimes printed with too few decimal places
+- After filament load/unload operations, the filament loaded status was sometimes reported incorrectly to DSF and DWC
 
 RepRapFirmware 3.01-RC9
 =======================
