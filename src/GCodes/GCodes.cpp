@@ -3685,7 +3685,6 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.c_str(), true, 701);
-		reprap.MoveUpdated();
 	}
 	else if (tool->GetFilament()->IsLoaded())
 	{
@@ -3720,7 +3719,6 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.c_str(), true, 702);
-		reprap.MoveUpdated();
 	}
 	return GCodeResult::ok;
 }
