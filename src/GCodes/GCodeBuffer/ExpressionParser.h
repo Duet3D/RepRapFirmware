@@ -34,7 +34,7 @@ private:
 	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;
 
 	ExpressionValue ParseExpectKet(bool evaluate, char expectedKet) THROWS(GCodeException);
-	ExpressionValue ParseNumber() THROWS(GCodeException)
+	ExpressionValue ParseNumber() noexcept
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
 	ExpressionValue ParseIdentifierExpression(bool evaluate, bool applyLengthOperator) THROWS(GCodeException)
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));

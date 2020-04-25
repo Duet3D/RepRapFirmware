@@ -10,6 +10,7 @@
 #include "GCodeBuffer.h"
 #include <RepRap.h>
 #include <General/NamedEnum.h>
+#include <Math/Power.h>
 
 #include <limits>
 
@@ -606,41 +607,67 @@ void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 	}
 }
 
-// Parse a number. the initial character of the string is a decimal digit.
-ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
+// Parse a number. The initial character of the string is a decimal digit.
+ExpressionValue ExpressionParser::ParseNumber() noexcept
 {
-	// 2. Read digits before decimal point, E or e
-	unsigned long valueBeforePoint = 0;
+	// 2. Read digits before decimal point, E or e. If the value gets too large to hold in an int32_t, switch to double.
+	uint32_t lvalueBeforePoint = 0;
+	double dvalueBeforePoint;
+	bool isFloat = false;
 	char c;
 	while (isdigit((c = CurrentCharacter())))
 	{
 		const unsigned int digit = c - '0';
-		if (valueBeforePoint > ULONG_MAX/10 || (valueBeforePoint *= 10, valueBeforePoint > ULONG_MAX - digit))
+		if (isFloat)
 		{
-			throw ConstructParseException("too many digits");
+			dvalueBeforePoint = dvalueBeforePoint * 10 + (double)digit;
 		}
-		valueBeforePoint += digit;
+		else if (lvalueBeforePoint > (std::numeric_limits<int32_t>::max() - digit)/10)
+		{
+			isFloat = true;
+			dvalueBeforePoint = (double)lvalueBeforePoint * 10 + (double)digit;
+		}
+		else
+		{
+			lvalueBeforePoint = (lvalueBeforePoint * 10u) + digit;
+		}
 		AdvancePointer();
 	}
 
 	// 3. Check for decimal point before E or e
-	unsigned long valueAfterPoint = 0;
+	uint32_t valueAfterPoint = 0;
 	long digitsAfterPoint = 0;
-	bool isFloat = (c == '.');
-	if (isFloat)
+	if (c == '.')
 	{
+		if (!isFloat)
+		{
+			dvalueBeforePoint = (double)lvalueBeforePoint;
+			isFloat = true;
+		}
+
 		AdvancePointer();
 
 		// 3b. Read the digits (if any) after the decimal point
+		bool overflowed = false;
 		while (isdigit((c = CurrentCharacter())))
 		{
-			const unsigned int digit = c - '0';
-			if (valueAfterPoint > LONG_MAX/10 || (valueAfterPoint *= 10, valueAfterPoint > LONG_MAX - digit))
+			if (!overflowed)
 			{
-				throw ConstructParseException("too many decimal digits");
+				const unsigned int digit = c - '0';
+				if (valueAfterPoint <= (std::numeric_limits<uint32_t>::max() - digit)/10u)
+				{
+					valueAfterPoint = (valueAfterPoint * 10u) + digit;
+					++digitsAfterPoint;
+				}
+				else
+				{
+					overflowed = true;
+					if (digit >= 5 && valueAfterPoint != std::numeric_limits<uint32_t>::max())
+					{
+						++valueAfterPoint;			// do approximate rounding
+					}
+				}
 			}
-			valueAfterPoint += digit;
-			++digitsAfterPoint;
 			AdvancePointer();
 		}
 	}
@@ -649,7 +676,12 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 	long exponent = 0;
 	if (toupper(c) == 'E')
 	{
-		isFloat = true;
+		if (!isFloat)
+		{
+			dvalueBeforePoint = (double)lvalueBeforePoint;
+			isFloat = true;
+		}
+
 		AdvancePointer();
 		c = CurrentCharacter();
 
@@ -679,27 +711,27 @@ ExpressionValue ExpressionParser::ParseNumber() THROWS(GCodeException)
 	if (isFloat)
 	{
 		retvalue.SetType(TypeCode::Float);
-		retvalue.param = constrain<long>(digitsAfterPoint, 1, MaxFloatDigitsDisplayedAfterPoint);
+		retvalue.param = constrain<long>(digitsAfterPoint - exponent, 1, MaxFloatDigitsDisplayedAfterPoint);
 		if (valueAfterPoint != 0)
 		{
-			if (valueBeforePoint == 0)
+			if (dvalueBeforePoint == 0)
 			{
-				retvalue.fVal = (float)((double)valueAfterPoint * pow(10, exponent - digitsAfterPoint));
+				retvalue.fVal = (float)TimesPowerOf10((double)valueAfterPoint, exponent - digitsAfterPoint);
 			}
 			else
 			{
-				retvalue.fVal = (float)(((double)valueAfterPoint/pow(10, digitsAfterPoint) + valueBeforePoint) * pow(10, exponent));
+				retvalue.fVal = (float)TimesPowerOf10(TimesPowerOf10((double)valueAfterPoint, -digitsAfterPoint) + dvalueBeforePoint, exponent);
 			}
 		}
 		else
 		{
-			retvalue.fVal = (float)(valueBeforePoint * pow(10, exponent));
+			retvalue.fVal = (float)TimesPowerOf10(dvalueBeforePoint, exponent);
 		}
 	}
 	else
 	{
 		retvalue.SetType(TypeCode::Int32);
-		retvalue.iVal = (int32_t)valueBeforePoint;
+		retvalue.iVal = (int32_t)lvalueBeforePoint;
 	}
 
 	return retvalue;
