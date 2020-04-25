@@ -1816,21 +1816,6 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	// Show the current error codes
 	MessageF(mtype, "Error status: %" PRIx32 "\n", errorCodeBits);
 
-#if HAS_MASS_STORAGE
-	// Show the number of free entries in the file table
-	MessageF(mtype, "Free file entries: %u\n", MassStorage::GetNumFreeFiles());
-
-# if HAS_HIGH_SPEED_SD
-	// Show the HSMCI CD pin and speed
-	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed() * 0.000001));
-# else
-	MessageF(mtype, "SD card 0 %s\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
-# endif
-
-	// Show the longest SD card write time
-	MessageF(mtype, "SD card longest block write time: %.1fms, max retries %u\n", (double)FileStore::GetAndClearLongestWriteTime(), FileStore::GetAndClearMaxRetryCount());
-#endif
-
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
 	const uint32_t currentMcuTemperature = adcFilters[CpuTempFilterIndex].GetSum();

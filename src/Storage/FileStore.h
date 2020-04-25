@@ -70,9 +70,6 @@ public:
 	bool SetClusterMap(uint32_t[]) noexcept;					// Provide a cluster map for fast seeking
 #endif
 
-	static float GetAndClearLongestWriteTime() noexcept;		// Return the longest time it took to write a block to a file, in milliseconds
-	static unsigned int GetAndClearMaxRetryCount() noexcept;	// Return the highest SD card retry count that resulted in a successful transfer
-
 private:
 	void Init() noexcept;
 	FRESULT Store(const char *s, size_t len, size_t *bytesWritten) noexcept; // Write data to the non-volatile storage

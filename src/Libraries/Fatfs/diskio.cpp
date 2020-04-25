@@ -50,15 +50,32 @@
 #include "RepRapFirmware.h"
 #include "RepRap.h"
 #include "Tasks.h"
+#include <Movement/StepTimer.h>
 
 #include <cstring>
 
 static unsigned int highestSdRetriesDone = 0;
+static uint32_t longestWriteTime = 0;
+static uint32_t longestReadTime = 0;
 
 unsigned int DiskioGetAndClearMaxRetryCount() noexcept
 {
 	const unsigned int ret = highestSdRetriesDone;
 	highestSdRetriesDone = 0;
+	return ret;
+}
+
+float DiskioGetAndClearLongestReadTime() noexcept
+{
+	const float ret = (float)longestReadTime * StepTimer::StepClocksToMillis;
+	longestReadTime = 0;
+	return ret;
+}
+
+float DiskioGetAndClearLongestWriteTime() noexcept
+{
+	const float ret = (float)longestWriteTime * StepTimer::StepClocksToMillis;
+	longestWriteTime = 0;
 	return ret;
 }
 
@@ -192,8 +209,21 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 	/* Read the data */
 	unsigned int retryNumber = 0;
 	uint32_t retryDelay = SdCardRetryDelay;
-	while (memory_2_ram(drv, sector, buff, count) != CTRL_GOOD)
+	for (;;)
 	{
+		uint32_t time = StepTimer::GetTimerTicks();
+		const Ctrl_status ret = memory_2_ram(drv, sector, buff, count);
+		time = StepTimer::GetTimerTicks() - time;
+		if (time > longestReadTime)
+		{
+			longestReadTime = time;
+		}
+
+		if (ret == CTRL_GOOD)
+		{
+			break;
+		}
+
 		lock.Release();
 		++retryNumber;
 		if (retryNumber == MaxSdCardTries)
@@ -250,7 +280,7 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcep
 		return RES_ERROR;
 	}
 
-	/* Check valid address */
+	// Check valid address
 	uint32_t ul_last_sector_num;
 	mem_read_capacity(drv, &ul_last_sector_num);
 	if ((sector + count * uc_sector_size) > (ul_last_sector_num + 1) * uc_sector_size)
@@ -258,11 +288,25 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcep
 		return RES_PARERR;
 	}
 
-	/* Write the data */
+	// Write the data
+
 	unsigned int retryNumber = 0;
 	uint32_t retryDelay = SdCardRetryDelay;
-	while (ram_2_memory(drv, sector, buff, count) != CTRL_GOOD)
+	for (;;)
 	{
+		uint32_t time = StepTimer::GetTimerTicks();
+		const Ctrl_status ret = ram_2_memory(drv, sector, buff, count);
+		time = StepTimer::GetTimerTicks() - time;
+		if (time > longestWriteTime)
+		{
+			longestWriteTime = time;
+		}
+
+		if (ret == CTRL_GOOD)
+		{
+			break;
+		}
+
 		lock.Release();
 		++retryNumber;
 		if (retryNumber == MaxSdCardTries)

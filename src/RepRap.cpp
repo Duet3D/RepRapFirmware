@@ -761,6 +761,9 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	// Now print diagnostics for other modules
 	Tasks::Diagnostics(mtype);
 	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
+#if HAS_MASS_STORAGE
+	MassStorage::Diagnostics(mtype);
+#endif
 	move->Diagnostics(mtype);
 	heat->Diagnostics(mtype);
 	gCodes->Diagnostics(mtype);

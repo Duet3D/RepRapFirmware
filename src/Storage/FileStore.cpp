@@ -11,8 +11,6 @@
 #include "Libraries/Fatfs/diskio.h"
 #include "Movement/StepTimer.h"
 
-uint32_t FileStore::longestWriteTime = 0;
-
 FileStore::FileStore() noexcept : writeBuffer(nullptr)
 {
 	Init();
@@ -342,17 +340,11 @@ int FileStore::ReadLine(char* buf, size_t nBytes) noexcept
 
 FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
 {
-	uint32_t time = StepTimer::GetTimerTicks();
 	if (calcCrc)
 	{
 		crc.Update(s, len);
 	}
 	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
-	time = StepTimer::GetTimerTicks() - time;
-	if (time > longestWriteTime)
-	{
-		longestWriteTime = time;
-	}
 	return writeStatus;
 }
 
@@ -477,20 +469,6 @@ bool FileStore::Truncate() noexcept
 	default:
 		return false;
 	}
-}
-
-// Return the file write time in milliseconds, and clear it
-float FileStore::GetAndClearLongestWriteTime() noexcept
-{
-	const float ret = (float)longestWriteTime * StepTimer::StepClocksToMillis;
-	longestWriteTime = 0;
-	return ret;
-}
-
-// Return the highest SD card retry count that resulted in a successful transfer
-unsigned int FileStore::GetAndClearMaxRetryCount() noexcept
-{
-	return DiskioGetAndClearMaxRetryCount();
 }
 
 // Return true if the passed file is the same as ours

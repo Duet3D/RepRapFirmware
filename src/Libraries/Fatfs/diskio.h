@@ -5,8 +5,13 @@
 #ifndef _DISKIO
 
 #ifdef __cplusplus
+
 unsigned int DiskioGetAndClearMaxRetryCount() noexcept;
+float DiskioGetAndClearLongestReadTime() noexcept;
+float DiskioGetAndClearLongestWriteTime() noexcept;
+
 extern "C" {
+
 #endif
 
 #define _READONLY	0	/* 1: Remove write functions */

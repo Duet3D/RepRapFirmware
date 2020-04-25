@@ -2,7 +2,12 @@
 #include <Platform.h>
 #include <RepRap.h>
 #include <ObjectModel/ObjectModel.h>
+#include <Libraries/Fatfs/diskio.h>
 #include <sd_mmc.h>
+
+#ifndef __LPC17xx__
+# include <sam/drivers/hsmci/hsmci.h>
+#endif
 
 // Check that the LFN configuration in FatFS is sufficient
 static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
@@ -914,6 +919,26 @@ const Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
 bool MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	return infoParser.GetFileInfo(filePath, info, quitEarly);
+}
+
+void MassStorage::Diagnostics(MessageType mtype) noexcept
+{
+	Platform& platform = reprap.GetPlatform();
+
+	// Show the number of free entries in the file table
+	platform.MessageF(mtype, "=== Storage ===\nFree file entries: %u\n", MassStorage::GetNumFreeFiles());
+
+# if HAS_HIGH_SPEED_SD
+	// Show the HSMCI CD pin and speed
+	platform.MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n",
+								(MassStorage::IsCardDetected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed() * 0.000001));
+# else
+	platform.MessageF(mtype, "SD card 0 %s\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
+# endif
+
+	// Show the longest SD card write time
+	platform.MessageF(mtype, "SD card longest read time %.1fms, write time %.1fms, max retries %u\n",
+								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
 }
 
 # if SUPPORT_OBJECT_MODEL

@@ -58,6 +58,7 @@ namespace MassStorage
 	void RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
 	FileWriteBuffer *AllocateWriteBuffer() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
+	void Diagnostics(MessageType mtype) noexcept;
 
 	enum class InfoResult : uint8_t
 	{

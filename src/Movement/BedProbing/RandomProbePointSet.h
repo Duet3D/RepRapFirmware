@@ -51,10 +51,6 @@ protected:
 private:
 	bool GoodProbePointOrdering(size_t numPoints) const noexcept;				// Check that the probe points are in the right order
     float SecondDegreeTransformZ(float x, float y) const noexcept;				// Used for second degree bed equation
-	float TriangleZ(float x, float y) const noexcept;							// Interpolate onto a triangular grid
-	void BarycentricCoordinates(size_t p0, size_t p1,   						// Compute the barycentric coordinates of a point in a triangle
-			size_t p2, float x, float y, float& l1,     						// (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
-			float& l2, float& l3) const noexcept;
 
 	// Enumeration to record what has been set
 	enum PointCoordinateSet
@@ -79,11 +75,6 @@ private:
 
 	// Variables used to do 4-point compensation
 	float xRectangle, yRectangle;										// The side lengths of the rectangle used for second-degree bed compensation
-
-	// Variables used to do 5-point compensation
-	float baryXBedProbePoints[5];										// The X coordinates of the triangle corner points
-	float baryYBedProbePoints[5];										// The Y coordinates of the triangle corner points
-	float baryZBedProbePoints[5];										// The Z coordinates of the triangle corner points
 };
 
 #endif /* SRC_MOVEMENT_RANDOMPROBEPOINTSET_H_ */
