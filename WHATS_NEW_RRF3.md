@@ -1,10 +1,10 @@
-RepRapFirmware 3.01 (in preparation)
-===================
+RepRapFirmware 3.01-RC10
+========================
 
 Recommended compatible firmware:
-- DuetWebControl 2.1.4 (TBC)
+- DuetWebControl 2.1.5
 - DuetWiFiServer 1.23 (same as for previous RC)
-- Duet Software Framework version 2.1.0 (TBC) (for Duet 3/Raspberry Pi users)
+- Duet Software Framework version 2.1.1 (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01-RC7 (same as for previous RC)
 - PanelDueFirmware 1.24
 
@@ -17,14 +17,16 @@ New features and changed behaviour:
 - A default bed heater is never configured. In previous 3.01 release candidates, heater 0 was the default bed heater in the Duet WiFi/Ethernet and Maestro builds.
 - The "laser" field in the rr_status and M408 responses and in state.laserPwm in the object model are now the power that will be used for the next G1, G2 or G3 move instead of the current laser power. This is to allow user interfaces to warn that the laser will turn on as soon as movement starts. New object model field move.current.laserPwm gives the current laser PWM.
 - When in laser mode, at the end of a SD file print the laser power for the next move is set to zero automatically even if the job file didn't request it
+- When parsing numbers in conditional GCode expressions, excessive numbers of digits no longer give rise to error messages
 
 Bug fixes:
 - The minimum extrusion and retraction temperatures in the object model were not reported as zero when cold extrusion was enabled, so the DWC extrude and retract buttons remained greyed-out
 - When the minimum extrusion or retraction temperature was changed using M302, the updated values were not reported in the rr_status and M308 responses (this is long-standing bug)
 - When the minimum extrusion or retraction temperature was changed using M302, the appropriate object model sequence number was not upated, so DWC and DSF were not aware of the change
 - Non-movement commands that needed to be synchronised to the movement queue were sometimes executed too early
-- M3 and M5 commands in laser mode were sometimes executed too early, often by 1 move
+- M3 and M5 commands in laser mode were sometimes executed too early, typically by 1 move
 - Error messages from G1 and G2/G3 commands were lost
+- Literals in conditional GCode were sometimes printed with too few decimal places
 
 RepRapFirmware 3.01-RC9
 =======================
