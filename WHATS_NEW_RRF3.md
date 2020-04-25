@@ -9,7 +9,7 @@ Recommended compatible firmware:
 - PanelDueFirmware 1.24
 
 Upgrade notes:
-- Duet WiFi, Ethernet and Maestro: a default bed heater is no longer created, so you need to use M140 H0 in config.g if you want to replicate the prevous behaviour. The online configurator already generates this command automatically when you configure a bed heater. Any M143 H0 command must come later in config.g than the M140 H0 command, because M140 resets the temperature limit for the heater to the default for bed heaters.
+- Duet WiFi, Ethernet and Maestro: a default bed heater is no longer created, so you need to use M140 H0 in config.g if you want to replicate the previous behaviour. The online configurator already generates this command automatically when you configure a bed heater. Any M143 H0 command must come later in config.g than the M140 H0 command, because M140 resets the temperature limit for the heater to the default for bed heaters.
 
 Known issues and limitations: as for 3.01-RC9
 
