@@ -14,7 +14,7 @@ Upgrade notes:
 Known issues and limitations: as for 3.01-RC9
 
 New features and changed behaviour:
-- A default bed heater is never configured. In previous 3.01 release candidates, heater 0 was the default bed heater in the Duet WiFi/Ethernet and Maestro builds.
+- A default bed heater is never assigned. In previous 3.01 release candidates, heater 0 was the default bed heater in the Duet WiFi/Ethernet and Maestro builds.
 - The "laser" field in the rr_status and M408 responses and in state.laserPwm in the object model are now the power that will be used for the next G1, G2 or G3 move instead of the current laser power. This is to allow user interfaces to warn that the laser will turn on as soon as movement starts. New object model field move.current.laserPwm gives the current laser PWM.
 - When in laser mode, at the end of a SD file print the laser power for the next move is set to zero automatically even if the job file didn't request it
 - When parsing numbers in conditional GCode expressions, excessive numbers of digits no longer give rise to error messages
