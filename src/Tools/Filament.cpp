@@ -88,6 +88,9 @@ void Filament::LoadAssignment() noexcept
 
 /*static*/ void Filament::SaveAssignments() noexcept
 {
+	// Update the OM when the filament has been changed
+	reprap.MoveUpdated();
+
 #if HAS_MASS_STORAGE
 # if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
