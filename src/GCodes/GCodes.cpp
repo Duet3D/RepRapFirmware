@@ -2371,7 +2371,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb) noexcept
 }
 
 // Set up a move to travel to the resume point. Return true if successful, false if needs to be called again.
-// By the tie this is called, the user position has been overwritten with the final position of the pending move, so we can't use it.
+// By the time this is called, the user position has been overwritten with the final position of the pending move, so we can't use it.
 // But the expected position was saved by buildObjects when the state changed from printing a cancelled object to printing a live object.
 bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 {
@@ -2384,6 +2384,7 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ToolOffsetTransform(currentUserPosition, moveBuffer.initialCoords);
 	ToolOffsetTransform(buildObjects.GetInitialPosition().moveCoords, moveBuffer.coords);
 	moveBuffer.feedRate = buildObjects.GetInitialPosition().feedRate;
+	moveBuffer.tool = reprap.GetCurrentTool();
 	NewMoveAvailable(1);
 	return true;
 }
@@ -3579,9 +3580,9 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 
 			// New code does the retraction and the Z hop as separate moves
 			// Get ready to generate a move
+			SetMoveBufferDefaults();
 			moveBuffer.tool = reprap.GetCurrentTool();
 			reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, moveBuffer.tool);
-			SetMoveBufferDefaults();
 			moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
 
 			if (retract)

@@ -31,16 +31,18 @@ enum class GCodeState : uint8_t
 	homing1,
 	homing2,
 
-	// These next 4 must be contiguous
+	// These next 5 must be contiguous
 	toolChange0,
 	toolChange1,
 	toolChange2,
+	toolChange3,
 	toolChangeComplete,
 
-	// These next 5 must be contiguous
+	// These next 6 must be contiguous
 	m109ToolChange0,
 	m109ToolChange1,
 	m109ToolChange2,
+	m109ToolChange3,
 	m109ToolChangeComplete,
 	m109WaitForTemperature,
 

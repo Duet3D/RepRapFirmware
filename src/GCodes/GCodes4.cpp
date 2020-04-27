@@ -273,6 +273,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			UpdateCurrentUserPosition();				// get the actual position of the new tool
 
 			gb.AdvanceState();
+			if (machineType != MachineType::fff)
+			{
+				gb.AdvanceState();						// skip moving tool to the new height if not a 3D printer
+			}
+
 			if (AllAxesAreHomed())
 			{
 				if (reprap.GetCurrentTool() != nullptr && (toolChangeParam & TPostBit) != 0)
@@ -285,16 +290,26 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::toolChangeComplete:
-	case GCodeState::m109ToolChangeComplete:
+	case GCodeState::toolChange3:						// move the new tool to the correct height
+	case GCodeState::m109ToolChange3:					// move the new tool to the correct height
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing
 		{
 			// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
 			// Only do this if we are running as an FDM printer, because it's not appropriate for CNC machines.
-			if (machineType == MachineType::fff)
-			{
-				currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
-			}
+			SetMoveBufferDefaults();
+			currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
+			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+			moveBuffer.feedRate = DefaultFeedRate * SecondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
+			moveBuffer.tool = reprap.GetCurrentTool();					// needed so that bed compensation is applied correctly
+			NewMoveAvailable(1);
+			gb.AdvanceState();
+		}
+		break;
+
+	case GCodeState::toolChangeComplete:
+	case GCodeState::m109ToolChangeComplete:
+		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing or the move to height to finish
+		{
 			gb.MachineState().feedRate = toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
 			doingToolChange = false;
@@ -306,7 +321,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			else
 			{
 				UnlockAll(gb);							// allow movement again
-				gb.AdvanceState();
+				gb.AdvanceState();						// advance to m109WaitForTemperature
 			}
 		}
 		break;
@@ -369,14 +384,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// Move the head back to the paused location
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			float currentZ = moveBuffer.coords[Z_AXIS];
+			const float currentZ = moveBuffer.coords[Z_AXIS];
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
 				currentUserPosition[axis] = pauseRestorePoint.moveCoords[axis];
 			}
-			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
 			SetMoveBufferDefaults();
+			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
 			moveBuffer.feedRate = DefaultFeedRate * SecondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
+			moveBuffer.tool = reprap.GetCurrentTool();					// needed so that bed compensation is applied correctly
 			if (gb.GetState() == GCodeState::resuming1 && currentZ > pauseRestorePoint.moveCoords[Z_AXIS])
 			{
 				// First move the head to the correct XY point, then move it down in a separate move
@@ -1203,13 +1219,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (tool != nullptr && tool->DriveCount() != 0)
 			{
 				SetMoveBufferDefaults();
+				moveBuffer.tool = tool;
 				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, tool);
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
 					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = tool->GetRetractLength() + tool->GetRetractExtra();
 				}
 				moveBuffer.feedRate = tool->GetUnRetractSpeed() * tool->DriveCount();
-				moveBuffer.tool = tool;
 				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
 				moveBuffer.canPauseAfter = true;
 				NewMoveAvailable(1);

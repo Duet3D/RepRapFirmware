@@ -66,7 +66,6 @@ void LocalFan::SetHardwarePwm(float pwmVal) noexcept
 
 // Refresh the fan PWM
 // Checking all the sensors is expensive, so only do this if checkSensors is true.
-// If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
 void LocalFan::InternalRefresh(bool checkSensors) noexcept
 {
 	float reqVal;
@@ -80,7 +79,7 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 	}
 	else if (!checkSensors)
 	{
-		reqVal = (lastVal == 0.0) ? 0.0 : val;
+		reqVal = lastVal;
 	}
 	else
 	{
@@ -144,28 +143,24 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 				blipStartTime = millis();
 			}
 		}
-
-		if (blipping)
+		else if (blipping && millis() - blipStartTime >= blipTime)
 		{
-			if (millis() - blipStartTime < blipTime)
-			{
-				reqVal = 1.0;
-			}
-			else
-			{
-				blipping = false;
-			}
+			blipping = false;
 		}
 	}
-#if HAS_SMART_DRIVERS
-	else if (driverChannelsMonitored.IsNonEmpty() && lastVal != 0.0)
+	else
 	{
-		reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);	// tell Platform that we have stopped a fan that cools drivers
-	}
+		blipping = false;
+#if HAS_SMART_DRIVERS
+		if (driverChannelsMonitored.IsNonEmpty() && lastVal != 0.0)
+		{
+			reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);	// tell Platform that we have stopped a fan that cools drivers
+		}
 #endif
+	}
 
-	SetHardwarePwm(reqVal);
 	lastVal = reqVal;
+	SetHardwarePwm((blipping) ? 1.0 : reqVal);
 }
 
 GCodeResult LocalFan::Refresh(const StringRef& reply) noexcept

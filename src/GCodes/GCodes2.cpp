@@ -2272,6 +2272,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// The pipeline is empty, so execute the babystepping move immediately
 						SetMoveBufferDefaults();
 						moveBuffer.feedRate = DefaultFeedRate;
+						moveBuffer.tool = reprap.GetCurrentTool();
 						NewMoveAvailable(1);
 					}
 				}
@@ -3776,6 +3777,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					moveBuffer.feedRate = gb.MachineState().feedRate;
 					moveBuffer.usingStandardFeedrate = true;
+					moveBuffer.tool = reprap.GetCurrentTool();
 					NewMoveAvailable(1);
 
 					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);

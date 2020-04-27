@@ -63,12 +63,12 @@ protected:
 	unsigned int fanNumber;
 
 	// Variables that control the fan
-	float val;
-	float lastVal;
+	float val;												// the value requested in the M106 command
+	float lastVal;											// the last PWM value we sent to the fan, not allowing for blipping
 	float minVal;
 	float maxVal;
 	float triggerTemperatures[2];
-	uint32_t blipTime;										// in milliseconds
+	uint32_t blipTime;										// how long we blip the fan for, in milliseconds
 	SensorsBitmap sensorsMonitored;
 
 	String<MaxFanNameLength> name;
