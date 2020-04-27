@@ -481,7 +481,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		{
 			struct tm timeInfo;
 			memset(&timeInfo, 0, sizeof(timeInfo));
-			if (strptime(timeString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+			if (SafeStrptime(timeString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 			{
 				GetPlatform().SetDateTime(mktime(&timeInfo));
 			}
@@ -503,7 +503,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		if (typeString != nullptr)
 		{
 			// New-style JSON status responses
-			int type = SafeStrtol(typeString);
+			int32_t type = StrToI32(typeString);
 			if (type < 1 || type > 3)
 			{
 				type = 1;
@@ -539,7 +539,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	{
 		OutputBuffer::Release(response);
 		const char* const firstVal = GetKeyValue("first");
-		const unsigned int startAt = (firstVal == nullptr) ? 0 : (unsigned int)SafeStrtol(firstVal);
+		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
 		response = reprap.GetFilelistResponse(GetKeyValue("dir"), startAt);		// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "files"))
@@ -551,9 +551,9 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			dir = GetPlatform().GetGCodeDir();
 		}
 		const char* const firstVal = GetKeyValue("first");
-		const unsigned int startAt = (firstVal == nullptr) ? 0 : SafeStrtol(firstVal);
+		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
 		const char* const flagDirsVal = GetKeyValue("flagDirs");
-		const bool flagDirs = flagDirsVal != nullptr && SafeStrtol(flagDirsVal) == 1;
+		const bool flagDirs = flagDirsVal != nullptr && StrToU32(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "move"))
@@ -1173,7 +1173,7 @@ void HttpResponder::ProcessRequest() noexcept
 					{
 						if (StringEqualsIgnoreCase(headers[i].key, "Content-Length"))
 						{
-							postFileLength = atoi(headers[i].value);
+							postFileLength = StrToU32(headers[i].value);
 							contentLengthFound = true;
 							break;
 						}
@@ -1208,7 +1208,7 @@ void HttpResponder::ProcessRequest() noexcept
 					{
 						struct tm timeInfo;
 						memset(&timeInfo, 0, sizeof(timeInfo));
-						if (strptime(lastModifiedString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+						if (SafeStrptime(lastModifiedString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 						{
 							fileLastModified  = mktime(&timeInfo);
 						}

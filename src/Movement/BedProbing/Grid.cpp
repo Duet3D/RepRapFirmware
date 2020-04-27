@@ -193,14 +193,14 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 		p = q + 1;
 	}
 
-	numX = SafeStrtoul(p, &q);
+	numX = StrToU32(p, &q);
 	if (p == q || *q != ',')
 	{
 		return false;
 	}
 	p = q + 1;
 
-	numY = SafeStrtoul(p, &q);
+	numY = StrToU32(p, &q);
 	if (p == q)
 	{
 		return false;

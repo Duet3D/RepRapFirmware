@@ -682,7 +682,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 	{
 		p += strlen(filamentUsedStr2);
 		const char *q;
-		unsigned long num = SafeStrtoul(p, &q);
+		uint32_t num = StrToU32(p, &q);
 		if (q != p && num < maxFilaments)
 		{
 			p = q;
@@ -803,7 +803,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 			}
 			const char * const q = pos;
 			float hours = 0.0, minutes = 0.0;
-			float secs = SafeStrtod(pos, &pos);
+			float secs = SafeStrtof(pos, &pos);
 			if (q != pos)
 			{
 				while (*pos == ' ')
@@ -825,7 +825,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 					{
 						++pos;
 					}
-					secs = SafeStrtod(pos, &pos);
+					secs = SafeStrtof(pos, &pos);
 					while (*pos == ' ')
 					{
 						++pos;
@@ -842,7 +842,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 					{
 						++pos;
 					}
-					secs = SafeStrtod(pos, &pos);
+					secs = SafeStrtof(pos, &pos);
 				}
 			}
 			parsedFileInfo.printTime = lrintf((hours * 60.0 + minutes) * 60.0 + secs);
@@ -864,7 +864,7 @@ bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len) noexcept
 			++pos;
 		}
 		const char * const q = pos;
-		const uint32_t secs = SafeStrtoul(pos, &pos);
+		const uint32_t secs = StrToU32(pos, &pos);
 		if (q != pos)
 		{
 			parsedFileInfo.simulatedTime = secs;

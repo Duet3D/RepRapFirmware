@@ -64,7 +64,7 @@ void Filament::LoadAssignment() noexcept
 		{
 			while (file->ReadLine(buffer, sizeof(buffer)) > 0)
 			{
-				if (isdigit(buffer[0]) && atoi(buffer) == extruder)
+				if (isdigit(buffer[0]) && StrToI32(buffer) == extruder)
 				{
 					const char *filament = buffer;
 					while (*filament != 0)

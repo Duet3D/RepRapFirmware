@@ -29,6 +29,8 @@ Licence: GPL
 
 #include <ctime>
 [[deprecated("use gmtime_r instead for thread-safety")]] tm* gmtime(const time_t* time);
+[[deprecated("use SafeStrptime instead")]] char * strptime (const char *buf, const char *format, struct tm *timeptr);
+const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr) noexcept;
 
 #include "ecv.h"
 #ifdef value

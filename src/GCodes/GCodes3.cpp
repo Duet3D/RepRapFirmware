@@ -906,7 +906,7 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) THROWS(
 		// Set date
 		String<12> dateString;
 		gb.GetPossiblyQuotedString(dateString.GetRef());
-		if (strptime(dateString.c_str(), "%Y-%m-%d", &timeInfo) == nullptr)
+		if (SafeStrptime(dateString.c_str(), "%Y-%m-%d", &timeInfo) == nullptr)
 		{
 			reply.copy("Invalid date format");
 			return GCodeResult::error;
@@ -920,7 +920,7 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) THROWS(
 		// Set time
 		String<12> timeString;
 		gb.GetPossiblyQuotedString(timeString.GetRef());
-		if (strptime(timeString.c_str(), "%H:%M:%S", &timeInfo) == nullptr)
+		if (SafeStrptime(timeString.c_str(), "%H:%M:%S", &timeInfo) == nullptr)
 		{
 			reply.copy("Invalid time format");
 			return GCodeResult::error;
@@ -1442,7 +1442,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 				case 5:		// layer (counting from 0)
 					{
 						const char *endptr;
-						const uint32_t layer = SafeStrtoul(text, &endptr);
+						const uint32_t layer = StrToU32(text, &endptr);
 						if (endptr != text)
 						{
 							reprap.GetPrintMonitor().SetLayerNumber((i == 5) ? layer + 1 : layer);

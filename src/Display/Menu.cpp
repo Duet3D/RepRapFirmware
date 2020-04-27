@@ -288,35 +288,35 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'R':
-			row = SafeStrtoul(args, &args);
+			row = StrToU32(args, &args);
 			break;
 
 		case 'C':
-			column = SafeStrtoul(args, &args);
+			column = StrToU32(args, &args);
 			break;
 
 		case 'F':
-			fontNumber = min<unsigned int>(SafeStrtoul(args, &args), lcd.GetNumFonts() - 1);
+			fontNumber = min<unsigned int>(StrToU32(args, &args), lcd.GetNumFonts() - 1);
 			break;
 
 		case 'V':
-			xVis = SafeStrtoul(args, &args);
+			xVis = StrToU32(args, &args);
 			break;
 
 		case 'D':
-			decimals = SafeStrtoul(args, &args);
+			decimals = StrToU32(args, &args);
 			break;
 
 		case 'N':
-			nparam = SafeStrtoul(args, &args);
+			nparam = StrToU32(args, &args);
 			break;
 
 		case 'W':
-			width = SafeStrtoul(args, &args);
+			width = StrToU32(args, &args);
 			break;
 
 		case 'H':
-			alignment = SafeStrtoul(args, &args);
+			alignment = StrToU32(args, &args);
 			break;
 
 		case '"':			// a string with no letter is a T argument

@@ -10,7 +10,7 @@
 #include "GCodeBuffer.h"
 #include <RepRap.h>
 #include <General/NamedEnum.h>
-#include <Math/Power.h>
+#include <General/NumericConverter.h>
 
 #include <limits>
 
@@ -610,131 +610,11 @@ void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 // Parse a number. The initial character of the string is a decimal digit.
 ExpressionValue ExpressionParser::ParseNumber() noexcept
 {
-	// 2. Read digits before decimal point, E or e. If the value gets too large to hold in an int32_t, switch to double.
-	uint32_t lvalueBeforePoint = 0;
-	double dvalueBeforePoint;
-	bool isFloat = false;
-	char c;
-	while (isdigit((c = CurrentCharacter())))
-	{
-		const unsigned int digit = c - '0';
-		if (isFloat)
-		{
-			dvalueBeforePoint = dvalueBeforePoint * 10 + (double)digit;
-		}
-		else if (lvalueBeforePoint > (std::numeric_limits<int32_t>::max() - digit)/10)
-		{
-			isFloat = true;
-			dvalueBeforePoint = (double)lvalueBeforePoint * 10 + (double)digit;
-		}
-		else
-		{
-			lvalueBeforePoint = (lvalueBeforePoint * 10u) + digit;
-		}
-		AdvancePointer();
-	}
-
-	// 3. Check for decimal point before E or e
-	uint32_t valueAfterPoint = 0;
-	long digitsAfterPoint = 0;
-	if (c == '.')
-	{
-		if (!isFloat)
-		{
-			dvalueBeforePoint = (double)lvalueBeforePoint;
-			isFloat = true;
-		}
-
-		AdvancePointer();
-
-		// 3b. Read the digits (if any) after the decimal point
-		bool overflowed = false;
-		while (isdigit((c = CurrentCharacter())))
-		{
-			if (!overflowed)
-			{
-				const unsigned int digit = c - '0';
-				if (valueAfterPoint <= (std::numeric_limits<uint32_t>::max() - digit)/10u)
-				{
-					valueAfterPoint = (valueAfterPoint * 10u) + digit;
-					++digitsAfterPoint;
-				}
-				else
-				{
-					overflowed = true;
-					if (digit >= 5 && valueAfterPoint != std::numeric_limits<uint32_t>::max())
-					{
-						++valueAfterPoint;			// do approximate rounding
-					}
-				}
-			}
-			AdvancePointer();
-		}
-	}
-
-	// 5. Check for exponent part
-	long exponent = 0;
-	if (toupper(c) == 'E')
-	{
-		if (!isFloat)
-		{
-			dvalueBeforePoint = (double)lvalueBeforePoint;
-			isFloat = true;
-		}
-
-		AdvancePointer();
-		c = CurrentCharacter();
-
-		// 5a. Check for signed exponent
-		const bool expNegative = (c == '-');
-		if (expNegative || c == '+')
-		{
-			AdvancePointer();
-		}
-
-		// 5b. Read exponent digits
-		while (isdigit((c = CurrentCharacter())))
-		{
-			exponent = (10 * exponent) + (c - '0');	// could overflow, but anyone using such large numbers is being very silly
-			AdvancePointer();
-		}
-
-		if (expNegative)
-		{
-			exponent = -exponent;
-		}
-	}
-
-	// 6. Compute the composite value
-	ExpressionValue retvalue;
-
-	if (isFloat)
-	{
-		retvalue.SetType(TypeCode::Float);
-		retvalue.param = constrain<long>(digitsAfterPoint - exponent, 1, MaxFloatDigitsDisplayedAfterPoint);
-		if (valueAfterPoint != 0)
-		{
-			if (dvalueBeforePoint == 0)
-			{
-				retvalue.fVal = (float)TimesPowerOf10((double)valueAfterPoint, exponent - digitsAfterPoint);
-			}
-			else
-			{
-				retvalue.fVal = (float)TimesPowerOf10(TimesPowerOf10((double)valueAfterPoint, -digitsAfterPoint) + dvalueBeforePoint, exponent);
-			}
-		}
-		else
-		{
-			retvalue.fVal = (float)TimesPowerOf10(dvalueBeforePoint, exponent);
-		}
-	}
-	else
-	{
-		retvalue.SetType(TypeCode::Int32);
-		retvalue.iVal = (int32_t)lvalueBeforePoint;
-	}
-
-	return retvalue;
+	NumericConverter conv;
+	conv.Accumulate(CurrentCharacter(), true, true, [this]()->char { AdvancePointer(); return CurrentCharacter(); });		// must succeed because CurrentCharacter is a decimal digit
+	return (conv.FitsInInt32())
+			? ExpressionValue(conv.GetInt32())
+				: ExpressionValue(conv.GetFloat(), constrain<unsigned int>(conv.GetDigitsAfterPoint(), 1, MaxFloatDigitsDisplayedAfterPoint));
 }
 
 // Parse an identifier expression

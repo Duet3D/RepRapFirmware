@@ -345,7 +345,7 @@ void Scanner::ProcessCommand() noexcept
 	// Upload request: UPLOAD <SIZE> <FILENAME>
 	else if (StringStartsWith(buffer, "UPLOAD "))
 	{
-		uploadSize = atoi(&buffer[7]);
+		uploadSize = StrToU32(&buffer[7]);
 		uploadFilename = nullptr;
 		for(size_t i = 8; i < bufferPointer - 1; i++)
 		{

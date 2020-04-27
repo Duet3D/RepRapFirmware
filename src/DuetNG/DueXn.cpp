@@ -29,6 +29,8 @@ namespace DuetExpansion
 	static bool additionalIoExpanderPresent = false;
 	static uint16_t additionalIoInputBits = 0;
 
+	static uint32_t dueXnReadCount = 0;
+	static uint32_t dueXnReadCountResetMillis = 0;
 	static volatile bool taskWaiting = false;
 	static volatile bool inputsChanged = false;
 
@@ -82,6 +84,7 @@ namespace DuetExpansion
 		{
 			inputsChanged = false;
 			dueXnInputBits = dueXnExpander.digitalReadAll();
+			++dueXnReadCount;
 
 			cpu_irq_disable();
 			if (!inputsChanged)
@@ -318,10 +321,19 @@ namespace DuetExpansion
 		}
 	}
 
-	// Print diagnostic data
-	// I2C error counts are now reported by Platform, so nothing to report here.
+	// Print diagnostic data. I2C error counts are now reported by Platform.
 	void Diagnostics(MessageType mtype) noexcept
 	{
+		const uint32_t now = millis();
+		const uint32_t readCount = dueXnReadCount;
+		dueXnReadCountResetMillis = now;
+		dueXnReadCount = 0;
+
+		reprap.GetPlatform().MessageF(mtype,
+										"=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min\n",
+										readCount,
+										(double)((float)readCount * (MillisToSeconds * SecondsToMinutes)/(now - dueXnReadCountResetMillis))
+									 );
 	}
 
 	// Diagnose the SX1509 by setting all pins as inputs and reading them

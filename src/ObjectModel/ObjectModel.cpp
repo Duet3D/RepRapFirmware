@@ -373,7 +373,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 				else
 				{
 					const char *endptr;
-					const long index = SafeStrtol(filter, &endptr);
+					const int32_t index = StrToI32(filter, &endptr);
 					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
 					{
 						buf->cat("null");					// avoid returning badly-formed JSON
@@ -467,7 +467,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 				else
 				{
 					const char *endptr;
-					const long index = SafeStrtol(filter, &endptr);
+					const int32_t index = StrToI32(filter, &endptr);
 					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
 					{
 						buf->cat("null");				// avoid returning badly-formed JSON
@@ -513,7 +513,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 				else
 				{
 					const char *endptr;
-					const long index = SafeStrtol(filter, &endptr);
+					const int32_t index = StrToI32(filter, &endptr);
 					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
 					{
 						buf->cat("null");				// avoid returning badly-formed JSON
