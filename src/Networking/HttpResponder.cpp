@@ -450,11 +450,12 @@ bool HttpResponder::CharFromClient(char c) noexcept
 bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen) noexcept
 {
 	keepOpen = false;	// assume we don't want to persist the connection
-	if (StringEqualsIgnoreCase(request, "connect") && GetKeyValue("password") != nullptr)
+	const char *parameter;
+	if (StringEqualsIgnoreCase(request, "connect") && (parameter = GetKeyValue("password")) != nullptr)
 	{
 		if (!CheckAuthenticated())
 		{
-			if (!reprap.CheckPassword(GetKeyValue("password")))
+			if (!reprap.CheckPassword(parameter))
 			{
 				// Wrong password
 				response->copy("{\"err\":1}");
@@ -519,10 +520,15 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			response = reprap.GetLegacyStatusResponse(1, 0);
 		}
 	}
-	else if (StringEqualsIgnoreCase(request, "gcode") && GetKeyValue("gcode") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "gcode"))
 	{
+		const char *command = GetKeyValue("gcode");
 		NetworkGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
-		httpInput->Put(HttpMessage, GetKeyValue("gcode"));
+		// If the command is empty, just report the buffer space. This allows rr_gcode to be used to poll the buffer space without using it up.
+		if (command != nullptr && command[0] != 0)
+		{
+			httpInput->Put(HttpMessage, command);
+		}
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
 #if HAS_MASS_STORAGE
@@ -530,17 +536,17 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	{
 		response->printf("{\"err\":%d}", (uploadError) ? 1 : 0);
 	}
-	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "delete") && (parameter = GetKeyValue("name")) != nullptr)
 	{
-		const bool ok = MassStorage::Delete(GetKeyValue("name"), false);
+		const bool ok = MassStorage::Delete(parameter, false);
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
-	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "filelist") && (parameter = GetKeyValue("dir")) != nullptr)
 	{
 		OutputBuffer::Release(response);
 		const char* const firstVal = GetKeyValue("first");
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
-		response = reprap.GetFilelistResponse(GetKeyValue("dir"), startAt);		// this may return nullptr
+		response = reprap.GetFilelistResponse(parameter, startAt);		// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "files"))
 	{
