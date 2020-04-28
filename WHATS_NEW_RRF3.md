@@ -1,3 +1,26 @@
+RepRapFirmware 3.01-RC11 (in preparation)
+========================
+
+Recommended compatible firmware: (TBC)
+- DuetWebControl 2.1.5
+- DuetWiFiServer 1.23 (same as for previous RC)
+- Duet Software Framework version 2.1.1 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC7 (same as for previous RC)
+- PanelDueFirmware 1.24
+
+Upgrade notes:
+- Legacy 5-point bed compensation is no longer supported
+
+New features/changed behaviour:
+- HTTP command rr_gcode with no gcode parameter now returns the buffer space, and rr_gcode with an empty gcode parameter no longer adds an empty command to the buffer
+- Skew compensation parameters have been added to the object model, in move.compansation.skew
+- Duet WiFi/Ethernet only: added I2C transaction count and transactions/minute to M122 diagnostics
+- Added longest SD card read time (since last M122) to diagnostics
+- Longest SD card write time in diagnostics now excludes delays inserted by RRF between retries and the CRC calculation time
+
+Bug fixes:
+- Pause and resume sometimes caused a small Z shift if bed compensation was in use and the tool has an X or Y offset
+
 RepRapFirmware 3.01-RC10
 ========================
 
