@@ -1,4 +1,4 @@
-RepRapFirmware 3.01-RC11 (in preparation)
+RepRapFirmware 3.01-RC11
 ========================
 
 Recommended compatible firmware: (TBC)
@@ -9,17 +9,25 @@ Recommended compatible firmware: (TBC)
 - PanelDueFirmware 1.24
 
 Upgrade notes:
+- Tool change files are now run even if the axes have not been homed. If you don't want certain parts to run when axes have not been homed, use conditional GCode in the tool change file.
 - Legacy 5-point bed compensation is no longer supported
+Duet 3 users: Connector IO_0 is no longer dedicated to PanelDue, therefore if you connect a PanelDue to this port you must use the following command in config.g to enable it: M575 P1 S1 B57600
 
 New features/changed behaviour:
+- Duet 3 only: the IO_1 connector is no longer dedicated to PanelDue
+- The PanelDue port (or IO_1 on Duet 3) can now be configure to operate in raw (non-PanelDue) serial mode using command M575 P1 S2 B### where ### is the required baud rate. In this mode it will default to Marlin-type responses.
 - HTTP command rr_gcode with no gcode parameter now returns the buffer space, and rr_gcode with an empty gcode parameter no longer adds an empty command to the buffer
-- Skew compensation parameters have been added to the object model, in move.compansation.skew
+- Skew compensation parameters have been added to the object model, in move.compensation.skew
 - Duet WiFi/Ethernet only: added I2C transaction count and transactions/minute to M122 diagnostics
 - Added longest SD card read time (since last M122) to diagnostics
 - Longest SD card write time in diagnostics now excludes delays inserted by RRF between retries and the CRC calculation time
+- The "unknown value" message when looking up object model values now includes the name of the unknown value
+- The object model now reports invisible axes as well as visible ones
 
 Bug fixes:
-- Pause and resume sometimes caused a small Z shift if bed compensation was in use and the tool has an X or Y offset
+- Pause and resume sometimes caused a small Z shift if bed compensation was in use and the tool had an X or Y offset
+- When an error message occurred in a GCode meta command, the error message included the command number/letter of the previous normal GCode command, which was confusing
+- When M584 was used to change the visibility of axes, seqs.move was not updated in the object model
 
 RepRapFirmware 3.01-RC10
 ========================
