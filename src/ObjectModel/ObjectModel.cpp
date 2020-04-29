@@ -277,6 +277,11 @@ GCodeException ObjectExplorationContext::ConstructParseException(const char *msg
 	return GCodeException(line, column, msg);
 }
 
+GCodeException ObjectExplorationContext::ConstructParseException(const char *msg, const char *sparam) const noexcept
+{
+	return GCodeException(line, column, msg, sparam);
+}
+
 // Report this object
 void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, uint8_t tableNumber, const char* filter) const
 {
@@ -735,7 +740,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 	const ObjectModelTableEntry *const e = FindObjectModelTableEntry(tableNumber, idString);
 	if (e == nullptr)
 	{
-		throw context.ConstructParseException("unknown value");		// idString will have gone out of scope by the time the exception is caught
+		throw context.ConstructParseException("unknown value '%s'", idString);
 	}
 
 	idString = GetNextElement(idString);

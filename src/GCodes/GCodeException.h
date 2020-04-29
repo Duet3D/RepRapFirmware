@@ -8,27 +8,24 @@
 #ifndef SRC_GCODES_GCODEEXCEPTION_H_
 #define SRC_GCODES_GCODEEXCEPTION_H_
 
-#include <cstdint>
-
-class StringRef;
-class GCodeBuffer;
+#include <RepRapFirmware.h>
 
 class GCodeException
 {
 public:
-	GCodeException(int lin, int col, const char *msg) noexcept : line(lin), column(col), message(msg)  { }
+	GCodeException(int lin, int col, const char *msg) noexcept : line(lin), column(col), message(msg), haveStringParam(false)  { }
 
-	GCodeException(int lin, int col, const char *msg, const char *sparam) noexcept : line(lin), column(col), message(msg)
+	GCodeException(int lin, int col, const char *msg, const char *sparam) noexcept : line(lin), column(col), message(msg), haveStringParam(true)
 	{
-		param.s = sparam;
+		stringParam.copy(sparam);
 	}
 
-	GCodeException(int lin, int col, const char *msg, uint32_t uparam) noexcept : line(lin), column(col), message(msg)
+	GCodeException(int lin, int col, const char *msg, uint32_t uparam) noexcept : line(lin), column(col), message(msg), haveStringParam(false)
 	{
 		param.u = uparam;
 	}
 
-	GCodeException(int lin, int col, const char *msg, int32_t iparam) noexcept : line(lin), column(col), message(msg)
+	GCodeException(int lin, int col, const char *msg, int32_t iparam) noexcept : line(lin), column(col), message(msg), haveStringParam(false)
 	{
 		param.i = iparam;
 	}
@@ -43,8 +40,9 @@ private:
 	{
 		int32_t i;
 		uint32_t u;
-		const char *s;
 	} param;
+	bool haveStringParam;
+	String<StringLength20> stringParam;
 };
 
 #endif /* SRC_GCODES_GCODEEXCEPTION_H_ */

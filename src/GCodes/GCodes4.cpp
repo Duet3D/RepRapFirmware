@@ -236,7 +236,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if ((toolChangeParam & TFreeBit) != 0)
 		{
 			const Tool * const oldTool = reprap.GetCurrentTool();
-			if (oldTool != nullptr && AllAxesAreHomed())
+			if (oldTool != nullptr)						// 2020-04-29: run tfree file even if not all axes have been homed
 			{
 				String<StringLength20> scratchString;
 				scratchString.printf("tfree%d.g", oldTool->Number());
@@ -256,7 +256,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				UpdateCurrentUserPosition();			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();
-			if (reprap.GetTool(newToolNumber).IsNotNull() && AllAxesAreHomed() && (toolChangeParam & TPreBit) != 0)
+			if (reprap.GetTool(newToolNumber).IsNotNull() && (toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
 			{
 				String<StringLength20> scratchString;
 				scratchString.printf("tpre%d.g", newToolNumber);
@@ -278,14 +278,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.AdvanceState();						// skip moving tool to the new height if not a 3D printer
 			}
 
-			if (AllAxesAreHomed())
+			if (reprap.GetCurrentTool() != nullptr && (toolChangeParam & TPostBit) != 0)	// 2020-04-29: run tpost file even if not all axes have been homed
 			{
-				if (reprap.GetCurrentTool() != nullptr && (toolChangeParam & TPostBit) != 0)
-				{
-					String<StringLength20> scratchString;
-					scratchString.printf("tpost%d.g", newToolNumber);
-					DoFileMacro(gb, scratchString.c_str(), false, 0);
-				}
+				String<StringLength20> scratchString;
+				scratchString.printf("tpost%d.g", newToolNumber);
+				DoFileMacro(gb, scratchString.c_str(), false, 0);
 			}
 		}
 		break;

@@ -460,9 +460,11 @@ void Platform::Init() noexcept
 	baudRates[1] = AUX_BAUD_RATE;
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
 	auxMutex.Create("Aux");
-	auxDetected = auxRaw = false;
+	auxEnabled = auxRaw = false;
 	auxSeq = 0;
+# ifndef DUET3									// for Duet 3 we only enable the aux device if it is requested by M575
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the port initialisation in CoreNG isn't complete at that point
+# endif
 #endif
 
 #ifdef SERIAL_AUX2_DEVICE
@@ -876,7 +878,6 @@ void Platform::Exit() noexcept
 
 	// Release all output buffers
 	usbOutput.ReleaseAll();
-	auxGCodeReply.ReleaseAll();
 #ifdef SERIAL_AUX2_DEVICE
 	aux2Output.ReleaseAll();
 #endif
@@ -922,16 +923,25 @@ bool Platform::FlushAuxMessages() noexcept
 	OutputBuffer *auxOutputBuffer = auxOutput.GetFirstItem();
 	if (auxOutputBuffer != nullptr)
 	{
-		const size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
-		if (bytesToWrite > 0)
+		if (auxEnabled)
 		{
-			SERIAL_AUX_DEVICE.write(auxOutputBuffer->Read(bytesToWrite), bytesToWrite);
+			const size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
+			if (bytesToWrite > 0)
+			{
+				SERIAL_AUX_DEVICE.write(auxOutputBuffer->Read(bytesToWrite), bytesToWrite);
+			}
+
+			if (auxOutputBuffer->BytesLeft() == 0)
+			{
+				auxOutput.ReleaseFirstItem();
+			}
+		}
+		else
+		{
+			OutputBuffer *buf = auxOutput.Pop();
+			OutputBuffer::ReleaseAll(buf);
 		}
 
-		if (auxOutputBuffer->BytesLeft() == 0)
-		{
-			auxOutput.ReleaseFirstItem();
-		}
 	}
 	return auxOutput.GetFirstItem() != nullptr;
 #else
@@ -1029,9 +1039,6 @@ void Platform::Spin() noexcept
 
 	// Try to flush messages to serial ports
 	(void)FlushMessages();
-
-	// Time out any stale PanelDue messages
-	auxGCodeReply.ApplyTimeout(AuxTimeout);
 
 	// Check the MCU max and min temperatures
 #if HAS_CPU_TEMP_SENSOR
@@ -2957,28 +2964,47 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 
 //-----------------------------------------------------------------------------------------------------
 
+// Aux port functions
+
+void Platform::EnableAux() noexcept
+{
+#ifdef DUET3
+	if (!auxEnabled)
+	{
+		// Initialize Serial port U(S)ART pins
+		ConfigurePin(APINS_Serial0);
+		setPullup(APIN_Serial0_RXD, true); 							// Enable pullup for RX0
+
+		SERIAL_AUX_DEVICE.begin(baudRates[1]);
+		auxEnabled = true;
+	}
+#else
+	auxEnabled = true;
+#endif
+}
+
 void Platform::AppendAuxReply(const char *msg, bool rawMessage) noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
 	// Discard this response if either no aux device is attached or if the response is empty
-	if (msg[0] != 0 && HaveAux())
+	if (msg[0] != 0 && IsAuxEnabled())
 	{
 		MutexLocker lock(auxMutex);
 		OutputBuffer *buf;
 		if (OutputBuffer::Allocate(buf))
 		{
-			buf->copy(msg);
-			if (rawMessage)
+			if (rawMessage || auxRaw)
 			{
-				// Raw responses are sent directly to the AUX device
-				auxOutput.Push(buf);
+				buf->copy(msg);
 			}
 			else
 			{
-				// Regular text-based responses for AUX are currently stored and processed by M105/M408
 				auxSeq++;
-				auxGCodeReply.Push(buf);
+				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":", auxSeq);
+				buf->EncodeString(msg, true, false);
+				buf->cat("}\n");
 			}
+			auxOutput.Push(buf);
 		}
 	}
 #endif
@@ -2988,24 +3014,32 @@ void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage) noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
 	// Discard this response if either no aux device is attached or if the response is empty
-	if (reply == nullptr || reply->Length() == 0 || !HaveAux())
+	if (reply == nullptr || reply->Length() == 0 || !IsAuxEnabled())
 	{
 		OutputBuffer::ReleaseAll(reply);
 	}
 	else
 	{
 		MutexLocker lock(auxMutex);
-		if (rawMessage)
+		if (rawMessage || auxRaw)
 		{
-			// JSON responses are always sent directly to the AUX device
-			// For big responses it makes sense to write big chunks of data in portions. Store this data here
 			auxOutput.Push(reply);
 		}
 		else
 		{
-			// Other responses are stored for M408
-			auxSeq++;
-			auxGCodeReply.Push(reply);
+			OutputBuffer *buf;
+			if (OutputBuffer::Allocate(buf))
+			{
+				auxSeq++;
+				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":", auxSeq);
+				buf->EncodeReply(reply);
+				buf->cat("}\n");
+				auxOutput.Push(buf);
+			}
+			else
+			{
+				OutputBuffer::ReleaseAll(reply);
+			}
 		}
 	}
 #else
@@ -3504,7 +3538,6 @@ void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 	if (chan < NUM_SERIAL_CHANNELS)
 	{
 		baudRates[chan] = br;
-		ResetChannel(chan);
 	}
 }
 
@@ -3518,7 +3551,6 @@ void Platform::SetCommsProperties(size_t chan, uint32_t cp) noexcept
 	if (chan < NUM_SERIAL_CHANNELS)
 	{
 		commsParams[chan] = cp;
-		ResetChannel(chan);
 	}
 }
 
@@ -3543,8 +3575,11 @@ void Platform::ResetChannel(size_t chan) noexcept
 
 #ifdef SERIAL_AUX_DEVICE
 	case 1:
-		SERIAL_AUX_DEVICE.end();
-		SERIAL_AUX_DEVICE.begin(baudRates[1]);
+		if (auxEnabled)
+		{
+			SERIAL_AUX_DEVICE.end();
+			SERIAL_AUX_DEVICE.begin(baudRates[1]);
+		}
 		break;
 #endif
 

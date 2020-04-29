@@ -183,6 +183,7 @@ public:
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 
 	GCodeException ConstructParseException(const char *msg) const noexcept;
+	GCodeException ConstructParseException(const char *msg, const char *sparam) const noexcept;
 
 private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting

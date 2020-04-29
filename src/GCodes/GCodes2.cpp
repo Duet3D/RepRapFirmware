@@ -3327,7 +3327,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (auxGCode != nullptr)
 						{
 							auxGCode->SetCommsProperties(val);
-							platform.SetAuxDetected((val & 2u) != 0);
+							const bool rawMode = (val & 2u) != 0;
+							platform.SetAuxRaw(rawMode);
+							if (rawMode && !platform.IsAuxEnabled())			// if enabling aux for the first time and in raw mode, set Marlin compatibility
+							{
+								auxGCode->MachineState().compatibility = Compatibility::Marlin;
+							}
 						}
 						break;
 					default:
@@ -3335,7 +3340,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					seen = true;
 				}
-				if (!seen)
+				if (seen)
+				{
+					if (chan == 1 && !platform.IsAuxEnabled())
+					{
+						platform.EnableAux();
+					}
+					else
+					{
+						platform.ResetChannel(chan);
+					}
+				}
+				else
 				{
 					const uint32_t cp = platform.GetCommsProperties(chan);
 					reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");

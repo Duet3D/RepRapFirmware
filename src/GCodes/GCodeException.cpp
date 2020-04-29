@@ -13,6 +13,7 @@
 // Construct the error message. This will be prefixed with "Error: " when it is returned to the user.
 void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *gb) const noexcept
 {
+	// Print the file location, if possible
 	const bool inFile = gb != nullptr && gb->IsDoingFile();
 	if (inFile)
 	{
@@ -27,11 +28,40 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *gb) c
 		}
 		reply.cat(": ");
 	}
-	if (gb != nullptr && gb->HasCommandNumber())
+
+	// Print the command letter/number, if possible
+	if (gb != nullptr)
 	{
-		reply.catf("%c%u: ", gb->GetCommandLetter(), gb->GetCommandNumber());
+		switch (gb->GetCommandLetter())
+		{
+		case 'E':
+			reply.cat("meta command: ");
+			break;
+
+		case 'G':
+		case 'M':
+		case 'T':
+			if (gb->HasCommandNumber())
+			{
+				reply.catf("%c%u: ", gb->GetCommandLetter(), gb->GetCommandNumber());
+			}
+			break;
+
+		case 'Q':		// we use Q0 for comments
+		default:
+			break;
+		}
 	}
-	reply.catf(message, param.u);
+
+	// Print the message and any parameter
+	if (haveStringParam)
+	{
+		reply.catf(message, stringParam.c_str());
+	}
+	else
+	{
+		reply.catf(message, param.u);
+	}
 }
 
 // End

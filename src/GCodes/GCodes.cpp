@@ -518,10 +518,10 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (gotCommand)
 		{
 			gb.DecodeCommand();
-#ifdef SERIAL_AUX_DEVICE
-			if (&gb == auxGCode && !platform.HaveAux())
+#if defined(SERIAL_AUX_DEVICE) && !defined(DUET3)
+			if (&gb == auxGCode && !platform.IsAuxEnabled())
 			{
-				platform.SetAuxDetected(false);			// by default we assume no PanelDue is attached, so flag when we receive a command from it
+				platform.EnableAux();				// by default we assume no PanelDue is attached, so flag when we receive a command from it
 			}
 #endif
 		}
@@ -3387,7 +3387,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	// Also check that this response was triggered by a gcode
 	if (   reply[0] == 0
 		&& (   (gb.MachineState().doingFileMacro && !gb.MachineState().waitingForAcknowledgement)			// we must acknowledge M292
-			|| &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || &gb == auxGCode
+			|| &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || (&gb == auxGCode && !platform.IsAuxRaw())
 		   )
 	   )
 	{
@@ -3465,7 +3465,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 #endif
 
 	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
-	if (&gb == auxGCode)
+	if (&gb == auxGCode && !platform.IsAuxRaw())
 	{
 		platform.AppendAuxReply(reply, (*reply)[0] == '{');
 		return;

@@ -321,13 +321,14 @@ public:
 	bool SetDateTime(time_t time) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-	OutputBuffer *GetAuxGCodeReply() noexcept;						// Returns cached G-Code reply for AUX devices and clears its reference
 	void AppendAuxReply(OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(const char *msg, bool rawMessage) noexcept;
-    uint32_t GetAuxSeq() noexcept { return auxSeq; }
-    bool HaveAux() const noexcept { return auxDetected; }			// Any device on the AUX line?
-    void SetAuxDetected(bool isRaw) noexcept { auxDetected = true; auxRaw = isRaw; }
+
+    bool IsAuxEnabled() const noexcept { return auxEnabled; }		// Any device on the AUX line?
+    void EnableAux() noexcept;
     bool IsAuxRaw() const noexcept { return auxRaw; }
+	void SetAuxRaw(bool raw) noexcept { auxRaw = raw; }
+	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
 
 	void SetIPAddress(IPAddress ip) noexcept;
 	IPAddress GetIPAddress() const noexcept;
@@ -573,7 +574,6 @@ private:
 
 	void RawMessage(MessageType type, const char *message) noexcept;	// called by Message after handling error/warning flags
 
-	void ResetChannel(size_t chan) noexcept;							// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint32_t reading) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
@@ -727,9 +727,8 @@ private:
 	Mutex auxMutex;
 #endif
 
-	OutputStack auxGCodeReply;					// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
-	bool auxDetected;							// Do we have an AUX device?
+	bool auxEnabled;							// Do we have an AUX device?
 	bool auxRaw;								// true if aux device is in raw mode
 
 #ifdef SERIAL_AUX2_DEVICE
@@ -1014,11 +1013,6 @@ inline float Platform::GetNozzleDiameter() const noexcept
 inline void Platform::SetNozzleDiameter(float diameter) noexcept
 {
 	nozzleDiameter = diameter;
-}
-
-inline OutputBuffer *Platform::GetAuxGCodeReply() noexcept
-{
-	return auxGCodeReply.Pop();
 }
 
 #endif

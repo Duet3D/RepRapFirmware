@@ -366,7 +366,10 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 		}
 	}
 
-	const bool b = ProcessConditionalGCode(reply, skippedBlockType, doingFile);	// this may throw a ParseException
+	// Save and clear the command letter in case ProcessConditionalGCode throws an exception, so that the error message won't include the previous command
+	const char savedCommandLetter = commandLetter;
+	commandLetter = 'E';						// we use this to flag a meta command, see GCodeException::GetMessage
+	const bool b = ProcessConditionalGCode(reply, skippedBlockType, doingFile);	// this may throw a GCodeException
 	if (b)
 	{
 		seenMetaCommand = true;
@@ -375,6 +378,10 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 			CheckForMixedSpacesAndTabs();
 		}
 		Init();
+	}
+	else
+	{
+		commandLetter = savedCommandLetter;		// restore this so that we can handle Fanuc-style GCode
 	}
 
 	return b;
@@ -392,7 +399,7 @@ void StringParser::CheckForMixedSpacesAndTabs() noexcept
 
 // Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
 // If we just finished skipping an if- or elif-block when the condition was false then 'skippedBlockType' is the type of that block, else it is BlockType::plain
-bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile)
+bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile) THROWS(GCodeException)
 {
 	// First count the number of lowercase characters.
 	unsigned int i = 0;
