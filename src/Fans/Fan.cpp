@@ -47,7 +47,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Fan)
 
 Fan::Fan(unsigned int fanNum) noexcept
 	: fanNumber(fanNum),
-	  val(0.0), lastVal(0.0),
+	  val(0.0), lastVal(-1.0),
 	  minVal(DefaultMinFanPwm),
 	  maxVal(1.0),										// 100% maximum fan speed
 	  blipTime(DefaultFanBlipTime)
@@ -170,7 +170,15 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			{
 				reply.catf(", temperature: %.1f:%.1fC, sensors:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
 				sensorsMonitored.Iterate([&reply](unsigned int sensorNum, bool) noexcept { reply.catf(" %u", sensorNum); });
-				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
+				reply.cat(", current speed: ");
+				if (lastVal >= 0.0)
+				{
+					reply.catf("%d%%:", (int)(lastVal * 100.0));
+				}
+				else
+				{
+					reply.cat("unknown");
+				}
 			}
 		}
 	}

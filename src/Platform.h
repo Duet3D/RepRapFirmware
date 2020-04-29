@@ -326,7 +326,8 @@ public:
 	void AppendAuxReply(const char *msg, bool rawMessage) noexcept;
     uint32_t GetAuxSeq() noexcept { return auxSeq; }
     bool HaveAux() const noexcept { return auxDetected; }			// Any device on the AUX line?
-    void SetAuxDetected() noexcept { auxDetected = true; }
+    void SetAuxDetected(bool isRaw) noexcept { auxDetected = true; auxRaw = isRaw; }
+    bool IsAuxRaw() const noexcept { return auxRaw; }
 
 	void SetIPAddress(IPAddress ip) noexcept;
 	IPAddress GetIPAddress() const noexcept;
@@ -728,7 +729,8 @@ private:
 
 	OutputStack auxGCodeReply;					// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
-	bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
+	bool auxDetected;							// Do we have an AUX device?
+	bool auxRaw;								// true if aux device is in raw mode
 
 #ifdef SERIAL_AUX2_DEVICE
     volatile OutputStack aux2Output;

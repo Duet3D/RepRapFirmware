@@ -460,7 +460,7 @@ void Platform::Init() noexcept
 	baudRates[1] = AUX_BAUD_RATE;
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
 	auxMutex.Create("Aux");
-	auxDetected = false;
+	auxDetected = auxRaw = false;
 	auxSeq = 0;
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the port initialisation in CoreNG isn't complete at that point
 #endif

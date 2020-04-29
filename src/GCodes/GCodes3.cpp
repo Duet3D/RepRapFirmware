@@ -527,6 +527,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	}
 
 	bool seen = false;
+	const size_t originalVisibleAxes = numVisibleAxes;
 	const char *lettersToTry = AllowedAxisLetters;
 	char c;
 	while ((c = *lettersToTry) != 0)
@@ -599,10 +600,14 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen)
 	{
-		// In the DDA ring, the axis positions for invisible non-moving axes are not always copied over from previous moves.
-		// So if we have more visible axes than before, then we need to update their positions to get them in sync.
-		// We could do this only when we increase the number of visible axes, but for simplicity we do it always.
-		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);		// tell the Move system where the axes are
+		reprap.MoveUpdated();
+		if (numVisibleAxes > originalVisibleAxes)
+		{
+			// In the DDA ring, the axis positions for invisible non-moving axes are not always copied over from previous moves.
+			// So if we have more visible axes than before, then we need to update their positions to get them in sync.
+			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);	// ensure that the position of any new axes are updated in moveBuffer
+			reprap.GetMove().SetNewPosition(moveBuffer.coords, true);		// tell the Move system where the axes are
+		}
 	}
 	else
 	{

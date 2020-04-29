@@ -3316,7 +3316,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				if (gb.Seen('S'))
 				{
-					uint32_t val = gb.GetIValue();
+					const uint32_t val = gb.GetIValue();
 					platform.SetCommsProperties(chan, val);
 					switch (chan)
 					{
@@ -3327,7 +3327,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (auxGCode != nullptr)
 						{
 							auxGCode->SetCommsProperties(val);
-							platform.SetAuxDetected();
+							platform.SetAuxDetected((val & 2u) != 0);
 						}
 						break;
 					default:
@@ -3337,8 +3337,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				if (!seen)
 				{
-					uint32_t cp = platform.GetCommsProperties(chan);
+					const uint32_t cp = platform.GetCommsProperties(chan);
 					reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
+					if (chan == 1 && platform.IsAuxRaw())
+					{
+						reply.cat(", raw mode");
+					}
 				}
 			}
 			break;

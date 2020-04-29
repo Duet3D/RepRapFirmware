@@ -64,7 +64,7 @@ protected:
 
 	// Variables that control the fan
 	float val;												// the value requested in the M106 command
-	float lastVal;											// the last PWM value we sent to the fan, not allowing for blipping
+	float lastVal;											// the last PWM value we sent to the fan, not allowing for blipping, or -1 if we don't know it
 	float minVal;
 	float maxVal;
 	float triggerTemperatures[2];

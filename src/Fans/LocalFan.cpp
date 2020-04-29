@@ -107,7 +107,7 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 						// We already know that ht < triggerTemperatures[1], therefore unless we have NaNs it is safe to divide by (triggerTemperatures[1] - triggerTemperatures[0])
 						reqVal = max<float>(reqVal, (ht - triggerTemperatures[0])/(triggerTemperatures[1] - triggerTemperatures[0]));
 					}
-					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
+					else if (lastVal > 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
 					{
 						const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
 						reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
@@ -127,7 +127,7 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 	if (reqVal > 0.0)
 	{
 		reqVal = max<float>(reqVal * maxVal, minVal);		// scale the requested PWM by the maximum, enforce the minimum
-		if (lastVal == 0.0)
+		if (lastVal <= 0.0)
 		{
 			// We are turning this fan on
 #if HAS_SMART_DRIVERS
@@ -152,7 +152,7 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 	{
 		blipping = false;
 #if HAS_SMART_DRIVERS
-		if (driverChannelsMonitored.IsNonEmpty() && lastVal != 0.0)
+		if (driverChannelsMonitored.IsNonEmpty() && lastVal > 0.0)
 		{
 			reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);	// tell Platform that we have stopped a fan that cools drivers
 		}
@@ -180,7 +180,7 @@ bool LocalFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 bool LocalFan::Check(bool checkSensors) noexcept
 {
 	InternalRefresh(checkSensors);
-	return sensorsMonitored.IsNonEmpty() && lastVal != 0.0;
+	return sensorsMonitored.IsNonEmpty() && lastVal > 0.0;
 }
 
 bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply) noexcept

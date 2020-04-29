@@ -519,9 +519,9 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			gb.DecodeCommand();
 #ifdef SERIAL_AUX_DEVICE
-			if (&gb == auxGCode)
+			if (&gb == auxGCode && !platform.HaveAux())
 			{
-				platform.SetAuxDetected();			// by default we assume no PanelDue is attached, so flag when we receive a command from it
+				platform.SetAuxDetected(false);			// by default we assume no PanelDue is attached, so flag when we receive a command from it
 			}
 #endif
 		}
