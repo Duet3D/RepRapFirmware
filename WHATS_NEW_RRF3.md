@@ -1,19 +1,21 @@
 RepRapFirmware 3.01-RC11
 ========================
 
-Recommended compatible firmware: (TBC)
+Recommended compatible firmware:
 - DuetWebControl 2.1.5
 - DuetWiFiServer 1.23 (same as for previous RC)
-- Duet Software Framework version 2.1.1 (for Duet 3/Raspberry Pi users)
-- Duet 3 expansion board and tool board firmware 3.01-RC7 (same as for previous RC)
+- Duet Software Framework version 2.1.3 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01-RC11
 - PanelDueFirmware 1.24
 
 Upgrade notes:
+- If you use M581 commands you must replace the C parameter by R
 - Tool change files are now run even if the axes have not been homed. If you don't want certain parts to run when axes have not been homed, use conditional GCode in the tool change file.
 - Legacy 5-point bed compensation is no longer supported
-Duet 3 users: Connector IO_0 is no longer dedicated to PanelDue, therefore if you connect a PanelDue to this port you must use the following command in config.g to enable it: M575 P1 S1 B57600
+- Duet 3 users: Connector IO_0 is no longer dedicated to PanelDue, therefore if you connect a PanelDue to this port you must use the following command in config.g to enable it: M575 P1 S1 B57600
 
 New features/changed behaviour:
+- The M581 C parameter (condition) is now replaced by R, in order to allow triggering from a C endstop
 - Duet 3 only: the IO_1 connector is no longer dedicated to PanelDue
 - The PanelDue port (or IO_1 on Duet 3) can now be configure to operate in raw (non-PanelDue) serial mode using command M575 P1 S2 B### where ### is the required baud rate. In this mode it will default to Marlin-type responses.
 - HTTP command rr_gcode with no gcode parameter now returns the buffer space, and rr_gcode with an empty gcode parameter no longer adds an empty command to the buffer
@@ -23,11 +25,15 @@ New features/changed behaviour:
 - Longest SD card write time in diagnostics now excludes delays inserted by RRF between retries and the CRC calculation time
 - The "unknown value" message when looking up object model values now includes the name of the unknown value
 - The object model now reports invisible axes as well as visible ones
+- It was not possible to set up a M581 trigger to trigger on both low->high and high->low transitions of an endstop or input pin
+- If you used the M581 C parameter and you had a C axis, it would trigger on changes to the state pof the C endstop
+- Disabling a trigger response to an niput or endstpo changed using the C-1 parameter didn't work
 
 Bug fixes:
 - Pause and resume sometimes caused a small Z shift if bed compensation was in use and the tool had an X or Y offset
 - When an error message occurred in a GCode meta command, the error message included the command number/letter of the previous normal GCode command, which was confusing
 - When M584 was used to change the visibility of axes, seqs.move was not updated in the object model
+- Duet3 with SBC: the SPI timeout was longer than the CAN timout, so SPI timeout errors were sometimes reported when a command used the CAN address a non-present board
 
 RepRapFirmware 3.01-RC10
 ========================
