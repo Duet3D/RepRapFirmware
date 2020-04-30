@@ -33,7 +33,8 @@ Bug fixes:
 - Pause and resume sometimes caused a small Z shift if bed compensation was in use and the tool had an X or Y offset
 - When an error message occurred in a GCode meta command, the error message included the command number/letter of the previous normal GCode command, which was confusing
 - When M584 was used to change the visibility of axes, seqs.move was not updated in the object model
-- Duet3 with SBC: the SPI timeout was longer than the CAN timout, so SPI timeout errors were sometimes reported when a command used the CAN address a non-present board
+- Duet3 with SBC: the SPI timeout was longer than the CAN timout, so SPI timeout errors were sometimes reported when a command used a CAN address for which no board was present
+- Duet 3 only: Object model value fans[].actualValue was always reported as zero for fans on expansion and tool boards
 
 RepRapFirmware 3.01-RC10
 ========================
