@@ -305,8 +305,8 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			CanMessageBuffer::Free(buf);
 			break;
 
-		case CanMessageType::fanRpmReport:
-			reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fanRpms);
+		case CanMessageType::fansReport:
+			reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fansReport);
 			CanMessageBuffer::Free(buf);
 			break;
 

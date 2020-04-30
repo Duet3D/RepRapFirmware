@@ -233,7 +233,7 @@ void FansManager::Init() noexcept
 
 #if SUPPORT_CAN_EXPANSION
 
-void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& msg) noexcept
+void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFansReport& msg) noexcept
 {
 	size_t numFansProcessed = 0;
 	uint64_t whichFans = msg.whichFans;
@@ -243,7 +243,7 @@ void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& 
 		auto fan = FindFan(fanNum);
 		if (fan.IsNotNull())
 		{
-			fan->UpdateRpmFromRemote(src, msg.fanRpms[numFansProcessed]);
+			fan->UpdateFromRemote(src, msg.fanReports[numFansProcessed]);
 		}
 		++numFansProcessed;
 		whichFans &= ~((uint64_t)1 << fanNum);

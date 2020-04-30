@@ -14,7 +14,7 @@
 #include "GCodes/GCodeResult.h"
 
 #if SUPPORT_CAN_EXPANSION
-# include "CanId.h"
+# include <CanMessageFormats.h>
 #endif
 
 class GCodeBuffer;
@@ -30,9 +30,10 @@ public:
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept = 0;
 	virtual bool IsEnabled() const noexcept = 0;
 	virtual int32_t GetRPM() const noexcept = 0;
+	virtual float GetPwm() const noexcept = 0;
 	virtual GCodeResult ReportPortDetails(const StringRef& str) const noexcept = 0;
 #if SUPPORT_CAN_EXPANSION
-	virtual void UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept = 0;
+	virtual void UpdateFromRemote(CanAddress src, const FanReport& report) noexcept = 0;
 #endif
 
 	// Set or report the parameters for this fan
@@ -55,7 +56,7 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 
-	static constexpr uint32_t RpmReadingTimeout = 2000;		// any reading older than this number of milliseconds is considered unreliable
+	static constexpr uint32_t FanReportTimeout = 2000;		// any reading older than this number of milliseconds is considered unreliable
 
 	virtual GCodeResult Refresh(const StringRef& reply) noexcept = 0;
 	virtual bool UpdateFanConfiguration(const StringRef& reply) noexcept = 0;
@@ -64,7 +65,6 @@ protected:
 
 	// Variables that control the fan
 	float val;												// the value requested in the M106 command
-	float lastVal;											// the last PWM value we sent to the fan, not allowing for blipping, or -1 if we don't know it
 	float minVal;
 	float maxVal;
 	float triggerTemperatures[2];

@@ -28,7 +28,7 @@ static_assert(MaxCodeBufferSize % sizeof(uint32_t) == 0, "MaxCodeBufferSize must
 static_assert(MaxCodeBufferSize >= GCODE_LENGTH, "MaxCodeBufferSize must be at least as big as GCODE_LENGTH");
 
 constexpr uint32_t SpiTransferTimeout = 500;		// maximum allowed delay between data exchanges during a full transfer (in ms)
-constexpr uint32_t SpiConnectionTimeout = 4000;		// maximum time to wait for the next transfer (in ms)
+constexpr uint32_t SpiConnectionTimeout = 8000;		// maximum time to wait for the next transfer (in ms)
 constexpr uint16_t SpiCodeBufferSize = 4096;		// number of bytes available for G-code caching
 
 // Shared structures

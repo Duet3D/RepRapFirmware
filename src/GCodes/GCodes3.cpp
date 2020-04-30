@@ -472,13 +472,13 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply)
 
 	const bool activeHigh = (!gb.Seen('S') || gb.GetUIValue() >= 1);
 	Platform& platform = reprap.GetPlatform();
-	const bool ok = endstopsToWaitFor.IterateWhile([&platform, activeHigh](unsigned int axis, bool)->bool
+	const bool ok = endstopsToWaitFor.IterateWhile([&platform, activeHigh](unsigned int axis, unsigned int)->bool
 								{
 									const bool stopped = platform.GetEndstops().Stopped(axis) == EndStopHit::atStop;
 									return stopped == activeHigh;
 								}
 							 )
-				&& portsToWaitFor.IterateWhile([&platform, activeHigh](unsigned int port, bool)->bool
+				&& portsToWaitFor.IterateWhile([&platform, activeHigh](unsigned int port, unsigned int)->bool
 								{
 									return (port >= MaxGpInPorts || platform.GetGpInPort(port).GetState() == activeHigh);
 								}

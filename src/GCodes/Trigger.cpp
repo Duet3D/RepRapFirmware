@@ -39,7 +39,7 @@ bool Trigger::Check() noexcept
 	// Check the endstops
 	EndstopsManager& endstops = reprap.GetPlatform().GetEndstops();
 	(highLevelEndstops | lowLevelEndstops)
-		.Iterate([this, &endstops, &triggered](unsigned int axis, bool)
+		.Iterate([this, &endstops, &triggered](unsigned int axis, unsigned int)
 					{
 						const bool stopped = (endstops.Stopped(axis) == EndStopHit::atStop);
 						if (stopped != endstopStates.IsBitSet(axis))
@@ -55,7 +55,7 @@ bool Trigger::Check() noexcept
 
 	Platform& platform = reprap.GetPlatform();
 	(highLevelInputs | lowLevelInputs)
-		.Iterate([this, &platform, &triggered](unsigned int inPort, bool)
+		.Iterate([this, &platform, &triggered](unsigned int inPort, unsigned int)
 					{
 						const bool isActive = reprap.GetPlatform().GetGpInPort(inPort).GetState();
 						if (isActive != inputStates.IsBitSet(inPort))
@@ -180,8 +180,8 @@ void Trigger::AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs, con
 	else
 	{
 		const char* const axisLetters = reprap.GetGCodes().GetAxisLetters();
-		endstops.Iterate([axisLetters, &reply](unsigned int axis, bool) noexcept { reply.catf(" %c", axisLetters[axis]); } );
-		inputs.Iterate([&reply](unsigned int port, bool) noexcept { reply.catf(" %d", port); } );
+		endstops.Iterate([axisLetters, &reply](unsigned int axis, unsigned int) noexcept { reply.catf(" %c", axisLetters[axis]); } );
+		inputs.Iterate([&reply](unsigned int port, unsigned int) noexcept { reply.catf(" %d", port); } );
 	}
 }
 

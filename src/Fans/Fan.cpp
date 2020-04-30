@@ -23,7 +23,7 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Fan members
-	{ "actualValue",		OBJECT_MODEL_FUNC(self->lastVal, 2), 															ObjectModelEntryFlags::live },
+	{ "actualValue",		OBJECT_MODEL_FUNC(self->GetPwm(), 2), 															ObjectModelEntryFlags::live },
 	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime, 2), 											ObjectModelEntryFlags::none },
 	// TODO add frequency here
 	{ "max",				OBJECT_MODEL_FUNC(self->maxVal, 2), 															ObjectModelEntryFlags::none },
@@ -47,7 +47,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Fan)
 
 Fan::Fan(unsigned int fanNum) noexcept
 	: fanNumber(fanNum),
-	  val(0.0), lastVal(-1.0),
+	  val(0.0),
 	  minVal(DefaultMinFanPwm),
 	  maxVal(1.0),										// 100% maximum fan speed
 	  blipTime(DefaultFanBlipTime)
@@ -169,8 +169,9 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			if (sensorsMonitored.IsNonEmpty())
 			{
 				reply.catf(", temperature: %.1f:%.1fC, sensors:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				sensorsMonitored.Iterate([&reply](unsigned int sensorNum, bool) noexcept { reply.catf(" %u", sensorNum); });
+				sensorsMonitored.Iterate([&reply](unsigned int sensorNum, unsigned int) noexcept { reply.catf(" %u", sensorNum); });
 				reply.cat(", current speed: ");
+				const float lastVal = GetPwm();
 				if (lastVal >= 0.0)
 				{
 					reply.catf("%d%%:", (int)(lastVal * 100.0));

@@ -15,8 +15,8 @@
 
 RemoteFan::RemoteFan(unsigned int fanNum, CanAddress boardNum) noexcept
 	: Fan(fanNum),
-	  lastRpm(-1), whenLastRpmReceived(0),
-	  boardNumber(boardNum), thermostaticFanRunning(false)
+	  lastRpm(-1), lastPwm(-1.0), whenLastReportReceived(0),
+	  boardNumber(boardNum)
 {
 }
 
@@ -37,7 +37,12 @@ RemoteFan::~RemoteFan() noexcept
 
 bool RemoteFan::Check(bool checkSensors) noexcept
 {
-	return thermostaticFanRunning;
+	if (millis() - whenLastReportReceived > FanReportTimeout)
+	{
+		lastRpm = -1;
+		lastPwm = -1.0;
+	}
+	return sensorsMonitored.IsNonEmpty() && lastPwm > 0.0;
 }
 
 bool RemoteFan::IsEnabled() const noexcept
@@ -53,21 +58,13 @@ GCodeResult RemoteFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply
 	return cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
 }
 
-int32_t RemoteFan::GetRPM() const noexcept
-{
-	if (millis() - whenLastRpmReceived > RpmReadingTimeout)
-	{
-		lastRpm = -1;
-	}
-	return lastRpm;
-}
-
-void RemoteFan::UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept
+void RemoteFan::UpdateFromRemote(CanAddress src, const FanReport& report) noexcept
 {
 	if (src == boardNumber)
 	{
-		lastRpm = rpm;
-		whenLastRpmReceived = millis();
+		lastPwm = (report.actualPwm < 0) ? -1.0 : (float)report.actualPwm * (1.0/65535);
+		lastRpm = report.rpm;
+		whenLastReportReceived = millis();
 	}
 }
 

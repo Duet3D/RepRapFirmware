@@ -22,6 +22,7 @@ void FanInterrupt(CallbackParameter cb) noexcept
 LocalFan::LocalFan(unsigned int fanNum) noexcept
 	: Fan(fanNum),
 	  lastPwm(-1.0),									// force a refresh
+	  lastVal(-1.0),
 	  fanInterruptCount(0), fanLastResetTime(0), fanInterval(0),
 	  blipping(false)
 {
@@ -90,7 +91,7 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 #if HAS_SMART_DRIVERS
 		  , &driverChannelsMonitored
 #endif
-		 ](unsigned int sensorNum, bool) noexcept
+		 ](unsigned int sensorNum, unsigned int) noexcept
 			{
 				const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
 				if (sensor.IsNotNull())

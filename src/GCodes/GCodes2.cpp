@@ -258,6 +258,15 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		break;
 
 	case 29: // Grid-based bed probing
+
+#if HAS_LINUX_INTERFACE
+		// Pass file- and system-related commands to DSF if they came from somewhere else. They will be passed back to us via a binary buffer or separate SPI message if necessary.
+		if (reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().IsConnected() && !gb.IsBinary())
+		{
+			gb.SendToSbc();
+			return false;
+		}
+#endif
 		if (!LockMovementAndWaitForStandstill(gb))		// do this first to make sure that a new grid isn't being defined
 		{
 			return false;

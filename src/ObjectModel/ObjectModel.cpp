@@ -494,9 +494,9 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 				const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
 				buf->cat('[');
 				bm.Iterate
-					([buf](unsigned int bn, bool first) noexcept
+					([buf](unsigned int bn, unsigned int count) noexcept
 						{
-							if (!first)
+							if (count != 0)
 							{
 								buf->cat(',');
 							}
@@ -540,9 +540,9 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
 				buf->cat('[');
 				bm.Iterate
-					([buf](unsigned int bn, bool first) noexcept
+					([buf](unsigned int bn, unsigned int count) noexcept
 						{
-							if (!first)
+							if (count != 0)
 							{
 								buf->cat(',');
 							}

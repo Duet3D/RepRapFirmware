@@ -1694,9 +1694,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				// Axis mapping
 				response->cat(",\"axisMap\":[[");
 				tool->GetXAxisMap().Iterate
-					([response](unsigned int xi, bool first) noexcept
+					([response](unsigned int xi, unsigned int count) noexcept
 						{
-							if (!first)
+							if (count != 0)
 							{
 								response->cat(',');
 							}
@@ -1706,9 +1706,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				response->cat("],[");
 
 				tool->GetYAxisMap().Iterate
-					([response](unsigned int yi, bool first) noexcept
+					([response](unsigned int yi, unsigned int count) noexcept
 						{
-							if (!first)
+							if (count != 0)
 							{
 								response->cat(',');
 							}

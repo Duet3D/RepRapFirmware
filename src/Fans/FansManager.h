@@ -15,7 +15,7 @@
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanId.h>
-struct CanMessageFanRpms;
+struct CanMessageFansReport;
 #endif
 
 class GCodeBuffer;
@@ -38,7 +38,7 @@ public:
 	const char *GetFanName(size_t fanNum) const noexcept;
 	int32_t GetFanRPM(size_t fanNum) const noexcept;
 #if SUPPORT_CAN_EXPANSION
-	void ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& msg) noexcept;
+	void ProcessRemoteFanRpms(CanAddress src, const CanMessageFansReport& msg) noexcept;
 #endif
 #if HAS_MASS_STORAGE
 	bool WriteFanSettings(FileStore *f) const noexcept;

@@ -19,11 +19,12 @@ public:
 	bool Check(bool checkSensors) noexcept override;						// update the fan PWM returning true if it is a thermostatic fan that is on
 	bool IsEnabled() const noexcept override { return port.IsValid(); }
 	int32_t GetRPM() const noexcept override;
+	float GetPwm() const noexcept override { return lastVal; }
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 	GCodeResult ReportPortDetails(const StringRef& str) const noexcept override;
 
 #if SUPPORT_CAN_EXPANSION
-	void UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept override { }
+	void UpdateFromRemote(CanAddress src, const FanReport& report) noexcept override { }
 #endif
 
 	bool AssignPorts(const char *pinNames, const StringRef& reply) noexcept;
@@ -41,7 +42,8 @@ private:
 	PwmPort port;											// port used to control the fan
 	IoPort tachoPort;										// port used to read the tacho
 
-	float lastPwm;
+	float lastPwm;											// the last PWM value we wrote to the hardware
+	float lastVal;											// the last PWM value we sent to the fan, not allowing for blipping, or -1 if we don't know it
 
 	// Variables used to read the tacho
 	static constexpr uint32_t fanMaxInterruptCount = 32;	// number of fan interrupts that we average over

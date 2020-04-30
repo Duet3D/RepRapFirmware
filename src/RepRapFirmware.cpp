@@ -267,7 +267,7 @@ double HideNan(float val) noexcept
 // Append a list of driver numbers to a string, with a space before each one
 void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept
 {
-	drivers.Iterate([str](unsigned int d, bool) noexcept { str.catf(" %u", d); });
+	drivers.Iterate([str](unsigned int d, unsigned int) noexcept { str.catf(" %u", d); });
 }
 
 // End
