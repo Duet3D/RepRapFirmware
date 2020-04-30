@@ -882,8 +882,10 @@ void Platform::Exit() noexcept
 	// Stop processing data. Don't try to send a message because it will probably never get there.
 	active = false;
 
-	// Close down USB and serial ports
+	// Close down USB and serial ports and release output buffers
 	SERIAL_MAIN_DEVICE.end();
+	usbOutput.ReleaseAll();
+
 #ifdef SERIAL_AUX_DEVICE
 # ifdef DUET3
 	if (auxEnabled)
@@ -891,15 +893,11 @@ void Platform::Exit() noexcept
 	{
 		SERIAL_AUX_DEVICE.end();
 	}
-#endif
-#ifdef SERIAL_AUX2_DEVICE
-	SERIAL_AUX2_DEVICE.end();
+	auxOutput.ReleaseAll();
 #endif
 
-	// Release all output buffers
-	usbOutput.ReleaseAll();
-	auxOutput.ReleaseAll();
 #ifdef SERIAL_AUX2_DEVICE
+	SERIAL_AUX2_DEVICE.end();
 	aux2Output.ReleaseAll();
 #endif
 
