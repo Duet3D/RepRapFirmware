@@ -13,6 +13,11 @@ Upgrade notes:
 - Tool change files are now run even if the axes have not been homed. If you don't want certain parts to run when axes have not been homed, use conditional GCode in the tool change file.
 - Legacy 5-point bed compensation is no longer supported
 - Duet 3 users: Connector IO_0 is no longer dedicated to PanelDue, therefore if you connect a PanelDue to this port you must use the following command in config.g to enable it: M575 P1 S1 B57600
+- Duet 2 users: if using a PanelDue with a baud rate other than 57600, see under Known Issues below.
+
+Known issues and limitations:
+- Duet WiFi/Ethernet/Maestro with PanelDue: if you use a PanelDue baud rate other than 57600 then the first M575 command to change the baud rate doesn't work. Workaround: use two identical M575 commands in config.g.
+- See also known issues and limitations for 3.01-RC9
 
 New features/changed behaviour:
 - The M581 C parameter (condition) is now replaced by R, in order to allow triggering from a C endstop
