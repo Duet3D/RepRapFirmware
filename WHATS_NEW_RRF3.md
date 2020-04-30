@@ -2,7 +2,7 @@ RepRapFirmware 3.01-RC11
 ========================
 
 Recommended compatible firmware:
-- DuetWebControl 2.1.5
+- DuetWebControl 2.1.6
 - DuetWiFiServer 1.23 (same as for previous RC)
 - Duet Software Framework version 2.1.3 (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01-RC11
