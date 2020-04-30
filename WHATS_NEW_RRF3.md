@@ -16,8 +16,8 @@ Upgrade notes:
 
 New features/changed behaviour:
 - The M581 C parameter (condition) is now replaced by R, in order to allow triggering from a C endstop
-- Duet 3 only: the IO_1 connector is no longer dedicated to PanelDue
-- The PanelDue port (or IO_1 on Duet 3) can now be configure to operate in raw (non-PanelDue) serial mode using command M575 P1 S2 B### where ### is the required baud rate. In this mode it will default to Marlin-type responses.
+- Duet 3 only: the IO_0 connector is no longer dedicated to PanelDue
+- The PanelDue port (or IO_0 on Duet 3) can now be configure to operate in raw (non-PanelDue) serial mode using command M575 P1 S2 B### where ### is the required baud rate. In this mode it will default to Marlin-type responses.
 - HTTP command rr_gcode with no gcode parameter now returns the buffer space, and rr_gcode with an empty gcode parameter no longer adds an empty command to the buffer
 - Skew compensation parameters have been added to the object model, in move.compensation.skew
 - Duet WiFi/Ethernet: added I2C transaction count and transactions/minute to M122 diagnostics
