@@ -762,40 +762,51 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile) noexc
 			nameOfFileToSend = INDEX_PAGE_FILE;
 		}
 
-		for (;;)
+		if (isWebFile && strlen(nameOfFileToSend) > MaxExpectedWebDirFilenameLength)
 		{
-			// Try to open a gzipped version of the file first
-			if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+			// We have been asked for a file with a very long name. Don't try to open it, because that may lead to MassStorage::CombineName generating an error message.
+			// Instead, report a possible virus attack from the sending IP address.
+			GetPlatform().MessageF(WarningMessage,
+									"IP %s requested file '%.20s...' from HTTP server, possibly a virus attack\n",
+									IP4String(GetRemoteIP()).c_str(), nameOfFileToSend);
+		}
+		else
+		{
+			for (;;)
 			{
-				String<MaxFilenameLength> nameBuf;
-				nameBuf.copy(nameOfFileToSend);
-				nameBuf.cat(".gz");
-				fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf.c_str(), OpenMode::read);
+				// Try to open a gzipped version of the file first
+				if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+				{
+					String<MaxFilenameLength> nameBuf;
+					nameBuf.copy(nameOfFileToSend);
+					nameBuf.cat(".gz");
+					fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf.c_str(), OpenMode::read);
+					if (fileToSend != nullptr)
+					{
+						zip = true;
+						break;
+					}
+				}
+
+				// That failed, so try to open the normal version of the file
+				fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
 				if (fileToSend != nullptr)
 				{
-					zip = true;
 					break;
 				}
-			}
 
-			// That failed, so try to open the normal version of the file
-			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
-			if (fileToSend != nullptr)
-			{
-				break;
-			}
-
-			if (StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
-			{
-				nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
-			}
-			else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
-			{
-				nameOfFileToSend = INDEX_PAGE_FILE;
-			}
-			else
-			{
-				break;
+				if (StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
+				{
+					nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
+				}
+				else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
+				{
+					nameOfFileToSend = INDEX_PAGE_FILE;
+				}
+				else
+				{
+					break;
+				}
 			}
 		}
 

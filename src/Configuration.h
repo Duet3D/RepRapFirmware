@@ -346,6 +346,15 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 #define FILAMENTS_DIRECTORY "0:/filaments/"			// Directory for filament configurations
 #define FIRMWARE_DIRECTORY "0:/sys/"				// Directory for firmware and IAP files
 #define MENU_DIR "0:/menu/"							// Directory for menu files
+
+// MaxExpectedWebDirFilenameLength is the maximum length of a filename that we can accept in a HTTP request without rejecting it out of hand
+// and perhaps warning the user of a possible virus attack.
+// It must be at least as long as any web file request from DWC, which is the file path excluding the initial "0:/www" and the trailing ".gz, possibly with "/" prepended.
+// As at 2020-05-02 the longest filename requested by DWC is "/fonts/materialdesignicons-webfont.3e2c1c79.eot" which is 48 characters long
+// It must be small enough that a filename within this length doesn't cause an overflow in MassStorage::CombineName. This is checked by the static_assert below.
+constexpr size_t MaxExpectedWebDirFilenameLength = MaxFilenameLength - 20;
+static_assert(MaxExpectedWebDirFilenameLength + strlen(WEB_DIR) + strlen(".gz") <= MaxFilenameLength);
+
 #define UPLOAD_EXTENSION ".part"					// Extension to a filename for a file being uploaded
 
 #define DEFAULT_LOG_FILE "eventlog.txt"
