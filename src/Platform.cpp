@@ -462,9 +462,6 @@ void Platform::Init() noexcept
 	auxMutex.Create("Aux");
 	auxEnabled = auxRaw = false;
 	auxSeq = 0;
-# ifndef DUET3									// for Duet 3 we only enable the aux device if it is requested by M575
-	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the port initialisation in CoreNG isn't complete at that point
-# endif
 #endif
 
 #ifdef SERIAL_AUX2_DEVICE
@@ -2975,18 +2972,12 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 
 void Platform::EnableAux() noexcept
 {
-#ifdef DUET3
+#ifdef SERIAL_AUX_DEVICE
 	if (!auxEnabled)
 	{
-		// Initialize Serial port U(S)ART pins
-		ConfigurePin(APINS_Serial0);
-		setPullup(APIN_Serial0_RXD, true); 							// Enable pullup for RX0
-
 		SERIAL_AUX_DEVICE.begin(baudRates[1]);
 		auxEnabled = true;
 	}
-#else
-	auxEnabled = true;
 #endif
 }
 

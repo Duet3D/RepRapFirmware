@@ -327,6 +327,8 @@ constexpr PinEntry PinTable[] =
 	{ PortCPin(7),	PinCapability::rw,		"connlcd.encb,connlcd.3" },
 	{ PortAPin(8),	PinCapability::rw,		"connlcd.enca,connlcd.4" },
 	{ PortAPin(7),	PinCapability::rw,		"connsd.encsw,connsd.7" },
+	{ PortAPin(9),	PinCapability::rw,		"urxd0" },
+	{ PortAPin(10),	PinCapability::rw,		"utxd0" },
 	{ PortBPin(6),	PinCapability::rw,		"exp.pb6,exp.29,duex.pb6" },
 	{ 211,			PinCapability::rwpwm,	"duex.gp1" },
 	{ 210,			PinCapability::rwpwm,	"duex.gp2" },

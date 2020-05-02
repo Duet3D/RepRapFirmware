@@ -248,6 +248,8 @@ constexpr PinEntry PinTable[] =
 	{ Z_PROBE_PIN,	PinCapability::ainr,	"zprobe.in" },
 	{ Z_PROBE_MOD_PIN, PinCapability::write, "zprobe.mod,servo" },
 	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
+	{ PortBPin(2),	PinCapability::rw,		"urxd" },
+	{ PortBPin(3),	PinCapability::rw,		"utxd" },
 	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },
 	{ PortAPin(22), PinCapability::ainrw,	"exp.pa22" },
 	{ PortAPin(3),	PinCapability::rw,		"exp.pa3,twd0" },
@@ -258,16 +260,6 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
-
-#if ALLOCATE_DEFAULT_PORTS
-
-// Default pin allocations
-constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
-constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
-constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
-constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
-
-#endif
 
 // Duet pin numbers to control the W5500 interface
 constexpr Pin W5500ResetPin = PortCPin(13);									// Low on this in holds the W5500 in reset

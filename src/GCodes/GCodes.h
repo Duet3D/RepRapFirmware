@@ -229,6 +229,7 @@ public:
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 	const RestorePoint *GetRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &numberedRestorePoints[n]; }
+	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 
 # if HAS_VOLTAGE_MONITOR
 	const char *GetPowerFailScript() const noexcept { return powerFailScript; }
