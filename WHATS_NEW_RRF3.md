@@ -19,7 +19,7 @@ Known issues and limitations:
 
 New features/changed behaviour:
 - The PanelDue connector (or IO_0 on Duet 3) is no longer dedicated to PanelDue. When not used for PanelDue, its two pins are available for use by GPIO, endstops etc. On Duet WiFi/Ethernet/Maestro they are called "urx0" and "utx0".
-- Added 'move.virtualEPos' to object model
+- Added 'move.virtualEPos' and 'boards[0].uniqueId' to object model
 
 Bug fixes:
 - Duet WiFi/Ethernet/Maestro: the first time a M575 P1 command was used, the B parameter (baud rate) baud rate in that command was ignored
