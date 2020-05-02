@@ -555,9 +555,9 @@ public:
 	const GpInputPort& GetGpInPort(size_t gpinPortNumber) const noexcept
 		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
 
-#if SAM4E || SAM4S || SAME70
+#if SUPPORTS_UNIQUE_ID
 	uint32_t Random() noexcept;
-	void AppendUniqueId(const StringRef& reply) noexcept;
+	const char *GetUniqueIdString() const noexcept { return uniqueIdChars; }
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -600,9 +600,11 @@ private:
 	MacAddress defaultMacAddress;
 
 	// Board and processor
-#if SAM4E || SAM4S || SAME70
+#if SUPPORTS_UNIQUE_ID
 	uint32_t uniqueId[5];
+	char uniqueIdChars[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
 #endif
+
 	BoardType board;
 
 #ifdef DUET_NG

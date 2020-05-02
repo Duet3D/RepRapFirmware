@@ -172,4 +172,11 @@
 # define ALLOCATE_DEFAULT_PORTS	0
 #endif
 
+// We must define SUPPORTS_UNIQUE_ID as either 0 or 1 so we can use it in maths
+#if SAM4E || SAM4S || SAME70
+# define SUPPORTS_UNIQUE_ID		1
+#else
+# define SUPPORTS_UNIQUE_ID		0
+#endif
+
 #endif // PINS_H__
