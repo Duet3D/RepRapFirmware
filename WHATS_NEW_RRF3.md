@@ -1,3 +1,29 @@
+RepRapFirmware 3.01 (in preparation)
+========================
+
+Recommended compatible firmware:
+- DuetWebControl TBC
+- DuetWiFiServer 1.23 (same as for previous RC)
+- Duet Software Framework version TBC (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01
+- PanelDueFirmware 1.24
+
+Upgrade notes:
+- All PanelDue users: the PanelDue connector (or IO_0 on Duet 3) is no longer dedicated to PanelDue, therefore if you connect a PanelDue to this port you must use the following command in config.g to enable it: M575 P1 S1 B57600. You can use baud rates other than 57600, however the IAP files all assume 57600 baud; therefore if you use another baud rate then PanelDue will not display firmware update progress.
+
+Known issues and limitations:
+- All boards: Z probe types 1, 2 and 5 are only supported for Z probe 0, and if using Duet 3 only for a probe connected to the main board. All other Z probes must be of type 8 or 9.
+- Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
+- Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
+- Duet 3: additional limitations apply to systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
+
+New features/changed behaviour:
+- The PanelDue connector (or IO_0 on Duet 3) is no longer dedicated to PanelDue. When not used for PanelDue, its two pins are available for use by GPIO, endstops etc. On Duet WiFi/Ethernet/Maestro they are called "urx0" and "utx0".
+- Added 'move.virtualEPos' to object model
+
+Bug fixes:
+- Duet WiFi/Ethernet/Maestro: the first time a M575 P1 command was used, the B parameter (baud rate) baud rate in that command was ignored
+
 RepRapFirmware 3.01-RC11
 ========================
 
