@@ -766,9 +766,13 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile) noexc
 		{
 			// We have been asked for a file with a very long name. Don't try to open it, because that may lead to MassStorage::CombineName generating an error message.
 			// Instead, report a possible virus attack from the sending IP address.
-			GetPlatform().MessageF(WarningMessage,
-									"IP %s requested file '%.20s...' from HTTP server, possibly a virus attack\n",
-									IP4String(GetRemoteIP()).c_str(), nameOfFileToSend);
+			// Exception: it if is an OCSP request, just return 404.
+			if (!StringStartsWith(nameOfFileToSend, "/ocsp"))
+			{
+				GetPlatform().MessageF(WarningMessage,
+										"IP %s requested file '%.20s...' from HTTP server, possibly a virus attack\n",
+										IP4String(GetRemoteIP()).c_str(), nameOfFileToSend);
+			}
 		}
 		else
 		{
