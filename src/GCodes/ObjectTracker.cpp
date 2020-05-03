@@ -224,10 +224,19 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, O
 		}
 		else
 		{
-			for (size_t i = 0; i < numObjects; ++i)
+			for (size_t i = 0; i < min<unsigned int>(numObjects, MaxTrackedObjects); ++i)
 			{
 				const ObjectDirectoryEntry& obj = objectDirectory[i];
-				buf->lcatf("%2u: X%d-%dmm Y%d-%dmm %s", i, (int)obj.x[0], (int)obj.x[1], (int)obj.y[0], (int)obj.y[1], obj.name);
+				buf->lcatf("%2u%s: X %d to %dmm, Y %d to %dmm, %s",
+							i,
+							(objectsCancelled.IsBitSet(i) ? " (cancelled)" : ""),
+							(int)obj.x[0], (int)obj.x[1],
+							(int)obj.y[0], (int)obj.y[1],
+							obj.name);
+			}
+			if (numObjects > MaxTrackedObjects)
+			{
+				buf->lcatf("%u more objects", numObjects - MaxTrackedObjects);
 			}
 		}
 #else
