@@ -121,11 +121,13 @@ void ObjectTracker::ChangeToObject(GCodeBuffer& gb, int i) noexcept
 	}
 }
 
-GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
+GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException)
 {
+	bool seen = false;
 	if (gb.Seen('T'))
 	{
 		// Specify how many objects. May be useful for a user interface.
+		seen = true;
 		numObjects = gb.GetUIValue();
 		objectsCancelled.Clear();						// assume this command is only used at the start of a print
 		reprap.JobUpdated();
@@ -134,6 +136,7 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 	if (gb.Seen('S'))
 	{
 		// Specify which object we are about to print
+		seen = true;
 		if (!usingM486Labelling)
 		{
 			usingM486Labelling = true;
@@ -165,6 +168,7 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 	if (gb.Seen('P'))
 	{
 		// Cancel an object
+		seen = true;
 		const int objectToCancel = gb.GetIValue();
 		if (objectToCancel >= 0 && objectToCancel < (int)objectsCancelled.MaxBits())
 		{
@@ -180,6 +184,7 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 	if (gb.Seen('U'))
 	{
 		// Resume an object
+		seen = true;
 		const int objectToResume = gb.GetIValue();
 		if (objectToResume >= 0 && objectToResume < (int)objectsCancelled.MaxBits())
 		{
@@ -195,12 +200,46 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply) T
 	if (gb.Seen('C') && currentObjectNumber >= 0 && currentObjectNumber < (int)objectsCancelled.MaxBits())
 	{
 		// Cancel current object
+		seen = true;
 		objectsCancelled.SetBit(currentObjectNumber);
 		if (!currentObjectCancelled)
 		{
 			StopPrinting(gb);
 		}
 		reprap.JobUpdated();
+	}
+
+	if (!seen)
+	{
+#if TRACK_OBJECT_NAMES
+		// List objects on build plate
+		if (!OutputBuffer::Allocate(buf))
+		{
+			return GCodeResult::notFinished;
+		}
+
+		if (numObjects == 0)
+		{
+			buf->copy("No known objects on build plate");
+		}
+		else
+		{
+			for (size_t i = 0; i < numObjects; ++i)
+			{
+				const ObjectDirectoryEntry& obj = objectDirectory[i];
+				buf->lcatf("%2u: X%d-%dmm Y%d-%dmm %s", i, (int)obj.x[0], (int)obj.x[1], (int)obj.y[0], (int)obj.y[1], obj.name);
+			}
+		}
+#else
+		if (numObjects == 0)
+		{
+			reply.copy("No known objects on build plate");
+		}
+		else
+		{
+			reply.printf("%u objects on build plate", numObjects);
+		}
+#endif
 	}
 
 	return GCodeResult::ok;

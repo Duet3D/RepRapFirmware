@@ -2780,7 +2780,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 486: // number object or cancel object
-			result = buildObjects.HandleM486(gb, reply);
+			result = buildObjects.HandleM486(gb, reply, outBuf);
 			break;
 
 		case 500: // Store parameters in config-override.g

@@ -49,7 +49,7 @@ public:
 	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
 	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
 	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
-	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Handle M486
+	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException);	// Handle M486
 	const RestorePoint& GetInitialPosition() const noexcept { return rp; }
 	void SetVirtualTool(int toolNum) noexcept { virtualToolNumber = toolNum; }
 
