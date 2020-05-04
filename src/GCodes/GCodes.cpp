@@ -2534,7 +2534,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			return true;
 		}
 
-		gb.RequestMacroFile(fileName, reportMissing, codeRunning >= 0);
+		gb.RequestMacroFile(fileName, reportMissing, gb.IsBinary() && codeRunning >= 0);
 	}
 	else
 #endif

@@ -150,7 +150,11 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 #endif
 
 Move::Move() noexcept
-	: active(false),
+	:
+#if SUPPORT_ASYNC_MOVES
+	  heightController(nullptr),
+#endif
+	  active(false),
 	  drcEnabled(false),											// disable dynamic ringing cancellation
 	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
 	  drcPeriod(0.025),												// 40Hz
@@ -1175,7 +1179,7 @@ void Move::ReleaseAuxMove(bool hasNewMove) noexcept
 }
 
 // Configure height following
-GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (heightController == nullptr)
 	{
@@ -1185,7 +1189,7 @@ GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& rep
 }
 
 // Start/stop height following
-GCodeResult Move::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Move::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (heightController == nullptr)
 	{

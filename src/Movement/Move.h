@@ -180,8 +180,8 @@ public:
 #if SUPPORT_ASYNC_MOVES
 	AsyncMove *LockAuxMove() noexcept;														// Get and lock the aux move buffer
 	void ReleaseAuxMove(bool hasNewMove) noexcept;											// Release the aux move buffer and optionally signal that it contains a move
-	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Configure height following
-	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Start/stop height following
+	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Configure height following
+	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Start/stop height following
 #endif
 
 	static int32_t MotorMovementToSteps(size_t drive, float coord) noexcept;				// Convert a single motor position to number of steps
