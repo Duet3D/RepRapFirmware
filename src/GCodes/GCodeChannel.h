@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
 
-NamedEnum(GCodeChannel, uint8_t, HTTP, Telnet, File, USB, Aux, Trigger, Queue, LCD, SBC, Daemon, Autopause);
+NamedEnum(GCodeChannel, uint8_t, HTTP, Telnet, File, USB, Aux, Trigger, Queue, LCD, SBC, Daemon, Aux2, Autopause);
 
 constexpr size_t NumGCodeChannels = GCodeChannel::NumValues;
 

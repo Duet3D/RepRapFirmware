@@ -25,7 +25,8 @@ enum MessageType : uint32_t
 	LcdMessage = 0x80,					// A message that is to be sent to the panel
 	SbcMessage = 0x100,					// A message that is to be sent to the SBC
 	DaemonMessage = 0x200,				// A message that is sent to the daemon processor
-	AutoPauseMessage = 0x400,			// A message that is to be sent to an auto-pause processor
+	Aux2Message = 0x400,				// A message that is to be sent to the second aux device
+	AutoPauseMessage = 0x800,			// A message that is to be sent to an auto-pause processor
 
 	// Special destinations (byte 3)
     BlockingUsbMessage = 0x10000,		// A message that is to be sent to USB in blocking mode

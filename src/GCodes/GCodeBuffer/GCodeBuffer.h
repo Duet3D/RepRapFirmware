@@ -133,6 +133,7 @@ public:
 
 #if HAS_LINUX_INTERFACE
 	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
+	void FinishedBinaryMode() noexcept { isBinaryBuffer = false; }
 
 	void SetPrintFinished() noexcept;							// Mark the print file as finished
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
@@ -189,9 +190,9 @@ public:
 	void RestartFrom(FilePosition pos) noexcept;
 
 #if HAS_MASS_STORAGE
-	FileGCodeInput *GetFileInput() const noexcept { return fileInput; }	//TEMPORARY!
+	FileGCodeInput *GetFileInput() const noexcept { return fileInput; }
 #endif
-	GCodeInput *GetNormalInput() const noexcept { return normalInput; }	//TEMPORARY!
+	GCodeInput *GetNormalInput() const noexcept { return normalInput; }
 
 	void MotionCommanded() noexcept { motionCommanded = true; }
 	void MotionStopped() noexcept { motionCommanded = false; }

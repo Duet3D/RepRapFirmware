@@ -120,6 +120,14 @@ GCodes::GCodes(Platform& p) noexcept :
 	spiGCode = nullptr;
 #endif
 	daemonGCode = new GCodeBuffer(GCodeChannel::Daemon, nullptr, fileInput, GenericMessage);
+#if defined(SERIAL_AUX2_DEVICE)
+	StreamGCodeInput * const aux2Input = new StreamGCodeInput(SERIAL_AUX2_DEVICE);
+	aux2GCode = new GCodeBuffer(GCodeChannel::Aux2, aux2Input, fileInput, Aux2Message);
+#elif HAS_LINUX_INTERFACE
+	aux2GCode = new GCodeBuffer(GCodeChannel::Aux2, nullptr, fileInput, Aux2Message);
+#else
+	aux2GCode = nullptr;
+#endif
 	autoPauseGCode = new GCodeBuffer(GCodeChannel::Autopause, nullptr, fileInput, GenericMessage);
 }
 
@@ -514,7 +522,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		 if (!(&gb == usbGCode && reprap.GetScanner().IsRegistered()))
 #endif
 	{
-		const bool gotCommand = (gb.GetNormalInput() != nullptr) ? gb.GetNormalInput()->FillBuffer(&gb) : false;
+		const bool gotCommand = (gb.GetNormalInput() != nullptr) && gb.GetNormalInput()->FillBuffer(&gb);
 		if (gotCommand)
 		{
 			gb.DecodeCommand();
@@ -561,9 +569,17 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// Finished a macro or finished processing config.g
 				gb.MachineState().CloseFile();
 				CheckFinishedRunningConfigFile(gb);
-				const bool hadFileError = gb.MachineState().fileError, wasBinary = gb.IsBinary();
+				const bool hadFileError = gb.MachineState().fileError;
+				const bool wasBinary = gb.IsBinary();
 				Pop(gb, false);
 				gb.Init();
+#if 0
+				// Reset the GCodeBuffer to non-binary input if necessary, so that if we are in Marlin mode we will send an OK response
+				if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
+				{
+					gb.FinishedBinaryMode();
+				}
+#endif
 				if (gb.GetState() == GCodeState::doingUnsupportedCode)
 				{
 					gb.SetState(GCodeState::normal);
@@ -610,7 +626,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
 				if (!wasBinary)
 				{
-					MessageType type = (MessageType)((1u << gb.GetChannel().ToBaseType()) | BinaryCodeReplyFlag);
+					const MessageType type = (MessageType)((1u << gb.GetChannel().ToBaseType()) | BinaryCodeReplyFlag);
 					platform.Message(type, "");
 				}
 			}
