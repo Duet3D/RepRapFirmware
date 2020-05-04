@@ -336,28 +336,17 @@ void BinaryParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 
 void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
-	//TODO DSF should know which commands take a string parameter without a preceding parameter letter,
-	// so it should send the argument as a string or as an expression with a dummy parameter letter.
-	str.Clear();
-	WriteParameters(str, false);
-	if (!allowEmpty && str.IsEmpty())
+	if (Seen('@') || Seen('\0'))		// DCS 2.1.3 and earlier use '\0', later DCS versions use '@'
+	{
+		GetPossiblyQuotedString(str, allowEmpty);
+	}
+	else if (!allowEmpty)
 	{
 		throw ConstructParseException("non-empty string expected");
 	}
 }
 
-// Get the complete parameter string
-const char *BinaryParser::GetCompleteParameters() const noexcept
-{
-	return "";			// If we decide to support Q codes from DSF then change this to copy the single parameter to gb.buffer and return a pointer to it
-}
-
-void BinaryParser::GetQuotedString(const StringRef& str) THROWS(GCodeException)
-{
-	GetPossiblyQuotedString(str);
-}
-
-void BinaryParser::GetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
+void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -386,7 +375,7 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str) THROWS(GCodeExc
 
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	if (str.IsEmpty())
+	if (!allowEmpty && str.IsEmpty())
 	{
 		throw ConstructParseException("non-empty string expected");
 	}

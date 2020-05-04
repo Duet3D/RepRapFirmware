@@ -1275,9 +1275,9 @@ void StringParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 }
 
 // Get the complete parameter string
-const char *StringParser::GetCompleteParameters() const noexcept
+void StringParser::GetCompleteParameters(const StringRef& str) const noexcept
 {
-	return gb.buffer + parameterStart;
+	str.copy(gb.buffer + parameterStart);
 }
 
 // Get an int32 after a G Code letter

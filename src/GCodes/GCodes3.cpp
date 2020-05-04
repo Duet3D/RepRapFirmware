@@ -1408,7 +1408,9 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 		"HEIGHT"					// Ideamaker
 	};
 
-	const char * text = gb.GetCompleteParameters();
+	String<StringLength100> comment;
+	gb.GetCompleteParameters(comment.GetRef());
+	const char *text = comment.c_str();
 	while (*text == ' ')
 	{
 		++text;

@@ -40,9 +40,9 @@ public:
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);			// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);					// Get a MAC address sextet after a key letter
 	void GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);	// Get a string with no preceding key letter
-	const char *GetCompleteParameters() const noexcept;							// Get the complete parameter string
+	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);	// Get the complete parameter string
 	void GetQuotedString(const StringRef& str) THROWS(GCodeException);			// Get and copy a quoted string
-	void GetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException);	// Get and copy a string which may or may not be quoted
+	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);	// Get and copy a string which may or may not be quoted
 	void GetReducedString(const StringRef& str) THROWS(GCodeException);			// Get and copy a quoted string, removing certain characters
 	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
@@ -77,6 +77,18 @@ private:
 	const CodeParameter *seenParameter;
 	const char *seenParameterValue;
 };
+
+// Get the complete parameter string. Used by the Q0 command to process comments.
+inline void BinaryParser::GetCompleteParameters(const StringRef& str) THROWS(GCodeException)
+{
+	GetUnprecedentedString(str, true);
+}
+
+// Get a string, which must be enclosed in double quotes. DSF sorts out quotes, so we needn't worry about them.
+inline void BinaryParser::GetQuotedString(const StringRef& str) THROWS(GCodeException)
+{
+	GetPossiblyQuotedString(str);
+}
 
 #endif
 
