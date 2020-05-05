@@ -1798,8 +1798,10 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 								GetModuleName(srdBuf[slot].resetReason & 0x1F), srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
 			MessageF(mtype,
-					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task 0x%08" PRIx32 "\n",
-					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp, srdBuf[slot].taskName
+					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task %c%c%c%c\n",
+					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp,
+					(unsigned int)(srdBuf[slot].taskName & 0xFF), (unsigned int)((srdBuf[slot].taskName >> 8) & 0xFF),
+					(unsigned int)((srdBuf[slot].taskName >> 16) & 0xFF), (unsigned int)((srdBuf[slot].taskName >> 24) & 0xFF)
 				);
 			if (srdBuf[slot].sp != 0xFFFFFFFF)
 			{

@@ -570,16 +570,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.MachineState().CloseFile();
 				CheckFinishedRunningConfigFile(gb);
 				const bool hadFileError = gb.MachineState().fileError;
-				const bool wasBinary = gb.IsBinary();
 				Pop(gb, false);
 				gb.Init();
-#if 0
-				// Reset the GCodeBuffer to non-binary input if necessary, so that if we are in Marlin mode we will send an OK response
-				if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
-				{
-					gb.FinishedBinaryMode();
-				}
-#endif
+
+				// Prepare the response to the command that invoked the macro
+				GCodeResult rslt = GCodeResult::ok;
 				if (gb.GetState() == GCodeState::doingUnsupportedCode)
 				{
 					gb.SetState(GCodeState::normal);
@@ -587,11 +582,9 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 					if (hadFileError)
 					{
-						HandleResult(gb, GCodeResult::warningNotSupported, reply, nullptr);
-					}
-					else
-					{
-						HandleReply(gb, GCodeResult::ok, "");
+						gb.PrintCommand(reply);
+						reply.cat(": Command is not supported");
+						rslt = GCodeResult::warning;
 					}
 				}
 				else if (gb.GetState() == GCodeState::doingUserMacro)
@@ -604,31 +597,32 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					{
 						bool reportMissing, fromCode;
 						reply.printf("Macro file %s not found", gb.GetRequestedMacroFile(reportMissing, fromCode));
-						HandleReply(gb, GCodeResult::warning, reply.c_str());
-					}
-					else
-					{
-						HandleReply(gb, GCodeResult::ok, "");
+						rslt = GCodeResult::warning;
 					}
 				}
 				else if (gb.GetState() == GCodeState::loadingFilament && hadFileError)
 				{
 					// Don't perform final filament assignment if the load macro could not be processed
 					gb.SetState(GCodeState::normal);
-					HandleReply(gb, GCodeResult::ok, "");
-				}
-				else if (gb.GetState() == GCodeState::normal)
-				{
-					UnlockAll(gb);
-					HandleReply(gb, GCodeResult::ok, "");
 				}
 
-				// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
-				if (!wasBinary)
+				if (gb.GetState() == GCodeState::normal)
 				{
+					UnlockAll(gb);
+				}
+
+//				HandleReply(gb, rslt, reply.c_str());
+				// Reset the GCodeBuffer to non-binary input if necessary, so that if we are in Marlin mode we will send an OK response
+				if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
+				{
+					// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
+					// FIXME do we need to inform DCS of the result code so that it can implement the 'result' variable correctly?
 					const MessageType type = (MessageType)((1u << gb.GetChannel().ToBaseType()) | BinaryCodeReplyFlag);
 					platform.Message(type, "");
+					gb.FinishedBinaryMode();
 				}
+
+				HandleReply(gb, rslt, reply.c_str());
 			}
 		}
 		else if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
