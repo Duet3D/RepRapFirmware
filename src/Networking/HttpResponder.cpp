@@ -6,6 +6,9 @@
  */
 
 #include "HttpResponder.h"
+
+#if SUPPORT_HTTP
+
 #include "Socket.h"
 #include "GCodes/GCodes.h"
 #include "General/IP4String.h"
@@ -1544,5 +1547,7 @@ unsigned int HttpResponder::clientsServed = 0;
 volatile uint16_t HttpResponder::seq = 0;
 volatile OutputStack HttpResponder::gcodeReply;
 Mutex HttpResponder::gcodeReplyMutex;
+
+#endif // SUPPORT_HTTP
 
 // End
