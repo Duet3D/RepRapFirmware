@@ -1798,12 +1798,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		}
 	}
 
-	if (response->cat('}') == 0)
-	{
-		OutputBuffer::ReleaseAll(response);
-		return nullptr;
-	}
-
+	response->cat('}');
 	return response;
 }
 

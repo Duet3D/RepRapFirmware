@@ -1005,7 +1005,11 @@ void HttpResponder::SendJsonResponse(const char* command) noexcept
 		// Unfortunately the protocol is prone to deadlocking, because if most output buffers are used up holding a GCode reply,
 		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
 		// Until we fix the protocol, the best we can do is time out and throw some GCode responses away.
+#if 1
+		// DC 2020-05-05: we no longer retry if there are no buffers available, instead we return a 503 error immediately
+#else
 		if (millis() - startedProcessingRequestAt >= MaxBufferWaitTime)
+#endif
 		{
 			{
 				// Looks like we've run out of buffers and waiting hasn't help, so release some of the responses that are waiting to go
