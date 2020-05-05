@@ -2525,11 +2525,12 @@ void GCodes::EmergencyStop() noexcept
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
 // Return true if the file was found or it wasn't and we were asked to report that fact.
-// 'codeRunning' is the M command we are running, as follows;
+// 'codeRunning' is the G or M command we are running, or 0 for a tool change file. In particular:
 // 501 = running M501
 // 502 = running M502
 // 98 = running a macro explicitly via M98
-// -1 = running a system macro automatically
+// otherwise it is either the G- or M-code being executed, or 0 for a tool change file, or -1 for another system file
+// FIXME: sort this out, in particular when the call to RequestMacroFile needs the fromCode parameter to be true
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept
 {
 #if HAS_LINUX_INTERFACE
