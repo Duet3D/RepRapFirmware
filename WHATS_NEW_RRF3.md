@@ -2,7 +2,7 @@ RepRapFirmware 3.01 (in preparation)
 ========================
 
 Recommended compatible firmware:
-- DuetWebControl TBC
+- DuetWebControl 2.1.6
 - DuetWiFiServer 1.23 (same as for previous RC)
 - Duet Software Framework version TBC (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.01
@@ -20,9 +20,15 @@ Known issues and limitations:
 New features/changed behaviour:
 - The PanelDue connector (or IO_0 on Duet 3) is no longer dedicated to PanelDue. When not used for PanelDue, its two pins are available for use by GPIO, endstops etc. On Duet WiFi/Ethernet/Maestro they are called "urx0" and "utx0".
 - Added 'move.virtualEPos' and 'boards[0].uniqueId' to object model
+- M486 without parameters now reports the known objects on the build plate
+- Previously, if a response for an over-long filename was received by the HTTP server, a "Filename too long" error message was generated and no response to the HTTP command was returned. Now, a 404 response is returned, and a message warning about a possible virus attack is generated unless the filename looks like an OCSP request.
+- If a HTTP request is received but insufficient output buffers are available, a HTTP 503 error code is now returned immediately instead of waiting to see if buffers become available and/or discarding response messages. A client receiving a 503 request should call rr_reply to get and flush any pending responses before making any otyher type of request.
 
 Bug fixes:
-- Duet WiFi/Ethernet/Maestro: the first time a M575 P1 command was used, the B parameter (baud rate) baud rate in that command was ignored
+- Duet WiFi/Ethernet/Maestro: the first time a M575 P1 command was used, the B parameter (baud rate) baud rate in that command was ignored, so the default baud rate of 57600 continued to be used
+- Using the M591 command caused a firmware crash and reset in some configurations
+- Duet 3 + SBC: when sending commands from USB or a raw aux port on the Duet and in Marlin response mode, certain commands (e.g. G28. G32) did not return the "ok" response
+- Duet 2 + DueX5: depending on the configuration, the response to a M122 command sent from DWC 2.1.5 might be discarded due to insufficient output buffers. The fix for this also needs DWC 2.1.6.
 
 RepRapFirmware 3.01-RC11
 ========================
