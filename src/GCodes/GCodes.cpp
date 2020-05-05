@@ -606,23 +606,19 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					gb.SetState(GCodeState::normal);
 				}
 
-				if (gb.GetState() == GCodeState::normal)
-				{
-					UnlockAll(gb);
-				}
-
-//				HandleReply(gb, rslt, reply.c_str());
 				// Reset the GCodeBuffer to non-binary input if necessary, so that if we are in Marlin mode we will send an OK response
 				if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
 				{
 					// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
-					// FIXME do we need to inform DCS of the result code so that it can implement the 'result' variable correctly?
-					const MessageType type = (MessageType)((1u << gb.GetChannel().ToBaseType()) | BinaryCodeReplyFlag);
-					platform.Message(type, "");
+					HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, "");
 					gb.FinishedBinaryMode();
 				}
 
-				HandleReply(gb, rslt, reply.c_str());
+				if (gb.GetState() == GCodeState::normal)
+				{
+					UnlockAll(gb);
+					HandleReply(gb, rslt, reply.c_str());
+				}
 			}
 		}
 		else if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
