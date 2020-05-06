@@ -11,9 +11,9 @@ RepRapFirmware is built from several Github projects. You need to use compatible
 - RRFLibraries: master
 - DuetWiFiSocketServer: master
 
-As at 08 January 2020, the latest RRF 3.x source code is on these branches:
+As at 06 May 2020, the latest RRF 3.01 source code is on these branches:
 
-- RepRapFirmware: v3-dev
+- RepRapFirmware: v3.01-dev
 - CoreNG: dev
 - FreeRTOS: master
 - RRFLibraries: dev
@@ -23,13 +23,10 @@ As at 08 January 2020, the latest RRF 3.x source code is on these branches:
 **Instructions for building under Windows**
 
 1. Download and install the gcc cross-compiler from https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads:
-
+- To build firmware version 3.01 use version 2019-q4-major
 - To build firmware version 2.03beta3 and later use version 2018-q4-major
-
 - To build firmware version 2.01beta2 and later, use version 2018-q2-update
-
 - To build firmware version 1.20alpha3 and later, use version 2017-q2-update
-
 - To build firmware version 1.20alpha2 and earlier, use version arm-none-eabi-4.8.3-2014q1. A simple way of doing this is to download Arduino version 1.5.8 and install it into folder C:/Arduino-1.5.8. The compiler and associated tools will then be in folder C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin. If you already have a later version of Arduino installed including the add-on for SAM processors, you will find the compiler and tools in a different folder, for example C:\Users\<YOUR USER NAME>\AppData\Local\Arduino15\packages\arduino\tools\arm-none-eabi-gcc\4.8.3-2014q1\bin.
 
 2. Download and install Eclipse IDE for C/C++ Developers version 2018-09, from http://www.eclipse.org/downloads/eclipse-packages/. You do not need the Arduino add-on.
