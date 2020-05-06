@@ -24,12 +24,14 @@ As at 06 May 2020, the latest RRF 3.01 source code is on these branches:
 
 1. Download and install the gcc cross-compiler from https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads:
 - To build firmware version 3.01 use version 2019-q4-major
-- To build firmware version 2.03beta3 and later use version 2018-q4-major
-- To build firmware version 2.01beta2 and later, use version 2018-q2-update
-- To build firmware version 1.20alpha3 and later, use version 2017-q2-update
-- To build firmware version 1.20alpha2 and earlier, use version arm-none-eabi-4.8.3-2014q1. A simple way of doing this is to download Arduino version 1.5.8 and install it into folder C:/Arduino-1.5.8. The compiler and associated tools will then be in folder C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin. If you already have a later version of Arduino installed including the add-on for SAM processors, you will find the compiler and tools in a different folder, for example C:\Users\<YOUR USER NAME>\AppData\Local\Arduino15\packages\arduino\tools\arm-none-eabi-gcc\4.8.3-2014q1\bin.
+- To build firmware version 2.05 use 2019-q3-update
+- To build firmware version 2.03 use version 2018-q4-major
+- To build firmware version 2.01 use version 2018-q2-update
+- To build firmware version 1.20 use version 2017-q2-update
 
-2. Download and install Eclipse IDE for C/C++ Developers version 2018-09, from http://www.eclipse.org/downloads/eclipse-packages/. You do not need the Arduino add-on.
+You should be able to use a later version of the compiler than the one specified, but you may get warning messages if you do.
+
+2. Download and install Eclipse IDE for C/C++ Developers, from http://www.eclipse.org/downloads/eclipse-packages/. You do not need the Arduino add-on.
 
 3. Download and install GNU Arm Eclipse from https://sourceforge.net/projects/gnuarmeclipse/files/Build%20Tools/gnuarmeclipse-build-tools-win64-2.6-201507152002-setup.exe/download. This provides versions of make.exe, rm.exe and other tools without the 8192-character command line limitation of some other versions.
 
