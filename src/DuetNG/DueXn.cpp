@@ -324,16 +324,19 @@ namespace DuetExpansion
 	// Print diagnostic data. I2C error counts are now reported by Platform.
 	void Diagnostics(MessageType mtype) noexcept
 	{
-		const uint32_t now = millis();
-		const uint32_t readCount = dueXnReadCount;
-		dueXnReadCountResetMillis = now;
-		dueXnReadCount = 0;
+		if (dueXnBoardType != ExpansionBoardType::none)
+		{
+			const uint32_t now = millis();
+			const uint32_t readCount = dueXnReadCount;
+			dueXnReadCount = 0;
 
-		reprap.GetPlatform().MessageF(mtype,
-										"=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min\n",
-										readCount,
-										(double)((float)readCount * (MillisToSeconds * SecondsToMinutes)/(now - dueXnReadCountResetMillis))
-									 );
+			reprap.GetPlatform().MessageF(mtype,
+											"=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min\n",
+											readCount,
+											(double)((float)readCount * (MillisToSeconds * SecondsToMinutes)/(now - dueXnReadCountResetMillis))
+										 );
+			dueXnReadCountResetMillis = now;
+		}
 	}
 
 	// Diagnose the SX1509 by setting all pins as inputs and reading them
