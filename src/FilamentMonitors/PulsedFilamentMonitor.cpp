@@ -131,6 +131,7 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	if (seen)
 	{
 		Init();
+		reprap.SensorsUpdated();
 	}
 	else
 	{

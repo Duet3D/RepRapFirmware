@@ -55,6 +55,7 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	if (seen)
 	{
 		Check(false, false, 0, 0.0);
+		reprap.SensorsUpdated();
 	}
 	else
 	{

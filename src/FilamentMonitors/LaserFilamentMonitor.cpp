@@ -136,6 +136,7 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 	if (seen)
 	{
 		Init();
+		reprap.SensorsUpdated();
 	}
 	else
 	{

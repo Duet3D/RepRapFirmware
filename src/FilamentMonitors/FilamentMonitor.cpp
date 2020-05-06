@@ -98,6 +98,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 			sensor->Disable();
 			delete sensor;
 			sensor = nullptr;
+			reprap.SensorsUpdated();
 		}
 
 		if (sensor == nullptr)

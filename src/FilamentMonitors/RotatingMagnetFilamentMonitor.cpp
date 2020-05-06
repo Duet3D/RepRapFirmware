@@ -141,6 +141,7 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 	if (seen)
 	{
 		Init();
+		reprap.SensorsUpdated();
 	}
 	else
 	{
