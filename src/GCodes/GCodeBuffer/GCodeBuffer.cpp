@@ -755,6 +755,7 @@ void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, boo
 	{
 		// This suppresses unwanted replies in the USB console
 		isBinaryBuffer = true;
+		memset(buffer, 0, sizeof(CodeHeader));
 	}
 
 	requestedMacroFile.copy(filename);

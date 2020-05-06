@@ -469,7 +469,7 @@ void GCodes::Spin() noexcept
 // Start a new gcode, or continue to execute one that has already been started:
 void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-	if (IsPaused() && &gb == fileGCode)
+	if (IsPaused() && &gb == fileGCode && !gb.IsDoingFileMacro())
 	{
 		// We are paused, so don't process any more gcodes from the file being printed.
 		// There is a potential issue here if fileGCode holds any locks, so unlock everything.
