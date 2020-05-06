@@ -333,7 +333,7 @@ namespace DuetExpansion
 			reprap.GetPlatform().MessageF(mtype,
 											"=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min\n",
 											readCount,
-											(double)((float)readCount * (MillisToSeconds * SecondsToMinutes)/(now - dueXnReadCountResetMillis))
+											(double)(((float)readCount * (SecondsToMillis * MinutesToSeconds))/(now - dueXnReadCountResetMillis))
 										 );
 			dueXnReadCountResetMillis = now;
 		}
