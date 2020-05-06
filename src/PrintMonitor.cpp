@@ -47,7 +47,7 @@ const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
 constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
-	// 0. PrintMonitor members
+	// 0. Job members
 #if TRACK_OBJECT_NAMES
 	{ "build",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), reprap.GetGCodes().GetBuildObjects(), 0), 									ObjectModelEntryFlags::live },
 #endif
