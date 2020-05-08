@@ -1431,13 +1431,22 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 
 				switch (i)
 				{
-				case 0:		// printing object (slic3r)
 				case 1:		// MESH (Cura)
+#if TRACK_OBJECT_NAMES
+					if (StringStartsWith(text, "NONMESH"))
+					{
+						buildObjects.StopObject(gb);
+						break;
+					}
+#endif
+					// no break
+				case 0:		// printing object (slic3r)
 				case 2:		// process (S3D)
 #if TRACK_OBJECT_NAMES
 					buildObjects.StartObject(gb, text);
 #endif
 					break;
+
 
 				case 3:		// stop printing object
 #if TRACK_OBJECT_NAMES
