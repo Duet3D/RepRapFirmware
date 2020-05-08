@@ -685,7 +685,7 @@ void Network::HandleHttpGCodeReply(OutputBuffer *buf) noexcept
 	MutexLocker lock(httpMutex);
 	HttpResponder::HandleGCodeReply(buf);
 #else
-	OutputBuffer::Release(buf);
+	OutputBuffer::ReleaseAll(buf);
 #endif
 }
 
@@ -695,7 +695,7 @@ void Network::HandleTelnetGCodeReply(OutputBuffer *buf) noexcept
 	MutexLocker lock(telnetMutex);
 	TelnetResponder::HandleGCodeReply(buf);
 #else
-	OutputBuffer::Release(buf);
+	OutputBuffer::ReleaseAll(buf);
 #endif
 }
 

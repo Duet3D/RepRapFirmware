@@ -46,7 +46,7 @@ public:
 	Heat(const Heat&) = delete;
 
 	// Methods that don't relate to a particular heater
-	void HeaterTask() noexcept;
+	[[noreturn]] void HeaterTask() noexcept;
 	void Init() noexcept;												// Set everything up
 	void Exit() noexcept;												// Shut everything down
 	void ResetHeaterModels() noexcept;									// Reset all active heater models to defaults
@@ -82,7 +82,7 @@ public:
 	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException); // Set the P/I/D parameters for a heater
 	GCodeResult HandleM143(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException);	// Configure heater protection (M143)
 
-	void SensorsTask() noexcept;
+	[[noreturn]] void SensorsTask() noexcept;
 	static void EnsureSensorsTask() noexcept;
 
 	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const noexcept;	// Get a pointer to the temperature sensor entry

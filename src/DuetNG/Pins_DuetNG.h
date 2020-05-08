@@ -6,23 +6,42 @@
 
 #define BOARD_NAME_WIFI			"Duet 2 WiFi"
 #define BOARD_NAME_ETHERNET		"Duet 2 Ethernet"
-#define BOARD_SHORT_NAME_WIFI	"2WiFi"
+#define BOARD_NAME_SBC			"Duet 2 + SBC"
+#define BOARD_SHORT_NAME_WIFI		"2WiFi"
 #define BOARD_SHORT_NAME_ETHERNET	"2Ethernet"
+#define BOARD_SHORT_NAME_SBC		"2SBC"
 
+#if defined(USE_SBC)
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 2 + SBC"
+#define DEFAULT_BOARD_TYPE	 	BoardType::Duet2SBC
+#define IAP_FIRMWARE_FILE		"Duet2Firmware_" BOARD_SHORT_NAME_SBC ".bin"
+#define IAP_UPDATE_FILE			"Duet2_SDiap_" BOARD_SHORT_NAME_SBC ".bin"
+#define IAP_UPDATE_FILE_SBC		"Duet2_SBCiap_" BOARD_SHORT_NAME_SBC ".bin"
+
+constexpr size_t NumFirmwareUpdateModules = 1;
+#else
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 2 WiFi/Ethernet"
 #define DEFAULT_BOARD_TYPE	 	BoardType::DuetWiFi_10
 #define IAP_FIRMWARE_FILE		"Duet2CombinedFirmware.bin"
-
-constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the second 64kb of RAM
 #define IAP_UPDATE_FILE			"Duet2CombinedIAP.bin"	// using the same IAP file for both Duet WiFi and Duet Ethernet
 #define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
 
 constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 is now unused)
+#endif
+
+constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the second 64kb of RAM
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
+#if defined(USE_SBC)
+#define HAS_WIFI_NETWORKING		0
+#define HAS_W5500_NETWORKING	0
+#define HAS_LINUX_INTERFACE		1
+#else
 #define HAS_WIFI_NETWORKING		1
 #define HAS_W5500_NETWORKING	1
+#define HAS_LINUX_INTERFACE		0
+#endif
 
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
@@ -42,9 +61,15 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
+#if defined(USE_SBC)
+#define SUPPORT_HTTP			0
+#define SUPPORT_FTP				0
+#define SUPPORT_TELNET			0
+#else
 #define SUPPORT_HTTP			1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
+#endif
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
@@ -390,6 +415,20 @@ constexpr Pin W5500ResetPin = PortEPin(4);			// Low on this in holds the W5500 m
 constexpr Pin W5500InterruptPin = PortDPin(31);		// W5500 interrupt output, active low
 constexpr Pin W5500ModuleSensePin = PortAPin(5);	// URXD1, tied to ground on the Ethernet module
 constexpr Pin W5500SsPin = PortAPin(11);			// SPI NPCS pin, input from W5500 module
+
+// Duet pin numbers for the Linux interface
+#define SBC_SPI					SPI
+#define SBC_SPI_INTERFACE_ID	ID_SPI
+#define SBC_SPI_IRQn			SPI_IRQn
+#define SBC_SPI_HANDLER			SPI_Handler
+constexpr Pin APIN_SBC_SPI_MOSI = 13;
+constexpr Pin APIN_SBC_SPI_MISO = 12;
+constexpr Pin APIN_SBC_SPI_SCK = 14;
+constexpr Pin APIN_SBC_SPI_SS0 = 11;
+
+constexpr Pin LinuxTfrReadyPin = PortDPin(30);
+constexpr uint8_t DmacChanLinuxTx = 1;
+constexpr uint8_t DmacChanLinuxRx = 2;
 
 // Timer allocation (no network timer on DuetNG)
 // TC0 channel 0 is used for FAN2

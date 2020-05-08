@@ -67,8 +67,13 @@
 # include "Display/Display.h"
 #endif
 
+#if SUPPORT_IOBITS
+# include "PortControl.h"
+#endif
+
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
+# include "Linux/DataTransfer.h"
 #endif
 
 #if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
@@ -2217,19 +2222,61 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		break;
 
 	case (unsigned int)DiagnosticTestType::PrintObjectAddresses:
-		reply.printf
-				(	"Platform %08" PRIx32 "-%08" PRIx32
+		MessageF(MessageType::GenericMessage,
+					"Platform %08" PRIx32 "-%08" PRIx32
 #if HAS_LINUX_INTERFACE
 					"\nLinuxInterface %08" PRIx32 "-%08" PRIx32
 #endif
 					"\nNetwork %08" PRIx32 "-%08" PRIx32
 					"\nGCodes %08" PRIx32 "-%08" PRIx32
+					"\nMove %08" PRIx32 "-%08" PRIx32
+					"\nHeat %08" PRIx32 "-%08" PRIx32
 					, reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1
 #if HAS_LINUX_INTERFACE
 					, reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()), reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) + sizeof(LinuxInterface) - 1
 #endif
 					, reinterpret_cast<uint32_t>(&reprap.GetNetwork()), reinterpret_cast<uint32_t>(&reprap.GetNetwork()) + sizeof(Network) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetMove()), reinterpret_cast<uint32_t>(&reprap.GetMove()) + sizeof(Move) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetHeat()), reinterpret_cast<uint32_t>(&reprap.GetHeat()) + sizeof(Heat) - 1
+				);
+
+		MessageF(MessageType::GenericMessage,
+					"\nPrintMonitor %08" PRIx32 "-%08" PRIx32
+					"\nFansManager %08" PRIx32 "-%08" PRIx32
+#if SUPPORT_ROLAND
+					"\nRoland %08" PRIx32 "-%08" PRIx32
+#endif
+#if SUPPORT_SCANNER
+					"\nScanner %08" PRIx32 "-%08" PRIx32
+#endif
+#if SUPPORT_IOBITS
+					"\nPortControl %08" PRIx32 "-%08" PRIx32
+#endif
+#if SUPPORT_12864_LCD
+					"\nDisplay %08" PRIx32 "-%08" PRIx32
+#endif
+#if SUPPORT_CAN_EXPANSION
+					"\nExpansionManager %08" PRIx32 "-%08" PRIx32
+#endif
+
+					, reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()), reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()) + sizeof(PrintMonitor) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetFansManager()), reinterpret_cast<uint32_t>(&reprap.GetFansManager()) + sizeof(FansManager) - 1
+#if SUPPORT_ROLAND
+					, reinterpret_cast<uint32_t>(&reprap.GetRoland()), reinterpret_cast<uint32_t>(&reprap.GetRoland()) + sizeof(Roland) - 1
+#endif
+#if SUPPORT_SCANNER
+					, reinterpret_cast<uint32_t>(&reprap.GetScanner()), reinterpret_cast<uint32_t>(&reprap.GetScanner()) + sizeof(Scanner) - 1
+#endif
+#if SUPPORT_IOBITS
+					, reinterpret_cast<uint32_t>(&reprap.GetPortControl()), reinterpret_cast<uint32_t>(&reprap.GetPortControl()) + sizeof(PortControl) - 1
+#endif
+#if SUPPORT_12864_LCD
+					, reinterpret_cast<uint32_t>(&reprap.GetDisplay()), reinterpret_cast<uint32_t>(&reprap.GetDisplay()) + sizeof(Display) - 1
+#endif
+#if SUPPORT_CAN_EXPANSION
+					, reinterpret_cast<uint32_t>(&reprap.GetExpansion()), reinterpret_cast<uint32_t>(&reprap.GetExpansion()) + sizeof(ExpansionManager) - 1
+#endif
 				);
 		break;
 
@@ -3772,12 +3819,16 @@ bool Platform::IsDuetWiFi() const noexcept
 
 const char *Platform::GetBoardName() const
 {
-	return (IsDuetWiFi()) ? BOARD_NAME_WIFI : BOARD_NAME_ETHERNET;
+	return board == BoardType::Duet2SBC
+			? BOARD_NAME_SBC
+			: (IsDuetWiFi()) ? BOARD_NAME_WIFI : BOARD_NAME_ETHERNET;
 }
 
 const char *Platform::GetBoardShortName() const
 {
-	return (IsDuetWiFi()) ? BOARD_SHORT_NAME_WIFI : BOARD_SHORT_NAME_ETHERNET;
+	return board == BoardType::Duet2SBC
+			? BOARD_SHORT_NAME_SBC
+			: (IsDuetWiFi()) ? BOARD_SHORT_NAME_WIFI : BOARD_SHORT_NAME_ETHERNET;
 }
 
 #endif
