@@ -21,6 +21,9 @@ public:
 	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
 	bool Interrupt() noexcept override;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	static constexpr float DefaultMmPerPulse = 1.0;
 	static constexpr float DefaultMinMovementAllowed = 0.6;
@@ -31,6 +34,10 @@ private:
 	void Reset() noexcept;
 	void Poll() noexcept;
 	FilamentSensorStatus CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept;
+
+	bool DataReceived() const noexcept;
+	bool HaveCalibrationData() const noexcept;
+	float MeasuredSensitivity() const noexcept;
 
 	// Configuration parameters
 	float mmPerPulse;

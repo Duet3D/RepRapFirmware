@@ -192,7 +192,7 @@
 #define LWIP_NUM_NETIF_CLIENT_DATA  (LWIP_MDNS_RESPONDER)
 
 #if defined(__SAME70Q21__) || defined(__SAME70Q20B__) || defined(__SAME70Q21B__)
-extern uint32_t trueRandom(void);
+extern uint32_t trueRandom(void) noexcept;
 # define LWIP_RAND					trueRandom
 #else
 # define LWIP_RAND					random
@@ -265,6 +265,10 @@ extern uint32_t trueRandom(void);
  * field.
  */
 #define LWIP_NETIF_HOSTNAME             1
+
+/** The maximum number of services per netif */
+#define MDNS_MAX_SERVICES               4
+
 
 /*
    ------------------------------------

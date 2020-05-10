@@ -29,6 +29,8 @@ namespace DuetExpansion
 	static bool additionalIoExpanderPresent = false;
 	static uint16_t additionalIoInputBits = 0;
 
+	static uint32_t dueXnReadCount = 0;
+	static uint32_t dueXnReadCountResetMillis = 0;
 	static volatile bool taskWaiting = false;
 	static volatile bool inputsChanged = false;
 
@@ -66,7 +68,7 @@ namespace DuetExpansion
 	// ISR for when the SX1509B on the DueX indicates that the state of an input has changed.
 	// Note, we must only wake up the DueX task if it is waiting on this specific interrupt.
 	// Otherwise we might wake it prematurely when it is waiting for an I2C transaction to be completed.
-	static void DueXIrq(CallbackParameter p)
+	static void DueXIrq(CallbackParameter p) noexcept
 	{
 		inputsChanged = true;
 		if (taskWaiting)
@@ -76,19 +78,20 @@ namespace DuetExpansion
 		}
 	}
 
-	extern "C" [[noreturn]] void DueXTask(void * pvParameters)
+	extern "C" [[noreturn]] void DueXTask(void * pvParameters) noexcept
 	{
 		for (;;)
 		{
 			inputsChanged = false;
 			dueXnInputBits = dueXnExpander.digitalReadAll();
+			++dueXnReadCount;
 
 			cpu_irq_disable();
 			if (!inputsChanged)
 			{
 				taskWaiting = true;
 				cpu_irq_enable();
-				TaskBase::Take();
+				(void)TaskBase::Take();
 			}
 			else
 			{
@@ -98,7 +101,7 @@ namespace DuetExpansion
 	}
 
 	// Identify which expansion board (if any) is attached and initialise it
-	ExpansionBoardType DueXnInit()
+	ExpansionBoardType DueXnInit() noexcept
 	{
 		I2C::Init();										// initialise I2C
 		delay(200);											// the SX1509B has an independent power on reset, so give it some time
@@ -142,7 +145,7 @@ namespace DuetExpansion
 
 	// Create the DueXn task and enable the associated interrupt from the DueXn.
 	// This must be called after interrupt priorities have been configured, to comply with FreeRTOS constraints.
-	void DueXnTaskInit()
+	void DueXnTaskInit() noexcept
 	{
 		if (dueXnBoardType != ExpansionBoardType::none)
 		{
@@ -158,7 +161,7 @@ namespace DuetExpansion
 	}
 
 	// Look for an additional output pin expander
-	void AdditionalOutputInit()
+	void AdditionalOutputInit() noexcept
 	{
 		I2C::Init();										// initialise I2C
 
@@ -181,7 +184,7 @@ namespace DuetExpansion
 	}
 
 	// Return the name of the expansion board, or nullptr if no expansion board
-	const char* _ecv_array null GetExpansionBoardName()
+	const char* _ecv_array null GetExpansionBoardName() noexcept
 	{
 		switch(dueXnBoardType)
 		{
@@ -197,13 +200,13 @@ namespace DuetExpansion
 	}
 
 	// Return the name of the additional expansion board, or nullptr if no expansion board
-	const char* _ecv_array null GetAdditionalExpansionBoardName()
+	const char* _ecv_array null GetAdditionalExpansionBoardName() noexcept
 	{
 		return (additionalIoExpanderPresent) ? "SX1509B expander" : nullptr;
 	}
 
 	// Set the I/O mode of a pin
-	void SetPinMode(Pin pin, PinMode mode)
+	void SetPinMode(Pin pin, PinMode mode) noexcept
 	{
 		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 		{
@@ -247,7 +250,7 @@ namespace DuetExpansion
 
 	// Read a pin
 	// We need to use the SX1509 interrupt to read the data register using interrupts, and just retrieve that value here.
-	bool DigitalRead(Pin pin)
+	bool DigitalRead(Pin pin) noexcept
 	{
 		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 		{
@@ -281,7 +284,7 @@ namespace DuetExpansion
 	}
 
 	// Write a pin
-	void DigitalWrite(Pin pin, bool high)
+	void DigitalWrite(Pin pin, bool high) noexcept
 	{
 		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 		{
@@ -300,7 +303,7 @@ namespace DuetExpansion
 	}
 
 	// Set the PWM value on this pin
-	void AnalogOut(Pin pin, float pwm)
+	void AnalogOut(Pin pin, float pwm) noexcept
 	{
 		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 		{
@@ -318,14 +321,26 @@ namespace DuetExpansion
 		}
 	}
 
-	// Print diagnostic data
-	// I2C error counts are now reported by Platform, so nothing to report here.
-	void Diagnostics(MessageType mtype)
+	// Print diagnostic data. I2C error counts are now reported by Platform.
+	void Diagnostics(MessageType mtype) noexcept
 	{
+		if (dueXnBoardType != ExpansionBoardType::none)
+		{
+			const uint32_t now = millis();
+			const uint32_t readCount = dueXnReadCount;
+			dueXnReadCount = 0;
+
+			reprap.GetPlatform().MessageF(mtype,
+											"=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min\n",
+											readCount,
+											(double)(((float)readCount * (SecondsToMillis * MinutesToSeconds))/(now - dueXnReadCountResetMillis))
+										 );
+			dueXnReadCountResetMillis = now;
+		}
 	}
 
 	// Diagnose the SX1509 by setting all pins as inputs and reading them
-	uint16_t DiagnosticRead()
+	uint16_t DiagnosticRead() noexcept
 	{
 		dueXnExpander.pinModeMultiple(AllStopBitsX5 | AllGpioBits | AllFanBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
 		delay(1);

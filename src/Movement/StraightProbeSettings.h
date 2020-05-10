@@ -12,8 +12,6 @@
 #define SRC_MOVEMENT_STRAIGHTPROBESETTINGS_H_
 
 #include "RepRapFirmware.h"
-#include "ObjectModel/ObjectModel.h"
-#include "Endstops/ZProbe.h"
 
 enum class StraightProbeType : uint8_t {
 	unset,
@@ -23,30 +21,27 @@ enum class StraightProbeType : uint8_t {
 	awayFromWorkpiece				 // probe away from workpiece, stop on loss of contact
 };
 
-class StraightProbeSettings INHERIT_OBJECT_MODEL
+class StraightProbeSettings
 {
 public:
-	StraightProbeSettings();
+	StraightProbeSettings() noexcept;
 
-	void Reset();
+	void Reset() noexcept;
 
-	void SetCoordsToTarget(float[MaxAxes]) const;
-	void SetTarget(const float[MaxAxes]);                            // Set target for G38 move
+	void SetCoordsToTarget(float[MaxAxes]) const noexcept;
+	void SetTarget(const float[MaxAxes]) noexcept;						// Set target for G38 move
 
-	const StraightProbeType GetType() const { return type; }
-	void SetStraightProbeType(const StraightProbeType t) { type = t; }
+	const StraightProbeType GetType() const noexcept { return type; }
+	void SetStraightProbeType(const StraightProbeType t) noexcept { type = t; }
 
-	const AxesBitmap GetMovingAxes() const { return movingAxes; }
-	void AddMovingAxis(const size_t);
+	const AxesBitmap GetMovingAxes() const noexcept { return movingAxes; }
+	void AddMovingAxis(const size_t) noexcept;
 
-	const size_t GetZProbeToUse() const { return probeToUse; }
-	void SetZProbeToUse(const size_t probeNumber) { probeToUse = probeNumber; }
+	const size_t GetZProbeToUse() const noexcept { return probeToUse; }
+	void SetZProbeToUse(const size_t probeNumber) noexcept { probeToUse = probeNumber; }
 
-	const bool ProbingAway() const;
-	const bool SignalError() const;
-
-protected:
-	DECLARE_OBJECT_MODEL
+	const bool ProbingAway() const noexcept;
+	const bool SignalError() const noexcept;
 
 private:
 	AxesBitmap movingAxes;                 // Axes supposed to move - this is only used for manual probing
@@ -55,16 +50,18 @@ private:
 	StraightProbeType type;                // Type of move
 };
 
-inline void StraightProbeSettings::AddMovingAxis(const size_t axis)
+inline void StraightProbeSettings::AddMovingAxis(const size_t axis) noexcept
 {
-	SetBit(movingAxes, axis);
+	movingAxes.SetBit(axis);
 }
 
-inline const bool StraightProbeSettings::ProbingAway() const {
+inline const bool StraightProbeSettings::ProbingAway() const noexcept
+{
 	return type == StraightProbeType::awayFromWorkpieceErrorOnFailure || type == StraightProbeType::awayFromWorkpiece;
 }
 
-inline const bool StraightProbeSettings::SignalError() const {
+inline const bool StraightProbeSettings::SignalError() const noexcept
+{
 	return type == StraightProbeType::awayFromWorkpieceErrorOnFailure || type == StraightProbeType::towardsWorkpieceErrorOnFailure;
 }
 

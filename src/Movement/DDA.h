@@ -64,17 +64,24 @@ public:
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
 	int32_t GetTimeLeft() const noexcept;
-	void InsertHiccup(uint32_t delayClocks) noexcept { afterPrepare.moveStartTime += delayClocks; }
+
+#if SUPPORT_CAN_EXPANSION
+	uint32_t InsertHiccup(uint32_t now) noexcept;
+#else
+	void InsertHiccup(uint32_t now) noexcept;
+#endif
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
 	bool FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]) noexcept;
-    void SetPositions(const float move[], size_t numDrives) noexcept;				// Force the endpoints to be these
-    FilePosition GetFilePosition() const noexcept { return filePos; }
-    float GetRequestedSpeed() const noexcept { return requestedSpeed; }
-    float GetTopSpeed() const noexcept { return topSpeed; }
-    float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
+	void SetPositions(const float move[], size_t numDrives) noexcept;				// Force the endpoints to be these
+	FilePosition GetFilePosition() const noexcept { return filePos; }
+	float GetRequestedSpeed() const noexcept { return requestedSpeed; }
+	float GetTopSpeed() const noexcept { return topSpeed; }
+	float GetAcceleration() const noexcept { return acceleration; }
+	float GetDeceleration() const noexcept { return deceleration; }
+	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
 	const Tool *GetTool() const noexcept { return tool; }
 	float GetTotalDistance() const noexcept { return totalDistance; }
@@ -265,7 +272,7 @@ private:
 			int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
 
 #if SUPPORT_CAN_EXPANSION
-			uint32_t drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
+			DriversBitmap drivesMoving;			// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
 			static_assert(MaxAxesPlusExtruders <= sizeof(drivesMoving) * CHAR_BIT);
 #endif
 		} afterPrepare;
@@ -333,6 +340,28 @@ inline bool DDA::ScheduleNextStepInterrupt(StepTimer& timer) const noexcept
 	}
 	return false;
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Insert a hiccup, returning the amount of time inserted
+inline uint32_t DDA::InsertHiccup(uint32_t now) noexcept
+{
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
+	const uint32_t oldStartTime = afterPrepare.moveStartTime;
+	afterPrepare.moveStartTime = now + DDA::HiccupTime - ticksDueAfterStart;
+	return afterPrepare.moveStartTime - oldStartTime;
+}
+
+#else
+
+// Insert a hiccup
+inline void DDA::InsertHiccup(uint32_t now) noexcept
+{
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
+	afterPrepare.moveStartTime = now + DDA::HiccupTime - ticksDueAfterStart;
+}
+
+#endif
 
 #if HAS_SMART_DRIVERS
 

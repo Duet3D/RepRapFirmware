@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include "ObjectModel/ObjectModel.h"
 
 #if SUPPORT_SCANNER
 
@@ -39,45 +40,48 @@ enum class ScannerState
 	Uploading			// uploading a binary file
 };
 
-class Scanner
+class Scanner INHERIT_OBJECT_MODEL
 {
 public:
 	friend class GCodes;
 
-	Scanner(Platform& p) : platform(p) { }
-	void Init();
-	void Exit();
-	void Spin();
+	Scanner(Platform& p) noexcept : platform(p) { }
+	void Init() noexcept;
+	void Exit() noexcept;
+	void Spin() noexcept;
 
-	bool IsEnabled() const { return enabled; }			// Is the usage of a 3D scanner enabled?
-	bool Enable();										// Enable 3D scanner extension. Returns true when done
+	bool IsEnabled() const noexcept { return enabled; }			// Is the usage of a 3D scanner enabled?
+	bool Enable() noexcept;										// Enable 3D scanner extension. Returns true when done
 
-	bool IsRegistered() const;							// Is the 3D scanner registered and ready to use?
-	void Register();									// Register a 3D scanner instance
+	bool IsRegistered() const noexcept;							// Is the 3D scanner registered and ready to use?
+	void Register() noexcept;									// Register a 3D scanner instance
 	// External scanners are automatically unregistered when the main port (USB) is closed
 
 	// Start a new 3D scan. Returns true when the scan has been initiated
-	bool StartScan(const char *filename, int param, int resolution, int mode);
+	bool StartScan(const char *filename, int param, int resolution, int mode) noexcept;
 
-	bool Cancel();										// Cancel current 3D scanner action. Returns true when done
-	bool Calibrate(int mode);							// Calibrate the 3D scanner. Returns true when done
-	bool SetAlignment(bool on);							// Send ALIGN ON/OFF to the 3D scanner. Returns true when done
-	bool Shutdown();									// Send SHUTDOWN to the scanner and unregisters it
+	bool Cancel() noexcept;										// Cancel current 3D scanner action. Returns true when done
+	bool Calibrate(int mode) noexcept;							// Calibrate the 3D scanner. Returns true when done
+	bool SetAlignment(bool on) noexcept;						// Send ALIGN ON/OFF to the 3D scanner. Returns true when done
+	bool Shutdown() noexcept;									// Send SHUTDOWN to the scanner and unregisters it
 
-	bool DoingGCodes() const { return doingGCodes; }	// Has the scanner run any G-codes since the last state transition?
-	const char GetStatusCharacter() const;				// Returns the status char for the status response
-	float GetProgress() const;							// Returns the progress of the current action
+	bool DoingGCodes() const noexcept { return doingGCodes; }	// Has the scanner run any G-codes since the last state transition?
+	const char GetStatusCharacter() const noexcept;				// Returns the status char for the status response
+	float GetProgress() const noexcept;							// Returns the progress of the current action
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	GCodeBuffer *serialGCode;
 
-	void SetGCodeBuffer(GCodeBuffer *gb);
+	void SetGCodeBuffer(GCodeBuffer *gb) noexcept;
 
-	void SetState(const ScannerState s);
-	void ProcessCommand();
+	void SetState(const ScannerState s) noexcept;
+	void ProcessCommand() noexcept;
 
-	bool IsDoingFileMacro() const;
-	void DoFileMacro(const char *filename);
+	bool IsDoingFileMacro() const noexcept;
+	void DoFileMacro(const char *filename) noexcept;
 
 	Platform& platform;
 
@@ -100,8 +104,8 @@ private:
 	FileStore *fileBeingUploaded;
 };
 
-inline bool Scanner::IsRegistered() const { return (state != ScannerState::Disconnected); }
-inline void Scanner::SetGCodeBuffer(GCodeBuffer *gb) { serialGCode = gb; }
+inline bool Scanner::IsRegistered() const noexcept { return (state != ScannerState::Disconnected); }
+inline void Scanner::SetGCodeBuffer(GCodeBuffer *gb) noexcept { serialGCode = gb; }
 
 #endif
 

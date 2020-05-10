@@ -20,11 +20,13 @@ enum MessageType : uint32_t
 	FileMessage = 0x04,					// A message that is to be sent to a file processor
 	UsbMessage = 0x08,					// A message that is to be sent in non-blocking mode to the host via USB
 	AuxMessage  = 0x10,					// A message that is to be sent to an auxiliary device (PanelDue)
-	DaemonMessage = 0x20,				// A message that is to be sent to a daemon processor
+	TriggerMessage = 0x20,				// A message that is to be sent to a trigger processor
 	CodeQueueMessage = 0x40,			// A message that is to be sent to the code queue channel
 	LcdMessage = 0x80,					// A message that is to be sent to the panel
-	SpiMessage = 0x100,					// A message that is to be sent to the SPI master
-	AutoPauseMessage = 0x200,			// A message that is to be sent to an auto-pause processor
+	SbcMessage = 0x100,					// A message that is to be sent to the SBC
+	DaemonMessage = 0x200,				// A message that is sent to the daemon processor
+	Aux2Message = 0x400,				// A message that is to be sent to the second aux device
+	AutoPauseMessage = 0x800,			// A message that is to be sent to an auto-pause processor
 
 	// Special destinations (byte 3)
     BlockingUsbMessage = 0x10000,		// A message that is to be sent to USB in blocking mode
@@ -55,6 +57,11 @@ enum MessageType : uint32_t
 inline MessageType AddError(MessageType mt)
 {
 	return (MessageType)(mt | ErrorMessageFlag | LogMessage);
+}
+
+inline MessageType AddWarning(MessageType mt)
+{
+	return (MessageType)(mt | WarningMessageFlag | LogMessage);
 }
 
 #endif /* MESSAGETYPE_H_ */

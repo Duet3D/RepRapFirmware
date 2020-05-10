@@ -67,17 +67,16 @@ ThermocoupleSensor31855::ThermocoupleSensor31855(unsigned int sensorNum) noexcep
 }
 
 // Configure this temperature sensor
-GCodeResult ThermocoupleSensor31855::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult ThermocoupleSensor31855::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	if (!ConfigurePort(gb, reply, seen))
+	if (!ConfigurePort(gb, reply, changed))
 	{
 		return GCodeResult::error;
 	}
 
-	TryConfigureSensorName(gb, seen);
+	TryConfigureSensorName(gb, changed);
 
-	if (seen)
+	if (changed)
 	{
 		// Initialise the sensor
 		InitSpi();

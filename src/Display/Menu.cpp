@@ -81,7 +81,7 @@
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
 const uint32_t ErrorTimeout = 6000;				// how long we display an error message for
 
-Menu::Menu(Lcd7920& refLcd)
+Menu::Menu(Lcd7920& refLcd) noexcept
 	: lcd(refLcd),
 	  timeoutValue(0), lastActionTime(0),
 	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0),
@@ -90,7 +90,7 @@ Menu::Menu(Lcd7920& refLcd)
 {
 }
 
-void Menu::Load(const char* filename)
+void Menu::Load(const char* filename) noexcept
 {
 	if (numNestedMenus < MaxMenuNesting)
 	{
@@ -101,7 +101,7 @@ void Menu::Load(const char* filename)
 	}
 }
 
-void Menu::LoadFixedMenu()
+void Menu::LoadFixedMenu() noexcept
 {
 	displayingFixedMenu = true;
 	numNestedMenus = 0;
@@ -139,7 +139,7 @@ void Menu::LoadFixedMenu()
 }
 
 // Display a M291 message box
-void Menu::DisplayMessageBox(const MessageBox& mbox)
+void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 {
 	ResetCache();
 	displayingMessageBox = true;
@@ -170,15 +170,15 @@ void Menu::DisplayMessageBox(const MessageBox& mbox)
 	// Add whichever XYZ jog buttons we have been asked to display - assume only XYZ for now
 	const PixelNumber axisButtonWidth = availableWidth/4;
 	const PixelNumber axisButtonStep = (availableWidth - 3 *axisButtonWidth)/2 + axisButtonWidth;
-	if (IsBitSet(mbox.controls, X_AXIS))
+	if (mbox.controls.IsBitSet(X_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 510, 1), true);
 	}
-	if (IsBitSet(mbox.controls, Y_AXIS))
+	if (mbox.controls.IsBitSet(Y_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 511, 1), true);
 	}
-	if (IsBitSet(mbox.controls, Z_AXIS))
+	if (mbox.controls.IsBitSet(Z_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 512, 2), true);
 	}
@@ -195,13 +195,13 @@ void Menu::DisplayMessageBox(const MessageBox& mbox)
 }
 
 // Clear the message box and display the menu underneath it
-void Menu::ClearMessageBox()
+void Menu::ClearMessageBox() noexcept
 {
 	displayingMessageBox = false;
 	Reload();
 }
 
-void Menu::Pop()
+void Menu::Pop() noexcept
 {
 	// currentMargin = 0;
 	lcd.Clear();
@@ -210,7 +210,7 @@ void Menu::Pop()
 	Reload();
 }
 
-void Menu::LoadError(const char *msg, unsigned int line)
+void Menu::LoadError(const char *msg, unsigned int line) noexcept
 {
 	// Remove selectable items that may obscure view of the error message
 	ResetCache();
@@ -239,7 +239,7 @@ void Menu::LoadError(const char *msg, unsigned int line)
 
 // Parse a line in a menu layout file returning any error message, or nullptr if there was no error.
 // Leading whitespace has already been skipped.
-const char *Menu::ParseMenuLine(char * const commandWord)
+const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 {
 	errorColumn = 0;
 
@@ -288,35 +288,35 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 			break;
 
 		case 'R':
-			row = SafeStrtoul(args, &args);
+			row = StrToU32(args, &args);
 			break;
 
 		case 'C':
-			column = SafeStrtoul(args, &args);
+			column = StrToU32(args, &args);
 			break;
 
 		case 'F':
-			fontNumber = min<unsigned int>(SafeStrtoul(args, &args), lcd.GetNumFonts() - 1);
+			fontNumber = min<unsigned int>(StrToU32(args, &args), lcd.GetNumFonts() - 1);
 			break;
 
 		case 'V':
-			xVis = SafeStrtoul(args, &args);
+			xVis = StrToU32(args, &args);
 			break;
 
 		case 'D':
-			decimals = SafeStrtoul(args, &args);
+			decimals = StrToU32(args, &args);
 			break;
 
 		case 'N':
-			nparam = SafeStrtoul(args, &args);
+			nparam = StrToU32(args, &args);
 			break;
 
 		case 'W':
-			width = SafeStrtoul(args, &args);
+			width = StrToU32(args, &args);
 			break;
 
 		case 'H':
-			alignment = SafeStrtoul(args, &args);
+			alignment = StrToU32(args, &args);
 			break;
 
 		case '"':			// a string with no letter is a T argument
@@ -406,7 +406,7 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 	return nullptr;
 }
 
-void Menu::ResetCache()
+void Menu::ResetCache() noexcept
 {
 	highlightedItem = nullptr;
 
@@ -425,7 +425,7 @@ void Menu::ResetCache()
 	}
 }
 
-void Menu::Reload()
+void Menu::Reload() noexcept
 {
 	displayingFixedMenu = false;
 	if (numNestedMenus == 1)
@@ -492,14 +492,14 @@ void Menu::Reload()
 	}
 }
 
-void Menu::AddItem(MenuItem *item, bool isSelectable)
+void Menu::AddItem(MenuItem *item, bool isSelectable) noexcept
 {
 	item->UpdateWidthAndHeight(lcd);
 	MenuItem::AppendToList((isSelectable) ? &selectableItems : &unSelectableItems, item);
 }
 
 // Append a string to the string buffer and return its index
-const char *Menu::AppendString(const char *s)
+const char *Menu::AppendString(const char *s) noexcept
 {
 	// TODO: hold a fixed reference to '\0' -- if any strings passed in are empty, return this reference
 	const size_t oldIndex = commandBufferIndex;
@@ -512,7 +512,7 @@ const char *Menu::AppendString(const char *s)
 }
 
 // TODO: there is no error handling if a command within a sequence cannot be accepted...
-void Menu::EncoderAction_ExecuteHelper(const char *const cmd)
+void Menu::EncoderAction_ExecuteHelper(const char *const cmd) noexcept
 {
 	if (StringEqualsIgnoreCase(cmd, "return"))
 	{
@@ -532,7 +532,7 @@ void Menu::EncoderAction_ExecuteHelper(const char *const cmd)
 	}
 }
 
-void Menu::EncoderActionEnterItemHelper()
+void Menu::EncoderActionEnterItemHelper() noexcept
 {
 	if (highlightedItem != nullptr && highlightedItem->IsVisible())
 	{
@@ -540,13 +540,12 @@ void Menu::EncoderActionEnterItemHelper()
 		if (highlightedItem->Select(command.GetRef()))
 		{
 			char *pcCurrentCommand = command.GetRef().Pointer();
-			int nNextCommandIndex = StringContains(pcCurrentCommand, "|");
-			while (-1 != nNextCommandIndex)
+			char *pcNextCommand;
+			while ((pcNextCommand = strchr(pcCurrentCommand, '|')) != nullptr)
 			{
-				*(pcCurrentCommand + nNextCommandIndex) = '\0';
+				*pcNextCommand = '\0';
 				EncoderAction_ExecuteHelper(pcCurrentCommand);
-				pcCurrentCommand += nNextCommandIndex + 1;
-				nNextCommandIndex = StringContains(pcCurrentCommand, "|");
+				pcCurrentCommand = pcNextCommand + 1;
 			}
 			EncoderAction_ExecuteHelper(pcCurrentCommand);
 		}
@@ -557,7 +556,7 @@ void Menu::EncoderActionEnterItemHelper()
 	}
 }
 
-void Menu::EncoderActionScrollItemHelper(int action)
+void Menu::EncoderActionScrollItemHelper(int action) noexcept
 {
 	// Based mainly on file listing requiring we handle list of unknown length
 	// before moving on to the next selectable item at the Menu level, we let the
@@ -602,7 +601,7 @@ void Menu::EncoderActionScrollItemHelper(int action)
 // Perform the specified encoder action
 // If 'action' is zero then the button was pressed, else 'action' is the number of clicks (+ve for clockwise)
 // EncoderAction is what's called in response to all wheel/button actions; a convenient place to set new timeout values
-void Menu::EncoderAction(int action)
+void Menu::EncoderAction(int action) noexcept
 {
 	if (displayingErrorMessage)
 	{
@@ -646,7 +645,7 @@ void Menu::EncoderAction(int action)
 	}
 }
 
-/*static*/ const char *Menu::SkipWhitespace(const char *s)
+/*static*/ const char *Menu::SkipWhitespace(const char *s) noexcept
 {
 	while (*s == ' ' || *s == '\t')
 	{
@@ -655,7 +654,7 @@ void Menu::EncoderAction(int action)
 	return s;
 }
 
-/*static*/ char *Menu::SkipWhitespace(char *s)
+/*static*/ char *Menu::SkipWhitespace(char *s) noexcept
 {
 	while (*s == ' ' || *s == '\t')
 	{
@@ -665,7 +664,7 @@ void Menu::EncoderAction(int action)
 }
 
 // Refresh is called every Spin() of the Display under most circumstances; an appropriate place to check if timeout action needs to be taken
-void Menu::Refresh()
+void Menu::Refresh() noexcept
 {
 	if (!MassStorage::IsDriveMounted(0))
 	{
@@ -685,7 +684,7 @@ void Menu::Refresh()
 	DrawAll();
 }
 
-void Menu::DrawAll()
+void Menu::DrawAll() noexcept
 {
 	// First erase any displayed items that should now be invisible
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
@@ -712,7 +711,7 @@ void Menu::DrawAll()
 }
 
 // Clear any highlighting. Call Refresh() after calling this to clear it on the display.
-void Menu::ClearHighlighting()
+void Menu::ClearHighlighting() noexcept
 {
 	highlightedItem = nullptr;
 	itemIsSelected = false;
@@ -720,7 +719,7 @@ void Menu::ClearHighlighting()
 
 // Move the highlighted item forwards or backwards through the selectable items, setting it to nullptr if nothing is selectable
 // On entry, n is nonzero
-void Menu::AdvanceHighlightedItem(int n)
+void Menu::AdvanceHighlightedItem(int n) noexcept
 {
 	if (highlightedItem == nullptr)
 	{
@@ -757,7 +756,7 @@ void Menu::AdvanceHighlightedItem(int n)
 
 // Find the next selectable item, or the first one if nullptr is passed in
 // Note, there may be no selectable items, or there may be just one
-MenuItem *Menu::FindNextSelectableItem(MenuItem *p) const
+MenuItem *Menu::FindNextSelectableItem(MenuItem *p) const noexcept
 {
 	if (selectableItems == nullptr)
 	{
@@ -783,7 +782,7 @@ MenuItem *Menu::FindNextSelectableItem(MenuItem *p) const
 
 // Find the previous selectable item, or the last one if nullptr is passed in
 // Note, there may be no selectable items, and the one we pass in may not be selectable
-MenuItem *Menu::FindPrevSelectableItem(MenuItem *p) const
+MenuItem *Menu::FindPrevSelectableItem(MenuItem *p) const noexcept
 {
 	if (selectableItems == nullptr)
 	{

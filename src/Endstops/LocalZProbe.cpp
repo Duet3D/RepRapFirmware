@@ -12,13 +12,13 @@
 #include "Platform.h"
 
 // Members of class LocalZProbe
-LocalZProbe::~LocalZProbe()
+LocalZProbe::~LocalZProbe() noexcept
 {
 	inputPort.Release();
 	modulationPort.Release();
 }
 
-GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen)
+GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen) THROWS(GCodeException)
 {
 	// We must get and set the Z probe type first before setting the dive height etc. because different probe types need different port settings
 	if (gb.Seen('P'))
@@ -74,7 +74,7 @@ GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool
 
 #if ALLOCATE_DEFAULT_PORTS
 
-bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
+bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply) noexcept
 {
 	IoPort* const ports[] = { &inputPort, &modulationPort };
 	const PinAccess access[] = { PinAccess::read, PinAccess::write0 };
@@ -84,7 +84,7 @@ bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
 #endif
 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
-uint16_t LocalZProbe::GetRawReading() const
+uint16_t LocalZProbe::GetRawReading() const noexcept
 {
 	constexpr uint16_t MaxReading = 1000;
 	switch (type)
@@ -104,7 +104,7 @@ uint16_t LocalZProbe::GetRawReading() const
 	}
 }
 
-void LocalZProbe::SetProbing(bool isProbing) const
+void LocalZProbe::SetProbing(bool isProbing) noexcept
 {
 	// For Z probe types other than 1/2/3 and bltouch we set the modulation pin high at the start of a probing move and low at the end
 	// Don't do this for bltouch because on the Maestro, the MOD pin is normally used as the servo control output
@@ -114,7 +114,7 @@ void LocalZProbe::SetProbing(bool isProbing) const
 	}
 }
 
-GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) const
+GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 {
 	if (type != ZProbeType::zMotorStall && type != ZProbeType::none)
 	{
@@ -128,13 +128,13 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) const
 
 // Z probe programming functions
 
-/*static*/ bool LocalZProbe::TimerInterrupt(CallbackParameter param, StepTimer::Ticks& when)
+/*static*/ void LocalZProbe::TimerInterrupt(CallbackParameter param) noexcept
 {
-	return static_cast<LocalZProbe*>(param.vp)->Interrupt(when);
+	static_cast<LocalZProbe*>(param.vp)->Interrupt();
 }
 
 // Kick off sending some program bytes
-GCodeResult LocalZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply)
+GCodeResult LocalZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept
 {
 	timer.CancelCallback();										// make quite certain that this timer isn't already pending
 
@@ -156,61 +156,63 @@ GCodeResult LocalZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len,
 	return GCodeResult::ok;
 }
 
-bool LocalZProbe::Interrupt(uint32_t& when)
+void LocalZProbe::Interrupt() noexcept
 {
-	// The data format is:
-	// [0 0 1 0 b7 b6 b5 b4 /b4 b3 b2 b1 b0 /b0] repeated for each byte, where /b4 = inverse of b4, /b0 = inverse of b0
-	// After the last byte the line returns to 0
-	bool nextBit;
-	switch(bitsSent++)
+	if (timer.ScheduleCallbackFromIsr())
 	{
-	case 0:		// We sent 00, now send 1
-		nextBit = true;
-		break;
+		// The data format is:
+		// [0 0 1 0 b7 b6 b5 b4 /b4 b3 b2 b1 b0 /b0] repeated for each byte, where /b4 = inverse of b4, /b0 = inverse of b0
+		// After the last byte the line returns to 0
+		bool nextBit;
+		switch(bitsSent++)
+		{
+		case 0:		// We sent 00, now send 1
+			nextBit = true;
+			break;
 
-	case 1:	// We sent 001, now send 0
-	default:
-		nextBit = false;
-		break;
+		case 1:	// We sent 001, now send 0
+		default:
+			nextBit = false;
+			break;
 
-	case 2:
-	case 3:
-	case 4:
-	case 5:
-		nextBit = (((progBytes[bytesSent] >> (10 - bitsSent)) & 1) != 0);
-		break;
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+			nextBit = (((progBytes[bytesSent] >> (10 - bitsSent)) & 1) != 0);
+			break;
 
-	case 6:
-		nextBit = (((progBytes[bytesSent] >> 4) & 1) == 0);
-		break;
+		case 6:
+			nextBit = (((progBytes[bytesSent] >> 4) & 1) == 0);
+			break;
 
-	case 7:
-	case 8:
-	case 9:
-	case 10:
-		nextBit = (((progBytes[bytesSent] >> (11 - bitsSent)) & 1) != 0);
-		break;
+		case 7:
+		case 8:
+		case 9:
+		case 10:
+			nextBit = (((progBytes[bytesSent] >> (11 - bitsSent)) & 1) != 0);
+			break;
 
-	case 11:
-		nextBit = ((progBytes[bytesSent] & 1) == 0);
-		break;
+		case 11:
+			nextBit = ((progBytes[bytesSent] & 1) == 0);
+			break;
 
-	case 12:		// We sent 0010 + 10 data bits, now send 0
-		nextBit = false;
-		bitsSent = 0;
-		++bytesSent;
-		break;
+		case 12:		// We sent 0010 + 10 data bits, now send 0
+			nextBit = false;
+			bitsSent = 0;
+			++bytesSent;
+			break;
+		}
+
+		modulationPort.WriteDigital(nextBit);
+		if (bytesSent < numBytes)
+		{
+			timer.ScheduleCallbackFromIsr(startTime + ((bytesSent * 14) + bitsSent + 2) * bitTime);
+			return;
+		}
+
+		bytesSent = numBytes = 0;
 	}
-
-	modulationPort.WriteDigital(nextBit);
-	if (bytesSent < numBytes)
-	{
-		when = startTime + ((bytesSent * 14) + bitsSent + 2) * bitTime;
-		return true;
-	}
-
-	bytesSent = numBytes = 0;
-	return false;
 }
 
 // End

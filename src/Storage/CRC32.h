@@ -9,14 +9,14 @@ private:
 	uint32_t crc;
 
 public:
-	CRC32();
-	void Update(char c);
-	void Update(const char *c, size_t len);
-	void Reset();
-	uint32_t Get() const;
+	CRC32() noexcept;
+	void Update(char c) noexcept;
+	void Update(const char *c, size_t len) noexcept;
+	void Reset() noexcept;
+	uint32_t Get() const noexcept;
 };
 
-inline uint32_t CRC32::Get() const
+inline uint32_t CRC32::Get() const noexcept
 {
 	return ~crc;
 }

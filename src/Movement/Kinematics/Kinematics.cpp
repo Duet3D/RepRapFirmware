@@ -13,6 +13,7 @@
 #include "ScaraKinematics.h"
 #include "HangprinterKinematics.h"
 #include "PolarKinematics.h"
+#include "FiveBarScaraKinematics.h"
 
 #include "RepRap.h"
 #include "Platform.h"
@@ -22,14 +23,14 @@
 const char * const Kinematics::HomeAllFileName = "homeall.g";
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
-Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0)
+Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0) noexcept
 	: segmentsPerSecond(segsPerSecond), minSegmentLength(minSegLength), useSegmentation(segsPerSecond > 0.0), useRawG0(doUseRawG0), type(t)
 {
 }
 
 // Set or report the parameters from a M665, M666 or M669 command
 // This is the fallback function for when the derived class doesn't use the specified M-code
-bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException)
 {
 	if (mCode == 669)
 	{
@@ -48,7 +49,7 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef&
 
 // Return true if the specified XY position is reachable by the print head reference point.
 // This default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 command.
-bool Kinematics::IsReachable(float x, float y, bool isCoordinated) const
+bool Kinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
 {
 	const Platform& platform = reprap.GetPlatform();
 	return x >= platform.AxisMinimum(X_AXIS) && y >= platform.AxisMinimum(Y_AXIS) && x <= platform.AxisMaximum(X_AXIS) && y <= platform.AxisMaximum(Y_AXIS);
@@ -56,20 +57,21 @@ bool Kinematics::IsReachable(float x, float y, bool isCoordinated) const
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 // This default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-LimitPositionResult Kinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult Kinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+												size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	return (applyM208Limits && LimitPositionFromAxis(finalCoords, 0, numVisibleAxes, axesHomed)) ? LimitPositionResult::adjusted : LimitPositionResult::ok;
 }
 
 // Apply the M208 limits to the Cartesian position that the user wants to move to for all axes from the specified one upwards
 // Return true if any coordinates were changed
-bool Kinematics::LimitPositionFromAxis(float coords[], size_t firstAxis, size_t numVisibleAxes, AxesBitmap axesHomed) const
+bool Kinematics::LimitPositionFromAxis(float coords[], size_t firstAxis, size_t numVisibleAxes, AxesBitmap axesHomed) const noexcept
 {
 	const Platform& platform = reprap.GetPlatform();
 	bool limited = false;
 	for (size_t axis = firstAxis; axis < numVisibleAxes; axis++)
 	{
-		if (IsBitSet(axesHomed, axis))
+		if (axesHomed.IsBitSet(axis))
 		{
 			float& f = coords[axis];
 			// When homing a printer we convert the M208 axis limit to motor positions, then back again to get the user position.
@@ -92,7 +94,7 @@ bool Kinematics::LimitPositionFromAxis(float coords[], size_t firstAxis, size_t 
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
 // This default is suitable for Cartesian and CoreXY printers.
-void Kinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
+void Kinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept
 {
 	for (size_t i = 0; i < numAxes; ++i)
 	{
@@ -104,28 +106,28 @@ void Kinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) co
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
 // This default is suitable for most kinematics.
-AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
+AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept
 {
-	const AxesBitmap allAxes = LowestNBits<AxesBitmap>(numVisibleAxes);
+	const AxesBitmap allAxes = AxesBitmap::MakeLowestNBits(numVisibleAxes);
 	if ((toBeHomed & allAxes) == allAxes)
 	{
 		filename.copy(HomeAllFileName);
-		return 0;
+		return AxesBitmap();
 	}
 
 	// If Z homing is done using a Z probe then X and Y must be homed before Z
-	const bool homeZLast = (IsBitSet(toBeHomed, Z_AXIS) && reprap.GetPlatform().GetEndstops().HomingZWithProbe());
+	const bool homeZLast = (toBeHomed.IsBitSet(Z_AXIS) && reprap.GetPlatform().GetEndstops().HomingZWithProbe());
 	const AxesBitmap homeFirst = AxesToHomeBeforeProbing();
 
 	// Return the homing file for the lowest axis that we have been asked to home
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		if (IsBitSet(toBeHomed, axis) && (axis != Z_AXIS || !homeZLast || (alreadyHomed & homeFirst) == homeFirst))
+		if (toBeHomed.IsBitSet(axis) && (axis != Z_AXIS || !homeZLast || (alreadyHomed & homeFirst) == homeFirst))
 		{
 			filename.copy("home");
 			filename.cat(tolower(reprap.GetGCodes().GetAxisLetters()[axis]));
 			filename.cat(".g");
-			return 0;
+			return AxesBitmap();
 		}
 	}
 
@@ -135,12 +137,12 @@ AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alread
 
 // Return a bitmap of the motors that affect this axis or tower. Used for implementing stall detection endstops and energising additional motors.
 // Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
-AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const
+AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const noexcept
 {
-	return MakeBitmap<AxesBitmap>(axis);
+	return AxesBitmap::MakeFromBits(axis);
 }
 
-/*static*/ Kinematics *Kinematics::Create(KinematicsType k)
+/*static*/ Kinematics *Kinematics::Create(KinematicsType k) noexcept
 {
 	switch (k)
 	{
@@ -165,10 +167,12 @@ AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const
 		return new PolarKinematics();
 	case KinematicsType::rotaryDelta:
 		return new RotaryDeltaKinematics();
+	case KinematicsType::fiveBarScara:
+		return new FiveBarScaraKinematics();
 	}
 }
 
-/*static*/ void Kinematics::PrintMatrix(const char* s, const MathMatrix<float>& m, size_t maxRows, size_t maxCols)
+/*static*/ void Kinematics::PrintMatrix(const char* s, const MathMatrix<float>& m, size_t maxRows, size_t maxCols) noexcept
 {
 	debugPrintf("%s\n", s);
 	if (maxRows == 0)
@@ -189,7 +193,7 @@ AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const
 	}
 }
 
-/*static*/ void Kinematics::PrintMatrix(const char* s, const MathMatrix<double>& m, size_t maxRows, size_t maxCols)
+/*static*/ void Kinematics::PrintMatrix(const char* s, const MathMatrix<double>& m, size_t maxRows, size_t maxCols) noexcept
 {
 	debugPrintf("%s\n", s);
 	if (maxRows == 0)
@@ -210,7 +214,7 @@ AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const
 	}
 }
 
-/*static*/ void Kinematics::PrintVector(const char *s, const float *v, size_t numElems)
+/*static*/ void Kinematics::PrintVector(const char *s, const float *v, size_t numElems) noexcept
 {
 	debugPrintf("%s:", s);
 	for (size_t i = 0; i < numElems; ++i)
@@ -220,7 +224,7 @@ AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const
 	debugPrintf("\n");
 }
 
-/*static*/ void Kinematics::PrintVector(const char *s, const double *v, size_t numElems)
+/*static*/ void Kinematics::PrintVector(const char *s, const double *v, size_t numElems) noexcept
 {
 	debugPrintf("%s:", s);
 	for (size_t i = 0; i < numElems; ++i)

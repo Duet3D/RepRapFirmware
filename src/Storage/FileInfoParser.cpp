@@ -12,32 +12,16 @@
 #include "PrintMonitor.h"
 #include "GCodes/GCodes.h"
 
-void GCodeFileInfo::Init()
-{
-	isValid = false;
-	incomplete = true;
-	firstLayerHeight = 0.0;
-	objectHeight = 0.0;
-	layerHeight = 0.0;
-	printTime = simulatedTime = 0;
-	numFilaments = 0;
-	generatedBy.Clear();
-	for (size_t extr = 0; extr < MaxExtruders; extr++)
-	{
-		filamentNeeded[extr] = 0.0;
-	}
-}
-
 #if HAS_MASS_STORAGE
 
-FileInfoParser::FileInfoParser()
+FileInfoParser::FileInfoParser() noexcept
 	: parseState(notParsing), fileBeingParsed(nullptr), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0), fileOverlapLength(0)
 {
 	parsedFileInfo.Init();
 	parserMutex.Create("FileInfoParser");
 }
 
-bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly)
+bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
 	if (!lock)
@@ -367,7 +351,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 }
 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
-bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len)
+bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len) noexcept
 {
 	if (len < 4)
 	{
@@ -435,7 +419,7 @@ bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len)
 // This parsing algorithm needs to be fast. The old one sometimes took 5 seconds or more to parse about 120K of data.
 // To speed up parsing, we now parse forwards from the start of the buffer. This means we can't stop when we have found a G1 Z command,
 // we have to look for a later G1 Z command in the buffer. But it is faster in the (common) case that we don't find a match in the buffer at all.
-bool FileInfoParser::FindHeight(const char* buf, size_t len)
+bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 {
 	bool foundHeight = false;
 	bool inRelativeMode = false;
@@ -503,8 +487,12 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len)
 							}
 							else
 							{
-								parsedFileInfo.objectHeight = SafeStrtof(zpos, nullptr);
-								foundHeight = true;
+								float objectHeight = SafeStrtof(zpos, nullptr);
+								if (!isnan(objectHeight) && !isinf(objectHeight))
+								{
+									parsedFileInfo.objectHeight = objectHeight;
+									foundHeight = true;
+								}
 							}
 							break;		// carry on looking for a later G1 Z command
 						}
@@ -528,8 +516,12 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len)
 			static const char kisslicerHeightString[] = " END_LAYER_OBJECT z=";
 			if (len > 31 && StringStartsWithIgnoreCase(buf, kisslicerHeightString))
 			{
-				parsedFileInfo.objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
-				return true;
+				float objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
+				if (!isnan(objectHeight) && !isinf(objectHeight))
+				{
+					parsedFileInfo.objectHeight = objectHeight;
+					return true;
+				}
 			}
 		}
 	}
@@ -537,7 +529,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len)
 }
 
 // Scan the buffer for the layer height. The buffer is null-terminated.
-bool FileInfoParser::FindLayerHeight(const char *buf, size_t len)
+bool FileInfoParser::FindLayerHeight(const char *buf, size_t len) noexcept
 {
 	static const char* const layerHeightStrings[] =
 	{
@@ -572,7 +564,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len)
 					}
 					const char *tailPtr;
 					const float val = SafeStrtof(pos, &tailPtr);
-					if (tailPtr != pos)								// if we found and converted a number
+					if (tailPtr != pos && !isnan(val) && !isinf(val))	// if we found and converted a number
 					{
 						parsedFileInfo.layerHeight = val;
 						return true;
@@ -585,7 +577,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len)
 	return false;
 }
 
-bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len)
+bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len) noexcept
 {
 	static const char * const GeneratedByStrings[] =
 	{
@@ -639,7 +631,7 @@ bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len)
 
 // Scan the buffer for the filament used. The buffer is null-terminated.
 // Returns the number of filaments found.
-unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
+unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexcept
 {
 	unsigned int filamentsFound = 0;
 	const size_t maxFilaments = reprap.GetGCodes().GetNumExtruders();
@@ -657,21 +649,25 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
 		while (isDigit(*p))
 		{
 			const char* q;
-			parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, &q);
+			float filamentLength = SafeStrtof(p, &q);
 			p = q;
-			if (*p == 'm')
+			if (!isnan(filamentLength) && !isinf(filamentLength))
 			{
-				++p;
+				parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 				if (*p == 'm')
 				{
 					++p;
+					if (*p == 'm')
+					{
+						++p;
+					}
+					else
+					{
+						parsedFileInfo.filamentNeeded[filamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
+					}
 				}
-				else
-				{
-					parsedFileInfo.filamentNeeded[filamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
-				}
+				++filamentsFound;
 			}
-			++filamentsFound;
 			while (strchr(", \t", *p) != nullptr)
 			{
 				++p;
@@ -686,7 +682,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
 	{
 		p += strlen(filamentUsedStr2);
 		const char *q;
-		unsigned long num = SafeStrtoul(p, &q);
+		uint32_t num = StrToU32(p, &q);
 		if (q != p && num < maxFilaments)
 		{
 			p = q;
@@ -696,8 +692,12 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
 			}
 			if (isDigit(*p))
 			{
-				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr);
-				++filamentsFound;
+				float filamentLength = SafeStrtof(p, nullptr);
+				if (!isnan(filamentLength) && !isinf(filamentLength))
+				{
+					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
+					++filamentsFound;
+				}
 			}
 		}
 	}
@@ -716,8 +716,12 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
 			}
 			if (isDigit(*p))
 			{
-				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr); // S3D reports filament usage in mm, no conversion needed
-				++filamentsFound;
+				float filamentLength = SafeStrtof(p, nullptr);
+				if (!isnan(filamentLength) && !isinf(filamentLength))
+				{
+					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
+					++filamentsFound;
+				}
 			}
 		}
 	}
@@ -745,21 +749,28 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
 
 			if (isDigit(*p))
 			{
-				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr);
-				++filamentsFound;
+				float filamentLength = SafeStrtof(p, nullptr);
+				if (!isnan(filamentLength) && !isinf(filamentLength))
+				{
+					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
+					++filamentsFound;
+				}
 			}
 		}
 	}
 
 	// Special case: Old KISSlicer only generates the filament volume, so we need to calculate the length from it
-	if (filamentsFound == 0)
+	if (filamentsFound == 0 && reprap.GetPlatform().GetFilamentWidth() > 0.0)
 	{
 		const char *filamentVolumeStr = "; Estimated Build Volume: ";
 		p = strstr(buf, filamentVolumeStr);
 		if (p != nullptr)
 		{
 			const float filamentCMM = SafeStrtof(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
-			parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
+			if (!isnan(filamentCMM) && !isinf(filamentCMM))
+			{
+				parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
+			}
 		}
 	}
 
@@ -767,7 +778,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
 }
 
 // Scan the buffer for the estimated print time
-bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
+bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 {
 	static const char* const PrintTimeStrings[] =
 	{
@@ -792,7 +803,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 			}
 			const char * const q = pos;
 			float hours = 0.0, minutes = 0.0;
-			float secs = SafeStrtod(pos, &pos);
+			float secs = SafeStrtof(pos, &pos);
 			if (q != pos)
 			{
 				while (*pos == ' ')
@@ -802,15 +813,19 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 				if (*pos == 'h')
 				{
 					hours = secs;
-					if (StringStartsWithIgnoreCase(pos, "hours"))
+					if (StringStartsWithIgnoreCase(pos, "hours"))		// S3D
 					{
 						pos += 5;
+					}
+					else if (StringStartsWithIgnoreCase(pos, "hour"))	// S3D now prints "1 hour 42 minutes"
+					{
+						pos += 4;
 					}
 					else
 					{
 						++pos;
 					}
-					secs = SafeStrtod(pos, &pos);
+					secs = SafeStrtof(pos, &pos);
 					while (*pos == ' ')
 					{
 						++pos;
@@ -827,7 +842,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 					{
 						++pos;
 					}
-					secs = SafeStrtod(pos, &pos);
+					secs = SafeStrtof(pos, &pos);
 				}
 			}
 			parsedFileInfo.printTime = lrintf((hours * 60.0 + minutes) * 60.0 + secs);
@@ -838,7 +853,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 }
 
 // Scan the buffer for the simulated print time
-bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len)
+bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len) noexcept
 {
 	const char* pos = strstr(buf, SimulatedTimeString);
 	if (pos != nullptr)
@@ -849,7 +864,7 @@ bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len)
 			++pos;
 		}
 		const char * const q = pos;
-		const uint32_t secs = SafeStrtoul(pos, &pos);
+		const uint32_t secs = StrToU32(pos, &pos);
 		if (q != pos)
 		{
 			parsedFileInfo.simulatedTime = secs;

@@ -24,6 +24,8 @@ class Socket;
 class NetworkResponder
 {
 public:
+	NetworkResponder(const NetworkResponder&) = delete;
+
 	NetworkResponder *GetNext() const noexcept { return next; }
 	virtual bool Spin() noexcept = 0;							// do some work, returning true if we did anything significant
 	virtual bool Accept(Socket *s, NetworkProtocol protocol) noexcept = 0;	// ask the responder to accept this connection, returns true if it did

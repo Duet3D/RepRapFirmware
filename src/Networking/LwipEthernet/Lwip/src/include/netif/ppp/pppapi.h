@@ -28,16 +28,16 @@
 #ifndef LWIP_PPPAPI_H
 #define LWIP_PPPAPI_H
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 
 #if LWIP_PPP_API /* don't build if not configured for use in lwipopts.h */
 
-#include <Lwip/src/include/lwip/sys.h>
-#include <Lwip/src/include/lwip/netif.h>
-#include <Lwip/src/include/lwip/priv/tcpip_priv.h>
-#include <Lwip/src/include/netif/ppp/ppp.h>
+#include "lwip/sys.h"
+#include "lwip/netif.h"
+#include "lwip/priv/tcpip_priv.h"
+#include "netif/ppp/ppp.h"
 #if PPPOS_SUPPORT
-#include <Lwip/src/include/netif/ppp/pppos.h>
+#include "netif/ppp/pppos.h"
 #endif /* PPPOS_SUPPORT */
 
 #ifdef __cplusplus

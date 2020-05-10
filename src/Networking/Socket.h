@@ -23,6 +23,8 @@ class Socket
 {
 public:
 	Socket(NetworkInterface *iface) noexcept : interface(iface), localPort(0), remotePort(0), remoteIPAddress(), state(SocketState::disabled) { }
+	Socket(const Socket&) = delete;
+
 	NetworkInterface *GetInterface() const noexcept { return interface; }
 
 	Port GetLocalPort() const noexcept { return localPort; }

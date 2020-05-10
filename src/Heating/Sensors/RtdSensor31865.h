@@ -14,11 +14,11 @@ class RtdSensor31865 : public SpiTemperatureSensor
 {
 public:
 	RtdSensor31865(unsigned int sensorNum) noexcept;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	void Poll() noexcept override;
+	const char *GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *TypeName = "rtdmax31865";
-
-	void Poll() noexcept override;
 
 private:
 	TemperatureError TryInitRtd() const noexcept;

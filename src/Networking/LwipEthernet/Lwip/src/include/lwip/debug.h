@@ -37,8 +37,8 @@
 #ifndef LWIP_HDR_DEBUG_H
 #define LWIP_HDR_DEBUG_H
 
-#include <Lwip/src/include/lwip/arch.h>
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/arch.h"
+#include "lwip/opt.h"
 
 /**
  * @defgroup debugging_levels LWIP_DBG_MIN_LEVEL and LWIP_DBG_TYPES_ON values
@@ -115,9 +115,6 @@
 #ifndef LWIP_NOASSERT
 #define LWIP_ASSERT(message, assertion) do { if (!(assertion)) { \
   LWIP_PLATFORM_ASSERT(message); }} while(0)
-#ifndef LWIP_PLATFORM_ASSERT
-#error "If you want to use LWIP_ASSERT, LWIP_PLATFORM_ASSERT(message) needs to be defined in your arch/cc.h"
-#endif
 #else  /* LWIP_NOASSERT */
 #define LWIP_ASSERT(message, assertion)
 #endif /* LWIP_NOASSERT */
@@ -145,9 +142,6 @@
 #endif
 
 #ifdef LWIP_DEBUG
-#ifndef LWIP_PLATFORM_DIAG
-#error "If you want to use LWIP_DEBUG, LWIP_PLATFORM_DIAG(message) needs to be defined in your arch/cc.h"
-#endif
 #define LWIP_DEBUGF(debug, message) do { \
                                if ( \
                                    ((debug) & LWIP_DBG_ON) && \

@@ -8,6 +8,8 @@
 #ifndef SRC_ENDSTOPS_ENDSTOPDEFS_H_
 #define SRC_ENDSTOPS_ENDSTOPDEFS_H_
 
+#include <General/NamedEnum.h>
+
 // Forward declarations
 class EndstopOrZProbe;
 class Endstop;
@@ -26,13 +28,13 @@ enum class EndstopHitAction : uint8_t
 // Struct to return info about what endstop has been triggered and what to do about it
 struct EndstopHitDetails
 {
-	EndstopHitDetails() : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
+	EndstopHitDetails() noexcept : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
 	{
 		driver.Clear();
 	}
 
-	void SetAction(EndstopHitAction a) { action = (uint32_t)a; }
-	EndstopHitAction GetAction() const { return (EndstopHitAction)action; }
+	void SetAction(EndstopHitAction a) noexcept { action = (uint32_t)a; }
+	EndstopHitAction GetAction() const noexcept { return (EndstopHitAction)action; }
 
 	uint16_t action : 4,			// an EndstopHitAction
 			 internalUse : 4,		// used to pass data between CheckTriggered() and Acknowledge()
@@ -53,15 +55,15 @@ enum class EndStopPosition : unsigned int
 };
 
 // Type of an endstop input - values must tally with the M574 command S parameter
-enum class EndStopType : unsigned int
-{
-	unused_wasActiveLow = 0,
-	inputPin = 1,
-	zProbeAsEndstop = 2,
-	motorStallAny = 3,
-	motorStallIndividual = 4,
-	numInputTypes = 5
-};
+NamedEnum
+(	EndStopType, unsigned int,
+	unused_wasActiveLow,
+	inputPin,
+	zProbeAsEndstop,
+	motorStallAny,
+	motorStallIndividual,
+	numInputTypes
+);
 
 // This is used as the return type of function Stopped.
 // Note the ordering: we need more-stopped-value > less-stopped-value

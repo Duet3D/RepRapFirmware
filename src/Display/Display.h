@@ -20,17 +20,17 @@
 class Display
 {
 public:
-	Display();
+	Display() noexcept;
 
-	void Init() { }
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
-	void Spin();
-	void Exit();
-	void Beep(unsigned int frequency, unsigned int milliseconds);
-	void SuccessBeep();
-	void ErrorBeep();
-	bool IsPresent() const { return lcd != nullptr; }
-	void UpdatingFirmware();
+	void Init() noexcept { }
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) noexcept;
+	void Spin() noexcept;
+	void Exit() noexcept;
+	void Beep(unsigned int frequency, unsigned int milliseconds) noexcept;
+	void SuccessBeep() noexcept;
+	void ErrorBeep() noexcept;
+	bool IsPresent() const noexcept { return lcd != nullptr; }
+	void UpdatingFirmware() noexcept;
 
 private:
 	Lcd7920 *lcd;

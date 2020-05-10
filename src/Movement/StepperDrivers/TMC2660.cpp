@@ -25,7 +25,7 @@
 
 #include "sam/drivers/usart/usart.h"
 
-constexpr float MaximumMotorCurrent = 2400.0;
+constexpr float MaximumMotorCurrent = 2500.0;
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
@@ -35,7 +35,16 @@ constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detectio
 
 static size_t numTmc2660Drivers;
 
-static bool driversPowered = false;
+enum class DriversState : uint8_t
+{
+	noPower = 0,					// no VIN power
+	initialising,					// in the process of initialising the drivers for setting microstep positions
+	stepping,						// resetting the microstep counters to 0 in case of phantom steps during power up
+	reinitialising,					// re-initialising the drivers with the correct values
+	ready							// drivers are initialised and ready
+};
+
+static DriversState driversState = DriversState::noPower;
 
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips take too much of the CPU time
@@ -199,6 +208,7 @@ public:
 	void Init(uint32_t driverNumber, uint32_t p_pin) noexcept;
 	void SetAxisNumber(size_t p_axisNumber) noexcept;
 	void WriteAll() noexcept;
+	bool UpdatePending() const noexcept { return registersToUpdate != 0; }
 
 	bool SetMicrostepping(uint32_t shift, bool interpolate) noexcept;
 	unsigned int GetMicrostepping(bool& interpolation) const noexcept;
@@ -223,6 +233,7 @@ public:
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
 
 	uint32_t ReadMicrostepPosition() const noexcept { return mstepPosition; }
+	void ClearMicrostepPosition() noexcept { mstepPosition = 0xFFFFFFFF; }
 
 private:
 	bool SetChopConf(uint32_t newVal) noexcept;
@@ -250,7 +261,7 @@ private:
 	uint32_t pin;											// the pin number that drives the chip select pin of this driver
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state
 	volatile uint32_t registersToUpdate;					// bitmap of register values that need to be sent to the driver chip
-	uint32_t driverBit;										// 1 << the driver number
+	DriversBitmap driverBit;								// bitmap of just this driver number
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
@@ -401,7 +412,7 @@ void TmcDriverState::Init(uint32_t driverNumber, uint32_t p_pin) noexcept
 pre(!driversPowered)
 {
 	axisNumber = driverNumber;												// assume straight through mapping at initialisation
-	driverBit = 1ul << driverNumber;
+	driverBit = DriversBitmap::MakeFromBits(driverNumber);
 	pin = p_pin;
 	pinMode(pin, OUTPUT_HIGH);
 	enabled = false;
@@ -664,8 +675,10 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	{
 		threshold -= 128;
 	}
-	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 ", coolstep %" PRIx32,
-				threshold, ((filtered) ? "on" : "off"), StepTimer::StepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
+	const uint32_t fullstepsPerSecond = StepTimer::StepClockRate/maxStallStepInterval;
+	const float speed = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
+				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, registers[SmartEnable] & 0xFFFF);
 }
 
 // Append the driver status to a string, and reset the min/max load values
@@ -722,7 +735,7 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 inline void TmcDriverState::TransferDone() noexcept
 {
 	fastDigitalWriteHigh(pin);									// set the CS pin high for the driver we just polled
-	if (driversPowered)											// if the power is still good, update the status
+	if (driversState != DriversState::noPower)					// if the power is still good, update the status
 	{
 		Cache::InvalidateAfterDMAReceive(&spiDataIn, sizeof(spiDataIn));
 		uint32_t status = be32_to_cpu(spiDataIn) >> 12;			// get the status
@@ -785,6 +798,17 @@ inline void TmcDriverState::StartTransfer() noexcept
 		const size_t regNum = LowestSetBitNumber(registersToUpdate);
 		registersToUpdate &= ~(1u << regNum);
 		regVal = registers[regNum];
+		if (driversState < DriversState::reinitialising)
+		{
+			if (regNum == DriveControl)
+			{
+				regVal &= ~(TMC_DRVCTRL_INTPOL | TMC_DRVCTRL_MRES_MASK);	// set x256 microstepping, no interpolation
+			}
+			else if (regNum == DriveConfig)
+			{
+				regVal &= ~TMC_DRVCONF_RDSEL_MASK;							// set RDSEL=0 so that we read the microstep counter
+			}
+		}
 	}
 
 	// Kick off a transfer for that register
@@ -833,7 +857,7 @@ void TMC2660_SPI_Handler(void) noexcept
 	if (driver != nullptr)
 	{
 		driver->TransferDone();							// tidy up after the transfer we just completed
-		if (driversPowered)
+		if (driversState != DriversState::noPower)
 		{
 			// Power is still good, so send/receive to/from the next driver
 			++driver;									// advance to the next driver
@@ -914,8 +938,8 @@ namespace SmartDrivers
 		SPI_TMC2660->SPI_CSR[0] = csr;
 #endif
 
-		driversPowered = false;
-		EndstopOrZProbe::UpdateStalledDrivers(LowestNBits<DriversBitmap>(MaxSmartDrivers), false);
+		driversState = DriversState::noPower;
+		EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 		for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 		{
 			driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
@@ -934,7 +958,7 @@ namespace SmartDrivers
 	{
 		digitalWrite(GlobalTmc2660EnablePin, HIGH);
 		NVIC_DisableIRQ(TMC2660_SPI_IRQn);
-		driversPowered = false;
+		driversState = DriversState::noPower;
 	}
 
 	void SetAxisNumber(size_t driver, uint32_t axisNumber) noexcept
@@ -1018,22 +1042,106 @@ namespace SmartDrivers
 	// Before the first call to this function with powered true, you must call Init().
 	void Spin(bool powered) noexcept
 	{
-		const bool wasPowered = driversPowered;
-		driversPowered = powered;
 		if (powered)
 		{
-			if (!wasPowered)
+			switch (driversState)
 			{
+			case DriversState::noPower:
 				// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
-				EndstopOrZProbe::UpdateStalledDrivers(LowestNBits<DriversBitmap>(MaxSmartDrivers), false);
-				digitalWrite(GlobalTmc2660EnablePin, LOW);
-				delayMicroseconds(10);
-
+				EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 				for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 				{
 					driverStates[driver].WriteAll();
 				}
+				driversState = DriversState::initialising;
+				break;
+
+			case DriversState::initialising:
+				// If all drivers have been initialised, move to checking the microstep counters
+				{
+					bool allInitialised = true;
+					for (size_t i = 0; i < numTmc2660Drivers; ++i)
+					{
+						if (driverStates[i].UpdatePending())
+						{
+							allInitialised = false;
+							break;
+						}
+						driverStates[i].ClearMicrostepPosition();
+					}
+
+					if (allInitialised)
+					{
+						driversState = DriversState::stepping;
+					}
+				}
+				break;
+
+			case DriversState::stepping:
+				{
+					bool moreNeeded = false;
+					for (size_t i = 0; i < numTmc2660Drivers; ++i)
+					{
+						uint32_t count = driverStates[i].ReadMicrostepPosition();
+						if (count != 0)
+						{
+							moreNeeded = true;
+							if (count < 1024)
+							{
+								const bool backwards = (count > 512);
+								reprap.GetPlatform().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
+								if (backwards)
+								{
+									count = 1024 - count;
+								}
+								do
+								{
+									delayMicroseconds(1);
+									StepPins::StepDriversHigh(StepPins::CalcDriverBitmap(i));
+									delayMicroseconds(1);
+									StepPins::StepDriversLow();
+									--count;
+								} while (count != 0);
+								driverStates[i].ClearMicrostepPosition();
+							}
+						}
+					}
+					if (!moreNeeded)
+					{
+						driversState = DriversState::reinitialising;
+						for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
+						{
+							driverStates[driver].WriteAll();
+						}
+					}
+				}
+				break;
+
+			case DriversState::reinitialising:
+				// If all drivers have been initialised, set the global enable
+				{
+					bool allInitialised = true;
+					for (size_t i = 0; i < numTmc2660Drivers; ++i)
+					{
+						if (driverStates[i].UpdatePending())
+						{
+							allInitialised = false;
+							break;
+						}
+					}
+
+					if (allInitialised)
+					{
+						digitalWrite(GlobalTmc2660EnablePin, LOW);
+						driversState = DriversState::ready;
+					}
+				}
+				break;
+
+			case DriversState::ready:
+				break;
 			}
+
 			if (currentDriver == nullptr && numTmc2660Drivers != 0)
 			{
 				// Kick off the first transfer
@@ -1041,10 +1149,11 @@ namespace SmartDrivers
 				driverStates[0].StartTransfer();
 			}
 		}
-		else if (wasPowered)
+		else if (driversState != DriversState::noPower)
 		{
 			digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
-			EndstopOrZProbe::UpdateStalledDrivers(LowestNBits<DriversBitmap>(MaxSmartDrivers), false);
+			driversState = DriversState::noPower;
+			EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 		}
 	}
 
@@ -1052,8 +1161,8 @@ namespace SmartDrivers
 	void TurnDriversOff() noexcept
 	{
 		digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
-		driversPowered = false;
-		EndstopOrZProbe::UpdateStalledDrivers(LowestNBits<DriversBitmap>(MaxSmartDrivers), false);
+		driversState = DriversState::noPower;
+		EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
 	}
 
 	void SetStallThreshold(size_t driver, int sgThreshold) noexcept

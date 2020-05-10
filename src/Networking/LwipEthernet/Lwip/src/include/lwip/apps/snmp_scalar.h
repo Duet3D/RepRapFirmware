@@ -38,8 +38,8 @@
 #ifndef LWIP_HDR_APPS_SNMP_SCALAR_H
 #define LWIP_HDR_APPS_SNMP_SCALAR_H
 
-#include <Lwip/src/include/lwip/apps/snmp_core.h>
-#include <Lwip/src/include/lwip/apps/snmp_opts.h>
+#include "lwip/apps/snmp_opts.h"
+#include "lwip/apps/snmp_core.h"
 
 #ifdef __cplusplus
 extern "C" {

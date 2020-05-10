@@ -19,15 +19,11 @@ RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress) noe
 {
 }
 
-GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	TryConfigureSensorName(gb, seen);
+	TryConfigureSensorName(gb, changed);
 	CanMessageGenericConstructor cons(M308Params);
-	if (!cons.PopulateFromCommand(gb, reply))
-	{
-		return GCodeResult::error;
-	}
+	cons.PopulateFromCommand(gb);
 	const GCodeResult ret = cons.SendAndGetResponse(CanMessageType::m308, boardAddress, reply);
 	if ((ret == GCodeResult::ok || ret == GCodeResult::warning) && StringStartsWith(reply.c_str(), "type "))
 	{
@@ -39,6 +35,10 @@ GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 			temp.catf("(%s) ", GetSensorName());
 		}
 		reply.Insert(0, temp.c_str());
+	}
+	else
+	{
+		changed = true;
 	}
 	return ret;
 }

@@ -37,9 +37,10 @@
 #ifndef LWIP_HDR_INET_CHKSUM_H
 #define LWIP_HDR_INET_CHKSUM_H
 
-#include <Lwip/src/include/lwip/ip_addr.h>
-#include <Lwip/src/include/lwip/opt.h>
-#include <Lwip/src/include/lwip/pbuf.h>
+#include "lwip/opt.h"
+
+#include "lwip/pbuf.h"
+#include "lwip/ip_addr.h"
 
 /** Swap the bytes in an u16_t: much like lwip_htons() for little-endian */
 #ifndef SWAP_BYTES_IN_WORD
@@ -48,7 +49,7 @@
 
 /** Split an u32_t in two u16_ts and add them up */
 #ifndef FOLD_U32T
-#define FOLD_U32T(u)          (((u) >> 16) + ((u) & 0x0000ffffUL))
+#define FOLD_U32T(u)          ((u32_t)(((u) >> 16) + ((u) & 0x0000ffffUL)))
 #endif
 
 #if LWIP_CHECKSUM_ON_COPY

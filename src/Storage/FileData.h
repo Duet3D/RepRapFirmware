@@ -21,18 +21,27 @@ class FileData
 public:
 	friend class FileGCodeInput;
 
-	FileData() : f(nullptr) {}
+	FileData() noexcept : f(nullptr) {}
+
+	FileData(const FileData& other) noexcept
+	{
+		f = other.f;
+		if (f != nullptr)
+		{
+			f->Duplicate();
+		}
+	}
 
 	// Set this to refer to a newly-opened file
-	void Set(FileStore* pfile)
+	void Set(FileStore* pfile) noexcept
 	{
 		Close();	// close any existing file
 		f = pfile;
 	}
 
-	bool IsLive() const { return f != nullptr; }
+	bool IsLive() const noexcept { return f != nullptr; }
 
-	bool Close()
+	bool Close() noexcept
 	{
 		if (f != nullptr)
 		{
@@ -43,75 +52,64 @@ public:
 		return false;
 	}
 
-	bool Read(char& b)
+	bool Read(char& b) noexcept
 	{
 		return f->Read(b);
 	}
 
-	int Read(char *buf, size_t nBytes)
+	int Read(char *buf, size_t nBytes) noexcept
 	{
 		return f->Read(buf, nBytes);
 	}
 
-	bool Write(char b)
+	bool Write(char b) noexcept
 	{
 		return f->Write(b);
 	}
 
-	bool Write(const char *s)
+	bool Write(const char *s) noexcept
 	{
 		return f->Write(s, strlen(s));
 	}
 
-	bool Write(const char *s, size_t len)
+	bool Write(const char *s, size_t len) noexcept
 	{
 		return f->Write(s, len);
 	}
 
-	bool Write(const uint8_t *s, size_t len)
+	bool Write(const uint8_t *s, size_t len) noexcept
 	{
 		return f->Write(s, len);
 	}
 
 	// This returns the CRC32 of data written to a newly-created file. It does not calculate the CRC of an existing file.
-	uint32_t GetCrc32() const
+	uint32_t GetCrc32() const noexcept
 	{
 		return f->GetCRC32();
 	}
 
-	bool Flush()
+	bool Flush() noexcept
 	{
 		return f->Flush();
 	}
 
-	FilePosition GetPosition() const
+	FilePosition GetPosition() const noexcept
 	{
 		return f->Position();
 	}
 
-	bool Seek(FilePosition position)
+	bool Seek(FilePosition position) noexcept
 	{
 		return f->Seek(position);
 	}
 
-	FilePosition Length() const
+	FilePosition Length() const noexcept
 	{
 		return f->Length();
 	}
 
-	// Assignment operator
-	void CopyFrom(const FileData& other)
-	{
-		Close();
-		f = other.f;
-		if (f != nullptr)
-		{
-			f->Duplicate();
-		}
-	}
-
 	// Move operator
-	void MoveFrom(FileData& other)
+	void MoveFrom(FileData& other) noexcept
 	{
 		Close();
 		f = other.f;
@@ -121,16 +119,13 @@ public:
 private:
 	FileStore *f;
 
-	void Init()
+	void Init() noexcept
 	{
 		f = nullptr;
 	}
 
 	// Private assignment operator to prevent us assigning these objects
-	FileData& operator=(const FileData&);
-
-	// Private copy constructor to prevent us copying these objects
-	FileData(const FileData&);
+	FileData& operator=(const FileData&) noexcept;
 };
 
 #endif

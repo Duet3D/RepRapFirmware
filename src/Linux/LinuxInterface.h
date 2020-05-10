@@ -10,8 +10,9 @@
 
 #include "RTOSIface/RTOSIface.h"
 
+#include "GCodes/GCodeChannel.h"
 #include "GCodes/GCodeFileInfo.h"
-#include "MessageFormats.h"
+#include "LinuxMessageFormats.h"
 #include "MessageType.h"
 
 class Platform;
@@ -34,6 +35,7 @@ public:
 	void Init();
 	void Spin();
 	void Diagnostics(MessageType mtype);
+	bool IsConnected() const;
 
 	bool FillBuffer(GCodeBuffer &gb);		// Try to fill up the G-code buffer with the next available G-code
 

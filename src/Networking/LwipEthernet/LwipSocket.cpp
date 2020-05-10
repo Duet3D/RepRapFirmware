@@ -12,9 +12,10 @@
 #include "Networking/NetworkBuffer.h"
 #include "RepRap.h"
 
-#if LWIP_GMAC_TASK
 extern Mutex lwipMutex;
-#endif
+
+// ERR_IS_FATAL was defined like this in lwip 2.0.3 file err.h but isn't in 2.1.2
+#define ERR_IS_FATAL(e) ((e) <= ERR_ABRT)
 
 //***************************************************************************************************
 
@@ -66,12 +67,7 @@ static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 	return ERR_OK;
 }
 
-#if !LWIP_GMAC_TASK
-extern bool LockLWIP();
-extern void UnlockLWIP();
-#endif
-
-}
+}	// end extern "C"
 
 //***************************************************************************************************
 
@@ -208,9 +204,7 @@ void LwipSocket::Close() noexcept
 {
 	if (state != SocketState::disabled && state != SocketState::listening)
 	{
-#if LWIP_GMAC_TASK
 		MutexLocker lock(lwipMutex);
-#endif
 		DiscardReceivedData();
 		state = SocketState::closing;
 		whenClosed = millis();
@@ -227,9 +221,7 @@ void LwipSocket::Terminate() noexcept
 {
 	if (state != SocketState::disabled)
 	{
-#if LWIP_GMAC_TASK
 		MutexLocker lock(lwipMutex);
-#endif
 		if (connectionPcb != nullptr)
 		{
 			tcp_err(connectionPcb, nullptr);
@@ -267,10 +259,9 @@ bool LwipSocket::ReadChar(char& c) noexcept
 
 		if (readIndex >= receivedData->len)
 		{
-#if LWIP_GMAC_TASK
-			MutexLocker lock(lwipMutex);
-#endif
 			// We've processed one more pbuf
+			MutexLocker lock(lwipMutex);
+
 			if (connectionPcb != nullptr)
 			{
 				tcp_recved(connectionPcb, receivedData->len);
@@ -313,10 +304,9 @@ void LwipSocket::Taken(size_t len) noexcept
 		readIndex += len;
 		if (readIndex >= receivedData->len)
 		{
-#if LWIP_GMAC_TASK
-			MutexLocker lock(lwipMutex);
-#endif
 			// Notify LwIP
+			MutexLocker lock(lwipMutex);
+
 			if (connectionPcb != nullptr)
 			{
 				tcp_recved(connectionPcb, receivedData->len);
@@ -412,19 +402,11 @@ void LwipSocket::DiscardReceivedData() noexcept
 // Send the data, returning the length buffered
 size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 {
-#if LWIP_GMAC_TASK
 	MutexLocker lock(lwipMutex);
-#else
-	// This is always called outside the EthernetInterface::Spin method. Wait for pending ISRs to finish
-	while (!LockLWIP()) { }
-#endif
 
 	if (!CanSend())
 	{
 		// Don't bother if we cannot send anything at all+
-#if !LWIP_GMAC_TASK
-		UnlockLWIP();
-#endif
 		return 0;
 	}
 
@@ -446,9 +428,6 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 			if (ERR_IS_FATAL(err))
 			{
 				Terminate();
-#if !LWIP_GMAC_TASK
-				UnlockLWIP();
-#endif
 				return 0;
 			}
 			else if (err == ERR_MEM)
@@ -457,9 +436,6 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 				{
 					// The buffers are full - try again later
 					tcp_output(connectionPcb);
-#if !LWIP_GMAC_TASK
-					UnlockLWIP();
-#endif
 					return 0;
 				}
 				bytesToSend /= 2;
@@ -471,9 +447,6 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 		if (ERR_IS_FATAL(tcp_output(connectionPcb)))
 		{
 			Terminate();
-#if !LWIP_GMAC_TASK
-			UnlockLWIP();
-#endif
 			return 0;
 		}
 
@@ -481,15 +454,9 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 		whenWritten = millis();
 		unAcked += bytesToSend;
 
-#if !LWIP_GMAC_TASK
-		UnlockLWIP();
-#endif
 		return bytesToSend;
 	}
 
-#if !LWIP_GMAC_TASK
-	UnlockLWIP();
-#endif
 	return 0;
 }
 

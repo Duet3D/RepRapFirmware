@@ -14,125 +14,103 @@
 #include <CAN/CanMessageGenericConstructor.h>
 #include <RepRap.h>
 #include <Platform.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Members of class RemoteZProbe
 RemoteZProbe::~RemoteZProbe()
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf != nullptr)
+	String<StringLength100> reply;
+	const GCodeResult rslt = CanInterface::DeleteHandle(boardAddress, handle, reply.GetRef());
+	if (rslt != GCodeResult::ok)
 	{
-		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-		auto msg = buf->SetupRequestMessage<CanMessageDestroyZProbe>(rid, CanId::MasterAddress, boardAddress);
-		msg->number = number;
-		String<StringLength100> reply;
-		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
-		{
-			reply.cat('\n');
-			reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
-		}
+		reply.cat('\n');
+		reprap.GetPlatform().Message(GetGenericMessageType(rslt), reply.c_str());
 	}
 }
 
-GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) const
+GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) noexcept
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
-	{
-		str.cat("[not available: no CAN buffer]");
-		return GCodeResult::warning;
-	}
-
-	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageGetZProbePinNames>(rid, CanId::MasterAddress, boardAddress);
-	msg->number = number;
-	String<StringLength20> pinNames;
-	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, pinNames.GetRef());
+	String<StringLength100> reply;
+	const GCodeResult rslt = CanInterface::GetHandlePinName(boardAddress, handle, state, reply.GetRef());
 	if (rslt == GCodeResult::ok)
 	{
-		str.cat(pinNames.c_str());
+		str.cat(", input pin ");
+		str.cat(reply.c_str());
 	}
 	else
 	{
-		str.catf("[not available: %s]", pinNames.c_str());
+		str.copy(reply.c_str());
 	}
 	return rslt;
 }
 
-void RemoteZProbe::SetProbing(bool isProbing) const
+uint16_t RemoteZProbe::GetRawReading() const noexcept
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
+	return (state) ? 1000 : 0;
+}
+
+void RemoteZProbe::SetProbing(bool isProbing) noexcept
+{
+	String<StringLength100> reply;
+	const GCodeResult rslt = CanInterface::ChangeHandleResponseTime(boardAddress, handle, (isProbing) ? ActiveProbeReportInterval : InactiveProbeReportInterval, state, reply.GetRef());
+	if (rslt != GCodeResult::ok)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer\n");
-	}
-	else
-	{
-		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-		auto msg = buf->SetupRequestMessage<CanMessageSetProbing>(rid, CanId::MasterAddress, boardAddress);
-		msg->number = number;
-		msg->isProbing = (isProbing) ? 1 : 0;
-		String<StringLength100> reply;
-		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
-		{
-			reply.cat('\n');
-			reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
-		}
+		reply.cat('\n');
+		reprap.GetPlatform().Message(GetGenericMessageType(rslt), reply.c_str());
 	}
 }
 
 // Create a remote Z probe
-GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& reply)
+GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& reply) noexcept
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
+	if (type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch)
 	{
-		reply.copy("No CAN buffer");
+		reply.copy("M558: only Z probe types 8 and 9 are supported on expansion boards");
 		return GCodeResult::error;
 	}
 
-	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageCreateZProbe>(rid, CanId::MasterAddress, boardAddress);
-	msg->probeNumber = number;
-	msg->probeType = (uint8_t)type;
-	SafeStrncpy(msg->pinNames, pinNames.c_str(), ARRAY_SIZE(msg->pinNames));
-	buf->dataLength = msg->GetActualDataLength();
+	if (strchr(pinNames.c_str(), '+') != nullptr)
+	{
+		reply.copy("M558: output port not supported on expansion boards");
+		return GCodeResult::error;
+	}
 
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	handle.Set(RemoteInputHandle::typeZprobe, number, 0);
+	return CanInterface::CreateHandle(boardAddress, handle, pinNames.c_str(), 0, ActiveProbeReportInterval, state, reply);
 }
 
 // Configure an existing remote Z probe
-GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen)
+GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen) THROWS(GCodeException)
 {
-	GCodeResult rslt = ZProbe::Configure(gb, reply, seen);
-	if (seen && rslt == GCodeResult::ok)
+	if (gb.Seen('P'))
 	{
-		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-		if (buf == nullptr)
+		seen = true;
+		const uint32_t newType = gb.GetUIValue();
+		if (newType != (uint32_t)ZProbeType::unfilteredDigital && newType != (uint32_t)ZProbeType::blTouch)
 		{
-			reply.copy("No CAN buffer");
-			rslt = GCodeResult::error;
+			reply.copy("M558: only Z probe types 8 and 9 are supported on expansion boards");
+			return GCodeResult::error;
 		}
-		else
-		{
-			const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-			auto msg = buf->SetupRequestMessage<CanMessageConfigureZProbe>(rid, CanId::MasterAddress, boardAddress);
-
-			msg->number = number;
-			msg->type = (uint8_t)type;
-			msg->adcValue = adcValue;
-			msg->invertReading = misc.parts.invertReading;
-
-			rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
-		}
+		type = (ZProbeType)newType;
 	}
-	return rslt;
+
+	// No other configuration items affect remote probes differently from others, so just call the base class function
+	return ZProbe::Configure(gb, reply, seen);
 }
 
-GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply)
+GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept
 {
 	//TODO
-	reply.copy("Programming remote Z probes not yet supported");
+	reply.copy("Programming remote Z probes not supported");
 	return GCodeResult::error;
+}
+
+void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept
+{
+	if (src == boardAddress)
+	{
+		state = newState;
+	}
 }
 
 #endif

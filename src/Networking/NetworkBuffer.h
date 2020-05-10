@@ -11,8 +11,13 @@
 #include "RepRapFirmware.h"
 #include "NetworkDefs.h"
 
+#if defined(__LPC17xx__) && HAS_RTOSPLUSTCP_NETWORKING
+# include "RTOSPlusTCPEthernetInterface.h"
+#endif
+
 class WiFiSocket;
 class W5500Socket;
+class RTOSPlusTCPEthernetSocket;
 
 // Network buffer class. These buffers are 2K long so that they can accept as much data as the W5500 can provide in one go.
 class NetworkBuffer
@@ -20,6 +25,7 @@ class NetworkBuffer
 public:
 	friend class WiFiSocket;
 	friend class W5500Socket;
+	friend class RTOSPlusTCPEthernetSocket;
 
 	// Release this buffer and return the next one in the chain
 	NetworkBuffer *Release() noexcept;
@@ -73,11 +79,18 @@ public:
 	// Count how many buffers there are in a chain
 	static unsigned int Count(NetworkBuffer*& ptr) noexcept;
 
-	static const size_t bufferSize =
-#ifdef USE_3K_BUFFERS
-									 3 * 1024;
+#if defined(__LPC17xx__)
+
+# if HAS_RTOSPLUSTCP_NETWORKING
+	static const size_t bufferSize = 1 * ipconfigTCP_MSS;
+# elif HAS_WIFI_NETWORKING
+	static const size_t bufferSize = 2048;
+# else
+	static const size_t bufferSize = 2 * 1024;
+# endif
+
 #else
-									 2 * 1024;
+	static const size_t bufferSize = 2 * 1024;
 #endif
 
 private:

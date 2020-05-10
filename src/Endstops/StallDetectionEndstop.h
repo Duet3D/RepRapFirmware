@@ -14,19 +14,19 @@
 class StallDetectionEndstop final : public Endstop
 {
 public:
-	void* operator new(size_t sz) { return Allocate<StallDetectionEndstop>(); }
-	void operator delete(void* p) { Release<StallDetectionEndstop>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<StallDetectionEndstop>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<StallDetectionEndstop>(p); }
 
-	StallDetectionEndstop(uint8_t axis, EndStopPosition pos, bool p_individualMotors);		// for creating axis endstops
-	StallDetectionEndstop();							// for creating the single extruders endstop
+	StallDetectionEndstop(uint8_t axis, EndStopPosition pos, bool p_individualMotors) noexcept;		// for creating axis endstops
+	StallDetectionEndstop() noexcept;							// for creating the single extruders endstop
 
-	EndStopType GetEndstopType() const override { return (individualMotors) ? EndStopType::motorStallIndividual : EndStopType::motorStallAny; }
-	EndStopHit Stopped() const override;
-	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
-	EndstopHitDetails CheckTriggered(bool goingSlow) override;
-	bool Acknowledge(EndstopHitDetails what) override;
-	void AppendDetails(const StringRef& str) override;
-	void SetDrivers(DriversBitmap extruderDrivers);		// for setting which local extruder drives are active extruder endstops
+	EndStopType GetEndstopType() const noexcept override { return (individualMotors) ? EndStopType::motorStallIndividual : EndStopType::motorStallAny; }
+	EndStopHit Stopped() const noexcept override;
+	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept override;
+	EndstopHitDetails CheckTriggered(bool goingSlow) noexcept override;
+	bool Acknowledge(EndstopHitDetails what) noexcept override;
+	void AppendDetails(const StringRef& str) noexcept override;
+	void SetDrivers(DriversBitmap extruderDrivers) noexcept;		// for setting which local extruder drives are active extruder endstops
 
 private:
 	DriversBitmap driversMonitored;

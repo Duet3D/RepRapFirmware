@@ -5,15 +5,15 @@
 #include "Pins.h"
 #include "Hardware/IoPorts.h"
 
-RotaryEncoder::RotaryEncoder(Pin p0, Pin p1, Pin pb)
+RotaryEncoder::RotaryEncoder(Pin p0, Pin p1, Pin pb) noexcept
 	: pin0(p0), pin1(p1), pinButton(pb), ppc(1), encoderChange(0), encoderState(0), newPress(false), reverseDirection(false) {}
 
-inline unsigned int RotaryEncoder::ReadEncoderState() const
+inline unsigned int RotaryEncoder::ReadEncoderState() const noexcept
 {
 	return (digitalRead(pin0) ? 1u : 0u) | (digitalRead(pin1) ? 2u : 0u);
 }
 
-void RotaryEncoder::Init(int pulsesPerClick)
+void RotaryEncoder::Init(int pulsesPerClick) noexcept
 {
 	ppc = max<unsigned int>(abs(pulsesPerClick), 1);
 	reverseDirection = (pulsesPerClick < 0);
@@ -34,7 +34,7 @@ void RotaryEncoder::Init(int pulsesPerClick)
 	newPress = false;
 }
 
-void RotaryEncoder::Poll()
+void RotaryEncoder::Poll() noexcept
 {
 	// State transition table. Each entry has the following meaning:
 	// 0 - the encoder hasn't moved
@@ -45,7 +45,7 @@ void RotaryEncoder::Poll()
 		 0, +1, -1,  0,		// position 3 = 00 to 11, can't really do anything, so 0
 		-1,  0, -2, +1,		// position 2 = 01 to 10, assume it was a bounce and should be 01 -> 00 -> 10
 		+1, +2,  0, -1,		// position 1 = 10 to 01, assume it was a bounce and should be 10 -> 00 -> 01
-		 0, -1, +1,  0		// position 0 = 11 to 10, can't really do anything
+		 0, -1, +1,  0		// position 0 = 11 to 00, can't really do anything
 	};
 
 	// Poll the encoder
@@ -75,7 +75,7 @@ void RotaryEncoder::Poll()
 	}
 }
 
-int RotaryEncoder::GetChange()
+int RotaryEncoder::GetChange() noexcept
 {
 	int r;
 	if (encoderChange >= ppc - 1)
@@ -94,7 +94,7 @@ int RotaryEncoder::GetChange()
 	return (reverseDirection) ? -r : r;
 }
 
-bool RotaryEncoder::GetButtonPress()
+bool RotaryEncoder::GetButtonPress() noexcept
 {
 	const bool ret = newPress;
 	newPress = false;

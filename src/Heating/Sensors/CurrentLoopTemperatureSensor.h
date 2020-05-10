@@ -14,11 +14,11 @@ class CurrentLoopTemperatureSensor : public SpiTemperatureSensor
 {
 public:
 	CurrentLoopTemperatureSensor(unsigned int sensorNum) noexcept;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	void Poll() noexcept override;
 
 	static constexpr const char *TypeName = "currentloop";
-
-	void Poll() noexcept override;
 
 private:
 	TemperatureError TryGetLinearAdcTemperature(float& t) noexcept;

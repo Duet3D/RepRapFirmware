@@ -52,6 +52,8 @@ constexpr float DefaultMinFeedrate = 0.5;				// The minimum movement speed (extr
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
 
+constexpr uint32_t MaxTools = 50;						// this limit is to stop the serialised object model getting too large
+
 // Timeouts
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
 constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds
@@ -59,6 +61,7 @@ constexpr uint32_t MinimumWarningInterval = 4000;		// Milliseconds, must be at l
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
+constexpr uint16_t MinimumGpinReportInterval = 30;		// Minimum interval in milliseconds between input change reports sent over CAN bus
 
 constexpr uint32_t MinimumOpenLoadFullStepsPerSec = 20;	// this is 4mm/sec @ 80steps/mm
 
@@ -70,6 +73,7 @@ constexpr unsigned int MAIN_BAUD_RATE = 115200;			// Default communication speed
 constexpr unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART device
 constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
 constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
+constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
 // Heater values
 constexpr uint32_t HeatSampleIntervalMillis = 250;		// interval between taking temperature samples
@@ -84,8 +88,9 @@ constexpr float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
 
 constexpr unsigned int MaxBadTemperatureCount = 2000/HeatSampleIntervalMillis;	// Number of bad temperature samples permitted before a heater fault is reported (2 seconds)
 constexpr float BadLowTemperature = -10.0;				// Celsius
-constexpr float DefaultHotEndTemperatureLimit = 290.0;	// Celsius - E3D say to tighten the hot end at 285C
+constexpr float DefaultHotEndTemperatureLimit = 285.0;	// Celsius - E3D say to tighten the hot end at 285C
 constexpr float DefaultBedTemperatureLimit = 125.0;		// Celsius
+constexpr float DefaultAllowedOverTemperature = 5.0;
 constexpr float DefaultHotEndFanTemperature = 45.0;		// Temperature at which a thermostatic hot end fan comes on
 constexpr float ThermostatHysteresis = 1.0;				// How much hysteresis we use to prevent noise turning fans on/off too often
 constexpr float BadErrorTemperature = 2000.0;			// Must exceed any reasonable temperature limit including DEFAULT_TEMPERATURE_LIMIT
@@ -131,10 +136,6 @@ constexpr PwmFrequency ServoRefreshFrequency = 50;
 constexpr float DefaultMinFanPwm = 0.1;					// minimum fan PWM
 constexpr uint32_t DefaultFanBlipTime = 100;			// fan blip time in milliseconds
 
-// M577 and M581
-constexpr unsigned int MaxM577Ports = 4;
-constexpr unsigned int MaxPortsPerTrigger = 4;
-
 // Conditional GCode support
 constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduced a new block.
 
@@ -172,7 +173,7 @@ constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 # error
 #endif
 
-const float DefaultGridSpacing = 20.0;					// Default bed probing grid spacing in mm
+constexpr float DefaultGridSpacing = 20.0;				// Default bed probing grid spacing in mm
 
 static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must be <= MaxProbePoints");
 
@@ -205,7 +206,7 @@ constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 constexpr size_t MaxMessageLength = 256;
 constexpr size_t MaxTitleLength = 61;
 
-#if SAM4E || SAM4S || SAME70
+#if SAM4E || SAM4S || SAME70 || ESP_NETWORKING
 constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
 constexpr size_t MaxVariableNameLength = 120;
 #else
@@ -213,20 +214,23 @@ constexpr size_t MaxFilenameLength = 100;
 constexpr size_t MaxVariableNameLength = 100;
 #endif
 
+// Standard string lengths, to avoid having too many different instantiations of the String<n> template
 constexpr size_t StringLength20 = 20;
 constexpr size_t StringLength50 = 50;					// Used for pin names
 constexpr size_t StringLength100 = 100;					// Used for error messages
 constexpr size_t StringLength500 = 500;					// Used when writing the height map
+constexpr size_t StringLength256 = 256;
 
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
-constexpr size_t FormatStringLength = 256;
-constexpr size_t GCodeReplyLength = 256;				// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
+constexpr size_t FormatStringLength = StringLength256;
+constexpr size_t GCodeReplyLength = StringLength256;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
 constexpr size_t MachineNameLength = StringLength50;
 constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
+constexpr size_t StringBufferLength = StringLength256;	// Length of the string buffer used by the expression parser
 
-#if SAM4E || SAM4S || SAME70
+#if SAM4E || SAM4S || SAME70 || ESP_NETWORKING
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long
 constexpr size_t GCODE_LENGTH = 161;					// maximum number of non-comment characters in a line of GCode including the null terminator
 constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that we can queue to synchronise it to a move
@@ -241,7 +245,7 @@ constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that w
 // for the HTTP responder to return a status response. Otherwise DWC never gets to know that it needs to make a rr_reply call and the system deadlocks.
 #if SAME70
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
-constexpr size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
+constexpr size_t OUTPUT_BUFFER_COUNT = 40;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
 #elif SAM4E || SAM4S
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
@@ -253,13 +257,22 @@ constexpr size_t OUTPUT_BUFFER_COUNT = 16;				// How many OutputBuffer instances
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses
 #elif __LPC17xx__
 constexpr uint16_t OUTPUT_BUFFER_SIZE = 256;            // How many bytes does each OutputBuffer hold?
-constexpr size_t OUTPUT_BUFFER_COUNT = 15;              // How many OutputBuffer instances do we have?
+constexpr size_t OUTPUT_BUFFER_COUNT = 16;              // How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #else
 # error
 #endif
 
-const size_t maxQueuedCodes = 16;						// How many codes can be queued?
+constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
+
+// These two definitions are only used if TRACK_OBJECT_NAMES is defined, however that definition isn't available in this file
+#if SAME70
+constexpr size_t MaxTrackedObjects = 30;				// How many build plate objects we track. Each one needs 24 bytes of storage, in addition to the string space.
+constexpr size_t ObjectNamesStringSpace = 600;			// How much space we reserve for the names of objects on the build plate
+#else
+constexpr size_t MaxTrackedObjects = 10;				// How many build plate objects we track. Each one needs 24 bytes of storage, in addition to the string space.
+constexpr size_t ObjectNamesStringSpace = 200;			// How much space we reserve for the names of objects on the build plate
+#endif
 
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
@@ -284,10 +297,9 @@ constexpr float AxisRoundingError = 0.02;				// Maximum possible error when we r
 constexpr float NOZZLE_DIAMETER = 0.5;					// Millimetres
 constexpr float FILAMENT_WIDTH = 1.75;					// Millimetres
 
-constexpr unsigned int MaxStackDepth = 5;				// Maximum depth of stack
+constexpr unsigned int MaxStackDepth = 7;				// Maximum depth of stack (was 5 in 3.01-RC2, increased to 7 for 3.01-RC3)
 
 // CNC and laser support
-constexpr size_t MaxSpindles = 4;						// Maximum number of configurable spindles
 constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration
@@ -332,11 +344,19 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 #define MACRO_DIR "0:/macros/"						// Ditto - Macro files
 #define SCANS_DIRECTORY "0:/scans/"					// Directory for uploaded 3D scans
 #define FILAMENTS_DIRECTORY "0:/filaments/"			// Directory for filament configurations
+#define FIRMWARE_DIRECTORY "0:/sys/"				// Directory for firmware and IAP files
 #define MENU_DIR "0:/menu/"							// Directory for menu files
+
+// MaxExpectedWebDirFilenameLength is the maximum length of a filename that we can accept in a HTTP request without rejecting it out of hand
+// and perhaps warning the user of a possible virus attack.
+// It must be at least as long as any web file request from DWC, which is the file path excluding the initial "0:/www" and the trailing ".gz, possibly with "/" prepended.
+// As at 2020-05-02 the longest filename requested by DWC is "/fonts/materialdesignicons-webfont.3e2c1c79.eot" which is 48 characters long
+// It must be small enough that a filename within this length doesn't cause an overflow in MassStorage::CombineName. This is checked by the static_assert below.
+constexpr size_t MaxExpectedWebDirFilenameLength = MaxFilenameLength - 20;
+static_assert(MaxExpectedWebDirFilenameLength + strlen(WEB_DIR) + strlen(".gz") <= MaxFilenameLength);
+
 #define UPLOAD_EXTENSION ".part"					// Extension to a filename for a file being uploaded
 
-#define CONFIG_FILE "config.g"
-#define CONFIG_BACKUP_FILE "config.g.bak"
 #define DEFAULT_LOG_FILE "eventlog.txt"
 
 #define EOF_STRING "<!-- **EoF** -->"

@@ -34,11 +34,15 @@
 *****************************************************************************
 */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT /* don't build if not configured for use in lwipopts.h */
 
 #ifndef PPPDEBUG_H
 #define PPPDEBUG_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Trace levels. */
 #define LOG_CRITICAL  (PPP_DEBUG | LWIP_DBG_LEVEL_SEVERE)
@@ -74,6 +78,10 @@
 #define PPPDEBUG(a, b)
 
 #endif /* PPP_DEBUG */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PPPDEBUG_H */
 

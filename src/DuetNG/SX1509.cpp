@@ -11,7 +11,7 @@ https://github.com/sparkfun/SparkFun_SX1509_Arduino_Library
 
 Here you'll find the Arduino code used to interface with the SX1509 I2C
 16 I/O expander. There are functions to take advantage of everything the
-SX1509 provides - input/output setting, writing pins high/low, reading 
+SX1509 provides - input/output setting, writing pins high/low, reading
 the input value of pins, LED driver utilities (blink, breath, pwm), and
 keypad engine utilites.
 
@@ -27,7 +27,7 @@ Distributed as-is; no warranty is given.
 #include "SX1509Registers.h"
 #include "Hardware/I2C.h"
 
-SX1509::SX1509() : _clkX(0)
+SX1509::SX1509() noexcept : _clkX(0)
 {
 }
 
@@ -35,11 +35,11 @@ SX1509::SX1509() : _clkX(0)
 // Any operation requiring multiple I2C transactions must acquire and release the I2C mutex around them.
 
 // Test for the presence of a SX1509B. The I2C subsystem must be initialised before calling this.
-bool SX1509::begin(uint8_t address)
+bool SX1509::begin(uint8_t address) noexcept
 {
 	// Store the received parameters into member variables
 	deviceAddress =  address;
-	
+
 	reset();
 	delay(2);														// not sure this is needed, but it may help
 
@@ -60,7 +60,7 @@ bool SX1509::begin(uint8_t address)
 }
 
 // Reset the SX1509B
-void SX1509::reset()
+void SX1509::reset() noexcept
 {
 	MutexLocker lock(Tasks::GetI2CMutex());
 
@@ -69,7 +69,7 @@ void SX1509::reset()
 	writeByte(REG_RESET, 0x34);
 }
 
-void SX1509::pinMode(uint8_t pin, PinMode inOut)
+void SX1509::pinMode(uint8_t pin, PinMode inOut) noexcept
 {
 	pinModeMultiple(1u << pin, inOut);
 }
@@ -77,7 +77,7 @@ void SX1509::pinMode(uint8_t pin, PinMode inOut)
 // Set the pin mode for multiple pins.
 // Once we have enabled LED driver mode, disabling it doesn't seem to work.
 // So we track which pins are in PWM (i.e. LED driver) mode, and we never try to switch them back to being ordinary outputs.
-void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
+void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut) noexcept
 {
 	MutexLocker lock(Tasks::GetI2CMutex());
 
@@ -154,7 +154,7 @@ void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 	}
 }
 
-void SX1509::digitalWrite(uint8_t pin, bool highLow)
+void SX1509::digitalWrite(uint8_t pin, bool highLow) noexcept
 {
 	if (((1u << pin) & pwmPins) != 0)
 	{
@@ -172,7 +172,7 @@ void SX1509::digitalWrite(uint8_t pin, bool highLow)
 	}
 }
 
-bool SX1509::digitalRead(uint8_t pin)
+bool SX1509::digitalRead(uint8_t pin) noexcept
 {
 	if (pin >= 8)
 	{
@@ -184,21 +184,21 @@ bool SX1509::digitalRead(uint8_t pin)
 	}
 }
 
-uint16_t SX1509::digitalReadAll()
+uint16_t SX1509::digitalReadAll() noexcept
 {
 	return readWord(REG_DATA_B);
 }
 
 #if 0	// unused
 
-void SX1509::ledDriverInit(uint8_t pin, bool log, bool openDrain)
+void SX1509::ledDriverInit(uint8_t pin, bool log, bool openDrain) noexcept
 {
 	ledDriverInitMultiple(1u << pin, log, openDrain);
 }
 
 #endif
 
-void SX1509::ledDriverInitMultiple(uint16_t pins, bool log, bool openDrain)
+void SX1509::ledDriverInitMultiple(uint16_t pins, bool log, bool openDrain) noexcept
 {
 	if (openDrain)
 	{
@@ -224,17 +224,17 @@ void SX1509::ledDriverInitMultiple(uint16_t pins, bool log, bool openDrain)
 		tempByte &= ~((1u << 7) | (1u << 3));	// set linear mode bank B and A
 	}
 	writeByte(REG_MISC, tempByte);
-	
+
 	// Enable LED driver operation (REG_LED_DRIVER_ENABLE)
 	setBitsInWord(REG_LED_DRIVER_ENABLE_B, pins);
-	
+
 	// Set REG_DATA bit low ~ LED driver started
 	clearBitsInWord(REG_DATA_B, pins);
 
 	pwmPins |= pins;							// record which pins are in LED driver mode
 }
 
-void SX1509::analogWrite(uint8_t pin, uint8_t iOn)
+void SX1509::analogWrite(uint8_t pin, uint8_t iOn) noexcept
 {
 	// Write the on intensity of pin
 	// Linear mode: Ion = iOn
@@ -244,12 +244,12 @@ void SX1509::analogWrite(uint8_t pin, uint8_t iOn)
 	writeByte(REG_I_ON[pin], ~iOn);
 }
 
-void SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall)
+void SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall) noexcept
 {
 	enableInterruptMultiple(1u << pin, riseFall);
 }
 
-void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall)
+void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall) noexcept
 {
 	// Set REG_SENSE_XXX
 	// Sensitivity is set as follows:
@@ -289,12 +289,12 @@ void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall)
 	clearBitsInWord(REG_INTERRUPT_MASK_B, pins);
 }
 
-uint16_t SX1509::interruptSource()
+uint16_t SX1509::interruptSource() noexcept
 {
 	return readWord(REG_INTERRUPT_SOURCE_B);
 }
 
-uint16_t SX1509::interruptSourceAndClear()
+uint16_t SX1509::interruptSourceAndClear() noexcept
 {
 	MutexLocker lock(Tasks::GetI2CMutex());
 
@@ -303,14 +303,14 @@ uint16_t SX1509::interruptSourceAndClear()
 	return intSource;
 }
 
-bool SX1509::checkInterrupt(uint8_t pin)
+bool SX1509::checkInterrupt(uint8_t pin) noexcept
 {
 	return (interruptSource() & (1u << pin)) != 0;
 }
 
 //********* Private functions. The I2C mutex must be owned by the caller. ***********
 
-void SX1509::setBitsInWord(uint8_t registerAddress, uint16_t bits)
+void SX1509::setBitsInWord(uint8_t registerAddress, uint16_t bits) noexcept
 {
 	if (bits != 0)
 	{
@@ -319,7 +319,7 @@ void SX1509::setBitsInWord(uint8_t registerAddress, uint16_t bits)
 	}
 }
 
-void SX1509::clearBitsInWord(uint8_t registerAddress, uint16_t bits)
+void SX1509::clearBitsInWord(uint8_t registerAddress, uint16_t bits) noexcept
 {
 	if (bits != 0)
 	{
@@ -328,7 +328,7 @@ void SX1509::clearBitsInWord(uint8_t registerAddress, uint16_t bits)
 	}
 }
 
-void SX1509::analogWriteMultiple(uint16_t pins, uint8_t pwm)
+void SX1509::analogWriteMultiple(uint16_t pins, uint8_t pwm) noexcept
 {
 	for (uint8_t pin = 0; pins != 0; ++pin)
 	{
@@ -340,7 +340,7 @@ void SX1509::analogWriteMultiple(uint16_t pins, uint8_t pwm)
 	}
 }
 
-void SX1509::clock(uint8_t oscDivider)
+void SX1509::clock(uint8_t oscDivider) noexcept
 {
 	// RegClock constructed as follows:
 	//	6:5 - Oscillator frequency source
@@ -350,7 +350,7 @@ void SX1509::clock(uint8_t oscDivider)
 	//	3:0 - Frequency of oscout pin
 	//		0: LOW, 0xF: high, else fOSCOUT = FoSC/(2^(RegClock[3:0]-1))
 	writeByte(REG_CLOCK, (2u << 5) | (1u << 4) | (1u << 0));	// internal 2MHz oscillator, OSCIO outputs at that frequency
-	
+
 	// Config RegMisc[6:4] with oscDivider
 	// 0: off, else ClkX = fOSC / (2^(RegMisc[6:4] - 1))
 	oscDivider = constrain<uint8_t>(oscDivider, 1, 7);
@@ -361,37 +361,37 @@ void SX1509::clock(uint8_t oscDivider)
 	writeByte(REG_MISC, regMisc);
 }
 
-uint8_t SX1509::calculateLEDTRegister(int ms)
+uint8_t SX1509::calculateLEDTRegister(int ms) noexcept
 {
 	if (_clkX == 0)
 	{
 		return 0;
 	}
-	
+
 	int regOn1 = (int)(((float)ms / 1000.0) / (64.0 * 255.0 / (float) _clkX));
 	int regOn2 = regOn1 / 8;
 	regOn1 = constrain<int>(regOn1, 1, 15);
 	regOn2 = constrain<int>(regOn2, 16, 31);
-	
+
 	const float timeOn1 = 64.0 * regOn1 * 255.0 / _clkX * 1000.0;
 	const float timeOn2 = 512.0 * regOn2 * 255.0 / _clkX * 1000.0;
 
 	return (abs(timeOn1 - ms) < abs(timeOn2 - ms)) ? regOn1 : regOn2;
 }
 
-uint8_t SX1509::calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offIntensity)
+uint8_t SX1509::calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offIntensity) noexcept
 {
 	if (_clkX == 0)
 	{
 		return 0;
 	}
-	
+
 	const float tFactor = ((float) onIntensity - (4.0 * (float)offIntensity)) * 255.0 / (float) _clkX;
 	const float timeS = float(ms) / 1000.0;
-	
+
 	int regSlope1 = timeS / tFactor;
 	int regSlope2 = regSlope1 / 16;
-	
+
 	regSlope1 = constrain<int>(regSlope1, 1, 15);
 	regSlope2 = constrain<int>(regSlope2, 16, 31);
 
@@ -406,7 +406,7 @@ uint8_t SX1509::calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offI
 //	- deviceAddress should already be set by the constructor.
 //	- Return value is the uint8_t read from registerAddress
 //		- Currently returns 0 if communication has timed out
-uint8_t SX1509::readByte(uint8_t registerAddress)
+uint8_t SX1509::readByte(uint8_t registerAddress) noexcept
 {
 	uint8_t data[2];
 	data[0] = registerAddress;
@@ -422,7 +422,7 @@ uint8_t SX1509::readByte(uint8_t registerAddress)
 //	- A 16-bit unsigned int will be returned.
 //		- The msb of the return value will contain the value read from registerAddress
 //		- The lsb of the return value will contain the value read from registerAddress + 1
-uint16_t SX1509::readWord(uint8_t registerAddress)
+uint16_t SX1509::readWord(uint8_t registerAddress) noexcept
 {
 	uint8_t data[3];
 	data[0] = registerAddress;
@@ -438,7 +438,7 @@ uint16_t SX1509::readWord(uint8_t registerAddress)
 //	- A 32-bit unsigned int will be returned.
 //		- The msb of the return value will contain the value read from registerAddress
 //		- The lsb of the return value will contain the value read from registerAddress + 1
-uint32_t SX1509::readDword(uint8_t registerAddress)
+uint32_t SX1509::readDword(uint8_t registerAddress) noexcept
 {
 	uint8_t data[5];
 	data[0] = registerAddress;
@@ -454,7 +454,7 @@ uint32_t SX1509::readDword(uint8_t registerAddress)
 //	- writeValue is written to registerAddress
 //	- deviceAddress should already be set from the constructor
 //	- No return value.
-void SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
+void SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue) noexcept
 {
 	uint8_t data[2] = { registerAddress, writeValue };
 	(void)I2C::Transfer(deviceAddress, data, 2, 0);
@@ -465,7 +465,7 @@ void SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 //	- the upper uint8_t of writeValue is written to registerAddress
 //		- the lower uint8_t of writeValue is written to registerAddress + 1
 //	- No return value.
-void SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
+void SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue) noexcept
 {
 	uint8_t data[3] = { registerAddress, (uint8_t)(writeValue >> 8), (uint8_t)writeValue };
 	(void)I2C::Transfer(deviceAddress, data, 3, 0);
@@ -474,7 +474,7 @@ void SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
 // writeDword(uint8_t registerAddress, uint32_t writeValue)
 //	This function writes a four-uint8_t word to registerAddress .. registerAddress + 3, msb first
 //	- No return value.
-void SX1509::writeDword(uint8_t registerAddress, uint32_t writeValue)
+void SX1509::writeDword(uint8_t registerAddress, uint32_t writeValue) noexcept
 {
 	uint8_t data[5] = { registerAddress, (uint8_t)(writeValue >> 24), (uint8_t)(writeValue >> 16), (uint8_t)(writeValue >> 8), (uint8_t)writeValue };
 	(void)I2C::Transfer(deviceAddress, data, 5, 0);

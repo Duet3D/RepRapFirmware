@@ -25,9 +25,8 @@ Licence: GPL
 #define PLATFORM_H
 
 #include "RepRapFirmware.h"
-#include "SoftwareReset.h"
+#include "ObjectModel/ObjectModel.h"
 #include "Hardware/IoPorts.h"
-#include "DueFlashStorage.h"
 #include "Fans/FansManager.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
@@ -37,6 +36,8 @@ Licence: GPL
 #include "MessageType.h"
 #include "Tools/Spindle.h"
 #include "Endstops/EndstopsManager.h"
+#include <GPIO/GpInPort.h>
+#include <GPIO/GpOutPort.h>
 #include <General/IPAddress.h>
 
 #if defined(DUET_NG)
@@ -47,6 +48,12 @@ Licence: GPL
 # include "DAC/DAC084S085.h"       // SPI DAC for motor current vref
 # include "EUI48/EUI48EEPROM.h"    // SPI EUI48 mac address EEPROM
 # include "Microstepping.h"
+#elif defined(__LPC17xx__)
+# include "MCP4461/MCP4461.h"
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+# include <RemoteInputHandle.h>
 #endif
 
 #include <functional>
@@ -107,7 +114,8 @@ enum class BoardType : uint8_t
 {
 	Auto = 0,
 #if defined(DUET3)
-	Duet3 = 1
+	Duet3_v06_100 = 1,
+	Duet3_v101 = 2,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
@@ -127,6 +135,8 @@ enum class BoardType : uint8_t
 	PCCB_v10 = 1
 #elif defined(PCCB_08) || defined(PCCB_08_X5)
 	PCCB_v08 = 1
+#elif defined(__LPC17xx__)
+	Lpc = 1
 #else
 # error Unknown board
 #endif
@@ -148,6 +158,10 @@ enum class DiagnosticTestType : unsigned int
 	TimeSDWrite = 104,				// do a write timing test on the SD card
 	PrintObjectSizes = 105,			// print the sizes of various objects
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects
+
+#ifdef __LPC17xx__
+    PrintBoardConfiguration = 200,    //Prints out all pin/values loaded from SDCard to configure board
+#endif
 
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
@@ -249,24 +263,15 @@ struct AxisDriversConfig
 	DriverId driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
 };
 
-struct GpOutputPort
-{
-	PwmPort port;									// will be initialised by PwmPort default constructor
-#if SUPPORT_CAN_EXPANSION
-	CanAddress boardAddress;
-
-	GpOutputPort() noexcept { boardAddress = CanId::MasterAddress; }
-#endif
-};
-
 // The main class that defines the RepRap machine for the benefit of the other classes
-class Platform
+class Platform INHERIT_OBJECT_MODEL
 {
 public:
 	// Enumeration to describe the status of a drive
 	enum class DriverStatus : uint8_t { disabled, idle, enabled };
 
 	Platform() noexcept;
+	Platform(const Platform&) = delete;
 
 //-------------------------------------------------------------------------------------------------------------
 
@@ -278,39 +283,52 @@ public:
 	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(MessageType mtype) noexcept;
-	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d) noexcept;
+	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException);
+	bool WasDeliberateError() const noexcept { return deliberateError; }
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
 
-	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) noexcept;
 	bool AtxPower() const noexcept;
 	void AtxPowerOn() noexcept;
 	void AtxPowerOff(bool defer) noexcept;
+
+	BoardType GetBoardType() const noexcept { return board; }
 	void SetBoardType(BoardType bt) noexcept;
 	const char* GetElectronicsString() const noexcept;
 	const char* GetBoardString() const noexcept;
 
+#if SUPPORT_OBJECT_MODEL
+	size_t GetNumGpInputsToReport() const noexcept;
+	size_t GetNumGpOutputsToReport() const noexcept;
+#endif
+
 #ifdef DUET_NG
 	bool IsDuetWiFi() const noexcept;
 	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
+	const char *GetBoardName() const;
+	const char *GetBoardShortName() const;
 #endif
 
-	const uint8_t *GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
+	const MacAddress& GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
 
 	// Timing
 	void Tick() noexcept __attribute__((hot));						// Process a systick interrupt
 
 	// Real-time clock
 	bool IsDateTimeSet() const noexcept { return realTime != 0; }	// Has the RTC been set yet?
-	time_t GetDateTime() const noexcept { return realTime; }		// Retrieves the current RTC datetime and returns true if it's valid
+	time_t GetDateTime() const noexcept { return realTime; }		// Retrieves the current RTC datetime
+	bool GetDateTime(tm& rslt) const noexcept { return gmtime_r(&realTime, &rslt) != nullptr && realTime != 0; }
+																	// Retrieves the broken-down current RTC datetime and returns true if it's valid
 	bool SetDateTime(time_t time) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-	OutputBuffer *GetAuxGCodeReply() noexcept;						// Returns cached G-Code reply for AUX devices and clears its reference
 	void AppendAuxReply(OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(const char *msg, bool rawMessage) noexcept;
-    uint32_t GetAuxSeq() noexcept { return auxSeq; }
-    bool HaveAux() const noexcept { return auxDetected; }			// Any device on the AUX line?
-    void SetAuxDetected() noexcept { auxDetected = true; }
+
+    bool IsAuxEnabled() const noexcept { return auxEnabled; }		// Any device on the AUX line?
+    void EnableAux() noexcept;
+    bool IsAuxRaw() const noexcept { return auxRaw; }
+	void SetAuxRaw(bool raw) noexcept { auxRaw = raw; }
+	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
 
 	void SetIPAddress(IPAddress ip) noexcept;
 	IPAddress GetIPAddress() const noexcept;
@@ -329,8 +347,6 @@ public:
 #endif
 
 	// File functions
-	const char* GetConfigFile() const noexcept; 				// Where the configuration is stored (in the system dir).
-
 #if HAS_MASS_STORAGE
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool Delete(const char* folder, const char *filename) const noexcept;
@@ -340,7 +356,6 @@ public:
 	const char* GetWebDir() const noexcept; 					// Where the html etc files are
 	const char* GetGCodeDir() const noexcept; 					// Where the gcodes are
 	const char* GetMacroDir() const noexcept;					// Where the user-defined macros are
-	const char* GetDefaultFile() const noexcept;				// Where the default configuration is stored (in the system dir).
 
 	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char* dir, const StringRef& reply) noexcept;				// Set the system files path
@@ -348,7 +363,8 @@ public:
 	FileStore* OpenSysFile(const char *filename, OpenMode mode) const noexcept;
 	bool DeleteSysFile(const char *filename) const noexcept;
 	bool MakeSysFileName(const StringRef& result, const char *filename) const noexcept;
-	void GetSysDir(const StringRef & path) const noexcept;
+	void AppendSysDir(const StringRef & path) const noexcept;
+	void EncodeSysDir(OutputBuffer *buf) const noexcept;
 #endif
 
 	// Message output (see MessageType for further details)
@@ -366,6 +382,7 @@ public:
 	void SetDirection(size_t axisOrExtruder, bool direction) noexcept;
 	void SetDirectionValue(size_t driver, bool dVal) noexcept;
 	bool GetDirectionValue(size_t driver) const noexcept;
+	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
 	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
 	int8_t GetEnableValue(size_t driver) const noexcept;
 	void EnableLocalDrivers(size_t axisOrExtruder) noexcept;
@@ -405,7 +422,7 @@ public:
 	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisTotalLength(size_t axis) const noexcept;
 	float GetPressureAdvance(size_t extruder) const noexcept;
-	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply);
 
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const noexcept
 		pre(axis < MaxAxes)
@@ -436,8 +453,7 @@ public:
 
 	// Endstops and Z probe
 	EndstopsManager& GetEndstops() noexcept { return endstops; }
-	ZProbe& GetCurrentZProbe() noexcept { return endstops.GetCurrentZProbe(); }
-	ZProbeType GetCurrentZProbeType() const noexcept;
+	ReadLockedPointer<ZProbe> GetZProbeOrDefault(size_t probeNumber) noexcept { return endstops.GetZProbeOrDefault(probeNumber); }
 	void InitZProbeFilters() noexcept;
 	const volatile ZProbeAveragingFilter& GetZProbeOnFilter() const noexcept { return zProbeOnFilter; }
 	const volatile ZProbeAveragingFilter& GetZProbeOffFilter() const  noexcept{ return zProbeOffFilter; }
@@ -474,14 +490,14 @@ public:
 
 	// MCU temperature
 #if HAS_CPU_TEMP_SENSOR
-	void GetMcuTemperatures(float& minT, float& currT, float& maxT) const noexcept;
+	MinMaxCurrent GetMcuTemperatures() const noexcept;
 	void SetMcuTemperatureAdjust(float v) noexcept { mcuTemperatureAdjust = v; }
 	float GetMcuTemperatureAdjust() const noexcept { return mcuTemperatureAdjust; }
 #endif
 
 #if HAS_VOLTAGE_MONITOR
 	// Power in voltage
-	void GetPowerVoltages(float& minV, float& currV, float& maxV) const noexcept;
+	MinMaxCurrent GetPowerVoltages() const noexcept;
 	float GetCurrentPowerVoltage() const noexcept;
 	bool IsPowerOk() const noexcept;
 	void DisableAutoSave() noexcept;
@@ -491,12 +507,12 @@ public:
 
 #if HAS_12V_MONITOR
 	// 12V rail voltage
-	void GetV12Voltages(float& minV, float& currV, float& maxV) const noexcept;
+	MinMaxCurrent GetV12Voltages() const noexcept;
 #endif
 
 #if HAS_SMART_DRIVERS
 	float GetTmcDriversTemperature(unsigned int board) const noexcept;
-	void DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on) noexcept;
+	void DriverCoolingFansOnOff(DriverChannelsBitmap driverChannelsMonitored, bool on) noexcept;
 	unsigned int GetNumSmartDrivers() const noexcept { return numSmartDrivers; }
 #endif
 
@@ -507,56 +523,65 @@ public:
 #endif
 
 #if HAS_STALL_DETECT
-	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf);
+	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
 #endif
 
 #if HAS_MASS_STORAGE
 	// Logging support
-	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	const char *GetLogFileName() const noexcept;
 #endif
 
 	// Ancillary PWM
-	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void ExtrudeOn() noexcept;
 	void ExtrudeOff() noexcept;
 
 	// CNC and laser support
 	Spindle& AccessSpindle(size_t slot) noexcept { return spindles[slot]; }
 
+#if SUPPORT_LASER
 	void SetLaserPwm(Pwm_t pwm) noexcept;
 	float GetLaserPwm() const noexcept;							// return laser PWM in 0..1
 	bool AssignLaserPin(GCodeBuffer& gb, const StringRef& reply);
 	void SetLaserPwmFrequency(PwmFrequency freq) noexcept;
-
-	// Misc
-	GCodeResult ConfigurePort(GCodeBuffer& gb, const StringRef& reply);
-	const GpOutputPort& GetGpioPort(size_t gpioPortNumber) const noexcept
-	pre(gpioPortNumber < MaxGpioPorts)
-	{ return gpioPorts[gpioPortNumber]; }
-
-#if SAM4E || SAM4S || SAME70
-	uint32_t Random() noexcept;
-	void PrintUniqueId(MessageType mtype) noexcept;
 #endif
 
-private:
-	Platform(const Platform&) noexcept;						// private copy constructor to make sure we don't try to copy a Platform
+	// Misc
+	GCodeResult ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
-	const char* InternalGetSysDir() const noexcept;  		// where the system files are - not thread-safe!
+	GpOutputPort& GetGpOutPort(size_t gpoutPortNumber) noexcept
+		pre(gpioPortNumber < MaxGpOutPorts)	{ return gpoutPorts[gpoutPortNumber]; }
+	const GpInputPort& GetGpInPort(size_t gpinPortNumber) const noexcept
+		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
+
+#if SUPPORTS_UNIQUE_ID
+	uint32_t Random() noexcept;
+	const char *GetUniqueIdString() const noexcept { return uniqueIdChars; }
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
+#endif
+
+protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(axisDrivers)
+	OBJECT_MODEL_ARRAY(workplaceOffsets)
+
+private:
+	const char* InternalGetSysDir() const noexcept;  					// where the system files are - not thread-safe!
 
 	void RawMessage(MessageType type, const char *message) noexcept;	// called by Message after handling error/warning flags
 
-	void ResetChannel(size_t chan) noexcept;					// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint32_t reading) const noexcept;
 
-	GCodeResult ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply);
-
 #if SUPPORT_CAN_EXPANSION
-	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc, std::function<void(DriverId)> remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId){}); }
+	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc, std::function<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId){}); }
 #else
-	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func) noexcept { IterateDrivers(axisOrExtruder, func); }
+	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -572,12 +597,14 @@ private:
 	IPAddress ipAddress;
 	IPAddress netMask;
 	IPAddress gateWay;
-	uint8_t defaultMacAddress[6];
+	MacAddress defaultMacAddress;
 
 	// Board and processor
-#if SAM4E || SAM4S || SAME70
+#if SUPPORTS_UNIQUE_ID
 	uint32_t uniqueId[5];
+	char uniqueIdChars[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
 #endif
+
 	BoardType board;
 
 #ifdef DUET_NG
@@ -599,7 +626,7 @@ private:
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to
-	float standstillCurrentFraction[MaxAxesPlusExtruders];	// the percentages of normal motor current that each driver uses when in standstill
+	float standstillCurrentPercent[MaxAxesPlusExtruders];	// the percentages of normal motor current that each driver uses when in standstill
 	uint16_t microstepping[MaxAxesPlusExtruders];			// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
 	volatile DriverStatus driverState[MaxAxesPlusExtruders];
@@ -655,6 +682,8 @@ private:
 	Pin spiDacCS[MaxSpiDac];
 	DAC084S085 dacAlligator;
 	DAC084S085 dacPiggy;
+#elif defined(__LPC17xx__)
+	MCP4461 mcp4451;// works for 5561 (only volatile setting commands)
 #endif
 
 	// Endstops
@@ -665,7 +694,8 @@ private:
 	volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
 
 	// GPIO pins
-	GpOutputPort gpioPorts[MaxGpioPorts];
+	GpOutputPort gpoutPorts[MaxGpOutPorts];
+	GpInputPort gpinPorts[MaxGpInPorts];
 
 	// Thermistors and temperature monitoring
 	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters
@@ -699,9 +729,9 @@ private:
 	Mutex auxMutex;
 #endif
 
-	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
-	bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
+	bool auxEnabled;							// Do we have an AUX device?
+	bool auxRaw;								// true if aux device is in raw mode
 
 #ifdef SERIAL_AUX2_DEVICE
     volatile OutputStack aux2Output;
@@ -795,8 +825,11 @@ private:
 	Spindle spindles[MaxSpindles];
 	float extrusionAncilliaryPwmValue;
 	PwmPort extrusionAncilliaryPwmPort;
+
+#if SUPPORT_LASER
 	PwmPort laserPort;
 	float lastLaserPwm;
+#endif
 
 	// Power on/off
 	bool deferredPowerDown;
@@ -804,11 +837,6 @@ private:
 	// Misc
 	bool deliberateError;								// true if we deliberately caused an exception for testing purposes
 };
-
-inline const char* Platform::GetConfigFile() const noexcept
-{
-	return CONFIG_FILE;
-}
 
 #if HAS_MASS_STORAGE
 
@@ -827,11 +855,6 @@ inline const char* Platform::GetGCodeDir() const noexcept
 inline const char* Platform::GetMacroDir() const noexcept
 {
 	return MACRO_DIR;
-}
-
-inline const char* Platform::GetDefaultFile() const noexcept
-{
-	return CONFIG_BACKUP_FILE;
 }
 
 #endif
@@ -896,6 +919,14 @@ inline void Platform::SetDriverDirection(uint8_t driver, bool direction) noexcep
 	{
 		const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
 		digitalWrite(DIRECTION_PINS[driver], d);
+	}
+}
+
+inline void Platform::SetDriverAbsoluteDirection(size_t driver, bool direction) noexcept
+{
+	if (driver < NumDirectDrivers)
+	{
+		digitalWrite(DIRECTION_PINS[driver], direction);
 	}
 }
 
@@ -984,13 +1015,6 @@ inline float Platform::GetNozzleDiameter() const noexcept
 inline void Platform::SetNozzleDiameter(float diameter) noexcept
 {
 	nozzleDiameter = diameter;
-}
-
-inline OutputBuffer *Platform::GetAuxGCodeReply() noexcept
-{
-	OutputBuffer *temp = auxGCodeReply;
-	auxGCodeReply = nullptr;
-	return temp;
 }
 
 #endif

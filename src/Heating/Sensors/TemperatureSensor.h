@@ -5,14 +5,16 @@
 #include "Heating/TemperatureError.h"		// for result codes
 #include "Hardware/IoPorts.h"
 #include "GCodes/GCodeResult.h"
+#include <ObjectModel/ObjectModel.h>
 
 class GCodeBuffer;
 struct CanSensorReport;
 
-class TemperatureSensor
+class TemperatureSensor INHERIT_OBJECT_MODEL
 {
 public:
 	TemperatureSensor(unsigned int sensorNum, const char *type) noexcept;
+	TemperatureSensor(const TemperatureSensor&) = delete;
 
 	// Virtual destructor
 	virtual ~TemperatureSensor() noexcept;
@@ -30,7 +32,12 @@ public:
 	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
 	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.
 	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
-	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
+	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed);
+
+#if SUPPORT_OBJECT_MODEL
+	// Report the sensor type in the form corresponding to the Y parameter of M308.
+	virtual const char *GetShortSensorType() const noexcept = 0;
+#endif
 
 	// Return the sensor type
 	const char *GetSensorType() const noexcept { return sensorType; }
@@ -80,6 +87,8 @@ public:
 	virtual bool PollInTask() noexcept { return false; };		// Classes implementing this method need to also call Heat::EnsureSensorsTask() after succesful configuration
 
 protected:
+	DECLARE_OBJECT_MODEL
+
 	void SetResult(float t, TemperatureError rslt) noexcept;
 	void SetResult(TemperatureError rslt) noexcept;
 

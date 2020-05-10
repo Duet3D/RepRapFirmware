@@ -25,9 +25,9 @@ const char *const SoftwareResetData::ReasonText[] =
 	"Assertion failed",
 	"Heat task stuck",
 	"Memory protection fault",
-	"Unknown",
-	"Unknown",
-	"Unknown",
+	"Terminate called",
+	"Pure virtual function called",
+	"Deleted virtual function called",
 	"Unknown"
 };
 

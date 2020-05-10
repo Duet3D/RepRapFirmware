@@ -16,146 +16,108 @@
 
 #define STRINGIZE(_v) #_v
 
-CanMessageGenericConstructor::CanMessageGenericConstructor(const ParamDescriptor *p_param)
-	: paramTable(p_param), dataLen(0), err(nullptr)
+CanMessageGenericConstructor::CanMessageGenericConstructor(const ParamDescriptor *p_param) noexcept
+	: paramTable(p_param), dataLen(0)
 {
 	msg.paramMap = 0;
 }
 
-// Append a value to the data, returning true if it wouldn't fit
-bool CanMessageGenericConstructor::StoreValue(const void *vp, size_t sz)
+// Append a value to the data, throwing if it wouldn't fit
+void CanMessageGenericConstructor::StoreValue(const void *vp, size_t sz) THROWS(GCodeException)
 {
-	if (dataLen + sz <= sizeof(msg.data))
+	if (dataLen + sz > sizeof(msg.data))
 	{
-		memcpy(msg.data + dataLen, vp, sz);
-		dataLen += sz;
-		return false;
+		throw ConstructParseException("CAN message too long");
 	}
-	return true;
+	memcpy(msg.data + dataLen, vp, sz);
+	dataLen += sz;
 }
 
-// Insert a value in the data, returning true if it wouldn't fit
-bool CanMessageGenericConstructor::InsertValue(const void *vp, size_t sz, size_t pos)
+// Insert a value in the data, throwing if it wouldn't fit
+void CanMessageGenericConstructor::InsertValue(const void *vp, size_t sz, size_t pos) THROWS(GCodeException)
 {
-	if (dataLen + sz <= sizeof(msg.data))
+	if (dataLen + sz > sizeof(msg.data))
 	{
-		memmove(msg.data + pos + sz, msg.data + pos, dataLen - pos);
-		memcpy(msg.data + pos, vp, sz);
-		dataLen += sz;
-		return false;
+		throw ConstructParseException("CAN message too long");
 	}
-	return true;
+	memmove(msg.data + pos + sz, msg.data + pos, dataLen - pos);
+	memcpy(msg.data + pos, vp, sz);
+	dataLen += sz;
 }
 
-// Populate the CAN message from a GCode message returning true if successful. If an error occurs, write the message to 'reply' and return false.
-bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const StringRef& reply)
+// Populate the CAN message from a GCode message returning true if successful. Throws if an error occurs.
+void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(GCodeException)
 {
 	uint32_t paramBit = 1;
 	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
 	{
 		if (d->letter >= 'A' && d->letter <= 'Z' && gb.Seen(d->letter))
 		{
-			bool overflowed;
 			switch (d->type)
 			{
 			case ParamDescriptor::uint32:
-				{
-					const uint32_t val = gb.GetUIValue();
-					overflowed = StoreValue(val);
-				}
+				StoreValue(gb.GetUIValue());
 				break;
 
 			case ParamDescriptor::int32:
-				{
-					const int32_t val = gb.GetIValue();
-					overflowed = StoreValue(val);
-				}
+				StoreValue(gb.GetIValue());
 				break;
 
 			case ParamDescriptor::uint16:
-				{
-					const uint16_t val = (uint16_t)gb.GetUIValue();
-					overflowed = StoreValue(val);
-				}
+				StoreValue((uint16_t)min<uint32_t>(gb.GetUIValue(), std::numeric_limits<uint16_t>::max()));
 				break;
 
 			case ParamDescriptor::int16:
-				{
-					const int16_t val = (int16_t)gb.GetIValue();
-					overflowed = StoreValue(val);
-				}
+				StoreValue((int16_t)constrain<int32_t>(gb.GetIValue(), std::numeric_limits<int16_t>::min(), std::numeric_limits<int16_t>::max()));
 				break;
 
 			case ParamDescriptor::uint8:
-				{
-					const uint8_t val = (uint8_t)gb.GetUIValue();
-					overflowed = StoreValue(val);
-				}
+				StoreValue((uint8_t)min<uint32_t>(gb.GetUIValue(), std::numeric_limits<uint8_t>::max()));
+				break;
+
+			case ParamDescriptor::int8:
+				StoreValue((int8_t)constrain<int32_t>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max()));
 				break;
 
 			case ParamDescriptor::localDriver:
 				{
 					const DriverId id = gb.GetDriverId();
-					overflowed = StoreValue(id.localDriver);
-				}
-				break;
-
-			case ParamDescriptor::int8:
-				{
-					const int8_t val = (int8_t)gb.GetIValue();
-					overflowed = StoreValue(val);
+					StoreValue(id.localDriver);
 				}
 				break;
 
 			case ParamDescriptor::float_p:
-				{
-					const float val = gb.GetFValue();
-					overflowed = StoreValue(val);
-				}
+				StoreValue(gb.GetFValue());
 				break;
 
 			case ParamDescriptor::char_p:
 				{
 					String<StringLength20> str;
-					if (!gb.GetQuotedString(str.GetRef()))
-					{
-						reply.printf("expected quoted string after '%c'", d->letter);
-						return false;
-					}
+					gb.GetQuotedString(str.GetRef());
 					if (str.strlen() != 1)
 					{
-						reply.printf("expected single-character quoted string after '%c'", d->letter);
-						return false;
+						throw ConstructParseException("expected single-character quoted string after '%c'", (uint32_t)d->letter);
 					}
-					const char c = str[0];
-					overflowed = StoreValue(c);
+					StoreValue(str[0]);
 				}
 				break;
 
 			case ParamDescriptor::string:
 				{
 					String<StringLength20> str;
-					if (!gb.GetQuotedString(str.GetRef()))
-					{
-						reply.printf("expected quoted string after '%c'", d->letter);
-						return false;
-					}
-					overflowed = StoreValue(str.c_str(), str.strlen() + 1);
+					gb.GetQuotedString(str.GetRef());
+					StoreValue(str.c_str(), str.strlen() + 1);
 				}
 				break;
 
 			case ParamDescriptor::reducedString:
 				{
 					String<StringLength20> str;
-					if (!gb.GetReducedString(str.GetRef()))
-					{
-						reply.printf("expected quoted string after '%c'", d->letter);
-						return false;
-					}
+					gb.GetReducedString(str.GetRef());
 					// We don't want port names sent to expansion boards to include the board number, so remove the board number.
 					// We also use the reducedString type for sensor names, but they should't start with digits followed by '.'.
 					(void)IoPort::RemoveBoardAddress(str.GetRef());
-					overflowed = StoreValue(str.c_str(), str.strlen() + 1);
+					StoreValue(str.c_str(), str.strlen() + 1);
 				}
 				break;
 
@@ -166,10 +128,10 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 					uint32_t arr[59];				// max size is 59 * uint8_t + 1 length byte + parameters present bitmap = 64
 					size_t siz = min<size_t>(ARRAY_SIZE(arr), d->maxArrayLength);
 					gb.GetUnsignedArray(arr, siz, false);
-					overflowed = StoreValue((uint8_t)siz);
+					StoreValue((uint8_t)siz);
 					for (size_t i = 0; i < siz; ++i)
 					{
-						overflowed = overflowed && StoreValue(&arr[i], d->ItemSize());
+						StoreValue(&arr[i], d->ItemSize());
 					}
 				}
 				break;
@@ -179,32 +141,25 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 					float arr[14];
 					size_t siz = min<size_t>(ARRAY_SIZE(arr), d->maxArrayLength);
 					gb.GetFloatArray(arr, siz, false);
-					overflowed = StoreValue((uint8_t)siz);
+					StoreValue((uint8_t)siz);
 					for (size_t i = 0; i < siz; ++i)
 					{
-						overflowed = overflowed && StoreValue(arr[i]);
+						StoreValue(arr[i]);
 					}
 				}
 				break;
 
 			default:
-				reply.copy("internal error at " __FILE__ "(" STRINGIZE(#__LINE__) ")");
-				return false;
-			}
-			if (overflowed)
-			{
-				reply.copy("CAN message too long");
-				return false;
+				throw ConstructParseException("internal error at " __FILE__ "(" STRINGIZE(#__LINE__) ")");
 			}
 			msg.paramMap |= paramBit;
 		}
 		paramBit <<= 1;
 	}
-	return true;
 }
 
 //TODO factor out the common code in the following several routines
-void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v)
+void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -215,7 +170,7 @@ void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v)
 		{
 			if (present)
 			{
-				err = "duplicate parameter";
+				throw ConstructParseException("duplicate parameter");
 				return;
 			}
 			else
@@ -226,18 +181,11 @@ void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v)
 					break;
 
 				default:
-					err = "uval wrong parameter type";
-					return;
+					throw ConstructParseException("uval wrong parameter type");
 				}
 
-				if (InsertValue(&v, d->ItemSize(), pos))
-				{
-					err = "overflow";
-				}
-				else
-				{
-					msg.paramMap |= paramBit;
-				}
+				InsertValue(&v, d->ItemSize(), pos);
+				msg.paramMap |= paramBit;
 			}
 			return;
 		}
@@ -260,10 +208,10 @@ void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v)
 		}
 		paramBit <<= 1;
 	}
-	err = "wrong parameter letter";
+	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddUParam(char c, uint32_t v)
+void CanMessageGenericConstructor::AddUParam(char c, uint32_t v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -274,8 +222,7 @@ void CanMessageGenericConstructor::AddUParam(char c, uint32_t v)
 		{
 			if (present)
 			{
-				err = "duplicate parameter";
-				return;
+				throw ConstructParseException("duplicate parameter");
 			}
 			else
 			{
@@ -288,30 +235,23 @@ void CanMessageGenericConstructor::AddUParam(char c, uint32_t v)
 				case ParamDescriptor::pwmFreq:
 					if (v >= (1u << 16))
 					{
-						err = "uval too large";
+						throw ConstructParseException("uval too large");
 					}
 					break;
 
 				case ParamDescriptor::uint8:
 					if (v >= (1u << 8))
 					{
-						err = "uval too large";
+						throw ConstructParseException("uval too large");
 					}
 					break;
 
 				default:
-					err = "uval wrong parameter type";
-					return;
+					throw ConstructParseException("uval wrong parameter type");
 				}
 
-				if (InsertValue(&v, d->ItemSize(), pos))
-				{
-					err = "overflow";
-				}
-				else
-				{
-					msg.paramMap |= paramBit;
-				}
+				InsertValue(&v, d->ItemSize(), pos);
+				msg.paramMap |= paramBit;
 			}
 			return;
 		}
@@ -334,10 +274,10 @@ void CanMessageGenericConstructor::AddUParam(char c, uint32_t v)
 		}
 		paramBit <<= 1;
 	}
-	err = "wrong parameter letter";
+	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddIParam(char c, int32_t v)
+void CanMessageGenericConstructor::AddIParam(char c, int32_t v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -348,7 +288,7 @@ void CanMessageGenericConstructor::AddIParam(char c, int32_t v)
 		{
 			if (present)
 			{
-				err = "duplicate parameter";
+				throw ConstructParseException("duplicate parameter");
 			}
 			else
 			{
@@ -360,30 +300,24 @@ void CanMessageGenericConstructor::AddIParam(char c, int32_t v)
 				case ParamDescriptor::int16:
 					if (v >= (int32_t)(1u << 15) || v < -(int32_t)(1u << 15))
 					{
-						err = "ival too large";
+						throw ConstructParseException("ival too large");
 					}
 					break;
 
 				case ParamDescriptor::uint8:
 					if (v >= (int32_t)(1u << 7) || v < -(int32_t)(1u << 7))
 					{
-						err = "ival too large";
+						throw ConstructParseException("ival too large");
 					}
 					break;
 
 				default:
-					err = "ival wrong parameter type";
+					throw ConstructParseException("ival wrong parameter type");
 					return;
 				}
 
-				if (InsertValue(&v, d->ItemSize(), pos))
-				{
-					err = "overflow";
-				}
-				else
-				{
-					msg.paramMap |= paramBit;
-				}
+				InsertValue(&v, d->ItemSize(), pos);
+				msg.paramMap |= paramBit;
 			}
 			return;
 		}
@@ -406,10 +340,10 @@ void CanMessageGenericConstructor::AddIParam(char c, int32_t v)
 		}
 		paramBit <<= 1;
 	}
-	err = "wrong parameter letter";
+	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddFParam(char c, float v)
+void CanMessageGenericConstructor::AddFParam(char c, float v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -420,20 +354,14 @@ void CanMessageGenericConstructor::AddFParam(char c, float v)
 		{
 			if (present)
 			{
-				err = "duplicate parameter";
+				throw ConstructParseException("duplicate parameter");
 			}
 			else if (d->type != ParamDescriptor::float_p)
 			{
-				err = "fval wrong parameter type";
+				throw ConstructParseException("fval wrong parameter type");
 			}
-			else if (InsertValue(&v, d->ItemSize(), pos))
-			{
-				err = "overflow";
-			}
-			else
-			{
-				msg.paramMap |= paramBit;
-			}
+			InsertValue(&v, d->ItemSize(), pos);
+			msg.paramMap |= paramBit;
 			return;
 		}
 
@@ -455,10 +383,10 @@ void CanMessageGenericConstructor::AddFParam(char c, float v)
 		}
 		paramBit <<= 1;
 	}
-	err = "wrong parameter letter";
+	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddCharParam(char c, char v)
+void CanMessageGenericConstructor::AddCharParam(char c, char v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -469,20 +397,14 @@ void CanMessageGenericConstructor::AddCharParam(char c, char v)
 		{
 			if (present)
 			{
-				err = "duplicate parameter";
+				throw ConstructParseException("duplicate parameter");
 			}
 			else if (d->type != ParamDescriptor::char_p)
 			{
-				err = "cval wrong parameter type";
+				throw ConstructParseException("cval wrong parameter type");
 			}
-			else if (InsertValue(&v, d->ItemSize(), pos))
-			{
-				err = "overflow";
-			}
-			else
-			{
-				msg.paramMap |= paramBit;
-			}
+			InsertValue(&v, d->ItemSize(), pos);
+			msg.paramMap |= paramBit;
 			return;
 		}
 
@@ -504,10 +426,10 @@ void CanMessageGenericConstructor::AddCharParam(char c, char v)
 		}
 		paramBit <<= 1;
 	}
-	err = "wrong parameter letter";
+	throw ConstructParseException("wrong parameter letter");
 }
 
-void CanMessageGenericConstructor::AddStringParam(char c, const char *v)
+void CanMessageGenericConstructor::AddStringParam(char c, const char *v) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -518,7 +440,7 @@ void CanMessageGenericConstructor::AddStringParam(char c, const char *v)
 		{
 			if (present)
 			{
-				err = "duplicate parameter";
+				throw ConstructParseException("duplicate parameter");
 			}
 			else
 			{
@@ -526,21 +448,14 @@ void CanMessageGenericConstructor::AddStringParam(char c, const char *v)
 				{
 				case ParamDescriptor::string:
 				case ParamDescriptor::reducedString:			//TODO currently we don't reduce the string, but it should already be reduced
-					if (InsertValue(v, strlen(v) + 1, pos))
-					{
-						err = "overflow";
-					}
-					else
-					{
-						msg.paramMap |= paramBit;
-					}
-					break;
+					InsertValue(v, strlen(v) + 1, pos);
+					msg.paramMap |= paramBit;
+					return;
 
 				default:
-					err = "sval wrong parameter type";
+					throw ConstructParseException("sval wrong parameter type");
 				}
 			}
-			return;
 		}
 
 		if (present)
@@ -561,10 +476,10 @@ void CanMessageGenericConstructor::AddStringParam(char c, const char *v)
 		}
 		paramBit <<= 1;
 	}
-	err = "wrong parameter letter";
+	throw ConstructParseException("wrong parameter letter");
 }
 
-GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply)
+GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) noexcept
 {
 	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)

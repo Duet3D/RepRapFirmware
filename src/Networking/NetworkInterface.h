@@ -14,17 +14,18 @@
 class NetworkInterface INHERIT_OBJECT_MODEL
 {
 public:
+	NetworkInterface() : state(NetworkState::disabled) { }
+	NetworkInterface(const NetworkInterface&) = delete;
+
 	virtual void Init() noexcept = 0;
 	virtual void Activate() noexcept = 0;
 	virtual void Exit() noexcept = 0;
 	virtual void Spin() noexcept = 0;
-	virtual void Interrupt() noexcept { };
 	virtual void Diagnostics(MessageType mtype) noexcept = 0;
 
 	virtual GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept = 0;
 	virtual GCodeResult GetNetworkState(const StringRef& reply) noexcept = 0;
 	virtual int EnableState() const noexcept = 0;
-	virtual bool InNetworkStack() const noexcept = 0;
 	virtual bool IsWiFiInterface() const noexcept = 0;
 
 	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept = 0;
@@ -35,8 +36,8 @@ public:
 
 	virtual IPAddress GetIPAddress() const noexcept = 0;
 	virtual void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept = 0;
-	virtual void SetMacAddress(const uint8_t mac[]) noexcept = 0;
-	virtual const uint8_t *GetMacAddress() const noexcept = 0;
+	virtual GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept = 0;
+	virtual const MacAddress& GetMacAddress() const noexcept = 0;
 
 	virtual void UpdateHostname(const char *hostname) noexcept = 0;
 
@@ -46,8 +47,15 @@ public:
 	Mutex interfaceMutex;							// mutex to protect against multiple tasks using the same interface concurrently. Public so that sockets can lock it.
 
 protected:
+	NetworkState::RawType GetState() const noexcept { return state.RawValue(); }
+	void SetState(NetworkState::RawType newState) noexcept;
+	const char *GetStateName() const noexcept { return state.ToString(); }
+
 	Port portNumbers[NumProtocols];					// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+
+private:
+	NetworkState state;
 };
 
 #endif /* SRC_NETWORKING_NETWORKINTERFACE_H_ */

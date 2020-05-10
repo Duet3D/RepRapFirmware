@@ -14,20 +14,20 @@
 class LocalZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) { return Allocate<LocalZProbe>(); }
-	void operator delete(void* p) { Release<LocalZProbe>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<LocalZProbe>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<LocalZProbe>(p); }
 
-	LocalZProbe(unsigned int num) : ZProbe(num, ZProbeType::none) { }
-	~LocalZProbe() override;
-	void SetIREmitter(bool on) const override;
-	uint16_t GetRawReading() const override;
-	void SetProbing(bool isProbing) const override;
-	GCodeResult AppendPinNames(const StringRef& str) const override;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
-	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) override;
+	LocalZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
+	~LocalZProbe() noexcept override;
+	void SetIREmitter(bool on) const noexcept override;
+	uint16_t GetRawReading() const noexcept override;
+	void SetProbing(bool isProbing) noexcept override;
+	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
+	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept override;
 
 #if ALLOCATE_DEFAULT_PORTS
-	bool AssignPorts(const char *pinNames, const StringRef& reply);
+	bool AssignPorts(const char *pinNames, const StringRef& reply) noexcept;
 #endif
 
 private:
@@ -35,8 +35,8 @@ private:
 	IoPort modulationPort;			// the modulation port we are using
 
 	// Variable for programming Smart Effector and other programmable Z probes
-	static bool TimerInterrupt(CallbackParameter param, StepTimer::Ticks& when);
-	bool Interrupt(uint32_t& when);
+	static void TimerInterrupt(CallbackParameter param) noexcept;
+	void Interrupt() noexcept;
 
 	StepTimer timer;
 	uint8_t progBytes[MaxZProbeProgramBytes];
@@ -50,7 +50,7 @@ private:
 };
 
 // If this is a dumb modulated IR probe, set the IR LED on or off. Called from the tick ISR, so inlined for speed.
-inline void LocalZProbe::SetIREmitter(bool on) const
+inline void LocalZProbe::SetIREmitter(bool on) const noexcept
 {
 	if (type == ZProbeType::dumbModulated)
 	{

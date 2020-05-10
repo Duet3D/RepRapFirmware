@@ -38,7 +38,7 @@
 #ifndef LWIP_HDR_APPS_MDNS_OPTS_H
 #define LWIP_HDR_APPS_MDNS_OPTS_H
 
-#include <Lwip/src/include/lwip/opt.h>
+#include "lwip/opt.h"
 
 /**
  * @defgroup mdns_opts Options
@@ -56,7 +56,14 @@
 
 /** The maximum number of services per netif */
 #ifndef MDNS_MAX_SERVICES
-#define MDNS_MAX_SERVICES               4
+#define MDNS_MAX_SERVICES               1
+#endif
+
+/** MDNS_RESP_USENETIF_EXTCALLBACK==1: register an ext_callback on the netif
+ * to automatically restart probing/announcing on status or address change.
+ */
+#ifndef MDNS_RESP_USENETIF_EXTCALLBACK
+#define MDNS_RESP_USENETIF_EXTCALLBACK  LWIP_NETIF_EXT_STATUS_CALLBACK
 #endif
 
 /**

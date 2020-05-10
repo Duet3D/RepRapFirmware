@@ -30,6 +30,8 @@
 #  define PLATFORM DuetM
 # elif defined(PCCB)
 #  define PLATFORM Pccb
+# elif defined(__LPC17xx__)
+#  define PLATFORM LPC
 # else
 #  error Unknown platform
 # endif
@@ -102,6 +104,10 @@
 # define SUPPORT_OBJECT_MODEL	0
 #endif
 
+#ifndef TRACK_OBJECT_NAMES
+# define TRACK_OBJECT_NAMES		0
+#endif
+
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)
 #define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)
 
@@ -164,6 +170,13 @@
 
 #ifndef ALLOCATE_DEFAULT_PORTS
 # define ALLOCATE_DEFAULT_PORTS	0
+#endif
+
+// We must define SUPPORTS_UNIQUE_ID as either 0 or 1 so we can use it in maths
+#if SAM4E || SAM4S || SAME70
+# define SUPPORTS_UNIQUE_ID		1
+#else
+# define SUPPORTS_UNIQUE_ID		0
 #endif
 
 #endif // PINS_H__

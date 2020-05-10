@@ -128,14 +128,15 @@ float RemoteHeater::GetAccumulator() const noexcept
 	return 0.0;		// not supported
 }
 
-void RemoteHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept
+GCodeResult RemoteHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept
 {
-	//TODO
+	reply.copy("remote heater auto tune not implemented");
+	return GCodeResult::error;
 }
 
 void RemoteHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 {
-	//TODO
+	reply.copy("remote heater auto tune not implemented");
 }
 
 void RemoteHeater::Suspend(bool sus) noexcept
@@ -189,7 +190,7 @@ GCodeResult RemoteHeater::UpdateModel(const StringRef& reply) noexcept
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 		CanMessageUpdateHeaterModel * const msg = buf->SetupRequestMessage<CanMessageUpdateHeaterModel>(rid, CanInterface::GetCanAddress(), boardAddress);
-		model.SetupCanMessage(GetHeaterNumber(), *msg);
+		GetModel().SetupCanMessage(GetHeaterNumber(), *msg);
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}
 
@@ -207,6 +208,29 @@ GCodeResult RemoteHeater::UpdateFaultDetectionParameters(const StringRef& reply)
 		msg->heater = GetHeaterNumber();
 		msg->maxFaultTime = GetMaxHeatingFaultTime();
 		msg->maxTempExcursion = GetMaxTemperatureExcursion();
+		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	}
+
+	reply.copy("No CAN buffer");
+	return GCodeResult::error;
+}
+
+GCodeResult RemoteHeater::UpdateHeaterMonitors(const StringRef& reply) noexcept
+{
+	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	if (buf != nullptr)
+	{
+		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+		CanMessageSetHeaterMonitors * const msg = buf->SetupRequestMessage<CanMessageSetHeaterMonitors>(rid, CanInterface::GetCanAddress(), boardAddress);
+		msg->heater = GetHeaterNumber();
+		msg->numMonitors = MaxMonitorsPerHeater;
+		for (size_t i = 0; i < MaxMonitorsPerHeater; ++i)
+		{
+			msg->monitors[i].limit = monitors[i].GetTemperatureLimit();
+			msg->monitors[i].sensor = monitors[i].GetSensorNumber();
+			msg->monitors[i].action = (uint8_t)monitors[i].GetAction();
+			msg->monitors[i].trigger = (int8_t)monitors[i].GetTrigger();
+		}
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}
 

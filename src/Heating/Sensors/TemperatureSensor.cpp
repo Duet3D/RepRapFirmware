@@ -24,6 +24,30 @@
 # include "CAN/CanInterface.h"
 #endif
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(TemperatureSensor, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. TemperatureSensor members
+	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature, 1), 	ObjectModelEntryFlags::live },
+	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
+	{ "type",			OBJECT_MODEL_FUNC(self->GetShortSensorType()), 	ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 3 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
+
+#endif
+
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t) noexcept
 	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
@@ -64,11 +88,10 @@ void TemperatureSensor::SetSensorName(const char *newName) noexcept
 }
 
 // Default implementation of Configure, for sensors that have no configurable parameters
-GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	TryConfigureSensorName(gb, seen);
-	if (!seen && !gb.Seen('Y'))
+	TryConfigureSensorName(gb, changed);
+	if (!changed && !gb.Seen('Y'))
 	{
 		// No parameters were provided, so report the current configuration
 		CopyBasicDetails(reply);

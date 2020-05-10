@@ -450,11 +450,12 @@ bool HttpResponder::CharFromClient(char c) noexcept
 bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen) noexcept
 {
 	keepOpen = false;	// assume we don't want to persist the connection
-	if (StringEqualsIgnoreCase(request, "connect") && GetKeyValue("password") != nullptr)
+	const char *parameter;
+	if (StringEqualsIgnoreCase(request, "connect") && (parameter = GetKeyValue("password")) != nullptr)
 	{
 		if (!CheckAuthenticated())
 		{
-			if (!reprap.CheckPassword(GetKeyValue("password")))
+			if (!reprap.CheckPassword(parameter))
 			{
 				// Wrong password
 				response->copy("{\"err\":1}");
@@ -471,7 +472,8 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		}
 
 		// Client has been logged in
-		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\"}", HttpSessionTimeout, GetPlatform().GetBoardString());
+		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\",\"apiLevel\":%u}",
+							HttpSessionTimeout, GetPlatform().GetBoardString(), ApiLevel);
 		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
 
 		// See if we can update the current RTC date and time
@@ -480,7 +482,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		{
 			struct tm timeInfo;
 			memset(&timeInfo, 0, sizeof(timeInfo));
-			if (strptime(timeString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+			if (SafeStrptime(timeString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 			{
 				GetPlatform().SetDateTime(mktime(&timeInfo));
 			}
@@ -502,7 +504,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		if (typeString != nullptr)
 		{
 			// New-style JSON status responses
-			int type = SafeStrtol(typeString);
+			int32_t type = StrToI32(typeString);
 			if (type < 1 || type > 3)
 			{
 				type = 1;
@@ -518,10 +520,15 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			response = reprap.GetLegacyStatusResponse(1, 0);
 		}
 	}
-	else if (StringEqualsIgnoreCase(request, "gcode") && GetKeyValue("gcode") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "gcode"))
 	{
+		const char *command = GetKeyValue("gcode");
 		NetworkGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
-		httpInput->Put(HttpMessage, GetKeyValue("gcode"));
+		// If the command is empty, just report the buffer space. This allows rr_gcode to be used to poll the buffer space without using it up.
+		if (command != nullptr && command[0] != 0)
+		{
+			httpInput->Put(HttpMessage, command);
+		}
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
 #if HAS_MASS_STORAGE
@@ -529,17 +536,17 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	{
 		response->printf("{\"err\":%d}", (uploadError) ? 1 : 0);
 	}
-	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "delete") && (parameter = GetKeyValue("name")) != nullptr)
 	{
-		const bool ok = GetPlatform().Delete(FS_PREFIX, GetKeyValue("name"));
+		const bool ok = MassStorage::Delete(parameter, false);
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
-	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "filelist") && (parameter = GetKeyValue("dir")) != nullptr)
 	{
 		OutputBuffer::Release(response);
 		const char* const firstVal = GetKeyValue("first");
-		const unsigned int startAt = (firstVal == nullptr) ? 0 : (unsigned int)SafeStrtol(firstVal);
-		response = reprap.GetFilelistResponse(GetKeyValue("dir"), startAt);		// this may return nullptr
+		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
+		response = reprap.GetFilelistResponse(parameter, startAt);		// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "files"))
 	{
@@ -550,9 +557,9 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			dir = GetPlatform().GetGCodeDir();
 		}
 		const char* const firstVal = GetKeyValue("first");
-		const unsigned int startAt = (firstVal == nullptr) ? 0 : SafeStrtol(firstVal);
+		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
 		const char* const flagDirsVal = GetKeyValue("flagDirs");
-		const bool flagDirs = flagDirsVal != nullptr && SafeStrtol(flagDirsVal) == 1;
+		const bool flagDirs = flagDirsVal != nullptr && StrToU32(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "move"))
@@ -564,9 +571,9 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		{
 			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && MassStorage::FileExists(oldVal) && MassStorage::FileExists(newVal))
 			{
-				MassStorage::Delete(newVal);
+				MassStorage::Delete(newVal, false);
 			}
-			success = MassStorage::Rename(oldVal, newVal);
+			success = MassStorage::Rename(oldVal, newVal, false);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
@@ -576,7 +583,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		bool success = false;
 		if (dirVal != nullptr)
 		{
-			success = MassStorage::MakeDirectory(dirVal);
+			success = MassStorage::MakeDirectory(dirVal, false);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
@@ -608,6 +615,15 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		responderState = ResponderState::gettingFileInfo;
 		return false;
 	}
+#if SUPPORT_OBJECT_MODEL
+	else if (StringEqualsIgnoreCase(request, "model"))
+	{
+		OutputBuffer::Release(response);
+		const char *const filterVal = GetKeyValue("key");
+		const char *const flagsVal = GetKeyValue("flags");
+		response = reprap.GetModelResponse(filterVal, flagsVal);
+	}
+#endif
 	else if (StringEqualsIgnoreCase(request, "config"))
 	{
 		OutputBuffer::Release(response);
@@ -746,40 +762,55 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile) noexc
 			nameOfFileToSend = INDEX_PAGE_FILE;
 		}
 
-		for (;;)
+		if (isWebFile && strlen(nameOfFileToSend) > MaxExpectedWebDirFilenameLength)
 		{
-			// Try to open a gzipped version of the file first
-			if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+			// We have been asked for a file with a very long name. Don't try to open it, because that may lead to MassStorage::CombineName generating an error message.
+			// Instead, report a possible virus attack from the sending IP address.
+			// Exception: it if is an OCSP request, just return 404.
+			if (!StringStartsWith(nameOfFileToSend, "/ocsp"))
 			{
-				String<MaxFilenameLength> nameBuf;
-				nameBuf.copy(nameOfFileToSend);
-				nameBuf.cat(".gz");
-				fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf.c_str(), OpenMode::read);
+				GetPlatform().MessageF(WarningMessage,
+										"IP %s requested file '%.20s...' from HTTP server, possibly a virus attack\n",
+										IP4String(GetRemoteIP()).c_str(), nameOfFileToSend);
+			}
+		}
+		else
+		{
+			for (;;)
+			{
+				// Try to open a gzipped version of the file first
+				if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+				{
+					String<MaxFilenameLength> nameBuf;
+					nameBuf.copy(nameOfFileToSend);
+					nameBuf.cat(".gz");
+					fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf.c_str(), OpenMode::read);
+					if (fileToSend != nullptr)
+					{
+						zip = true;
+						break;
+					}
+				}
+
+				// That failed, so try to open the normal version of the file
+				fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
 				if (fileToSend != nullptr)
 				{
-					zip = true;
 					break;
 				}
-			}
 
-			// That failed, so try to open the normal version of the file
-			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
-			if (fileToSend != nullptr)
-			{
-				break;
-			}
-
-			if (StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
-			{
-				nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
-			}
-			else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
-			{
-				nameOfFileToSend = INDEX_PAGE_FILE;
-			}
-			else
-			{
-				break;
+				if (StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
+				{
+					nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
+				}
+				else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
+				{
+					nameOfFileToSend = INDEX_PAGE_FILE;
+				}
+				else
+				{
+					break;
+				}
 			}
 		}
 
@@ -974,6 +1005,10 @@ void HttpResponder::SendJsonResponse(const char* command) noexcept
 		// Unfortunately the protocol is prone to deadlocking, because if most output buffers are used up holding a GCode reply,
 		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
 		// Until we fix the protocol, the best we can do is time out and throw some GCode responses away.
+#if 1
+		// DC 2020-05-05: we no longer retry or discard responses if there are no buffers available, instead we return a 503 error immediately
+		{
+#else
 		if (millis() - startedProcessingRequestAt >= MaxBufferWaitTime)
 		{
 			{
@@ -987,6 +1022,7 @@ void HttpResponder::SendJsonResponse(const char* command) noexcept
 					return;					// next time we try, hopefully there will be a spare buffer
 				}
 			}
+#endif
 
 			// We've freed all the buffer we have
 			ReportOutputBufferExhaustion(__FILE__, __LINE__);
@@ -1163,7 +1199,7 @@ void HttpResponder::ProcessRequest() noexcept
 					{
 						if (StringEqualsIgnoreCase(headers[i].key, "Content-Length"))
 						{
-							postFileLength = atoi(headers[i].value);
+							postFileLength = StrToU32(headers[i].value);
 							contentLengthFound = true;
 							break;
 						}
@@ -1198,7 +1234,7 @@ void HttpResponder::ProcessRequest() noexcept
 					{
 						struct tm timeInfo;
 						memset(&timeInfo, 0, sizeof(timeInfo));
-						if (strptime(lastModifiedString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+						if (SafeStrptime(lastModifiedString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 						{
 							fileLastModified  = mktime(&timeInfo);
 						}
@@ -1505,7 +1541,7 @@ HttpResponder::HttpSession HttpResponder::sessions[MaxHttpSessions];
 unsigned int HttpResponder::numSessions = 0;
 unsigned int HttpResponder::clientsServed = 0;
 
-volatile uint32_t HttpResponder::seq = 0;
+volatile uint16_t HttpResponder::seq = 0;
 volatile OutputStack HttpResponder::gcodeReply;
 Mutex HttpResponder::gcodeReplyMutex;
 

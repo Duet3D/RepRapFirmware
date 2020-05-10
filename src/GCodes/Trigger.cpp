@@ -7,61 +7,221 @@
 
 #include "Trigger.h"
 #include "RepRap.h"
+#include "GCodes.h"
 #include "PrintMonitor.h"
+#include "GCodeBuffer/GCodeBuffer.h"
 
-Trigger::Trigger()
+Trigger::Trigger() noexcept : condition(0)
 {
-	condition = 0;
 }
 
 // Initialise the trigger
-void Trigger::Init()
+void Trigger::Init() noexcept
 {
-	for (IoPort& port : ports)
-	{
-		port.Release();
-	}
+	highLevelEndstops.Clear();
+	lowLevelEndstops.Clear();
+	highLevelInputs.Clear();
+	lowLevelInputs.Clear();
 	condition = 0;
 }
 
 // Return true if this trigger is unused, i.e. it doesn't watch any pins
-bool Trigger::IsUnused() const
+bool Trigger::IsUnused() const noexcept
 {
-	for (const IoPort& port : ports)
-	{
-		if (port.IsValid())
-		{
-			return false;
-		}
-	}
-	return true;
+	return highLevelEndstops.IsEmpty() && lowLevelEndstops.IsEmpty() && highLevelInputs.IsEmpty() && lowLevelInputs.IsEmpty();
 }
 
 // Check whether this trigger is active and update the input states
-bool Trigger::Check()
+bool Trigger::Check() noexcept
 {
 	bool triggered = false;
-	for (unsigned int i = 0; i < ARRAY_SIZE(ports); ++i)
+
+	// Check the endstops
+	EndstopsManager& endstops = reprap.GetPlatform().GetEndstops();
+	(highLevelEndstops | lowLevelEndstops)
+		.Iterate([this, &endstops, &triggered](unsigned int axis, unsigned int)
+					{
+						const bool stopped = (endstops.Stopped(axis) == EndStopHit::atStop);
+						if (stopped != endstopStates.IsBitSet(axis))
+						{
+							if (stopped)
+							{
+								endstopStates.SetBit(axis);
+								if (highLevelEndstops.IsBitSet(axis))
+								{
+									triggered = true;
+								}
+							}
+							else
+							{
+								endstopStates.ClearBit(axis);
+								if (lowLevelEndstops.IsBitSet(axis))
+								{
+									triggered = true;
+								}
+							}
+						}
+					}
+				);
+
+	Platform& platform = reprap.GetPlatform();
+	(highLevelInputs | lowLevelInputs)
+		.Iterate([this, &platform, &triggered](unsigned int inPort, unsigned int)
+					{
+						const bool isActive = reprap.GetPlatform().GetGpInPort(inPort).GetState();
+						if (isActive != inputStates.IsBitSet(inPort))
+						{
+							if (isActive)
+							{
+								inputStates.SetBit(inPort);
+								if (highLevelInputs.IsBitSet(inPort))
+								{
+									triggered = true;
+								}
+							}
+							else
+							{
+								inputStates.ClearBit(inPort);
+								if (lowLevelInputs.IsBitSet(inPort))
+								{
+									triggered = true;
+								}
+							}
+
+						}
+					}
+				);
+
+	return triggered && (condition == 0 || (condition > 0 && reprap.GetPrintMonitor().IsPrinting()));
+}
+
+// Handle M581 for this trigger
+GCodeResult Trigger::Configure(unsigned int number, GCodeBuffer &gb, const StringRef &reply)
+{
+	bool seen = false;
+	if (gb.Seen('R'))
 	{
-		if (!ports[i].IsValid())					// reached the end of the used ports
+		seen = true;
+		condition = gb.GetIValue();
+	}
+	else if (IsUnused())
+	{
+		condition = 0;					// this is a new trigger, so set no condition
+	}
+
+	const int sParam = (gb.Seen('S')) ? gb.GetIValue() : 1;
+	if (gb.Seen('P'))
+	{
+		if (gb.GetIValue() == -1)
 		{
-			break;
+			Init();						// P-1 clears all inputs and sets condition to 0
+			return GCodeResult::ok;
 		}
-		const bool b = ports[i].Read();
-		if (b != IsBitSet(inputStates, i))			// if the input level has changed
+		else
 		{
-			if (b)
+			seen = true;
+			gb.Seen('P');
+			uint32_t inputNumbers[MaxGpInPorts];
+			size_t numValues = MaxGpInPorts;
+			gb.GetUnsignedArray(inputNumbers, numValues, false);
+			const InputPortsBitmap portsToWaitFor = InputPortsBitmap::MakeFromArray(inputNumbers, numValues);
+			if (sParam < 0)
 			{
-				SetBit(inputStates, i);
-				triggered = true;
+				highLevelInputs &= ~portsToWaitFor;
+				lowLevelInputs &= ~portsToWaitFor;
 			}
 			else
 			{
-				ClearBit(inputStates, i);
+				((sParam >= 1) ? highLevelInputs : lowLevelInputs) |= portsToWaitFor;
 			}
 		}
 	}
-	return triggered && (condition == 0 || (condition == 1 && reprap.GetPrintMonitor().IsPrinting()));
+
+	AxesBitmap endstopsToWaitFor;
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
+	{
+		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
+		{
+			seen = true;
+			endstopsToWaitFor.SetBit(axis);
+		}
+	}
+
+	if (sParam < 0)
+	{
+		highLevelEndstops &= ~endstopsToWaitFor;
+		lowLevelEndstops &= ~endstopsToWaitFor;
+	}
+	else
+	{
+		((sParam >= 1) ? highLevelEndstops : lowLevelEndstops) |= endstopsToWaitFor;
+	}
+
+	inputStates.Clear();
+	(void)Check();					// set up initial input states
+
+	if (!seen)
+	{
+		reply.printf("Trigger %u ", number);
+		if (IsUnused())
+		{
+			reply.cat("is not configured");
+		}
+		else
+		{
+			if (condition < 0)
+			{
+				reply.cat("if enabled would fire on a");
+			}
+			else if (condition > 0)
+			{
+				reply.cat("fires only when printing on a");
+			}
+			else
+			{
+				reply.cat("fires on a");
+			}
+			const bool hasHighLevel = !highLevelEndstops.IsEmpty() || !highLevelInputs.IsEmpty();
+			if (hasHighLevel)
+			{
+				reply.cat(" rising edge of endstops/inputs");
+				AppendInputNames(highLevelEndstops, highLevelInputs, reply);
+			}
+			const bool hasLowLevel = !lowLevelEndstops.IsEmpty() || !lowLevelInputs.IsEmpty();
+			if (hasLowLevel)
+			{
+				if (hasHighLevel)
+				{
+					reply.cat(" or a");
+				}
+				reply.cat(" falling edge of endstops/inputs");
+				AppendInputNames(lowLevelEndstops, lowLevelInputs, reply);
+			}
+		}
+	}
+	return GCodeResult::ok;
+}
+
+// Handle M582 for this trigger
+bool Trigger::CheckLevel() noexcept
+{
+	endstopStates = lowLevelEndstops;
+	inputStates = lowLevelInputs;
+	return Check();
+}
+
+void Trigger::AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs, const StringRef &reply) noexcept
+{
+	if (endstops.IsEmpty() && inputs.IsEmpty())
+	{
+		reply.cat(" (none)");
+	}
+	else
+	{
+		const char* const axisLetters = reprap.GetGCodes().GetAxisLetters();
+		endstops.Iterate([axisLetters, &reply](unsigned int axis, unsigned int) noexcept { reply.catf(" %c", axisLetters[axis]); } );
+		inputs.Iterate([&reply](unsigned int port, unsigned int) noexcept { reply.catf(" %d", port); } );
+	}
 }
 
 // End

@@ -34,23 +34,36 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			1		// use XDMA controller
 
+#elif defined(__LPC17xx__)
+
+# define USE_PDC            0        // use peripheral DMA controller
+# define USE_DMAC           0        // use general DMA controller
+# define USE_XDMAC          0        // use XDMA controller
+
+//Compatibility with existing RRF Code
+constexpr Pin APIN_ESP_SPI_MISO = SPI0_MOSI;
+constexpr Pin APIN_ESP_SPI_SCK = SPI0_SCK;
+constexpr SSPChannel ESP_SPI = SSP0;
+
 #else
 # error Unknown board
 #endif
 
 #if USE_PDC
-#include "pdc/pdc.h"
+# include "pdc/pdc.h"
 #endif
 
 #if USE_DMAC
-#include "dmac/dmac.h"
+# include "dmac/dmac.h"
 #endif
 
 #if USE_XDMAC
-#include "xdmac/xdmac.h"
+# include "xdmac/xdmac.h"
 #endif
 
-#include "matrix/matrix.h"
+#ifndef __LPC17xx__
+# include "matrix/matrix.h"
+#endif
 
 const uint32_t WifiResponseTimeoutMillis = 200;
 const uint32_t WiFiWaitReadyMillis = 100;
@@ -60,8 +73,8 @@ const uint32_t WiFiStableMillis = 100;
 const unsigned int MaxHttpConnections = 4;
 
 // Forward declarations of static functions
-static void spi_dma_disable();
-static bool spi_dma_check_rx_complete();
+static void spi_dma_disable() noexcept;
+static bool spi_dma_check_rx_complete() noexcept;
 
 struct MessageBufferOut
 {
@@ -106,6 +119,10 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength) noex
 }
 #endif
 
+#ifdef __LPC17xx__
+# include "WiFiInterface_LPC.hpp"
+#endif
+
 static void EspTransferRequestIsr(CallbackParameter) noexcept
 {
 	wifiInterface->EspRequestsTransfer();
@@ -124,8 +141,8 @@ static inline void DisableEspInterrupt() noexcept
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullptr), ftpDataPort(0), closeDataPort(false),
-		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
+WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullptr), espWaitingTask(nullptr), ftpDataPort(0), closeDataPort(false),
+		requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
 		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
 	wifiInterface = this;
@@ -155,14 +172,19 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullp
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(WiFiInterface, _ret)
 
-const ObjectModelTableEntry WiFiInterface::objectModelTable[] =
+constexpr ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
-	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
-	{ "name", OBJECT_MODEL_FUNC_NOSELF("wifi"), TYPE_OF(const char *), ObjectModelTableEntry::none },
-	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),				ObjectModelEntryFlags::none },
+	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion),		ObjectModelEntryFlags::none },
+	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),				ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),			ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),		ObjectModelEntryFlags::none },
+	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),				ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),				ObjectModelEntryFlags::none },
 };
+
+constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 7 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
 
@@ -198,7 +220,7 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		MutexLocker lock(interfaceMutex);
 
-		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
+		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
 			ShutdownProtocol(protocol);
@@ -208,7 +230,7 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 		if (!protocolEnabled[protocol])
 		{
 			protocolEnabled[protocol] = true;
-			if (state == NetworkState::active)
+			if (GetState() == NetworkState::active)
 			{
 				StartProtocol(protocol);
 				// mDNS announcement is done by the WiFi Server firmware
@@ -228,7 +250,7 @@ GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const Strin
 	{
 		MutexLocker lock(interfaceMutex);
 
-		if (state == NetworkState::active)
+		if (GetState() == NetworkState::active)
 		{
 			ShutdownProtocol(protocol);
 		}
@@ -362,7 +384,7 @@ void WiFiInterface::Exit() noexcept
 // Get the network state into the reply buffer, returning true if there is some sort of error
 GCodeResult WiFiInterface::GetNetworkState(const StringRef& reply) noexcept
 {
-	switch (state)
+	switch (GetState())
 	{
 	case NetworkState::disabled:
 		reply.copy("WiFi module is disabled");
@@ -444,13 +466,13 @@ void WiFiInterface::Start() noexcept
 	transferAlreadyPendingCount = readyTimeoutCount = responseTimeoutCount = 0;
 
 	lastTickMillis = millis();
-	state = NetworkState::starting1;
+	SetState(NetworkState::starting1);
 }
 
 // Stop the ESP
 void WiFiInterface::Stop() noexcept
 {
-	if (state != NetworkState::disabled)
+	if (GetState() != NetworkState::disabled)
 	{
 		MutexLocker lock(interfaceMutex);
 
@@ -464,7 +486,7 @@ void WiFiInterface::Stop() noexcept
 		spi_dma_check_rx_complete();
 		spi_dma_disable();
 
-		state = NetworkState::disabled;
+		SetState(NetworkState::disabled);
 		currentMode = WiFiState::disabled;
 	}
 }
@@ -472,7 +494,7 @@ void WiFiInterface::Stop() noexcept
 void WiFiInterface::Spin() noexcept
 {
 	// Main state machine.
-	switch (state)
+	switch (GetState())
 	{
 	case NetworkState::starting1:
 		{
@@ -481,7 +503,7 @@ void WiFiInterface::Spin() noexcept
 			if (now - lastTickMillis >= WiFiStartupMillis)
 			{
 				lastTickMillis = now;
-				state = NetworkState::starting2;
+				SetState(NetworkState::starting2);
 			}
 		}
 		break;
@@ -498,12 +520,13 @@ void WiFiInterface::Spin() noexcept
 					platform.Message(NetworkInfoMessage, "WiFi module started\n");
 					SetupSpi();									// set up the SPI subsystem
 
-					// Read the status to get the WiFi server version
+					// Read the status to get the WiFi server version and MAC address
 					Receiver<NetworkStatusResponse> status;
 					const int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
 					if (rc > 0)
 					{
 						SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+						macAddress.SetFromBytes(status.Value().macAddress);
 
 						// Set the hostname before anything else is done
 						if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, reprap.GetNetwork().GetHostname(), HostNameLength, nullptr, 0) != ResponseEmpty)
@@ -511,7 +534,7 @@ void WiFiInterface::Spin() noexcept
 							reprap.GetPlatform().Message(NetworkInfoMessage, "Error: Could not set WiFi hostname\n");
 						}
 
-						state = NetworkState::active;
+						SetState(NetworkState::active);
 						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
 					}
 					else
@@ -570,7 +593,7 @@ void WiFiInterface::Spin() noexcept
 
 			if (rslt >= 0)
 			{
-				state = NetworkState::changingMode;
+				SetState(NetworkState::changingMode);
 			}
 			else
 			{
@@ -635,7 +658,7 @@ void WiFiInterface::Spin() noexcept
 
 			case WiFiState::connected:
 			case WiFiState::runningAsAccessPoint:
-				state = NetworkState::active;
+				SetState(NetworkState::active);
 				{
 					// Get our IP address, this needs to be correct for FTP to work
 					Receiver<NetworkStatusResponse> status;
@@ -658,7 +681,7 @@ void WiFiInterface::Spin() noexcept
 				{
 					requestedMode = currentMode;				// don't keep repeating the request if it failed and it wasn't a connect request
 				}
-				state = NetworkState::active;
+				SetState(NetworkState::active);
 				platform.MessageF(NetworkInfoMessage, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 				break;
 			}
@@ -672,9 +695,9 @@ void WiFiInterface::Spin() noexcept
 	// Check for debug info received from the WiFi module
 	if (serialRunning)
 	{
-		while (!debugPrintPending && Serial1.available() != 0)
+		while (!debugPrintPending && SERIAL_WIFI_DEVICE.available() != 0)
 		{
-			const char c = (char)Serial1.read();
+			const char c = (char)SERIAL_WIFI_DEVICE.read();
 			if (c == '\n')
 			{
 				debugPrintPending = true;
@@ -709,7 +732,6 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 	// Mapping from known ESP reset codes to reasons
 	static const char * const resetReasonTexts[] =
 	{
-		"Power on",
 		"Hardware watchdog",
 		"Exception",
 		"Software watchdog",
@@ -723,23 +745,9 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 			: "Unknown";
 }
 
-const char* WiFiInterface::TranslateNetworkState() const noexcept
-{
-	switch (state)
-	{
-	case NetworkState::disabled:		return "disabled";
-	case NetworkState::starting1:
-	case NetworkState::starting2:		return "starting";
-	case NetworkState::active:			return "running";
-	case NetworkState::changingMode:	return "changing mode";
-	default:							return "unknown";
-	}
-}
-
 void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 {
-	platform.Message(mtype, "- WiFi -\n");
-	platform.MessageF(mtype, "Network state is %s\n", TranslateNetworkState());
+	platform.MessageF(mtype, "- WiFi -\nNetwork state is %s\n", GetStateName());
 	platform.MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 	platform.MessageF(mtype, "Failed messages: pending %u, notready %u, noresp %u\n", transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount);
 
@@ -748,7 +756,7 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 	platform.MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
 #endif
 
-	if (state != NetworkState::disabled && state != NetworkState::starting1 && state != NetworkState::starting2)
+	if (GetState() != NetworkState::disabled && GetState() != NetworkState::starting1 && GetState() != NetworkState::starting2)
 	{
 		Receiver<NetworkStatusResponse> status;
 		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
@@ -816,7 +824,7 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 		{
 			// Shut down WiFi module completely
 			requestedMode = modeRequested;
-			if (state != NetworkState::disabled)
+			if (GetState() != NetworkState::disabled)
 			{
 				Stop();
 				platform.Message(GenericMessage, "WiFi module stopped\n");
@@ -824,7 +832,7 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 		}
 		else
 		{
-			if (state == NetworkState::disabled)
+			if (GetState() == NetworkState::disabled)
 			{
 				requestedMode = modeRequested;
 				Start();
@@ -889,7 +897,7 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 	gateway = p_gateway;
 }
 
-GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply)
+GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
 {
 	switch (mcode)
 	{
@@ -899,55 +907,49 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			WirelessConfigurationData config;
 			memset(&config, 0, sizeof(config));
 			String<ARRAY_SIZE(config.ssid)> ssid;
-			bool ok = gb.GetQuotedString(ssid.GetRef());
-			if (ok)
+			gb.GetQuotedString(ssid.GetRef());
+			SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
+
+			// Get the password
+			gb.MustSee('P');
 			{
-				SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
 				String<ARRAY_SIZE(config.password)> password;
-				ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
-				if (ok)
+				gb.GetQuotedString(password.GetRef());
+				if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
 				{
-					if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
-					{
-						reply.copy("WiFi password must be at least 8 characters");
-						return GCodeResult::error;
-					}
-					SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+					reply.copy("WiFi password must be at least 8 characters");
+					return GCodeResult::error;
 				}
+				SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 			}
-			if (ok && gb.Seen('I'))
+
+			if (gb.Seen('I'))
 			{
 				IPAddress temp;
 				gb.GetIPAddress(temp);
 				config.ip = temp.GetV4LittleEndian();
 			}
-			if (ok && gb.Seen('J'))
+			if (gb.Seen('J'))
 			{
 				IPAddress temp;
-				ok = gb.GetIPAddress(temp);
+				gb.GetIPAddress(temp);
 				config.gateway = temp.GetV4LittleEndian();
 			}
-			if (ok && gb.Seen('K'))
+			if (gb.Seen('K'))
 			{
 				IPAddress temp;
-				ok = gb.GetIPAddress(temp);
+				gb.GetIPAddress(temp);
 				config.netmask = temp.GetV4LittleEndian();
 			}
-			if (ok)
+
+			const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, &config, sizeof(config), nullptr, 0);
+			if (rslt == ResponseEmpty)
 			{
-				const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, &config, sizeof(config), nullptr, 0);
-				if (rslt == ResponseEmpty)
-				{
-					return GCodeResult::ok;
-				}
-				else
-				{
-					reply.copy("Failed to add SSID to remembered list");
-				}
+				return GCodeResult::ok;
 			}
 			else
 			{
-				reply.copy("Bad or missing parameter");
+				reply.copy("Failed to add SSID to remembered list");
 			}
 		}
 		else
@@ -990,38 +992,33 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 		return GCodeResult::error;
 
 	case 588:	// Forget WiFi network
-		if (gb.Seen('S'))
 		{
+			gb.MustSee('S');
 			String<SsidLength> ssidText;
-			if (gb.GetQuotedString(ssidText.GetRef()))
+			gb.GetQuotedString(ssidText.GetRef());
+			if (strcmp(ssidText.c_str(), "*") == 0)
 			{
-				if (strcmp(ssidText.c_str(), "*") == 0)
-				{
-					const int32_t rslt = SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
-					if (rslt == ResponseEmpty)
-					{
-						return GCodeResult::ok;
-					}
-
-					reply.copy("Failed to reset the WiFi module to factory settings");
-					return GCodeResult::error;
-				}
-
-				uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
-				memcpy(ssid32, ssidText.c_str(), SsidLength);
-				const int32_t rslt = SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
+				const int32_t rslt = SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
 				if (rslt == ResponseEmpty)
 				{
 					return GCodeResult::ok;
 				}
 
-				reply.copy("Failed to remove SSID from remembered list");
+				reply.copy("Failed to reset the WiFi module to factory settings");
 				return GCodeResult::error;
 			}
-		}
 
-		reply.copy("Bad or missing parameter");
-		return GCodeResult::error;
+			uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
+			memcpy(ssid32, ssidText.c_str(), SsidLength);
+			const int32_t rslt = SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
+			if (rslt == ResponseEmpty)
+			{
+				return GCodeResult::ok;
+			}
+
+			reply.copy("Failed to remove SSID from remembered list");
+			return GCodeResult::error;
+		}
 
 	case 589:	// Configure access point
 		if (gb.Seen('S'))
@@ -1030,56 +1027,39 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			WirelessConfigurationData config;
 			memset(&config, 0, sizeof(config));
 			String<SsidLength> ssid;
-			bool ok = gb.GetQuotedString(ssid.GetRef());
-			if (ok)
+			gb.GetQuotedString(ssid.GetRef());
+			if (strcmp(ssid.c_str(), "*") == 0)
 			{
-				if (strcmp(ssid.c_str(), "*") == 0)
-				{
-					// Delete the access point details
-					memset(&config, 0xFF, sizeof(config));
-				}
-				else
-				{
-					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
-					String<ARRAY_SIZE(config.password)> password;
-					ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
-					if (ok)
-					{
-						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-						if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
-						{
-							reply.copy("WiFi password must be at least 8 characters");
-							return GCodeResult::error;
-						}
-						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-						if (gb.Seen('I'))
-						{
-							IPAddress temp;
-							ok = gb.GetIPAddress(temp);
-							config.ip = temp.GetV4LittleEndian();
-							config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
-						}
-						else
-						{
-							ok = false;
-						}
-					}
-				}
-			}
-			if (ok)
-			{
-				const int32_t rslt = SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
-				if (rslt == ResponseEmpty)
-				{
-					return GCodeResult::ok;
-				}
-
-				reply.copy("Failed to configure access point parameters");
+				// Delete the access point details
+				memset(&config, 0xFF, sizeof(config));
 			}
 			else
 			{
-				reply.copy("Bad or missing parameter");
+				SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
+				String<ARRAY_SIZE(config.password)> password;
+				gb.MustSee('P');
+				gb.GetQuotedString(password.GetRef());
+				SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+				if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+				{
+					reply.copy("WiFi password must be at least 8 characters");
+					return GCodeResult::error;
+				}
+				SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+				gb.MustSee('I');
+				IPAddress temp;
+				gb.GetIPAddress(temp);
+				config.ip = temp.GetV4LittleEndian();
+				config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
 			}
+
+			const int32_t rslt = SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
+			if (rslt == ResponseEmpty)
+			{
+				return GCodeResult::ok;
+			}
+
+			reply.copy("Failed to configure access point parameters");
 		}
 		else
 		{
@@ -1116,7 +1096,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 void WiFiInterface::UpdateHostname(const char *hostname) noexcept
 {
 	// Update the hostname if possible
-	if (state == NetworkState::active)
+	if (GetState() == NetworkState::active)
 	{
 		if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
 		{
@@ -1125,13 +1105,10 @@ void WiFiInterface::UpdateHostname(const char *hostname) noexcept
 	}
 }
 
-void WiFiInterface::SetMacAddress(const uint8_t mac[]) noexcept
+GCodeResult WiFiInterface::SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept
 {
-	for (size_t i = 0; i < 6; i++)
-	{
-		macAddress[i] = mac[i];
-	}
-	// TODO actually update the mac address on the wifi module. For now we don't support this.
+	reply.copy("Not supported on this interface");
+	return GCodeResult::warningNotSupported;
 }
 
 void WiFiInterface::InitSockets() noexcept
@@ -1229,6 +1206,8 @@ void WiFiInterface::TerminateDataPort() noexcept
 	}
 }
 
+#ifndef __LPC17xx__
+
 #if USE_PDC
 static Pdc *spi_pdc;
 #endif
@@ -1255,7 +1234,7 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 #endif
 
-static inline void spi_rx_dma_enable()
+static inline void spi_rx_dma_enable() noexcept
 {
 #if USE_PDC
 	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_RXTEN);
@@ -1270,7 +1249,7 @@ static inline void spi_rx_dma_enable()
 #endif
 }
 
-static inline void spi_tx_dma_enable()
+static inline void spi_tx_dma_enable() noexcept
 {
 #if USE_PDC
 	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN);
@@ -1285,7 +1264,7 @@ static inline void spi_tx_dma_enable()
 #endif
 }
 
-static inline void spi_rx_dma_disable()
+static inline void spi_rx_dma_disable() noexcept
 {
 #if USE_PDC
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_RXTDIS);
@@ -1300,7 +1279,7 @@ static inline void spi_rx_dma_disable()
 #endif
 }
 
-static inline void spi_tx_dma_disable()
+static inline void spi_tx_dma_disable() noexcept
 {
 #if USE_PDC
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS);
@@ -1315,13 +1294,13 @@ static inline void spi_tx_dma_disable()
 #endif
 }
 
-static void spi_dma_disable()
+static void spi_dma_disable() noexcept
 {
 	spi_tx_dma_disable();
 	spi_rx_dma_disable();
 }
 
-static inline void spi_dma_enable()
+static inline void spi_dma_enable() noexcept
 {
 #if USE_PDC
 	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
@@ -1333,7 +1312,7 @@ static inline void spi_dma_enable()
 #endif
 }
 
-static bool spi_dma_check_rx_complete()
+static bool spi_dma_check_rx_complete() noexcept
 {
 #if USE_PDC
 	return true;
@@ -1369,7 +1348,7 @@ static bool spi_dma_check_rx_complete()
 	return false;
 }
 
-static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
+static void spi_tx_dma_setup(const void *buf, uint32_t transferLength) noexcept
 {
 #if USE_PDC
 	pdc_packet_t pdc_spi_packet;
@@ -1422,7 +1401,7 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 #endif
 }
 
-static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
+static void spi_rx_dma_setup(const void *buf, uint32_t transferLength) noexcept
 {
 #if USE_PDC
 	pdc_packet_t pdc_spi_packet;
@@ -1478,7 +1457,7 @@ static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 /**
  * \brief Set SPI slave transfer.
  */
-static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize)
+static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept
 {
 #if USE_PDC
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
@@ -1553,10 +1532,12 @@ void WiFiInterface::SetupSpi() noexcept
 	NVIC_EnableIRQ(ESP_SPI_IRQn);
 }
 
+#endif //end ifndef __LPC17xx__
+
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
-	if (state == NetworkState::disabled)
+	if (GetState() == NetworkState::disabled)
 	{
 		if (reprap.Debug(moduleNetwork))
 		{
@@ -1608,7 +1589,10 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	bufferIn.hdr.formatVersion = InvalidFormatVersion;
 	transferPending = true;
 
-	// DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
+#if defined(__LPC17xx__)
+    spi_slave_dma_setup(dataOutLength, dataInLength);
+#else
+    // DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
 	// The only way I can find to do this is to issue a software reset to the SPI system.
 	// Fortunately, this leaves the SPI system in slave mode.
 	spi_reset(ESP_SPI);
@@ -1621,29 +1605,29 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// Enable the end-of transfer interrupt
 	(void)ESP_SPI->SPI_SR;						// clear any pending interrupt
 	ESP_SPI->SPI_IER = SPI_IER_NSSR;			// enable the NSS rising interrupt
+#endif
 
 	// Tell the ESP that we are ready to accept data
 	digitalWrite(SamTfrReadyPin, HIGH);
 
-	// Wait for the DMA complete interrupt, with timeout
-	// When we use RTOS we should allow other tasks to run here
+	// Wait until the DMA transfer is complete, with timeout
+	do
 	{
-		const uint32_t now = millis();
-		while (transferPending || !spi_dma_check_rx_complete())
+		espWaitingTask = TaskBase::GetCallerTaskHandle();
+		if (TaskBase::Take(WifiResponseTimeoutMillis))
 		{
-			if (digitalRead(SamCsPin) && millis() - now > WifiResponseTimeoutMillis)	// if no transfer in progress and timed out
+			if (reprap.Debug(moduleNetwork))
 			{
-				if (reprap.Debug(moduleNetwork))
-				{
-					debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
-				}
-				transferPending = false;
-				spi_dma_disable();
-				++responseTimeoutCount;
-				return ResponseTimeout;
+				debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
 			}
+			transferPending = false;
+			spi_dma_disable();
+			++responseTimeoutCount;
+			return ResponseTimeout;
 		}
-	}
+	} while (transferPending);
+
+	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 
 	// Look at the response
 	if (bufferIn.hdr.formatVersion != MyFormatVersion)
@@ -1656,8 +1640,8 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	}
 
 	if (   (bufferIn.hdr.state == WiFiState::autoReconnecting || bufferIn.hdr.state == WiFiState::reconnecting)
-			&& currentMode != WiFiState::autoReconnecting && currentMode != WiFiState::reconnecting
-		   )
+		&& currentMode != WiFiState::autoReconnecting && currentMode != WiFiState::reconnecting
+	   )
 	{
 		++reconnectCount;
 	}
@@ -1737,6 +1721,8 @@ void WiFiInterface::GetNewStatus() noexcept
 	}
 }
 
+#ifndef __LPC17xx__
+
 // SPI interrupt handlers, called when NSS goes high
 void ESP_SPI_HANDLER(void) noexcept
 {
@@ -1774,15 +1760,20 @@ void WiFiInterface::SpiInterrupt() noexcept
 			++spiTxUnderruns;
 		}
 		transferPending = false;
+		TaskBase::GiveFromISR(espWaitingTask);
 	}
 }
+
+#endif //ifndef __LPC17xx__
 
 // Start the ESP
 void WiFiInterface::StartWiFi() noexcept
 {
 	digitalWrite(EspResetPin, HIGH);
+#ifndef __LPC17xx__
 	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
-	Serial1.begin(WiFiBaudRate);								// initialise the UART, to receive debug info
+#endif
+	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
 	debugMessageChars = 0;
 	serialRunning = true;
 	debugPrintPending = false;
@@ -1798,7 +1789,7 @@ void WiFiInterface::ResetWiFi() noexcept
 
 	if (serialRunning)
 	{
-		Serial1.end();
+		SERIAL_WIFI_DEVICE.end();
 		serialRunning = false;
 	}
 }
@@ -1813,7 +1804,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 {
 	if (serialRunning)
 	{
-		Serial1.end();
+		SERIAL_WIFI_DEVICE.end();
 		serialRunning = false;
 	}
 
@@ -1847,7 +1838,9 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	}
 	else
 	{
-		ConfigurePin(g_APinDescription[APINS_Serial1]);			// connect the pins to UART1
+#ifndef __LPC17xx__
+		ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to the UART
+#endif
 	}
 
 	// Release the reset on the ESP8266

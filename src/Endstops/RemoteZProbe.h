@@ -12,25 +12,33 @@
 
 #if SUPPORT_CAN_EXPANSION
 
+#include <RemoteInputHandle.h>
+
 class RemoteZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) { return Allocate<RemoteZProbe>(); }
-	void operator delete(void* p) { Release<RemoteZProbe>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<RemoteZProbe>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<RemoteZProbe>(p); }
 
-	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) : ZProbe(num, p_type), boardAddress(bn) { }
-	~RemoteZProbe() override;
-	void SetIREmitter(bool on) const override { }
-	uint16_t GetRawReading() const override { return 0; }
-	void SetProbing(bool isProbing) const override;
-	GCodeResult AppendPinNames(const StringRef& str) const override;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
-	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) override;
+	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), state(false) { }
+	~RemoteZProbe() noexcept override;
+	void SetIREmitter(bool on) const noexcept override { }
+	uint16_t GetRawReading() const noexcept override;
+	void SetProbing(bool isProbing) noexcept override;
+	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
+	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept override;
+	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept override;
 
-	GCodeResult Create(const StringRef& pinNames, const StringRef& reply);
+	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;
 
 private:
 	CanAddress boardAddress;
+	RemoteInputHandle handle;
+	bool state;
+
+	static constexpr uint16_t ActiveProbeReportInterval = 2;
+	static constexpr uint16_t InactiveProbeReportInterval = 25;
 };
 
 #endif

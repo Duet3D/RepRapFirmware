@@ -31,7 +31,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
-/* 
+/*
  *  This structure will hold context information for the hashing
  *  operation
  */
@@ -52,11 +52,9 @@ typedef struct SHA1Context
 /*
  *  Function Prototypes
  */
-void SHA1Reset(SHA1Context* context);
-bool SHA1Result(SHA1Context* context);
-void SHA1Input( SHA1Context* context,
-                const uint8_t* message_array,
-                uint32_t length);
+void SHA1Reset(SHA1Context* context) noexcept;
+bool SHA1Result(SHA1Context* context) noexcept;
+void SHA1Input(SHA1Context* context, const uint8_t* message_array, uint32_t length) noexcept;
 
 #ifdef __cplusplus
 }

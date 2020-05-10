@@ -13,17 +13,17 @@
 class ZProbeEndstop final : public Endstop
 {
 public:
-	void* operator new(size_t sz) { return Allocate<ZProbeEndstop>(); }
-	void operator delete(void* p) { Release<ZProbeEndstop>(p); }
+	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ZProbeEndstop>(); }
+	void operator delete(void* p) noexcept { FreelistManager::Release<ZProbeEndstop>(p); }
 
-	ZProbeEndstop(uint8_t axis, EndStopPosition pos);
+	ZProbeEndstop(uint8_t axis, EndStopPosition pos) noexcept;
 
-	EndStopType GetEndstopType() const override { return EndStopType::zProbeAsEndstop; }
-	EndStopHit Stopped() const override;
-	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
-	EndstopHitDetails CheckTriggered(bool goingSlow) override;
-	bool Acknowledge(EndstopHitDetails what) override;
-	void AppendDetails(const StringRef& str) override;
+	EndStopType GetEndstopType() const noexcept override { return EndStopType::zProbeAsEndstop; }
+	EndStopHit Stopped() const noexcept override;
+	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept override;
+	EndstopHitDetails CheckTriggered(bool goingSlow) noexcept override;
+	bool Acknowledge(EndstopHitDetails what) noexcept override;
+	void AppendDetails(const StringRef& str) noexcept override;
 
 private:
 	size_t zProbeNumber;					// which Z probe to use, always 0 for now

@@ -11,14 +11,12 @@
 #include "Libraries/Fatfs/diskio.h"
 #include "Movement/StepTimer.h"
 
-uint32_t FileStore::longestWriteTime = 0;
-
-FileStore::FileStore() : writeBuffer(nullptr)
+FileStore::FileStore() noexcept : writeBuffer(nullptr)
 {
 	Init();
 }
 
-void FileStore::Init()
+void FileStore::Init() noexcept
 {
 	usageMode = FileUseMode::free;
 	openCount = 0;
@@ -26,7 +24,7 @@ void FileStore::Init()
 }
 
 // Invalidate the file if it uses the specified FATFS object
-bool FileStore::Invalidate(const FATFS *fs, bool doClose)
+bool FileStore::Invalidate(const FATFS *fs, bool doClose) noexcept
 {
 	if (file.obj.fs == fs)
 	{
@@ -50,43 +48,23 @@ bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 }
 
 // Return true if the file is open on the specified file system
-bool FileStore::IsOpenOn(const FATFS *fs) const
+bool FileStore::IsOpenOn(const FATFS *fs) const noexcept
 {
 	return openCount != 0 && file.obj.fs == fs;
 }
 
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
-bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
+bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
 	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
 	writeBuffer = nullptr;
 
 	if (writing)
 	{
-		// Try to create the path of this file if we want to write to it
-		String<MaxFilenameLength> filePathCopy;
-		filePathCopy.copy(filePath);
-
-		size_t i = (isdigit(filePathCopy[0]) && filePathCopy[1] == ':') ? 2 : 0;
-		if (filePathCopy[i] == '/')
+		if (!MassStorage::EnsurePath(filePath, true))
 		{
-			++i;
-		}
-
-		while (i < filePathCopy.strlen())
-		{
-			if (filePathCopy[i] == '/')
-			{
-				filePathCopy[i] = 0;
-				if (!MassStorage::DirectoryExists(filePathCopy.GetRef()) && !MassStorage::MakeDirectory(filePathCopy.c_str()))
-				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create folder %s while trying to open file %s\n", filePathCopy.c_str(), filePath);
-					return false;
-				}
-				filePathCopy[i] = '/';
-			}
-			++i;
+			return false;
 		}
 
 		// Also try to allocate a write buffer so we can perform faster writes
@@ -124,6 +102,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 	calcCrc = (mode == OpenMode::writeWithCrc);
 	usageMode = (writing) ? FileUseMode::readWrite : FileUseMode::readOnly;
 	openCount = 1;
+#ifndef __LPC17xx__
 	if (preAllocSize != 0 && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 	{
 		const FRESULT expandReturn = f_expand(&file, preAllocSize, 1);		// try to pre-allocate contiguous space - it doesn't matter if it fails
@@ -132,15 +111,17 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 			debugPrintf("Preallocating %" PRIu32 " bytes returned %d\n", preAllocSize, (int)expandReturn);
 		}
 	}
+#endif
+	reprap.VolumesUpdated();
 	return true;
 }
 
-void FileStore::Duplicate()
+void FileStore::Duplicate() noexcept
 {
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		break;
 
 	case FileUseMode::readOnly:
@@ -159,14 +140,14 @@ void FileStore::Duplicate()
 }
 
 // This may be called from an ISR, in which case we need to defer the close
-bool FileStore::Close()
+bool FileStore::Close() noexcept
 {
 	switch (usageMode)
 	{
 	case FileUseMode::free:
 		if (!inInterrupt())
 		{
-			INTERNAL_ERROR;
+			REPORT_INTERNAL_ERROR;
 		}
 		return false;
 
@@ -211,7 +192,7 @@ bool FileStore::Close()
 	}
 }
 
-bool FileStore::ForceClose()
+bool FileStore::ForceClose() noexcept
 {
 	bool ok = true;
 	if (usageMode == FileUseMode::readWrite)
@@ -229,15 +210,16 @@ bool FileStore::ForceClose()
 	usageMode = FileUseMode::free;
 	closeRequested = false;
 	openCount = 0;
+	reprap.VolumesUpdated();
 	return ok && fr == FR_OK;
 }
 
-bool FileStore::Seek(FilePosition pos)
+bool FileStore::Seek(FilePosition pos) noexcept
 {
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return false;
 
 	case FileUseMode::readOnly:
@@ -250,12 +232,12 @@ bool FileStore::Seek(FilePosition pos)
 	}
 }
 
-FilePosition FileStore::Position() const
+FilePosition FileStore::Position() const noexcept
 {
 	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fptr : 0;
 }
 
-uint32_t FileStore::ClusterSize() const
+uint32_t FileStore::ClusterSize() const noexcept
 {
 	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
 }
@@ -267,12 +249,12 @@ bool FileStore::GoToEnd()
 }
 #endif
 
-FilePosition FileStore::Length() const
+FilePosition FileStore::Length() const noexcept
 {
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return 0;
 
 	case FileUseMode::readOnly:
@@ -288,18 +270,18 @@ FilePosition FileStore::Length() const
 }
 
 // Single character read
-bool FileStore::Read(char& b)
+bool FileStore::Read(char& b) noexcept
 {
 	return Read(&b, sizeof(char));
 }
 
 // Returns the number of bytes read or -1 if the read process failed
-int FileStore::Read(char* extBuf, size_t nBytes)
+int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 {
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return -1;
 
 	case FileUseMode::readOnly:
@@ -324,7 +306,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 // As Read but stop after '\n' or '\r\n' and null-terminate the string.
 // If the next line is too long to fit in the buffer then the line will be split.
 // Return the number of characters in the line excluding the null terminator, or -1 if end of file or a read error occurs.
-int FileStore::ReadLine(char* buf, size_t nBytes)
+int FileStore::ReadLine(char* buf, size_t nBytes) noexcept
 {
 	const FilePosition lineStart = Position();
 	const int r = Read(buf, nBytes);
@@ -356,38 +338,32 @@ int FileStore::ReadLine(char* buf, size_t nBytes)
 	return i;
 }
 
-FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten)
+FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
 {
-	uint32_t time = StepTimer::GetTimerTicks();
 	if (calcCrc)
 	{
 		crc.Update(s, len);
 	}
 	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
-	time = StepTimer::GetTimerTicks() - time;
-	if (time > longestWriteTime)
-	{
-		longestWriteTime = time;
-	}
 	return writeStatus;
 }
 
-bool FileStore::Write(char b)
+bool FileStore::Write(char b) noexcept
 {
 	return Write(&b, sizeof(char));
 }
 
-bool FileStore::Write(const char* b)
+bool FileStore::Write(const char* b) noexcept
 {
 	return Write(b, strlen(b));
 }
 
-bool FileStore::Write(const char *s, size_t len)
+bool FileStore::Write(const char *s, size_t len) noexcept
 {
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return false;
 
 	case FileUseMode::readOnly:
@@ -436,12 +412,12 @@ bool FileStore::Write(const char *s, size_t len)
 	}
 }
 
-bool FileStore::Flush()
+bool FileStore::Flush() noexcept
 {
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return false;
 
 	case FileUseMode::readOnly:
@@ -473,13 +449,13 @@ bool FileStore::Flush()
 }
 
 // Truncate file at current file pointer
-bool FileStore::Truncate()
+bool FileStore::Truncate() noexcept
 {
 	switch (usageMode)
 	{
 	case FileUseMode::free:
 	case FileUseMode::readOnly:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return false;
 
 	case FileUseMode::readWrite:
@@ -495,22 +471,8 @@ bool FileStore::Truncate()
 	}
 }
 
-// Return the file write time in milliseconds, and clear it
-float FileStore::GetAndClearLongestWriteTime()
-{
-	const float ret = (float)longestWriteTime * StepTimer::StepClocksToMillis;
-	longestWriteTime = 0;
-	return ret;
-}
-
-// Return the highest SD card retry count that resulted in a successful transfer
-unsigned int FileStore::GetAndClearMaxRetryCount()
-{
-	return DiskioGetAndClearMaxRetryCount();
-}
-
 // Return true if the passed file is the same as ours
-bool FileStore::IsSameFile(const FIL& otherFile) const
+bool FileStore::IsSameFile(const FIL& otherFile) const noexcept
 {
 	return file.obj.fs == otherFile.obj.fs && file.dir_sect == otherFile.dir_sect && file.dir_ptr == otherFile.dir_ptr;
 }
@@ -519,7 +481,7 @@ bool FileStore::IsSameFile(const FIL& otherFile) const
 
 // Provide a cluster map for fast seeking. Needs _USE_FASTSEEK defined as 1 in conf_fatfs to make any difference.
 // The first element of the table must be set to the total number of 32-bit entries in the table before calling this.
-bool FileStore::SetClusterMap(uint32_t tbl[])
+bool FileStore::SetClusterMap(uint32_t tbl[]) noexcept
 {
 	switch (usageMode)
 	{

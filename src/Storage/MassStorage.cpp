@@ -1,7 +1,13 @@
 #include "MassStorage.h"
-#include "Platform.h"
-#include "RepRap.h"
-#include "sd_mmc.h"
+#include <Platform.h>
+#include <RepRap.h>
+#include <ObjectModel/ObjectModel.h>
+#include <Libraries/Fatfs/diskio.h>
+#include <sd_mmc.h>
+
+#ifndef __LPC17xx__
+# include <sam/drivers/hsmci/hsmci.h>
+#endif
 
 // Check that the LFN configuration in FatFS is sufficient
 static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
@@ -26,7 +32,7 @@ enum class CardDetectState : uint8_t
 	removing
 };
 
-struct SdCardInfo
+struct SdCardInfo INHERIT_OBJECT_MODEL
 {
 	FATFS fileSystem;
 	uint32_t cdChangedTime;
@@ -36,7 +42,56 @@ struct SdCardInfo
 	bool mounting;
 	bool isMounted;
 	CardDetectState cardState;
+
+protected:
+	DECLARE_OBJECT_MODEL
 };
+
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(SdCardInfo, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(SdCardInfo, _condition,__VA_ARGS__)
+
+static uint64_t GetFreeSpace(size_t slot)
+{
+	uint64_t capacity, freeSpace;
+	uint32_t speed;
+	uint32_t clSize;
+	(void)MassStorage::GetCardInfo(slot, capacity, freeSpace, speed, clSize);
+	return freeSpace;
+}
+
+static const char * const VolPathNames[] = { "0:/", "1:/" };
+static_assert(ARRAY_SIZE(VolPathNames) >= NumSdCards, "Incorrect VolPathNames array");
+
+constexpr ObjectModelTableEntry SdCardInfo::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. volumes[] root
+	{ "capacity",			OBJECT_MODEL_FUNC_IF(self->isMounted, (uint64_t)sd_mmc_get_capacity(context.GetLastIndex()) * 1024u),	ObjectModelEntryFlags::none },
+	{ "freeSpace",			OBJECT_MODEL_FUNC_IF(self->isMounted, GetFreeSpace(context.GetLastIndex())),							ObjectModelEntryFlags::none },
+	{ "mounted",			OBJECT_MODEL_FUNC(self->isMounted),																		ObjectModelEntryFlags::none },
+	{ "openFiles",			OBJECT_MODEL_FUNC_IF(self->isMounted, MassStorage::AnyFileOpen(&(self->fileSystem))),					ObjectModelEntryFlags::none },
+	{ "path",				OBJECT_MODEL_FUNC_NOSELF(VolPathNames[context.GetLastIndex()]),											ObjectModelEntryFlags::verbose },
+	{ "speed",				OBJECT_MODEL_FUNC_IF(self->isMounted, (int32_t)sd_mmc_get_interface_speed(context.GetLastIndex())),		ObjectModelEntryFlags::none },
+};
+
+// TODO Add storages here in the format
+/*
+	openFiles = null
+	path = null
+*/
+
+constexpr uint8_t SdCardInfo::objectModelTableDescriptor[] = { 1, 6 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(SdCardInfo)
+
+#endif
 
 static SdCardInfo info[NumSdCards];
 
@@ -48,7 +103,7 @@ static FileWriteBuffer *freeWriteBuffers;
 static FileStore files[MAX_FILES];
 
 // Static helper functions
-FileWriteBuffer *MassStorage::AllocateWriteBuffer()
+FileWriteBuffer *MassStorage::AllocateWriteBuffer() noexcept
 {
 	MutexLocker lock(fsMutex);
 	if (freeWriteBuffers == nullptr)
@@ -62,7 +117,7 @@ FileWriteBuffer *MassStorage::AllocateWriteBuffer()
 	return buffer;
 }
 
-void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
+void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept
 {
 	MutexLocker lock(fsMutex);
 	buffer->SetNext(freeWriteBuffers);
@@ -70,7 +125,7 @@ void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
 }
 
 // Unmount a file system returning the number of open files were invalidated
-static unsigned int InternalUnmount(size_t card, bool doClose)
+static unsigned int InternalUnmount(size_t card, bool doClose) noexcept
 {
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
@@ -81,10 +136,11 @@ static unsigned int InternalUnmount(size_t card, bool doClose)
 	memset(&inf.fileSystem, 0, sizeof(inf.fileSystem));
 	sd_mmc_unmount(card);
 	inf.isMounted = false;
+	reprap.VolumesUpdated();
 	return invalidated;
 }
 
-static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime)
+static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime) noexcept
 {
 	struct tm timeInfo;
 	memset(&timeInfo, 0, sizeof(timeInfo));
@@ -94,12 +150,12 @@ static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime)
 	timeInfo.tm_mday = max<int>(fdate & 0x1F, 1);
 	timeInfo.tm_hour = (ftime >> 11) & 0x1F;
 	timeInfo.tm_min = (ftime >> 5) & 0x3F;
-	timeInfo.tm_sec = ftime & 0x1F;
+	timeInfo.tm_sec = (ftime & 0x1F) * 2;
 	timeInfo.tm_isdst = 0;
 	return mktime(&timeInfo);
 }
 
-static const char* TranslateCardType(card_type_t ct)
+static const char* TranslateCardType(card_type_t ct) noexcept
 {
 	switch (ct)
 	{
@@ -121,7 +177,7 @@ static const char* TranslateCardType(card_type_t ct)
 	}
 }
 
-static const char* TranslateCardError(sd_mmc_err_t err)
+static const char* TranslateCardError(sd_mmc_err_t err) noexcept
 {
 	switch (err)
 	{
@@ -142,7 +198,7 @@ static const char* TranslateCardError(sd_mmc_err_t err)
 	}
 }
 
-void MassStorage::Init()
+void MassStorage::Init() noexcept
 {
 	static const char * const VolMutexNames[] = { "SD0", "SD1" };
 	static_assert(ARRAY_SIZE(VolMutexNames) >= NumSdCards, "Incorrect VolMutexNames array");
@@ -172,7 +228,7 @@ void MassStorage::Init()
 	// We no longer mount the SD card here because it may take a long time if it fails
 }
 
-FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize)
+FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
 	{
 		MutexLocker lock(fsMutex);
@@ -189,7 +245,7 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 }
 
 // Close all files
-void MassStorage::CloseAllFiles()
+void MassStorage::CloseAllFiles() noexcept
 {
 	MutexLocker lock(fsMutex);
 	for (FileStore& f : files)
@@ -202,7 +258,7 @@ void MassStorage::CloseAllFiles()
 }
 
 // Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
-/*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName)
+/*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept
 {
 	bool hadError = false;
 	if (directory != nullptr && directory[0] != 0 && fileName[0] != '/' && (strlen(fileName) < 2 || !isdigit(fileName[0]) || fileName[1] != ':'))
@@ -240,7 +296,7 @@ void MassStorage::CloseAllFiles()
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 // If this returns true then the file system mutex is owned. The caller must subsequently release the mutex either
 // by calling FindNext until it returns false, or by calling AbandonFindNext.
-bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
+bool MassStorage::FindFirst(const char *directory, FileInfo &file_info) noexcept
 {
 	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
 	String<MaxFilenameLength> loc;
@@ -283,7 +339,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 
 // Find the next file in a directory. Returns true if another file has been read.
 // If it returns false then it also releases the mutex.
-bool MassStorage::FindNext(FileInfo &file_info)
+bool MassStorage::FindNext(FileInfo &file_info) noexcept
 {
 	if (dirMutex.GetHolder() != RTOSIface::GetCurrentTask())
 	{
@@ -307,7 +363,7 @@ bool MassStorage::FindNext(FileInfo &file_info)
 }
 
 // Quit searching for files. Needed to avoid hanging on to the mutex. Safe to call even if the caller doesn't hold the mutex.
-void MassStorage::AbandonFindNext()
+void MassStorage::AbandonFindNext() noexcept
 {
 	if (dirMutex.GetHolder() == RTOSIface::GetCurrentTask())
 	{
@@ -319,13 +375,13 @@ void MassStorage::AbandonFindNext()
 static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
 // Returns the name of the specified month or '???' if the specified value is invalid.
-const char* MassStorage::GetMonthName(const uint8_t month)
+const char* MassStorage::GetMonthName(const uint8_t month) noexcept
 {
 	return (month <= 12) ? monthNames[month] : monthNames[0];
 }
 
 // Delete a file or directory
-bool MassStorage::Delete(const char* filePath)
+bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
 {
 	FRESULT unlinkReturn;
 	bool isOpen = false;
@@ -367,59 +423,99 @@ bool MassStorage::Delete(const char* filePath)
 		// If the error was that the file or path doesn't exist, don't generate a global error message, but still return false
 		if (unlinkReturn != FR_NO_FILE && unlinkReturn != FR_NO_PATH)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", filePath);
+			if (messageIfFailed)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", filePath);
+			}
 		}
 		return false;
 	}
 	return true;
 }
 
-// Create a new directory
-bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
+// Ensure that the path up to the last '/' (excluding trailing '/' characters) in filePath exists, returning true if successful
+bool MassStorage::EnsurePath(const char* filePath, bool messageIfFailed) noexcept
 {
-	String<MaxFilenameLength> location;
-	if (!CombineName(location.GetRef(), parentDir, dirName))
+	// Try to create the path of this file if we want to write to it
+	String<MaxFilenameLength> filePathCopy;
+	filePathCopy.copy(filePath);
+
+	size_t i = (isdigit(filePathCopy[0]) && filePathCopy[1] == ':') ? 2 : 0;
+	if (filePathCopy[i] == '/')
 	{
-		return false;
+		++i;
 	}
-	if (f_mkdir(location.c_str()) != FR_OK)
+
+	size_t limit = filePathCopy.strlen();
+	while (limit != 0 && filePath[limit - 1] == '/')
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s\n", location.c_str());
-		return false;
+		--limit;
+	}
+	while (i < limit)
+	{
+		if (filePathCopy[i] == '/')
+		{
+			filePathCopy[i] = 0;
+			if (!MassStorage::DirectoryExists(filePathCopy.GetRef()) && f_mkdir(filePathCopy.c_str()) != FR_OK)
+			{
+				if (messageIfFailed)
+				{
+					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create folder %s in path %s\n", filePathCopy.c_str(), filePath);
+				}
+				return false;
+			}
+			filePathCopy[i] = '/';
+		}
+		++i;
 	}
 	return true;
 }
 
-bool MassStorage::MakeDirectory(const char *directory)
+// Create a new directory
+bool MassStorage::MakeDirectory(const char *directory, bool messageIfFailed) noexcept
 {
+	if (!EnsurePath(directory, messageIfFailed))
+	{
+		return false;
+	}
 	if (f_mkdir(directory) != FR_OK)
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s\n", directory);
+		if (messageIfFailed)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create folder %s\n", directory);
+		}
 		return false;
 	}
 	return true;
 }
 
 // Rename a file or directory
-bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
+bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool messageIfFailed) noexcept
 {
 	if (newFilename[0] >= '0' && newFilename[0] <= '9' && newFilename[1] == ':')
 	{
-		// Workaround for DWC 1.13 which send a volume specification at the start of the new path.
+		// Workaround for DWC 1.13 which sends a volume specification at the start of the new path.
 		// f_rename can't handle this, so skip past the volume specification.
 		// We are assuming that the user isn't really trying to rename across volumes. This is a safe assumption when the client is DWC.
 		newFilename += 2;
 	}
+	if (!EnsurePath(newFilename, messageIfFailed))
+	{
+		return false;
+	}
 	if (f_rename(oldFilename, newFilename) != FR_OK)
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to rename file or directory %s to %s\n", oldFilename, newFilename);
+		if (messageIfFailed)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to rename file or directory %s to %s\n", oldFilename, newFilename);
+		}
 		return false;
 	}
 	return true;
 }
 
 // Check if the specified file exists
-bool MassStorage::FileExists(const char *filePath)
+bool MassStorage::FileExists(const char *filePath) noexcept
 {
 	FILINFO fil;
 	return (f_stat(filePath, &fil) == FR_OK);
@@ -427,7 +523,7 @@ bool MassStorage::FileExists(const char *filePath)
 
 // Check if the specified directory exists
 // Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
-bool MassStorage::DirectoryExists(const StringRef& path)
+bool MassStorage::DirectoryExists(const StringRef& path) noexcept
 {
 	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
 	const size_t len = path.strlen();
@@ -446,7 +542,7 @@ bool MassStorage::DirectoryExists(const StringRef& path)
 }
 
 // Check if the specified directory exists
-bool MassStorage::DirectoryExists(const char *path)
+bool MassStorage::DirectoryExists(const char *path) noexcept
 {
 	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
 	String<MaxFilenameLength> loc;
@@ -455,7 +551,7 @@ bool MassStorage::DirectoryExists(const char *path)
 }
 
 // Return the last modified time of a file, or zero if failure
-time_t MassStorage::GetLastModifiedTime(const char *filePath)
+time_t MassStorage::GetLastModifiedTime(const char *filePath) noexcept
 {
 	FILINFO fil;
 	if (f_stat(filePath, &fil) == FR_OK)
@@ -465,12 +561,13 @@ time_t MassStorage::GetLastModifiedTime(const char *filePath)
 	return 0;
 }
 
-bool MassStorage::SetLastModifiedTime(const char *filePath, time_t time)
+bool MassStorage::SetLastModifiedTime(const char *filePath, time_t time) noexcept
 {
-	const struct tm * const timeInfo = gmtime(&time);
+	tm timeInfo;
+	gmtime_r(&time, &timeInfo);
 	FILINFO fno;
-    fno.fdate = (WORD)(((timeInfo->tm_year - 80) * 512U) | (timeInfo->tm_mon + 1) * 32U | timeInfo->tm_mday);
-    fno.ftime = (WORD)(timeInfo->tm_hour * 2048U | timeInfo->tm_min * 32U | timeInfo->tm_sec / 2U);
+    fno.fdate = (WORD)(((timeInfo.tm_year - 80) * 512U) | (timeInfo.tm_mon + 1) * 32U | timeInfo.tm_mday);
+    fno.ftime = (WORD)(timeInfo.tm_hour * 2048U | timeInfo.tm_min * 32U | timeInfo.tm_sec / 2U);
     const bool ok = (f_utime(filePath, &fno) == FR_OK);
     if (!ok)
 	{
@@ -482,7 +579,7 @@ bool MassStorage::SetLastModifiedTime(const char *filePath, time_t time)
 // Mount the specified SD card, returning true if done, false if needs to be called again.
 // If an error occurs, return true with the error message in 'reply'.
 // This may only be called to mount one card at a time.
-GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportSuccess)
+GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept
 {
 	if (card >= NumSdCards)
 	{
@@ -552,6 +649,7 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 	}
 
 	inf.isMounted = true;
+	reprap.VolumesUpdated();
 	if (reportSuccess)
 	{
 		float capacity = ((float)sd_mmc_get_capacity(card) * 1024) / 1000000;		// get capacity and convert from Kib to Mbytes
@@ -573,7 +671,7 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 
 // Unmount the specified SD card, returning true if done, false if needs to be called again.
 // If an error occurs, return true with the error message in 'reply'.
-GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply)
+GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 {
 	if (card >= NumSdCards)
 	{
@@ -592,7 +690,7 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply)
 
 // Check if the drive referenced in the specified path is mounted. Return true if it is.
 // Ideally we would try to mount it if it is not, however mounting a drive can take a long time, and the functions that call this are expected to execute quickly.
-bool MassStorage::CheckDriveMounted(const char* path)
+bool MassStorage::CheckDriveMounted(const char* path) noexcept
 {
 	const size_t card = (strlen(path) >= 2 && path[1] == ':' && isDigit(path[0]))
 						? path[0] - '0'
@@ -601,7 +699,7 @@ bool MassStorage::CheckDriveMounted(const char* path)
 }
 
 // Return true if any files are open on the file system
-bool MassStorage::AnyFileOpen(const FATFS *fs)
+bool MassStorage::AnyFileOpen(const FATFS *fs) noexcept
 {
 	MutexLocker lock(fsMutex);
 	for (const FileStore & fil : files)
@@ -615,7 +713,7 @@ bool MassStorage::AnyFileOpen(const FATFS *fs)
 }
 
 // Invalidate all open files on the specified file system, returning the number of files that were invalidated
-unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose)
+unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose) noexcept
 {
 	unsigned int invalidated = 0;
 	MutexLocker lock(fsMutex);
@@ -629,12 +727,12 @@ unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose)
 	return invalidated;
 }
 
-bool MassStorage::IsCardDetected(size_t card)
+bool MassStorage::IsCardDetected(size_t card) noexcept
 {
 	return info[card].cardState == CardDetectState::present;
 }
 
-unsigned int MassStorage::GetNumFreeFiles()
+unsigned int MassStorage::GetNumFreeFiles() noexcept
 {
 	unsigned int numFreeFiles = 0;
 	MutexLocker lock(fsMutex);
@@ -648,7 +746,7 @@ unsigned int MassStorage::GetNumFreeFiles()
 	return numFreeFiles;
 }
 
-void MassStorage::Spin()
+void MassStorage::Spin() noexcept
 {
 	for (size_t card = 0; card < NumSdCards; ++card)
 	{
@@ -722,7 +820,7 @@ void MassStorage::Spin()
 }
 
 // Append the simulated printing time to the end of the file
-void MassStorage::RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds)
+void MassStorage::RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept
 {
 	FileStore * const file = OpenFile(printingFilePath, OpenMode::append, 0);
 	bool ok = (file != nullptr);
@@ -775,7 +873,7 @@ void MassStorage::RecordSimulationTime(const char *printingFilePath, uint32_t si
 }
 
 // Get information about the SD card and interface speed
-MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize)
+MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize) noexcept
 {
 	if (slot >= NumSdCards)
 	{
@@ -790,7 +888,7 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 
 	capacity = (uint64_t)sd_mmc_get_capacity(slot) * 1024;
 	speed = sd_mmc_get_interface_speed(slot);
-	String<ShortScratchStringLength> path;
+	String<StringLength50> path;
 	path.printf("%u:/", slot);
 	uint32_t freeClusters;
 	FATFS *fs;
@@ -798,7 +896,7 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 	if (fr == FR_OK)
 	{
 		clSize = fs->csize * 512;
-		freeSpace = (fr == FR_OK) ? (uint64_t)freeClusters * clSize : 0;
+		freeSpace = (uint64_t)freeClusters * clSize;
 	}
 	else
 	{
@@ -808,46 +906,76 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 	return InfoResult::ok;
 }
 
-bool MassStorage::IsDriveMounted(size_t drive)
+bool MassStorage::IsDriveMounted(size_t drive) noexcept
 {
 	return drive < NumSdCards && info[drive].isMounted;
 }
 
-const Mutex& MassStorage::GetVolumeMutex(size_t vol)
+const Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
 {
 	return info[vol].volMutex;
 }
 
-bool MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly)
+bool MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	return infoParser.GetFileInfo(filePath, info, quitEarly);
 }
+
+void MassStorage::Diagnostics(MessageType mtype) noexcept
+{
+	Platform& platform = reprap.GetPlatform();
+
+	// Show the number of free entries in the file table
+	platform.MessageF(mtype, "=== Storage ===\nFree file entries: %u\n", MassStorage::GetNumFreeFiles());
+
+# if HAS_HIGH_SPEED_SD
+	// Show the HSMCI CD pin and speed
+	platform.MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n",
+								(MassStorage::IsCardDetected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed() * 0.000001));
+# else
+	platform.MessageF(mtype, "SD card 0 %s\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
+# endif
+
+	// Show the longest SD card write time
+	platform.MessageF(mtype, "SD card longest read time %.1fms, write time %.1fms, max retries %u\n",
+								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
+}
+
+# if SUPPORT_OBJECT_MODEL
+
+const ObjectModel * MassStorage::GetVolume(size_t vol) noexcept
+{
+	return &info[vol];
+}
+
+# endif
+
 
 // Functions called by FatFS to acquire/release mutual exclusion
 extern "C"
 {
 	// Create a sync object. We already created it, we just need to copy the handle.
-	int ff_cre_syncobj (BYTE vol, FF_SYNC_t* psy)
+	int ff_cre_syncobj (BYTE vol, FF_SYNC_t* psy) noexcept
 	{
 		*psy = &MassStorage::GetVolumeMutex(vol);
 		return 1;
 	}
 
 	// Lock sync object
-	int ff_req_grant (FF_SYNC_t sy)
+	int ff_req_grant (FF_SYNC_t sy) noexcept
 	{
 		sy->Take();
 		return 1;
 	}
 
 	// Unlock sync object
-	void ff_rel_grant (FF_SYNC_t sy)
+	void ff_rel_grant (FF_SYNC_t sy) noexcept
 	{
 		sy->Release();
 	}
 
 	// Delete a sync object
-	int ff_del_syncobj (FF_SYNC_t sy)
+	int ff_del_syncobj (FF_SYNC_t sy) noexcept
 	{
 		return 1;		// nothing to do, we never delete the mutex
 	}

@@ -75,11 +75,6 @@ void ethernet_timers_update() noexcept;
 // Reads all stored network packets and processes them
 void ethernet_task() noexcept;
 
-#if !LWIP_GMAC_TASK
-// Set the RX callback for incoming network packets
-void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback) noexcept;
-#endif
-
 // Returns the network interface's current IPv4 address
 void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress& gateWay) noexcept;
 

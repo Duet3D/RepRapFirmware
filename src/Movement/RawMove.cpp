@@ -8,10 +8,11 @@
 #include "RawMove.h"
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
-void RawMove::SetDefaults(size_t firstDriveToZero)
+void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 {
 	moveType = 0;
 	isCoordinated = false;
+	applyM220M221 = false;
 	usingStandardFeedrate = false;
 	usePressureAdvance = false;
 	checkEndstops = false;
@@ -27,7 +28,7 @@ void RawMove::SetDefaults(size_t firstDriveToZero)
 
 #if SUPPORT_ASYNC_MOVES
 
-void AsyncMove::SetDefaults()
+void AsyncMove::SetDefaults() noexcept
 {
 	for (float& f : movements)
 	{

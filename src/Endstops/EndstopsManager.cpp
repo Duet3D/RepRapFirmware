@@ -21,14 +21,84 @@
 #include "GCodes/GCodes.h"
 #include "Movement/Move.h"
 #include <OutputMemory.h>
+#include <Heating/Heat.h>
+#include <Heating/Sensors/TemperatureSensor.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CanMessageBuffer.h"
 #endif
 
-ReadWriteLock EndstopsManager::endstopsLock;					// used to lock both endstops and Z probes
+ReadWriteLock EndstopsManager::endstopsLock;
+ReadWriteLock EndstopsManager::zProbesLock;
 
-EndstopsManager::EndstopsManager() : activeEndstops(nullptr), extrudersEndstop(nullptr), isHomingMove(false)
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(EndstopsManager, __VA_ARGS__)
+
+constexpr ObjectModelArrayDescriptor EndstopsManager::sensorsArrayDescriptor =
+{
+	&Heat::sensorsLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetHeat().GetNumSensorsToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetHeat().FindSensor(context.GetLastIndex()).Ptr()); }
+};
+
+constexpr ObjectModelArrayDescriptor EndstopsManager::endstopsArrayDescriptor =
+{
+	&endstopsLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstop(context.GetLastIndex()).Ptr()); }
+};
+
+constexpr ObjectModelArrayDescriptor EndstopsManager::filamentMonitorsArrayDescriptor =
+{
+	&FilamentMonitor::filamentMonitorsLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return FilamentMonitor::GetNumMonitorsToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(FilamentMonitor::GetMonitorAlreadyLocked(context.GetLastIndex())); }
+};
+
+constexpr ObjectModelArrayDescriptor EndstopsManager::gpinArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpInputsToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{
+						const GpInputPort& port = reprap.GetPlatform().GetGpInPort(context.GetLastIndex());
+						return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
+					}
+};
+
+constexpr ObjectModelArrayDescriptor EndstopsManager::probesArrayDescriptor =
+{
+	&zProbesLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const EndstopsManager*)self)->GetNumProbesToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{ return ExpressionValue(((const EndstopsManager*)self)->GetZProbe(context.GetLastIndex()).Ptr()); }
+};
+
+constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. sensors members
+	{ "analog",				OBJECT_MODEL_FUNC_NOSELF(&sensorsArrayDescriptor),				ObjectModelEntryFlags::live },
+	{ "endstops",			OBJECT_MODEL_FUNC_NOSELF(&endstopsArrayDescriptor), 			ObjectModelEntryFlags::live },
+	{ "filamentMonitors",	OBJECT_MODEL_FUNC_NOSELF(&filamentMonitorsArrayDescriptor),		ObjectModelEntryFlags::live },
+	{ "gpIn",				OBJECT_MODEL_FUNC_NOSELF(&gpinArrayDescriptor), 				ObjectModelEntryFlags::live },
+	{ "probes",				OBJECT_MODEL_FUNC_NOSELF(&probesArrayDescriptor),				ObjectModelEntryFlags::live },
+};
+
+constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 5 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(EndstopsManager)
+
+#endif
+
+EndstopsManager::EndstopsManager() noexcept : activeEndstops(nullptr), extrudersEndstop(nullptr), isHomingMove(false)
 {
 	for (Endstop *& es : axisEndstops)
 	{
@@ -40,7 +110,7 @@ EndstopsManager::EndstopsManager() : activeEndstops(nullptr), extrudersEndstop(n
 	}
 }
 
-void EndstopsManager::Init()
+void EndstopsManager::Init() noexcept
 {
 	activeEndstops = nullptr;
 
@@ -65,26 +135,54 @@ void EndstopsManager::Init()
 #endif
 
 	defaultZProbe = new DummyZProbe(0);			// we must always have a non-null current Z probe so we use this one if none is defined
-	currentZProbeNumber = 0;
+}
+
+ReadLockedPointer<Endstop> EndstopsManager::FindEndstop(size_t axis) const noexcept
+{
+	ReadLocker lock(endstopsLock);
+	return ReadLockedPointer<Endstop>(lock, (axis < MaxAxes) ? axisEndstops[axis] : nullptr);
+}
+
+ReadLockedPointer<ZProbe> EndstopsManager::GetZProbe(size_t index) const noexcept
+{
+	ReadLocker lock(zProbesLock);
+	return ReadLockedPointer<ZProbe>(lock, (index < ARRAY_SIZE(zProbes)) ? zProbes[index] : nullptr);
+}
+
+// Return the current Z probe if there is one, else a default Z probe
+ReadLockedPointer<ZProbe> EndstopsManager::GetZProbeOrDefault(size_t index) const noexcept
+{
+	ReadLocker lock(zProbesLock);
+	return ReadLockedPointer<ZProbe>(lock,
+										(index < ARRAY_SIZE(zProbes) && zProbes[index] != nullptr)
+										? zProbes[index]
+										: defaultZProbe);
+}
+
+ZProbe& EndstopsManager::GetDefaultZProbeFromISR() const noexcept
+{
+	return (zProbes[0] != nullptr)
+			? *zProbes[0]
+			: *defaultZProbe;
 }
 
 // Add an endstop to the active list
-void EndstopsManager::AddToActive(EndstopOrZProbe& e)
+void EndstopsManager::AddToActive(EndstopOrZProbe& e) noexcept
 {
 	e.SetNext(activeEndstops);
 	activeEndstops = &e;
 }
 
 // Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command. Return true if successful.
-bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming)
+bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming) noexcept
 {
 	activeEndstops = nullptr;
-	isHomingMove = forHoming && axes != 0;
+	isHomingMove = forHoming && axes.IsNonEmpty();
 	const Kinematics& kin = reprap.GetMove().GetKinematics();
-	while (axes != 0)
+	while (axes.IsNonEmpty())
 	{
-		const unsigned int axis = LowestSetBit(axes);
-		ClearBit(axes, axis);
+		const unsigned int axis = axes.LowestSetBit();
+		axes.ClearBit(axis);
 		if (axisEndstops[axis] != nullptr && axisEndstops[axis]->Prime(kin, reprap.GetPlatform().GetAxisDriversConfig(axis)))
 		{
 			AddToActive(*axisEndstops[axis]);
@@ -99,7 +197,7 @@ bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming)
 }
 
 // Set up the active endstops for Z probing, returning true if successful
-bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway)
+bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway) noexcept
 {
 	activeEndstops = nullptr;
 	isHomingMove = false;
@@ -112,24 +210,24 @@ bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway)
 }
 
 // Enable extruder endstops. This adds to any existing axis endstops, so you must call EnableAxisEndstops before calling this.
-bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders)
+bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 {
-	if (extruders != 0)
+	if (extruders.IsNonEmpty())
 	{
 		if (extrudersEndstop == nullptr)
 		{
 			extrudersEndstop = new StallDetectionEndstop;
 		}
-		DriversBitmap drivers = 0;
-		while (extruders != 0)
+		DriversBitmap drivers;
+		while (extruders.IsNonEmpty())
 		{
-			const unsigned int extruder = LowestSetBit(extruders);
-			ClearBit(extruders, extruder);
+			const unsigned int extruder = extruders.LowestSetBit();
+			extruders.ClearBit(extruder);
 			const DriverId driver = reprap.GetPlatform().GetExtruderDriver(extruder);
 #if SUPPORT_CAN_EXPANSION
 			if (driver.IsLocal())
 			{
-				SetBit(drivers, driver.localDriver);
+				drivers.SetBit(driver.localDriver);
 			}
 			else
 			{
@@ -137,7 +235,7 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders)
 				return false;
 			}
 #else
-			SetBit(drivers, driver.localDriver);
+			drivers.SetBit(driver.localDriver);
 #endif
 		}
 
@@ -149,7 +247,7 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders)
 
 // Check the endstops.
 // If an endstop has triggered, remove it from the active list and return its details
-EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
+EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow) noexcept
 {
 	EndstopHitDetails ret;									// the default constructor will clear all fields
 	EndstopOrZProbe *actioned = nullptr;
@@ -207,7 +305,7 @@ EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
 }
 
 // Configure the endstops in response to M574
-GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf)
+GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) noexcept
 {
 	// First count how many axes we are configuring, and lock movement if necessary
 	unsigned int axesSeen = 0;
@@ -320,7 +418,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 			}
 			else
 			{
-				switch (inputType)
+				switch (inputType.ToBaseType())
 				{
 				case EndStopType::motorStallAny:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
@@ -365,7 +463,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 	return GCodeResult::ok;
 }
 
-EndStopPosition EndstopsManager::GetEndStopPosition(size_t axis) const pre(axis < MaxAxes)
+EndStopPosition EndstopsManager::GetEndStopPosition(size_t axis) const noexcept
 {
 	return (axisEndstops[axis] == nullptr) ? EndStopPosition::noEndStop
 			: (axisEndstops[axis]->GetAtHighEnd()) ? EndStopPosition::highEndStop
@@ -373,17 +471,17 @@ EndStopPosition EndstopsManager::GetEndStopPosition(size_t axis) const pre(axis 
 }
 
 // Return true if we are using a bed probe to home Z
-bool EndstopsManager::HomingZWithProbe() const
+bool EndstopsManager::HomingZWithProbe() const noexcept
 {
 	return axisEndstops[Z_AXIS] == nullptr || axisEndstops[Z_AXIS]->GetEndstopType() == EndStopType::zProbeAsEndstop;
 }
 
-EndStopHit EndstopsManager::Stopped(size_t axis) const
+EndStopHit EndstopsManager::Stopped(size_t axis) const noexcept
 {
 	return (axisEndstops[axis] == nullptr) ? EndStopHit::noStop : axisEndstops[axis]->Stopped();
 }
 
-void EndstopsManager::GetM119report(const StringRef& reply)
+void EndstopsManager::GetM119report(const StringRef& reply) noexcept
 {
 	reply.copy("Endstops - ");
 	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
@@ -393,10 +491,10 @@ void EndstopsManager::GetM119report(const StringRef& reply)
 											: TranslateEndStopResult(axisEndstops[axis]->Stopped(), axisEndstops[axis]->GetAtHighEnd());
 		reply.catf("%c: %s, ", reprap.GetGCodes().GetAxisLetters()[axis], status);
 	}
-	reply.catf("Z probe: %s", TranslateEndStopResult(GetCurrentZProbe().Stopped(), false));
+	reply.catf("Z probe: %s", TranslateEndStopResult(GetZProbeOrDefault(0)->Stopped(), false));
 }
 
-const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEnd)
+const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEnd) noexcept
 {
 	switch (es)
 	{
@@ -412,18 +510,7 @@ const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEn
 	}
 }
 
-ZProbe& EndstopsManager::GetCurrentZProbe() const
-{
-	ZProbe * const zp = (currentZProbeNumber < MaxZProbes) ? zProbes[currentZProbeNumber] : nullptr;
-	return (zp == nullptr) ? *defaultZProbe : *zp;
-}
-
-ZProbe *EndstopsManager::GetZProbe(size_t num) const
-{
-	return (num < ARRAY_SIZE(zProbes)) ? zProbes[num] : nullptr;
-}
-
-void EndstopsManager::SetZProbeDefaults()
+void EndstopsManager::SetZProbeDefaults() noexcept
 {
 	zProbes[0]->SetDefaults();
 	for (size_t i = 0; i < MaxZProbes; ++i)
@@ -433,16 +520,17 @@ void EndstopsManager::SetZProbeDefaults()
 }
 
 // Program the Z probe
-GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const uint32_t probeNumber = (gb.Seen('K')) ? gb.GetUIValue() : currentZProbeNumber;
-	if (probeNumber >= MaxZProbes || zProbes[probeNumber] == nullptr)
+	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+	ReadLocker lock(zProbesLock);
+	ZProbe * const zProbe = zProbes[probeNumber];
+	if (zProbe == nullptr)
 	{
 		reply.copy("Invalid Z probe index");
 		return GCodeResult::error;
 	}
 
-	ZProbe * const zProbe = zProbes[probeNumber];
 	if (gb.Seen('S'))
 	{
 		uint32_t zProbeProgram[MaxZProbeProgramBytes];
@@ -467,7 +555,7 @@ GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& rep
 
 #if HAS_MASS_STORAGE
 
-bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) const
+bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) const noexcept
 {
 	bool ok = true;
 	bool written = false;
@@ -492,14 +580,9 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 #endif
 
 // Handle M558
-GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
+GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetUIValue() : currentZProbeNumber;
-	if (probeNumber >= MaxZProbes)
-	{
-		reply.copy("Invalid Z probe index");
-		return GCodeResult::error;
-	}
+	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
 
 	// Check what sort of Z probe we need and where it is, so see whether we need to delete any existing one and create a new one.
 	// If there is no probe, we need a new one; and if it is not a motor stall one then a port number must be given.
@@ -521,7 +604,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		return GCodeResult::error;
 	}
 
-	WriteLocker lock(endstopsLock);
+	WriteLocker lock(zProbesLock);
 
 	ZProbe * const existingProbe = zProbes[probeNumber];
 	if (existingProbe == nullptr && !seenType)
@@ -611,25 +694,39 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 
 // Set or print the Z probe. Called by G31.
 // Note that G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
-GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	uint32_t probeNumber = currentZProbeNumber;
-	bool seenK = false;
-	gb.TryGetUIValue('K', probeNumber, seenK);
-	if (probeNumber >= MaxZProbes || zProbes[probeNumber] == nullptr)
+	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+	ReadLocker lock(zProbesLock);
+	ZProbe * const zp = zProbes[probeNumber];
+	if (zp == nullptr)
 	{
 		reply.copy("Invalid Z probe index");
 		return GCodeResult::error;
 	}
 
-	return zProbes[probeNumber]->HandleG31(gb, reply);
+	return zp->HandleG31(gb, reply);
 }
+
+#if SUPPORT_OBJECT_MODEL
+
+size_t EndstopsManager::GetNumProbesToReport() const noexcept
+{
+	size_t ret = MaxZProbes;
+	while (ret != 0 && zProbes[ret - 1] == nullptr)
+	{
+		--ret;
+	}
+	return ret;
+}
+
+#endif
+
 
 #if SUPPORT_CAN_EXPANSION
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
-// We must re-use or free the buffer.
-void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state)
+void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
@@ -641,9 +738,22 @@ void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajo
 	}
 }
 
+// Handle signalling of a remote switch change, when the handle indicates that it is being used as a Z probe.
+void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept
+{
+	if (handleMajor < ARRAY_SIZE(zProbes))
+	{
+		ZProbe * const zp = zProbes[handleMajor];
+		if (zp != nullptr)
+		{
+			zp->HandleRemoteInputChange(src, handleMinor, state);
+		}
+	}
+}
+
 // This is called when we update endstop states because of a message from a remote board.
 // In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
-void EndstopsManager::OnEndstopStatesChanged()
+void EndstopsManager::OnEndstopOrZProbeStatesChanged() noexcept
 {
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
 
@@ -658,7 +768,7 @@ void EndstopsManager::OnEndstopStatesChanged()
 		}
 	}
 
-	RestoreBasePriority(oldPrio);								// allow step interrupts again
+	RestoreBasePriority(oldPrio);										// allow step interrupts again
 }
 
 #endif

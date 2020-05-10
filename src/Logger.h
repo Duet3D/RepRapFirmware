@@ -20,19 +20,21 @@ class OutputBuffer;
 class Logger
 {
 public:
-	Logger();
+	Logger() noexcept;
 
-	void Start(time_t time, const StringRef& file);
-	void Stop(time_t time);
-	void LogMessage(time_t time, const char *message);
-	void LogMessage(time_t time, OutputBuffer *buf);
-	void Flush(bool forced);
-	bool IsActive() const { return logFile.IsLive(); }
+	void Start(time_t time, const StringRef& file) noexcept;
+	void Stop(time_t time) noexcept;
+	void LogMessage(time_t time, const char *message) noexcept;
+	void LogMessage(time_t time, OutputBuffer *buf) noexcept;
+	void Flush(bool forced) noexcept;
+	bool IsActive() const noexcept { return logFile.IsLive(); }
+	const char *GetFileName() const noexcept { return (IsActive()) ? logFileName.c_str() : nullptr; }
 
 private:
-	bool WriteDateTime(time_t time);
-	void InternalLogMessage(time_t time, const char *message);
+	bool WriteDateTime(time_t time) noexcept;
+	void InternalLogMessage(time_t time, const char *message) noexcept;
 
+	String<MaxFilenameLength> logFileName;
 	FileData logFile;
 	uint32_t lastFlushTime;
 	FilePosition lastFlushFileSize;

@@ -9,6 +9,8 @@
 #define SRC_PCCB_PINS_PCCB_H_
 
 #if defined(PCCB_10)
+# define BOARD_NAME				"PC001373"
+# define BOARD_SHORT_NAME		"PC001373"
 # define FIRMWARE_NAME 			"RepRapFirmware for PC001373"
 # define DEFAULT_BOARD_TYPE 	BoardType::PCCB_v10
 #elif defined(PCCB_08_X5)
@@ -23,17 +25,8 @@
 
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define IAP_FIRMWARE_FILE		"PccbFirmware.bin"
-
-#define IAP_IN_RAM				1
-
-#if IAP_IN_RAM
-# define IAP_UPDATE_FILE		"PccbIAP.bin"
+#define IAP_UPDATE_FILE			"PccbIAP.bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20010000;
-#else
-# define IAP_UPDATE_FILE		"iap4s.bin"
-constexpr uint32_t IAP_IMAGE_START = 0x00470000;
-constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
-#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
@@ -55,7 +48,6 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SA
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			1
 #define HAS_VREF_MONITOR		1
-#define ACTIVE_LOW_HEAT_ON		0					// although we have no heaters, this matters because we treat the LEDs as heaters
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
@@ -63,11 +55,10 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SA
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
+#define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_DOTSTAR_LED		1					// set nonzero to support DotStar LED strips
 #define ALLOCATE_DEFAULT_PORTS	1
-
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
 
 // The physical capabilities of the machine
 
@@ -91,7 +82,7 @@ constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 1;					// The number of heaters in the machine. PCCB has no heaters.
-constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors per heater
 
 constexpr size_t MaxBedHeaters = 1;
 constexpr size_t MaxChamberHeaters = 1;
@@ -101,7 +92,8 @@ constexpr int8_t DefaultE0Heater = 0;				// Index of the default first extruder 
 constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
-constexpr size_t MaxGpioPorts = 5;
+constexpr size_t MaxGpInPorts = 5;
+constexpr size_t MaxGpOutPorts = 5;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, <= DRIVES
@@ -117,7 +109,9 @@ constexpr size_t MaxExtrudersPerTool = 1;
 
 constexpr size_t MaxFans = 7;
 
-constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
+
+constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
 constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -155,6 +149,8 @@ constexpr Pin TMC2660MisoPin = PortAPin(12);
 constexpr Pin TMC2660SclkPin = PortAPin(14);
 constexpr Pin GlobalTmc2660EnablePin = PortCPin(16); // The pin that drives ENN of all drivers on the DueX5
 
+constexpr uint32_t DefaultStandstillCurrentPercent = 100;					// it's not adjustable on TMC2660
+
 #elif defined(PCCB_08)
 
 constexpr Pin ENABLE_PINS[NumDirectDrivers] =		{ NoPin,		NoPin,		  PortBPin(14), PortCPin(25), PortCPin( 5), PortCPin(19), PortAPin( 0), PortCPin(28) };
@@ -178,6 +174,8 @@ constexpr uint32_t TransferTimeout = 10;			// any transfer should complete withi
 
 #define UART_TMC_DRV0_Handler	UART0_Handler
 #define UART_TMC_DRV1_Handler	UART1_Handler
+
+constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 #endif
 
@@ -228,7 +226,6 @@ constexpr Pin DotStarMosiPin = PortAPin(22);
 constexpr Pin DotStarSclkPin = PortAPin(23);
 constexpr uint32_t DotStarClockId = ID_USART1;
 constexpr IRQn DotStarIRQn = USART1_IRQn;
-const uint32_t DotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 
 // SD cards
 constexpr size_t NumSdCards = 1;
@@ -337,6 +334,8 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
+#if ALLOCATE_DEFAULT_PORTS
+
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "stop1", "nil", "stop0" };	// stop0 is the default Z endstop, stop1 is the X endstop
 constexpr const char *DefaultZProbePinNames = "nil";
@@ -349,6 +348,8 @@ constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, Default
 #else
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "!fan3+fan3a.tach", "nil+fan3btach" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, 25000 };
+#endif
+
 #endif
 
 // Timer allocation

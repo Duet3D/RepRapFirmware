@@ -20,8 +20,9 @@ Licence: GPL
 #ifndef PRINTMONITOR_H
 #define PRINTMONITOR_H
 
-#include "RepRapFirmware.h"
-#include "Storage/FileInfoParser.h"	// for struct GCodeFileInfo
+#include <RepRapFirmware.h>
+#include <GCodes/GCodeFileInfo.h>
+#include <ObjectModel/ObjectModel.h>
 
 const float LAYER_HEIGHT_TOLERANCE = 0.015;			// Tolerance for comparing two Z heights (in mm)
 
@@ -39,69 +40,96 @@ enum PrintEstimationMethod
 	layerBased
 };
 
-class PrintMonitor
+class PrintMonitor INHERIT_OBJECT_MODEL
 {
-	public:
-		PrintMonitor(Platform& p, GCodes& gc);
-		void Spin();
-		void Init();
+public:
+	PrintMonitor(Platform& p, GCodes& gc) noexcept;
+	void Spin() noexcept;
+	void Init() noexcept;
 
-		bool IsPrinting() const;						// Is a file being printed?
-		void StartingPrint(const char *filename);		// Called to indicate a file will be printed (see M23)
-		void StartedPrint();							// Called whenever a new live print starts (see M24)
-		void StoppedPrint();							// Called whenever a file print has stopped
-		float FractionOfFilePrinted() const;			// Return the fraction printed (0..1)
+	bool IsPrinting() const noexcept;						// Is a file being printed?
+	void StartingPrint(const char *filename) noexcept;		// Called to indicate a file will be printed (see M23)
+	void StartedPrint() noexcept;							// Called whenever a new live print starts (see M24)
+	void StoppedPrint() noexcept;							// Called whenever a file print has stopped
+	void SetLayerNumber(uint32_t layerNumber) noexcept;		// Set the current layer number
+	void SetLayerZ(float layerZ) noexcept;					// Set the printing height of the new layer
+	float FractionOfFilePrinted() const noexcept;			// Return the fraction printed (0..1)
 
-		// Return an estimate in seconds based on a specific estimation method
-		float EstimateTimeLeft(PrintEstimationMethod method) const;
+	// Return an estimate in seconds based on a specific estimation method
+	float EstimateTimeLeft(PrintEstimationMethod method) const noexcept;
+#if SUPPORT_OBJECT_MODEL
+	ExpressionValue EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept;
+#endif
 
-		// Provide some information about the file being printed
-		unsigned int GetCurrentLayer() const;
-		float GetCurrentLayerTime() const;
-		float GetPrintDuration() const;
-		float GetWarmUpDuration() const;
-		float GetFirstLayerDuration() const;
-		float GetFirstLayerHeight() const;
+	// Provide some information about the file being printed
+	unsigned int GetCurrentLayer() const noexcept;
+	float GetCurrentLayerTime() const noexcept;
+	float GetPrintDuration() const noexcept;
+	float GetWarmUpDuration() const noexcept;
+	float GetFirstLayerDuration() const noexcept;
+	float GetFirstLayerHeight() const noexcept;
 
-		const char *GetPrintingFilename() const { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
-		bool GetPrintingFileInfo(GCodeFileInfo& info);
-		void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info);
+	const char *GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
+	bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
+	void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
 
-	private:
-		Platform& platform;
-		GCodes& gCodes;
-		uint32_t lastUpdateTime;
+protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(filament)
 
-		// Information/Events concerning the file being printed
-		void FirstLayerComplete();
-		void LayerComplete();
+private:
+	Platform& platform;
+	GCodes& gCodes;
+	uint32_t lastUpdateTime;
 
-		bool isPrinting;
-		bool heatingUp;
-		uint64_t printStartTime;
-		uint64_t heatingStartedTime;
-		uint64_t pauseStartTime, totalPauseTime;
+	// Information/Events concerning the file being printed
+	void FirstLayerComplete() noexcept;
+	void LayerComplete() noexcept;
+	void Reset() noexcept;
 
-		unsigned int currentLayer;
-		float warmUpDuration, firstLayerDuration;
-		float firstLayerFilament, firstLayerProgress;
-		float lastLayerChangeTime, lastLayerFilament, lastLayerZ;
+#if SUPPORT_OBJECT_MODEL
+	int32_t GetPrintOrSimulatedDuration() const noexcept;
+#endif
 
-		unsigned int numLayerSamples;
-		float layerDurations[MAX_LAYER_SAMPLES];
-		float filamentUsagePerLayer[MAX_LAYER_SAMPLES];
-		float fileProgressPerLayer[MAX_LAYER_SAMPLES];
-		float layerEstimatedTimeLeft;
+	bool isPrinting;
+	bool heatingUp;
+	uint64_t printStartTime;
+	uint64_t heatingStartedTime;
+	uint64_t pauseStartTime, totalPauseTime;
 
-		bool printingFileParsed;
-		GCodeFileInfo printingFileInfo;
-		String<MaxFilenameLength> filenameBeingPrinted;
+	unsigned int currentLayer;
+	float warmUpDuration, firstLayerDuration;
+	float firstLayerFilament, firstLayerProgress;
+	float lastLayerChangeTime, lastLayerFilament, lastLayerZ;
+
+	unsigned int numLayerSamples;
+	float layerDurations[MAX_LAYER_SAMPLES];
+	float filamentUsagePerLayer[MAX_LAYER_SAMPLES];
+	float fileProgressPerLayer[MAX_LAYER_SAMPLES];
+	float layerEstimatedTimeLeft;
+
+	unsigned int lastLayerNumberNotified;
+	float lastLayerStartHeightNotified;
+
+	bool printingFileParsed;
+	GCodeFileInfo printingFileInfo;
+	String<MaxFilenameLength> filenameBeingPrinted;
 };
 
-inline bool PrintMonitor::IsPrinting() const { return isPrinting; }
-inline unsigned int PrintMonitor::GetCurrentLayer() const { return currentLayer; }
-inline float PrintMonitor::GetCurrentLayerTime() const { return (lastLayerChangeTime > 0.0) ? (GetPrintDuration() - lastLayerChangeTime) : 0.0; }
-inline float PrintMonitor::GetFirstLayerHeight() const { return printingFileParsed ? printingFileInfo.firstLayerHeight : 0.0; }
+inline bool PrintMonitor::IsPrinting() const noexcept { return isPrinting; }
+inline unsigned int PrintMonitor::GetCurrentLayer() const noexcept { return currentLayer; }
+
+inline float PrintMonitor::GetCurrentLayerTime() const noexcept
+{
+	return (currentLayer == 0) ? 0.0
+			: (currentLayer == 1) ? GetPrintDuration()
+				: GetPrintDuration() - lastLayerChangeTime;
+}
+
+inline float PrintMonitor::GetFirstLayerHeight() const noexcept
+{
+	return printingFileParsed ? printingFileInfo.firstLayerHeight : 0.0;
+}
 
 #endif /* PRINTMONITOR_H */
 

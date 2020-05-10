@@ -6,28 +6,34 @@
  */
 
 #include "BinaryParser.h"
-#include "GCodeBuffer.h"
-#include "Platform.h"
-#include "RepRap.h"
 
-BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) : gb(gcodeBuffer)
+#if HAS_LINUX_INTERFACE
+
+#include "GCodeBuffer.h"
+#include "ExpressionParser.h"
+#include <Platform.h>
+#include <RepRap.h>
+#include <Networking/NetworkDefs.h>
+
+BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
 {
 	header = reinterpret_cast<const CodeHeader *>(gcodeBuffer.buffer);
 }
 
-void BinaryParser::Init()
+void BinaryParser::Init() noexcept
 {
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
 }
 
-void BinaryParser::Put(const char *data, size_t len)
+void BinaryParser::Put(const char *data, size_t len) noexcept
 {
 	memcpy(gb.buffer, data, len);
 	bufferLength = len;
 	gb.bufferState = GCodeBufferState::ready;
 	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
+	gb.machineState->lineNumber = header->lineNumber;
 
 	if (reprap.Debug(moduleGcodes))
 	{
@@ -37,7 +43,7 @@ void BinaryParser::Put(const char *data, size_t len)
 	}
 }
 
-bool BinaryParser::Seen(char c)
+bool BinaryParser::Seen(char c) noexcept
 {
 	if (bufferLength != 0 && header->numParameters != 0)
 	{
@@ -71,273 +77,314 @@ bool BinaryParser::Seen(char c)
 	return false;
 }
 
-char BinaryParser::GetCommandLetter() const
+char BinaryParser::GetCommandLetter() const noexcept
 {
 	return (bufferLength != 0) ? header->letter : 'Q';
 }
 
-bool BinaryParser::HasCommandNumber() const
+bool BinaryParser::HasCommandNumber() const noexcept
 {
 	return (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0);
 }
 
-int BinaryParser::GetCommandNumber() const
+int BinaryParser::GetCommandNumber() const noexcept
 {
 	return HasCommandNumber() ? header->majorCode : -1;
 }
 
-int8_t BinaryParser::GetCommandFraction() const
+int8_t BinaryParser::GetCommandFraction() const noexcept
 {
 	return (bufferLength != 0 && (header->flags & CodeFlags::HasMinorCommandNumber) != 0) ? header->minorCode : -1;
 }
 
-float BinaryParser::GetFValue()
+float BinaryParser::GetFValue() THROWS(GCodeException)
 {
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		float value;
-		switch (seenParameter->type)
-		{
-		case DataType::Float:
-			value = seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0.0f;
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	INTERNAL_ERROR;
-	return 0.0f;
-}
-
-int32_t BinaryParser::GetIValue()
-{
-	if (seenParameter != nullptr)
+	float value;
+	switch (seenParameter->type)
 	{
-		int32_t value;
-		switch (seenParameter->type)
+	case DataType::Float:
+		value = seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	case DataType::Expression:
 		{
-		case DataType::Float:
-			value = seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0.0f;
-			break;
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			value = parser.ParseFloat();
+			parser.CheckForExtraCharacters();
 		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		break;
+	default:
+		value = 0.0;
+		break;
 	}
-
-	INTERNAL_ERROR;
-	return 0;
-}
-
-uint32_t BinaryParser::GetUIValue()
-{
-	if (seenParameter != nullptr)
-	{
-		uint32_t value;
-		switch (seenParameter->type)
-		{
-		case DataType::Float:
-			value = (uint32_t)seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = (uint32_t)seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0;
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
-	}
-
-	INTERNAL_ERROR;
-	return 0;
-}
-
-// Get a driver ID
-DriverId BinaryParser::GetDriverId()
-{
-	DriverId value;
-	if (seenParameter != nullptr)
-	{
-		switch (seenParameter->type)
-		{
-		case DataType::Int:
-		case DataType::UInt:
-		case DataType::DriverId:
-			value.SetFromBinary(seenParameter->uintValue);
-			break;
-
-		default:
-			value.Clear();
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
-	}
-
-	INTERNAL_ERROR;
-	value.Clear();
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
 	return value;
 }
 
-bool BinaryParser::GetIPAddress(IPAddress& returnedIp)
+int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		return false;
+		THROW_INTERNAL_ERROR;
 	}
 
-	if (seenParameter->type != DataType::String)
+	int32_t value;
+	switch (seenParameter->type)
 	{
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return false;
-	}
-
-	const char* p = seenParameterValue;
-	uint8_t ip[4];
-	unsigned int n = 0;
-	for (;;)
-	{
-		const char *pp;
-		const unsigned long v = SafeStrtoul(p, &pp);
-		if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
+	case DataType::Float:
+		value = seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	case DataType::Expression:
 		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			value = parser.ParseInteger();
+			parser.CheckForExtraCharacters();
 		}
-		ip[n] = (uint8_t)v;
-		++n;
-		p = pp;
-		if (*p != '.')
-		{
-			break;
-		}
-		if (n == 4)
-		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
-		}
-		++p;
+		break;
+	default:
+		value = 0;
+		break;
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	if (n == 4)
-	{
-		returnedIp.SetV4(ip);
-		return true;
-	}
-	returnedIp.SetNull();
-	return false;
+	return value;
 }
 
-bool BinaryParser::GetMacAddress(uint8_t mac[6])
+uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		return false;
+		THROW_INTERNAL_ERROR;
 	}
 
-	if (seenParameter->type != DataType::String)
+	uint32_t value;
+	switch (seenParameter->type)
 	{
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return false;
-	}
-
-	const char* p = seenParameterValue;
-	unsigned int n = 0;
-	for (;;)
-	{
-		const char *pp;
-		const unsigned long v = SafeStrtoul(p, &pp, 16);
-		if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
+	case DataType::Float:
+		value = (uint32_t)seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = (uint32_t)seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	case DataType::Expression:
 		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			value = parser.ParseUnsigned();
+			parser.CheckForExtraCharacters();
 		}
-		mac[n] = (uint8_t)v;
-		++n;
-		p = pp;
-		if (*p != ':')
-		{
-			break;
-		}
-		if (n == 6)
-		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
-		}
-		++p;
+		break;
+	default:
+		value = 0;
+		break;
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return n == 6;
+	return value;
 }
 
-bool BinaryParser::GetUnprecedentedString(const StringRef& str)
+// Get a driver ID
+DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 {
-	str.Clear();
-	WriteParameters(str, false);
-	return !str.IsEmpty();
-}
-
-bool BinaryParser::GetQuotedString(const StringRef& str)
-{
-	return GetPossiblyQuotedString(str);
-}
-
-bool BinaryParser::GetPossiblyQuotedString(const StringRef& str)
-{
-	if (seenParameter != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
+	if (seenParameter == nullptr)
 	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	DriverId value;
+	switch (seenParameter->type)
+	{
+	case DataType::Int:
+	case DataType::UInt:
+	case DataType::DriverId:
+		value.SetFromBinary(seenParameter->uintValue);
+		break;
+
+	default:
+		value.Clear();
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return value;
+}
+
+void BinaryParser::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
+{
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	switch (seenParameter->type)
+	{
+	case DataType::String:
+		{
+			const char* p = seenParameterValue;
+			uint8_t ip[4];
+			unsigned int n = 0;
+			for (;;)
+			{
+				const char *pp;
+				const unsigned long v = SafeStrtoul(p, &pp);
+				if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
+				{
+					throw ConstructParseException("invalid IP address");
+				}
+				ip[n] = (uint8_t)v;
+				++n;
+				p = pp;
+				if (*p != '.')
+				{
+					break;
+				}
+				if (n == 4)
+				{
+					throw ConstructParseException("invalid IP address");
+				}
+				++p;
+			}
+
+			if (n != 4)
+			{
+				throw ConstructParseException("invalid IP address");
+			}
+			returnedIp.SetV4(ip);
+		}
+		break;
+
+	case DataType::Expression:
+		//TODO not handled yet
+	default:
+		throw ConstructParseException("IP address string expected");
+	}
+
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+}
+
+void BinaryParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
+{
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	switch (seenParameter->type)
+	{
+	case DataType::String:
+		{
+			const char* p = seenParameterValue;
+			unsigned int n = 0;
+			for (;;)
+			{
+				const char *pp;
+				const unsigned long v = SafeStrtoul(p, &pp, 16);
+				if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
+				{
+					throw ConstructParseException("invalid MAC address");
+				}
+				mac.bytes[n] = (uint8_t)v;
+				++n;
+				p = pp;
+				if (*p != ':')
+				{
+					break;
+				}
+				if (n == 6)
+				{
+					throw ConstructParseException("invalid MAC address");
+				}
+				++p;
+			}
+
+			if (n != 6)
+			{
+				throw ConstructParseException("invalid MAC address");
+			}
+		}
+		break;
+
+	case DataType::Expression:
+		//TODO not handled yet
+	default:
+		throw ConstructParseException("MAC address string expected");
+	}
+
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+}
+
+void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
+{
+	if (Seen('@') || Seen('\0'))		// DCS 2.1.3 and earlier use '\0', later DCS versions use '@'
+	{
+		GetPossiblyQuotedString(str, allowEmpty);
+	}
+	else if (!allowEmpty)
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
+}
+
+void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
+{
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	switch (seenParameter->type)
+	{
+	case DataType::String:
 		str.copy(seenParameterValue, seenParameter->intValue);
-	}
-	else
-	{
+		break;
+
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			const ExpressionValue val = parser.Parse();
+			parser.CheckForExtraCharacters();
+			val.AppendAsString(str);
+		}
+		break;
+
+	default:
 		str.Clear();
+		break;
 	}
+
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return !str.IsEmpty();
+	if (!allowEmpty && str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
-bool BinaryParser::GetReducedString(const StringRef& str)
+void BinaryParser::GetReducedString(const StringRef& str) THROWS(GCodeException)
 {
 	str.Clear();
-	if (seenParameterValue != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
+	if (seenParameterValue != nullptr && seenParameter->type == DataType::String)
 	{
 		while (reducedBytesRead < seenParameter->intValue)
 		{
@@ -354,7 +401,7 @@ bool BinaryParser::GetReducedString(const StringRef& str)
 				{
 					seenParameter = nullptr;
 					seenParameterValue = nullptr;
-					return false;
+					throw ConstructParseException("control character in string");
 				}
 				str.cat(tolower(c));
 				break;
@@ -364,32 +411,33 @@ bool BinaryParser::GetReducedString(const StringRef& str)
 
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return !str.IsEmpty();
+	if (str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
-void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad)
+void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	GetArray(arr, length, doPad);
 }
 
-void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad)
+void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	GetArray(arr, length, doPad);
 }
 
-void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
+void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	GetArray(arr, length, doPad);
 }
 
 // Get a :-separated list of drivers after a key letter
-void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
+void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		length = 0;
-		return;
+		THROW_INTERNAL_ERROR;
 	}
 
 	switch (seenParameter->type)
@@ -417,28 +465,28 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
 	}
 }
 
-void BinaryParser::SetFinished()
+void BinaryParser::SetFinished() noexcept
 {
 	gb.machineState->g53Active = false;		// G53 does not persist beyond the current command
 	Init();
 }
 
-FilePosition BinaryParser::GetFilePosition() const
+FilePosition BinaryParser::GetFilePosition() const noexcept
 {
 	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
 }
 
-const char* BinaryParser::DataStart() const
+const char* BinaryParser::DataStart() const noexcept
 {
 	return gb.buffer;
 }
 
-size_t BinaryParser::DataLength() const
+size_t BinaryParser::DataLength() const noexcept
 {
 	return bufferLength;
 }
 
-void BinaryParser::PrintCommand(const StringRef& s) const
+void BinaryParser::PrintCommand(const StringRef& s) const noexcept
 {
 	if (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0)
 	{
@@ -454,7 +502,7 @@ void BinaryParser::PrintCommand(const StringRef& s) const
 	}
 }
 
-void BinaryParser::AppendFullCommand(const StringRef &s) const
+void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 {
 	if (bufferLength != 0)
 	{
@@ -475,19 +523,12 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const
 	}
 }
 
-size_t BinaryParser::AddPadding(size_t bytesRead) const
-{
-    size_t padding = 4 - bytesRead % 4;
-    return bytesRead + ((padding == 4) ? 0 : padding);
-}
-
-template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
+//TODO need a way to pass arrays in which one or more elements is an expression from DSF to RRF
+template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		length = 0;
-		return;
+		THROW_INTERNAL_ERROR;
 	}
 
 	int lastIndex = -1;
@@ -528,8 +569,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		}
 		lastIndex = seenParameter->intValue - 1;
 		break;
-	case DataType::String:
-	case DataType::Expression:
+	default:
 		length = 0;
 		return;
 	}
@@ -547,7 +587,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 	}
 }
 
-void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
+void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const noexcept
 {
 	if (bufferLength != 0)
 	{
@@ -640,8 +680,23 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
 						s.cat(':');
 					}
 					const uint32_t driver = *reinterpret_cast<const uint32_t*>(val);
-					s.catf("%c%d.%d", param->letter, (int)(driver >> 16), (int)(driver & 0xFFFF));
+					s.catf("%d.%d", (int)(driver >> 16), (int)(driver & 0xFFFF));
 					val += sizeof(uint32_t);
+				}
+				break;
+			case DataType::Bool:
+				s.catf("%c%c", param->letter, (param->intValue != 0) ? '1' : '0');
+				break;
+			case DataType::BoolArray:
+				s.cat(param->letter);
+				for (int k = 0; k < param->intValue; k++)
+				{
+					if (k != 0)
+					{
+						s.cat(':');
+					}
+					s.cat(((const uint8_t*)val != 0) ? '1' : '0');
+					val += sizeof(uint8_t);
 				}
 				break;
 			}
@@ -649,3 +704,21 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
 	}
 }
 
+GCodeException BinaryParser::ConstructParseException(const char *str) const noexcept
+{
+	return GCodeException(header->lineNumber, -1, str);
+}
+
+GCodeException BinaryParser::ConstructParseException(const char *str, const char *param) const noexcept
+{
+	return GCodeException(header->lineNumber, -1, str, param);
+}
+
+GCodeException BinaryParser::ConstructParseException(const char *str, uint32_t param) const noexcept
+{
+	return GCodeException(header->lineNumber, -1, str, param);
+}
+
+#endif
+
+// End

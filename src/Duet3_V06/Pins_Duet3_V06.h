@@ -2,26 +2,16 @@
 #define PINS_SAME70_H__
 
 #define BOARD_SHORT_NAME		"MB6HC"
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC v0.6 or 1.0"
-#define DEFAULT_BOARD_TYPE		BoardType::Duet3
+#define BOARD_NAME				"Duet 3 MB6HC"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC"
+#define DEFAULT_BOARD_TYPE		BoardType::Auto
+
 const size_t NumFirmwareUpdateModules = 1;
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-
-#define IAP_IN_RAM				1
-
-#if IAP_IN_RAM
-# define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
+#define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
+#define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
-#else
-# define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
-
-// SAME70 Flash locations
-// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
-// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
-constexpr uint32_t IAP_IMAGE_START = 0x004E0000;
-constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
-#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
@@ -55,6 +45,7 @@ constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0
+#define TRACK_OBJECT_NAMES		1
 
 #define USE_MPU					1					// Needed if USE_CACHE is set, so that we can have non-cacheable memory regions
 #define USE_CACHE				1
@@ -65,12 +56,12 @@ constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
-constexpr size_t MaxCanDrivers = 18;
-constexpr size_t MaxCanBoards = 18;
+constexpr size_t MaxCanDrivers = 20;
+constexpr size_t MaxCanBoards = 20;
 
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxBedHeaters = 9;
+constexpr size_t MaxBedHeaters = 12;
 constexpr size_t MaxChamberHeaters = 4;
 constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
 
@@ -86,8 +77,8 @@ constexpr size_t NumDefaultExtruders = 1;			// The number of drivers that we con
 
 constexpr size_t MaxAxesPlusExtruders = 20;			// May be <= MaxAxes + MaxExtruders
 
-constexpr size_t MaxHeatersPerTool = 4;
-constexpr size_t MaxExtrudersPerTool = 6;
+constexpr size_t MaxHeatersPerTool = 8;
+constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
@@ -118,6 +109,8 @@ constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
 constexpr Pin TMC51xxMosiPin = PortBPin(4);
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
 constexpr Pin TMC51xxSclkPin = PortAPin(23);
+
+constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 
 // Thermistor/PT1000 inputs
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(15), PortCPin(29), PortCPin(30), PortCPin(31) };	// Thermistor/PT1000 pins
@@ -157,7 +150,6 @@ constexpr Pin DotStarMosiPin = PortAPin(13);
 constexpr Pin DotStarSclkPin = PortAPin(14);
 constexpr uint32_t DotStarClockId = ID_QSPI;
 constexpr IRQn DotStarIRQn = QSPI_IRQn;
-const uint32_t DotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 
 // Ethernet
 constexpr Pin PhyInterruptPin = PortCPin(6);
@@ -271,18 +263,6 @@ constexpr Pin LinuxTfrReadyPin = PortEPin(2);
 Spi * const LinuxSpi = SPI1;
 
 // Timer allocation
-
-#if !LWIP_GMAC_TASK
-
-// Network timer is timer 4 aka TC1 channel1
-#define NETWORK_TC			(TC1)
-#define NETWORK_TC_CHAN		(1)
-#define NETWORK_TC_IRQN		TC4_IRQn
-#define NETWORK_TC_HANDLER	TC4_Handler
-#define NETWORK_TC_ID		ID_TC4
-
-#endif
-
 // Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.
 #define STEP_TC				(TC0)
 #define STEP_TC_CHAN		(0)					// channel for lower 16 bits

@@ -11,6 +11,7 @@
 #define SRC_HEATING_FOPDT_H_
 
 #include "RepRapFirmware.h"
+#include "ObjectModel/ObjectModel.h"
 
 // This is how PID parameters are stored internally
 struct PidParameters
@@ -36,7 +37,7 @@ class FileStore;
 struct CanMessageUpdateHeaterModel;
 #endif
 
-class FopDt
+class FopDt INHERIT_OBJECT_MODEL
 {
 public:
 	FopDt() noexcept;
@@ -65,8 +66,11 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) noexcept;
+	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) const noexcept;
 #endif
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	void CalcPidConstants() noexcept;

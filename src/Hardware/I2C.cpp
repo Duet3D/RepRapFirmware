@@ -19,7 +19,7 @@ void I2C::Init() noexcept
 	if (!i2cInitialised)
 	{
 		MutexLocker lock(Tasks::GetI2CMutex());
-		if (!i2cInitialised)			// test it again, now that we own the mutex
+		if (!i2cInitialised)					// test it again, now that we own the mutex
 		{
 			I2C_IFACE.BeginMaster(I2cClockFreq);
 			i2cInitialised = true;
@@ -32,18 +32,13 @@ void I2C::Init() noexcept
 
 #include "RTOSIface/RTOSIface.h"
 
-static TaskHandle_t twiTask = nullptr;				// the task that is waiting for a TWI command to complete
+static TaskHandle twiTask = nullptr;			// the task that is waiting for a TWI command to complete
 
 extern "C" void WIRE_ISR_HANDLER() noexcept
 {
 	WIRE_INTERFACE->TWI_IDR = 0xFFFFFFFF;
-	if (twiTask != nullptr)
-	{
-		BaseType_t higherPriorityTaskWoken = pdFALSE;
-		vTaskNotifyGiveFromISR(twiTask, &higherPriorityTaskWoken);	// wake up the task
-		twiTask = nullptr;
-		portYIELD_FROM_ISR(higherPriorityTaskWoken);
-	}
+	TaskBase::GiveFromISR(twiTask);				// wake up the task
+	twiTask = nullptr;
 }
 
 uint32_t I2C::statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor) noexcept
@@ -52,7 +47,7 @@ uint32_t I2C::statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor) noexcept
 	if ((sr & bitsToWaitFor) == 0)
 	{
 		// Suspend this task until we get an interrupt indicating that a status bit that we are interested in has been set
-		twiTask = xTaskGetCurrentTaskHandle();
+		twiTask = TaskBase::GetCallerTaskHandle();
 		twi->TWI_IER = bitsToWaitFor;
 		(void)TaskBase::Take(2);
 		sr = twi->TWI_SR;

@@ -31,15 +31,14 @@ Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept
 }
 
 // Configure the temperature sensor
-GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
-	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, seen))
+	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, changed))
 	{
 		return GCodeResult::error;
 	}
 
-	gb.TryGetFValue('R', seriesR, seen);
+	gb.TryGetFValue('R', seriesR, changed);
 	if (!isPT1000)
 	{
 		bool seenB = false;
@@ -47,33 +46,32 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 		if (seenB)
 		{
 			shC = 0.0;						// if user changes B and doesn't define C, assume C=0
-			seen = true;
+			changed = true;
 		}
-		gb.TryGetFValue('C', shC, seen);
-		gb.TryGetFValue('T', r25, seen);
-		if (seen)
+		gb.TryGetFValue('C', shC, changed);
+		gb.TryGetFValue('T', r25, changed);
+		if (changed)
 		{
 			CalcDerivedParameters();
 		}
 	}
 
 #if !HAS_VREF_MONITOR || defined(DUET3)
-	constexpr int maxOffset = (int)(30u << (AdcBits + AdcOversampleBits - 12));
 	if (gb.Seen('L'))
 	{
-		adcLowOffset = (int16_t)constrain<int>(gb.GetIValue(), -maxOffset, maxOffset);
-		seen = true;
+		adcLowOffset = (int8_t)constrain<int>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		changed = true;
 	}
 	if (gb.Seen('H'))
 	{
-		adcHighOffset = (int16_t)constrain<int>(gb.GetIValue(), -maxOffset, maxOffset);
-		seen = true;
+		adcHighOffset = (int8_t)constrain<int>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		changed = true;
 	}
 #endif
 
-	TryConfigureSensorName(gb, seen);
+	TryConfigureSensorName(gb, changed);
 
-	if (seen)
+	if (changed)
 	{
 		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
 		if (adcFilterChannel >= 0)
@@ -125,12 +123,16 @@ void Thermistor::Poll() noexcept
 	if (tempFilterValid && vrefFilter.IsValid() && vssaFilter.IsValid())
 	{
 # ifdef DUET3
-		// Duet 3 MB6HC board revisions 0.5, 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon.
+		// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon.
 		// So Extrapolate the reading for VrefP. We also allow offsets to be added.
+		// Version 1.01 and later boards have the series resistors connected to VrefMon.
 		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		const int32_t averagedVssaReading = rawAveragedVssaReading + (2 * adcLowOffset);
-		const int32_t averagedVrefReading = ((rawAveragedVrefReading - rawAveragedVssaReading) * 4715)/4700 + rawAveragedVssaReading + (2 * adcHighOffset);
+		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits - 12 + Thermistor::AdcOversampleBits - 1)));
+		const int32_t averagedVrefReading = ((reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
+											? ((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0)) + rawAveragedVssaReading
+												: rawAveragedVrefReading
+											) + (adcHighOffset * (1 << (AdcBits - 12 + Thermistor::AdcOversampleBits - 1)));
 # else
 		const int32_t averagedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t averagedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
@@ -139,7 +141,7 @@ void Thermistor::Poll() noexcept
 		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor.
 		// VSSA is the voltage measured across the VSSA fuse. We assume the same 15 ohms maximum resistance for the fuse.
 		// Assume a maximum ADC reading offset of 100.
-		constexpr int32_t maxDrop = ((OversampledAdcRange * 15)/(int32_t)MinVrefLoadR) + (100 << Thermistor::AdcOversampleBits);
+		constexpr int32_t maxDrop = (OversampledAdcRange * 15)/MinVrefLoadR + (100 << Thermistor::AdcOversampleBits);
 
 		if (averagedVrefReading < OversampledAdcRange - maxDrop)
 		{

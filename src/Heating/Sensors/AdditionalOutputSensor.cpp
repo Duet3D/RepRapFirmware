@@ -20,18 +20,13 @@ AdditionalOutputSensor::~AdditionalOutputSensor() noexcept
 {
 }
 
-GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	bool seen = false;
 	if (gb.Seen('P'))
 	{
-		seen = true;
+		changed = true;
 		String<StringLength20> pParam;
-		if (!gb.GetQuotedString(pParam.GetRef()))
-		{
-			reply.copy("Missing parent sensor and output number");
-			return GCodeResult::error;
-		}
+		gb.GetQuotedString(pParam.GetRef());
 
 		const char *pn = pParam.c_str();
 		if (*pn != 'S' && *pn != 's')
@@ -49,7 +44,7 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 		}
 
 		// Parse parent sensor number
-		parentSensor = SafeStrtoul(pn, &pn);
+		parentSensor = StrToU32(pn, &pn);
 		if (*pn != '.')
 		{
 			reply.copy("Missing additional output number of parent");
@@ -75,11 +70,11 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 			++pn;
 
 			// Parse output number
-			outputNumber = SafeStrtoul(pn, &pn);
+			outputNumber = StrToU32(pn, &pn);
 
 			if (outputNumber > parent->GetNumAdditionalOutputs())
 			{
-				reply.printf("Parent sensor only has %d addtional outputs", parent->GetNumAdditionalOutputs());
+				reply.printf("Parent sensor only has %d additional outputs", parent->GetNumAdditionalOutputs());
 				return GCodeResult::error;
 			}
 		}
@@ -88,8 +83,8 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 		Poll();
 	}
 
-	TryConfigureSensorName(gb, seen);
-	if (!seen && !gb.Seen('Y'))
+	TryConfigureSensorName(gb, changed);
+	if (!changed && !gb.Seen('Y'))
 	{
 		// No parameters were provided, so report the current configuration
 		CopyBasicDetails(reply);

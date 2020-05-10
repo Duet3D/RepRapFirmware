@@ -30,11 +30,15 @@
  * $Id: ccp.h,v 1.12 2004/11/04 10:02:26 paulus Exp $
  */
 
-#include <Lwip/src/include/netif/ppp/ppp_opts.h>
+#include "netif/ppp/ppp_opts.h"
 #if PPP_SUPPORT && CCP_SUPPORT  /* don't build if not configured for use in lwipopts.h */
 
 #ifndef CCP_H
 #define CCP_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * CCP codes.
@@ -151,6 +155,10 @@ typedef struct ccp_options {
 extern const struct protent ccp_protent;
 
 void ccp_resetrequest(ppp_pcb *pcb);  /* Issue a reset-request. */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CCP_H */
 #endif /* PPP_SUPPORT && CCP_SUPPORT */

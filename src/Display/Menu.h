@@ -21,38 +21,42 @@ class MessageBox;
 class Menu
 {
 public:
-	Menu(Lcd7920& refLcd);
-	void Load(const char* filename);							// load a menu file
-	void Pop();
-	void EncoderAction(int action);
-	void Refresh();
-	void ClearHighlighting();
-	void DisplayMessageBox(const MessageBox& mbox);
-	void ClearMessageBox();
+	Menu(Lcd7920& refLcd) noexcept;
+	void Load(const char* filename) noexcept;							// load a menu file
+	void Pop() noexcept;
+	void EncoderAction(int action) noexcept;
+	void Refresh() noexcept;
+	void ClearHighlighting() noexcept;
+	void DisplayMessageBox(const MessageBox& mbox) noexcept;
+	void ClearMessageBox() noexcept;
 
 private:
-	void LoadFixedMenu();
-	void ResetCache();
-	void Reload();
-	void DrawAll();
-	const char *ParseMenuLine(char * s);
-	void LoadError(const char *msg, unsigned int line);
-	void AddItem(MenuItem *item, bool isSelectable);
-	const char *AppendString(const char *s);
+	void LoadFixedMenu() noexcept;
+	void ResetCache() noexcept;
+	void Reload() noexcept;
+	void DrawAll() noexcept;
+	const char *ParseMenuLine(char * s) noexcept;
+	void LoadError(const char *msg, unsigned int line) noexcept;
+	void AddItem(MenuItem *item, bool isSelectable) noexcept;
+	const char *AppendString(const char *s) noexcept;
 
-	void EncoderActionEnterItemHelper();
-	void EncoderActionScrollItemHelper(int action);
-	void EncoderAction_ExecuteHelper(const char *const cmd);
+	void EncoderActionEnterItemHelper() noexcept;
+	void EncoderActionScrollItemHelper(int action) noexcept;
+	void EncoderAction_ExecuteHelper(const char *const cmd) noexcept;
 
-	void AdvanceHighlightedItem(int n);
-	MenuItem *FindNextSelectableItem(MenuItem *p) const;
-	MenuItem *FindPrevSelectableItem(MenuItem *p) const;
+	void AdvanceHighlightedItem(int n) noexcept;
+	MenuItem *FindNextSelectableItem(MenuItem *p) const noexcept;
+	MenuItem *FindPrevSelectableItem(MenuItem *p) const noexcept;
 
-	static const char *SkipWhitespace(const char *s);
-	static char *SkipWhitespace(char *s);
-	static bool CheckVisibility(MenuItem::Visibility vis);
+	static const char *SkipWhitespace(const char *s) noexcept;
+	static char *SkipWhitespace(char *s) noexcept;
+	static bool CheckVisibility(MenuItem::Visibility vis) noexcept;
 
-	static const size_t CommandBufferSize = 2500;
+#ifdef __LPC17xx__
+    static const size_t CommandBufferSize = 1024;
+#else
+    static const size_t CommandBufferSize = 2500;
+#endif
 	static const size_t MaxMenuLineLength = 120;				// adjusts behaviour in Reload()
 	static const size_t MaxMenuFilenameLength = 18;
 	static const size_t MaxMenuNesting = 8;						// maximum number of nested menus

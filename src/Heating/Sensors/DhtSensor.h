@@ -23,7 +23,6 @@ enum class DhtSensorType
 	Dht22
 };
 
-
 // This class represents a DHT temperature sensor
 class DhtTemperatureSensor : public SensorWithPort
 {
@@ -31,12 +30,12 @@ public:
 	DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType type) noexcept;
 	~DhtTemperatureSensor() noexcept;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
-
 	void Poll() noexcept override;
 	bool PollInTask() noexcept override;
+	const char *GetShortSensorType() const noexcept override;
 
 	void Interrupt() noexcept;
 	void TakeReading() noexcept;
@@ -64,6 +63,8 @@ class DhtHumiditySensor : public AdditionalOutputSensor
 public:
 	DhtHumiditySensor(unsigned int sensorNum) noexcept;
 	~DhtHumiditySensor() noexcept;
+
+	const char *GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *TypeName = "dhthumidity";
 };

@@ -54,26 +54,24 @@ public:
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
-	bool InNetworkStack() const noexcept override { return false; }
 	bool IsWiFiInterface() const noexcept override { return true; }
 
 	void UpdateHostname(const char *hostname) noexcept override;
 	IPAddress GetIPAddress() const noexcept override { return ipAddress; }
 	void SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) noexcept override;
-	void SetMacAddress(const uint8_t mac[]) noexcept override;
-	const uint8_t *GetMacAddress() const noexcept override { return macAddress; }
+	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
+	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
 	void OpenDataPort(Port port) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 	// The remaining functions are specific to the WiFi version
-	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply);
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException);
 	WifiFirmwareUploader *GetWifiUploader() const noexcept { return uploader; }
 	void StartWiFi() noexcept;
 	void ResetWiFi() noexcept;
 	void ResetWiFiForUpload(bool external) noexcept;
 	const char *GetWiFiServerVersion() const noexcept { return wiFiServerVersion; }
-	const char* TranslateNetworkState() const noexcept;
 	static const char* TranslateWiFiState(WiFiState w) noexcept;
 	void SpiInterrupt() noexcept;
 	void EspRequestsTransfer() noexcept;
@@ -83,15 +81,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	enum class NetworkState
-	{
-		disabled,					// WiFi module disabled
-		starting1,					// starting up
-		starting2,					// starting up
-		active,						// running, but not necessarily in the requested mode
-		changingMode,				// running and in the process of switching between modes
-	};
-
 	void InitSockets() noexcept;
 	void TerminateSockets() noexcept;
 	void TerminateSockets(Port port) noexcept;
@@ -127,6 +116,7 @@ private:
 	uint32_t lastTickMillis;
 
 	WifiFirmwareUploader *uploader;
+	TaskHandle espWaitingTask;
 
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
@@ -136,7 +126,6 @@ private:
 	bool closeDataPort;
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 
-	NetworkState state;
 	WiFiState requestedMode;
 	WiFiState currentMode;
 	bool activated;
@@ -145,7 +134,7 @@ private:
 	IPAddress ipAddress;
 	IPAddress netmask;
 	IPAddress gateway;
-	uint8_t macAddress[6];
+	MacAddress macAddress;
 	char requestedSsid[SsidLength + 1];
 	char actualSsid[SsidLength + 1];
 

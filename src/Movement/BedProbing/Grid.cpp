@@ -9,13 +9,9 @@
 #include "Platform.h"
 #include "RepRap.h"
 #include "Storage/FileStore.h"
-#include <cmath>
+#include <Math/Deviation.h>
 
-const char * const GridDefinition::HeightMapLabelLines[] =
-{
-	"xmin,xmax,ymin,ymax,radius,spacing,xnum,ynum",				// old version label line
-	"xmin,xmax,ymin,ymax,radius,xspacing,yspacing,xnum,ynum"	// current version label line
-};
+#include <cmath>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -24,27 +20,43 @@ const char * const GridDefinition::HeightMapLabelLines[] =
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(GridDefinition, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GridDefinition, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(GridDefinition, __VA_ARGS__)
 
-const ObjectModelTableEntry GridDefinition::objectModelTable[] =
+constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 {
-	// These entries must be in alphabetical order
-	{ "radius", OBJECT_MODEL_FUNC(&(self->radius)), TYPE_OF(float), ObjectModelTableEntry::none }
+	// Within each group, these entries must be in alphabetical order
+	// 0. GridDefinition members
+	{ "radius",			OBJECT_MODEL_FUNC(self->radius, 1),			ObjectModelEntryFlags::none },
+	{ "xMax",			OBJECT_MODEL_FUNC(self->xMax, 1),			ObjectModelEntryFlags::none },
+	{ "xMin",			OBJECT_MODEL_FUNC(self->xMin, 1),			ObjectModelEntryFlags::none },
+	{ "xSpacing",		OBJECT_MODEL_FUNC(self->xSpacing, 1),		ObjectModelEntryFlags::none },
+	{ "yMax",			OBJECT_MODEL_FUNC(self->yMax, 1),			ObjectModelEntryFlags::none },
+	{ "yMin",			OBJECT_MODEL_FUNC(self->yMin, 1),			ObjectModelEntryFlags::none },
+	{ "ySpacing",		OBJECT_MODEL_FUNC(self->ySpacing, 1),		ObjectModelEntryFlags::none },
 };
+
+constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 7 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 
 #endif
 
+const char * const GridDefinition::HeightMapLabelLines[] =
+{
+	"xmin,xmax,ymin,ymax,radius,spacing,xnum,ynum",				// old version label line
+	"xmin,xmax,ymin,ymax,radius,xspacing,yspacing,xnum,ynum"	// current version label line
+};
+
 // Initialise the grid to be invalid
-GridDefinition::GridDefinition()
+GridDefinition::GridDefinition() noexcept
 	: xMin(0.0), xMax(-1.0), yMin(0.0), yMax(-1.0), radius(-1.0), xSpacing(0.0), ySpacing(0.0)
 {
 	CheckValidity();		// will flag the grid as invalid
 }
 
 // Set the grid parameters ands return true if it is now valid
-bool GridDefinition::Set(const float xRange[2], const float yRange[2], float pRadius, const float pSpacings[2])
+bool GridDefinition::Set(const float xRange[2], const float yRange[2], float pRadius, const float pSpacings[2]) noexcept
 {
 	xMin = xRange[0];
 	xMax = xRange[1];
@@ -59,7 +71,7 @@ bool GridDefinition::Set(const float xRange[2], const float yRange[2], float pRa
 
 // Set up internal variables and check validity of the grid.
 // numX, numY are always set up, but recipXspacing, recipYspacing only if the grid is valid
-void GridDefinition::CheckValidity()
+void GridDefinition::CheckValidity() noexcept
 {
 	numX = (xMax - xMin >= MinRange && xSpacing >= MinSpacing) ? (uint32_t)((xMax - xMin)/xSpacing) + 1 : 0;
 	numY = (yMax - yMin >= MinRange && ySpacing >= MinSpacing) ? (uint32_t)((yMax - yMin)/ySpacing) + 1 : 0;
@@ -75,37 +87,37 @@ void GridDefinition::CheckValidity()
 	}
 }
 
-float GridDefinition::GetXCoordinate(unsigned int xIndex) const
+float GridDefinition::GetXCoordinate(unsigned int xIndex) const noexcept
 {
 	return xMin + (xIndex * xSpacing);
 }
 
-float GridDefinition::GetYCoordinate(unsigned int yIndex) const
+float GridDefinition::GetYCoordinate(unsigned int yIndex) const noexcept
 {
 	return yMin + (yIndex * ySpacing);
 }
 
-bool GridDefinition::IsInRadius(float x, float y) const
+bool GridDefinition::IsInRadius(float x, float y) const noexcept
 {
 	return radius < 0.0 || x * x + y * y < radius * radius;
 }
 
 // Append the grid parameters to the end of a string
-void GridDefinition::PrintParameters(const StringRef& s) const
+void GridDefinition::PrintParameters(const StringRef& s) const noexcept
 {
 	s.catf("X%.1f:%.1f, Y%.1f:%.1f, radius %.1f, X spacing %.1f, Y spacing %.1f, %" PRIu32 " points",
 		(double)xMin, (double)xMax, (double)yMin, (double)yMax, (double)radius, (double)xSpacing, (double)ySpacing, NumPoints());
 }
 
 // Write the parameter label line to a string
-void GridDefinition::WriteHeadingAndParameters(const StringRef& s) const
+void GridDefinition::WriteHeadingAndParameters(const StringRef& s) const noexcept
 {
 	s.printf("%s\n%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%" PRIi32 ",%" PRIi32 "\n",
 				HeightMapLabelLines[ARRAY_UPB(HeightMapLabelLines)], (double)xMin, (double)xMax, (double)yMin, (double)yMax, (double)radius, (double)xSpacing, (double)ySpacing, numX, numY);
 }
 
 // Check the parameter label line, returning -1 if not recognised, else the version we found
-/*static*/ int GridDefinition::CheckHeading(const StringRef& s)
+/*static*/ int GridDefinition::CheckHeading(const StringRef& s) noexcept
 {
 	for (size_t i = 0; i < ARRAY_SIZE(HeightMapLabelLines); ++i)
 	{
@@ -118,7 +130,7 @@ void GridDefinition::WriteHeadingAndParameters(const StringRef& s) const
 }
 
 // Read the grid parameters from a string returning true if success
-bool GridDefinition::ReadParameters(const StringRef& s, int version)
+bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 {
 	// 2018-04-08: rewrote this not to use sscanf because that function isn't thread safe
 	isValid = false;						// assume failure
@@ -181,14 +193,14 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version)
 		p = q + 1;
 	}
 
-	numX = SafeStrtoul(p, &q);
+	numX = StrToU32(p, &q);
 	if (p == q || *q != ',')
 	{
 		return false;
 	}
 	p = q + 1;
 
-	numY = SafeStrtoul(p, &q);
+	numY = StrToU32(p, &q);
 	if (p == q)
 	{
 		return false;
@@ -199,7 +211,7 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version)
 }
 
 // Print what is wrong with the grid, appending it to the existing string
-void GridDefinition::PrintError(float originalXrange, float originalYrange, const StringRef& r) const
+void GridDefinition::PrintError(float originalXrange, float originalYrange, const StringRef& r) const noexcept
 {
 	if (xSpacing < MinSpacing || ySpacing < MinSpacing)
 	{
@@ -234,27 +246,30 @@ void GridDefinition::PrintError(float originalXrange, float originalYrange, cons
 // Increase the version number in the following string whenever we change the format of the height map file.
 const char * const HeightMap::HeightMapComment = "RepRapFirmware height map file v2";
 
-HeightMap::HeightMap() : useMap(false) { }
+HeightMap::HeightMap() noexcept : useMap(false) { }
 
-void HeightMap::SetGrid(const GridDefinition& gd)
+void HeightMap::SetGrid(const GridDefinition& gd) noexcept
 {
 	useMap = false;
 	def = gd;
 	ClearGridHeights();
 }
 
-void HeightMap::ClearGridHeights()
+void HeightMap::ClearGridHeights() noexcept
 {
 	gridHeightSet.ClearAll();
+#if HAS_MASS_STORAGE
+	fileName.Clear();
+#endif
 }
 
 // Set the height of a grid point
-void HeightMap::SetGridHeight(size_t xIndex, size_t yIndex, float height)
+void HeightMap::SetGridHeight(size_t xIndex, size_t yIndex, float height) noexcept
 {
 	SetGridHeight(yIndex * def.numX + xIndex, height);
 }
 
-void HeightMap::SetGridHeight(size_t index, float height)
+void HeightMap::SetGridHeight(size_t index, float height) noexcept
 {
 	if (index < MaxGridProbePoints)
 	{
@@ -265,7 +280,7 @@ void HeightMap::SetGridHeight(size_t index, float height)
 
 // Return the minimum number of segments for a move by this X or Y amount
 // Note that deltaX and deltaY may be negative
-unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const
+unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const noexcept
 {
 	const float xDistance = fabsf(deltaX);
 	unsigned int xSegments = (xDistance > 0.0) ? (unsigned int)(xDistance * def.recipXspacing + 0.4) : 1;
@@ -279,24 +294,25 @@ unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const
 #if HAS_MASS_STORAGE
 
 // Save the grid to file returning true if an error occurred
-bool HeightMap::SaveToFile(FileStore *f, float zOffset) const
+bool HeightMap::SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept
 {
 	String<StringLength500> bufferSpace;
 	const StringRef buf = bufferSpace.GetRef();
 
 	// Write the header comment
 	buf.copy(HeightMapComment);
-	if (reprap.GetPlatform().IsDateTimeSet())
+	tm timeInfo;
+	if (reprap.GetPlatform().GetDateTime(timeInfo))
 	{
-		time_t timeNow = reprap.GetPlatform().GetDateTime();
-		const struct tm * const timeInfo = gmtime(&timeNow);
 		buf.catf(" generated at %04u-%02u-%02u %02u:%02u",
-						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min);
 	}
-	float mean, deviation, minError, maxError;
-	(void)GetStatistics(mean, deviation, minError, maxError);
+
+	Deviation deviation;
+	float minError, maxError;
+	(void)GetStatistics(deviation, minError, maxError);
 	buf.catf(", min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
-				(double)(minError + zOffset), (double)(maxError + zOffset), (double)(mean + zOffset), (double)deviation);
+				(double)(minError + zOffset), (double)(maxError + zOffset), (double)(deviation.GetMean() + zOffset), (double)deviation.GetDeviationFromMean());
 	if (!f->Write(buf.c_str()))
 	{
 		return true;
@@ -337,18 +353,19 @@ bool HeightMap::SaveToFile(FileStore *f, float zOffset) const
 		}
 	}
 
+	fileName.copy(fname);
 	return false;
 }
 
 // Load the grid from file, returning true if an error occurred with the error reason appended to the buffer
-bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
+bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
 {
 	const size_t MaxLineLength = (MaxXGridPoints * 8) + 2;						// maximum length of a line in the height map file, need 8 characters per grid point
 	const char* const readFailureText = "failed to read line from file";
 	char buffer[MaxLineLength + 1];
 	StringRef s(buffer, ARRAY_SIZE(buffer));
 
-	ClearGridHeights();
+	ClearGridHeights();															// this also clears the filename
 	GridDefinition newGrid;
 	int gridVersion;
 
@@ -356,7 +373,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
 	{
 		r.cat(readFailureText);
 	}
-	else if (!StringStartsWith(buffer, HeightMapComment))	// check the version line is as expected
+	else if (!StringStartsWith(buffer, HeightMapComment))						// check the version line is as expected
 	{
 		r.cat("bad header line or wrong version header");
 	}
@@ -368,7 +385,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
 	{
 		r.cat("bad label line");
 	}
-	else if (f->ReadLine(buffer, sizeof(buffer)) <= 0)		// read the height map parameters
+	else if (f->ReadLine(buffer, sizeof(buffer)) <= 0)							// read the height map parameters
 	{
 		r.cat(readFailureText);
 	}
@@ -421,6 +438,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
 			}
 		}
 		ExtrapolateMissing();
+		fileName.copy(fname);
 		return false;										// success!
 	}
 	return true;											// an error occurred
@@ -430,8 +448,14 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
 
 #if HAS_LINUX_INTERFACE
 
+// Update the filename
+void HeightMap::SetFileName(const char *name) noexcept
+{
+	fileName.copy(name);
+}
+
 // Save the grid to a sequential array in the same way as to a regular CSV file
-void HeightMap::SaveToArray(float *arr, float zOffset) const
+void HeightMap::SaveToArray(float *arr, float zOffset) const noexcept
 {
 	size_t index = 0;
 	for (size_t i = 0; i < def.numY; ++i)
@@ -447,7 +471,7 @@ void HeightMap::SaveToArray(float *arr, float zOffset) const
 #endif
 
 // Return number of points probed, mean and RMS deviation, min and max error
-unsigned int HeightMap::GetStatistics(float& mean, float& deviation, float& minError, float& maxError) const
+unsigned int HeightMap::GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept
 {
 	double heightSum = 0.0, heightSquaredSum = 0.0;
 	minError = 9999.0;
@@ -472,27 +496,20 @@ unsigned int HeightMap::GetStatistics(float& mean, float& deviation, float& minE
 			heightSquaredSum += dsquare(dHeightError);
 		}
 	}
-	if (numProbed == 0)
-	{
-		mean = deviation = 0.0;
-	}
-	else
-	{
-		mean = (float)(heightSum/numProbed);
-		deviation = (float)sqrt(((heightSquaredSum * numProbed) - (heightSum * heightSum)))/numProbed;
-	}
+
+	deviation.Set(heightSquaredSum, heightSum, numProbed);
 	return numProbed;
 }
 
 // Try to turn mesh compensation on or off and report the state achieved
-bool HeightMap::UseHeightMap(bool b)
+bool HeightMap::UseHeightMap(bool b) noexcept
 {
 	useMap = b && def.IsValid();
 	return useMap;
 }
 
 // Compute the height error at the specified point
-float HeightMap::GetInterpolatedHeightError(float x, float y) const
+float HeightMap::GetInterpolatedHeightError(float x, float y) const noexcept
 {
 	if (!useMap)
 	{
@@ -521,7 +538,7 @@ float HeightMap::GetInterpolatedHeightError(float x, float y) const
 	return InterpolateXY(xIndex, yIndex, xf - xFloor, yf - yFloor);
 }
 
-float HeightMap::InterpolateXY(uint32_t xIndex, uint32_t yIndex, float xFrac, float yFrac) const
+float HeightMap::InterpolateXY(uint32_t xIndex, uint32_t yIndex, float xFrac, float yFrac) const noexcept
 {
 	const uint32_t indexX0Y0 = GetMapIndex(xIndex, yIndex);			// (X0,Y0)
 	const uint32_t indexX1Y0 = indexX0Y0 + 1;						// (X1,Y0)
@@ -535,7 +552,7 @@ float HeightMap::InterpolateXY(uint32_t xIndex, uint32_t yIndex, float xFrac, fl
 			+ (gridHeights[indexX1Y1] * xyFrac);
 }
 
-void HeightMap::ExtrapolateMissing()
+void HeightMap::ExtrapolateMissing() noexcept
 {
 	//1: calculating the bed plane by least squares fit
 	//2: filling in missing points

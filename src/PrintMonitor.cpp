@@ -25,21 +25,87 @@ Licence: GPL
 #include "Platform.h"
 #include "RepRap.h"
 
-PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) : platform(p), gCodes(gc), isPrinting(false), heatingUp(false),
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(PrintMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(PrintMonitor, _condition,__VA_ARGS__)
+
+const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
+			{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+			{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)], 1); }
+};
+
+constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. Job members
+#if TRACK_OBJECT_NAMES
+	{ "build",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), reprap.GetGCodes().GetBuildObjects(), 0), 									ObjectModelEntryFlags::live },
+#endif
+	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintOrSimulatedDuration()), 										ObjectModelEntryFlags::live },
+	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
+	{ "filePosition",		OBJECT_MODEL_FUNC_NOSELF((uint64_t)reprap.GetGCodes().GetFilePosition()),											ObjectModelEntryFlags::live },
+	{ "firstLayerDuration", OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetFirstLayerDuration())), 									ObjectModelEntryFlags::none },
+	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)reprap.GetGCodes().GetLastDuration()), 							ObjectModelEntryFlags::none },
+	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
+	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
+	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), (int32_t)self->currentLayer), 												ObjectModelEntryFlags::none },
+	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetCurrentLayerTime())), 										ObjectModelEntryFlags::live },
+	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::live },
+	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::none },
+
+	// 1. ParsedFileInfo members
+	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 										ObjectModelEntryFlags::none },
+	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->filenameBeingPrinted.c_str()),										ObjectModelEntryFlags::none },
+	{ "firstLayerHeight",	OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight, 2), 														ObjectModelEntryFlags::none },
+	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
+	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight, 2), 															ObjectModelEntryFlags::none },
+	{ "lastModified",		OBJECT_MODEL_FUNC(DateTime(self->printingFileInfo.lastModifiedTime)), 												ObjectModelEntryFlags::none },
+	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight, 2), 															ObjectModelEntryFlags::none },
+	{ "numLayers",			OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.GetNumLayers()), 													ObjectModelEntryFlags::none },
+	{ "printTime",			OBJECT_MODEL_FUNC_IF(self->printingFileInfo.printTime != 0, (int32_t)self->printingFileInfo.printTime), 			ObjectModelEntryFlags::none },
+	{ "simulatedTime",		OBJECT_MODEL_FUNC_IF(self->printingFileInfo.simulatedTime != 0, (int32_t)self->printingFileInfo.simulatedTime), 	ObjectModelEntryFlags::none },
+	{ "size",				OBJECT_MODEL_FUNC((uint64_t)self->printingFileInfo.fileSize),														ObjectModelEntryFlags::none },
+
+	// 2. TimesLeft members
+	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::live },
+	{ "file",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(fileBased)),													ObjectModelEntryFlags::live },
+	{ "layer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(layerBased)),													ObjectModelEntryFlags::live },
+};
+
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 10 + TRACK_OBJECT_NAMES, 11, 3 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
+
+int32_t PrintMonitor::GetPrintOrSimulatedDuration() const noexcept
+{
+	return lrintf((reprap.GetGCodes().IsSimulating()) ? reprap.GetGCodes().GetSimulationTime() + reprap.GetMove().GetSimulationTime() : GetPrintDuration());
+}
+
+#endif
+
+PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), isPrinting(false), heatingUp(false),
 	printStartTime(0), pauseStartTime(0), totalPauseTime(0), currentLayer(0), warmUpDuration(0.0),
 	firstLayerDuration(0.0), firstLayerFilament(0.0), firstLayerProgress(0.0), lastLayerChangeTime(0.0),
 	lastLayerFilament(0.0), lastLayerZ(0.0), numLayerSamples(0), layerEstimatedTimeLeft(0.0), printingFileParsed(false)
 {
-	filenameBeingPrinted[0] = 0;
-	printingFileInfo.Init();
 }
 
-void PrintMonitor::Init()
+void PrintMonitor::Init() noexcept
 {
 	lastUpdateTime = millis();
 }
 
-bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info)
+bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
 {
 	if (IsPrinting())
 	{
@@ -56,14 +122,15 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info)
 	return true;
 }
 
-void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info)
+void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info) noexcept
 {
 	filenameBeingPrinted.copy(filename);
 	printingFileInfo = info;
 	printingFileParsed = true;
+	reprap.JobUpdated();
 }
 
-void PrintMonitor::Spin()
+void PrintMonitor::Spin() noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -136,6 +203,7 @@ void PrintMonitor::Spin()
 			if (gCodes.GetLastPrintingHeight(currentZ))
 			{
 				// Print is in progress and filament is being extruded
+				//TODO use lastLayerNumberNotified and lastLayerStartHeightNotified if available
 				if (currentLayer == 0)
 				{
 					currentLayer = 1;
@@ -145,30 +213,36 @@ void PrintMonitor::Spin()
 					{
 						printingFileInfo.firstLayerHeight = currentZ;
 					}
+					reprap.JobUpdated();
 				}
-				else if (currentLayer == 1)
+				else if (printingFileInfo.layerHeight > 0.0)			// if layer height is known
 				{
-					// Check if we've finished the first layer
-					if (currentZ > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
+					if (currentLayer == 1)
 					{
-						FirstLayerComplete();
+						// Check if we've finished the first layer
+						if (currentZ > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
+						{
+							FirstLayerComplete();
+							currentLayer++;
+
+							lastLayerZ = currentZ;
+							lastLayerChangeTime = GetPrintDuration();
+							reprap.JobUpdated();
+						}
+					}
+					// Else check for following layer changes
+					else if (currentZ > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
+					{
+						LayerComplete();
 						currentLayer++;
 
-						lastLayerZ = currentZ;
+						// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
+						lastLayerZ = (printingFileInfo.layerHeight > 0.0)
+										? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
+											: currentZ;
 						lastLayerChangeTime = GetPrintDuration();
+						reprap.JobUpdated();
 					}
-				}
-				// Else check for following layer changes
-				else if (currentZ > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
-				{
-					LayerComplete();
-					currentLayer++;
-
-					// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
-					lastLayerZ = (printingFileInfo.layerHeight > 0.0)
-									? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
-										: currentZ;
-					lastLayerChangeTime = GetPrintDuration();
 				}
 			}
 		}
@@ -177,37 +251,70 @@ void PrintMonitor::Spin()
 }
 
 // Return the first layer print time
-float PrintMonitor::GetFirstLayerDuration() const
+float PrintMonitor::GetFirstLayerDuration() const noexcept
 {
 	return (firstLayerDuration > 0.0) ? firstLayerDuration : ((currentLayer > 0) ? GetPrintDuration() - warmUpDuration : 0.0);
 }
 
 // Return the warm-up time
-float PrintMonitor::GetWarmUpDuration() const
+float PrintMonitor::GetWarmUpDuration() const noexcept
 {
 	return (heatingUp) ? warmUpDuration + (millis64() - heatingStartedTime) * MillisToSeconds : warmUpDuration;
 }
 
 // Notifies this class that a file has been set for printing
-void PrintMonitor::StartingPrint(const char* filename)
+void PrintMonitor::StartingPrint(const char* filename) noexcept
 {
 #if HAS_MASS_STORAGE
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
 	printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+	reprap.JobUpdated();
 #endif
 }
 
-// Tell this class that the file set for printing is now actually processed
-void PrintMonitor::StartedPrint()
+void PrintMonitor::Reset() noexcept
 {
+	currentLayer = numLayerSamples = 0;
+	pauseStartTime = totalPauseTime = 0;
+	firstLayerDuration = firstLayerFilament = firstLayerProgress = 0.0;
+	layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
+	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
+	lastLayerNumberNotified = 0;
+	lastLayerStartHeightNotified = 0.0;
+	reprap.JobUpdated();
+}
+
+// Tell this class that the file set for printing is now actually processed
+void PrintMonitor::StartedPrint() noexcept
+{
+	Reset();
 	isPrinting = true;
 	heatingUp = false;
 	printStartTime = millis64();
-	warmUpDuration = 0.0;
+}
+
+void PrintMonitor::StoppedPrint() noexcept
+{
+	Reset();
+	isPrinting = heatingUp = printingFileParsed = false;
+}
+
+// Set the current layer number as given in a comment
+// The Z move to the new layer probably hasn't been done yet, so just store the layer number.
+void PrintMonitor::SetLayerNumber(uint32_t layerNumber) noexcept
+{
+	lastLayerNumberNotified = layerNumber;
+}
+
+// Set the printing height of the new layer
+// The Z move to the new layer probably hasn't been done yet, so just store the layer print height.
+void PrintMonitor::SetLayerZ(float layerZ) noexcept
+{
+	lastLayerStartHeightNotified = layerZ;
 }
 
 // Called when the first layer has been finished
-void PrintMonitor::FirstLayerComplete()
+void PrintMonitor::FirstLayerComplete() noexcept
 {
 	firstLayerFilament = gCodes.GetTotalRawExtrusion();
 	firstLayerDuration = GetPrintDuration() - warmUpDuration;
@@ -223,7 +330,7 @@ void PrintMonitor::FirstLayerComplete()
 }
 
 // This is called whenever a layer greater than 2 has been finished
-void PrintMonitor::LayerComplete()
+void PrintMonitor::LayerComplete() noexcept
 {
 	// Record a new set of layer, filament and file stats
 	const float extrRawTotal = gCodes.GetTotalRawExtrusion();
@@ -285,17 +392,7 @@ void PrintMonitor::LayerComplete()
 	}
 }
 
-void PrintMonitor::StoppedPrint()
-{
-	isPrinting = heatingUp = printingFileParsed = false;
-	currentLayer = numLayerSamples = 0;
-	pauseStartTime = totalPauseTime = 0;
-	firstLayerDuration = firstLayerFilament = firstLayerProgress = 0.0;
-	layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
-	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
-}
-
-float PrintMonitor::FractionOfFilePrinted() const
+float PrintMonitor::FractionOfFilePrinted() const noexcept
 {
 	if (!printingFileInfo.isValid || printingFileInfo.fileSize == 0)
 	{
@@ -305,7 +402,7 @@ float PrintMonitor::FractionOfFilePrinted() const
 }
 
 // Estimate the print time left in seconds on a preset estimation method
-float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
+float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcept
 {
 	// We can't provide an estimation if we don't have any information about the file
 	if (!printingFileParsed)
@@ -379,9 +476,9 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 			}
 
 			// Sum up the filament usage and the filament needed
-			float totalFilamentNeeded = 0.0;
 			const float extrRawTotal = gCodes.GetTotalRawExtrusion();
-			for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
+			float totalFilamentNeeded = printingFileInfo.filamentNeeded[0];
+			for (size_t extruder = 1; extruder < printingFileInfo.numFilaments; extruder++)
 			{
 				totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 			}
@@ -436,8 +533,19 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 	return 0.0;
 }
 
+#if SUPPORT_OBJECT_MODEL
+
+// Return the estimated time remaining if we have it, else null
+ExpressionValue PrintMonitor::EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept
+{
+	const float time = EstimateTimeLeft(method);
+	return (time > 0.0) ? ExpressionValue(lrintf(time)) : ExpressionValue(nullptr);
+}
+
+#endif
+
 // This returns the amount of time the machine has printed without interruptions (i.e. pauses)
-float PrintMonitor::GetPrintDuration() const
+float PrintMonitor::GetPrintDuration() const noexcept
 {
 	if (!isPrinting)
 	{

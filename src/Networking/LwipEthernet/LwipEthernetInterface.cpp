@@ -41,80 +41,22 @@ const char * const MdnsServiceStrings[NumProtocols] = { "_http", "_ftp", "_telne
 const char * const MdnsTxtRecords[2] = { "product=" FIRMWARE_NAME, "version=" VERSION };
 const unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
 
-
 /*-----------------------------------------------------------------------------------*/
 
 static LwipEthernetInterface *ethernetInterface;
 
-#if LWIP_GMAC_TASK
-
 # include <RTOSIface/RTOSIface.h>
 Mutex lwipMutex;
 
-#endif
-
 extern "C"
 {
-
-#if !LWIP_GMAC_TASK
-
-	static volatile bool lwipLocked = false;
-	static volatile bool resetCallback = false;
-
-	// Lock functions for LwIP (LwIP isn't thread-safe when working with the raw API)
-	bool LockLWIP()
-	{
-		if (lwipLocked)
-		{
-			return false;
-		}
-
-		lwipLocked = true;
-		return true;
-	}
-
-	void UnlockLWIP()
-	{
-		lwipLocked = false;
-	}
-
-	// Callback functions for the GMAC driver and for LwIP
-
-	// Called from ISR
-	static void ethernet_rx_callback(uint32_t ul_status)
-	{
-		// Because the LWIP stack can become corrupted if we work with it in parallel,
-		// we may have to wait for the next Spin() call to read the next packet.
-		if (LockLWIP())
-		{
-			ethernet_task();
-			UnlockLWIP();
-		}
-		else
-		{
-			ethernet_set_rx_callback(nullptr);
-			resetCallback = true;
-		}
-	}
-
-	#endif
-
 	// Task function to keep the GMAC and LwIP running
 	void DoEthernetTask()
 	{
 		ethernet_task();
-
-#if !LWIP_GMAC_TASK
-		if (resetCallback)
-		{
-			resetCallback = false;
-			ethernet_set_rx_callback(&ethernet_rx_callback);
-		}
-#endif
 	}
 
 	// Callback functions for LWIP (may be called from ISR)
-
 	static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 	{
 		LWIP_UNUSED_ARG(arg);
@@ -134,8 +76,8 @@ extern "C"
 
 /*-----------------------------------------------------------------------------------*/
 
-LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept : platform(p), closeDataPort(false), state(NetworkState::disabled),
-		activated(false), initialised(false), usingDhcp(false)
+LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept
+	: platform(p), closeDataPort(false), activated(false), initialised(false), usingDhcp(false)
 {
 	ethernetInterface = this;
 
@@ -160,16 +102,20 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept : platform(p)
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(LwipEthernetInterface, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(LwipEthernetInterface, __VA_ARGS__)
 
-const ObjectModelTableEntry LwipEthernetInterface::objectModelTable[] =
+constexpr ObjectModelTableEntry LwipEthernetInterface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
-	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
-	{ "name", OBJECT_MODEL_FUNC_NOSELF("ethernet"), TYPE_OF(const char *), ObjectModelTableEntry::none },
-	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),			ObjectModelEntryFlags::none },
+	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),			ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),		ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),	ObjectModelEntryFlags::none },
+	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),			ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),		ObjectModelEntryFlags::verbose },
 };
+
+constexpr uint8_t LwipEthernetInterface::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
 
@@ -180,9 +126,7 @@ void LwipEthernetInterface::Init() noexcept
 	interfaceMutex.Create("LwipIface");
 	//TODO we don't yet use this mutex anywhere!
 
-#if LWIP_GMAC_TASK
 	lwipMutex.Create("LwipCore");
-#endif
 
 	// Clear the PCBs
 	for (size_t i = 0; i < NumTcpPorts; ++i)
@@ -190,7 +134,7 @@ void LwipEthernetInterface::Init() noexcept
 		listeningPcbs[i] = nullptr;
 	}
 
-	memcpy(macAddress, platform.GetDefaultMacAddress(), sizeof(macAddress));
+	macAddress = platform.GetDefaultMacAddress();
 }
 
 GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
@@ -204,7 +148,7 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 	if (protocol < NumProtocols)
 	{
 		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
-		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
+		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
 			ShutdownProtocol(protocol);
@@ -215,7 +159,7 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 		{
 			// Enable the corresponding socket
 			protocolEnabled[protocol] = true;
-			if (state == NetworkState::active)
+			if (GetState() == NetworkState::active)
 			{
 				StartProtocol(protocol);
 				RebuildMdnsServices();
@@ -233,7 +177,7 @@ GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, con
 {
 	if (protocol < NumProtocols)
 	{
-		if (state == NetworkState::active)
+		if (GetState() == NetworkState::active)
 		{
 			ShutdownProtocol(protocol);
 		}
@@ -280,13 +224,6 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 
 void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 {
-#if 0	// chrishamm: Also see Network::Stop
-	for (NetworkResponder* r = responders; r != nullptr; r = r->GetNext())
-	{
-		r->Terminate(protocol);
-	}
-#endif
-
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -346,7 +283,7 @@ void LwipEthernetInterface::Activate() noexcept
 	if (!activated)
 	{
 		activated = true;
-		if (state == NetworkState::enabled)
+		if (GetState() == NetworkState::enabled)
 		{
 			Start();
 		}
@@ -391,7 +328,7 @@ void LwipEthernetInterface::Start() noexcept
 		const char *hostname = reprap.GetNetwork().GetHostname();
 
 		// Allow the MAC address to be set only before LwIP is started...
-		ethernet_configure_interface(platform.GetDefaultMacAddress(), hostname);
+		ethernet_configure_interface(platform.GetDefaultMacAddress().bytes, hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
 		// Initialise mDNS subsystem
@@ -405,160 +342,129 @@ void LwipEthernetInterface::Start() noexcept
 		initialised = true;
 	}
 
-#if !LWIP_GMAC_TASK
-	resetCallback = true;			// reset EMAC RX callback on next Spin call
-#endif
-	state = NetworkState::establishingLink;
+	SetState(NetworkState::establishingLink);
 }
 
 // Stop the network
 void LwipEthernetInterface::Stop() noexcept
 {
-	if (state != NetworkState::disabled)
+	if (GetState() != NetworkState::disabled)
 	{
 		netif_set_down(&gs_net_if);
-#if !LWIP_GMAC_TASK
-		resetCallback = false;
-		ethernet_set_rx_callback(nullptr);
-#endif
 
 #if defined(DUET3)
-	pinMode(PhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
+		pinMode(PhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
 #endif
-		state = NetworkState::disabled;
+		SetState(NetworkState::disabled);
 	}
 }
 
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
 void LwipEthernetInterface::Spin() noexcept
 {
-#if LWIP_GMAC_TASK
 	MutexLocker lock(lwipMutex);
-#else
-	if (LockLWIP())							// basically we can't do anything if we can't interact with LWIP
+
+	switch(GetState())
 	{
-#endif
-		switch(state)
+	case NetworkState::enabled:
+	case NetworkState::disabled:
+	default:
+		// Nothing to do
+		break;
+
+	case NetworkState::establishingLink:
+		if (ethernet_establish_link())
 		{
-		case NetworkState::enabled:
-		case NetworkState::disabled:
-		default:
-			// Nothing to do
-			break;
-
-		case NetworkState::establishingLink:
-			if (ethernet_establish_link())
-			{
-				usingDhcp = platform.GetIPAddress().IsNull();
-				if (usingDhcp)
-				{
-					// IP address is all zeros, so use DHCP
-					state = NetworkState::obtainingIP;
-//					debugPrintf("Link established, getting IP address\n");
-					IPAddress nullAddress;
-					ethernet_set_configuration(nullAddress, nullAddress, nullAddress);
-					dhcp_start(&gs_net_if);
-				}
-				else
-				{
-					// Using static IP address
-					state = NetworkState::connected;
-//					debugPrintf("Link established, network running\n");
-					ethernet_set_configuration(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
-				}
-			}
-			break;
-
-		case NetworkState::obtainingIP:
-			if (ethernet_link_established())
-			{
-				// Check for incoming packets
-				DoEthernetTask();
-
-				// Have we obtained an IP address yet?
-				ethernet_get_ipaddress(ipAddress, netmask, gateway);
-				if (!ipAddress.IsNull())
-				{
-					// Notify the mDNS responder about this
-					state = NetworkState::connected;
-//						debugPrintf("IP address obtained, network running\n");
-				}
-			}
-			else
-			{
-//					debugPrintf("Lost phy link\n");
-				TerminateSockets();
-				state = NetworkState::establishingLink;
-			}
-			break;
-
-		case NetworkState::connected:
+			usingDhcp = platform.GetIPAddress().IsNull();
 			if (usingDhcp)
 			{
-				dhcp_stop(&gs_net_if);
-			}
-
-			InitSockets();
-			RebuildMdnsServices();
-			ethernet_get_ipaddress(ipAddress, netmask, gateway);
-			platform.MessageF(NetworkInfoMessage, "Ethernet running, IP address = %s\n", IP4String(ipAddress).c_str());
-			state = NetworkState::active;
-			break;
-
-		case NetworkState::active:
-			// Check that the link is still up
-			if (ethernet_link_established())
-			{
-				// Check for incoming packets
-				DoEthernetTask();
-
-				// Poll the next TCP socket
-				sockets[nextSocketToPoll]->Poll();
-
-				// Move on to the next TCP socket for next time
-				++nextSocketToPoll;
-				if (nextSocketToPoll == NumEthernetSockets)
-				{
-					nextSocketToPoll = 0;
-				}
-
-				// Check if the data port needs to be closed
-				if (closeDataPort && !sockets[FtpDataSocketNumber]->IsClosing())
-				{
-					TerminateDataPort();
-				}
+				// IP address is all zeros, so use DHCP
+				SetState(NetworkState::obtainingIP);
+//				debugPrintf("Link established, getting IP address\n");
+				IPAddress nullAddress;
+				ethernet_set_configuration(nullAddress, nullAddress, nullAddress);
+				dhcp_start(&gs_net_if);
 			}
 			else
 			{
-//				debugPrintf("Lost phy link\n");
-				TerminateSockets();
-				state = NetworkState::establishingLink;
+				// Using static IP address
+				SetState(NetworkState::connected);
+//				debugPrintf("Link established, network running\n");
+				ethernet_set_configuration(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
 			}
-			break;
 		}
-#if !LWIP_GMAC_TASK
-		UnlockLWIP();
-	}
-#endif
-}
+		break;
 
-void LwipEthernetInterface::Interrupt() noexcept
-{
-#if !LWIP_GMAC_TASK
-	if (initialised && LockLWIP())
-	{
-		ethernet_timers_update();
-		UnlockLWIP();
+	case NetworkState::obtainingIP:
+		if (ethernet_link_established())
+		{
+			// Check for incoming packets
+			DoEthernetTask();
+
+			// Have we obtained an IP address yet?
+			ethernet_get_ipaddress(ipAddress, netmask, gateway);
+			if (!ipAddress.IsNull())
+			{
+				// Notify the mDNS responder about this
+				SetState(NetworkState::connected);
+//				debugPrintf("IP address obtained, network running\n");
+			}
+		}
+		else
+		{
+//			debugPrintf("Lost phy link\n");
+			TerminateSockets();
+			SetState(NetworkState::establishingLink);
+		}
+		break;
+
+	case NetworkState::connected:
+		InitSockets();
+		RebuildMdnsServices();
+		ethernet_get_ipaddress(ipAddress, netmask, gateway);
+		platform.MessageF(NetworkInfoMessage, "Ethernet running, IP address = %s\n", IP4String(ipAddress).c_str());
+		SetState(NetworkState::active);
+		reprap.NetworkUpdated();
+		break;
+
+	case NetworkState::active:
+		// Check that the link is still up
+		if (ethernet_link_established())
+		{
+			// Check for incoming packets
+			DoEthernetTask();
+
+			// Poll the next TCP socket
+			sockets[nextSocketToPoll]->Poll();
+
+			// Move on to the next TCP socket for next time
+			++nextSocketToPoll;
+			if (nextSocketToPoll == NumEthernetSockets)
+			{
+				nextSocketToPoll = 0;
+			}
+
+			// Check if the data port needs to be closed
+			if (closeDataPort && !sockets[FtpDataSocketNumber]->IsClosing())
+			{
+				TerminateDataPort();
+			}
+		}
+		else
+		{
+//			debugPrintf("Lost phy link\n");
+			TerminateSockets();
+			SetState(NetworkState::establishingLink);
+		}
+		break;
 	}
-#endif
 }
 
 void LwipEthernetInterface::Diagnostics(MessageType mtype) noexcept
 {
-	platform.Message(mtype, "- Ethernet -\n");
-	platform.MessageF(mtype, "State: %d\n", (int)state);
-	platform.MessageF(mtype, "Error counts: %u %u %u %u %u\n", rxErrorCount, rxBuffersNotFullyPopulatedCount, txErrorCount, txBufferNotFreeCount, txBufferTooShortCount);
-	platform.Message(mtype, "Socket states:");
+	platform.MessageF(mtype, "- Ethernet -\nState: %s\n", GetStateName());
+	platform.MessageF(mtype, "Error counts: %u %u %u %u %u\nSocket states:",
+								rxErrorCount, rxBuffersNotFullyPopulatedCount, txErrorCount, txBufferNotFreeCount, txBufferTooShortCount);
 	for (LwipSocket *s : sockets)
 	{
 		platform.MessageF(mtype, " %d", s->GetState());
@@ -579,20 +485,20 @@ GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ss
 {
 	if (!activated)
 	{
-		state = (mode == 0) ? NetworkState::disabled : NetworkState::enabled;
+		SetState((mode == 0) ? NetworkState::disabled : NetworkState::enabled);
 	}
 	else if (mode == 0)
 	{
-		if (state != NetworkState::disabled)
+		if (GetState() != NetworkState::disabled)
 		{
 			Stop();
 			platform.Message(NetworkInfoMessage, "Network stopped\n");
 		}
 
 	}
-	else if (state == NetworkState::disabled)
+	else if (GetState() == NetworkState::disabled)
 	{
-		state = NetworkState::enabled;
+		SetState(NetworkState::enabled);
 		Start();
 	}
 	return GCodeResult::ok;
@@ -600,16 +506,7 @@ GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ss
 
 int LwipEthernetInterface::EnableState() const noexcept
 {
-	return (state == NetworkState::disabled) ? 0 : 1;
-}
-
-bool LwipEthernetInterface::InNetworkStack() const noexcept
-{
-#if LWIP_GMAC_TASK
-	return false;
-#else
-	return lwipLocked;
-#endif
+	return (GetState() == NetworkState::disabled) ? 0 : 1;
 }
 
 bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb) noexcept
@@ -634,7 +531,7 @@ IPAddress LwipEthernetInterface::GetIPAddress() const noexcept
 
 void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
-	if (state == NetworkState::obtainingIP || state == NetworkState::active)
+	if (GetState() == NetworkState::obtainingIP || GetState() == NetworkState::active)
 	{
 		const bool wantDhcp = p_ipAddress.IsNull();
 		if (wantDhcp)
@@ -642,7 +539,7 @@ void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netm
 			// Acquire dynamic IP address
 			if (!usingDhcp)
 			{
-				state = NetworkState::obtainingIP;
+				SetState(NetworkState::obtainingIP);
 				IPAddress nullAddress;
 				ethernet_set_configuration(nullAddress, nullAddress, nullAddress);
 				dhcp_start(&gs_net_if);
@@ -654,11 +551,11 @@ void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netm
 			// Set static IP address
 			if (usingDhcp)
 			{
-				if (state == NetworkState::obtainingIP)
+				if (GetState() == NetworkState::obtainingIP)
 				{
 					dhcp_stop(&gs_net_if);
 				}
-				state = NetworkState::active;
+				SetState(NetworkState::active);
 				usingDhcp = false;
 			}
 
@@ -677,9 +574,10 @@ void LwipEthernetInterface::UpdateHostname(const char *hostname) noexcept
 	}
 }
 
-void LwipEthernetInterface::SetMacAddress(const uint8_t mac[]) noexcept
+GCodeResult LwipEthernetInterface::SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept
 {
-	memcpy(macAddress, mac, sizeof(macAddress));
+	macAddress = mac;
+	return GCodeResult::ok;
 }
 
 void LwipEthernetInterface::OpenDataPort(Port port) noexcept

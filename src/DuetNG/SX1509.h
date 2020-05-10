@@ -11,7 +11,7 @@ https://github.com/sparkfun/SparkFun_SX1509_Arduino_Library
 
 Here you'll find the Arduino code used to interface with the SX1509 I2C
 16 I/O expander. There are functions to take advantage of everything the
-SX1509 provides - input/output setting, writing pins high/low, reading 
+SX1509 provides - input/output setting, writing pins high/low, reading
 the input value of pins, LED driver utilities (blink, breath, pwm), and
 keypad engine utilites.
 
@@ -39,28 +39,28 @@ private:
 	uint16_t pwmPins;						// bitmap of pins configured as PWM output pins
 
 	// Read Functions:
-	uint8_t readByte(uint8_t registerAddress);
-	uint16_t readWord(uint8_t registerAddress);
-	uint32_t readDword(uint8_t registerAddress);
+	uint8_t readByte(uint8_t registerAddress) noexcept;
+	uint16_t readWord(uint8_t registerAddress) noexcept;
+	uint32_t readDword(uint8_t registerAddress) noexcept;
 
 	// Write functions:
-	void writeByte(uint8_t registerAddress, uint8_t writeValue);
-	void writeWord(uint8_t registerAddress, uint16_t writeValue);
-	void writeDword(uint8_t registerAddress, uint32_t writeValue);
+	void writeByte(uint8_t registerAddress, uint8_t writeValue) noexcept;
+	void writeWord(uint8_t registerAddress, uint16_t writeValue) noexcept;
+	void writeDword(uint8_t registerAddress, uint32_t writeValue) noexcept;
 
-	void setBitsInWord(uint8_t registerAddress, uint16_t bits);
-	void clearBitsInWord(uint8_t registerAddress, uint16_t bits);
-	void analogWriteMultiple(uint16_t pins, uint8_t pwm);
+	void setBitsInWord(uint8_t registerAddress, uint16_t bits) noexcept;
+	void clearBitsInWord(uint8_t registerAddress, uint16_t bits) noexcept;
+	void analogWriteMultiple(uint16_t pins, uint8_t pwm) noexcept;
 
 	// Helper functions:
 
-	// calculateLEDTRegister - Try to estimate an LED on/off duration register, 
+	// calculateLEDTRegister - Try to estimate an LED on/off duration register,
 	// given the number of milliseconds and LED clock frequency.
-	uint8_t calculateLEDTRegister(int ms);
+	uint8_t calculateLEDTRegister(int ms) noexcept;
 
-	// calculateSlopeRegister - Try to estimate an LED rise/fall duration 
+	// calculateSlopeRegister - Try to estimate an LED rise/fall duration
 	// register, given the number of milliseconds and LED clock frequency.
-	uint8_t calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offIntensity);
+	uint8_t calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offIntensity) noexcept;
 
 
 	// -----------------------------------------------------------------------------
@@ -70,14 +70,14 @@ private:
 	//	Inputs:
 	//	- oscDivider: Sets the clock divider in REG_MISC. Clock is 2MHz / (1 << (oscDivider - 1). PWM frequency is 1/256 of that.
 	// -----------------------------------------------------------------------------
-	void clock(uint8_t oscDivider);
+	void clock(uint8_t oscDivider) noexcept;
 
 public:
 	// -----------------------------------------------------------------------------
 	// Constructor - SX1509: This function sets up the pins connected to the
 	//		SX1509, and sets up the private deviceAddress variable.
 	// -----------------------------------------------------------------------------
-	SX1509();
+	SX1509() noexcept;
 
 	// -----------------------------------------------------------------------------
 	// begin(uint8_t address): This function initializes the SX1509.
@@ -89,14 +89,14 @@ public:
 	//		 ADDR0 and ADDR1 pins are set to. This variable is required.
 	// Output: Returns true if communication is successful, false on error.
 	// -----------------------------------------------------------------------------
-	bool begin(uint8_t address);
+	bool begin(uint8_t address) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// reset(): This function resets the SX1509. A software
 	//		reset writes a 0x12 then 0x34 to the REG_RESET as outlined in the
 	//		datasheet.
 	// -----------------------------------------------------------------------------
-	void reset();
+	void reset() noexcept;
 
 	// -----------------------------------------------------------------------------
 	// pinMode(uint8_t pin, PinMode inOut): This function sets one of the SX1509's 16
@@ -107,7 +107,7 @@ public:
 	//	 	- inOut: The Core INPUT and OUTPUT constants should be used for the
 	//		 inOut parameter. They do what they say!
 	// -----------------------------------------------------------------------------
-	void pinMode(uint8_t pin, PinMode inOut);
+	void pinMode(uint8_t pin, PinMode inOut) noexcept;
 
 	// pinModeMultiple(uint16_t pins, PinMode inOut): This function sets several of the SX1509's 16
 	//		outputs to either an INPUT or OUTPUT.
@@ -117,7 +117,7 @@ public:
 	//	 	- inOut: The Core INPUT and OUTPUT constants should be used for the
 	//		 inOut parameter. They do what they say!
 	// -----------------------------------------------------------------------------
-	void pinModeMultiple(uint16_t pins, PinMode inOut);
+	void pinModeMultiple(uint16_t pins, PinMode inOut) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// digitalWrite(uint8_t pin, bool highLow): This function writes a pin to either high
@@ -129,7 +129,7 @@ public:
 	//		- pin: The SX1509 pin number. Should be a value between 0 and 15.
 	//		- highLow: true for HIGH, false for LOW.
 	// -----------------------------------------------------------------------------
-	void digitalWrite(uint8_t pin, bool highLow);
+	void digitalWrite(uint8_t pin, bool highLow) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// digitalRead(uint8_t pin): This function reads the HIGH/LOW status of a pin.
@@ -140,12 +140,12 @@ public:
 	//  Outputs:
 	//		This function returns true if HIGH, false if LOW
 	// -----------------------------------------------------------------------------
-	bool digitalRead(uint8_t pin);
+	bool digitalRead(uint8_t pin) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// digitalReadAll(): This function reads all 16 pins.
 	// -----------------------------------------------------------------------------
-	uint16_t digitalReadAll();
+	uint16_t digitalReadAll() noexcept;
 
 #if 0	// unused
 	// -----------------------------------------------------------------------------
@@ -159,7 +159,7 @@ public:
 	//			- log defaults to 0, linear mode
 	//			- currently log sets both bank A and B to the same mode
 	// -----------------------------------------------------------------------------
-	void ledDriverInit(uint8_t pin, bool log, bool openDrain);
+	void ledDriverInit(uint8_t pin, bool log, bool openDrain) noexcept;
 #endif
 
 	// -----------------------------------------------------------------------------
@@ -173,7 +173,7 @@ public:
 	//			- log defaults to 0, linear mode
 	//			- currently log sets both bank A and B to the same mode
 	// -----------------------------------------------------------------------------
-	void ledDriverInitMultiple(uint16_t pins, bool log, bool openDrain);
+	void ledDriverInitMultiple(uint16_t pins, bool log, bool openDrain) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// analogWrite(uint8_t pin, uint8_t iOn):	This function can be used to control the intensity
@@ -186,7 +186,7 @@ public:
 	//
 	//	Note: ledDriverInit should be called on the pin before calling this.
 	// -----------------------------------------------------------------------------
-	void analogWrite(uint8_t pin, uint8_t iOn);
+	void analogWrite(uint8_t pin, uint8_t iOn) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// enableInterrupt(uint8_t pin, uint8_t riseFall): This function sets up an interrupt
@@ -205,7 +205,7 @@ public:
 	//	Note: This function does not set up a pin as an input, or configure	its
 	//		pull-up/down resistors! Do that before (or after).
 	// -----------------------------------------------------------------------------
-	void enableInterrupt(uint8_t pin, uint8_t riseFall);
+	void enableInterrupt(uint8_t pin, uint8_t riseFall) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// enableInterruptMultiple(uint16_t pins, uint8_t riseFall): This function sets up an interrupt
@@ -224,7 +224,7 @@ public:
 	//	Note: This function does not set up a pin as an input, or configure	its
 	//		pull-up/down resistors! Do that before (or after).
 	// -----------------------------------------------------------------------------
-	void enableInterruptMultiple(uint16_t pins, uint8_t riseFall);
+	void enableInterruptMultiple(uint16_t pins, uint8_t riseFall) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// interruptSource(void): Returns an unsigned int representing which pin caused
@@ -234,8 +234,8 @@ public:
 	//		generated an interrupt. E.g. a return value of	0x0104 would mean pins 8
 	//		and 3 (bits 8 and 3) have generated an interrupt.
 	// -----------------------------------------------------------------------------
-	uint16_t interruptSource();
-	uint16_t interruptSourceAndClear();
+	uint16_t interruptSource() noexcept;
+	uint16_t interruptSourceAndClear() noexcept;
 
 	// -----------------------------------------------------------------------------
 	// checkInterrupt(void): Checks if a single pin generated an interrupt.
@@ -244,7 +244,7 @@ public:
 	//  Input:
 	//  	- pin: Pin to be checked for generating an input.
 	// -----------------------------------------------------------------------------
-	bool checkInterrupt(uint8_t pin);
+	bool checkInterrupt(uint8_t pin) noexcept;
 };
 
 #endif	// SX1509_H

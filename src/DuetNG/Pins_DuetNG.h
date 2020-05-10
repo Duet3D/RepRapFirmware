@@ -4,21 +4,17 @@
 // Pins definition file for Duet 2 WiFi/Ethernet
 // This file is normally #included by #including RepRapFirmware.h, which includes this file
 
+#define BOARD_NAME_WIFI			"Duet 2 WiFi"
+#define BOARD_NAME_ETHERNET		"Duet 2 Ethernet"
+#define BOARD_SHORT_NAME_WIFI	"2WiFi"
+#define BOARD_SHORT_NAME_ETHERNET	"2Ethernet"
+
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 2 WiFi/Ethernet"
 #define DEFAULT_BOARD_TYPE	 	BoardType::DuetWiFi_10
 #define IAP_FIRMWARE_FILE		"Duet2CombinedFirmware.bin"
 
-#define IAP_IN_RAM				1
-
-#if IAP_IN_RAM
 constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the second 64kb of RAM
-# define IAP_UPDATE_FILE		"Duet2CombinedIAP.bin"	// using the same IAP file for both Duet WiFi and Duet Ethernet
-#else
-constexpr uint32_t IAP_IMAGE_START = 0x00470000;
-constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
-# define IAP_UPDATE_FILE		"iap4e.bin"			// using the same IAP file for both Duet WiFi and Duet Ethernet
-#endif
-
+#define IAP_UPDATE_FILE			"Duet2CombinedIAP.bin"	// using the same IAP file for both Duet WiFi and Duet Ethernet
 #define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
 
 constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 is now unused)
@@ -49,20 +45,26 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
-#define ALLOCATE_DEFAULT_PORTS	1
+#define ALLOCATE_DEFAULT_PORTS	0
+#define TRACK_OBJECT_NAMES		1
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
 
 // The physical capabilities of the machine
 
+#if SUPPORT_12864_LCD
+constexpr size_t NumDirectDrivers = 11;				// The maximum number of drives supported directly by the electronics
+#else
 constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives supported directly by the electronics
+#endif
+
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
 constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 10;					// The maximum number of heaters in the machine
-constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors per heater
 
 constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
@@ -73,13 +75,14 @@ constexpr size_t NumThermistorInputs = 8;
 constexpr size_t NumTmcDriversSenseChannels = 2;
 
 constexpr size_t MaxZProbes = 4;
-constexpr size_t MaxGpioPorts = 10;
+constexpr size_t MaxGpInPorts = 10;
+constexpr size_t MaxGpOutPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine, usually just X, Y and Z
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
-constexpr size_t MaxExtruders = 6;					// The maximum number of extruders
+constexpr size_t MaxExtruders = 7;					// The maximum number of extruders
 constexpr size_t NumDefaultExtruders = 1;			// The number of drivers that we configure as extruders by default
 
 constexpr size_t MaxAxesPlusExtruders = 12;
@@ -90,6 +93,8 @@ constexpr size_t MaxExtrudersPerTool = 8;
 constexpr size_t MaxFans = 12;
 
 constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+
+constexpr size_t MaxSpindles = 4;					// Maximum number of configurable spindles
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -112,18 +117,27 @@ constexpr Pin ENABLE_PINS[NumDirectDrivers] =
 {
 	PortDPin(14), PortCPin(9), PortCPin(10), PortCPin(17), PortCPin(25),	// Duet
 	PortDPin(23), PortDPin(24), PortDPin(25), PortDPin(26), PortBPin(14),	// DueX5
-	PortDPin(18), PortCPin(28)												// CONN_LCD
+	PortDPin(18),															// CONN_LCD
+#if !SUPPORT_12864_LCD
+	PortCPin(28)
+#endif
 };
 constexpr Pin STEP_PINS[NumDirectDrivers] =
 {
 	PortDPin(6), PortDPin(7), PortDPin(8), PortDPin(5), PortDPin(4),		// Duet
 	PortDPin(2), PortDPin(1), PortDPin(0), PortDPin(3), PortDPin(27),		// DueX5
-	PortDPin(20), PortDPin(21)												// CONN_LCD
+	PortDPin(20),															// CONN_LCD
+#if !SUPPORT_12864_LCD
+	PortDPin(21)
+#endif
 };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =
 {	PortDPin(11), PortDPin(12), PortDPin(13), PortAPin(1), PortDPin(9),		// Duet
 	PortDPin(28), PortDPin(22), PortDPin(16), PortDPin(17), PortCPin(0),	// DueX5
-	PortDPin(19), PortAPin(25)												// CONN_LCD
+	PortDPin(19),															// CONN_LCD
+#if !SUPPORT_12864_LCD
+	PortAPin(25)
+#endif
 };
 
 // Pin assignments etc. using USART1 in SPI mode
@@ -135,6 +149,8 @@ constexpr IRQn TMC2660_SPI_IRQn = USART1_IRQn;
 constexpr Pin TMC2660MosiPin = PortAPin(22);
 constexpr Pin TMC2660MisoPin = PortAPin(21);
 constexpr Pin TMC2660SclkPin = PortAPin(23);
+
+constexpr uint32_t DefaultStandstillCurrentPercent = 100;					// it's not adjustable on Duet 2
 
 constexpr Pin DueX_SG = PortEPin(0);				// DueX stallguard detect pin = PE0 (was E2_STOP)
 constexpr Pin DueX_INT = PortAPin(17);				// DueX interrupt pin = PA17 (was E6_STOP)
@@ -184,6 +200,26 @@ constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(21), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { PortCPin(24) };
 constexpr uint32_t ExpectedSdCardSpeed = 20000000;
+
+#if SUPPORT_12864_LCD
+// The ST7920 datasheet specifies minimum clock cycle time 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low.
+// This assumes that the Vih specification is met, which is 0.7 * Vcc = 3.5V @ Vcc=5V
+// The Duet Maestro level shifts all 3 LCD signals to 5V, so we meet the Vih specification and can reliably run at 2MHz.
+// For other electronics, there are reports that operation with 3.3V LCD signals may work if you reduce the clock frequency.
+constexpr uint32_t LcdSpiClockFrequency = 2000000;             // 2.0MHz
+constexpr Pin LcdCSPin = PortDPin(21);      //connlcd.10 --> gate -> exp2.4
+constexpr Pin LcdBeepPin = PortAPin(8);     //connlcd.4           -> exp1.1
+constexpr Pin EncoderPinA = PortAPin(25);   //connlcd.8           -> exp2.5
+constexpr Pin EncoderPinB = PortCPin(28);   //connlcd.6           -> exp2.3
+constexpr Pin EncoderPinSw = PortAPin(7);   //connsd.7            -> exp1.2
+                                            //adittional spi wiring:
+                                            //connsd.6            <- exp2.1
+                                            //connsd.5   --> gate -> exp1.3
+                                            //            `->     -> exp2.6
+                                            //connsd.4   --> gate -> exp1.5
+                                            //            `->     -> exp2.2
+                                            //connsd.3            -> exp2.4
+#endif
 
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
@@ -291,6 +327,8 @@ constexpr PinEntry PinTable[] =
 	{ PortCPin(7),	PinCapability::rw,		"connlcd.encb,connlcd.3" },
 	{ PortAPin(8),	PinCapability::rw,		"connlcd.enca,connlcd.4" },
 	{ PortAPin(7),	PinCapability::rw,		"connsd.encsw,connsd.7" },
+	{ PortAPin(9),	PinCapability::rw,		"urxd0" },
+	{ PortAPin(10),	PinCapability::rw,		"utxd0" },
 	{ PortBPin(6),	PinCapability::rw,		"exp.pb6,exp.29,duex.pb6" },
 	{ 211,			PinCapability::rwpwm,	"duex.gp1" },
 	{ 210,			PinCapability::rwpwm,	"duex.gp2" },
@@ -319,11 +357,15 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
+#if ALLOCATE_DEFAULT_PORTS
+
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
+
+#endif
 
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
 constexpr Pin EspResetPin = PortEPin(4);			// Low on this in holds the WiFi module in reset (ESP_RESET)
