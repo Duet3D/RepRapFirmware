@@ -1,3 +1,26 @@
+RepRapFirmware 3.01 (in preparation)
+===================
+
+Recommended compatible firmware:
+- DuetWebControl TBD
+- DuetWiFiServer 1.23 (same as for previous RC)
+- Duet Software Framework version TBD (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.01
+- PanelDueFirmware 1.24
+
+Upgrade notes:
+- As for 3.01-RC12
+
+Known issues and limitations:
+- As for 3.01-RC12
+
+New features/changed behaviour:
+- Increased maximum number of Neopixels from 50 to 60 so that a complete ring can be driven
+- Cura comment MESH:NONMESH is now recognised as introducing a sequence of moves that does not relate to any print object
+
+Bug fixes:
+- None since 3.01-RC12
+
 RepRapFirmware 3.01-RC12
 ========================
 
