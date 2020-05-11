@@ -25,6 +25,12 @@ public:
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
 
+protected:
+	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(screwX)
+	OBJECT_MODEL_ARRAY(screwY)
+	OBJECT_MODEL_ARRAY(lastCorrections)
+
 private:
 	void AppendCorrections(const floatc_t corrections[], const StringRef& reply) const noexcept;
 
@@ -35,6 +41,7 @@ private:
 	float correctionFactor;
 	float maxCorrection;
 	float screwPitch;
+	float lastCorrections[MaxLeadscrews];
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_ZLEADSCREWKINEMATICS_H_ */

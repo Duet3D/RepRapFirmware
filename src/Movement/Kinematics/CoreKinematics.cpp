@@ -55,14 +55,15 @@ constexpr ObjectModelTableEntry CoreKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
+	{ "base",				OBJECT_MODEL_FUNC(self, 0x80), 									ObjectModelEntryFlags::none },
 	{ "forwardMatrix",		OBJECT_MODEL_FUNC_NOSELF(&forwardMatrixArrayDescriptor), 		ObjectModelEntryFlags::none },
 	{ "inverseMatrix",		OBJECT_MODEL_FUNC_NOSELF(&inverseMatrixArrayDescriptor), 		ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 						ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 4 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(CoreKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(CoreKinematics, ZLeadscrewKinematics)
 
 #endif
 
