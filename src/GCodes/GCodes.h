@@ -482,6 +482,9 @@ private:
 
 	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?
+#if HAS_LINUX_INTERFACE
+	FilePosition lastFilePosition;				// Last known file position
+#endif
 	bool isPaused;								// true if the print has been paused manually or automatically
 	bool pausePending;							// true if we have been asked to pause but we are running a macro
 	bool filamentChangePausePending;			// true if we have been asked to pause for a filament change but we are running a macro

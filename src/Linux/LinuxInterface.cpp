@@ -124,7 +124,11 @@ void LinuxInterface::Spin()
 						String<StringLength100> errorMessage;
 						e.GetMessage(errorMessage.GetRef(), nullptr);
 						buf->cat(errorMessage.c_str());
-						packetAcknowledged = transfer->WriteObjectModel(buf);
+						if (!transfer->WriteObjectModel(buf))
+						{
+							OutputBuffer::ReleaseAll(buf);
+							packetAcknowledged = false;
+						}
 					}
 					else
 					{
