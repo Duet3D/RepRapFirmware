@@ -181,7 +181,7 @@ namespace DotStarLed
 		*p++ = EncodedByte[val & 3];
 	}
 
-	// Send data to DotStar LEDs
+	// Send data to NeoPixel LEDs
 	static GCodeResult SendNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint32_t numLeds, bool following) noexcept
 	{
 		uint8_t *p = chunkBuffer + (12 * numAlreadyInBuffer);

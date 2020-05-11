@@ -357,17 +357,17 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
-#if ALLOCATE_DEFAULT_PORTS
-
-// Default pin allocations
-constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
-constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
-constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
-constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
-
-#endif
-
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
+#define ESP_SPI					SPI
+#define ESP_SPI_INTERFACE_ID	ID_SPI
+#define ESP_SPI_IRQn			SPI_IRQn
+#define ESP_SPI_HANDLER			SPI_Handler
+
+constexpr Pin APIN_ESP_SPI_MOSI = APIN_SPI_MOSI;
+constexpr Pin APIN_ESP_SPI_MISO = APIN_SPI_MISO;
+constexpr Pin APIN_ESP_SPI_SCK = APIN_SPI_SCK;
+constexpr Pin APIN_ESP_SPI_SS0 = APIN_SPI_SS0;
+
 constexpr Pin EspResetPin = PortEPin(4);			// Low on this in holds the WiFi module in reset (ESP_RESET)
 constexpr Pin EspEnablePin = PortEPin(5);			// High to enable the WiFi module, low to power it down (ESP_CH_PD)
 constexpr Pin EspDataReadyPin = PortDPin(31);		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
@@ -375,6 +375,16 @@ constexpr Pin SamTfrReadyPin = PortDPin(30);		// Output from the SAM to the WiFi
 constexpr Pin SamCsPin = PortAPin(11);				// SPI NPCS pin, input from WiFi module
 
 // Duet pin numbers to control the W5500 interface on the Duet Ethernet
+#define W5500_SPI				SPI
+#define W5500_SPI_INTERFACE_ID	ID_SPI
+#define W5500_SPI_IRQn			SPI_IRQn
+#define W5500_SPI_HANDLER		SPI_Handler
+
+constexpr Pin APIN_W5500_SPI_MOSI = APIN_SPI_MOSI;
+constexpr Pin APIN_W5500_SPI_MISO = APIN_SPI_MISO;
+constexpr Pin APIN_W5500_SPI_SCK = APIN_SPI_SCK;
+constexpr Pin APIN_W5500_SPI_SS0 = APIN_SPI_SS0;
+
 constexpr Pin W5500ResetPin = PortEPin(4);			// Low on this in holds the W5500 module in reset (ESP_RESET)
 constexpr Pin W5500InterruptPin = PortDPin(31);		// W5500 interrupt output, active low
 constexpr Pin W5500ModuleSensePin = PortAPin(5);	// URXD1, tied to ground on the Ethernet module
