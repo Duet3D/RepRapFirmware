@@ -3170,7 +3170,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 	}
 #endif
 #ifdef SERIAL_AUX2_DEVICE
-	if ((type & LcdMessage) != 0)
+	if ((type & Aux2Message) != 0)
 	{
 		++numDestinations;
 	}
@@ -3200,7 +3200,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 		}
 
 #ifdef SERIAL_AUX2_DEVICE
-		if ((type & LcdMessage) != 0)
+		if ((type & Aux2Message) != 0)
 		{
 			// Send this message to the second UART device
 			MutexLocker lock(aux2Mutex);
