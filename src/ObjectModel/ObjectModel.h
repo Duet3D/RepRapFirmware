@@ -27,7 +27,7 @@ enum class TypeCode : uint8_t
 	Char,
 	Uint32,
 	Int32,
-	Uint64,
+	Uint64,			// only 56 bits actually available
 	Float,
 	Bitmap16,
 	Bitmap32,
@@ -211,6 +211,8 @@ public:
 	ExpressionValue (*GetElement)(const ObjectModel*, ObjectExplorationContext&) noexcept;
 };
 
+struct ObjectModelClassDescriptor;
+
 // Class from which other classes that represent part of the object model are derived
 class ObjectModel
 {
@@ -243,7 +245,7 @@ protected:
 	// Get the object model table entry for the current level object in the query
 	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) const noexcept;
 
-	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept = 0;
+	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
 private:
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcept;
@@ -309,30 +311,48 @@ public:
 	}
 };
 
+struct ObjectModelClassDescriptor
+{
+	const ObjectModelTableEntry *omt;
+	const uint8_t *omd;
+	const ObjectModelClassDescriptor *parent;
+};
+
 // Use this macro to inherit form ObjectModel
 #define INHERIT_OBJECT_MODEL	: public ObjectModel
 
 // Use this macro in the 'protected' section of every class declaration that derived from ObjectModel
 #define DECLARE_OBJECT_MODEL \
-	const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept override; \
+	const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept override; \
 	static const ObjectModelTableEntry objectModelTable[]; \
-	static const uint8_t objectModelTableDescriptor[];
+	static const uint8_t objectModelTableDescriptor[]; \
+	static const ObjectModelClassDescriptor objectModelClassDescriptor;
 
 #define DECLARE_OBJECT_MODEL_VIRTUAL \
-	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept override = 0;
+	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept override = 0;
 
 #define DESCRIPTOR_OK(_class) 	(ARRAY_SIZE(_class::objectModelTableDescriptor) == _class::objectModelTableDescriptor[0] + 1)
 #define OMT_SIZE_OK(_class)		(ARRAY_SIZE(_class::objectModelTable) == ArraySum(_class::objectModelTableDescriptor + 1, ARRAY_SIZE(_class::objectModelTableDescriptor) - 1))
 #define OMT_ORDERING_OK(_class)	(ObjectModelTableEntry::IsOrdered(_class::objectModelTableDescriptor, _class::objectModelTable))
 
 #define DEFINE_GET_OBJECT_MODEL_TABLE(_class) \
-	const ObjectModelTableEntry *_class::GetObjectModelTable(const uint8_t*& descriptor) const noexcept \
+	const ObjectModelClassDescriptor _class::objectModelClassDescriptor = { _class::objectModelTable, _class::objectModelTableDescriptor, nullptr }; \
+	const ObjectModelClassDescriptor *_class::GetObjectModelClassDescriptor() const noexcept \
 	{ \
 		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
 		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \
 		static_assert(!DESCRIPTOR_OK(_class) || !OMT_SIZE_OK(_class) || OMT_ORDERING_OK(_class), "Object model table must be ordered"); \
-		descriptor = objectModelTableDescriptor; \
-		return objectModelTable; \
+		return &objectModelClassDescriptor; \
+	}
+
+#define DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(_class, _parent) \
+	const ObjectModelClassDescriptor _class::objectModelClassDescriptor = { _class::objectModelTable, _class::objectModelTableDescriptor, &_parent::objectModelClassDescriptor }; \
+	const ObjectModelClassDescriptor *_class::GetObjectModelClassDescriptor() const noexcept \
+	{ \
+		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
+		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \
+		static_assert(!DESCRIPTOR_OK(_class) || !OMT_SIZE_OK(_class) || OMT_ORDERING_OK(_class), "Object model table must be ordered"); \
+		return &objectModelClassDescriptor; \
 	}
 
 #define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
