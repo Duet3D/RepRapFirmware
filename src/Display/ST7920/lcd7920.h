@@ -38,13 +38,16 @@ class Lcd7920 : public Print
 {
 public:
 	// Construct a GLCD driver.
-	Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts) noexcept;
+	Lcd7920(const LcdFont * const fnts[], size_t nFonts) noexcept;
+
+	// Initialize the display
+	void Init(uint8_t p_controllerType, Pin csPin, Pin p_a0Pin, uint32_t freq) noexcept;
+
+	// Select the font to use for subsequent calls to write() in graphics mode
+	void SetFont(size_t newFont) noexcept;
 
 	constexpr PixelNumber GetNumRows() const noexcept { return NumRows; }
 	constexpr PixelNumber GetNumCols() const noexcept { return NumCols; }
-
-	// Set the SPI clock frequency
-	void SetSpiClockFrequency(uint32_t freq) noexcept;
 
 	// Write a single character in the current font. Called by the 'print' functions.
 	//  c = character to write
@@ -54,14 +57,8 @@ public:
 	// Write a space
 	void WriteSpaces(PixelNumber numPixels) noexcept;
 
-	// Initialize the display. Call this in setup(). Also call setFont to select initial text font.
-	void Init() noexcept;
-
 	// Return the number of fonts
 	size_t GetNumFonts() const noexcept { return numFonts; }
-
-	// Select the font to use for subsequent calls to write() in graphics mode
-	void SetFont(size_t newFont) noexcept;
 
 	// Get the current font height
 	PixelNumber GetFontHeight() const noexcept;
@@ -148,6 +145,8 @@ private:
 	uint32_t charVal;
 	sspi_device device;
 	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
+	uint8_t controllerType;
+	Pin a0Pin;
 	uint8_t numContinuationBytesLeft;
 	PixelNumber row, column;
 	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
@@ -157,11 +156,13 @@ private:
 	bool textInverted;
 	bool justSetCursor;
 
-	void sendLcdCommand(uint8_t command) noexcept;
-	void sendLcdData(uint8_t data) noexcept;
-	void sendLcd(uint8_t data1, uint8_t data2) noexcept;
+	void sendLcdCommand(uint8_t command) noexcept { sendLcd(command, false); }
+	void sendLcdData(uint8_t data) noexcept { sendLcd(data, true); }
+	void sendLcd(uint8_t byteToSend, bool isData) noexcept;
+
 	void CommandDelay() noexcept;
 	void DataDelay() noexcept;
+
 	void setGraphicsAddress(unsigned int r, unsigned int c) noexcept;
 	size_t writeNative(uint16_t c) noexcept;		// write a decoded character
 	void SetDirty(PixelNumber r, PixelNumber c) noexcept;

@@ -166,8 +166,10 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 // This assumes that the Vih specification is met, which is 0.7 * Vcc = 3.5V @ Vcc=5V
 // The Duet Maestro level shifts all 3 LCD signals to 5V, so we meet the Vih specification and can reliably run at 2MHz.
 // For other electronics, there are reports that operation with 3.3V LCD signals may work if you reduce the clock frequency.
+// The ST7567 specifies minimum clock cycle time 50ns i.e. 20MHz @ Vcc=3.3V
 constexpr uint32_t LcdSpiClockFrequency = 2000000;		// 2.0MHz
 constexpr Pin LcdCSPin = PortCPin(9);
+constexpr Pin LcdA0Pin = PortAPin(21);
 constexpr Pin LcdBeepPin = PortAPin(15);
 constexpr Pin EncoderPinA = PortBPin(5);
 constexpr Pin EncoderPinB = PortCPin(3);
@@ -250,7 +252,7 @@ constexpr PinEntry PinTable[] =
 	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
 	{ PortBPin(2),	PinCapability::rw,		"urxd" },
 	{ PortBPin(3),	PinCapability::rw,		"utxd" },
-	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },
+	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },					// also used by ST7567 LCD controllers
 	{ PortAPin(22), PinCapability::ainrw,	"exp.pa22" },
 	{ PortAPin(3),	PinCapability::rw,		"exp.pa3,twd0" },
 	{ PortAPin(4),	PinCapability::rw,		"exp.pa4,twck0" },
@@ -262,6 +264,16 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 // Duet pin numbers to control the W5500 interface
+#define W5500_SPI				SPI
+#define W5500_SPI_INTERFACE_ID	ID_SPI
+#define W5500_SPI_IRQn			SPI_IRQn
+#define W5500_SPI_HANDLER		SPI_Handler
+
+constexpr Pin APIN_W5500_SPI_MOSI = APIN_SPI_MOSI;
+constexpr Pin APIN_W5500_SPI_MISO = APIN_SPI_MISO;
+constexpr Pin APIN_W5500_SPI_SCK = APIN_SPI_SCK;
+constexpr Pin APIN_W5500_SPI_SS0 = APIN_SPI_SS0;
+
 constexpr Pin W5500ResetPin = PortCPin(13);									// Low on this in holds the W5500 in reset
 constexpr Pin W5500SsPin = PortAPin(11);									// SPI NPCS pin to W5500
 constexpr Pin W5500IntPin = PortAPin(23);									// Interrupt from W5500

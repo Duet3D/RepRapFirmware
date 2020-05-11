@@ -151,18 +151,18 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		switch (gb.GetUIValue())
+		const unsigned int displayType = gb.GetUIValue();
+		switch (displayType)
 		{
-		case 1:		// 12864 display
+		case 1:		// 12864 display, ST7920 controller
+		case 2:		// 12864 display, ST7567 controller
 			if (lcd == nullptr)
 			{
-				lcd = new Lcd7920(LcdCSPin, fonts, ARRAY_SIZE(fonts));
+				lcd = new Lcd7920(fonts, ARRAY_SIZE(fonts));
 			}
-			if (gb.Seen('F'))
-			{
-				lcd->SetSpiClockFrequency(gb.GetUIValue());
-			}
-			lcd->Init();
+			lcd->Init(displayType - 1, LcdCSPin, LcdA0Pin, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency);
+			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
+			lcd->SetFont(SmallFontNumber);
 			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
 			lcd->SetFont(SmallFontNumber);
 

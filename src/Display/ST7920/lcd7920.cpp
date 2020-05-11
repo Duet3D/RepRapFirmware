@@ -39,28 +39,31 @@ inline void Lcd7920::DataDelay() noexcept
 	delayMicroseconds(LcdDataDelayMicros);
 }
 
-Lcd7920::Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts) noexcept
-	: fonts(fnts), numFonts(nFonts), currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
+Lcd7920::Lcd7920(const LcdFont * const fnts[], size_t nFonts) noexcept
+	: fonts(fnts), numFonts(nFonts)
 {
+}
+
+// Initialise. cControllerType is 1 for ST7567 controller, 0 for ST7920. a0Pin is only used by the ST7567.
+void Lcd7920::Init(uint8_t p_controllerType, Pin csPin, Pin p_a0Pin, uint32_t freq) noexcept
+{
+	controllerType = p_controllerType;
+	a0Pin = p_a0Pin;
+	if (p_controllerType == 1)
+	{
+		pinMode(p_a0Pin, OUTPUT_HIGH);
+	}
 	device.csPin = csPin;
-	device.csPolarity = true;						// active high chip select
+	device.csPolarity = (controllerType == 0);		// active high chip select for ST7920, active low for ST7567
 	device.spiMode = 0;
-	device.clockFrequency = LcdSpiClockFrequency;
+	device.clockFrequency = freq;
 #ifdef __LPC17xx__
     device.sspChannel = LcdSpiChannel;
 #endif
-}
-
-// Set the SPI clock frequency
-void Lcd7920::SetSpiClockFrequency(uint32_t freq) noexcept
-{
-	device.clockFrequency = freq;
-}
-
-void Lcd7920::Init() noexcept
-{
 	sspi_master_init(&device, 8);
+
 	numContinuationBytesLeft = 0;
+	textInverted = false;
 	startRow = NumRows;
 	startCol = NumCols;
 	endRow = endCol = nextFlushRow = 0;
@@ -713,27 +716,20 @@ void Lcd7920::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
 	CommandDelay();    // we definitely need this one
 }
 
-// Send a command to the LCD. The SPI mutex is already owned
-void Lcd7920::sendLcdCommand(uint8_t command) noexcept
+// Send a command or data to the lcd. The SPI mutex is already owned
+void Lcd7920::sendLcd(uint8_t byteToSend, bool isData) noexcept
 {
-	sendLcd(0xF8, command);
-}
-
-// Send a data byte to the LCD. The SPI mutex is already owned
-void Lcd7920::sendLcdData(uint8_t data) noexcept
-{
-	sendLcd(0xFA, data);
-}
-
-// Send a command to the lcd. Data1 is sent as-is, data2 is split into 2 bytes, high nibble first.
-// The SPI mutex is already owned
-void Lcd7920::sendLcd(uint8_t data1, uint8_t data2) noexcept
-{
-	uint8_t data[3];
-	data[0] = data1;
-	data[1] = data2 & 0xF0;
-	data[2] = data2 << 4;
-	sspi_transceive_packet(data, nullptr, 3);
+	if (controllerType == 1)			// if ST7567
+	{
+		digitalWrite(a0Pin, isData);
+		uint8_t data[1] = { byteToSend };
+		sspi_transceive_packet(data, nullptr, 1);
+	}
+	else								// ST7960
+	{
+		uint8_t data[3] = { (isData) ? (uint8_t)0xFA : (uint8_t)0xF8, (uint8_t)(byteToSend & 0xF0), (uint8_t)(byteToSend << 4) };
+		sspi_transceive_packet(data, nullptr, 3);
+	}
 }
 
 #endif
