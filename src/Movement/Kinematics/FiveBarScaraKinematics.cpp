@@ -31,13 +31,14 @@ constexpr ObjectModelTableEntry FiveBarScaraKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
+	{ "base",	OBJECT_MODEL_FUNC(self, 0x80), 				ObjectModelEntryFlags::none },
 	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
 	//TODO lots more to be added here
 };
 
-constexpr uint8_t FiveBarScaraKinematics::objectModelTableDescriptor[] = { 1, 1 };
+constexpr uint8_t FiveBarScaraKinematics::objectModelTableDescriptor[] = { 1, 2 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(FiveBarScaraKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(FiveBarScaraKinematics, ZLeadscrewKinematics)
 
 #endif
 

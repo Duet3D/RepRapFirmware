@@ -288,32 +288,43 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 	if (context.IncreaseDepth())
 	{
 		bool added = false;
-		const uint8_t *descriptor;
-		const ObjectModelTableEntry *tbl = GetObjectModelTable(descriptor);
-		if (tableNumber < descriptor[0])
-		{
-			size_t numEntries = descriptor[tableNumber + 1];
-			while (tableNumber != 0)
-			{
-				--tableNumber;
-				tbl += descriptor[tableNumber + 1];
-			}
+		const ObjectModelClassDescriptor * classDescriptor = GetObjectModelClassDescriptor();
 
-			while (numEntries != 0)
+		if ((tableNumber & 0x80) != 0)								// if we want the parent class table
+		{
+			classDescriptor = classDescriptor->parent;
+			tableNumber &= 0x7F;
+		}
+
+		if (classDescriptor != nullptr)
+		{
+			const uint8_t * const descriptor = classDescriptor->omd;
+			if (tableNumber < descriptor[0])
 			{
-				if (tbl->Matches(filter, context))
+				const ObjectModelTableEntry *tbl = classDescriptor->omt;
+				size_t numEntries = descriptor[tableNumber + 1];
+				while (tableNumber != 0)
 				{
-					if (tbl->ReportAsJson(buf, context, this, filter, !added))
-					{
-						added = true;
-					}
+					--tableNumber;
+					tbl += descriptor[tableNumber + 1];
 				}
-				--numEntries;
-				++tbl;
-			}
-			if (added && *filter == 0)
-			{
-				buf->cat('}');
+
+				while (numEntries != 0)
+				{
+					if (tbl->Matches(filter, context))
+					{
+						if (tbl->ReportAsJson(buf, context, this, filter, !added))
+						{
+							added = true;
+						}
+					}
+					--numEntries;
+					++tbl;
+				}
+				if (added && *filter == 0)
+				{
+					buf->cat('}');
+				}
 			}
 		}
 		if (!added)
@@ -647,13 +658,24 @@ void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext&
 // Find the requested entry
 const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(uint8_t tableNumber, const char* idString) const noexcept
 {
-	const uint8_t *descriptor;
-	const ObjectModelTableEntry *tbl = GetObjectModelTable(descriptor);
+	const ObjectModelClassDescriptor * classDescriptor = GetObjectModelClassDescriptor();
+	if ((tableNumber & 0x80) != 0)								// if we want the parent class table
+	{
+		classDescriptor = classDescriptor->parent;
+		if (classDescriptor == nullptr)
+		{
+			return nullptr;										// no parent
+		}
+		tableNumber &= 0x7F;
+	}
+
+	const uint8_t * const descriptor = classDescriptor->omd;
 	if (tableNumber >= descriptor[0])
 	{
 		return nullptr;
 	}
 
+	const ObjectModelTableEntry *tbl = classDescriptor->omt;
 	const size_t numEntries = descriptor[tableNumber + 1];
 	while (tableNumber != 0)
 	{
