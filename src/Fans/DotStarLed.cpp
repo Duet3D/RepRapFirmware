@@ -26,9 +26,9 @@ namespace DotStarLed
 	constexpr uint32_t DefaultSpiFrequencies[2] = { DefaultDotStarSpiClockFrequency, DefaultNeoPixelSpiClockFrequency };
 	constexpr uint32_t MinNeoPixelResetTicks = (50 * StepTimer::StepClockRate)/1000000;		// 50us minimum Neopixel reset time
 
-	constexpr size_t ChunkBufferSize = 600;								// the size of our DMA buffer. DotStar LEDs use 4 bytes/LED, NeoPixels use 12 bytes/LED.
+	constexpr size_t ChunkBufferSize = 720;								// the size of our DMA buffer. DotStar LEDs use 4 bytes/LED, NeoPixels use 12 bytes/LED.
 	constexpr unsigned int MaxDotStarChunkSize = ChunkBufferSize/4;		// maximum number of DotStarLEDs we DMA to in one go. Most strips have 30 LEDs/metre.
-	constexpr unsigned int MaxNeoPixelChunkSize = ChunkBufferSize/12;	// maximum number of NeoPixels we DMA to in one go
+	constexpr unsigned int MaxNeoPixelChunkSize = ChunkBufferSize/12;	// maximum number of NeoPixels we can support. A full ring contains 60.
 
 	static uint32_t ledType = 0;										// 0 = DotStar, 1 = NeoPixel
 	static uint32_t whenDmaFinished = 0;								// the time in step clocks when we determined that the DMA had finished
@@ -181,7 +181,7 @@ namespace DotStarLed
 		*p++ = EncodedByte[val & 3];
 	}
 
-	// Send data to DotStar LEDs
+	// Send data to NeoPixel LEDs
 	static GCodeResult SendNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint32_t numLeds, bool following) noexcept
 	{
 		uint8_t *p = chunkBuffer + (12 * numAlreadyInBuffer);
