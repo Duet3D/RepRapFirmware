@@ -28,7 +28,7 @@ constexpr ObjectModelArrayDescriptor ZLeadscrewKinematics::lastCorrectionsArrayD
 	nullptr,					// no lock needed
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->lastCorrections[context.GetLastIndex()]); }
+									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->lastCorrections[context.GetLastIndex()], 3); }
 };
 
 constexpr ObjectModelArrayDescriptor ZLeadscrewKinematics::screwXArrayDescriptor =
@@ -36,7 +36,7 @@ constexpr ObjectModelArrayDescriptor ZLeadscrewKinematics::screwXArrayDescriptor
 	nullptr,					// no lock needed
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->leadscrewX[context.GetLastIndex()]); }
+									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->leadscrewX[context.GetLastIndex()], 1); }
 };
 
 constexpr ObjectModelArrayDescriptor ZLeadscrewKinematics::screwYArrayDescriptor =
@@ -44,22 +44,25 @@ constexpr ObjectModelArrayDescriptor ZLeadscrewKinematics::screwYArrayDescriptor
 	nullptr,					// no lock needed
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->leadscrewY[context.GetLastIndex()]); }
+									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->leadscrewY[context.GetLastIndex()], 1); }
 };
 
 constexpr ObjectModelTableEntry ZLeadscrewKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "correctionFactor",	OBJECT_MODEL_FUNC(self->correctionFactor, 1), 					ObjectModelEntryFlags::none },
-	{ "lastCorrections",	OBJECT_MODEL_FUNC_NOSELF(&lastCorrectionsArrayDescriptor), 		ObjectModelEntryFlags::none },
-	{ "maxCorrection",		OBJECT_MODEL_FUNC(self->maxCorrection, 1), 						ObjectModelEntryFlags::none },
-	{ "screwPitch",			OBJECT_MODEL_FUNC(self->screwPitch, 2), 						ObjectModelEntryFlags::none },
-	{ "screwX",				OBJECT_MODEL_FUNC_NOSELF(&screwXArrayDescriptor), 				ObjectModelEntryFlags::none },
-	{ "screwY",				OBJECT_MODEL_FUNC_NOSELF(&screwYArrayDescriptor), 				ObjectModelEntryFlags::none },
+	{ "tiltCorrection",		OBJECT_MODEL_FUNC(self, 1), 								ObjectModelEntryFlags::none },
+
+	// 1. tiltCorrection members
+	{ "correctionFactor",	OBJECT_MODEL_FUNC(self->correctionFactor, 1), 				ObjectModelEntryFlags::none },
+	{ "lastCorrections",	OBJECT_MODEL_FUNC_NOSELF(&lastCorrectionsArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "maxCorrection",		OBJECT_MODEL_FUNC(self->maxCorrection, 1), 					ObjectModelEntryFlags::none },
+	{ "screwPitch",			OBJECT_MODEL_FUNC(self->screwPitch, 2), 					ObjectModelEntryFlags::none },
+	{ "screwX",				OBJECT_MODEL_FUNC_NOSELF(&screwXArrayDescriptor), 			ObjectModelEntryFlags::none },
+	{ "screwY",				OBJECT_MODEL_FUNC_NOSELF(&screwYArrayDescriptor), 			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t ZLeadscrewKinematics::objectModelTableDescriptor[] = { 1, 6 };
+constexpr uint8_t ZLeadscrewKinematics::objectModelTableDescriptor[] = { 2, 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZLeadscrewKinematics)
 
