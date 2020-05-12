@@ -397,80 +397,83 @@ void LinuxInterface::Spin()
 				sendBufferUpdate = !transfer->WriteCodeBufferUpdate(bufferSpace);
 			}
 
-			// Get another chunk of the file being requested
-			if (!requestedFileName.IsEmpty() && !reprap.GetGCodes().IsFlashing() &&
-				transfer->WriteFileChunkRequest(requestedFileName.c_str(), requestedFileOffset, requestedFileLength))
+			if (!writingIap)					// it's not safe to access GCodes once we have started writing the IAP
 			{
-				requestedFileName.Clear();
-			}
-
-			// Deal with code channel requests
-			bool reportMissing, fromCode;
-			for (size_t i = 0; i < NumGCodeChannels; i++)
-			{
-				const GCodeChannel channel(i);
-				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-
-				// Invalidate buffered codes if required
-				if (gb->IsInvalidated())
+				// Get another chunk of the file being requested
+				if (!requestedFileName.IsEmpty() && !reprap.GetGCodes().IsFlashing() &&
+					transfer->WriteFileChunkRequest(requestedFileName.c_str(), requestedFileOffset, requestedFileLength))
 				{
-					InvalidateBufferChannel(gb->GetChannel());
-					gb->Invalidate(false);
+					requestedFileName.Clear();
 				}
 
-				// Handle macro start requests
-				if (gb->IsMacroRequested())
+				// Deal with code channel requests
+				bool reportMissing, fromCode;
+				for (size_t i = 0; i < NumGCodeChannels; i++)
 				{
-					const char * const requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
-					if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
+					const GCodeChannel channel(i);
+					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+
+					// Invalidate buffered codes if required
+					if (gb->IsInvalidated())
 					{
-						if (reprap.Debug(moduleLinuxInterface))
+						InvalidateBufferChannel(gb->GetChannel());
+						gb->Invalidate(false);
+					}
+
+					// Handle macro start requests
+					if (gb->IsMacroRequested())
+					{
+						const char * const requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
+						if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
 						{
-							reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
+							if (reprap.Debug(moduleLinuxInterface))
+							{
+								reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
+							}
+							gb->MacroRequestSent();
+							gb->Invalidate();
 						}
-						gb->MacroRequestSent();
+					}
+
+					// Handle file abort requests
+					if (gb->IsAbortRequested() && transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
+					{
+						gb->AcknowledgeAbort();
 						gb->Invalidate();
+					}
+
+					// Handle blocking messages
+					if (gb->MachineState().waitingForAcknowledgement && !gb->MachineState().waitingForAcknowledgementSent &&
+						transfer->WriteWaitForAcknowledgement(channel))
+					{
+						gb->MachineState().waitingForAcknowledgementSent = true;
+						gb->Invalidate();
+					}
+
+					// Send pending firmware codes
+					if (gb->IsSendRequested() && transfer->WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
+					{
+						gb->SetFinished(true);
 					}
 				}
 
-				// Handle file abort requests
-				if (gb->IsAbortRequested() && transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
+				// Send pause notification on demand
+				if (reportPause && transfer->WritePrintPaused(pauseFilePosition, pauseReason))
 				{
-					gb->AcknowledgeAbort();
-					gb->Invalidate();
+					reportPause = false;
+					reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File)->Invalidate();
 				}
-
-				// Handle blocking messages
-				if (gb->MachineState().waitingForAcknowledgement && !gb->MachineState().waitingForAcknowledgementSent &&
-					transfer->WriteWaitForAcknowledgement(channel))
-				{
-					gb->MachineState().waitingForAcknowledgementSent = true;
-					gb->Invalidate();
-				}
-
-				// Send pending firmware codes
-				if (gb->IsSendRequested() && transfer->WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
-				{
-					gb->SetFinished(true);
-				}
-			}
-
-			// Send pause notification on demand
-			if (reportPause && transfer->WritePrintPaused(pauseFilePosition, pauseReason))
-			{
-				reportPause = false;
-				reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File)->Invalidate();
 			}
 
 			// Start the next transfer
 			transfer->StartNextTransfer();
-			if (!wasConnected)
+			if (!wasConnected && !writingIap)
 			{
 				reprap.GetPlatform().Message(NetworkInfoMessage, "Connection to Linux established!\n");
 			}
 			wasConnected = true;
 		}
-		else if (!transfer->IsConnected() && wasConnected)
+		else if (!transfer->IsConnected() && wasConnected && !writingIap)
 		{
 			reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to Linux\n");
 
