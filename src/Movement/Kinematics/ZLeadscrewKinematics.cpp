@@ -378,6 +378,11 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 			else
 			{
 				reprap.GetMove().AdjustLeadscrews(solution);
+				for (size_t i = 0; i < numLeadscrews; ++i)
+				{
+					lastCorrections[i] = solution[i];
+				}
+
 				reply.printf("Leadscrew adjustments made:");
 				AppendCorrections(solution, reply);
 
@@ -395,6 +400,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 			for (size_t i = 0; i < numLeadscrews; ++i)
 			{
 				const float netAdjustment = solution[i] - solution[0];
+				lastCorrections[i] = netAdjustment;
 				reply.catf(" %.2f turn %s (%.2fmm)", (double)(fabsf(netAdjustment)/screwPitch), (netAdjustment > 0) ? "down" : "up", (double)netAdjustment);
 			}
 		}

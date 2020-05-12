@@ -259,6 +259,16 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 // Duet pin numbers for the Linux interface
+#define SBC_SPI					SPI1
+#define SBC_SPI_INTERFACE_ID	ID_SPI1
+#define SBC_SPI_IRQn			SPI1_IRQn
+#define SBC_SPI_HANDLER			SPI1_Handler
+
+constexpr Pin APIN_SBC_SPI_MOSI = APIN_SPI1_MOSI;
+constexpr Pin APIN_SBC_SPI_MISO = APIN_SPI1_MISO;
+constexpr Pin APIN_SBC_SPI_SCK = APIN_SPI1_SCK;
+constexpr Pin APIN_SBC_SPI_SS0 = APIN_SPI1_SS0;
+
 constexpr Pin LinuxTfrReadyPin = PortEPin(2);
 Spi * const LinuxSpi = SPI1;
 
