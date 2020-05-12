@@ -2204,9 +2204,18 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::PrintObjectAddresses:
 		reply.printf
-				("Platform %08" PRIx32 "-%08" PRIx32 "\nGCodes %08" PRIx32 "-%08" PRIx32,
-					reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1,
-					reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
+				(	"Platform %08" PRIx32 "-%08" PRIx32
+#if HAS_LINUX_INTERFACE
+					"\nLinuxInterface %08" PRIx32 "-%08" PRIx32
+#endif
+					"\nNetwork %08" PRIx32 "-%08" PRIx32
+					"\nGCodes %08" PRIx32 "-%08" PRIx32
+					, reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1
+#if HAS_LINUX_INTERFACE
+					, reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()), reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) + sizeof(LinuxInterface) - 1
+#endif
+					, reinterpret_cast<uint32_t>(&reprap.GetNetwork()), reinterpret_cast<uint32_t>(&reprap.GetNetwork()) + sizeof(Network) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
 				);
 		break;
 

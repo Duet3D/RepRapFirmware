@@ -389,6 +389,9 @@ RepRap::RepRap() noexcept
 {
 	OutputBuffer::Init();
 	platform = new Platform();
+#if HAS_LINUX_INTERFACE
+	linuxInterface = new LinuxInterface();				// needs to be allocated early so as to avoid the last 64K of RAM
+#endif
 	network = new Network(*platform);
 	gCodes = new GCodes(*platform);
 	move = new Move();
@@ -407,9 +410,6 @@ RepRap::RepRap() noexcept
 #endif
 #if SUPPORT_12864_LCD
  	display = new Display();
-#endif
-#if HAS_LINUX_INTERFACE
-	linuxInterface = new LinuxInterface();
 #endif
 #if SUPPORT_CAN_EXPANSION
 	expansion = new ExpansionManager();
