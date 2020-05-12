@@ -2743,6 +2743,17 @@ void RepRap::UpdateFirmware() noexcept
 		return;
 	}
 
+	PrepareToLoadIap();
+
+	// Use RAM-based IAP
+	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
+	iapFile->Close();
+	StartIap();
+#endif
+}
+
+void RepRap::PrepareToLoadIap() noexcept
+{
 #if SUPPORT_12864_LCD
 	display->UpdatingFirmware();			// put the firmware update message on the display
 #endif
@@ -2760,18 +2771,12 @@ void RepRap::UpdateFirmware() noexcept
 	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
 
-	// Step 0 - disable the cache because it interferes with flash memory access
+	// Disable the cache because it interferes with flash memory access
 	Cache::Disable();
 
 #if USE_MPU
 	//TODO consider setting flash memory to strongly-ordered instead
 	ARM_MPU_Disable();
-#endif
-
-	// Use RAM-based IAP
-	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
-	iapFile->Close();
-	StartIap();
 #endif
 }
 

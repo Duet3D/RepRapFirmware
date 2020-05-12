@@ -291,10 +291,10 @@ GCodeChannel DataTransfer::ReadMacroCompleteInfo(bool &error) noexcept
 void DataTransfer::ReadHeightMap() noexcept
 {
 	// Read heightmap header
-	const HeightMapHeader *header = ReadDataHeader<HeightMapHeader>();
-	float *xRange = new float[2] { header->xMin, header->xMax };
-	float *yRange = new float[2] { header->yMin, header->yMax };
-	float *spacing = new float[2] { header->xSpacing, header->ySpacing };
+	const HeightMapHeader * const header = ReadDataHeader<HeightMapHeader>();
+	float xRange[2] = { header->xMin, header->xMax };
+	float yRange[2] = { header->yMin, header->yMax };
+	float spacing[2] = { header->xSpacing, header->ySpacing };
 	reprap.GetGCodes().AssignGrid(xRange, yRange, header->radius, spacing);
 
 	// Read Z coordinates
