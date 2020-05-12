@@ -17,9 +17,17 @@ Known issues and limitations:
 New features/changed behaviour:
 - Increased maximum number of Neopixels from 50 to 60 so that a complete ring can be driven
 - Cura comment MESH:NONMESH is now recognised as introducing a sequence of moves that does not relate to any print object
+- Added object model property 'move.kinematics.tiltCorrection' to those kinematics classes that derive from ZLeadscrewKinematics
+- If the serial aux port hasn't been enabled, M575 P1 with no other parameters now reports this
+- Duet 3: firmware updates initiated from SBC now send the same USB and PanelDue messages as other types of firmware update
 
 Bug fixes:
-- None since 3.01-RC12
+- Duet 3: Fixed a very small memory leak when DCS sent a height map to RRF
+
+Internal changes:
+- The object model reporting and query system now supports properties inherited from parent classes
+- The code for updating firmware via SBC has been improved to support the reduced RAM available on Duet 2
+- The DCS/RRF interface now reserves GCode input aux2 for use in future firmware versions
 
 RepRapFirmware 3.01-RC12
 ========================
