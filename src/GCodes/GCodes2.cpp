@@ -3349,6 +3349,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					seen = true;
 				}
+
 				if (seen)
 				{
 					if (chan == 1 && !platform.IsAuxEnabled())
@@ -3359,6 +3360,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						platform.ResetChannel(chan);
 					}
+				}
+				else if (chan == 1 && !platform.IsAuxEnabled())
+				{
+					reply.copy("Channel 1 is disabled");
 				}
 				else
 				{
