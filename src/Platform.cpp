@@ -2985,6 +2985,27 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 
 //-----------------------------------------------------------------------------------------------------
 
+// USB port functions
+
+void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
+{
+	if (   !SERIAL_MAIN_DEVICE.IsConnected()
+#if SUPPORT_SCANNER
+		|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
+#endif
+	   )
+	{
+		// If the serial USB line is not open, discard the message right away
+		OutputBuffer::ReleaseAll(buffer);
+	}
+	else
+	{
+		// Else append incoming data to the stack
+		MutexLocker lock(usbMutex);
+		usbOutput.Push(buffer);
+	}
+}
+
 // Aux port functions
 
 void Platform::EnableAux() noexcept
@@ -3233,21 +3254,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
-			MutexLocker lock(usbMutex);
-			if (   !SERIAL_MAIN_DEVICE.IsConnected()
-#if SUPPORT_SCANNER
-				|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
-#endif
-			   )
-			{
-				// If the serial USB line is not open, discard the message right away
-				OutputBuffer::ReleaseAll(buffer);
-			}
-			else
-			{
-				// Else append incoming data to the stack
-				usbOutput.Push(buffer);
-			}
+			AppendUsbReply(buffer);
 		}
 
 #if HAS_LINUX_INTERFACE

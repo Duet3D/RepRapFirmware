@@ -64,6 +64,7 @@ private:
 	char requestedFileChunk[MaxFileChunkSize];
 	int32_t requestedFileDataLength;
 
+	Mutex gcodeReplyMutex;
 	OutputStack *gcodeReply;
 	void HandleGCodeReply(MessageType type, const char *reply);		// accessed by Platform
 	void HandleGCodeReply(MessageType type, OutputBuffer *buffer);	// accessed by Platform
