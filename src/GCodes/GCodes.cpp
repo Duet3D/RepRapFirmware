@@ -599,16 +599,10 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else if (gb.GetState() == GCodeState::doingUserMacro)
 				{
+					// M98 needs its own state in SBC mode to make sure the code does not completed before
+					// the file has been requested. This will become obsolete in RRF 3.02.
 					gb.SetState(GCodeState::normal);
 					UnlockAll(gb);
-
-					// Output a warning message on demand
-					if (hadFileError)
-					{
-						bool reportMissing, fromCode;
-						reply.printf("Macro file %s not found", gb.GetRequestedMacroFile(reportMissing, fromCode));
-						rslt = GCodeResult::warning;
-					}
 				}
 				else if (gb.GetState() == GCodeState::loadingFilament && hadFileError)
 				{
