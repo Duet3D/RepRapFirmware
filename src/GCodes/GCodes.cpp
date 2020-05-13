@@ -620,7 +620,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
 				{
 					// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
-					HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, "");
+					HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, reply.c_str());
 					gb.FinishedBinaryMode();
 				}
 

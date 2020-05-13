@@ -3369,10 +3369,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					const uint32_t cp = platform.GetCommsProperties(chan);
 					reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
-					if (chan == 1 && platform.IsAuxRaw())
+					if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
+					{
+						reply.cat(", connected");
+					}
+					else if (chan == 1 && platform.IsAuxRaw())
 					{
 						reply.cat(", raw mode");
 					}
+					//TODO handle aux2 here
 				}
 			}
 			break;
