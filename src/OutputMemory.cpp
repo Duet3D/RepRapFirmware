@@ -448,8 +448,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 		}
 
 		// Unlink and free the last entry
-		previousItem->next = nullptr;
-		Release(lastItem);
+		ReleaseAll(previousItem->next);
 		releasedBytes += OUTPUT_BUFFER_SIZE;
 	} while (previousItem != buffer && releasedBytes < bytesNeeded);
 

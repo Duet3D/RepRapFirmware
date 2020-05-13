@@ -974,12 +974,21 @@ void Platform::SetNetMask(IPAddress nm) noexcept
 bool Platform::FlushAuxMessages() noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
-	// Write non-blocking data to the AUX line
-	MutexLocker lock(auxMutex);
-	OutputBuffer *auxOutputBuffer = auxOutput.GetFirstItem();
-	if (auxOutputBuffer != nullptr)
+	bool hasMore = !auxOutput.IsEmpty();
+	if (hasMore)
 	{
-		if (auxEnabled)
+		MutexLocker lock(auxMutex);
+		OutputBuffer *auxOutputBuffer = auxOutput.GetFirstItem();
+		if (auxOutputBuffer == nullptr)
+		{
+			(void)auxOutput.Pop();
+		}
+		else if (!auxEnabled)
+		{
+			OutputBuffer::ReleaseAll(auxOutputBuffer);
+			(void)auxOutput.Pop();
+		}
+		else
 		{
 			const size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
 			if (bytesToWrite > 0)
@@ -992,14 +1001,9 @@ bool Platform::FlushAuxMessages() noexcept
 				auxOutput.ReleaseFirstItem();
 			}
 		}
-		else
-		{
-			OutputBuffer *buf = auxOutput.Pop();
-			OutputBuffer::ReleaseAll(buf);
-		}
-
+		hasMore = !auxOutput.IsEmpty();
 	}
-	return auxOutput.GetFirstItem() != nullptr;
+	return hasMore;
 #else
 	return false;
 #endif
@@ -1012,11 +1016,21 @@ bool Platform::FlushMessages() noexcept
 
 #ifdef SERIAL_AUX2_DEVICE
 	// Write non-blocking data to the second AUX line
+	//TODO use common code with FlushAuxMessages()
 	bool aux2HasMore;
 	{
 		MutexLocker lock(aux2Mutex);
 		OutputBuffer *aux2OutputBuffer = aux2Output.GetFirstItem();
-		if (aux2OutputBuffer != nullptr)
+		if (aux2OutputBuffer == nullptr)
+		{
+			(void)aux2Output.Pop();
+		}
+		else if (!aux2Enabled)
+		{
+			OutputBuffer::ReleaseAll(aux2OutputBuffer);
+			(void)aux2Output.Pop();
+		}
+		else
 		{
 			const size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
 			if (bytesToWrite > 0)
@@ -1064,7 +1078,7 @@ bool Platform::FlushMessages() noexcept
 			}
 			else
 			{
-				 usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
+				usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
 			}
 		}
 		usbHasMore = !usbOutput.IsEmpty();

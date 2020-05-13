@@ -368,26 +368,13 @@ void LinuxInterface::Spin()
 			// Send code replies and generic messages
 			while (!gcodeReply->IsEmpty())
 			{
-				MessageType type = gcodeReply->GetFirstItemType();
-				OutputBuffer *buffer = gcodeReply->GetFirstItem();
-				if (buffer == nullptr)
+				const MessageType type = gcodeReply->GetFirstItemType();
+				OutputBuffer *buffer = gcodeReply->GetFirstItem();			// this may be null
+				if (!transfer->WriteCodeReply(type, buffer))				// this handles the null case too
 				{
-					// This is an empty response
-					if (!transfer->WriteCodeReply(type, buffer))
-					{
-						break;
-					}
-					(void)gcodeReply->Pop();
+					break;
 				}
-				else
-				{
-					// This response contains data
-					if (!transfer->WriteCodeReply(type, buffer))
-					{
-						break;
-					}
-					gcodeReply->SetFirstItem(buffer);
-				}
+				gcodeReply->SetFirstItem(buffer);							// this does a pop if buffer is null
 			}
 
 			// Notify DSF about the available buffer space
