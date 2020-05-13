@@ -15,14 +15,17 @@ Known issues and limitations:
 - As for 3.01-RC12
 
 New features/changed behaviour:
-- Increased maximum number of Neopixels from 50 to 60 so that a complete ring can be driven
 - Cura comment MESH:NONMESH is now recognised as introducing a sequence of moves that does not relate to any print object
 - Added object model property 'move.kinematics.tiltCorrection' to those kinematics classes that derive from ZLeadscrewKinematics
-- If the serial aux port hasn't been enabled, M575 P1 with no other parameters now reports this
+- M575 P0 indicates whether the USB interface is in the connected state
+- M575 P1 says if the aux channel is disabled
+- M122 Telnet responder line now gives the number of Telnet sessions
+- Duet 3: Increased maximum number of Neopixels from 50 to 60 so that a complete ring can be driven
 - Duet 3: firmware updates initiated from SBC now send the same USB and PanelDue messages as other types of firmware update
 
 Bug fixes:
-- Duet 3: Fixed a very small memory leak when DCS sent a height map to RRF
+- Duet 3 with SBC: Fixed a very small memory leak when DCS sent a height map to RRF
+- Duet 3 with SBC: Fixed loss of output buffers when the USB interface became disconnected
 
 Internal changes:
 - The object model reporting and query system now supports properties inherited from parent classes
