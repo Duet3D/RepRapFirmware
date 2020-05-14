@@ -129,34 +129,38 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 // sVal is a string of the form shortName|version
 void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 {
-	const char *const p = strchr(sVal, '|');
-	const size_t indexOfDivider = (p == nullptr) ? strlen(sVal) : p - sVal;
-
-	switch((ExpansionDetail)param)
+	// While updating firmware on expansion/tool boards we sometimes get a null board type string here, so allow for that
+	if (sVal != nullptr)
 	{
-	case ExpansionDetail::shortName:
-		rslt.copy(sVal, indexOfDivider);
-		break;
+		const char *const p = strchr(sVal, '|');
+		const size_t indexOfDivider = (p == nullptr) ? strlen(sVal) : p - sVal;
 
-	case ExpansionDetail::firmwareVersion:
-		if (p == nullptr)
+		switch((ExpansionDetail)param)
 		{
-			rslt.Clear();
-		}
-		else
-		{
-			rslt.copy(sVal + indexOfDivider + 1);
-		}
-		break;
+		case ExpansionDetail::shortName:
+			rslt.copy(sVal, indexOfDivider);
+			break;
 
-	case ExpansionDetail::firmwareFileName:
-		rslt.copy("Duet3Firmware_");
-		rslt.catn(sVal, indexOfDivider);
-		rslt.cat(".bin");
-		break;
+		case ExpansionDetail::firmwareVersion:
+			if (p == nullptr)
+			{
+				rslt.Clear();
+			}
+			else
+			{
+				rslt.copy(sVal + indexOfDivider + 1);
+			}
+			break;
 
-	default:
-		break;
+		case ExpansionDetail::firmwareFileName:
+			rslt.copy("Duet3Firmware_");
+			rslt.catn(sVal, indexOfDivider);
+			rslt.cat(".bin");
+			break;
+
+		default:
+			break;
+		}
 	}
 }
 
