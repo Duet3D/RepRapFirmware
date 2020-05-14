@@ -119,21 +119,22 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 		UpdateBoardState(src, BoardState::unknown);
 		if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
 		{
-			board.typeName = nullptr;
+			const char *newTypeName = nullptr;
 			for (const ExpansionBoardData& data : boards)
 			{
 				if (data.typeName != nullptr && strcmp(boardTypeAndFirmwareVersion.c_str(), data.typeName) == 0)
 				{
-					board.typeName = data.typeName;
+					newTypeName = data.typeName;
 					break;
 				}
 			}
-			if (board.typeName == nullptr)
+			if (newTypeName == nullptr)
 			{
 				char * const temp = new char[boardTypeAndFirmwareVersion.strlen() + 1];
 				strcpy(temp, boardTypeAndFirmwareVersion.c_str());
-				board.typeName = temp;
+				newTypeName = temp;
 			}
+			board.typeName = newTypeName;
 		}
 		UpdateBoardState(src, BoardState::running);
 	}
