@@ -1,4 +1,4 @@
-RepRapFirmware 3.1.0 (in preparation)
+RepRapFirmware 3.1.0
 ====================
 
 Recommended compatible firmware:
@@ -14,7 +14,7 @@ Upgrade notes:
 Known issues and limitations:
 - As for 3.01-RC12
 
-New features/changed behaviour:
+New features/changed behaviour since 3.01-RC12:
 - Cura comment MESH:NONMESH is now recognised as introducing a sequence of moves that does not relate to any print object
 - Added object model property 'move.kinematics.tiltCorrection' to those kinematics classes that derive from ZLeadscrewKinematics
 - M575 P0 indicates whether the USB interface is in the connected state
@@ -23,14 +23,14 @@ New features/changed behaviour:
 - Duet 3: Increased maximum number of Neopixels from 50 to 60 so that a complete ring can be driven
 - Duet 3: firmware updates initiated from SBC now send the same USB and PanelDue messages as other types of firmware update
 
-Bug fixes:
+Bug fixes since 3.01-RC12:
 - Duet 3: the default value written to the TMC5160 PWMCONF register did not match the default value for that chip
 - Duet 3: a memory protection fault often occurred if DWC or DCS fetched the object model 'boards' subtree while an expansion or tool board was undergoing a firmware update
 - Duet 3 with SBC: Fixed a very small memory leak when DCS sent a height map to RRF
 - Duet 3 with SBC: Fixed loss of output buffers when the USB interface became disconnected and generic messasges were generated
 - Duet 3 with SBC: Array parameters in G- and M-commands were not bounds checked
 
-Internal changes:
+Internal changes since 3.01-RC12:
 - The object model reporting and query system now supports properties inherited from parent classes
 - The code for updating firmware via SBC has been improved to support the reduced RAM available on Duet 2
 - The DCS/RRF interface now reserves GCode input aux2 for use in future firmware versions
