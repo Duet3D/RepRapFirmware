@@ -262,6 +262,16 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 // Duet pin numbers to control the W5500 interface
+#define W5500_SPI				SPI
+#define W5500_SPI_INTERFACE_ID	ID_SPI
+#define W5500_SPI_IRQn			SPI_IRQn
+#define W5500_SPI_HANDLER		SPI_Handler
+
+constexpr Pin APIN_W5500_SPI_MOSI = APIN_SPI_MOSI;
+constexpr Pin APIN_W5500_SPI_MISO = APIN_SPI_MISO;
+constexpr Pin APIN_W5500_SPI_SCK = APIN_SPI_SCK;
+constexpr Pin APIN_W5500_SPI_SS0 = APIN_SPI_SS0;
+
 constexpr Pin W5500ResetPin = PortCPin(13);									// Low on this in holds the W5500 in reset
 constexpr Pin W5500SsPin = PortAPin(11);									// SPI NPCS pin to W5500
 constexpr Pin W5500IntPin = PortAPin(23);									// Interrupt from W5500

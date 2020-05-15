@@ -62,7 +62,7 @@ constexpr ObjectModelTableEntry CoreKinematics::objectModelTable[] =
 
 constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 3 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(CoreKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(CoreKinematics, ZLeadscrewKinematics)
 
 #endif
 

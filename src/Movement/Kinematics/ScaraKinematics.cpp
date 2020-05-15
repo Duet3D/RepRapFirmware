@@ -32,7 +32,7 @@ constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
 
 constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 1 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(ScaraKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics)
 
 #endif
 

@@ -930,7 +930,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	}
 
 	// If we are not evaluating then the object expression doesn't have to exist, so don't retrieve it because that might throw an error
-	return (evaluate) ? reprap.GetObjectValue(context, id.c_str()) : ExpressionValue(nullptr);
+	return (evaluate) ? reprap.GetObjectValue(context, nullptr, id.c_str()) : ExpressionValue(nullptr);
 }
 
 // Parse a quoted string, given that the current character is double-quote

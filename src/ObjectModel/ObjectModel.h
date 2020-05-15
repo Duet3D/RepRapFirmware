@@ -27,7 +27,7 @@ enum class TypeCode : uint8_t
 	Char,
 	Uint32,
 	Int32,
-	Uint64,
+	Uint64,			// only 56 bits actually available
 	Float,
 	Bitmap16,
 	Bitmap32,
@@ -211,6 +211,8 @@ public:
 	ExpressionValue (*GetElement)(const ObjectModel*, ObjectExplorationContext&) noexcept;
 };
 
+struct ObjectModelClassDescriptor;
+
 // Class from which other classes that represent part of the object model are derived
 class ObjectModel
 {
@@ -222,28 +224,28 @@ public:
 	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
 
 	// Function to report a value or object as JSON
-	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const THROWS(GCodeException);
+	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, ExpressionValue val, const char *filter) const THROWS(GCodeException);
 
 	// Skip the current element in the ID or filter string
 	static const char* GetNextElement(const char *id) noexcept;
 
 protected:
 	// Construct a JSON representation of those parts of the object model requested by the user
-	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
+	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
 
 	// Report an entire array as JSON
-	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException);
+	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException);
 
 	// Get the value of an object that we hold
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, ExpressionValue val, const char *idString) const THROWS(GCodeException);
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, ExpressionValue val, const char *idString) const THROWS(GCodeException);
 
 	// Get the object model table entry for the current level object in the query
-	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) const noexcept;
+	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *idString) const noexcept;
 
-	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept = 0;
+	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
 private:
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcept;
@@ -282,7 +284,7 @@ public:
 	bool Matches(const char *filter, const ObjectExplorationContext& context) const noexcept;
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter, bool first) const noexcept;
+	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const noexcept;
 
 	// Return the name of this field
 	const char* GetName() const noexcept { return name; }
@@ -309,30 +311,48 @@ public:
 	}
 };
 
+struct ObjectModelClassDescriptor
+{
+	const ObjectModelTableEntry *omt;
+	const uint8_t *omd;
+	const ObjectModelClassDescriptor *parent;
+};
+
 // Use this macro to inherit form ObjectModel
 #define INHERIT_OBJECT_MODEL	: public ObjectModel
 
 // Use this macro in the 'protected' section of every class declaration that derived from ObjectModel
 #define DECLARE_OBJECT_MODEL \
-	const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept override; \
+	const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept override; \
 	static const ObjectModelTableEntry objectModelTable[]; \
-	static const uint8_t objectModelTableDescriptor[];
+	static const uint8_t objectModelTableDescriptor[]; \
+	static const ObjectModelClassDescriptor objectModelClassDescriptor;
 
 #define DECLARE_OBJECT_MODEL_VIRTUAL \
-	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept override = 0;
+	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept override = 0;
 
 #define DESCRIPTOR_OK(_class) 	(ARRAY_SIZE(_class::objectModelTableDescriptor) == _class::objectModelTableDescriptor[0] + 1)
 #define OMT_SIZE_OK(_class)		(ARRAY_SIZE(_class::objectModelTable) == ArraySum(_class::objectModelTableDescriptor + 1, ARRAY_SIZE(_class::objectModelTableDescriptor) - 1))
 #define OMT_ORDERING_OK(_class)	(ObjectModelTableEntry::IsOrdered(_class::objectModelTableDescriptor, _class::objectModelTable))
 
 #define DEFINE_GET_OBJECT_MODEL_TABLE(_class) \
-	const ObjectModelTableEntry *_class::GetObjectModelTable(const uint8_t*& descriptor) const noexcept \
+	const ObjectModelClassDescriptor _class::objectModelClassDescriptor = { _class::objectModelTable, _class::objectModelTableDescriptor, nullptr }; \
+	const ObjectModelClassDescriptor *_class::GetObjectModelClassDescriptor() const noexcept \
 	{ \
 		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
 		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \
 		static_assert(!DESCRIPTOR_OK(_class) || !OMT_SIZE_OK(_class) || OMT_ORDERING_OK(_class), "Object model table must be ordered"); \
-		descriptor = objectModelTableDescriptor; \
-		return objectModelTable; \
+		return &objectModelClassDescriptor; \
+	}
+
+#define DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(_class, _parent) \
+	const ObjectModelClassDescriptor _class::objectModelClassDescriptor = { _class::objectModelTable, _class::objectModelTableDescriptor, &_parent::objectModelClassDescriptor }; \
+	const ObjectModelClassDescriptor *_class::GetObjectModelClassDescriptor() const noexcept \
+	{ \
+		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
+		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \
+		static_assert(!DESCRIPTOR_OK(_class) || !OMT_SIZE_OK(_class) || OMT_ORDERING_OK(_class), "Object model table must be ordered"); \
+		return &objectModelClassDescriptor; \
 	}
 
 #define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \

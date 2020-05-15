@@ -3349,6 +3349,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					seen = true;
 				}
+
 				if (seen)
 				{
 					if (chan == 1 && !platform.IsAuxEnabled())
@@ -3360,14 +3361,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						platform.ResetChannel(chan);
 					}
 				}
+				else if (chan == 1 && !platform.IsAuxEnabled())
+				{
+					reply.copy("Channel 1 is disabled");
+				}
 				else
 				{
 					const uint32_t cp = platform.GetCommsProperties(chan);
 					reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
-					if (chan == 1 && platform.IsAuxRaw())
+					if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
+					{
+						reply.cat(", connected");
+					}
+					else if (chan == 1 && platform.IsAuxRaw())
 					{
 						reply.cat(", raw mode");
 					}
+					//TODO handle aux2 here
 				}
 			}
 			break;

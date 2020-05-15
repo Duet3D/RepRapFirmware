@@ -974,12 +974,21 @@ void Platform::SetNetMask(IPAddress nm) noexcept
 bool Platform::FlushAuxMessages() noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
-	// Write non-blocking data to the AUX line
-	MutexLocker lock(auxMutex);
-	OutputBuffer *auxOutputBuffer = auxOutput.GetFirstItem();
-	if (auxOutputBuffer != nullptr)
+	bool hasMore = !auxOutput.IsEmpty();
+	if (hasMore)
 	{
-		if (auxEnabled)
+		MutexLocker lock(auxMutex);
+		OutputBuffer *auxOutputBuffer = auxOutput.GetFirstItem();
+		if (auxOutputBuffer == nullptr)
+		{
+			(void)auxOutput.Pop();
+		}
+		else if (!auxEnabled)
+		{
+			OutputBuffer::ReleaseAll(auxOutputBuffer);
+			(void)auxOutput.Pop();
+		}
+		else
 		{
 			const size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
 			if (bytesToWrite > 0)
@@ -992,14 +1001,9 @@ bool Platform::FlushAuxMessages() noexcept
 				auxOutput.ReleaseFirstItem();
 			}
 		}
-		else
-		{
-			OutputBuffer *buf = auxOutput.Pop();
-			OutputBuffer::ReleaseAll(buf);
-		}
-
+		hasMore = !auxOutput.IsEmpty();
 	}
-	return auxOutput.GetFirstItem() != nullptr;
+	return hasMore;
 #else
 	return false;
 #endif
@@ -1012,11 +1016,21 @@ bool Platform::FlushMessages() noexcept
 
 #ifdef SERIAL_AUX2_DEVICE
 	// Write non-blocking data to the second AUX line
+	//TODO use common code with FlushAuxMessages()
 	bool aux2HasMore;
 	{
 		MutexLocker lock(aux2Mutex);
 		OutputBuffer *aux2OutputBuffer = aux2Output.GetFirstItem();
-		if (aux2OutputBuffer != nullptr)
+		if (aux2OutputBuffer == nullptr)
+		{
+			(void)aux2Output.Pop();
+		}
+		else if (!aux2Enabled)
+		{
+			OutputBuffer::ReleaseAll(aux2OutputBuffer);
+			(void)aux2Output.Pop();
+		}
+		else
 		{
 			const size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
 			if (bytesToWrite > 0)
@@ -1064,7 +1078,7 @@ bool Platform::FlushMessages() noexcept
 			}
 			else
 			{
-				 usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
+				usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
 			}
 		}
 		usbHasMore = !usbOutput.IsEmpty();
@@ -2204,9 +2218,18 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::PrintObjectAddresses:
 		reply.printf
-				("Platform %08" PRIx32 "-%08" PRIx32 "\nGCodes %08" PRIx32 "-%08" PRIx32,
-					reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1,
-					reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
+				(	"Platform %08" PRIx32 "-%08" PRIx32
+#if HAS_LINUX_INTERFACE
+					"\nLinuxInterface %08" PRIx32 "-%08" PRIx32
+#endif
+					"\nNetwork %08" PRIx32 "-%08" PRIx32
+					"\nGCodes %08" PRIx32 "-%08" PRIx32
+					, reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1
+#if HAS_LINUX_INTERFACE
+					, reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()), reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) + sizeof(LinuxInterface) - 1
+#endif
+					, reinterpret_cast<uint32_t>(&reprap.GetNetwork()), reinterpret_cast<uint32_t>(&reprap.GetNetwork()) + sizeof(Network) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
 				);
 		break;
 
@@ -2962,6 +2985,27 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 
 //-----------------------------------------------------------------------------------------------------
 
+// USB port functions
+
+void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
+{
+	if (   !SERIAL_MAIN_DEVICE.IsConnected()
+#if SUPPORT_SCANNER
+		|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
+#endif
+	   )
+	{
+		// If the serial USB line is not open, discard the message right away
+		OutputBuffer::ReleaseAll(buffer);
+	}
+	else
+	{
+		// Else append incoming data to the stack
+		MutexLocker lock(usbMutex);
+		usbOutput.Push(buffer);
+	}
+}
+
 // Aux port functions
 
 void Platform::EnableAux() noexcept
@@ -3170,7 +3214,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 	}
 #endif
 #ifdef SERIAL_AUX2_DEVICE
-	if ((type & LcdMessage) != 0)
+	if ((type & Aux2Message) != 0)
 	{
 		++numDestinations;
 	}
@@ -3200,7 +3244,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 		}
 
 #ifdef SERIAL_AUX2_DEVICE
-		if ((type & LcdMessage) != 0)
+		if ((type & Aux2Message) != 0)
 		{
 			// Send this message to the second UART device
 			MutexLocker lock(aux2Mutex);
@@ -3210,21 +3254,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
-			MutexLocker lock(usbMutex);
-			if (   !SERIAL_MAIN_DEVICE.IsConnected()
-#if SUPPORT_SCANNER
-				|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
-#endif
-			   )
-			{
-				// If the serial USB line is not open, discard the message right away
-				OutputBuffer::ReleaseAll(buffer);
-			}
-			else
-			{
-				// Else append incoming data to the stack
-				usbOutput.Push(buffer);
-			}
+			AppendUsbReply(buffer);
 		}
 
 #if HAS_LINUX_INTERFACE

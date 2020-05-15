@@ -37,7 +37,7 @@ constexpr ObjectModelTableEntry FiveBarScaraKinematics::objectModelTable[] =
 
 constexpr uint8_t FiveBarScaraKinematics::objectModelTableDescriptor[] = { 1, 1 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(FiveBarScaraKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(FiveBarScaraKinematics, ZLeadscrewKinematics)
 
 #endif
 

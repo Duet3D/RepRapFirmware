@@ -12,8 +12,61 @@
 #include "Movement/Move.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
-
 const float M3ScrewPitch = 0.5;
+
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ZLeadscrewKinematics, __VA_ARGS__)
+
+constexpr ObjectModelArrayDescriptor ZLeadscrewKinematics::lastCorrectionsArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->lastCorrections[context.GetLastIndex()], 3); }
+};
+
+constexpr ObjectModelArrayDescriptor ZLeadscrewKinematics::screwXArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->leadscrewX[context.GetLastIndex()], 1); }
+};
+
+constexpr ObjectModelArrayDescriptor ZLeadscrewKinematics::screwYArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+									{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->leadscrewY[context.GetLastIndex()], 1); }
+};
+
+constexpr ObjectModelTableEntry ZLeadscrewKinematics::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. kinematics members
+	{ "tiltCorrection",		OBJECT_MODEL_FUNC(self, 1), 								ObjectModelEntryFlags::none },
+
+	// 1. tiltCorrection members
+	{ "correctionFactor",	OBJECT_MODEL_FUNC(self->correctionFactor, 1), 				ObjectModelEntryFlags::none },
+	{ "lastCorrections",	OBJECT_MODEL_FUNC_NOSELF(&lastCorrectionsArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "maxCorrection",		OBJECT_MODEL_FUNC(self->maxCorrection, 1), 					ObjectModelEntryFlags::none },
+	{ "screwPitch",			OBJECT_MODEL_FUNC(self->screwPitch, 2), 					ObjectModelEntryFlags::none },
+	{ "screwX",				OBJECT_MODEL_FUNC_NOSELF(&screwXArrayDescriptor), 			ObjectModelEntryFlags::none },
+	{ "screwY",				OBJECT_MODEL_FUNC_NOSELF(&screwYArrayDescriptor), 			ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t ZLeadscrewKinematics::objectModelTableDescriptor[] = { 2, 1, 6 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(ZLeadscrewKinematics)
+
+#endif
 
 ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k) noexcept
 	: Kinematics(k, -1.0, 0.0, true), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
@@ -53,7 +106,12 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 
 		if (seenX && seenY && xSize == ySize)
 		{
+			for (float& v : lastCorrections)
+			{
+				v = 0.0;
+			}
 			numLeadscrews = xSize;
+			reprap.MoveUpdated();
 			return false;							// successful configuration
 		}
 
@@ -66,6 +124,7 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 		// If no parameters provided so just report the existing setup
 		if (seenPFS)
 		{
+			reprap.MoveUpdated();
 			return true;							// just changed the maximum correction or screw pitch
 		}
 		else if (numLeadscrews < 2)
@@ -322,6 +381,11 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 			else
 			{
 				reprap.GetMove().AdjustLeadscrews(solution);
+				for (size_t i = 0; i < numLeadscrews; ++i)
+				{
+					lastCorrections[i] = solution[i];
+				}
+
 				reply.printf("Leadscrew adjustments made:");
 				AppendCorrections(solution, reply);
 
@@ -339,6 +403,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 			for (size_t i = 0; i < numLeadscrews; ++i)
 			{
 				const float netAdjustment = solution[i] - solution[0];
+				lastCorrections[i] = netAdjustment;
 				reply.catf(" %.2f turn %s (%.2fmm)", (double)(fabsf(netAdjustment)/screwPitch), (netAdjustment > 0) ? "down" : "up", (double)netAdjustment);
 			}
 		}

@@ -950,10 +950,7 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad
 	size_t length = 0;
 	for (;;)
 	{
-		if (length >= returnedLength)		// array limit has been set in here
-		{
-			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-		}
+		CheckArrayLength(length, returnedLength);
 		arr[length++] = ReadFloatValue();
 		if (gb.buffer[readPointer] != LIST_SEPARATOR)
 		{
@@ -989,10 +986,7 @@ void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad
 	size_t length = 0;
 	for (;;)
 	{
-		if (length >= returnedLength) // Array limit has been set in here
-		{
-			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-		}
+		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadIValue();
 		length++;
 		if (gb.buffer[readPointer] != LIST_SEPARATOR)
@@ -1028,10 +1022,7 @@ void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool
 	size_t length = 0;
 	for (;;)
 	{
-		if (length >= returnedLength) // Array limit has been set in here
-		{
-			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-		}
+		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadUIValue();
 		length++;
 		if (gb.buffer[readPointer] != LIST_SEPARATOR)
@@ -1068,10 +1059,7 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 	size_t length = 0;
 	for (;;)
 	{
-		if (length >= returnedLength) // Array limit has been set in here
-		{
-			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-		}
+		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadDriverIdValue();
 		length++;
 		if (gb.buffer[readPointer] != LIST_SEPARATOR)
@@ -1083,6 +1071,14 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 
 	returnedLength = length;
 	readPointer = -1;
+}
+
+void StringParser::CheckArrayLength(size_t actualLength, size_t maxLength) THROWS(GCodeException)
+{
+	if (actualLength >= maxLength)
+	{
+		throw ConstructParseException("array too long, max length = %u", (uint32_t)maxLength);
+	}
 }
 
 // Get and copy a quoted string returning true if successful
