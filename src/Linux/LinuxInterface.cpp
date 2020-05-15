@@ -28,6 +28,7 @@ LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), wasConnected(fa
 
 void LinuxInterface::Init()
 {
+	gcodeReplyMutex.Create("LinuxReply");
 	transfer->Init();
 	transfer->StartNextTransfer();
 }
@@ -366,27 +367,18 @@ void LinuxInterface::Spin()
 			}
 
 			// Send code replies and generic messages
-			while (!gcodeReply->IsEmpty())
+			if (!gcodeReply->IsEmpty())
 			{
-				MessageType type = gcodeReply->GetFirstItemType();
-				OutputBuffer *buffer = gcodeReply->GetFirstItem();
-				if (buffer == nullptr)
+				MutexLocker lock(gcodeReplyMutex);
+				while (!gcodeReply->IsEmpty())
 				{
-					// This is an empty response
-					if (!transfer->WriteCodeReply(type, buffer))
+					const MessageType type = gcodeReply->GetFirstItemType();
+					OutputBuffer *buffer = gcodeReply->GetFirstItem();			// this may be null
+					if (!transfer->WriteCodeReply(type, buffer))				// this handles the null case too
 					{
 						break;
 					}
-					(void)gcodeReply->Pop();
-				}
-				else
-				{
-					// This response contains data
-					if (!transfer->WriteCodeReply(type, buffer))
-					{
-						break;
-					}
-					gcodeReply->SetFirstItem(buffer);
+					gcodeReply->SetFirstItem(buffer);							// this does a pop if buffer is null
 				}
 			}
 
@@ -491,7 +483,10 @@ void LinuxInterface::Spin()
 			}
 
 			// Don't cache any messages if they cannot be sent
-			gcodeReply->ReleaseAll();
+			{
+				MutexLocker lock(gcodeReplyMutex);
+				gcodeReply->ReleaseAll();
+			}
 
 			// Close all open G-code files
 			for (size_t i = 0; i < NumGCodeChannels; i++)
@@ -610,6 +605,7 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
 		return;
 	}
 
+	MutexLocker lock(gcodeReplyMutex);
 	OutputBuffer *buffer = gcodeReply->GetLastItem();
 	if (buffer != nullptr && mt == gcodeReply->GetLastItemType() && (mt & PushFlag) != 0 && !buffer->IsReferenced())
 	{
@@ -637,6 +633,7 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer)
 		return;
 	}
 
+	MutexLocker lock(gcodeReplyMutex);
 	gcodeReply->Push(buffer, mt);
 }
 

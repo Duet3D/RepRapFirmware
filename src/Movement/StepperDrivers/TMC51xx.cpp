@@ -246,7 +246,7 @@ constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
 // PWMCONF register
 constexpr uint8_t REGNUM_PWMCONF = 0x70;
 
-constexpr uint32_t DefaultPwmConfReg = 0xC10D0024;			// this is the reset default - try it until we find something better
+constexpr uint32_t DefaultPwmConfReg = 0xC40C001E;			// this is the reset default - try it until we find something better
 
 constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
@@ -523,11 +523,11 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexc
 		return true;
 
 	case SmartDriverRegister::thigh:
-		UpdateRegister (WriteThigh, regVal & ((1u << 20) - 1));
+		UpdateRegister(WriteThigh, regVal & ((1u << 20) - 1));
 		return true;
 
 	case SmartDriverRegister::coolStep:
-		UpdateRegister (WriteTcoolthrs, regVal & ((1u << 20) - 1));
+		UpdateRegister(WriteTcoolthrs, regVal & ((1u << 20) - 1));
 		return true;
 
 	case SmartDriverRegister::hdec:

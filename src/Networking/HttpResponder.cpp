@@ -510,13 +510,13 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 				type = 1;
 			}
 
-			OutputBuffer::Release(response);
+			OutputBuffer::ReleaseAll(response);
 			response = reprap.GetStatusResponse(type, ResponseSource::HTTP);		// this may return nullptr
 		}
 		else
 		{
 			// Deprecated
-			OutputBuffer::Release(response);
+			OutputBuffer::ReleaseAll(response);
 			response = reprap.GetLegacyStatusResponse(1, 0);
 		}
 	}
@@ -543,14 +543,14 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEqualsIgnoreCase(request, "filelist") && (parameter = GetKeyValue("dir")) != nullptr)
 	{
-		OutputBuffer::Release(response);
+		OutputBuffer::ReleaseAll(response);
 		const char* const firstVal = GetKeyValue("first");
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
 		response = reprap.GetFilelistResponse(parameter, startAt);		// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "files"))
 	{
-		OutputBuffer::Release(response);
+		OutputBuffer::ReleaseAll(response);
 		const char* dir = GetKeyValue("dir");
 		if (dir == nullptr)
 		{
@@ -618,7 +618,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 #if SUPPORT_OBJECT_MODEL
 	else if (StringEqualsIgnoreCase(request, "model"))
 	{
-		OutputBuffer::Release(response);
+		OutputBuffer::ReleaseAll(response);
 		const char *const filterVal = GetKeyValue("key");
 		const char *const flagsVal = GetKeyValue("flags");
 		response = reprap.GetModelResponse(filterVal, flagsVal);
@@ -626,7 +626,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 #endif
 	else if (StringEqualsIgnoreCase(request, "config"))
 	{
-		OutputBuffer::Release(response);
+		OutputBuffer::ReleaseAll(response);
 		response = reprap.GetConfigResponse();
 	}
 	else
@@ -989,7 +989,7 @@ void HttpResponder::SendJsonResponse(const char* command) noexcept
 		if (!gotResponse)
 		{
 			// GetJsonResponse() changed the state instead of returning a response
-			OutputBuffer::Release(jsonResponse);
+			OutputBuffer::ReleaseAll(jsonResponse);
 			return;
 		}
 		if (jsonResponse != nullptr && jsonResponse->HadOverflow())
@@ -1002,35 +1002,12 @@ void HttpResponder::SendJsonResponse(const char* command) noexcept
 	if (jsonResponse == nullptr)
 	{
 		// We ran out of buffers at some point.
-		// Unfortunately the protocol is prone to deadlocking, because if most output buffers are used up holding a GCode reply,
-		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
-		// Until we fix the protocol, the best we can do is time out and throw some GCode responses away.
-#if 1
 		// DC 2020-05-05: we no longer retry or discard responses if there are no buffers available, instead we return a 503 error immediately
-		{
-#else
-		if (millis() - startedProcessingRequestAt >= MaxBufferWaitTime)
-		{
-			{
-				// Looks like we've run out of buffers and waiting hasn't help, so release some of the responses that are waiting to go
-				MutexLocker lock(gcodeReplyMutex);
-				OutputBuffer *buf = gcodeReply.Pop();
-				if (buf != nullptr)
-				{
-					OutputBuffer::ReleaseAll(buf);
-					OutputBuffer::ReleaseAll(outBuf);
-					return;					// next time we try, hopefully there will be a spare buffer
-				}
-			}
-#endif
+		ReportOutputBufferExhaustion(__FILE__, __LINE__);
 
-			// We've freed all the buffer we have
-			ReportOutputBufferExhaustion(__FILE__, __LINE__);
-
-			// We know that we have an output buffer, but it may be too short to send a long reply, so send a short one
-			outBuf->copy(serviceUnavailableResponse);
-			Commit(ResponderState::free, false);
-		}
+		// We know that we have an output buffer, but it may be too short to send a long reply, so send a short one
+		outBuf->copy(serviceUnavailableResponse);
+		Commit(ResponderState::free, false);
 		return;
 	}
 
@@ -1070,31 +1047,12 @@ void HttpResponder::SendJsonResponse(const char* command) noexcept
 	if (outBuf->HadOverflow())
 	{
 		// We ran out of buffers at some point.
-		// Unfortunately the protocol is prone to deadlocking, because if most output buffer are used up holding a GCode reply,
-		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
-		// Until we fix the protocol, the best we can do is time out and throw the GCode response away.
-		if (millis() - startedProcessingRequestAt >= MaxBufferWaitTime)
-		{
-			{
-				MutexLocker lock(gcodeReplyMutex);
-				OutputBuffer *buf = gcodeReply.Pop();
-				if (buf != nullptr)
-				{
-					OutputBuffer::ReleaseAll(buf);
-					OutputBuffer::ReleaseAll(outBuf);
-					return;
-				}
-			}
-			ReportOutputBufferExhaustion(__FILE__, __LINE__);
-			OutputBuffer::Truncate(outBuf, 999999);				// release all buffers except the first one
-			outBuf->copy(serviceUnavailableResponse);
-			Commit(ResponderState::free, false);
-		}
-		else
-		{
-			// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
-			OutputBuffer::ReleaseAll(outBuf);
-		}
+		// DC 2020-05-05: we no longer retry or discard responses if there are no buffers available, instead we return a 503 error immediately
+		ReportOutputBufferExhaustion(__FILE__, __LINE__);
+
+		// We know that we have an output buffer, but it may be too short to send a long reply, so send a short one
+		outBuf->copy(serviceUnavailableResponse);
+		Commit(ResponderState::free, false);
 		return;
 	}
 
