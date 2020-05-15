@@ -1,11 +1,11 @@
-RepRapFirmware 3.01 (in preparation)
-===================
+RepRapFirmware 3.1.0 (in preparation)
+====================
 
 Recommended compatible firmware:
-- DuetWebControl TBD
+- DuetWebControl 3.1.0
 - DuetWiFiServer 1.23 (same as for previous RC)
-- Duet Software Framework version TBD (for Duet 3/Raspberry Pi users)
-- Duet 3 expansion board and tool board firmware 3.01
+- Duet Software Framework version 3.1.0 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.1.0
 - PanelDueFirmware 1.24
 
 Upgrade notes:
@@ -24,8 +24,11 @@ New features/changed behaviour:
 - Duet 3: firmware updates initiated from SBC now send the same USB and PanelDue messages as other types of firmware update
 
 Bug fixes:
+- Duet 3: the default value written to the TMC5160 PWMCONF register did not match the default value for that chip
+- Duet 3: a memory protection fault often occurred if DWC or DCS fetched the object model 'boards' subtree while an expansion or tool board was undergoing a firmware update
 - Duet 3 with SBC: Fixed a very small memory leak when DCS sent a height map to RRF
-- Duet 3 with SBC: Fixed loss of output buffers when the USB interface became disconnected
+- Duet 3 with SBC: Fixed loss of output buffers when the USB interface became disconnected and generic messasges were generated
+- Duet 3 with SBC: Array parameters in G- and M-commands were not bounds checked
 
 Internal changes:
 - The object model reporting and query system now supports properties inherited from parent classes
