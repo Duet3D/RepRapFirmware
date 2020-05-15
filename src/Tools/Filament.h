@@ -30,6 +30,9 @@ public:
 
 	void LoadAssignment() noexcept;										// Read the assigned material for the given extruder from the SD card
 
+	void SaveFilamentUsage(const char *filamentUsagefile, int extruder) noexcept;		// save filament usage file to filaments directory in a CSV file.
+	void LoadFilamentUsage(const char *filamentUsagefile, int extruder) noexcept;
+
 	static void SaveAssignments() noexcept;								// Rewrite the CSV file containing the extruder <-> filament assignments
 	static bool IsInUse(const char *filamentName) noexcept;				// Check if this material is already assigned to an extruder
 	static Filament *GetFilamentByExtruder(const int extruder) noexcept;	// Retrieve the Filament instance assigned to the given extruder drive
@@ -43,6 +46,7 @@ private:
 
 	int extruder;
 	char name[FilamentNameLength];
+	float used_length;
 };
 
 #endif

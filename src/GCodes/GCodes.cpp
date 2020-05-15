@@ -3691,6 +3691,9 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 		gb.SetState(GCodeState::loadingFilament);
 
 		String<StringLength256> scratchString;
+		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), STATS_FILAMENT_CSV);
+		tool->GetFilament()->LoadFilamentUsage(scratchString.c_str(), tool->GetFilament()->GetExtruder());
+
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.c_str(), true, 701);
 	}
@@ -3725,6 +3728,10 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 	{
 		gb.SetState(GCodeState::unloadingFilament);
 		String<StringLength256> scratchString;
+
+		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), STATS_FILAMENT_CSV);
+		tool->GetFilament()->SaveFilamentUsage(scratchString.c_str(), tool->GetFilament()->GetExtruder());
+
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.c_str(), true, 702);
 	}
@@ -3784,7 +3791,12 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		currentZHop = 0.0;
 		currentTool->SetRetracted(false);
 	}
-
+#if HAS_MASS_STORAGE
+	String<StringLength256> scratchString;
+	scratchString.printf("%s%s/%s\n", FILAMENTS_DIRECTORY, currentTool->GetFilament()->GetName(), STATS_FILAMENT_CSV);
+	currentTool->GetFilament()->SaveFilamentUsage(scratchString.c_str(), currentTool->GetFilament()->GetExtruder());
+	reprap.GetPlatform().Message(WarningMessage, scratchString.c_str());
+#endif
 	const char *printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
 	if (printingFilename == nullptr)
 	{

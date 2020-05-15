@@ -9,6 +9,7 @@
 #include "Filament.h"
 
 #include "RepRap.h"
+#include "GCodes/GCodes.h"
 #include "Platform.h"
 
 #include <ctime>
@@ -22,7 +23,7 @@ Filament *Filament::filamentList = nullptr;
 Filament::Filament(int extr) noexcept : extruder(extr)
 {
 	strcpy(name, "");
-
+	this->used_length = 0.0;
 	next = filamentList;
 	filamentList = this;
 }
@@ -66,18 +67,55 @@ void Filament::LoadAssignment() noexcept
 			{
 				if (isdigit(buffer[0]) && StrToI32(buffer) == extruder)
 				{
-					const char *filament = buffer;
-					while (*filament != 0)
+#if 1
+					char *p, *r;
+					if ((p = strchr(buffer, ',')))
 					{
-						if (*filament++ == ',')
+						*p++ = 0;
+						if (*p && (r = strchr(p, ',')))
 						{
+							*r++ = 0;
+							if (*r && isdigit(*r))
+								used_length = SafeStrtof(r);
+						}
+						SafeStrncpy(name, p, ARRAY_SIZE(name));
+					}
+#else
+
+					char *filament = buffer, *s, *r;
+					while (*filament != 0)
+						if (*filament++ == ',')
+							break;
+					r = filament;
+					while (*r++ != 0)
+					{
+						if (*filament == ',')
+						{
+							s = filament;
+							*s++ = 0;
+
+							while (*s != 0)
+							{
+								if (*s++ == ',')
+								{
+									*s++ = 0;
+									if (*s && isdigit(*s))
+									{
+										used_length = SafeStrtof(s);
+										break;
+
+									}
+								}
+							}
 							break;
 						}
 					}
 
 					SafeStrncpy(name, filament, ARRAY_SIZE(name));
 					break;
+#endif
 				}
+
 			}
 		}
 	}
@@ -86,7 +124,51 @@ void Filament::LoadAssignment() noexcept
 #endif
 }
 
-/*static*/ void Filament::SaveAssignments() noexcept
+void Filament::LoadFilamentUsage(const char *filamentUsageFilename, int extruder) noexcept
+{
+#if HAS_MASS_STORAGE
+	FileStore * const file = reprap.GetPlatform().OpenSysFile(filamentUsageFilename, OpenMode::read);
+	if (file == nullptr)
+	{
+		// Will only occur upon first usage
+		return;
+	}
+	char bufferSpace[64];
+	StringRef buf(bufferSpace, ARRAY_SIZE(bufferSpace));
+	Filament *f = GetFilamentByExtruder(extruder);
+	char buffer[64];
+	if (file->ReadLine(buffer, sizeof(buffer)) > 0)
+		if (f) // there better be a result or something odd has happened.
+			f->used_length = SafeStrtof(buffer);
+	file->Close();
+#endif
+
+}
+
+void Filament::SaveFilamentUsage(const char *filamentUsageFilename, int extruder) noexcept
+{
+#if HAS_MASS_STORAGE
+	FileStore * const file = reprap.GetPlatform().OpenSysFile(filamentUsageFilename, OpenMode::write);
+	if (file == nullptr)
+	{
+		// Should never happen
+		return;
+	}
+	char bufferSpace[64];
+	StringRef buf(bufferSpace, ARRAY_SIZE(bufferSpace));
+	Filament *f = GetFilamentByExtruder(extruder);
+	if (f)
+	{
+		f->used_length += reprap.GetGCodes().GetRawExtruderTotalByDrive(extruder);
+		buf.printf("%2.1f\n", (double)f->used_length);
+		file->Write(buf.c_str());
+	}
+	file->Close();
+#endif
+
+}
+
+void Filament::SaveAssignments() noexcept
 {
 	// Update the OM when the filament has been changed
 	reprap.MoveUpdated();
@@ -122,12 +204,13 @@ void Filament::LoadAssignment() noexcept
 	file->Write(buf.c_str());
 
 	// Write column headers and one row for each loaded filament
-	file->Write("extruder,filament\n");
+	file->Write("extruder,filament,usage\n");
 	for (Filament *f = filamentList; f != nullptr; f = f->next)
 	{
 		if (f->IsLoaded())
 		{
-			buf.printf("%d,%s\n", f->GetExtruder(), f->GetName());
+			f->used_length = reprap.GetGCodes().GetRawExtruderTotalByDrive(f->GetExtruder());
+			buf.printf("%d,%s,%2.1f\n", f->GetExtruder(), f->GetName(),(double)f->used_length);
 			file->Write(buf.c_str());
 		}
 	}
