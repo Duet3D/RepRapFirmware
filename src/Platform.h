@@ -321,6 +321,7 @@ public:
 	bool SetDateTime(time_t time) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
+	void AppendUsbReply(OutputBuffer *buffer) noexcept;
 	void AppendAuxReply(OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(const char *msg, bool rawMessage) noexcept;
 

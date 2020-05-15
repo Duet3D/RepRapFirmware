@@ -170,6 +170,7 @@ public:
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept;
 	void UpdateFirmware() noexcept;
+	void PrepareToLoadIap() noexcept;
 	void StartIap() noexcept;
 
 	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error

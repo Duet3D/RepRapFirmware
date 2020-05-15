@@ -92,7 +92,7 @@ public:
 	static size_t Truncate(OutputBuffer *buffer, size_t bytesNeeded) noexcept;
 
 	// Release one OutputBuffer instance. Returns the next item from the chain or nullptr if this was the last instance.
-	static OutputBuffer *Release(OutputBuffer *buf) noexcept;
+	__attribute((warn_unused_result)) static OutputBuffer *Release(OutputBuffer *buf) noexcept;
 
 	// Release all OutputBuffer objects in a chain
 	static void ReleaseAll(OutputBuffer * volatile &buf) noexcept;
