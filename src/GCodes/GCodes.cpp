@@ -72,18 +72,18 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 	fileGCode = new GCodeBuffer(GCodeChannel::File, nullptr, fileInput, GenericMessage);
 
-#if HAS_NETWORKING || HAS_LINUX_INTERFACE
+# if SUPPORT_HTTP || HAS_LINUX_INTERFACE
 	httpInput = new NetworkGCodeInput();
 	httpGCode = new GCodeBuffer(GCodeChannel::HTTP, httpInput, fileInput, HttpMessage);
-# if SUPPORT_TELNET
+# else
+	httpGCode = nullptr;
+# endif // SUPPORT_HTTP || HAS_LINUX_INTERFACE
+# if SUPPORT_TELNET || HAS_LINUX_INTERFACE
 	telnetInput = new NetworkGCodeInput();
 	telnetGCode = new GCodeBuffer(GCodeChannel::Telnet, telnetInput, fileInput, TelnetMessage, Compatibility::Marlin);
 # else
 	telnetGCode = nullptr;
-# endif
-#else
-	httpGCode = telnetGCode = nullptr;
-#endif
+# endif // SUPPORT_TELNET || HAS_LINUX_INTERFACE
 
 #if defined(SERIAL_MAIN_DEVICE)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);

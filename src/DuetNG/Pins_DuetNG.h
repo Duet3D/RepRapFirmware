@@ -42,6 +42,7 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
+#define SUPPORT_HTTP			1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1

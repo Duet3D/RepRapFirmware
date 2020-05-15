@@ -38,10 +38,12 @@ const size_t NumTelnetResponders = 2;	// the number of concurrent Telnet session
 // Limit the number of HTTP responders to 4 because they take around 2K of memory each
 const size_t NumHttpResponders = 4;		// the number of concurrent HTTP requests we can process
 const size_t NumTelnetResponders = 1;	// the number of concurrent Telnet sessions we support
-# endif
+# endif // not SAME70
 
 const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
-#endif
+#endif // not __LPC17xx__
+
+#define HAS_RESPONDERS	(SUPPORT_HTTP || SUPPORT_FTP || SUPPORT_TELNET)
 
 // Forward declarations
 class NetworkResponder;
@@ -115,11 +117,15 @@ private:
 
 	Platform& platform;
 
+#if HAS_NETWORKING
 	NetworkInterface *interfaces[NumNetworkInterfaces];
+#endif
 	NetworkResponder *responders;
 	NetworkResponder *nextResponderToPoll;
 
+#if SUPPORT_HTTP
 	Mutex httpMutex;
+#endif
 #if SUPPORT_TELNET
 	Mutex telnetMutex;
 #endif

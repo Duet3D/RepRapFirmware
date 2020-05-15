@@ -456,7 +456,7 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
-#if HAS_NETWORKING
+#if HAS_NETWORKING || HAS_LINUX_INTERFACE
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
 #endif

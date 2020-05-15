@@ -7,7 +7,7 @@
 #include "Heating/Heat.h"
 #include "Heating/Sensors/TemperatureSensor.h"
 #include "Network.h"
-#if HAS_NETWORKING
+#if SUPPORT_HTTP
 # include "Networking/HttpResponder.h"
 #endif
 #include "Platform.h"
