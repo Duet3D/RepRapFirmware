@@ -1325,11 +1325,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	if (gb.GetState() == GCodeState::normal)
 	{
-		// We completed a command, so unlock resources and tell the host about it
+		// We completed a command state, so unlock resources
 		gb.StopTimer();
 		UnlockAll(gb);
 		gb.MachineState().RetrieveStateMachineResult(stateMachineResult, reply);
-		HandleReply(gb, stateMachineResult, reply.c_str());
+		if (!gb.MachineState().waitingForAcknowledgement)
+		{
+			// Tell the host about it if no message prompt is shown
+			HandleReply(gb, stateMachineResult, reply.c_str());
+		}
 		CheckForDeferredPause(gb);
 	}
 }

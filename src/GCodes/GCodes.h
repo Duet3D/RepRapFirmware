@@ -101,7 +101,9 @@ public:
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
 	void GetCurrentCoordinates(const StringRef& s) const noexcept;				// Write where we are into a string
-	bool DoingFileMacro() const noexcept;										// Or still busy processing a macro file?
+	bool DoingFileMacro() const noexcept;										// Is a macro file being processed?
+	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
+
 	FilePosition GetFilePosition() const noexcept;								// Return the current position of the file being printed in bytes
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 

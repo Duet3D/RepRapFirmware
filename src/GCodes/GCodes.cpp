@@ -310,6 +310,19 @@ bool GCodes::DoingFileMacro() const noexcept
 	return false;
 }
 
+// Return true if any channel is waiting for a message acknowledgement
+bool GCodes::WaitingForAcknowledgement() const noexcept
+{
+	for (const GCodeBuffer *gbp : gcodeSources)
+	{
+		if (gbp != nullptr && gbp->MachineState().waitingForAcknowledgement)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 // Return the current position of the file being printed in bytes.
 // Unlike other methods returning file positions it never returns noFilePosition
 FilePosition GCodes::GetFilePosition() const noexcept

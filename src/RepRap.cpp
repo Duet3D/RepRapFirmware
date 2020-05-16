@@ -2495,7 +2495,8 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (printMonitor->IsPrinting() && gCodes->IsSimulating())	? 7		// Simulating
 			: (printMonitor->IsPrinting())							  	? 8		// Printing
 			: (gCodes->IsDoingToolChange())								? 9		// Changing tool
-			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 10	// Busy
+			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
+			   gCodes->WaitingForAcknowledgement()) 					? 10	// Busy
 			:															  11;	// Idle
 
 }
