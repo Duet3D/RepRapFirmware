@@ -291,6 +291,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	if (seen)
 	{
+		reprap.SensorsUpdated();
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
@@ -298,10 +299,6 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		if (gb.MachineState().runningM501)
 		{
 			misc.parts.saveToConfigOverride = true;		// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
-		}
-		else
-		{
-			reprap.SensorsUpdated();
 		}
 	}
 	else
@@ -355,6 +352,7 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 
 	if (seen)
 	{
+		reprap.SensorsUpdated();
 		return GCodeResult::ok;
 	}
 
