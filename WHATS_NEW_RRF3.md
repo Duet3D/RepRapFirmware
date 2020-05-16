@@ -1,3 +1,24 @@
+RepRapFirmware 3.1.1 (in preparation)
+====================
+
+Recommended compatible firmware:
+- DuetWebControl 3.1.0
+- DuetWiFiServer 1.23 (same as for previous RC)
+- Duet Software Framework version 3.1.0 (for Duet 3/Raspberry Pi users)
+- Duet 3 expansion board and tool board firmware 3.1.0
+- PanelDueFirmware 1.24
+
+Upgrade notes:
+- None since version 3.1.0
+
+New features/changed behaviour:
+- Maximum GCode line length increased from 160 to 200 characters
+
+Bug fixes:
+- In some configurations the firmware crashed occasionally because the NETWORK task stack overflowed
+- Changes to G31 and M558 Z probe parameters were not reported to DCS or DWC
+- Duet 3 with SBC: G29 (optionally with S1 parameter) rewrote the old height map at the end instead of the new one
+
 RepRapFirmware 3.1.0
 ====================
 
