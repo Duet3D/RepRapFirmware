@@ -299,6 +299,10 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		{
 			misc.parts.saveToConfigOverride = true;		// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
 		}
+		else
+		{
+			reprap.SensorsUpdated();
+		}
 	}
 	else
 	{
