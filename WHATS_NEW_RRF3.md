@@ -1,23 +1,24 @@
-RepRapFirmware 3.1.1 (in preparation)
+RepRapFirmware 3.1.1
 ====================
 
 Recommended compatible firmware:
-- DuetWebControl 3.1.0
+- DuetWebControl 3.1.1
 - DuetWiFiServer 1.23 (same as for previous RC)
-- Duet Software Framework version 3.1.0 (for Duet 3/Raspberry Pi users)
+- Duet Software Framework version 3.1.1 (for Duet 3/Raspberry Pi users)
 - Duet 3 expansion board and tool board firmware 3.1.0
 - PanelDueFirmware 1.24
 
 Upgrade notes:
-- None since version 3.1.0
+- Available RAM is slightly reduced in this version. This won't affect most users, however if you are running a Duet WiFi or Duet Ethernet with a large number of tools/heaters/sensors etc. then check that the Never Used RAM in the M122 report is comfortably above zero.
 
 New features/changed behaviour:
-- Maximum GCode line length increased from 160 to 200 characters
+- Maximum GCode line length is increased from 160 to 200 characters
+- The number of decimal places reported for axis minimum and maximum limits from the object model is increased from 1 to 2
 
 Bug fixes:
 - In some configurations the firmware crashed occasionally because the NETWORK task stack overflowed
 - Changes to G31 and M558 Z probe parameters were not reported to DCS or DWC
-- Duet 3 with SBC: G29 (optionally with S1 parameter) rewrote the old height map at the end instead of the new one
+- Duet 3 with SBC: G29 (optionally with S1 parameter) rewrote the old height map to the virtual SD card instead of writing the new one
 
 RepRapFirmware 3.1.0
 ====================
@@ -40,8 +41,8 @@ Upgrade notes:
 - Legacy 5-point bed compensation is no longer supported
 - The tool number (P parameter) in a M563 command must now be in the range 0-49
 - Duet 3: If you were using M308 H or L parameters for thermistors attached to a Duet 3 main board, you will need to adjust those values
-- The parameters to M577 have changed. See  https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M577_RepRapFirmware_3_01RC2_and_later.
-- The parameters to M581 have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M581_RepRapFirmware_3_01RC2_and_later.
+- The parameters to M577 have changed. See  https://duet3d.dozuki.com/Wiki/Gcode#Section_M577_RepRapFirmware_3_01RC2_and_later.
+- The parameters to M581 have changed. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M581_RepRapFirmware_3_01RC2_and_later.
 - The P parameter to M143 now has a different meaning. Also the X (sensor) parameter has been replaced by T. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M143_Maximum_heater_temperature.
 
 Known issues and limitations:
@@ -61,7 +62,7 @@ New features:
 - The PanelDue port (or IO_0 on Duet 3) can now be configure to operate in raw (non-PanelDue) serial mode using command M575 P1 S2 B### where ### is the required baud rate. In this mode it will default to Marlin-type responses.
 - There is now a daemon GCode channel, which looks for and executes file sys/daemon.g. This can be used to execute regular tasks. If the end of the file is reached, or the file is not found, it delays for 1 second and starts again.
 - Experimental support for NeoPixel LED strips has been added for Duet 3. See the M150 X parameter.
-- Multiple Z probes are supported. M558, G29 and G30 now accept an optional K parameter to specify which Z probe to use. Each Z probe can now have its own deploy and retract files. Z probe number # (where # counts up from zero) looks first for deployprobe#.g and if that is not found it falls back to deployprobe.g. Similarly it uses retractprobe#.g in preference to retractprobe.g. The M401 (deploy probe) and M402 (retract probe) commands now accept an optional P parameter which is the Z probe number to deploy mor retract, default 0.
+- Multiple Z probes are supported. M558, G29 and G30 now accept an optional K parameter to specify which Z probe to use. Each Z probe can now have its own deploy and retract files. Z probe number # (where # counts up from zero) looks first for deployprobe#.g and if that is not found it falls back to deployprobe.g. Similarly it uses retractprobe#.g in preference to retractprobe.g. The M401 (deploy probe) and M402 (retract probe) commands now accept an optional P parameter which is the Z probe number to deploy or retract, default 0.
 - M207 retraction parameters are now settable on a per-tool basis. The P parameter selects which tool to set. M207 with no P parameter applies the parameters provided to all existing tools. Retraction settings in the object model are moved from extruders[].retraction to tools[].retraction.
 - General purpose inputs may now be configured using M950 J# C"pin-name". These are used by M577 and M581. Their states may be queried in the object model. On Duet 3 they may refer to pins on expansion boards and tool boards as well as pins on the main board.
 - File runonce.g is now supported. If this file is present at startup, it is run after running config.g and activating the network, and then deleted.
@@ -81,10 +82,10 @@ Changed behaviour (major):
 - The M308 thermistor H and L parameters on Duet 3 main boards have been re-scaled to match the scaling used on Duet 3 expansion and tool boards.
 - If the macro stack depth is exceeded, the current macros in the stack are abandoned; and if the macro was called from a GCode print file, that file is abandoned too
 - Round brackets in GCode lines are no longer treated as enclosing comments if the machine is not in CNC mode
-- A G4 command will no longer wait for all movement to complete if the input channel executing the G4 has not commanded any motion since it last waited for motion to stop. This is to allow G4 to be used to introduced delays in trigger and deamon GCode files, without causing motion to stop. M400 can still be used to wait for motion to stop.
+- A G4 command will no longer wait for all movement to complete if the input channel executing the G4 has not commanded any motion since it last waited for motion to stop. This is to allow G4 to be used to introduced delays in trigger and daemon GCode files, without causing motion to stop. M400 can still be used to wait for motion to stop.
 - The I (invert) parameter of M558 has been removed
-- The parameters to M577 have changed. See  https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M577_RepRapFirmware_3_01RC2_and_later.
-- The parameters to M581 have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M581_RepRapFirmware_3_01RC2_and_later.
+- The parameters to M577 have changed. See  https://duet3d.dozuki.com/Wiki/Gcode#Section_M577_RepRapFirmware_3_01RC2_and_later.
+- The parameters to M581 have changed. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M581_RepRapFirmware_3_01RC2_and_later.
 - The P parameter to M143 now has a different meaning. Also the X (sensor) parameter has been replaced by T. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M143_Maximum_heater_temperature.
 Duet 3: Z probes of types 8 (unfiltered digital) and 9 (BLTouch) connected to expansion boards and tool boards are supported
 - When tuning a heater using M303 H# the S parameter is now mandatory
@@ -111,7 +112,7 @@ Changed behaviour (minor):
 - Increased maximum stack/macro file depth from 5 to 7
 - Duet 3: an emergency stop now tries to stop all CAN-connected expansion boards and tool boards
 - When a GCode channel locks movement and waits for movement to stop, if there is no movement but moves have been queued, those moves are now executed immediately. Previously there could be a short delay before they were executed.
-- On Duet 3, increased maximum heaters per tool from 4 to 8, maximum extruders per tool from 6 to 8, maxumum bed heaters from 9 to 12, maximum total heaters to 32 and maximum extra heater protection instances to 32
+- On Duet 3, increased maximum heaters per tool from 4 to 8, maximum extruders per tool from 6 to 8, maximum bed heaters from 9 to 12, maximum total heaters to 32 and maximum extra heater protection instances to 32
 
 Bug fixes:
 - Duet 3: the default value written to the TMC5160 PWMCONF register did not match the default value for that chip
@@ -139,7 +140,7 @@ Bug fixes:
 - The seconds in the last-modified times of files were reported incorrectly (this was a long-standing bug)
 - In five-bar SCARA kinematics, the X and Y motors were not treated as continuous rotation axes (thanks bondus)
 - When M32 was run a second time, the line numbering was not reset
-- Round-robin scheduling of GCode input sources has been restored so that no channel can monpolise the motion system
+- Round-robin scheduling of GCode input sources has been restored so that no channel can monopolise the motion system
 - On some Duet 3 boards, axes were not flagged as homed when VIN power was lost but 5V power remained
 - When using the M109 command, the firmware did not prevent you from setting temperatures that exceeded the limit set by M143
 - The RPM of non-thermostatic fans with tachos wasn't reported continuously
