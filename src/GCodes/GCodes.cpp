@@ -624,15 +624,15 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 
 				// Reset the GCodeBuffer to non-binary input if necessary, so that if we are in Marlin mode we will send an OK response
-				if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
-				{
-					// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
-					HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, reply.c_str());
-					gb.FinishedBinaryMode();
-				}
-
 				if (gb.GetState() == GCodeState::normal)
 				{
+					if (gb.GetNormalInput() != nullptr)
+					{
+						// Need to send a final response to the SBC if the request came from a code so it can pop its stack
+						HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, reply.c_str());
+						gb.FinishedBinaryMode();
+					}
+
 					UnlockAll(gb);
 					HandleReply(gb, rslt, reply.c_str());
 				}
