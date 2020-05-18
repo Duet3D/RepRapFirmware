@@ -4050,6 +4050,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					zp->SetTriggerHeight(-gb.GetFValue());
 					zp->SetSaveToConfigOverride();
+					reprap.SensorsUpdated();
 				}
 				else
 				{
