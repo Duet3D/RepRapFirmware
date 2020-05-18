@@ -1328,10 +1328,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We completed a command state, so unlock resources
 		gb.StopTimer();
 		UnlockAll(gb);
-		gb.MachineState().RetrieveStateMachineResult(stateMachineResult, reply);
 		if (!gb.MachineState().waitingForAcknowledgement)
 		{
 			// Tell the host about it if no message prompt is shown
+			gb.MachineState().RetrieveStateMachineResult(stateMachineResult, reply);
 			HandleReply(gb, stateMachineResult, reply.c_str());
 		}
 		CheckForDeferredPause(gb);
