@@ -358,7 +358,7 @@ void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char
 
 // Function to report a value or object as JSON
 // This function is recursive, so keep its stack usage low
-void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, ExpressionValue val, const char *filter) const
+void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *filter) const
 {
 	if (context.WantArrayLength() && *filter == 0)
 	{
@@ -411,7 +411,8 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 					context.AddIndex(index);
 					{
 						ReadLocker lock(val.omadVal->lockPointer);
-						ReportItemAsJson(buf, context, classDescriptor, val.omadVal->GetElement(this, context), endptr + 1);
+						const ExpressionValue element = val.omadVal->GetElement(this, context);
+						ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
 					}
 					context.RemoveIndex();
 					if (*filter == 0)
@@ -444,18 +445,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			break;
 
 		case TypeCode::Float:
-			if (val.fVal == 0.0)
-			{
-				buf->cat('0');							// replace 0.000... in JSON by 0. This is mostly to save space when writing workplace coordinates.
-			}
-			else if (isnan(val.fVal) || isinf(val.fVal))
-			{
-				buf->cat("null");						// avoid generating bad JSON if the value is a NaN or infinity
-			}
-			else
-			{
-				buf->catf(val.GetFloatFormatString(), (double)val.fVal);
-			}
+			ReportFloat(buf, val);
 			break;
 
 		case TypeCode::Uint32:
@@ -510,21 +500,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			}
 
 			// If we get here then we want a long form report
-			{
-				const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
-				buf->cat('[');
-				bm.Iterate
-					([buf](unsigned int bn, unsigned int count) noexcept
-						{
-							if (count != 0)
-							{
-								buf->cat(',');
-							}
-							buf->catf("%u", bn);
-						}
-					);
-				buf->cat(']');
-			}
+			ReportBitmap1632Long(buf, val);
 			break;
 
 		case TypeCode::Bitmap64:
@@ -556,21 +532,7 @@ void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			}
 
 			// If we get here then we want a long form report
-			{
-				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
-				buf->cat('[');
-				bm.Iterate
-					([buf](unsigned int bn, unsigned int count) noexcept
-						{
-							if (count != 0)
-							{
-								buf->cat(',');
-							}
-							buf->catf("%u", bn);
-						}
-					);
-				buf->cat(']');
-			}
+			ReportBitmap64Long(buf, val);
 			break;
 
 		case TypeCode::Enum32:
@@ -658,7 +620,8 @@ void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext&
 			buf->cat(',');
 		}
 		context.AddIndex(i);
-		ReportItemAsJson(buf, context, classDescriptor, omad->GetElement(this, context), filter);
+		const ExpressionValue element = omad->GetElement(this, context);
+		ReportItemAsJson(buf, context, classDescriptor, element, filter);
 		context.RemoveIndex();
 	}
 	buf->cat(']');
@@ -784,7 +747,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 	throw context.ConstructParseException("unknown value '%s'", idString);
 }
 
-ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, ExpressionValue val, const char *idString) const
+ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const
 {
 	switch (val.GetType())
 	{
@@ -936,7 +899,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 }
 
 // Separate function to avoid the tm object (44 bytes) being allocated on the stack frame of a recursive function
-void ObjectModel::ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcept
+void ObjectModel::ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept
 {
 	const time_t time = val.Get56BitValue();
 	tm timeInfo;
@@ -945,17 +908,68 @@ void ObjectModel::ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcep
 				timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 }
 
+// Separate function to avoid a recursive function saving all the FP registers
+void ObjectModel::ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept
+{
+	if (val.fVal == 0.0)
+	{
+		buf->cat('0');							// replace 0.000... in JSON by 0. This is mostly to save space when writing workplace coordinates.
+	}
+	else if (isnan(val.fVal) || isinf(val.fVal))
+	{
+		buf->cat("null");						// avoid generating bad JSON if the value is a NaN or infinity
+	}
+	else
+	{
+		buf->catf(val.GetFloatFormatString(), (double)val.fVal);
+	}
+}
+
+void ObjectModel::ReportBitmap1632Long(OutputBuffer *buf, const ExpressionValue& val) noexcept
+{
+	const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
+	buf->cat('[');
+	bm.Iterate
+		([buf](unsigned int bn, unsigned int count) noexcept
+			{
+				if (count != 0)
+				{
+					buf->cat(',');
+				}
+				buf->catf("%u", bn);
+			}
+		);
+	buf->cat(']');
+}
+
+void ObjectModel::ReportBitmap64Long(OutputBuffer *buf, const ExpressionValue& val) noexcept
+{
+	const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
+	buf->cat('[');
+	bm.Iterate
+		([buf](unsigned int bn, unsigned int count) noexcept
+			{
+				if (count != 0)
+				{
+					buf->cat(',');
+				}
+				buf->catf("%u", bn);
+			}
+		);
+	buf->cat(']');
+}
+
 #ifdef DUET3
 
 // Separate functions to avoid the string being allocated on the stack frame of a recursive function
-void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, ExpressionValue val) noexcept
+void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, const ExpressionValue& val) noexcept
 {
 	String<StringLength50> rslt;
 	val.ExtractRequestedPart(rslt.GetRef());
 	buf->EncodeString(rslt.c_str(), true);
 }
 
-ExpressionValue ObjectModel::GetExpansionBoardDetailLength(ExpressionValue val) noexcept
+ExpressionValue ObjectModel::GetExpansionBoardDetailLength(const ExpressionValue& val) noexcept
 {
 	String<StringLength50> rslt;
 	val.ExtractRequestedPart(rslt.GetRef());
