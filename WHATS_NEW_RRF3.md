@@ -10,6 +10,7 @@ Recommended compatible firmware:
 
 Upgrade notes:
 - Available RAM is slightly reduced in this version. This won't affect most users, however if you are running a Duet WiFi or Duet Ethernet with a large number of tools/heaters/sensors etc. then check that the Never Used RAM in the M122 report is comfortably above zero.
+- If you are upgrading from a version earlier than 3.1.0, see also the upgrade notes for version 3.1.0.
 
 New features/changed behaviour:
 - Maximum GCode line length is increased from 160 to 200 characters
