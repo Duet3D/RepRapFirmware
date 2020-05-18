@@ -66,7 +66,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 			const time_t time = Get56BitValue();
 			tm timeInfo;
 			gmtime_r(&time, &timeInfo);
-			str.catf("%04u-%02u-%02u %02u:%02u:%02u",
+			str.catf("%04u-%02u-%02uT%02u:%02u:%02u",
 						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 		}
 		break;
