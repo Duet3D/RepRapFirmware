@@ -449,7 +449,7 @@ void GCodes::Spin() noexcept
 			const bool wasCancelled = gb.MachineState().messageCancelled;
 			gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
 #if HAS_LINUX_INTERFACE
-			if (gb.IsBinary())
+			if (reprap.UsingLinuxInterface())
 			{
 				// Send an empty response to DCS in order to let it pop its internal stack
 				HandleReplyPreserveResult(gb, GCodeResult::ok, "");
@@ -3392,7 +3392,8 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	if (gb.IsBinary())
 	{
 		MessageType type = gb.GetResponseMessageType();
-		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested())
+		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested() ||
+			(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 		{
 			if (reply[0] == 0)
 			{
