@@ -426,7 +426,7 @@ constexpr Pin APIN_SBC_SPI_MISO = 12;
 constexpr Pin APIN_SBC_SPI_SCK = 14;
 constexpr Pin APIN_SBC_SPI_SS0 = 11;
 
-constexpr Pin LinuxTfrReadyPin = PortDPin(30);
+constexpr Pin LinuxTfrReadyPin = PortDPin(31);
 constexpr uint8_t DmacChanLinuxTx = 1;
 constexpr uint8_t DmacChanLinuxRx = 2;
 
