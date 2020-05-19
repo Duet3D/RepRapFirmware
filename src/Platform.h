@@ -123,7 +123,8 @@ enum class BoardType : uint8_t
 	DuetWiFi_102 = 2,
 	DuetEthernet_10 = 3,
 	DuetEthernet_102 = 4,
-	Duet2SBC = 5,
+	Duet2SBC_10 = 5,
+	Duet2SBC_102 = 6,
 #elif defined(DUET_M)
 	DuetM_10 = 1,
 #elif defined(DUET_06_085)

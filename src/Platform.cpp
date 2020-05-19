@@ -3693,6 +3693,9 @@ void Platform::SetBoardType(BoardType bt) noexcept
 			pinMode(VssaSensePin, INPUT);
 		}
 
+# if defined(USE_SBC)
+		board = (vssaSenseWorking) ? BoardType::Duet2SBC_102 : BoardType::Duet2SBC_10;
+# else
 		// Test whether the Ethernet module is present
 		if (digitalRead(W5500ModuleSensePin))					// the Ethernet module has this pin grounded
 		{
@@ -3702,6 +3705,7 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		{
 			board = (vssaSenseWorking) ? BoardType::DuetEthernet_102 : BoardType::DuetEthernet_10;
 		}
+# endif
 #elif defined(DUET_M)
 		board = BoardType::DuetM_10;
 #elif defined(DUET_06_085)
@@ -3748,6 +3752,8 @@ const char* Platform::GetElectronicsString() const noexcept
 	case BoardType::DuetWiFi_102:			return "Duet WiFi 1.02 or later";
 	case BoardType::DuetEthernet_10:		return "Duet Ethernet 1.0 or 1.01";
 	case BoardType::DuetEthernet_102:		return "Duet Ethernet 1.02 or later";
+	case BoardType::Duet2SBC_10:			return "Duet 2 1.0 or 1.01 + SBC";
+	case BoardType::Duet2SBC_102:			return "Duet 2 1.02 or later + SBC";
 #elif defined(DUET_M)
 	case BoardType::DuetM_10:				return "Duet Maestro 1.0";
 #elif defined(DUET_06_085)
@@ -3786,6 +3792,8 @@ const char* Platform::GetBoardString() const noexcept
 	case BoardType::DuetWiFi_102:			return "duetwifi102";
 	case BoardType::DuetEthernet_10:		return "duetethernet10";
 	case BoardType::DuetEthernet_102:		return "duetethernet102";
+	case BoardType::Duet2SBC_10:			return "duet2sbc10";
+	case BoardType::Duet2SBC_102:			return "duet2sbc102";
 #elif defined(DUET_M)
 	case BoardType::DuetM_10:				return "duetmaestro100";
 #elif defined(DUET_06_085)
@@ -3819,14 +3827,14 @@ bool Platform::IsDuetWiFi() const noexcept
 
 const char *Platform::GetBoardName() const
 {
-	return board == BoardType::Duet2SBC
+	return (board == BoardType::Duet2SBC_10 || board == BoardType::Duet2SBC_102)
 			? BOARD_NAME_SBC
 			: (IsDuetWiFi()) ? BOARD_NAME_WIFI : BOARD_NAME_ETHERNET;
 }
 
 const char *Platform::GetBoardShortName() const
 {
-	return board == BoardType::Duet2SBC
+	return (board == BoardType::Duet2SBC_10 || board == BoardType::Duet2SBC_102)
 			? BOARD_SHORT_NAME_SBC
 			: (IsDuetWiFi()) ? BOARD_SHORT_NAME_WIFI : BOARD_SHORT_NAME_ETHERNET;
 }

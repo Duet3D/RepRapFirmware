@@ -13,7 +13,7 @@
 
 #if defined(USE_SBC)
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 2 + SBC"
-#define DEFAULT_BOARD_TYPE	 	BoardType::Duet2SBC
+#define DEFAULT_BOARD_TYPE	 	BoardType::Duet2SBC_10
 #define IAP_FIRMWARE_FILE		"Duet2Firmware_" BOARD_SHORT_NAME_SBC ".bin"
 #define IAP_UPDATE_FILE			"Duet2_SDiap_" BOARD_SHORT_NAME_SBC ".bin"
 #define IAP_UPDATE_FILE_SBC		"Duet2_SBCiap_" BOARD_SHORT_NAME_SBC ".bin"
