@@ -105,6 +105,7 @@ enum class GCodeState : uint8_t
 #if HAS_LINUX_INTERFACE
 	doingUnsupportedCode,
 	doingUserMacro,
+	waitingForAcknowledgement,
 #endif
 
 #if HAS_VOLTAGE_MONITOR
