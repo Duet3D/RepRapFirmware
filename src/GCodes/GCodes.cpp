@@ -310,6 +310,19 @@ bool GCodes::DoingFileMacro() const noexcept
 	return false;
 }
 
+// Return true if any channel is waiting for a message acknowledgement
+bool GCodes::WaitingForAcknowledgement() const noexcept
+{
+	for (const GCodeBuffer *gbp : gcodeSources)
+	{
+		if (gbp != nullptr && gbp->MachineState().waitingForAcknowledgement)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 // Return the current position of the file being printed in bytes.
 // Unlike other methods returning file positions it never returns noFilePosition
 FilePosition GCodes::GetFilePosition() const noexcept
@@ -409,8 +422,8 @@ void GCodes::Spin() noexcept
 	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
 	if (gbp->IsCompletelyIdle()
-#if HAS_MASS_STORAGE
-		&& !(gbp->MachineState().fileState.IsLive())
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+		&& !gbp->MachineState().DoingFile()
 #endif
 	   )	// if autoPause is not active
 	{
@@ -435,6 +448,13 @@ void GCodes::Spin() noexcept
 		{
 			const bool wasCancelled = gb.MachineState().messageCancelled;
 			gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+#if HAS_LINUX_INTERFACE
+			if (reprap.UsingLinuxInterface())
+			{
+				// Send an empty response to DCS in order to let it pop its internal stack
+				HandleReplyPreserveResult(gb, GCodeResult::ok, "");
+			}
+#endif
 
 			if (wasCancelled)
 			{
@@ -611,15 +631,15 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 
 				// Reset the GCodeBuffer to non-binary input if necessary, so that if we are in Marlin mode we will send an OK response
-				if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
-				{
-					// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
-					HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, reply.c_str());
-					gb.FinishedBinaryMode();
-				}
-
 				if (gb.GetState() == GCodeState::normal)
 				{
+					if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
+					{
+						// Need to send a final response to the SBC if the request came from a code so it can pop its stack
+						HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, reply.c_str());
+						gb.FinishedBinaryMode();
+					}
+
 					UnlockAll(gb);
 					HandleReply(gb, rslt, reply.c_str());
 				}
@@ -3372,7 +3392,8 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	if (gb.IsBinary())
 	{
 		MessageType type = gb.GetResponseMessageType();
-		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested())
+		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested() ||
+			(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 		{
 			if (reply[0] == 0)
 			{

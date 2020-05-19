@@ -2345,10 +2345,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 
 				// If we need to wait for an acknowledgement, save the state and set waiting
-				if ((sParam == 2 || sParam == 3) && Push(gb, true))					// stack the machine state including the file position
+				if (sParam == 2 || sParam == 3)
 				{
-					UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
-					gb.MachineState().WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
+#if HAS_LINUX_INTERFACE
+					if (reprap.UsingLinuxInterface())
+					{
+						gb.SetState(GCodeState::waitingForAcknowledgement);
+					}
+#endif
+					if (Push(gb, true))					// stack the machine state including the file position
+					{
+						UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
+						gb.MachineState().WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
+					}
 				}
 
 				// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
@@ -4050,6 +4059,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					zp->SetTriggerHeight(-gb.GetFValue());
 					zp->SetSaveToConfigOverride();
+					reprap.SensorsUpdated();
 				}
 				else
 				{

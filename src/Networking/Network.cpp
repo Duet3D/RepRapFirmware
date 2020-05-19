@@ -41,7 +41,7 @@
 #ifdef __LPC17xx__
 constexpr size_t NetworkStackWords = 375;
 #else
-constexpr size_t NetworkStackWords = 600;				// need to be enough to support rr_model
+constexpr size_t NetworkStackWords = 550;				// needs to be enough to support rr_model
 #endif
 
 static Task<NetworkStackWords> networkTask;

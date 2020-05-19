@@ -306,6 +306,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF(&restorePointsArrayDescriptor),				ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
+	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 
 	// 4. MachineModel.state.beep
@@ -357,8 +358,8 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																		// directories
 #endif
 	25,																		// limits
-	13 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
-	2,																		// state/beep
+	14 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
+	2,																		// state.beep
 	6,																		// state.messageBox
 	10 + 2 * HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE		// seqs
 };
@@ -742,7 +743,10 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 	platform->MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
 #elif defined(__LPC17xx__)
-    platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
+	platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
+#elif HAS_LINUX_INTERFACE
+	platform->MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
+						(UsingLinuxInterface()) ? "SBC" : "standalone");
 #else
 	platform->MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
 #endif
@@ -2495,7 +2499,8 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (printMonitor->IsPrinting() && gCodes->IsSimulating())	? 7		// Simulating
 			: (printMonitor->IsPrinting())							  	? 8		// Printing
 			: (gCodes->IsDoingToolChange())								? 9		// Changing tool
-			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 10	// Busy
+			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
+			   gCodes->WaitingForAcknowledgement()) 					? 10	// Busy
 			:															  11;	// Idle
 
 }
