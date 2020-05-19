@@ -15,11 +15,15 @@ Upgrade notes:
 New features/changed behaviour:
 - Maximum GCode line length is increased from 160 to 200 characters
 - The number of decimal places reported for axis minimum and maximum limits from the object model is increased from 1 to 2
+- Duet 3: M122 now says whether the Duet is running in SBC or standalone mode
+- Added object model field 'state.time'. This will be null if the date/time hasn't been set, otherwise a string in ISO format such as 2020-05-10T07:59:31.
+- Object model variables which represent a date and time (e.g. file last modified time) are now in ISO format, i.e. "2020-05-10T07:59:31" instead of "2020-05-10 07:59:31". This is for compatibility with DSF and with the way they are returned by M409.
 
 Bug fixes:
 - In some configurations the firmware crashed occasionally because the NETWORK task stack overflowed
-- Changes to G31 and M558 Z probe parameters were not reported to DCS or DWC
+- Changes to Z probe parameters made by G31, M558 and M851 were not reported to DCS or DWC
 - Duet 3 with SBC: G29 (optionally with S1 parameter) rewrote the old height map to the virtual SD card instead of writing the new one
+- Duet 3 with SBC: certain commands completed in the wrong order
 
 RepRapFirmware 3.1.0
 ====================
