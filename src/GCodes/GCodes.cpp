@@ -422,8 +422,8 @@ void GCodes::Spin() noexcept
 	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
 	if (gbp->IsCompletelyIdle()
-#if HAS_MASS_STORAGE
-		&& !(gbp->MachineState().fileState.IsLive())
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+		&& !gbp->MachineState().DoingFile()
 #endif
 	   )	// if autoPause is not active
 	{
