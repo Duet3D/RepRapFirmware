@@ -17,7 +17,7 @@
 # include "Linux/LinuxInterface.h"
 #endif
 #include "Movement/Move.h"
-#include "Network.h"
+#include "Networking/Network.h"
 #include "Scanner.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"

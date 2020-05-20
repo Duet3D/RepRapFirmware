@@ -6,7 +6,7 @@
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
 #include "Heating/Sensors/TemperatureSensor.h"
-#include "Network.h"
+#include "Networking/Network.h"
 #if SUPPORT_HTTP
 # include "Networking/HttpResponder.h"
 #endif
@@ -739,7 +739,12 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	// Print the firmware version and board type
 
 #ifdef DUET_NG
+# if HAS_LINUX_INTERFACE
+	platform->MessageF(mtype, "%s version %s running on %s (%s mode)", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
+						(UsingLinuxInterface()) ? "SBC" : "standalone");
+# else
 	platform->MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
+# endif
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 	platform->MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
 #elif defined(__LPC17xx__)

@@ -27,7 +27,7 @@
 #include "Movement/StepTimer.h"
 #include "Tools/Tool.h"
 #include "Endstops/ZProbe.h"
-#include "Network.h"
+#include "Networking/Network.h"
 #include "PrintMonitor.h"
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "RepRap.h"
@@ -254,10 +254,12 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
 
+#if HAS_CPU_TEMP_SENSOR
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().max, 1),												ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min, 1),												ObjectModelEntryFlags::none },
+#endif
 
 	// 2. vIn members
 #if HAS_VOLTAGE_MONITOR
@@ -324,9 +326,11 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	9,																		// number of sections
+	8 + HAS_CPU_TEMP_SENSOR,																		// number of sections
 	12 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION + SUPPORTS_UNIQUE_ID,		// section 0: boards[0]
+#if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
+#endif
 #if HAS_VOLTAGE_MONITOR
 	3,																		// section 2: vIn
 #else

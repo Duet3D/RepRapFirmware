@@ -126,7 +126,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Duet3_V06|src/Linux|src/Duet3_V05|src/Duet3_V03|src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Pccb|src/DuetNG|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Duet3_V06|src/Linux|src/Duet3_V05|src/Duet3_V03|src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Pccb|src/DuetNG|src/DuetM|src/Networking/ESP8266WiFi/|src/Networking/LwipEthernet/|src/Networking/W5500Ethernet/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -542,7 +542,7 @@
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.178696318" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.1343498785" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver"/>
-							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${LinkFlags1} &quot;${workspace_loc:/${CoreName}}/SAM4S/cores/arduino/syscalls.o&quot; ${INPUTS} ${LinkFlags2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.547420771" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
+							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${LinkFlags1} &quot;${workspace_loc:/${CoreName}}/SAM4S_PCCB/cores/arduino/syscalls.o&quot; ${INPUTS} ${LinkFlags2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.547420771" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
 								<option id="gnu.cpp.link.option.nostdlibs.295391099" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" useByScannerDiscovery="false" value="false" valueType="boolean"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.paths.93177435" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAM4S_RTOS}&quot;"/>
@@ -608,7 +608,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Duet3_V06|src/Linux|src/Duet3_V05|src/Duet3_V03|src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet|src/DuetNG|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Duet3_V06|src/Linux|src/Duet3_V05|src/Duet3_V03|src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet|src/DuetNG|src/DuetM|src/RADDS|src/Networking/W5500Ethernet/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

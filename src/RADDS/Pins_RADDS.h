@@ -1,6 +1,8 @@
 #ifndef PINS_DUET_H__
 #define PINS_DUET_H__
 
+# define BOARD_NAME				"RADDS"
+# define BOARD_SHORT_NAME		"RADDS"
 #define FIRMWARE_NAME "RepRapFirmware for RADDS"
 #define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
 
@@ -19,6 +21,7 @@ constexpr uint32_t IAP_IMAGE_END = 0x000FFBFF;		// don't touch the last 1KB, it'
 #endif
 
 const size_t NumFirmwareUpdateModules = 1;
+constexpr uint32_t DefaultStandstillCurrentPercent = 100;
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0

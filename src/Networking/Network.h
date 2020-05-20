@@ -18,7 +18,7 @@
 
 #if defined(DUET3_V03)
 const size_t NumNetworkInterfaces = 2;
-#elif defined(SAME70XPLD) || defined(DUET3_V05) || defined(DUET3_V06) || defined(DUET_NG) || defined(DUET_M) || defined(__LPC17xx__)
+#elif defined(SAME70XPLD) || defined(DUET3_V05) || defined(DUET3_V06) || defined(DUET_NG) || defined(DUET_M) || defined(__LPC17xx__) || defined(PCCB) || defined(__RADDS__)
 const size_t NumNetworkInterfaces = 1;
 #else
 # error Wrong Network.h file included
