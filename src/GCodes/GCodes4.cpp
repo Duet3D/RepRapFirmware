@@ -1305,10 +1305,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 
 #if HAS_LINUX_INTERFACE
-	case GCodeState::doingUnsupportedCode:
-		//TODO
-	case GCodeState::doingUserMacro:
-		// We get here when a macro file has been cancelled via M99 or M292 P1
+	case GCodeState::doingUserMacro:			// finished a macro from M98 which has been cancelled by M99 or M291 P1
+	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next
 		gb.SetState(GCodeState::normal);
 		break;
 #endif

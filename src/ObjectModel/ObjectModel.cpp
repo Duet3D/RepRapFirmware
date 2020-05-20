@@ -66,7 +66,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 			const time_t time = Get56BitValue();
 			tm timeInfo;
 			gmtime_r(&time, &timeInfo);
-			str.catf("%04u-%02u-%02u %02u:%02u:%02u",
+			str.catf("%04u-%02u-%02uT%02u:%02u:%02u",
 						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 		}
 		break;
@@ -166,7 +166,7 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 
 #endif
 
-void ObjectExplorationContext::AddIndex(int32_t index)
+void ObjectExplorationContext::AddIndex(int32_t index) THROWS(GCodeException)
 {
 	if (numIndicesCounted == MaxIndices)
 	{
@@ -176,7 +176,7 @@ void ObjectExplorationContext::AddIndex(int32_t index)
 	++numIndicesCounted;
 }
 
-void ObjectExplorationContext::AddIndex()
+void ObjectExplorationContext::AddIndex() THROWS(GCodeException)
 {
 	if (numIndicesCounted == numIndicesProvided)
 	{
@@ -185,7 +185,7 @@ void ObjectExplorationContext::AddIndex()
 	++numIndicesCounted;
 }
 
-void ObjectExplorationContext::RemoveIndex()
+void ObjectExplorationContext::RemoveIndex() THROWS(GCodeException)
 {
 	if (numIndicesCounted == 0)
 	{
@@ -194,7 +194,7 @@ void ObjectExplorationContext::RemoveIndex()
 	--numIndicesCounted;
 }
 
-void ObjectExplorationContext::ProvideIndex(int32_t index)
+void ObjectExplorationContext::ProvideIndex(int32_t index) THROWS(GCodeException)
 {
 	if (numIndicesProvided == MaxIndices)
 	{
@@ -252,7 +252,7 @@ ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, bool
 	}
 }
 
-int32_t ObjectExplorationContext::GetIndex(size_t n) const
+int32_t ObjectExplorationContext::GetIndex(size_t n) const THROWS(GCodeException)
 {
 	if (n < numIndicesCounted)
 	{
@@ -261,7 +261,7 @@ int32_t ObjectExplorationContext::GetIndex(size_t n) const
 	THROW_INTERNAL_ERROR;
 }
 
-int32_t ObjectExplorationContext::GetLastIndex() const
+int32_t ObjectExplorationContext::GetLastIndex() const THROWS(GCodeException)
 {
 	if (numIndicesCounted != 0)
 	{
@@ -287,7 +287,8 @@ GCodeException ObjectExplorationContext::ConstructParseException(const char *msg
 }
 
 // Report this object
-void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char* filter) const
+void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor,
+								uint8_t tableNumber, const char* filter) const THROWS(GCodeException)
 {
 	if (context.IncreaseDepth())
 	{
@@ -349,7 +350,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 }
 
 // Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
-void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const
+void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException)
 {
 	const unsigned int defaultMaxDepth = (wantArrayLength) ? 99 : (filter[0] == 0) ? 1 : 99;
 	ObjectExplorationContext context(reportFlags, wantArrayLength, defaultMaxDepth);
@@ -357,295 +358,281 @@ void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char
 }
 
 // Function to report a value or object as JSON
-// This function is recursive, so keep its stack usage low
-void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, ExpressionValue val, const char *filter) const
+// This function is recursive, so keep its stack usage low.
+// Most recursive calls are for non-array object values, so handle object values inline to reduce stack usage.
+// This saves about 240 bytes of stack space but costs 272 bytes of flash memory.
+inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+											const ExpressionValue& val, const char *filter) const THROWS(GCodeException)
 {
 	if (context.WantArrayLength() && *filter == 0)
 	{
-		// We have been asked for the length of an array and we have reached the end of the filter, so the value should be an array
-		switch (val.GetType())
+		ReportArrayLengthAsJson(buf, context, val);
+	}
+	else if (val.GetType() == TypeCode::ObjectModel)
+	{
+		if (*filter == '.')
 		{
-		case TypeCode::Array:
-			buf->catf("%u", val.omadVal->GetNumElements(this, context));
-			break;
-
-		case TypeCode::Bitmap16:
-		case TypeCode::Bitmap32:
-			buf->catf("%u", Bitmap<uint32_t>::MakeFromRaw(val.uVal).CountSetBits());
-			break;
-
-		case TypeCode::Bitmap64:
-			buf->catf("%u", Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).CountSetBits());
-			break;
-
-		default:
-			buf->cat("null");
-			break;
+			++filter;
 		}
+		else if (*filter != 0)
+		{
+			buf->cat("null");						// error, should have reached the end of the filter or a '.'
+			return;
+		}
+		val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
 	}
 	else
 	{
-		switch (val.GetType())
+		ReportItemAsJsonFull(buf, context, classDescriptor, val, filter);
+	}
+}
+
+void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept
+{
+	switch (val.GetType())
+	{
+	case TypeCode::Array:
+		buf->catf("%u", val.omadVal->GetNumElements(this, context));
+		break;
+
+	case TypeCode::Bitmap16:
+	case TypeCode::Bitmap32:
+		buf->catf("%u", Bitmap<uint32_t>::MakeFromRaw(val.uVal).CountSetBits());
+		break;
+
+	case TypeCode::Bitmap64:
+		buf->catf("%u", Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).CountSetBits());
+		break;
+
+	case TypeCode::CString:
+		buf->catf("%u", strlen(val.sVal));
+		break;
+
+	default:
+		buf->cat("null");
+		break;
+	}
+}
+
+// Function to report a value or object as JSON
+// This function is recursive, so keep its stack usage low
+void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+										const ExpressionValue& val, const char *filter) const THROWS(GCodeException)
+{
+	switch (val.GetType())
+	{
+	case TypeCode::Array:
+		if (*filter == '[')
 		{
-		case TypeCode::Array:
-			if (*filter == '[')
+			++filter;
+			if (*filter == ']')						// if reporting on [parts of] all elements in the array
 			{
-				++filter;
-				if (*filter == ']')						// if reporting on [parts of] all elements in the array
-				{
-					ReportArrayAsJson(buf, context, classDescriptor, val.omadVal, filter + 1);
-				}
-				else
-				{
-					const char *endptr;
-					const int32_t index = StrToI32(filter, &endptr);
-					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
-					{
-						buf->cat("null");					// avoid returning badly-formed JSON
-						break;								// invalid syntax, or index out of range
-					}
-					if (*filter == 0)
-					{
-						buf->cat('[');
-					}
-					context.AddIndex(index);
-					{
-						ReadLocker lock(val.omadVal->lockPointer);
-						ReportItemAsJson(buf, context, classDescriptor, val.omadVal->GetElement(this, context), endptr + 1);
-					}
-					context.RemoveIndex();
-					if (*filter == 0)
-					{
-						buf->cat(']');
-					}
-				}
-			}
-			else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
-			{
-				ReportArrayAsJson(buf, context, classDescriptor, val.omadVal, filter);
+				ReportArrayAsJson(buf, context, classDescriptor, val.omadVal, filter + 1);
 			}
 			else
 			{
-				buf->cat("null");
+				const char *endptr;
+				const int32_t index = StrToI32(filter, &endptr);
+				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+				{
+					buf->cat("null");					// avoid returning badly-formed JSON
+					break;								// invalid syntax, or index out of range
+				}
+				if (*filter == 0)
+				{
+					buf->cat('[');
+				}
+				context.AddIndex(index);
+				{
+					// As at release 3.1.1 this next block uses the most stack of this entire function
+					ReadLocker lock(val.omadVal->lockPointer);
+					const ExpressionValue element = val.omadVal->GetElement(this, context);
+					ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
+				}
+				context.RemoveIndex();
+				if (*filter == 0)
+				{
+					buf->cat(']');
+				}
 			}
-			break;
+		}
+		else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
+		{
+			ReportArrayAsJson(buf, context, classDescriptor, val.omadVal, filter);
+		}
+		else
+		{
+			buf->cat("null");
+		}
+		break;
 
-		case TypeCode::ObjectModel:
-			if (*filter == '.')
-			{
-				++filter;
-			}
-			else if (*filter != 0)
-			{
-				buf->cat("null");						// error, should have reached the end of the filter or a '.'
-				break;
-			}
-			val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
-			break;
+	case TypeCode::Float:
+		ReportFloat(buf, val);
+		break;
 
-		case TypeCode::Float:
-			if (val.fVal == 0.0)
-			{
-				buf->cat('0');							// replace 0.000... in JSON by 0. This is mostly to save space when writing workplace coordinates.
-			}
-			else if (isnan(val.fVal) || isinf(val.fVal))
-			{
-				buf->cat("null");						// avoid generating bad JSON if the value is a NaN or infinity
-			}
-			else
-			{
-				buf->catf(val.GetFloatFormatString(), (double)val.fVal);
-			}
-			break;
+	case TypeCode::Uint32:
+		buf->catf("%" PRIu32, val.uVal);
+		break;
 
-		case TypeCode::Uint32:
-			buf->catf("%" PRIu32, val.uVal);
-			break;
+	case TypeCode::Uint64:
+		buf->catf("%" PRIu64, ((uint64_t)val.param << 32) | val.uVal);	// convert unsigned integer to string
+		break;
 
-		case TypeCode::Uint64:
-			buf->catf("%" PRIu64, ((uint64_t)val.param << 32) | val.uVal);	// convert unsigned integer to string
-			break;
+	case TypeCode::Int32:
+		buf->catf("%" PRIi32, val.iVal);
+		break;
 
-		case TypeCode::Int32:
-			buf->catf("%" PRIi32, val.iVal);
-			break;
-
-		case TypeCode::CString:
-			buf->EncodeString(val.sVal, true);
-			break;
+	case TypeCode::CString:
+		buf->EncodeString(val.sVal, true);
+		break;
 
 #ifdef DUET3
-		case TypeCode::CanExpansionBoardDetails:
-			ReportExpansionBoardDetail(buf, val);
-			break;
+	case TypeCode::CanExpansionBoardDetails:
+		ReportExpansionBoardDetail(buf, val);
+		break;
 #endif
 
-		case TypeCode::Bitmap16:
-		case TypeCode::Bitmap32:
-			if (*filter == '[')
+	case TypeCode::Bitmap16:
+	case TypeCode::Bitmap32:
+		if (*filter == '[')
+		{
+			++filter;
+			if (*filter == ']')						// if reporting on all elements in the array
 			{
 				++filter;
-				if (*filter == ']')						// if reporting on all elements in the array
-				{
-					++filter;
-				}
-				else
-				{
-					const char *endptr;
-					const int32_t index = StrToI32(filter, &endptr);
-					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
-					{
-						buf->cat("null");				// avoid returning badly-formed JSON
-						break;							// invalid syntax, or index out of range
-					}
-					const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
-					buf->catf("%u", bm.GetSetBitNumber(index));
-					break;
-				}
-			}
-			else if (context.ShortFormReport())
-			{
-				buf->catf("%" PRIu32, val.uVal);
-				break;
-			}
-
-			// If we get here then we want a long form report
-			{
-				const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
-				buf->cat('[');
-				bm.Iterate
-					([buf](unsigned int bn, unsigned int count) noexcept
-						{
-							if (count != 0)
-							{
-								buf->cat(',');
-							}
-							buf->catf("%u", bn);
-						}
-					);
-				buf->cat(']');
-			}
-			break;
-
-		case TypeCode::Bitmap64:
-			if (*filter == '[')
-			{
-				++filter;
-				if (*filter == ']')						// if reporting on all elements in the array
-				{
-					++filter;
-				}
-				else
-				{
-					const char *endptr;
-					const int32_t index = StrToI32(filter, &endptr);
-					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
-					{
-						buf->cat("null");				// avoid returning badly-formed JSON
-						break;							// invalid syntax, or index out of range
-					}
-					const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.uVal);
-					buf->catf("%u", bm.GetSetBitNumber(index));
-					break;
-				}
-			}
-			else if (context.ShortFormReport())
-			{
-				buf->catf("%" PRIu64, val.Get56BitValue());
-				break;
-			}
-
-			// If we get here then we want a long form report
-			{
-				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
-				buf->cat('[');
-				bm.Iterate
-					([buf](unsigned int bn, unsigned int count) noexcept
-						{
-							if (count != 0)
-							{
-								buf->cat(',');
-							}
-							buf->catf("%u", bn);
-						}
-					);
-				buf->cat(']');
-			}
-			break;
-
-		case TypeCode::Enum32:
-			if (context.ShortFormReport())
-			{
-				buf->catf("%" PRIu32, val.uVal);
 			}
 			else
 			{
-				buf->cat("\"unimplemented\"");
-				// TODO append the real name
-			}
-			break;
-
-		case TypeCode::Bool:
-			buf->cat((val.bVal) ? "true" : "false");
-			break;
-
-		case TypeCode::Char:
-			buf->cat('"');
-			buf->EncodeChar(val.cVal);
-			buf->cat('"');
-			break;
-
-		case TypeCode::IPAddress:
-			{
-				const IPAddress ipVal(val.uVal);
-				char sep = '"';
-				for (unsigned int q = 0; q < 4; ++q)
+				const char *endptr;
+				const int32_t index = StrToI32(filter, &endptr);
+				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
 				{
-					buf->catf("%c%u", sep, ipVal.GetQuad(q));
-					sep = '.';
+					buf->cat("null");				// avoid returning badly-formed JSON
+					break;							// invalid syntax, or index out of range
 				}
-				buf->cat('"');
-			}
-			break;
-
-		case TypeCode::DateTime:
-			ReportDateTime(buf, val);
-			break;
-
-		case TypeCode::DriverId:
-#if SUPPORT_CAN_EXPANSION
-			buf->catf("\"%u.%u\"", (unsigned int)(val.uVal >> 8), (unsigned int)(val.uVal & 0xFF));
-#else
-			buf->catf("\"%u\"", (unsigned int)val.uVal);
-#endif
-			break;
-
-		case TypeCode::MacAddress:
-			buf->catf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
-						(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
-						(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
-			break;
-
-		case TypeCode::Special:
-#if HAS_MASS_STORAGE
-			switch ((ExpressionValue::SpecialType)val.param)
-			{
-			case ExpressionValue::SpecialType::sysDir:
-				reprap.GetPlatform().EncodeSysDir(buf);
+				const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
+				buf->catf("%u", bm.GetSetBitNumber(index));
 				break;
 			}
-#endif
-			break;
-
-		case TypeCode::None:
-			buf->cat("null");
+		}
+		else if (context.ShortFormReport())
+		{
+			buf->catf("%" PRIu32, val.uVal);
 			break;
 		}
+
+		// If we get here then we want a long form report
+		ReportBitmap1632Long(buf, val);
+		break;
+
+	case TypeCode::Bitmap64:
+		if (*filter == '[')
+		{
+			++filter;
+			if (*filter == ']')						// if reporting on all elements in the array
+			{
+				++filter;
+			}
+			else
+			{
+				const char *endptr;
+				const int32_t index = StrToI32(filter, &endptr);
+				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+				{
+					buf->cat("null");				// avoid returning badly-formed JSON
+					break;							// invalid syntax, or index out of range
+				}
+				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.uVal);
+				buf->catf("%u", bm.GetSetBitNumber(index));
+				break;
+			}
+		}
+		else if (context.ShortFormReport())
+		{
+			buf->catf("%" PRIu64, val.Get56BitValue());
+			break;
+		}
+
+		// If we get here then we want a long form report
+		ReportBitmap64Long(buf, val);
+		break;
+
+	case TypeCode::Enum32:
+		if (context.ShortFormReport())
+		{
+			buf->catf("%" PRIu32, val.uVal);
+		}
+		else
+		{
+			buf->cat("\"unimplemented\"");
+			// TODO append the real name
+		}
+		break;
+
+	case TypeCode::Bool:
+		buf->cat((val.bVal) ? "true" : "false");
+		break;
+
+	case TypeCode::Char:
+		buf->cat('"');
+		buf->EncodeChar(val.cVal);
+		buf->cat('"');
+		break;
+
+	case TypeCode::IPAddress:
+		{
+			const IPAddress ipVal(val.uVal);
+			char sep = '"';
+			for (unsigned int q = 0; q < 4; ++q)
+			{
+				buf->catf("%c%u", sep, ipVal.GetQuad(q));
+				sep = '.';
+			}
+			buf->cat('"');
+		}
+		break;
+
+	case TypeCode::DateTime:
+		ReportDateTime(buf, val);
+		break;
+
+	case TypeCode::DriverId:
+#if SUPPORT_CAN_EXPANSION
+		buf->catf("\"%u.%u\"", (unsigned int)(val.uVal >> 8), (unsigned int)(val.uVal & 0xFF));
+#else
+		buf->catf("\"%u\"", (unsigned int)val.uVal);
+#endif
+		break;
+
+	case TypeCode::MacAddress:
+		buf->catf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
+					(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
+					(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
+		break;
+
+	case TypeCode::Special:
+#if HAS_MASS_STORAGE
+		switch ((ExpressionValue::SpecialType)val.param)
+		{
+		case ExpressionValue::SpecialType::sysDir:
+			reprap.GetPlatform().EncodeSysDir(buf);
+			break;
+		}
+#endif
+		break;
+
+	case TypeCode::None:
+		buf->cat("null");
+		break;
+
+	case TypeCode::ObjectModel:
+		break;							// we already handled this case in the inline part
 	}
 }
 
 // Report an entire array as JSON
-void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModelArrayDescriptor *omad, const char *filter) const
+void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+										const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException)
 {
 	ReadLocker lock(omad->lockPointer);
 
@@ -658,7 +645,8 @@ void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext&
 			buf->cat(',');
 		}
 		context.AddIndex(i);
-		ReportItemAsJson(buf, context, classDescriptor, omad->GetElement(this, context), filter);
+		const ExpressionValue element = omad->GetElement(this, context);
+		ReportItemAsJson(buf, context, classDescriptor, element, filter);
 		context.RemoveIndex();
 	}
 	buf->cat(']');
@@ -784,7 +772,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 	throw context.ConstructParseException("unknown value '%s'", idString);
 }
 
-ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, ExpressionValue val, const char *idString) const
+ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const
 {
 	switch (val.GetType())
 	{
@@ -936,7 +924,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 }
 
 // Separate function to avoid the tm object (44 bytes) being allocated on the stack frame of a recursive function
-void ObjectModel::ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcept
+void ObjectModel::ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept
 {
 	const time_t time = val.Get56BitValue();
 	tm timeInfo;
@@ -945,17 +933,68 @@ void ObjectModel::ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcep
 				timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 }
 
+// Separate function to avoid a recursive function saving all the FP registers
+void ObjectModel::ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept
+{
+	if (val.fVal == 0.0)
+	{
+		buf->cat('0');							// replace 0.000... in JSON by 0. This is mostly to save space when writing workplace coordinates.
+	}
+	else if (isnan(val.fVal) || isinf(val.fVal))
+	{
+		buf->cat("null");						// avoid generating bad JSON if the value is a NaN or infinity
+	}
+	else
+	{
+		buf->catf(val.GetFloatFormatString(), (double)val.fVal);
+	}
+}
+
+void ObjectModel::ReportBitmap1632Long(OutputBuffer *buf, const ExpressionValue& val) noexcept
+{
+	const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
+	buf->cat('[');
+	bm.Iterate
+		([buf](unsigned int bn, unsigned int count) noexcept
+			{
+				if (count != 0)
+				{
+					buf->cat(',');
+				}
+				buf->catf("%u", bn);
+			}
+		);
+	buf->cat(']');
+}
+
+void ObjectModel::ReportBitmap64Long(OutputBuffer *buf, const ExpressionValue& val) noexcept
+{
+	const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
+	buf->cat('[');
+	bm.Iterate
+		([buf](unsigned int bn, unsigned int count) noexcept
+			{
+				if (count != 0)
+				{
+					buf->cat(',');
+				}
+				buf->catf("%u", bn);
+			}
+		);
+	buf->cat(']');
+}
+
 #ifdef DUET3
 
 // Separate functions to avoid the string being allocated on the stack frame of a recursive function
-void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, ExpressionValue val) noexcept
+void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, const ExpressionValue& val) noexcept
 {
 	String<StringLength50> rslt;
 	val.ExtractRequestedPart(rslt.GetRef());
 	buf->EncodeString(rslt.c_str(), true);
 }
 
-ExpressionValue ObjectModel::GetExpansionBoardDetailLength(ExpressionValue val) noexcept
+ExpressionValue ObjectModel::GetExpansionBoardDetailLength(const ExpressionValue& val) noexcept
 {
 	String<StringLength50> rslt;
 	val.ExtractRequestedPart(rslt.GetRef());

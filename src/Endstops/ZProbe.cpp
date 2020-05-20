@@ -291,6 +291,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	if (seen)
 	{
+		reprap.SensorsUpdated();
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
@@ -351,6 +352,7 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 
 	if (seen)
 	{
+		reprap.SensorsUpdated();
 		return GCodeResult::ok;
 	}
 
