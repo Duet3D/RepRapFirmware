@@ -1365,7 +1365,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				buf.copy("M206");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					buf.catf(" %c%.3f", axisLetters[axis], (double)-axisOffsets[axis]);
+					buf.catf(" %c%.3f", axisLetters[axis], (double)-workplaceCoordinates[0][axis]);
 				}
 				buf.cat('\n');
 				ok = f->Write(buf.c_str());
