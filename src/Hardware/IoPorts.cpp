@@ -31,14 +31,14 @@
 
 // Read a port name parameter and assign one port. Caller must call gb.Seen() with the appropriate letter and get 'true' returned before calling this.
 // If successful, return true; else return false with the error message in 'reply'.
-bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access)
+bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
 {
 	IoPort* const p = this;
 	return AssignPorts(gb, reply, neededFor, 1, &p, &access) == 1;
 }
 
 // Try to assign ports, returning the number of ports successfully assigned
-/*static*/ size_t IoPort::AssignPorts(const char* pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
+/*static*/ size_t IoPort::AssignPorts(const char* pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[]) noexcept
 {
 	// Release any existing assignments
 	for (size_t i = 0; i < numPorts; ++i)
@@ -91,7 +91,7 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 	return numPorts;
 }
 
-bool IoPort::AssignPort(const char* pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access)
+bool IoPort::AssignPort(const char* pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
 {
 	IoPort* const p = this;
 	return AssignPorts(pinName, reply, neededFor, 1, &p, &access) == 1;
@@ -171,7 +171,7 @@ void IoPort::DetachInterrupt() const noexcept
 }
 
 // Allocate the specified logical pin, returning true if successful
-bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFor, PinAccess access)
+bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
 {
 	Release();
 
@@ -501,7 +501,7 @@ uint16_t IoPort::ReadAnalog() const noexcept
 
 #if SUPPORT_CAN_EXPANSION
 
-// Remove the board address form a port name string and return it
+// Remove the board address from a port name string and return it
 /*static*/ CanAddress IoPort::RemoveBoardAddress(const StringRef& portName) noexcept
 {
 	size_t prefix = 0;

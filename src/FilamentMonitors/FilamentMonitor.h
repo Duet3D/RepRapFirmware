@@ -30,7 +30,7 @@ public:
 	FilamentMonitor(const FilamentMonitor&) = delete;
 
 	// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
-	virtual bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) = 0;
+	virtual bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) = 0;
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
@@ -64,7 +64,7 @@ public:
 	static void Spin() noexcept;
 
 	// Handle M591
-	static GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder)
+	static GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder) THROWS(GCodeException)
 	pre(extruder < MaxExtruders);
 
 	// Send diagnostics info
@@ -72,10 +72,10 @@ public:
 
 #if SUPPORT_OBJECT_MODEL
 	// Get the number of monitors to report in the OM
-	static size_t GetNumMonitorsToReport();
+	static size_t GetNumMonitorsToReport() noexcept;
 
 	// Get access to a filament monitor when we already have a read lock
-	static FilamentMonitor *GetMonitorAlreadyLocked(size_t extruder) { return filamentSensors[extruder]; }
+	static FilamentMonitor *GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
 #endif
 
 	// This must be public so that the array descriptor in class RepRap can lock it

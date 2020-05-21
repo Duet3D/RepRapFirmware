@@ -20,10 +20,10 @@ public:
 	void AppendDetails(const StringRef& str) const noexcept;
 
 	static size_t AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]);
-	bool AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
+	bool AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
 
-	static size_t AssignPorts(const char *pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]);
-	bool AssignPort(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
+	static size_t AssignPorts(const char *pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]) noexcept;
+	bool AssignPort(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
 
 	void AppendPinName(const StringRef& str) const noexcept;
 	bool IsValid() const noexcept { return logicalPin < NumNamedPins; }
@@ -58,7 +58,7 @@ public:
 	static void WriteAnalog(Pin p, float pwm, uint16_t frequency) noexcept;
 
 protected:
-	bool Allocate(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
+	bool Allocate(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
 
 	static const char* TranslatePinAccess(PinAccess access) noexcept;
 

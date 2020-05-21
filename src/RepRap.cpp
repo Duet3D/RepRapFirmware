@@ -2878,12 +2878,6 @@ void RepRap::StartIap() noexcept
 	return sinf(angle) + cosf(angle);
 }
 
-// Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine
-/*static*/ double RepRap::SinCos(double angle) noexcept
-{
-	return sin(angle) + cos(angle);
-}
-
 // Report an internal error
 void RepRap::ReportInternalError(const char *file, const char *func, int line) const noexcept
 {

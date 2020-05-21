@@ -99,7 +99,7 @@ public:
 
 	static void Diagnostics(MessageType mtype) noexcept;
 
-	static unsigned int GetFreeBuffers() { return OUTPUT_BUFFER_COUNT - usedOutputBuffers; }
+	static unsigned int GetFreeBuffers() noexcept { return OUTPUT_BUFFER_COUNT - usedOutputBuffers; }
 
 private:
 	OutputBuffer *next;

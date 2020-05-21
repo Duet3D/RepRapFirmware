@@ -33,14 +33,15 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the secon
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
+
 #if defined(USE_SBC)
-#define HAS_WIFI_NETWORKING		0
-#define HAS_W5500_NETWORKING	0
-#define HAS_LINUX_INTERFACE		1
+# define HAS_WIFI_NETWORKING	0
+# define HAS_W5500_NETWORKING	0
+# define HAS_LINUX_INTERFACE	1
 #else
-#define HAS_WIFI_NETWORKING		1
-#define HAS_W5500_NETWORKING	1
-#define HAS_LINUX_INTERFACE		0
+# define HAS_WIFI_NETWORKING	1
+# define HAS_W5500_NETWORKING	1
+# define HAS_LINUX_INTERFACE	0
 #endif
 
 #define HAS_CPU_TEMP_SENSOR		1
@@ -61,15 +62,17 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the secon
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
+
 #if defined(USE_SBC)
-#define SUPPORT_HTTP			0
-#define SUPPORT_FTP				0
-#define SUPPORT_TELNET			0
+# define SUPPORT_HTTP			0
+# define SUPPORT_FTP			0
+# define SUPPORT_TELNET			0
 #else
-#define SUPPORT_HTTP			1
-#define SUPPORT_FTP				1
-#define SUPPORT_TELNET			1
+# define SUPPORT_HTTP			1
+# define SUPPORT_FTP			1
+# define SUPPORT_TELNET			1
 #endif
+
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
@@ -235,10 +238,11 @@ constexpr uint32_t ExpectedSdCardSpeed = 20000000;
 constexpr uint32_t LcdSpiClockFrequency = 2000000;             // 2.0MHz
 constexpr Pin LcdCSPin = PortDPin(21);      //connlcd.10 --> gate -> exp2.4
 constexpr Pin LcdBeepPin = PortAPin(8);     //connlcd.4           -> exp1.1
+constexpr Pin LcdA0Pin = NoPin;	//TODO assign a pin
 constexpr Pin EncoderPinA = PortAPin(25);   //connlcd.8           -> exp2.5
 constexpr Pin EncoderPinB = PortCPin(28);   //connlcd.6           -> exp2.3
 constexpr Pin EncoderPinSw = PortAPin(7);   //connsd.7            -> exp1.2
-                                            //adittional spi wiring:
+                                            //additional spi wiring:
                                             //connsd.6            <- exp2.1
                                             //connsd.5   --> gate -> exp1.3
                                             //            `->     -> exp2.6
@@ -448,7 +452,7 @@ namespace StepPins
 	// All our step pins are on port D, so the bitmap is just the map of step bits in port D.
 
 	// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
-	static inline uint32_t CalcDriverBitmap(size_t driver) noexcept
+	static inline __attribute__((always_inline)) uint32_t CalcDriverBitmap(size_t driver) noexcept
 	{
 		return (driver < NumDirectDrivers)
 				? g_APinDescription[STEP_PINS[driver]].ulPin
@@ -458,7 +462,7 @@ namespace StepPins
 	// Set the specified step pins high
 	// This needs to be as fast as possible, so we do a parallel write to the port(s).
 	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversHigh(uint32_t driverMap) noexcept
+	static inline __attribute__((always_inline)) void StepDriversHigh(uint32_t driverMap) noexcept
 	{
 		PIOD->PIO_ODSR = driverMap;				// on Duet WiFi/Ethernet all step pins are on port D
 	}
@@ -466,7 +470,7 @@ namespace StepPins
 	// Set all step pins low
 	// This needs to be as fast as possible, so we do a parallel write to the port(s).
 	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversLow() noexcept
+	static inline __attribute__((always_inline)) void StepDriversLow() noexcept
 	{
 		PIOD->PIO_ODSR = 0;						// on Duet WiFi/Ethernet all step pins are on port D
 	}
