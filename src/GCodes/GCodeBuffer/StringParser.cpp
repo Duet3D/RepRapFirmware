@@ -1370,7 +1370,7 @@ void StringParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 	for (;;)
 	{
 		const char *pp;
-		const unsigned long v = SafeStrtoul(p, &pp, 16);
+		const unsigned long v = StrHexToU32(p, &pp);
 		if (pp == p || v > 255)
 		{
 			readPointer = -1;
@@ -1600,38 +1600,25 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 		return val;
 	}
 
-	int base = 10;
-	size_t skipTrailingQuote = 0;
-
-	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits
+	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits. We could stop supporting this because we already support {0xNNNN}.
+	const char *endptr;
+	uint32_t rslt;
 	if (gb.buffer[readPointer] == '"')
 	{
 		++readPointer;
-		skipTrailingQuote = 1;
-		switch (gb.buffer[readPointer])
+		rslt = StrOptHexToU32(gb.buffer + readPointer, &endptr);
+		if (*endptr != '"')
 		{
-		case 'x':
-		case 'X':
-			base = 16;
-			++readPointer;
-			break;
-
-		case '0':
-			if (gb.buffer[readPointer + 1] == 'x' || gb.buffer[readPointer + 1] == 'X')
-			{
-				base = 16;
-				readPointer += 2;
-			}
-			break;
-
-		default:
-			break;
+			throw ConstructParseException("expected '\"'");
 		}
+		++endptr;
+	}
+	else
+	{
+		rslt = StrToU32(gb.buffer + readPointer, &endptr);
 	}
 
-	const char *endptr;
-	const uint32_t rslt = SafeStrtoul(gb.buffer + readPointer, &endptr, base);
-	readPointer = endptr - gb.buffer + skipTrailingQuote;
+	readPointer = endptr - gb.buffer;
 	return rslt;
 }
 

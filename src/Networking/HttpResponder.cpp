@@ -1178,7 +1178,7 @@ void HttpResponder::ProcessRequest() noexcept
 					postFileGotCrc = (expectedCrc != nullptr);
 					if (postFileGotCrc)
 					{
-						postFileExpectedCrc = SafeStrtoul(expectedCrc, nullptr, 16);
+						postFileExpectedCrc = StrHexToU32(expectedCrc, nullptr);
 					}
 
 					// Start a new file upload
