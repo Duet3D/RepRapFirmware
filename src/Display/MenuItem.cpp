@@ -43,7 +43,7 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, Fon
 void MenuItem::PrintAligned(Driver& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept
 {
 	PixelNumber colsToSkip = 0;
-	lcd.SetFont(fontNumber);
+	lcd.SelectFont(fontNumber);
 	if (align != 0)
 	{
 		lcd.SetCursor(lcd.GetNumRows(), column);
@@ -131,7 +131,7 @@ void TextMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 {
 	if (width == 0)
 	{
-		lcd.SetFont(fontNumber);
+		lcd.SelectFont(fontNumber);
 		lcd.SetCursor(lcd.GetNumRows(), 0);
 		lcd.SetRightMargin(lcd.GetNumCols());
 		lcd.TextInvert(false);
@@ -144,7 +144,7 @@ void TextMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 	}
 	if (height == 0)
 	{
-		lcd.SetFont(fontNumber);
+		lcd.SelectFont(fontNumber);
 		height = lcd.GetFontHeight();
 	}
 }
@@ -176,7 +176,7 @@ void ButtonMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 {
 	if (width == 0)
 	{
-		lcd.SetFont(fontNumber);
+		lcd.SelectFont(fontNumber);
 		lcd.SetCursor(lcd.GetNumRows(), 0);
 		lcd.SetRightMargin(lcd.GetNumCols());
 		lcd.TextInvert(false);
@@ -185,7 +185,7 @@ void ButtonMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 	}
 	if (height == 0)
 	{
-		lcd.SetFont(fontNumber);
+		lcd.SelectFont(fontNumber);
 		height = lcd.GetFontHeight();
 	}
 }
@@ -506,7 +506,7 @@ void ValueMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 	// The width is always set for a ValueMenuItem so we just need to determine the height
 	if (height == 0)
 	{
-		lcd.SetFont(fontNumber);
+		lcd.SelectFont(fontNumber);
 		height = lcd.GetFontHeight();
 	}
 }
@@ -810,7 +810,7 @@ void FilesMenuItem::Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, P
 					// no break
 				case GCodeResult::error:
 					sdCardState = error;
-					lcd.SetFont(fontNumber);
+					lcd.SelectFont(fontNumber);
 					lcd.SetCursor(row, column);
 					lcd.SetRightMargin(rightMargin);
 					lcd.ClearToMargin();
@@ -833,7 +833,7 @@ void FilesMenuItem::Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, P
 
 void FilesMenuItem::ListFiles(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
-	lcd.SetFont(fontNumber);
+	lcd.SelectFont(fontNumber);
 	lcd.SetRightMargin(rightMargin);
 	uint8_t line = 0;
 
@@ -1084,7 +1084,7 @@ void FilesMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 	// The width is always set for a FilesMenuItem so we just need to determine the height
 	if (height == 0)
 	{
-		lcd.SetFont(fontNumber);
+		lcd.SelectFont(fontNumber);
 		height = lcd.GetFontHeight() * numDisplayLines;
 	}
 }

@@ -26,9 +26,6 @@ enum class PixelMode : uint8_t
 typedef uint8_t PixelNumber;
 const PixelNumber NumRows = 64, NumCols = 128;
 
-// Class for driving 128x64 graphical LCD fitted with ST7920 controller
-// This drives the GLCD in serial mode so that it needs just 2 pins.
-
 // Derive this class from the Print class so that we can print stuff to it in alpha mode
 class Driver : public Print
 {
@@ -59,9 +56,8 @@ public:
 	// Maybe we just want to draw on the screen without text, so this is removed from the constructor
 	void SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept;
 
-	//TODO: refactor to SelectCurrentFont
 	// Select the font to use for subsequent calls to write() in graphics mode
-	void SetFont(size_t newFont) noexcept;
+	void SelectFont(size_t newFont) noexcept;
 
 	// Return the number of fonts
 	size_t GetNumFonts() const noexcept { return numFonts; }
@@ -104,6 +100,8 @@ public:
 	//  mode = whether we want to set, clear or invert the pixel
 	void SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept;
 
+	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
+
 	// Read a pixel. Returns true if the pixel is set, false if it is clear.
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
 	//  y = y-coordinate of the pixel, measured down from the top of the display
@@ -138,10 +136,9 @@ public:
 	//  data = bitmap image, must be ((width + 7)/8) bytes long
 	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept;
 
-	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
-
 protected:
 	const LcdFont * const *fonts;
+	PixelNumber displayWidth, displayHeight;
 	size_t numFonts;
 	size_t currentFontNumber;						// index of the current font
 	uint32_t charVal;

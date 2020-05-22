@@ -5,8 +5,15 @@
 
 #if SUPPORT_12864_LCD
 
+#include "Fonts/Fonts.h"
+
+extern const LcdFont font7x11;
+
+const LcdFont * const defaultfonts[] = { &font7x11 };
+
+// Set one default font to use
 Driver::Driver(PixelNumber width, PixelNumber height) noexcept
-	: fonts(nullptr), numFonts(0), currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
+	: fonts(defaultfonts), numFonts(ARRAY_SIZE(defaultfonts)), currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
 {
 }
 
@@ -16,7 +23,7 @@ void Driver::SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept
 	numFonts = nFonts;
 }
 
-void Driver::SetFont(size_t newFont) noexcept
+void Driver::SelectFont(size_t newFont) noexcept
 {
 	if (newFont < numFonts)
 	{
@@ -27,16 +34,19 @@ void Driver::SetFont(size_t newFont) noexcept
 // Get the current font height
 PixelNumber Driver::GetFontHeight() const noexcept
 {
-	return fonts[currentFontNumber]->height;
+	return GetFontHeight(currentFontNumber);
 }
 
 // Get the height of a specified font
 PixelNumber Driver::GetFontHeight(size_t fontNumber) const noexcept
 {
+	if(fonts == nullptr) return 0;
+
 	if (fontNumber >= numFonts)
 	{
 		fontNumber = currentFontNumber;
 	}
+
 	return fonts[fontNumber]->height;
 }
 

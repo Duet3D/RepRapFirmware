@@ -27,6 +27,8 @@ public:
 	void Spin() noexcept;
 	void Exit() noexcept;
 	void Beep(unsigned int frequency, unsigned int milliseconds) noexcept;
+	void StopBeep() noexcept;
+	void SetBeepPin(Pin pin) noexcept;
 	void SuccessBeep() noexcept;
 	void ErrorBeep() noexcept;
 	bool IsPresent() const noexcept { return lcd != nullptr; }
@@ -36,6 +38,7 @@ private:
 	Driver *lcd;
 	Menu *menu;
 	RotaryEncoder *encoder;
+	Pin beepPin;
 	uint32_t whenBeepStarted;
 	uint32_t beepLength;
 	uint32_t lastRefreshMillis;

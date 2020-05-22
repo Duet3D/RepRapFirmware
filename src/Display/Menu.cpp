@@ -217,7 +217,7 @@ void Menu::LoadError(const char *msg, unsigned int line) noexcept
 	ResetCache();
 
 	lcd.Clear();
-	lcd.SetFont(0);
+	lcd.SelectFont(0);
 	lcd.print("Error loading menu\nFile: ");
 	lcd.print((numNestedMenus > 0) ? filenames[numNestedMenus - 1].c_str() : "(none)");
 	if (line != 0)

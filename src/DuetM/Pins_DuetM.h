@@ -173,6 +173,10 @@ constexpr Pin EncoderPinA = PortBPin(5);
 constexpr Pin EncoderPinB = PortCPin(3);
 constexpr Pin EncoderPinSw = PortAPin(7);
 
+// Define free-to-use extension pins ext_0 and ext_1
+constexpr Pin Ext0Pin = PortAPin(21);
+constexpr Pin Ext1Pin = PortAPin(22);
+
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
 enum class PinCapability: uint8_t

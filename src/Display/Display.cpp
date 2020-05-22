@@ -100,7 +100,7 @@ void Display::Spin() noexcept
 
 		if (beepActive && millis() - whenBeepStarted > beepLength)
 		{
-			IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
+			StopBeep();
 			beepActive = false;
 		}
 	}
@@ -110,12 +110,12 @@ void Display::Exit() noexcept
 {
 	if (lcd != nullptr)
 	{
-		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
+		StopBeep();
 		if (!updatingFirmware)
 		{
 			lcd->TextInvert(false);
 			lcd->Clear();
-			lcd->SetFont(LargeFontNumber);
+			lcd->SelectFont(LargeFontNumber);
 			lcd->SetCursor(20, 0);
 			lcd->print("Shutting down...");
 		}
@@ -132,7 +132,7 @@ void Display::Beep(unsigned int frequency, unsigned int milliseconds) noexcept
 		whenBeepStarted = millis();
 		beepLength = milliseconds;
 		beepActive = true;
-		IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
+		IoPort::WriteAnalog(beepPin, 0.5, (uint16_t)frequency);
 	}
 }
 
@@ -166,8 +166,8 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 				lcd->SetSpiClockFrequency(gb.GetUIValue());
 			}
 			lcd->Init();
-			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
-			lcd->SetFont(SmallFontNumber);
+			SetBeepPin(LcdBeepPin);
+			lcd->SelectFont(SmallFontNumber);
 
 			if (encoder == nullptr)
 			{
@@ -213,14 +213,25 @@ void Display::UpdatingFirmware() noexcept
 	updatingFirmware = true;
 	if (lcd != nullptr)
 	{
-		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
+		StopBeep();
 		lcd->TextInvert(false);
 		lcd->Clear();
-		lcd->SetFont(LargeFontNumber);
+		lcd->SelectFont(LargeFontNumber);
 		lcd->SetCursor(20, 0);
 		lcd->print("Updating firmware...");
 		lcd->FlushAll();
 	}
+}
+
+void Display::SetBeepPin(Pin pin) noexcept
+{
+	beepPin = pin;
+	IoPort::SetPinMode(beepPin, OUTPUT_PWM_LOW);
+}
+
+void Display::StopBeep() noexcept
+{
+	IoPort::WriteAnalog(beepPin, 0.0, 0);		// stop any beep
 }
 
 #endif
