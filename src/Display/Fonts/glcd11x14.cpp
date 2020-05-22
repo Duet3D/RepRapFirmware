@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "lcd7920.h"
+#include "Fonts.h"
 
 #if SUPPORT_12864_LCD
 

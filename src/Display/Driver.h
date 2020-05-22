@@ -13,6 +13,7 @@
 #if SUPPORT_12864_LCD
 
 #include "Print.h"
+#include "Fonts/Fonts.h"
 
 // Enumeration for specifying drawing modes
 enum class PixelMode : uint8_t
@@ -20,17 +21,6 @@ enum class PixelMode : uint8_t
 	PixelClear = 0,    // clear the pixel(s)
 	PixelSet = 1,      // set the pixel(s)
 	PixelFlip = 2      // invert the pixel(s)
-};
-
-// Struct for describing a font table, always held in PROGMEM
-struct LcdFont
-{
-	const uint8_t *ptr;			// pointer to font table
-	uint16_t startCharacter;	// Unicode code point of the first character in the font
-	uint16_t endCharacter;		// Unicode code point of the last character in the font
-	uint8_t height;				// row height in pixels - only this number of pixels will be fetched and drawn - maximum 16 in this version of the software
-	uint8_t width;				// max character width in pixels (the font table contains this number of bytes or words per character, plus 1 for the active width)
-	uint8_t numSpaces;			// number of space columns between characters before kerning
 };
 
 typedef uint8_t PixelNumber;
