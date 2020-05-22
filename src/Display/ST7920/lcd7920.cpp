@@ -61,8 +61,8 @@ void Lcd7920::Init() noexcept
 {
 	sspi_master_init(&device, 8);
 	numContinuationBytesLeft = 0;
-	startRow = NumRows;
-	startCol = NumCols;
+	startRow = displayHeight;
+	startCol = displayWidth;
 	endRow = endCol = nextFlushRow = 0;
 
 	{
@@ -140,7 +140,7 @@ bool Lcd7920::FlushSome() noexcept
 			delayMicroseconds(1);
 
 			setGraphicsAddress(nextFlushRow, startColNum);
-			uint8_t *ptr = image + (((NumCols/8) * nextFlushRow) + (2 * startColNum));
+			uint8_t *ptr = image + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
 			while (startColNum < endColNum)
 			{
 				sendLcdData(*ptr++);
@@ -157,8 +157,8 @@ bool Lcd7920::FlushSome() noexcept
 			return true;
 		}
 
-		startRow = NumRows;
-		startCol = NumCols;
+		startRow = displayHeight;
+		startCol = displayWidth;
 		endCol = endRow = nextFlushRow = 0;
 	}
 	return false;

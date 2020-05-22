@@ -166,8 +166,9 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 				lcd->SetSpiClockFrequency(gb.GetUIValue());
 			}
 			lcd->Init();
-			SetBeepPin(LcdBeepPin);
 			lcd->SelectFont(SmallFontNumber);
+			// Future option to assign another pin to beep, e.g. depending on display module used
+			SetBeepPin(LcdBeepPin);
 
 			if (encoder == nullptr)
 			{
