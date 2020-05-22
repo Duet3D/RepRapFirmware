@@ -39,8 +39,8 @@ inline void Lcd7920::DataDelay() noexcept
 	delayMicroseconds(LcdDataDelayMicros);
 }
 
-Lcd7920::Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Driver(csPin, fnts, nFonts)
+Lcd7920::Lcd7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
+	: Driver(width, height)
 {
 	device.csPin = csPin;
 	device.csPolarity = true;						// active high chip select

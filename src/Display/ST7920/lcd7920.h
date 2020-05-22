@@ -12,7 +12,7 @@ class Lcd7920 : public Driver
 {
 public:
 	// Construct a GLCD driver.
-	Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts) noexcept;
+	Lcd7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept;
 
 	// Initialize the display. Call this in setup(). Also call setFont to select initial text font.
 	void Init() noexcept;

@@ -29,12 +29,12 @@ const PixelNumber NumRows = 64, NumCols = 128;
 // Class for driving 128x64 graphical LCD fitted with ST7920 controller
 // This drives the GLCD in serial mode so that it needs just 2 pins.
 
-// Derive the LCD class from the Print class so that we can print stuff to it in alpha mode
+// Derive this class from the Print class so that we can print stuff to it in alpha mode
 class Driver : public Print
 {
 public:
 	// Construct a GLCD driver.
-	Driver(Pin csPin, const LcdFont * const fnts[], size_t nFonts) noexcept;
+	Driver(PixelNumber width, PixelNumber height) noexcept;
 
 	constexpr PixelNumber GetNumRows() const noexcept { return NumRows; }
 	constexpr PixelNumber GetNumCols() const noexcept { return NumCols; }
@@ -56,11 +56,15 @@ public:
 	// Write a space
 	void WriteSpaces(PixelNumber numPixels) noexcept;
 
-	// Return the number of fonts
-	size_t GetNumFonts() const noexcept { return numFonts; }
+	// Maybe we just want to draw on the screen without text, so this is removed from the constructor
+	void SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept;
 
+	//TODO: refactor to SelectCurrentFont
 	// Select the font to use for subsequent calls to write() in graphics mode
 	void SetFont(size_t newFont) noexcept;
+
+	// Return the number of fonts
+	size_t GetNumFonts() const noexcept { return numFonts; }
 
 	// Get the current font height
 	PixelNumber GetFontHeight() const noexcept;
@@ -138,7 +142,7 @@ public:
 
 protected:
 	const LcdFont * const *fonts;
-	const size_t numFonts;
+	size_t numFonts;
 	size_t currentFontNumber;						// index of the current font
 	uint32_t charVal;
 	uint16_t lastCharColData;						// data for the last non-space column, used for kerning

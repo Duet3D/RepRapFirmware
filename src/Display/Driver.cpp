@@ -5,9 +5,15 @@
 
 #if SUPPORT_12864_LCD
 
-Driver::Driver(Pin csPin, const LcdFont * const fnts[], size_t nFonts) noexcept
-	: fonts(fnts), numFonts(nFonts), currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
+Driver::Driver(PixelNumber width, PixelNumber height) noexcept
+	: fonts(nullptr), numFonts(0), currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
 {
+}
+
+void Driver::SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept
+{
+	fonts = fnts;
+	numFonts = nFonts;
 }
 
 void Driver::SetFont(size_t newFont) noexcept

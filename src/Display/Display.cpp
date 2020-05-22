@@ -158,7 +158,8 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 		case 1:		// 12864 display
 			if (lcd == nullptr)
 			{
-				lcd = new Lcd7920(LcdCSPin, fonts, ARRAY_SIZE(fonts));
+				lcd = new Lcd7920(128, 64, LcdCSPin);
+				lcd->SetFonts(fonts, ARRAY_SIZE(fonts));
 			}
 			if (gb.Seen('F'))
 			{
