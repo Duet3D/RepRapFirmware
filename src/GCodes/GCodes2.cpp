@@ -3070,39 +3070,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 559:
 		case 560: // Binary writing
 			{
-				String<MaxFilenameLength> sysDir;
-				const char* defaultFile;
-				const char *folder;
+				String<MaxFilenameLength> defaultFolder;
 				if (code == 560)
 				{
-					folder = platform.GetWebDir();
-					defaultFile = INDEX_PAGE_FILE;
+					defaultFolder.copy(platform.GetWebDir());
 				}
 				else
 				{
-					platform.AppendSysDir(sysDir.GetRef());
-					folder = sysDir.c_str();
-					defaultFile = CONFIG_FILE;
+					platform.AppendSysDir(defaultFolder.GetRef());
 				}
 				String<MaxFilenameLength> filename;
-				if (gb.Seen('P'))
-				{
-					gb.GetPossiblyQuotedString(filename.GetRef());
-				}
-				else
-				{
-					filename.copy(defaultFile);
-				}
+				gb.MustSee('P');
+				gb.GetQuotedString(filename.GetRef());
 				const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
 				const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
-				const bool ok = gb.OpenFileToWrite(folder, filename.c_str(), size, true, crc32);
+				const bool ok = gb.OpenFileToWrite(defaultFolder.c_str(), filename.c_str(), size, true, crc32);
 				if (ok)
 				{
 					reply.printf("Writing to file: %s", filename.c_str());
 				}
 				else
 				{
-					reply.printf("Can't open file %s for writing.", filename.c_str());
+					reply.printf("Can't open file %s for writing", filename.c_str());
 					result = GCodeResult::error;
 				}
 			}
