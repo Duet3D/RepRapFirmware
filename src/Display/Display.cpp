@@ -9,6 +9,7 @@
 
 #if SUPPORT_12864_LCD
 
+#include "ST7920/lcd7920.h"
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Hardware/IoPorts.h"

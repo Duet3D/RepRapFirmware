@@ -21,7 +21,7 @@ class MessageBox;
 class Menu
 {
 public:
-	Menu(Lcd7920& refLcd) noexcept;
+	Menu(Driver& refLcd) noexcept;
 	void Load(const char* filename) noexcept;							// load a menu file
 	void Pop() noexcept;
 	void EncoderAction(int action) noexcept;
@@ -63,7 +63,7 @@ private:
 	static const PixelNumber InnerMargin = 2;					// how many pixels we keep clear inside the border
 	static const PixelNumber OuterMargin = 8 + InnerMargin;		// how many pixels of the previous menu we leave on each side
 
-	Lcd7920& lcd;
+	Driver& lcd;
 
 	uint32_t timeoutValue;										// how long to time out after 0 = no timeout
 	uint32_t lastActionTime;

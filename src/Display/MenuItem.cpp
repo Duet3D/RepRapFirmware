@@ -40,7 +40,7 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, Fon
 }
 
 // Print the item at the correct place with the correct alignment
-void MenuItem::PrintAligned(Lcd7920& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept
+void MenuItem::PrintAligned(Driver& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept
 {
 	PixelNumber colsToSkip = 0;
 	lcd.SetFont(fontNumber);
@@ -97,7 +97,7 @@ bool MenuItem::IsVisible() const noexcept
 }
 
 // Erase this item if it is drawn but should not be visible
-void MenuItem::EraseIfInvisible(Lcd7920& lcd, PixelNumber tOffset) noexcept
+void MenuItem::EraseIfInvisible(Driver& lcd, PixelNumber tOffset) noexcept
 {
 	if (drawn && !IsVisible())
 	{
@@ -111,12 +111,12 @@ TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignmen
 {
 }
 
-void TextMenuItem::CorePrint(Lcd7920& lcd) noexcept
+void TextMenuItem::CorePrint(Driver& lcd) noexcept
 {
 	lcd.print(text);
 }
 
-void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void TextMenuItem::Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	// We ignore the 'highlight' parameter because text items are not selectable
 	if (IsVisible() && (!drawn || itemChanged))
@@ -127,7 +127,7 @@ void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, P
 	}
 }
 
-void TextMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
+void TextMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 {
 	if (width == 0)
 	{
@@ -154,14 +154,14 @@ ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Font
 {
 }
 
-void ButtonMenuItem::CorePrint(Lcd7920& lcd) noexcept
+void ButtonMenuItem::CorePrint(Driver& lcd) noexcept
 {
 	lcd.WriteSpaces(1);				// space at start in case highlighted
 	lcd.print(text);
 	lcd.WriteSpaces(1);				// space at end to allow for highlighting
 }
 
-void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ButtonMenuItem::Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetNumCols())
 	{
@@ -172,7 +172,7 @@ void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight,
 	}
 }
 
-void ButtonMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
+void ButtonMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 {
 	if (width == 0)
 	{
@@ -237,7 +237,7 @@ ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignm
 {
 }
 
-void ValueMenuItem::CorePrint(Lcd7920& lcd) noexcept
+void ValueMenuItem::CorePrint(Driver& lcd) noexcept
 {
 	if (adjustable)
 	{
@@ -312,7 +312,7 @@ void ValueMenuItem::CorePrint(Lcd7920& lcd) noexcept
 	}
 }
 
-void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ValueMenuItem::Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	if (IsVisible())
 	{
@@ -501,7 +501,7 @@ bool ValueMenuItem::Select(const StringRef& cmd) noexcept
 	return false;
 }
 
-void ValueMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
+void ValueMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 {
 	// The width is always set for a ValueMenuItem so we just need to determine the height
 	if (height == 0)
@@ -768,7 +768,7 @@ unsigned int FilesMenuItem::uListingEntries() const noexcept
 	return bInSubdirectory() ? (1 + m_uHardItemsInDirectory) : m_uHardItemsInDirectory;
 }
 
-void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void FilesMenuItem::Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	// The 'highlight' parameter is not used to highlight this item, but it is still used to tell whether this item is selected or not
 	if (!IsVisible())
@@ -831,7 +831,7 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 	}
 }
 
-void FilesMenuItem::ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void FilesMenuItem::ListFiles(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	lcd.SetFont(fontNumber);
 	lcd.SetRightMargin(rightMargin);
@@ -1079,7 +1079,7 @@ bool FilesMenuItem::Select(const StringRef& cmd) noexcept
 	return false;
 }
 
-void FilesMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
+void FilesMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 {
 	// The width is always set for a FilesMenuItem so we just need to determine the height
 	if (height == 0)
@@ -1106,7 +1106,7 @@ ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const
 	fileName.copy(pFileName);
 }
 
-void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ImageMenuItem::Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	if (IsVisible() && (!drawn || itemChanged || highlight != highlighted))
 	{
@@ -1140,7 +1140,7 @@ void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 	}
 }
 
-void ImageMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
+void ImageMenuItem::UpdateWidthAndHeight(Driver& lcd) noexcept
 {
 	if (width == 0 || height == 0)
 	{
