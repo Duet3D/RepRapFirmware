@@ -24,7 +24,6 @@ enum class PixelMode : uint8_t
 };
 
 typedef uint8_t PixelNumber;
-//const PixelNumber NumRows = 64, NumCols = 128;
 
 // Derive this class from the Print class so that we can print stuff to it in alpha mode
 class Driver : public Print
@@ -32,9 +31,10 @@ class Driver : public Print
 public:
 	// Construct a GLCD driver.
 	Driver(PixelNumber width, PixelNumber height) noexcept;
+	~Driver();
 
-	constexpr PixelNumber GetNumRows() const noexcept { return displayHeight; }
 	constexpr PixelNumber GetNumCols() const noexcept { return displayWidth; }
+	constexpr PixelNumber GetNumRows() const noexcept { return displayHeight; }
 
 	// Initialize the display. Call this in setup(). Also call setFont to select initial text font.
 	virtual void Init() noexcept = 0;
@@ -73,7 +73,7 @@ public:
 
 	// Clear the display and select non-inverted text.
 	void Clear() noexcept;
-	void Clear(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;
+	void ClearRect(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;
 
 	// Set the cursor position
 	//  r = row, the number of pixels from the top of the display to the top of the character.
@@ -138,7 +138,7 @@ public:
 	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept;
 
 protected:
-	PixelNumber displayWidth, displayHeight;
+	const PixelNumber displayWidth, displayHeight;
 	const LcdFont * const *fonts;
 	size_t numFonts;
 	size_t currentFontNumber;						// index of the current font
@@ -149,8 +149,8 @@ protected:
 	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
 	PixelNumber nextFlushRow;						// which row we need to flush next
 	PixelNumber leftMargin, rightMargin;
-	//uint8_t image[(NumRows * NumCols)/8];			// image buffer, 1K in size
-	uint8_t* image;			// image buffer
+	uint32_t imageBufferSize;
+	uint8_t* imageBuffer;	        		                // image buffer
 	bool textInverted;
 	bool justSetCursor;
 

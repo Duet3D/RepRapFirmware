@@ -101,7 +101,7 @@ void MenuItem::EraseIfInvisible(Driver& lcd, PixelNumber tOffset) noexcept
 {
 	if (drawn && !IsVisible())
 	{
-		lcd.Clear(row - tOffset, column, row + height, column + width);
+		lcd.ClearRect(row - tOffset, column, row + height, column + width);
 		drawn = false;
 	}
 }
@@ -218,6 +218,7 @@ PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, P
 	PixelNumber tOffsetRequest = tCurrentOffset;
 
 	// Are we off the bottom of the visible window?
+	//TODO: the value 64 should become lcd.GetNumRows() or e.g. IsRowOffscreen() !!!
 	if (64 + tCurrentOffset <= row + fontHeight + 1)
 	{
 		tOffsetRequest = row - 3;

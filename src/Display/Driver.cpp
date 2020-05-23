@@ -16,7 +16,14 @@ Driver::Driver(PixelNumber width, PixelNumber height) noexcept
 	: displayWidth(width), displayHeight(height), fonts(defaultfonts), numFonts(ARRAY_SIZE(defaultfonts)),
 	  currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
 {
-	image = new uint8_t[(displayHeight * displayWidth)/8];
+	// sizeof(imageBuffer) was used in some places, which doesn't work with a pointer type
+	imageBufferSize = (height * width)/8;
+	imageBuffer = new uint8_t[imageBufferSize];
+}
+
+Driver::~Driver()
+{
+	delete[] imageBuffer;
 }
 
 void Driver::SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept
@@ -84,8 +91,8 @@ void Driver::WriteSpaces(PixelNumber numPixels) noexcept
 		if (ySize != 0)
 		{
 			const uint8_t mask = 0x80 >> (column & 7);
-			uint8_t *p = image + ((row * (displayWidth/8)) + (column/8));
-			for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
+			uint8_t *p = imageBuffer + ((row * (displayWidth/8)) + (column/8));
+			for (uint8_t i = 0; i < ySize && p < (imageBuffer + imageBufferSize); ++i)
 			{
 				const uint8_t oldVal = *p;
 				const uint8_t newVal = (textInverted) ? oldVal | mask : oldVal & ~mask;
@@ -108,13 +115,13 @@ void Driver::WriteSpaces(PixelNumber numPixels) noexcept
 // Set the left margin. This is where the cursor goes to when we print newline.
 void Driver::SetLeftMargin(PixelNumber c) noexcept
 {
-	leftMargin = min<uint8_t>(c, displayWidth);
+	leftMargin = min<PixelNumber>(c, displayWidth);
 }
 
 // Set the right margin. In graphics mode, anything written will be truncated at the right margin. Defaults to the right hand edge of the display.
-void Driver::SetRightMargin(PixelNumber r) noexcept
+void Driver::SetRightMargin(PixelNumber c) noexcept
 {
-	rightMargin = min<uint8_t>(r, displayWidth);
+	rightMargin = min<PixelNumber>(c, displayWidth);
 }
 
 // Clear a rectangle from the current position to the right margin. The height of the rectangle is the height of the current font.
@@ -123,7 +130,7 @@ void Driver::ClearToMargin() noexcept
 	const uint8_t fontHeight = fonts[currentFontNumber]->height;
 	while (column < rightMargin)
 	{
-		uint8_t *p = image + ((row * (displayWidth/8)) + (column/8));
+		uint8_t *p = imageBuffer + ((row * (displayWidth/8)) + (column/8));
 		uint8_t mask = 0xFF >> (column & 7);
 		PixelNumber nextColumn;
 		if ((column & (~7)) < (rightMargin & (~7)))
@@ -136,7 +143,7 @@ void Driver::ClearToMargin() noexcept
 			nextColumn = rightMargin;;
 		}
 
-		for (uint8_t i = 0; i < fontHeight && p < (image + sizeof(image)); ++i)
+		for (uint8_t i = 0; i < fontHeight && p < (imageBuffer + imageBufferSize); ++i)
 		{
 			const uint8_t oldVal = *p;
 			const uint8_t newVal = (textInverted) ? oldVal | mask : oldVal & ~mask;
@@ -166,11 +173,11 @@ void Driver::TextInvert(bool b) noexcept
 
 void Driver::Clear() noexcept
 {
-	Clear(0, 0, displayHeight, displayWidth);
+	ClearRect(0, 0, displayHeight, displayWidth);
 }
 
 // Clear a rectangular block of pixels starting at rows, scol ending just before erow, ecol
-void Driver::Clear(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumber eCol) noexcept
+void Driver::ClearRect(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumber eCol) noexcept
 {
 	if (eCol > displayWidth) { eCol = displayWidth; }
 	if (eRow > displayHeight) { eRow = displayHeight; }
@@ -184,8 +191,8 @@ void Driver::Clear(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNu
 		}
 		for (PixelNumber row = sRow; row < eRow; ++row)
 		{
-			uint8_t * p = image + ((row * (displayWidth/8)) + (sCol/8));
-			uint8_t * const endp = image + ((row * (displayWidth/8)) + (eCol/8));
+			uint8_t * p = imageBuffer + ((row * (displayWidth/8)) + (sCol/8));
+			uint8_t * const endp = imageBuffer + ((row * (displayWidth/8)) + (eCol/8));
 			*p &= sMask;
 			if (p != endp)
 			{
@@ -287,7 +294,7 @@ void Driver::Bitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNumb
 {
 	for (PixelNumber r = 0; r < height && r + y0 < displayHeight; ++r)
 	{
-		uint8_t *p = image + (((r + y0) * (displayWidth/8)) + (x0/8));
+		uint8_t *p = imageBuffer + (((r + y0) * (displayWidth/8)) + (x0/8));
 		uint16_t bitMapOffset = r * (width/8);
 		for (PixelNumber c = 0; c < (width/8) && c + (x0/8) < displayWidth/8; ++c)
 		{
@@ -311,7 +318,7 @@ void Driver::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, con
 		uint8_t firstColIndex = left/8;									// column index of the first byte to write
 		const uint8_t lastColIndex = (left + width - 1)/8;				// column index of the last byte to write
 		const unsigned int firstDataShift = left % 8;					// number of bits in the first byte that we leave alone
-		uint8_t *p = image + (top * displayWidth/8) + firstColIndex;
+		uint8_t *p = imageBuffer + (top * displayWidth/8) + firstColIndex;
 
 		// Do all bytes except the last one
 		uint8_t accumulator = *p & (0xFF << (8 - firstDataShift));		// prime the accumulator
@@ -357,7 +364,7 @@ void Driver::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept
 {
 	if (y < displayHeight && x < rightMargin)
 	{
-		uint8_t * const p = image + ((y * (displayWidth/8)) + (x/8));
+		uint8_t * const p = imageBuffer + ((y * (displayWidth/8)) + (x/8));
 		const uint8_t mask = 0x80u >> (x%8);
 		const uint8_t oldVal = *p;
 		uint8_t newVal;
@@ -389,7 +396,7 @@ bool Driver::ReadPixel(PixelNumber x, PixelNumber y) const noexcept
 {
 	if (y < displayHeight && x < displayWidth)
 	{
-		const uint8_t * const p = image + ((y * (displayWidth/8)) + (x/8));
+		const uint8_t * const p = imageBuffer + ((y * (displayWidth/8)) + (x/8));
 		return (*p & (0x80u >> (x%8))) != 0;
 	}
 	return false;
@@ -520,8 +527,8 @@ size_t Driver::writeNative(uint16_t ch) noexcept
 				if (ySize != 0)
 				{
 					const uint8_t mask = 0x80 >> (column & 7);
-					uint8_t *p = image + ((row * (displayWidth/8)) + (column/8));
-					for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
+					uint8_t *p = imageBuffer + ((row * (displayWidth/8)) + (column/8));
+					for (uint8_t i = 0; i < ySize && p < (imageBuffer + imageBufferSize); ++i)
 					{
 						const uint8_t oldVal = *p;
 						const uint8_t newVal = (textInverted) ? oldVal | mask : oldVal & ~mask;
@@ -549,7 +556,7 @@ size_t Driver::writeNative(uint16_t ch) noexcept
 			{
 				const uint8_t mask1 = 0x80 >> (column & 7);
 				const uint8_t mask2 = ~mask1;
-				uint8_t *p = image + ((row * (displayWidth/8)) + (column/8));
+				uint8_t *p = imageBuffer + ((row * (displayWidth/8)) + (column/8));
 				const uint16_t setPixelVal = (textInverted) ? 0 : 1;
 				for (uint8_t i = 0; i < ySize; ++i)
 				{

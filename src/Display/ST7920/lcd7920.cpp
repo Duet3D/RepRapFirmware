@@ -140,7 +140,7 @@ bool Lcd7920::FlushSome() noexcept
 			delayMicroseconds(1);
 
 			setGraphicsAddress(nextFlushRow, startColNum);
-			uint8_t *ptr = image + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
+			uint8_t *ptr = imageBuffer + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
 			while (startColNum < endColNum)
 			{
 				sendLcdData(*ptr++);

@@ -155,7 +155,7 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	lcd.Line(topBottomMargin, lcd.GetNumCols() - sideMargin - 1, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
 	lcd.Line(lcd.GetNumRows() - topBottomMargin - 1, sideMargin, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
 	lcd.Line(topBottomMargin, sideMargin, lcd.GetNumRows() - topBottomMargin - 1, sideMargin, PixelMode::PixelSet);
-	lcd.Clear(topBottomMargin + 1, sideMargin + 1, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1);
+	lcd.ClearRect(topBottomMargin + 1, sideMargin + 1, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1);
 
 	// We could draw the static text directly, but it is easier to use the existing classes
 	const uint8_t fontToUse = 0;
@@ -439,7 +439,7 @@ void Menu::Reload() noexcept
 		currentMargin = 0;
 		const PixelNumber right = lcd.GetNumCols();
 		const PixelNumber bottom = lcd.GetNumRows();
-		lcd.Clear(currentMargin, currentMargin, bottom, right);
+		lcd.ClearRect(currentMargin, currentMargin, bottom, right);
 
 		// Draw the outline
 		// lcd.Line(currentMargin, currentMargin, bottom, currentMargin, PixelMode::PixelSet);
