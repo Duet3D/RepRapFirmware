@@ -1,16 +1,25 @@
 /*
  * Display.cpp
  *
- *  Created on: 22 Jan 2018
- *      Author: David
+ *  Created on  : 2018-01-22
+ *      Author  : David Crocker
+ *  Modified on : 2020-05-16
+ *      Author  : Martijn Schiedon
  */
+
+// TODO: what function calls this class? Is M918 only allowed once?
+// TODO: how is the driver class destructed?
+// TODO: Isn't it better to put the graphics drawing stuff in this class so that menu calls Display instead of the driver?
+// TODO: Why let beep functionality depend on whether a display is configured or not?
+// TODO: Decide if the EXT_0 pin used as DC should be configurable from GCode.
 
 #include "Display.h"
 
 #if SUPPORT_12864_LCD
 
 #include "Fonts/Fonts.h"
-#include "ST7920/lcd7920.h"
+#include <Display/ST7920/ST7920.h>
+#include <Display/UC1701/UC1701.h>
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Hardware/IoPorts.h"
@@ -96,7 +105,8 @@ void Display::Spin() noexcept
 				lastRefreshMillis = now;
 			}
 		}
-		lcd->FlushSome();
+
+		lcd->Flush();
 
 		if (beepActive && millis() - whenBeepStarted > beepLength)
 		{
@@ -123,6 +133,12 @@ void Display::Exit() noexcept
 	}
 }
 
+void Display::SetBeepPin(Pin pin) noexcept
+{
+	beepPin = pin;
+	IoPort::SetPinMode(beepPin, OUTPUT_PWM_LOW);
+}
+
 // NOTE: nothing enforces that this beep concludes before another is begun;
 //   that is, in rapid succession of commands, only the last beep issued will be heard by the user
 void Display::Beep(unsigned int frequency, unsigned int milliseconds) noexcept
@@ -134,6 +150,11 @@ void Display::Beep(unsigned int frequency, unsigned int milliseconds) noexcept
 		beepActive = true;
 		IoPort::WriteAnalog(beepPin, 0.5, (uint16_t)frequency);
 	}
+}
+
+void Display::StopBeep() noexcept
+{
+	IoPort::WriteAnalog(beepPin, 0.0, 0);		// stop any beep
 }
 
 void Display::SuccessBeep() noexcept
@@ -153,21 +174,41 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		switch (gb.GetUIValue())
+		uint32_t displayType = gb.GetUIValue();
+
+		if (displayType == 1 || displayType == 2)
 		{
-		case 1:		// 12864 display
+			// TODO: should replace driver when displayType changes; the current code seems to only allow
+			// configuring a driver with M918 once. Spin() is designed to handle a null pointer for the driver,
+			// so we can replace this with another driver.
 			if (lcd == nullptr)
 			{
-				lcd = new Lcd7920(128, 64, LcdCSPin);
-				lcd->SetFonts(fonts, ARRAY_SIZE(fonts));
+				switch(displayType)
+				{
+					case 1:  // ST7920 128x64 display
+						lcd = new ST7920(128, 64, LcdCSPin);
+						break;
+					case 2:  // UC1701 128x64 display
+						// NOTE: now using EXP_0, could be made configurable to use BEEP or EXT_1 pins as DC line
+						lcd = new UC1701(128, 64, LcdCSPin, Exp0Pin);
+						break;
+				}
 			}
+
+			// The following statement does allow changing the SPI frequency of the driver multiple times
+			// NOTE: theoretically, a driver does not necessarily have to be SPI-based, but since M918 assumes serial display drivers,
+			// a method to set the serial frequency has been supported at the DisplayDriver base class level
 			if (gb.Seen('F'))
 			{
-				lcd->SetSpiClockFrequency(gb.GetUIValue());
+				lcd->SetBusClockFrequency(gb.GetUIValue());
 			}
-			lcd->Init();
+
+			lcd->SetFonts(fonts, ARRAY_SIZE(fonts));
 			lcd->SelectFont(SmallFontNumber);
-			// Future option to assign another pin to beep, e.g. depending on display module used
+			lcd->Init();
+
+			// Future option to make this potentially configurable from a GCode parameter,
+			// or to derive and set the pin from the display type
 			SetBeepPin(LcdBeepPin);
 
 			if (encoder == nullptr)
@@ -180,9 +221,9 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 				menu = new Menu(*lcd);
 			}
 			menu->Load("main");
-			break;
-
-		default:
+		}
+		else
+		{
 			reply.copy("Unknown display type");
 			return GCodeResult::error;
 		}
@@ -222,17 +263,6 @@ void Display::UpdatingFirmware() noexcept
 		lcd->print("Updating firmware...");
 		lcd->FlushAll();
 	}
-}
-
-void Display::SetBeepPin(Pin pin) noexcept
-{
-	beepPin = pin;
-	IoPort::SetPinMode(beepPin, OUTPUT_PWM_LOW);
-}
-
-void Display::StopBeep() noexcept
-{
-	IoPort::WriteAnalog(beepPin, 0.0, 0);		// stop any beep
 }
 
 #endif

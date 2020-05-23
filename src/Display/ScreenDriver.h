@@ -1,12 +1,14 @@
 /*
- * Driver.h
+ * ScreenDriver.h
  *
- *  Created on: 22 mei 2020
- *      Author: Martijn Schiedon
+ *  Created on  : 2018-01-22
+ *      Author  : David Crocker
+ *  Modified on : 2020-05-16
+ *      Author  : Martijn Schiedon
  */
 
-#ifndef SRC_DISPLAY_DRIVER_H_
-#define SRC_DISPLAY_DRIVER_H_
+#ifndef SRC_DISPLAY_SCREENDRIVER_H_
+#define SRC_DISPLAY_SCREENDRIVER_H_
 
 #include "RepRapFirmware.h"
 
@@ -26,24 +28,24 @@ enum class PixelMode : uint8_t
 typedef uint8_t PixelNumber;
 
 // Derive this class from the Print class so that we can print stuff to it in alpha mode
-class Driver : public Print
+class ScreenDriver : public Print
 {
 public:
 	// Construct a GLCD driver.
-	Driver(PixelNumber width, PixelNumber height) noexcept;
-	~Driver();
+	ScreenDriver(PixelNumber width, PixelNumber height) noexcept;
+	~ScreenDriver();
 
 	constexpr PixelNumber GetNumCols() const noexcept { return displayWidth; }
 	constexpr PixelNumber GetNumRows() const noexcept { return displayHeight; }
 
-	// Initialize the display. Call this in setup(). Also call setFont to select initial text font.
+	// Initialize the display.
 	virtual void Init() noexcept = 0;
-	// Set the SPI clock frequency
-	virtual void SetSpiClockFrequency(uint32_t freq) noexcept = 0;
+	// Set the clock frequency of the interface (serial bus)
+	virtual void SetBusClockFrequency(uint32_t freq) noexcept = 0;
 	// Flush the display buffer to the display. Data will not be committed to the display until this is called.
 	virtual void FlushAll() noexcept = 0;
 	// Flush just some data, returning true if this needs to be called again
-	virtual bool FlushSome() noexcept = 0;
+	virtual bool Flush() noexcept = 0;
 
 	// Write a single character in the current font. Called by the 'print' functions.
 	//  c = character to write
@@ -101,7 +103,7 @@ public:
 	//  mode = whether we want to set, clear or invert the pixel
 	void SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept;
 
-	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
+	void FlagPixelDirty(PixelNumber r, PixelNumber c) noexcept;
 
 	// Read a pixel. Returns true if the pixel is set, false if it is clear.
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
@@ -113,14 +115,14 @@ public:
 	//  y0 = y-coordinate of one end of the line, measured down from the top of the display
 	//  x1, y1 = coordinates of the other end od the line
 	//  mode = whether we want to set, clear or invert each pixel
-	void Line(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, PixelMode mode) noexcept;
+	void DrawLine(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, PixelMode mode) noexcept;
 
 	// Draw a circle
 	//  x0 = x-coordinate of the centre, measured from left hand edge of the display
 	//  y0 = y-coordinate of the centre, measured down from the top of the display
 	//  radius = radius of the circle in pixels
 	//  mode = whether we want to set, clear or invert each pixel
-	void Circle(PixelNumber row, PixelNumber col, PixelNumber radius, PixelMode mode) noexcept;
+	void DrawCircle(PixelNumber row, PixelNumber col, PixelNumber radius, PixelMode mode) noexcept;
 
 	// Draw a bitmap
 	//  x0 = x-coordinate of the top left, measured from left hand edge of the display. Currently, must be a multiple of 8.
@@ -128,18 +130,18 @@ public:
 	//  width = width of bitmap in pixels. Currently, must be a multiple of 8.
 	//  rows = height of bitmap in pixels
 	//  data = bitmap image, must be ((width/8) * rows) bytes long
-	void Bitmap(PixelNumber top, PixelNumber left, PixelNumber height, PixelNumber width, const uint8_t data[]) noexcept;
+	void DrawBitmap(PixelNumber top, PixelNumber left, PixelNumber height, PixelNumber width, const uint8_t data[]) noexcept;
 
 	// Draw a bitmap row
 	//  x0 = x-coordinate of the top left, measured from left hand edge of the display
 	//  y0 = y-coordinate of the top left, measured down from the top of the display
 	//  width = width of bitmap in pixels
 	//  data = bitmap image, must be ((width + 7)/8) bytes long
-	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept;
+	void DrawBitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept;
 
 protected:
 	const PixelNumber displayWidth, displayHeight;
-	const LcdFont * const *fonts;
+	const LcdFont* const* fonts;
 	size_t numFonts;
 	size_t currentFontNumber;						// index of the current font
 	uint32_t charVal;
@@ -159,4 +161,4 @@ protected:
 
 #endif
 
-#endif /* SRC_DISPLAY_DRIVER_H_ */
+#endif /* SRC_DISPLAY_SCREENDRIVER_H_ */

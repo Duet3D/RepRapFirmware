@@ -1,8 +1,10 @@
 /*
  * Display.h
  *
- *  Created on: 22 Jan 2018
- *      Author: David
+ *  Created on  : 2018-01-22
+ *      Author  : David Crocker
+ *  Modified on : 2020-05-16
+ *      Author  : Martijn Schiedon
  */
 
 #ifndef SRC_DISPLAY_DISPLAY_H_
@@ -13,7 +15,7 @@
 #if SUPPORT_12864_LCD
 
 #include "RotaryEncoder.h"
-#include "Driver.h"
+#include <Display/ScreenDriver.h>
 #include "Menu.h"
 #include "GCodes/GCodeResult.h"
 
@@ -35,7 +37,7 @@ public:
 	void UpdatingFirmware() noexcept;
 
 private:
-	Driver *lcd;
+	ScreenDriver *lcd;
 	Menu *menu;
 	RotaryEncoder *encoder;
 	Pin beepPin;

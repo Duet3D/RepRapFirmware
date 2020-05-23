@@ -1,7 +1,13 @@
-// Driver for 128x64 graphical LCD with ST7920 controller
-// D Crocker, Escher Technologies Ltd.
+/*
+ * ST7920.cpp
+ *
+ *  Created on  : 2018-01-22
+ *      Author  : David Crocker, Escher Technologies Ltd.
+ *  Modified on : 2020-05-14
+ *      Author  : Martijn Schiedon
+ */
 
-#include "lcd7920.h"
+#include <Display/ST7920/ST7920.h>
 
 #if SUPPORT_12864_LCD
 
@@ -29,18 +35,18 @@ constexpr unsigned int LcdCommandDelayMicros = 72 - 8;	// 72us required, less 7u
 constexpr unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
 constexpr unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
-inline void Lcd7920::CommandDelay() noexcept
+inline void ST7920::commandDelay() noexcept
 {
 	delayMicroseconds(LcdCommandDelayMicros);
 }
 
-inline void Lcd7920::DataDelay() noexcept
+inline void ST7920::dataDelay() noexcept
 {
 	delayMicroseconds(LcdDataDelayMicros);
 }
 
-Lcd7920::Lcd7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
-	: Driver(width, height)
+ST7920::ST7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
+	: ScreenDriver(width, height)
 {
 	device.csPin = csPin;
 	device.csPolarity = true;						// active high chip select
@@ -52,12 +58,12 @@ Lcd7920::Lcd7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
 }
 
 // Set the SPI clock frequency
-void Lcd7920::SetSpiClockFrequency(uint32_t freq) noexcept
+void ST7920::SetBusClockFrequency(uint32_t freq) noexcept
 {
 	device.clockFrequency = freq;
 }
 
-void Lcd7920::Init() noexcept
+void ST7920::Init() noexcept
 {
 	sspi_master_init(&device, 8);
 	numContinuationBytesLeft = 0;
@@ -75,13 +81,13 @@ void Lcd7920::Init() noexcept
 		sendLcdCommand(LcdFunctionSetBasicAlpha);
 		delay(2);
 		sendLcdCommand(LcdFunctionSetBasicAlpha);
-		CommandDelay();
+		commandDelay();
 		sendLcdCommand(LcdEntryModeSet);
-		CommandDelay();
+		commandDelay();
 		sendLcdCommand(LcdDisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
 		delay(LcdDisplayClearDelayMillis);
 		sendLcdCommand(LcdFunctionSetExtendedGraphic);
-		CommandDelay();
+		commandDelay();
 
 		sspi_deselect_device(&device);
 	}
@@ -96,23 +102,26 @@ void Lcd7920::Init() noexcept
 		sspi_select_device(&device);
 		delayMicroseconds(1);
 		sendLcdCommand(LcdDisplayOn);
-		CommandDelay();
+		commandDelay();
 		sspi_deselect_device(&device);
 	}
 	currentFontNumber = 0;
 }
 
 // Flush all of the dirty part of the image to the lcd. Only called during startup and shutdown.
-void Lcd7920::FlushAll() noexcept
+void ST7920::FlushAll() noexcept
 {
-	while (FlushSome())
+	while (Flush())
 	{
 		delayMicroseconds(20);			// at 2MHz clock speed we need a delay here, at 1MHz we don't
 	}
 }
 
+//TODO: make Flush(bool full = false)
+//TODO: why is the dirty rectangle not simply shrunk and is a startRow used instead?
+//      Is this to finish existing outstanding flush actions while simultaneously allowing the dirty area to grow?
 // Flush some of the dirty part of the image to the LCD, returning true if there is more to do
-bool Lcd7920::FlushSome() noexcept
+bool ST7920::Flush() noexcept
 {
 	// See if there is anything to flush
 	if (endCol > startCol && endRow > startRow)
@@ -123,9 +132,9 @@ bool Lcd7920::FlushSome() noexcept
 			nextFlushRow = startRow;	// start from the beginning
 		}
 
-		if (nextFlushRow == startRow)	// if we are starting form the beginning
+		if (nextFlushRow == startRow)	// if we are starting from the beginning
 		{
-			++startRow;					// flag this row as flushed because it will be soon
+			++startRow;					// flag this row as flushed because this will happen in the next section
 		}
 
 		// Flush that row
@@ -146,7 +155,7 @@ bool Lcd7920::FlushSome() noexcept
 				sendLcdData(*ptr++);
 				sendLcdData(*ptr++);
 				++startColNum;
-				DataDelay();
+				dataDelay();
 			}
 			sspi_deselect_device(&device);
 		}
@@ -165,29 +174,29 @@ bool Lcd7920::FlushSome() noexcept
 }
 
 // Set the address to write to. The column address is in 16-bit words, so it ranges from 0 to 7.
-void Lcd7920::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
+void ST7920::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
 {
 	sendLcdCommand(LcdSetGdramAddress | (r & 31));
 	//commandDelay();  // don't seem to need this one
 	sendLcdCommand(LcdSetGdramAddress | c | ((r & 32) >> 2));
-	CommandDelay();    // we definitely need this one
+	commandDelay();    // we definitely need this one
 }
 
 // Send a command to the LCD. The SPI mutex is already owned
-void Lcd7920::sendLcdCommand(uint8_t command) noexcept
+void ST7920::sendLcdCommand(uint8_t command) noexcept
 {
 	sendLcd(0xF8, command);
 }
 
 // Send a data byte to the LCD. The SPI mutex is already owned
-void Lcd7920::sendLcdData(uint8_t data) noexcept
+void ST7920::sendLcdData(uint8_t data) noexcept
 {
 	sendLcd(0xFA, data);
 }
 
 // Send a command to the lcd. Data1 is sent as-is, data2 is split into 2 bytes, high nibble first.
 // The SPI mutex is already owned
-void Lcd7920::sendLcd(uint8_t data1, uint8_t data2) noexcept
+void ST7920::sendLcd(uint8_t data1, uint8_t data2) noexcept
 {
 	uint8_t data[3];
 	data[0] = data1;

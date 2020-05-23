@@ -1,7 +1,61 @@
-// Driver for 128x64 graphical LCD with ST7920 controller
-// D Crocker, Escher Technologies Ltd.
+/*
+ * ScreenDriver.cpp
+ *
+ *  Created on  : 2018-01-22
+ *      Author  : David Crocker
+ *  Modified on : 2020-05-16
+ *      Author  : Martijn Schiedon
+ */
 
-#include "Driver.h"
+/*
+ * Ontology of concepts and source file mapping:
+ *
+ *    DisplayUnit          -> Display.cpp
+ *      + DisplayModule
+ *        + DisplayDriver    -> ScreenDriver.cpp
+ *          - UC1701         -> UC1701.cpp
+ *          - ST7920         -> ST7920.cpp
+ *        + Display
+ *      + RotaryEncoder      -> RotaryEncoder.cpp
+ *      + ResetButton
+ *      + BackButton
+ *      + CardReader
+ *      + Speaker            -> Display.cpp
+ *
+ * Key:
+ *     + = part of (composition)
+ *     - = choice (inheritance, based on parent concept)
+ *
+ */
+
+/*
+ * Note: display cache memory is organized as a sequential byte array of ((horizontal pixels / 8) * vertical pixels)
+ *
+ * Example memory of a 128x64 display (the number is the index):
+ * 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
+ * 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F
+ * 20 21 22 23 24 25 26 27 28 29 2A 2B 2C 2D 2E 2F
+ * 30 31 32 33 34 35 36 37 38 39 3A 3B 3C 3D 3E 3F
+ * 40 41 42 43 44 45 46 47 48 49 4A 4B 4C 4D 4E 4F
+ * 50 51 52 53 54 55 56 57 58 59 5A 5B 5C 5D 5E 5F
+ * 60 61 62 63 64 65 66 67 68 69 6A 6B 6C 6D 6E 6F
+ * 70 71 72 73 74 75 76 77 78 79 7A 7B 7C 7D 7E 7F
+ */
+
+//TODO: remove ST7920 specific assumptions (e.g. "we refresh 16-bit words, so setting 1 pixel dirty in byte will suffice")
+//TODO: abstract generic drawing functions into a separate static helper class?
+//TODO: consistency and standardization of terms and order; top, left, width, height, rows, columns, r, c, x, y, etc.
+//TODO: set contrast option, controlled by Code
+//TODO: move character classes to a generic level as well?
+//TODO: decide on naming conventions for controller drivers, e.g. if UC1701 should be RT7565 instead.
+//TODO: make the CD pin configurable from GCode.
+//TODO: perhaps rename this to DotMatrixScreen?
+//  - You paint on a screen
+//  - The class is only suited to full-graphics screens with matrices of LEDs, LCD dots, OLED dots, etc.
+//  - When referencing the class in Menu or Display, it look natural, not artificial like DisplayDriver/DriverBase
+//  - It's a screen to write to, it becomes a display when looked at (semantics); the display more as user a interaction unit
+
+#include <Display/ScreenDriver.h>
 
 #if SUPPORT_12864_LCD
 
@@ -12,7 +66,7 @@ extern const LcdFont font7x11;
 const LcdFont * const defaultfonts[] = { &font7x11 };
 
 // Set one default font to use
-Driver::Driver(PixelNumber width, PixelNumber height) noexcept
+ScreenDriver::ScreenDriver(PixelNumber width, PixelNumber height) noexcept
 	: displayWidth(width), displayHeight(height), fonts(defaultfonts), numFonts(ARRAY_SIZE(defaultfonts)),
 	  currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
 {
@@ -21,18 +75,18 @@ Driver::Driver(PixelNumber width, PixelNumber height) noexcept
 	imageBuffer = new uint8_t[imageBufferSize];
 }
 
-Driver::~Driver()
+ScreenDriver::~ScreenDriver()
 {
 	delete[] imageBuffer;
 }
 
-void Driver::SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept
+void ScreenDriver::SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept
 {
 	fonts = fnts;
 	numFonts = nFonts;
 }
 
-void Driver::SelectFont(size_t newFont) noexcept
+void ScreenDriver::SelectFont(size_t newFont) noexcept
 {
 	if (newFont < numFonts)
 	{
@@ -41,13 +95,13 @@ void Driver::SelectFont(size_t newFont) noexcept
 }
 
 // Get the current font height
-PixelNumber Driver::GetFontHeight() const noexcept
+PixelNumber ScreenDriver::GetFontHeight() const noexcept
 {
 	return GetFontHeight(currentFontNumber);
 }
 
 // Get the height of a specified font
-PixelNumber Driver::GetFontHeight(size_t fontNumber) const noexcept
+PixelNumber ScreenDriver::GetFontHeight(size_t fontNumber) const noexcept
 {
 	if(fonts == nullptr) return 0;
 
@@ -61,7 +115,7 @@ PixelNumber Driver::GetFontHeight(size_t fontNumber) const noexcept
 
 // Flag a pixel as dirty. The r and c parameters must be no greater than displayHeight-1 and displayWidth-1 respectively.
 // Only one pixel in each 16-bit word needs to be flagged dirty for the whole word to get refreshed.
-void Driver::SetDirty(PixelNumber r, PixelNumber c) noexcept
+void ScreenDriver::FlagPixelDirty(PixelNumber r, PixelNumber c) noexcept
 {
 //	if (r >= displayHeight) { debugPrintf("r=%u\n", r); return; }
 //	if (c >= displayWidth) { debugPrintf("c=%u\n", c); return; }
@@ -73,7 +127,7 @@ void Driver::SetDirty(PixelNumber r, PixelNumber c) noexcept
 }
 
 // Write a space
-void Driver::WriteSpaces(PixelNumber numPixels) noexcept
+void ScreenDriver::WriteSpaces(PixelNumber numPixels) noexcept
 {
 	const LcdFont * const currentFont = fonts[currentFontNumber];
 	uint8_t ySize = currentFont->height;
@@ -99,7 +153,7 @@ void Driver::WriteSpaces(PixelNumber numPixels) noexcept
 				if (newVal != oldVal)
 				{
 					*p = newVal;
-					SetDirty(row + i, column);
+					FlagPixelDirty(row + i, column);
 				}
 				p += (displayWidth/8);
 			}
@@ -113,19 +167,19 @@ void Driver::WriteSpaces(PixelNumber numPixels) noexcept
 }
 
 // Set the left margin. This is where the cursor goes to when we print newline.
-void Driver::SetLeftMargin(PixelNumber c) noexcept
+void ScreenDriver::SetLeftMargin(PixelNumber c) noexcept
 {
 	leftMargin = min<PixelNumber>(c, displayWidth);
 }
 
 // Set the right margin. In graphics mode, anything written will be truncated at the right margin. Defaults to the right hand edge of the display.
-void Driver::SetRightMargin(PixelNumber c) noexcept
+void ScreenDriver::SetRightMargin(PixelNumber c) noexcept
 {
 	rightMargin = min<PixelNumber>(c, displayWidth);
 }
 
 // Clear a rectangle from the current position to the right margin. The height of the rectangle is the height of the current font.
-void Driver::ClearToMargin() noexcept
+void ScreenDriver::ClearToMargin() noexcept
 {
 	const uint8_t fontHeight = fonts[currentFontNumber]->height;
 	while (column < rightMargin)
@@ -150,7 +204,7 @@ void Driver::ClearToMargin() noexcept
 			if (newVal != oldVal)
 			{
 				*p = newVal;
-				SetDirty(row + i, column);			// we refresh 16-bit words, so setting 1 pixel dirty in byte will suffice
+				FlagPixelDirty(row + i, column);			// we refresh 16-bit words, so setting 1 pixel dirty in byte will suffice
 			}
 			p += (displayWidth/8);
 		}
@@ -159,7 +213,7 @@ void Driver::ClearToMargin() noexcept
 }
 
 // Select normal or inverted text
-void Driver::TextInvert(bool b) noexcept
+void ScreenDriver::TextInvert(bool b) noexcept
 {
 	if (b != textInverted)
 	{
@@ -171,13 +225,13 @@ void Driver::TextInvert(bool b) noexcept
 	}
 }
 
-void Driver::Clear() noexcept
+void ScreenDriver::Clear() noexcept
 {
 	ClearRect(0, 0, displayHeight, displayWidth);
 }
 
 // Clear a rectangular block of pixels starting at rows, scol ending just before erow, ecol
-void Driver::ClearRect(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumber eCol) noexcept
+void ScreenDriver::ClearRect(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumber eCol) noexcept
 {
 	if (eCol > displayWidth) { eCol = displayWidth; }
 	if (eRow > displayHeight) { eRow = displayHeight; }
@@ -221,7 +275,7 @@ void Driver::ClearRect(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, Pix
 }
 
 // Draw a line using the Bresenham Algorithm (thanks Wikipedia)
-void Driver::Line(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x1, PixelMode mode) noexcept
+void ScreenDriver::DrawLine(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x1, PixelMode mode) noexcept
 {
 	int dx = (x1 >= x0) ? x1 - x0 : x0 - x1;
 	int dy = (y1 >= y0) ? y1 - y0 : y0 - y1;
@@ -251,7 +305,7 @@ void Driver::Line(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x1
 }
 
 // Draw a circle using the Bresenham Algorithm (thanks Wikipedia)
-void Driver::Circle(PixelNumber x0, PixelNumber y0, PixelNumber radius, PixelMode mode) noexcept
+void ScreenDriver::DrawCircle(PixelNumber x0, PixelNumber y0, PixelNumber radius, PixelMode mode) noexcept
 {
 	int f = 1 - (int)radius;
 	int ddF_x = 1;
@@ -290,7 +344,7 @@ void Driver::Circle(PixelNumber x0, PixelNumber y0, PixelNumber radius, PixelMod
 }
 
 // Draw a bitmap. x0 and displayWidth must be divisible by 8.
-void Driver::Bitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNumber height, const uint8_t data[]) noexcept
+void ScreenDriver::DrawBitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNumber height, const uint8_t data[]) noexcept
 {
 	for (PixelNumber r = 0; r < height && r + y0 < displayHeight; ++r)
 	{
@@ -310,7 +364,7 @@ void Driver::Bitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNumb
 }
 
 // Draw a single bitmap row. 'left' and 'width' do not need to be divisible by 8.
-void Driver::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept
+void ScreenDriver::DrawBitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept
 {
 	if (width != 0)														// avoid possible arithmetic underflow
 	{
@@ -329,7 +383,7 @@ void Driver::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, con
 			if (newVal != *p)
 			{
 				*p = newVal;
-				SetDirty(top, 8 * firstColIndex);
+				FlagPixelDirty(top, 8 * firstColIndex);
 			}
 			accumulator = invData << (8 - firstDataShift);
 			++p;
@@ -346,13 +400,13 @@ void Driver::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, con
 		if (accumulator != *p)
 		{
 			*p = accumulator;
-			SetDirty(top, 8 * firstColIndex);
+			FlagPixelDirty(top, 8 * firstColIndex);
 		}
 	}
 }
 
 // Set the cursor position
-void Driver::SetCursor(PixelNumber r, PixelNumber c) noexcept
+void ScreenDriver::SetCursor(PixelNumber r, PixelNumber c) noexcept
 {
 	row = r;
 	column = c;
@@ -360,7 +414,7 @@ void Driver::SetCursor(PixelNumber r, PixelNumber c) noexcept
 	justSetCursor = true;
 }
 
-void Driver::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept
+void ScreenDriver::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept
 {
 	if (y < displayHeight && x < rightMargin)
 	{
@@ -387,12 +441,12 @@ void Driver::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept
 		if (newVal != oldVal)
 		{
 			*p = newVal;
-			SetDirty(y, x);
+			FlagPixelDirty(y, x);
 		}
 	}
 }
 
-bool Driver::ReadPixel(PixelNumber x, PixelNumber y) const noexcept
+bool ScreenDriver::ReadPixel(PixelNumber x, PixelNumber y) const noexcept
 {
 	if (y < displayHeight && x < displayWidth)
 	{
@@ -404,7 +458,7 @@ bool Driver::ReadPixel(PixelNumber x, PixelNumber y) const noexcept
 
 // Write a UTF8 byte.
 // If textYpos is off the end of the display, then don't write anything, just update textXpos and lastCharColData
-size_t Driver::write(uint8_t c) noexcept
+size_t ScreenDriver::write(uint8_t c) noexcept
 {
 	if (numContinuationBytesLeft == 0)
 	{
@@ -468,7 +522,7 @@ size_t Driver::write(uint8_t c) noexcept
 	}
 }
 
-size_t Driver::writeNative(uint16_t ch) noexcept
+size_t ScreenDriver::writeNative(uint16_t ch) noexcept
 {
 	const LcdFont * const currentFont = fonts[currentFontNumber];
 	if (ch == '\n')
@@ -535,7 +589,7 @@ size_t Driver::writeNative(uint16_t ch) noexcept
 						if (newVal != oldVal)
 						{
 							*p = newVal;
-							SetDirty(row + i, column);
+							FlagPixelDirty(row + i, column);
 						}
 						p += (displayWidth/8);
 					}
@@ -565,7 +619,7 @@ size_t Driver::writeNative(uint16_t ch) noexcept
 					if (newVal != oldVal)
 					{
 						*p = newVal;
-						SetDirty(row + i, column);
+						FlagPixelDirty(row + i, column);
 					}
 					colData >>= 1;
 					p += (displayWidth/8);

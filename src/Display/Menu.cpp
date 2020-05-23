@@ -70,7 +70,7 @@
 #if SUPPORT_12864_LCD
 
 //#include "ST7920/lcd7920.h"
-#include "Driver.h"
+#include <Display/ScreenDriver.h>
 #include "RepRap.h"
 #include "Platform.h"
 #include "Display/Display.h"
@@ -82,7 +82,7 @@
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
 const uint32_t ErrorTimeout = 6000;				// how long we display an error message for
 
-Menu::Menu(Driver& refLcd) noexcept
+Menu::Menu(ScreenDriver& refLcd) noexcept
 	: lcd(refLcd),
 	  timeoutValue(0), lastActionTime(0),
 	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0),
@@ -151,10 +151,10 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 
 	// Draw and a box and clear the interior
 	lcd.SetRightMargin(lcd.GetNumCols());
-	lcd.Line(topBottomMargin, sideMargin, topBottomMargin, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(topBottomMargin, lcd.GetNumCols() - sideMargin - 1, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(lcd.GetNumRows() - topBottomMargin - 1, sideMargin, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(topBottomMargin, sideMargin, lcd.GetNumRows() - topBottomMargin - 1, sideMargin, PixelMode::PixelSet);
+	lcd.DrawLine(topBottomMargin, sideMargin, topBottomMargin, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
+	lcd.DrawLine(topBottomMargin, lcd.GetNumCols() - sideMargin - 1, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
+	lcd.DrawLine(lcd.GetNumRows() - topBottomMargin - 1, sideMargin, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
+	lcd.DrawLine(topBottomMargin, sideMargin, lcd.GetNumRows() - topBottomMargin - 1, sideMargin, PixelMode::PixelSet);
 	lcd.ClearRect(topBottomMargin + 1, sideMargin + 1, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1);
 
 	// We could draw the static text directly, but it is easier to use the existing classes
@@ -580,7 +580,7 @@ void Menu::EncoderActionScrollItemHelper(int action) noexcept
 			highlightedItem->Enter(action > 0);
 
 			PixelNumber tLastOffset = rowOffset;
-			rowOffset = highlightedItem->GetVisibilityRowOffset(tLastOffset, lcd.GetFontHeight(highlightedItem->GetFontNumber()));
+			rowOffset = highlightedItem->GetVisibilityRowOffset(lcd, tLastOffset, lcd.GetFontHeight(highlightedItem->GetFontNumber()));
 
 			if (rowOffset != tLastOffset)
 			{

@@ -13,8 +13,7 @@
 #if SUPPORT_12864_LCD
 
 #include "General/FreelistManager.h"
-//#include "ST7920/lcd7920.h"
-#include "Driver.h"
+#include <Display/ScreenDriver.h>
 #include "Storage/MassStorage.h"
 
 // Menu item class hierarchy
@@ -29,7 +28,7 @@ public:
 	static constexpr Visibility AlwaysVisible = 0;
 
 	// Draw this element on the LCD respecting 'maxWidth' and 'highlight'
-	virtual void Draw(Driver& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept = 0;
+	virtual void Draw(ScreenDriver& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept = 0;
 
 	// Select this element with a push of the encoder.
 	// If it returns nullptr false go into adjustment mode, if we can adjust the item.
@@ -51,10 +50,10 @@ public:
 	virtual bool Adjust(int clicks) noexcept { return true; }
 
 	// If the width was specified as zero, update it with the actual width. Also update the height.
-	virtual void UpdateWidthAndHeight(Driver& lcd) noexcept = 0;
+	virtual void UpdateWidthAndHeight(ScreenDriver& lcd) noexcept = 0;
 
 	// DC: I don't know what this one is for, the person who wrote it didn't document it
-	virtual PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept { return 0; }
+	virtual PixelNumber GetVisibilityRowOffset(ScreenDriver& lcd, PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept { return 0; }
 
 	virtual ~MenuItem() noexcept { }
 
@@ -64,7 +63,7 @@ public:
 	bool IsVisible() const noexcept;
 
 	// Erase this item if it is drawn but should not be visible
-	void EraseIfInvisible(Driver& lcd, PixelNumber tOffset) noexcept;
+	void EraseIfInvisible(ScreenDriver& lcd, PixelNumber tOffset) noexcept;
 
 	// Return the width of this item in pixels
 	PixelNumber GetWidth() const noexcept { return width; }
@@ -77,10 +76,10 @@ protected:
 
 	// Print the item starting at the current cursor position, which may be off screen. Used to find the width and also to really print the item.
 	// Overridden for items that support variable alignment
-	virtual void CorePrint(Driver& lcd) noexcept { }
+	virtual void CorePrint(ScreenDriver& lcd) noexcept { }
 
 	// Print the item at the correct place with the correct alignment
-	void PrintAligned(Driver& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept;
+	void PrintAligned(ScreenDriver& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept;
 
 	const PixelNumber row, column;
 	PixelNumber width, height;
@@ -103,11 +102,11 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<TextMenuItem>(p); }
 
 	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char *t) noexcept;
-	void Draw(Driver& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
-	void UpdateWidthAndHeight(Driver& lcd) noexcept override;
+	void Draw(ScreenDriver& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void UpdateWidthAndHeight(ScreenDriver& lcd) noexcept override;
 
 protected:
-	void CorePrint(Driver& lcd) noexcept override;
+	void CorePrint(ScreenDriver& lcd) noexcept override;
 
 private:
 	const char *text;
@@ -120,14 +119,14 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<ButtonMenuItem>(p); }
 
 	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *t, const char *cmd, const char *acFile) noexcept;
-	void Draw(Driver& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
-	void UpdateWidthAndHeight(Driver& lcd) noexcept override;
+	void Draw(ScreenDriver& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void UpdateWidthAndHeight(ScreenDriver& lcd) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 
-	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
+	PixelNumber GetVisibilityRowOffset(ScreenDriver& lcd, PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
 
 protected:
-	void CorePrint(Driver& lcd) noexcept override;
+	void CorePrint(ScreenDriver& lcd) noexcept override;
 
 private:
 	const char *text;
@@ -142,18 +141,18 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<ValueMenuItem>(p); }
 
 	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d) noexcept;
-	void Draw(Driver& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(ScreenDriver& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 	bool CanAdjust() const noexcept override { return true; }
 	bool Adjust(int clicks) noexcept override;
-	void UpdateWidthAndHeight(Driver& lcd) noexcept override;
+	void UpdateWidthAndHeight(ScreenDriver& lcd) noexcept override;
 
-	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
+	PixelNumber GetVisibilityRowOffset(ScreenDriver& lcd, PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
 
 	unsigned int GetReferencedToolNumber() const noexcept;
 
 protected:
-	void CorePrint(Driver& lcd) noexcept override;
+	void CorePrint(ScreenDriver& lcd) noexcept override;
 
 private:
 	enum class AdjustMode : uint8_t { displaying, adjusting, liveAdjusting };
@@ -189,13 +188,13 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<FilesMenuItem>(p); }
 
 	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf) noexcept;
-	void Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(ScreenDriver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
 	void Enter(bool bForwardDirection) noexcept override;
 	int Advance(int nCounts) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
-	void UpdateWidthAndHeight(Driver& lcd) noexcept override;
+	void UpdateWidthAndHeight(ScreenDriver& lcd) noexcept override;
 
-	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
+	PixelNumber GetVisibilityRowOffset(ScreenDriver& lcd, PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
 
 	void EnterDirectory() noexcept;
 
@@ -203,7 +202,7 @@ protected:
 	void vResetViewState() noexcept;
 
 private:
-	void ListFiles(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept;
+	void ListFiles(ScreenDriver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept;
 	uint8_t GetDirectoryNesting() const noexcept;
 
 	const unsigned int numDisplayLines;
@@ -237,8 +236,8 @@ public:
 
 	ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName) noexcept;
 
-	void Draw(Driver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
-	void UpdateWidthAndHeight(Driver& lcd) noexcept override;
+	void Draw(ScreenDriver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
+	void UpdateWidthAndHeight(ScreenDriver& lcd) noexcept override;
 
 private:
 	String<MaxFilenameLength> fileName;
