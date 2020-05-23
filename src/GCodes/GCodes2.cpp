@@ -267,12 +267,25 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			return false;
 		}
 #endif
-		if (!LockMovementAndWaitForStandstill(gb))		// do this first to make sure that a new grid isn't being defined
+		if (!LockMovementAndWaitForStandstill(gb))			// do this first to make sure that a new grid isn't being defined
 		{
 			return false;
 		}
 		{
-			const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
+			int sparam;
+			if (gb.Seen('S'))
+			{
+				sparam = gb.GetIValue();
+			}
+			else if (DoFileMacro(gb, MESH_G, false, 29))	// no S parameter found so try to execute mesh.g
+			{
+				break;
+			}
+			else
+			{
+				sparam = 0;									// mesh.g not found, so treat G29 the same as G29 S0
+			}
+
 			switch(sparam)
 			{
 			case 0:		// probe and save height map
@@ -4066,7 +4079,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if HAS_SMART_DRIVERS
 		case 917: // Set/report standstill motor current percentage
 #endif
-			// Note that we no longer wait for movement to stop. This is so that we can use these commands (in particular, M913) in the M911 power fail script.
+			if (gb.GetState() != GCodeState::powerFailPausing1)			// we don't wait for movement to stop if we are running the power fail script
+			{
+				if (!LockMovementAndWaitForStandstill(gb))
+				{
+					return false;
+				}
+			}
 			{
 				bool seen = false;
 				for (size_t axis = 0; axis < numTotalAxes; axis++)

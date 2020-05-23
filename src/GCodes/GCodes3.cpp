@@ -587,7 +587,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	{
 		seen = true;
 		const unsigned int nva = gb.GetUIValue();
-		if (nva >= MinAxes && nva <= numTotalAxes)
+		if (nva >= MinVisibleAxes && nva <= numTotalAxes)
 		{
 			numVisibleAxes = nva;
 		}
