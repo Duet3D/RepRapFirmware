@@ -16,37 +16,18 @@
 
 // The LCD SPI clock frequency is now defined in the Pins.h file for the configuration being built
 
-// LCD basic instructions. These all take 72us to execute except LcdDisplayClear, which takes 1.6ms
-constexpr uint8_t LcdDisplayClear = 0x01;
-constexpr uint8_t LcdHome = 0x02;
-constexpr uint8_t LcdEntryModeSet = 0x06;				// move cursor right and increment address when writing data
-constexpr uint8_t LcdDisplayOff = 0x08;
-constexpr uint8_t LcdDisplayOn = 0x0C;					// add 0x02 for cursor on and/or 0x01 for cursor blink on
-constexpr uint8_t LcdFunctionSetBasicAlpha = 0x20;
-constexpr uint8_t LcdFunctionSetBasicGraphic = 0x22;
-constexpr uint8_t LcdFunctionSetExtendedAlpha = 0x24;
-constexpr uint8_t LcdFunctionSetExtendedGraphic = 0x26;
-constexpr uint8_t LcdSetDdramAddress = 0x80;			// add the address we want to set
-
-// LCD extended instructions
-constexpr uint8_t LcdSetGdramAddress = 0x80;
-
-constexpr unsigned int LcdCommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
-constexpr unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
-constexpr unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
-
 inline void ST7920::commandDelay() noexcept
 {
-	delayMicroseconds(LcdCommandDelayMicros);
+	delayMicroseconds(CommandDelayMicros);
 }
 
 inline void ST7920::dataDelay() noexcept
 {
-	delayMicroseconds(LcdDataDelayMicros);
+	delayMicroseconds(DataDelayMicros);
 }
 
 ST7920::ST7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
-	: ScreenDriver(width, height)
+	: DisplayDriver(width, height)
 {
 	device.csPin = csPin;
 	device.csPolarity = true;						// active high chip select
@@ -63,13 +44,9 @@ void ST7920::SetBusClockFrequency(uint32_t freq) noexcept
 	device.clockFrequency = freq;
 }
 
-void ST7920::Init() noexcept
+void ST7920::OnInitialize() noexcept
 {
 	sspi_master_init(&device, 8);
-	numContinuationBytesLeft = 0;
-	startRow = displayHeight;
-	startCol = displayWidth;
-	endRow = endCol = nextFlushRow = 0;
 
 	{
 		MutexLocker lock(Tasks::GetSpiMutex());
@@ -78,34 +55,35 @@ void ST7920::Init() noexcept
 		sspi_select_device(&device);
 		delayMicroseconds(1);
 
-		sendLcdCommand(LcdFunctionSetBasicAlpha);
+		sendLcdCommand(FunctionSetBasicAlpha);
 		delay(2);
-		sendLcdCommand(LcdFunctionSetBasicAlpha);
+		sendLcdCommand(FunctionSetBasicAlpha);
 		commandDelay();
-		sendLcdCommand(LcdEntryModeSet);
+		sendLcdCommand(EntryModeSet);
 		commandDelay();
-		sendLcdCommand(LcdDisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
-		delay(LcdDisplayClearDelayMillis);
-		sendLcdCommand(LcdFunctionSetExtendedGraphic);
+		sendLcdCommand(DisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
+		delay(DisplayClearDelayMillis);
+		sendLcdCommand(FunctionSetExtendedGraphic);
 		commandDelay();
 
 		sspi_deselect_device(&device);
 	}
+}
 
-	Clear();
-	FlushAll();
-
+void ST7920::OnEnable() noexcept
+{
 	{
 		MutexLocker lock(Tasks::GetSpiMutex());
 		sspi_master_setup_device(&device);
 		delayMicroseconds(1);
 		sspi_select_device(&device);
 		delayMicroseconds(1);
-		sendLcdCommand(LcdDisplayOn);
+
+		sendLcdCommand(DisplayOn);
 		commandDelay();
+
 		sspi_deselect_device(&device);
 	}
-	currentFontNumber = 0;
 }
 
 // Flush all of the dirty part of the image to the lcd. Only called during startup and shutdown.
@@ -118,38 +96,40 @@ void ST7920::FlushAll() noexcept
 }
 
 //TODO: make Flush(bool full = false)
-//TODO: why is the dirty rectangle not simply shrunk and is a startRow used instead?
-//      Is this to finish existing outstanding flush actions while simultaneously allowing the dirty area to grow?
 // Flush some of the dirty part of the image to the LCD, returning true if there is more to do
+// The dirty area is shrunk by increasing startRow until startRow equals endRow
 bool ST7920::Flush() noexcept
 {
 	// See if there is anything to flush
-	if (endCol > startCol && endRow > startRow)
+	if (dirtyRectRight > dirtyRectLeft && dirtyRectBottom > dirtyRectTop)
 	{
 		// Decide which row to flush next
-		if (nextFlushRow < startRow || nextFlushRow >= endRow)
+		if (nextFlushRow < dirtyRectTop || nextFlushRow >= dirtyRectBottom)
 		{
-			nextFlushRow = startRow;	// start from the beginning
+			nextFlushRow = dirtyRectTop;	// start from the beginning
 		}
 
-		if (nextFlushRow == startRow)	// if we are starting from the beginning
+		if (nextFlushRow == dirtyRectTop)	// if we are starting from the beginning
 		{
-			++startRow;					// flag this row as flushed because this will happen in the next section
+			++dirtyRectTop;					// flag this row as flushed because this will happen in the next section
 		}
 
 		// Flush that row
 		{
-			uint8_t startColNum = startCol/16;
-			const uint8_t endColNum = (endCol + 15)/16;
+			uint8_t startColNum = dirtyRectLeft/16;
+			const uint8_t endColNum = (dirtyRectRight + 15)/16;
 //			debugPrintf("flush %u %u %u\n", nextFlushRow, startColNum, endColNum);
 
 			MutexLocker lock(Tasks::GetSpiMutex());
 			sspi_master_setup_device(&device);
+			delayMicroseconds(1);
 			sspi_select_device(&device);
 			delayMicroseconds(1);
 
 			setGraphicsAddress(nextFlushRow, startColNum);
-			uint8_t *ptr = imageBuffer + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
+
+			uint8_t *ptr = displayBuffer + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
+
 			while (startColNum < endColNum)
 			{
 				sendLcdData(*ptr++);
@@ -157,18 +137,20 @@ bool ST7920::Flush() noexcept
 				++startColNum;
 				dataDelay();
 			}
+
 			sspi_deselect_device(&device);
 		}
 
-		if (startRow != endRow)
+		if (dirtyRectTop < dirtyRectBottom)
 		{
 			++nextFlushRow;
 			return true;
 		}
 
-		startRow = displayHeight;
-		startCol = displayWidth;
-		endCol = endRow = nextFlushRow = 0;
+		// Reset dirty rectangle and row tracking
+		dirtyRectTop = displayHeight;
+		dirtyRectLeft = displayWidth;
+		dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
 	}
 	return false;
 }
@@ -176,9 +158,9 @@ bool ST7920::Flush() noexcept
 // Set the address to write to. The column address is in 16-bit words, so it ranges from 0 to 7.
 void ST7920::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
 {
-	sendLcdCommand(LcdSetGdramAddress | (r & 31));
+	sendLcdCommand(SetGdramAddress | (r & 31));
 	//commandDelay();  // don't seem to need this one
-	sendLcdCommand(LcdSetGdramAddress | c | ((r & 32) >> 2));
+	sendLcdCommand(SetGdramAddress | c | ((r & 32) >> 2));
 	commandDelay();    // we definitely need this one
 }
 

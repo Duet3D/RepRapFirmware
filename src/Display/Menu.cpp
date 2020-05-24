@@ -70,7 +70,7 @@
 #if SUPPORT_12864_LCD
 
 //#include "ST7920/lcd7920.h"
-#include <Display/ScreenDriver.h>
+#include <Display/DisplayDriver.h>
 #include "RepRap.h"
 #include "Platform.h"
 #include "Display/Display.h"
@@ -82,7 +82,7 @@
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
 const uint32_t ErrorTimeout = 6000;				// how long we display an error message for
 
-Menu::Menu(ScreenDriver& refLcd) noexcept
+Menu::Menu(DisplayDriver& refLcd) noexcept
 	: lcd(refLcd),
 	  timeoutValue(0), lastActionTime(0),
 	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0),

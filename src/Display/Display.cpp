@@ -197,7 +197,7 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			// The following statement does allow changing the SPI frequency of the driver multiple times
 			// NOTE: theoretically, a driver does not necessarily have to be SPI-based, but since M918 assumes serial display drivers,
-			// a method to set the serial frequency has been supported at the DisplayDriver base class level
+			// a method to set the serial bus clock frequency has been supported at the DisplayDriver base class level.
 			if (gb.Seen('F'))
 			{
 				lcd->SetBusClockFrequency(gb.GetUIValue());

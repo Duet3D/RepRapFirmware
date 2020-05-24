@@ -15,7 +15,7 @@
 #if SUPPORT_12864_LCD
 
 #include "RotaryEncoder.h"
-#include <Display/ScreenDriver.h>
+#include <Display/DisplayDriver.h>
 #include "Menu.h"
 #include "GCodes/GCodeResult.h"
 
@@ -37,7 +37,7 @@ public:
 	void UpdatingFirmware() noexcept;
 
 private:
-	ScreenDriver *lcd;
+	DisplayDriver *lcd;
 	Menu *menu;
 	RotaryEncoder *encoder;
 	Pin beepPin;

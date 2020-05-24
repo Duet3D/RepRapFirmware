@@ -51,35 +51,14 @@ pixel_height = 64
 #include "Tasks.h"
 #include "Hardware/IoPorts.h"
 
-// 10101110 Set display enable to off
-constexpr uint8_t LcdDisplayOff = 0xAE;
-// 11100010 System reset
-constexpr uint8_t LcdSystemReset = 0xE2;
-
-constexpr uint8_t LcdDisplayClear = 0x01;
-constexpr uint8_t LcdHome = 0x02;
-constexpr uint8_t LcdEntryModeSet = 0x06;
-constexpr uint8_t LcdDisplayOn = 0x0C;
-constexpr uint8_t LcdFunctionSetBasicAlpha = 0x20;
-constexpr uint8_t LcdFunctionSetBasicGraphic = 0x22;
-constexpr uint8_t LcdFunctionSetExtendedAlpha = 0x24;
-constexpr uint8_t LcdFunctionSetExtendedGraphic = 0x26;
-constexpr uint8_t LcdSetDdramAddress = 0x80;
-
-// LCD extended instructions
-constexpr uint8_t LcdSetGdramAddress = 0x80;
-
-constexpr unsigned int LcdCommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
-constexpr unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
-constexpr unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
-constexpr unsigned int LcdFlushRowDelayMicros = 20;     // Delay between sending each rows when flushing all rows @ 2.0MHz (@ 1.0MHz this is not necessary)
-
 UC1701::UC1701(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noexcept
-	: ScreenDriver(width, height), dcPin(dcPin)
+	: DisplayDriver(width, height), dcPin(dcPin)
 {
 	spiDevice.csPin = csPin;
 	// Set CS (chip select) to be active low
-	spiDevice.csPolarity = false;
+	//spiDevice.csPolarity = false;
+	// Needs to be true because CLK is gated with CS
+	spiDevice.csPolarity = true;
 	// Data is sampled on the rising edge of the clock pulse and shifted out on the falling edge of the clock pulse
 	spiDevice.spiMode = 0;
 	// The LcdSpiClockFrequency is now defined in the Pins_xxxxx.h file for the configuration being built
@@ -89,17 +68,20 @@ UC1701::UC1701(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noex
 #endif
 }
 
-void UC1701::Init() noexcept
+void UC1701::OnInitialize() noexcept
 {
 	// Set DC/A0 pin to be an output with initial LOW state (command: 0, data: 1)
 	IoPort::SetPinMode(dcPin, OUTPUT_LOW);
 
+	// Post-reset wait
+	delay(6);
+
 	sspi_master_init(&spiDevice, 8);
 
-	numContinuationBytesLeft = 0;
-	startRow = displayHeight;
-	startCol = displayWidth;
-	endRow = endCol = nextFlushRow = 0;
+	//numContinuationBytesLeft = 0;
+	//startRow = displayHeight;
+	//startCol = displayWidth;
+	//endRow = endCol = nextFlushRow = 0;
 
 	{
 		MutexLocker lock(Tasks::GetSpiMutex());
@@ -110,41 +92,44 @@ void UC1701::Init() noexcept
 
 		//TODO: make these separate methods?
 		// 11100010 System reset
-		sendLcdCommand(LcdSystemReset);
-		sendLcdCommand(LcdDisplayOff);
+		sendCommand(SystemReset);
+		sendCommand(DisplayOff);
 		// 01000000 Set scroll line to 0 (6-bit value)
-		sendLcdCommand(0x40);
+		sendCommand(0x40);
 		// 10100000 Set SEG (column) direction to MX (mirror = 0)
-		sendLcdCommand(0xA0);
+		sendCommand(0xA0);
 		// 11001000 Set COM (row) direction not to MY (mirror = 0)
-		sendLcdCommand(0xC8);
+		sendCommand(0xC8);
 		// 10100110 Set inverse display to false
-		sendLcdCommand(0xA6);
+		sendCommand(0xA6);
 		// 10100010 Set LCD bias ratio BR=0 (1/9th at 1/65 duty)
-		sendLcdCommand(0xA2);
+		sendCommand(0xA2);
 		// 00101111 Set power control to enable XV0, V0 and VG charge pumps
-		sendLcdCommand(0x2F);
+		sendCommand(0x2F);
 		// 11111000 Set booster ratio (2-byte command) to 4x
-		sendLcdCommand(0xF8);
-		sendLcdCommand(0x00);
+		sendCommand(0xF8);
+		sendCommand(0x00);
 		// 00100011 Set Vlcd resistor ratio 1+Rb/Ra to 6.5 for the voltage regulator (contrast)
-		sendLcdCommand(0x23);
+		sendCommand(0x23);
 		// 10000001 Set electronic volume (2-byte command) 6-bit contrast value
-		sendLcdCommand(0x81);
-		sendLcdCommand(0x27);
+		sendCommand(0x81);
+		sendArg(0x27);
 		// 10101100 Set static indicator off
-		sendLcdCommand(0xAC);
-		// 10101110 Set display enable to off
-		sendLcdCommand(0xAE);
-		// 10100101 Set all pixel on (enters power saving mode)
-		sendLcdCommand(0xA5);
+		sendCommand(0xAC);
+
+		// Enter sleep mode
+		sendCommand(DisplayOff);
+		sendCommand(PixelOn);
 
 		delayMicroseconds(1);
 		sspi_deselect_device(&spiDevice);
 	}
+}
 
-	Clear();
-	FlushAll();
+void UC1701::OnEnable() noexcept
+{
+	//Clear();
+	//FlushAll();
 
 	{
 		MutexLocker lock(Tasks::GetSpiMutex());
@@ -153,14 +138,15 @@ void UC1701::Init() noexcept
 		sspi_select_device(&spiDevice);
 		delayMicroseconds(1);
 
-		// Set display enable to on
-		sendLcdCommand(0xAF);
+		// Exit sleep mode, display on
+		sendCommand(PixelOff);
+		sendCommand(DisplayOn);
 
 		delayMicroseconds(1);
 		sspi_deselect_device(&spiDevice);
 	}
 
-	currentFontNumber = 0;
+	//currentFontNumber = 0;
 }
 
 // Adjust the serial interface clock frequency
@@ -175,33 +161,90 @@ void UC1701::FlushAll() noexcept
 {
 	while (Flush())
 	{
-		delayMicroseconds(LcdFlushRowDelayMicros);
+		delayMicroseconds(FlushRowDelayMicros);
 	}
 }
 
 // Flush some of the dirty part of the image to the LCD, returning true if there is more to do
 //TODO: call this FlushBlock() or FlushRow() or FlushTile()?
 //TODO: move this method to the DriverBase class, and implement callback UpdateTile(c, r)?
+//      perhaps, offer the method in the specific driver the dirty rectangle in OnStartFlush() to let it determine the start parameters
+//      and OnFlush() to let it flush based on these parameters, and return false when done,
+//      so that the Flush() in the DisplayDriver can submit a new dirty rectangle through OnStartFlush()
+//      the dirty rectangle member variables can be made private then as well.
 bool UC1701::Flush() noexcept
 {
-	// See if there is anything to flush
-	if (endCol > startCol && endRow > startRow)
+	// See if there is anything to flush, right and bottom need to be at least one pixel larger than left and top.
+	if (dirtyRectRight > dirtyRectLeft && dirtyRectBottom > dirtyRectTop)
 	{
+		// Test to flush entire display each time something is dirty
+		{
+			MutexLocker lock(Tasks::GetSpiMutex());
+			sspi_master_setup_device(&spiDevice);
+			delayMicroseconds(1);
+			sspi_select_device(&spiDevice);
+			delayMicroseconds(1);
+
+			uint8_t tile[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+
+			// Send 8 rows of pixels in each transaction
+			for(int y = 0; y < displayHeight; y += 8)
+			{
+				// Set where the bytes go
+				setGraphicsAddress(y, 0);
+
+				startSendData();
+
+				// Send tiles of 8x8 for the entire display width
+				for(int x = 0; x < displayWidth; x += 8)
+				{
+					// Fill the tile buffer
+					for(int i = 0; i < 8; i++)
+					{
+						tile[i] = *(displayBuffer + ((y + i) * displayWidth / 8) + (x / 8));
+					}
+					// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
+					for(int i = 7; i >= 0; i--)
+					{
+						sendData(transformTile(tile, i));
+					}
+				}
+
+				endSendData();
+			}
+
+			// End update
+			delayMicroseconds(1);
+			sspi_deselect_device(&spiDevice);
+		}
+
+		// Reset dirty rectangle and row tracking
+		dirtyRectTop = displayHeight;
+		dirtyRectLeft = displayWidth;
+		dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
+
+/*
+		// The columns are set one pixel at a time
+		uint8_t startColNum = dirtyRectLeft;
+		const uint8_t endColNum = dirtyRectRight;
+		// The rows are set 8 pixels at a time
+		uint8_t startRowNum = dirtyRectTop/8;
+		const uint8_t endRowNum = (dirtyRectBottom + 7)/8;
+
 		// Decide which row to flush next
-		if (nextFlushRow < startRow || nextFlushRow >= endRow)
+		if (nextFlushRow < startRowNum || nextFlushRow >= endRowNum)
 		{
-			nextFlushRow = startRow;	// start from the beginning
+			nextFlushRow = startRowNum;       // start from the beginning
 		}
 
-		if (nextFlushRow == startRow)	// if we are starting from the beginning
+		if (nextFlushRow == startRowNum)	  // if we are starting from the beginning
 		{
-			++startRow;					// flag this row as flushed because it will be soon
+			// Shrink the dirty rectangle pre-emptively (flag as flushed)
+			dirtyRectTop = startRowNum + 8;
 		}
 
-		// Flush that row
+		// Flush that row/tile
 		{
-			uint8_t startColNum = startCol/16;
-			const uint8_t endColNum = (endCol + 15)/16;
 //			debugPrintf("flush %u %u %u\n", nextFlushRow, startColNum, endColNum);
 
 			MutexLocker lock(Tasks::GetSpiMutex());
@@ -210,7 +253,7 @@ bool UC1701::Flush() noexcept
 			delayMicroseconds(1);
 
 			setGraphicsAddress(nextFlushRow, startColNum);
-			uint8_t *ptr = imageBuffer + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
+			uint8_t *ptr = displayBuffer + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
 			while (startColNum < endColNum)
 			{
 				sendLcdData(*ptr++);
@@ -221,64 +264,94 @@ bool UC1701::Flush() noexcept
 			sspi_deselect_device(&spiDevice);
 		}
 
-		if (startRow != endRow)
+		if (dirtyRectTop < dirtyRectBottom)
 		{
-			++nextFlushRow;
+			nextFlushRow += 8;
 			return true;
 		}
 
-		startRow = displayHeight;
-		startCol = displayWidth;
-		endCol = endRow = nextFlushRow = 0;
+		// Reset dirty rectangle and row tracking
+		dirtyRectTop = displayHeight;
+		dirtyRectLeft = displayWidth;
+		dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
+*/
 	}
 	return false;
 }
 
-
-inline void UC1701::commandDelay() noexcept
+// Array of bytes is assumed to be 8 in size (square tile of 8x8 bits)
+//TODO: define Tile data type?
+uint8_t UC1701::transformTile(uint8_t data[8], PixelNumber c) noexcept
 {
-	delayMicroseconds(LcdCommandDelayMicros);
-}
-
-inline void UC1701::dataDelay() noexcept
-{
-	delayMicroseconds(LcdDataDelayMicros);
+	return ((data[0] >> c) & 1)
+         | ((data[1] >> c) & 1) << 1
+		 | ((data[2] >> c) & 1) << 2
+		 | ((data[3] >> c) & 1) << 3
+		 | ((data[4] >> c) & 1) << 4
+		 | ((data[5] >> c) & 1) << 5
+		 | ((data[6] >> c) & 1) << 6
+		 | ((data[7] >> c) & 1) << 7;
 }
 
 // Set the address to write to.
 // The display memory is organized in 8+1 pages (of horizontal rows) and 0-131 columns
 void UC1701::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
 {
-	// 1011#### Set Page Address
-	sendLcdCommand(0xB0 | ((r >> 3) & 0x0F));
-	// 0000#### Set Column Address LSB
-	sendLcdCommand(0x00 | (c & 0x0F));
 	// 0001#### Set Column Address MSB
-	sendLcdCommand(0x10 | ((c >> 4) & 0x0F));
+	sendCommand(0x10 | ((c >> 4) & 0x0F));
+	// 0000#### Set Column Address LSB
+	sendCommand(0x00 | (c & 0x0F));
+	// 1011#### Set Page Address
+	sendCommand(0xB0 | ((r >> 3) & 0x0F));
+
 	commandDelay();
 }
 
 // Send a command to the LCD. The SPI mutex is already owned
-void UC1701::sendLcdCommand(uint8_t command) noexcept
+void UC1701::sendCommand(uint8_t command) noexcept
 {
-	sendLcd(command);
+	uint8_t buffer[1];
+	buffer[0] = command;
+
+	sspi_transceive_packet(buffer, nullptr, 1);
 }
 
 // Send a data byte to the LCD. The SPI mutex is already owned
-void UC1701::sendLcdData(uint8_t data) noexcept
+void UC1701::sendArg(uint8_t arg) noexcept
 {
-	digitalWrite(dcPin, true);
-	sendLcd(data);
-	digitalWrite(dcPin, false);
+	uint8_t buffer[1];
+	buffer[0] = arg;
+
+	sspi_transceive_packet(buffer, nullptr, 1);
 }
 
-// Send a command to the lcd.
-// The SPI mutex is already owned
-void UC1701::sendLcd(uint8_t data) noexcept
+void UC1701::startSendData() noexcept
+{
+	digitalWrite(dcPin, true);
+}
+
+// Send a data byte to the LCD. The SPI mutex is already owned
+void UC1701::sendData(uint8_t data) noexcept
 {
 	uint8_t buffer[1];
 	buffer[0] = data;
+
 	sspi_transceive_packet(buffer, nullptr, 1);
+}
+
+void UC1701::endSendData() noexcept
+{
+	digitalWrite(dcPin, false);
+}
+
+inline void UC1701::commandDelay() noexcept
+{
+	delayMicroseconds(CommandDelayMicros);
+}
+
+inline void UC1701::dataDelay() noexcept
+{
+	delayMicroseconds(DataDelayMicros);
 }
 
 #endif

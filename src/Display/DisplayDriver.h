@@ -1,5 +1,5 @@
 /*
- * ScreenDriver.h
+ * DisplayDriver.h
  *
  *  Created on  : 2018-01-22
  *      Author  : David Crocker
@@ -7,8 +7,8 @@
  *      Author  : Martijn Schiedon
  */
 
-#ifndef SRC_DISPLAY_SCREENDRIVER_H_
-#define SRC_DISPLAY_SCREENDRIVER_H_
+#ifndef SRC_DISPLAY_DISPLAYDRIVER_H_
+#define SRC_DISPLAY_DISPLAYDRIVER_H_
 
 #include "RepRapFirmware.h"
 
@@ -27,24 +27,31 @@ enum class PixelMode : uint8_t
 
 typedef uint8_t PixelNumber;
 
+//TODO: check if "east const" convention is something to use, check with David how he feels
+
 // Derive this class from the Print class so that we can print stuff to it in alpha mode
-class ScreenDriver : public Print
+class DisplayDriver : public Print
 {
 public:
-	// Construct a GLCD driver.
-	ScreenDriver(PixelNumber width, PixelNumber height) noexcept;
-	~ScreenDriver();
+	DisplayDriver(PixelNumber width, PixelNumber height) noexcept;
+	~DisplayDriver();
 
+	// TODO: rename these GetDisplayWidth/GetDisplayHeight?
 	constexpr PixelNumber GetNumCols() const noexcept { return displayWidth; }
 	constexpr PixelNumber GetNumRows() const noexcept { return displayHeight; }
 
 	// Initialize the display.
-	virtual void Init() noexcept = 0;
+	virtual void Init() noexcept;
+
+	// Callback handler to initialize driver
+	virtual void OnInitialize() noexcept = 0;
+	// Callback handler to enable driver
+	virtual void OnEnable() noexcept = 0;
 	// Set the clock frequency of the interface (serial bus)
 	virtual void SetBusClockFrequency(uint32_t freq) noexcept = 0;
-	// Flush the display buffer to the display. Data will not be committed to the display until this is called.
+	// Flush the entire display buffer to the display.
 	virtual void FlushAll() noexcept = 0;
-	// Flush just some data, returning true if this needs to be called again
+	// Flush units of dirty data to the display, returns true if there is more to flush
 	virtual bool Flush() noexcept = 0;
 
 	// Write a single character in the current font. Called by the 'print' functions.
@@ -103,7 +110,7 @@ public:
 	//  mode = whether we want to set, clear or invert the pixel
 	void SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept;
 
-	void FlagPixelDirty(PixelNumber r, PixelNumber c) noexcept;
+	void SetPixelDirty(PixelNumber r, PixelNumber c) noexcept;
 
 	// Read a pixel. Returns true if the pixel is set, false if it is clear.
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
@@ -143,22 +150,25 @@ protected:
 	const PixelNumber displayWidth, displayHeight;
 	const LcdFont* const* fonts;
 	size_t numFonts;
-	size_t currentFontNumber;						// index of the current font
+	size_t currentFontNumber;						                            // index of the current font
 	uint32_t charVal;
-	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
+	uint16_t lastCharColData;						                            // data for the last non-space column, used for kerning
 	uint8_t numContinuationBytesLeft;
-	PixelNumber row, column;
-	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
-	PixelNumber nextFlushRow;						// which row we need to flush next
+	PixelNumber row, column;                                                    // current cursor location
+	PixelNumber dirtyRectTop, dirtyRectLeft, dirtyRectBottom, dirtyRectRight;	// coordinates of the dirty rectangle
+	PixelNumber nextFlushRow;						                            // which row we need to flush next, owned by the Flush() method
 	PixelNumber leftMargin, rightMargin;
-	uint32_t imageBufferSize;
-	uint8_t* imageBuffer;	        		                // image buffer
+	uint32_t displayBufferSize;
+	uint8_t* displayBuffer;	        		                                    // screen/display buffer
 	bool textInverted;
 	bool justSetCursor;
 
-	size_t writeNative(uint16_t c) noexcept;		// write a decoded character
+	// Future idea
+	//const PixelNumber flushTileWidth, flushTileHeight;
+
+	size_t writeNative(uint16_t c) noexcept;		                            // write a decoded character
 };
 
 #endif
 
-#endif /* SRC_DISPLAY_SCREENDRIVER_H_ */
+#endif /* SRC_DISPLAY_DISPLAYDRIVER_H_ */
