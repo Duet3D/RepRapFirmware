@@ -170,6 +170,7 @@ public:
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept;
 	void UpdateFirmware() noexcept;
+	void PrepareToLoadIap() noexcept;
 	void StartIap() noexcept;
 
 	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error
@@ -177,7 +178,6 @@ public:
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
 	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests
-	static double SinCos(double angle) noexcept;						// helper function for diagnostic tests
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 

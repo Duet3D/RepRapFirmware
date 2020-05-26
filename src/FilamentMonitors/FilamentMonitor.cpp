@@ -23,7 +23,7 @@ FilamentMonitor *FilamentMonitor::filamentSensors[MaxExtruders] = { 0 };
 #if SUPPORT_OBJECT_MODEL
 
 // Get the number of monitors to report in the OM
-size_t FilamentMonitor::GetNumMonitorsToReport()
+size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 {
 	size_t rslt = ARRAY_SIZE(filamentSensors);
 	while (rslt != 0 && filamentSensors[rslt - 1] == nullptr)
@@ -80,7 +80,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // Handle M591
-/*static*/ GCodeResult FilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder)
+/*static*/ GCodeResult FilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder) THROWS(GCodeException)
 {
 	bool seen = false;
 	uint32_t newSensorType;

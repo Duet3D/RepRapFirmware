@@ -330,7 +330,7 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive) noexcept
 
 // Schedule the next interrupt, returning true if we can't because it is already due
 // Base priority must be >= NvicPriorityStep when calling this
-inline bool DDA::ScheduleNextStepInterrupt(StepTimer& timer) const noexcept
+inline __attribute__((always_inline)) bool DDA::ScheduleNextStepInterrupt(StepTimer& timer) const noexcept
 {
 	if (state == executing)
 	{
@@ -344,7 +344,7 @@ inline bool DDA::ScheduleNextStepInterrupt(StepTimer& timer) const noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Insert a hiccup, returning the amount of time inserted
-inline uint32_t DDA::InsertHiccup(uint32_t now) noexcept
+inline __attribute__((always_inline)) uint32_t DDA::InsertHiccup(uint32_t now) noexcept
 {
 	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
 	const uint32_t oldStartTime = afterPrepare.moveStartTime;
@@ -355,7 +355,7 @@ inline uint32_t DDA::InsertHiccup(uint32_t now) noexcept
 #else
 
 // Insert a hiccup
-inline void DDA::InsertHiccup(uint32_t now) noexcept
+inline __attribute__((always_inline)) void DDA::InsertHiccup(uint32_t now) noexcept
 {
 	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
 	afterPrepare.moveStartTime = now + DDA::HiccupTime - ticksDueAfterStart;
@@ -366,7 +366,7 @@ inline void DDA::InsertHiccup(uint32_t now) noexcept
 #if HAS_SMART_DRIVERS
 
 // Get the current full step interval for this axis or extruder
-inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
+inline __attribute__((always_inline)) uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
 {
 	const DriveMovement * const dm = FindActiveDM(axis);
 	return (dm != nullptr) ? dm->GetStepInterval(microstepShift) : 0;

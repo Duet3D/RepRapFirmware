@@ -13,11 +13,11 @@
 #include "GCodes/GCodeChannel.h"
 #include "GCodes/GCodeFileInfo.h"
 #include "LinuxMessageFormats.h"
+#include "DataTransfer.h"
 #include "MessageType.h"
 
 class Platform;
 
-class DataTransfer;
 class GCodeBuffer;
 
 class OutputBuffer;
@@ -43,7 +43,7 @@ public:
 	const char *GetFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, int32_t& bytesRead, uint32_t &fileLength); 	// Request a file chunk and resume the given task when it has been received
 
 private:
-	DataTransfer *transfer;
+	DataTransfer transfer;
 	bool wasConnected;
 	uint32_t numDisconnects;
 
@@ -64,6 +64,7 @@ private:
 	char requestedFileChunk[MaxFileChunkSize];
 	int32_t requestedFileDataLength;
 
+	Mutex gcodeReplyMutex;
 	OutputStack *gcodeReply;
 	void HandleGCodeReply(MessageType type, const char *reply);		// accessed by Platform
 	void HandleGCodeReply(MessageType type, OutputBuffer *buffer);	// accessed by Platform

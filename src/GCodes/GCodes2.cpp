@@ -17,7 +17,7 @@
 # include "Linux/LinuxInterface.h"
 #endif
 #include "Movement/Move.h"
-#include "Network.h"
+#include "Networking/Network.h"
 #include "Scanner.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"
@@ -267,12 +267,25 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			return false;
 		}
 #endif
-		if (!LockMovementAndWaitForStandstill(gb))		// do this first to make sure that a new grid isn't being defined
+		if (!LockMovementAndWaitForStandstill(gb))			// do this first to make sure that a new grid isn't being defined
 		{
 			return false;
 		}
 		{
-			const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
+			int sparam;
+			if (gb.Seen('S'))
+			{
+				sparam = gb.GetIValue();
+			}
+			else if (DoFileMacro(gb, MESH_G, false, 29))	// no S parameter found so try to execute mesh.g
+			{
+				break;
+			}
+			else
+			{
+				sparam = 0;									// mesh.g not found, so treat G29 the same as G29 S0
+			}
+
 			switch(sparam)
 			{
 			case 0:		// probe and save height map
@@ -2345,10 +2358,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 
 				// If we need to wait for an acknowledgement, save the state and set waiting
-				if ((sParam == 2 || sParam == 3) && Push(gb, true))					// stack the machine state including the file position
+				if (sParam == 2 || sParam == 3)
 				{
-					UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
-					gb.MachineState().WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
+#if HAS_LINUX_INTERFACE
+					if (reprap.UsingLinuxInterface())
+					{
+						gb.SetState(GCodeState::waitingForAcknowledgement);
+					}
+#endif
+					if (Push(gb, true))					// stack the machine state including the file position
+					{
+						UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
+						gb.MachineState().WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
+					}
 				}
 
 				// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
@@ -3061,39 +3083,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 559:
 		case 560: // Binary writing
 			{
-				String<MaxFilenameLength> sysDir;
-				const char* defaultFile;
-				const char *folder;
+				String<MaxFilenameLength> defaultFolder;
 				if (code == 560)
 				{
-					folder = platform.GetWebDir();
-					defaultFile = INDEX_PAGE_FILE;
+					defaultFolder.copy(platform.GetWebDir());
 				}
 				else
 				{
-					platform.AppendSysDir(sysDir.GetRef());
-					folder = sysDir.c_str();
-					defaultFile = CONFIG_FILE;
+					platform.AppendSysDir(defaultFolder.GetRef());
 				}
 				String<MaxFilenameLength> filename;
-				if (gb.Seen('P'))
-				{
-					gb.GetPossiblyQuotedString(filename.GetRef());
-				}
-				else
-				{
-					filename.copy(defaultFile);
-				}
+				gb.MustSee('P');
+				gb.GetQuotedString(filename.GetRef());
 				const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
 				const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
-				const bool ok = gb.OpenFileToWrite(folder, filename.c_str(), size, true, crc32);
+				const bool ok = gb.OpenFileToWrite(defaultFolder.c_str(), filename.c_str(), size, true, crc32);
 				if (ok)
 				{
 					reply.printf("Writing to file: %s", filename.c_str());
 				}
 				else
 				{
-					reply.printf("Can't open file %s for writing.", filename.c_str());
+					reply.printf("Can't open file %s for writing", filename.c_str());
 					result = GCodeResult::error;
 				}
 			}
@@ -3349,6 +3360,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					seen = true;
 				}
+
 				if (seen)
 				{
 					if (chan == 1 && !platform.IsAuxEnabled())
@@ -3360,14 +3372,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						platform.ResetChannel(chan);
 					}
 				}
+				else if (chan == 1 && !platform.IsAuxEnabled())
+				{
+					reply.copy("Channel 1 is disabled");
+				}
 				else
 				{
 					const uint32_t cp = platform.GetCommsProperties(chan);
 					reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
-					if (chan == 1 && platform.IsAuxRaw())
+					if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
+					{
+						reply.cat(", connected");
+					}
+					else if (chan == 1 && platform.IsAuxRaw())
 					{
 						reply.cat(", raw mode");
 					}
+					//TODO handle aux2 here
 				}
 			}
 			break;
@@ -4040,6 +4061,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					zp->SetTriggerHeight(-gb.GetFValue());
 					zp->SetSaveToConfigOverride();
+					reprap.SensorsUpdated();
 				}
 				else
 				{
@@ -4057,7 +4079,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if HAS_SMART_DRIVERS
 		case 917: // Set/report standstill motor current percentage
 #endif
-			// Note that we no longer wait for movement to stop. This is so that we can use these commands (in particular, M913) in the M911 power fail script.
+			if (gb.GetState() != GCodeState::powerFailPausing1)			// we don't wait for movement to stop if we are running the power fail script
+			{
+				if (!LockMovementAndWaitForStandstill(gb))
+				{
+					return false;
+				}
+			}
 			{
 				bool seen = false;
 				for (size_t axis = 0; axis < numTotalAxes; axis++)

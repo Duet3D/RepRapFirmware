@@ -72,18 +72,18 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 	fileGCode = new GCodeBuffer(GCodeChannel::File, nullptr, fileInput, GenericMessage);
 
-#if HAS_NETWORKING || HAS_LINUX_INTERFACE
+# if SUPPORT_HTTP || HAS_LINUX_INTERFACE
 	httpInput = new NetworkGCodeInput();
 	httpGCode = new GCodeBuffer(GCodeChannel::HTTP, httpInput, fileInput, HttpMessage);
-# if SUPPORT_TELNET
+# else
+	httpGCode = nullptr;
+# endif // SUPPORT_HTTP || HAS_LINUX_INTERFACE
+# if SUPPORT_TELNET || HAS_LINUX_INTERFACE
 	telnetInput = new NetworkGCodeInput();
 	telnetGCode = new GCodeBuffer(GCodeChannel::Telnet, telnetInput, fileInput, TelnetMessage, Compatibility::Marlin);
 # else
 	telnetGCode = nullptr;
-# endif
-#else
-	httpGCode = telnetGCode = nullptr;
-#endif
+# endif // SUPPORT_TELNET || HAS_LINUX_INTERFACE
 
 #if defined(SERIAL_MAIN_DEVICE)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
@@ -310,6 +310,19 @@ bool GCodes::DoingFileMacro() const noexcept
 	return false;
 }
 
+// Return true if any channel is waiting for a message acknowledgement
+bool GCodes::WaitingForAcknowledgement() const noexcept
+{
+	for (const GCodeBuffer *gbp : gcodeSources)
+	{
+		if (gbp != nullptr && gbp->MachineState().waitingForAcknowledgement)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 // Return the current position of the file being printed in bytes.
 // Unlike other methods returning file positions it never returns noFilePosition
 FilePosition GCodes::GetFilePosition() const noexcept
@@ -409,8 +422,8 @@ void GCodes::Spin() noexcept
 	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
 	if (gbp->IsCompletelyIdle()
-#if HAS_MASS_STORAGE
-		&& !(gbp->MachineState().fileState.IsLive())
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+		&& !gbp->MachineState().DoingFile()
 #endif
 	   )	// if autoPause is not active
 	{
@@ -435,6 +448,13 @@ void GCodes::Spin() noexcept
 		{
 			const bool wasCancelled = gb.MachineState().messageCancelled;
 			gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+#if HAS_LINUX_INTERFACE
+			if (reprap.UsingLinuxInterface())
+			{
+				// Send an empty response to DCS in order to let it pop its internal stack
+				HandleReplyPreserveResult(gb, GCodeResult::ok, "");
+			}
+#endif
 
 			if (wasCancelled)
 			{
@@ -599,16 +619,10 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else if (gb.GetState() == GCodeState::doingUserMacro)
 				{
+					// M98 needs its own state in SBC mode to make sure the code does not completed before
+					// the file has been requested. This will become obsolete in RRF 3.02.
 					gb.SetState(GCodeState::normal);
 					UnlockAll(gb);
-
-					// Output a warning message on demand
-					if (hadFileError)
-					{
-						bool reportMissing, fromCode;
-						reply.printf("Macro file %s not found", gb.GetRequestedMacroFile(reportMissing, fromCode));
-						rslt = GCodeResult::warning;
-					}
 				}
 				else if (gb.GetState() == GCodeState::loadingFilament && hadFileError)
 				{
@@ -617,15 +631,15 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 
 				// Reset the GCodeBuffer to non-binary input if necessary, so that if we are in Marlin mode we will send an OK response
-				if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
-				{
-					// Need to send a final empty response to the SBC if the request came from a code so it can pop its stack
-					HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, "");
-					gb.FinishedBinaryMode();
-				}
-
 				if (gb.GetState() == GCodeState::normal)
 				{
+					if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
+					{
+						// Need to send a final response to the SBC if the request came from a code so it can pop its stack
+						HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, reply.c_str());
+						gb.FinishedBinaryMode();
+					}
+
 					UnlockAll(gb);
 					HandleReply(gb, rslt, reply.c_str());
 				}
@@ -1351,7 +1365,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				buf.copy("M206");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					buf.catf(" %c%.3f", axisLetters[axis], (double)-axisOffsets[axis]);
+					buf.catf(" %c%.3f", axisLetters[axis], (double)-workplaceCoordinates[0][axis]);
 				}
 				buf.cat('\n');
 				ok = f->Write(buf.c_str());
@@ -3378,7 +3392,8 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	if (gb.IsBinary())
 	{
 		MessageType type = gb.GetResponseMessageType();
-		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested())
+		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested() ||
+			(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 		{
 			if (reply[0] == 0)
 			{

@@ -950,10 +950,7 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad
 	size_t length = 0;
 	for (;;)
 	{
-		if (length >= returnedLength)		// array limit has been set in here
-		{
-			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-		}
+		CheckArrayLength(length, returnedLength);
 		arr[length++] = ReadFloatValue();
 		if (gb.buffer[readPointer] != LIST_SEPARATOR)
 		{
@@ -989,10 +986,7 @@ void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad
 	size_t length = 0;
 	for (;;)
 	{
-		if (length >= returnedLength) // Array limit has been set in here
-		{
-			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-		}
+		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadIValue();
 		length++;
 		if (gb.buffer[readPointer] != LIST_SEPARATOR)
@@ -1028,10 +1022,7 @@ void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool
 	size_t length = 0;
 	for (;;)
 	{
-		if (length >= returnedLength) // Array limit has been set in here
-		{
-			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-		}
+		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadUIValue();
 		length++;
 		if (gb.buffer[readPointer] != LIST_SEPARATOR)
@@ -1068,10 +1059,7 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 	size_t length = 0;
 	for (;;)
 	{
-		if (length >= returnedLength) // Array limit has been set in here
-		{
-			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-		}
+		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadDriverIdValue();
 		length++;
 		if (gb.buffer[readPointer] != LIST_SEPARATOR)
@@ -1083,6 +1071,14 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 
 	returnedLength = length;
 	readPointer = -1;
+}
+
+void StringParser::CheckArrayLength(size_t actualLength, size_t maxLength) THROWS(GCodeException)
+{
+	if (actualLength >= maxLength)
+	{
+		throw ConstructParseException("array too long, max length = %u", (uint32_t)maxLength);
+	}
 }
 
 // Get and copy a quoted string returning true if successful
@@ -1374,7 +1370,7 @@ void StringParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 	for (;;)
 	{
 		const char *pp;
-		const unsigned long v = SafeStrtoul(p, &pp, 16);
+		const unsigned long v = StrHexToU32(p, &pp);
 		if (pp == p || v > 255)
 		{
 			readPointer = -1;
@@ -1604,38 +1600,25 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 		return val;
 	}
 
-	int base = 10;
-	size_t skipTrailingQuote = 0;
-
-	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits
+	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits. We could stop supporting this because we already support {0xNNNN}.
+	const char *endptr;
+	uint32_t rslt;
 	if (gb.buffer[readPointer] == '"')
 	{
 		++readPointer;
-		skipTrailingQuote = 1;
-		switch (gb.buffer[readPointer])
+		rslt = StrOptHexToU32(gb.buffer + readPointer, &endptr);
+		if (*endptr != '"')
 		{
-		case 'x':
-		case 'X':
-			base = 16;
-			++readPointer;
-			break;
-
-		case '0':
-			if (gb.buffer[readPointer + 1] == 'x' || gb.buffer[readPointer + 1] == 'X')
-			{
-				base = 16;
-				readPointer += 2;
-			}
-			break;
-
-		default:
-			break;
+			throw ConstructParseException("expected '\"'");
 		}
+		++endptr;
+	}
+	else
+	{
+		rslt = StrToU32(gb.buffer + readPointer, &endptr);
 	}
 
-	const char *endptr;
-	const uint32_t rslt = SafeStrtoul(gb.buffer + readPointer, &endptr, base);
-	readPointer = endptr - gb.buffer + skipTrailingQuote;
+	readPointer = endptr - gb.buffer;
 	return rslt;
 }
 

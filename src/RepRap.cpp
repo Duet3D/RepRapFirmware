@@ -6,8 +6,8 @@
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
 #include "Heating/Sensors/TemperatureSensor.h"
-#include "Network.h"
-#if HAS_NETWORKING
+#include "Networking/Network.h"
+#if SUPPORT_HTTP
 # include "Networking/HttpResponder.h"
 #endif
 #include "Platform.h"
@@ -306,6 +306,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF(&restorePointsArrayDescriptor),				ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
+	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 
 	// 4. MachineModel.state.beep
@@ -357,8 +358,8 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																		// directories
 #endif
 	25,																		// limits
-	13 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
-	2,																		// state/beep
+	14 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
+	2,																		// state.beep
 	6,																		// state.messageBox
 	10 + 2 * HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE		// seqs
 };
@@ -389,6 +390,9 @@ RepRap::RepRap() noexcept
 {
 	OutputBuffer::Init();
 	platform = new Platform();
+#if HAS_LINUX_INTERFACE
+	linuxInterface = new LinuxInterface();				// needs to be allocated early so as to avoid the last 64K of RAM
+#endif
 	network = new Network(*platform);
 	gCodes = new GCodes(*platform);
 	move = new Move();
@@ -407,9 +411,6 @@ RepRap::RepRap() noexcept
 #endif
 #if SUPPORT_12864_LCD
  	display = new Display();
-#endif
-#if HAS_LINUX_INTERFACE
-	linuxInterface = new LinuxInterface();
 #endif
 #if SUPPORT_CAN_EXPANSION
 	expansion = new ExpansionManager();
@@ -738,11 +739,19 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	// Print the firmware version and board type
 
 #ifdef DUET_NG
+# if HAS_LINUX_INTERFACE
+	platform->MessageF(mtype, "%s version %s running on %s (%s mode)", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
+						(UsingLinuxInterface()) ? "SBC" : "standalone");
+# else
 	platform->MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
+# endif
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 	platform->MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
 #elif defined(__LPC17xx__)
-    platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
+	platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
+#elif HAS_LINUX_INTERFACE
+	platform->MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
+						(UsingLinuxInterface()) ? "SBC" : "standalone");
 #else
 	platform->MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
 #endif
@@ -2495,7 +2504,8 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (printMonitor->IsPrinting() && gCodes->IsSimulating())	? 7		// Simulating
 			: (printMonitor->IsPrinting())							  	? 8		// Printing
 			: (gCodes->IsDoingToolChange())								? 9		// Changing tool
-			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 10	// Busy
+			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
+			   gCodes->WaitingForAcknowledgement()) 					? 10	// Busy
 			:															  11;	// Idle
 
 }
@@ -2743,6 +2753,17 @@ void RepRap::UpdateFirmware() noexcept
 		return;
 	}
 
+	PrepareToLoadIap();
+
+	// Use RAM-based IAP
+	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
+	iapFile->Close();
+	StartIap();
+#endif
+}
+
+void RepRap::PrepareToLoadIap() noexcept
+{
 #if SUPPORT_12864_LCD
 	display->UpdatingFirmware();			// put the firmware update message on the display
 #endif
@@ -2760,18 +2781,12 @@ void RepRap::UpdateFirmware() noexcept
 	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
 
-	// Step 0 - disable the cache because it interferes with flash memory access
+	// Disable the cache because it interferes with flash memory access
 	Cache::Disable();
 
 #if USE_MPU
 	//TODO consider setting flash memory to strongly-ordered instead
 	ARM_MPU_Disable();
-#endif
-
-	// Use RAM-based IAP
-	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
-	iapFile->Close();
-	StartIap();
 #endif
 }
 
@@ -2861,12 +2876,6 @@ void RepRap::StartIap() noexcept
 /*static*/ float RepRap::SinfCosf(float angle) noexcept
 {
 	return sinf(angle) + cosf(angle);
-}
-
-// Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine
-/*static*/ double RepRap::SinCos(double angle) noexcept
-{
-	return sin(angle) + cos(angle);
 }
 
 // Report an internal error

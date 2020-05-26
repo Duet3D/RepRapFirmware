@@ -1,6 +1,8 @@
 #ifndef PINS_DUET_H__
 #define PINS_DUET_H__
 
+# define BOARD_NAME				"RADDS"
+# define BOARD_SHORT_NAME		"RADDS"
 #define FIRMWARE_NAME "RepRapFirmware for RADDS"
 #define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
 
@@ -19,6 +21,7 @@ constexpr uint32_t IAP_IMAGE_END = 0x000FFBFF;		// don't touch the last 1KB, it'
 #endif
 
 const size_t NumFirmwareUpdateModules = 1;
+constexpr uint32_t DefaultStandstillCurrentPercent = 100;
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
@@ -27,24 +30,6 @@ const size_t NumFirmwareUpdateModules = 1;
 #define HAS_HIGH_SPEED_SD		0
 #define HAS_VOLTAGE_MONITOR		0
 #define HAS_VREF_MONITOR		0
-
-const size_t NumFirmwareUpdateModules = 1;
-#define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
-
-#define IAP_IN_RAM				0
-
-#if IAP_IN_RAM
-
-# define IAP_UPDATE_FILE "RaddsIAP.bin"
-constexpr uint32_t IAP_IMAGE_START = 0x20008000u;
-
-#else
-
-# define IAP_UPDATE_FILE "iapradds.bin"
-constexpr uint32_t IAP_IMAGE_START = 0x000F0000;
-constexpr uint32_t IAP_IMAGE_END = 0x000FFBFF;		// don't touch the last 1KB, it's used for NvData
-
-#endif
 
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::RADDS_15
@@ -65,7 +50,7 @@ constexpr size_t NumDirectDrivers = 9;
 constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 3;
-constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors per heater
 
 constexpr size_t MaxBedHeaters = 1;
 constexpr size_t MaxChamberHeaters = 2;
@@ -75,7 +60,8 @@ constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder 
 constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MaxZProbes = 2;
-constexpr size_t MaxGpioPorts = 10;
+constexpr size_t MaxGpInPorts = 10;
+constexpr size_t MaxGpOutPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -92,6 +78,8 @@ constexpr size_t MaxExtrudersPerTool = 5;
 constexpr size_t MaxFans = 12;
 
 constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+
+constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;
 // Use TX0/RX0 for the auxiliary serial line

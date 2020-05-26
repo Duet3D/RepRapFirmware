@@ -324,7 +324,7 @@ inline bool Move::AllMovesAreFinished(bool waiting) noexcept
 
 // Get the current step interval for this axis or extruder, or 0 if it is not moving
 // This is called from the stepper drivers SPI interface ISR
-inline uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
+inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
 {
 	return (simulationMode == 0) ? mainDDARing.GetStepInterval(axis, microstepShift) : 0;
 }

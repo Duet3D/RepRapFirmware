@@ -100,6 +100,7 @@ enum class PinUsedBy : uint8_t
 #include "Configuration.h"
 #include "Pins.h"
 
+static_assert(MinVisibleAxes <= MinAxes);
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
 #if SUPPORT_CAN_EXPANSION

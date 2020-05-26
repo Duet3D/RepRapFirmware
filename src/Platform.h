@@ -122,7 +122,9 @@ enum class BoardType : uint8_t
 	DuetWiFi_10 = 1,
 	DuetWiFi_102 = 2,
 	DuetEthernet_10 = 3,
-	DuetEthernet_102 = 4
+	DuetEthernet_102 = 4,
+	Duet2SBC_10 = 5,
+	Duet2SBC_102 = 6,
 #elif defined(DUET_M)
 	DuetM_10 = 1,
 #elif defined(DUET_06_085)
@@ -304,8 +306,8 @@ public:
 #ifdef DUET_NG
 	bool IsDuetWiFi() const noexcept;
 	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
-	const char *GetBoardName() const;
-	const char *GetBoardShortName() const;
+	const char *GetBoardName() const noexcept;
+	const char *GetBoardShortName() const noexcept;
 #endif
 
 	const MacAddress& GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
@@ -321,6 +323,7 @@ public:
 	bool SetDateTime(time_t time) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
+	void AppendUsbReply(OutputBuffer *buffer) noexcept;
 	void AppendAuxReply(OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(const char *msg, bool rawMessage) noexcept;
 
@@ -422,7 +425,7 @@ public:
 	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisTotalLength(size_t axis) const noexcept;
 	float GetPressureAdvance(size_t extruder) const noexcept;
-	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const noexcept
 		pre(axis < MaxAxes)
@@ -456,7 +459,7 @@ public:
 	ReadLockedPointer<ZProbe> GetZProbeOrDefault(size_t probeNumber) noexcept { return endstops.GetZProbeOrDefault(probeNumber); }
 	void InitZProbeFilters() noexcept;
 	const volatile ZProbeAveragingFilter& GetZProbeOnFilter() const noexcept { return zProbeOnFilter; }
-	const volatile ZProbeAveragingFilter& GetZProbeOffFilter() const  noexcept{ return zProbeOffFilter; }
+	const volatile ZProbeAveragingFilter& GetZProbeOffFilter() const noexcept{ return zProbeOffFilter; }
 
 #if HAS_MASS_STORAGE
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const noexcept;

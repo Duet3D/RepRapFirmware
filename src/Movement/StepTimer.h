@@ -86,7 +86,7 @@ private:
 // Function GetTimerTicks() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined
 #if !(SAM4S || SAME70)
 
-inline StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
+inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
 # ifdef __LPC17xx__
 	return STEP_TC->TC;
@@ -97,7 +97,7 @@ inline StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 
 #endif
 
-inline uint16_t StepTimer::GetTimerTicks16() noexcept
+inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noexcept
 {
 #ifdef __LPC17xx__
 	return (uint16_t)STEP_TC->TC;

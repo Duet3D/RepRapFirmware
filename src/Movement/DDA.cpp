@@ -1986,9 +1986,9 @@ float DDA::GetProportionDone(bool moveWasAborted) const noexcept
 		if (proportionDone > proportionDoneSoFar)
 		{
 			int32_t taken = 0, left = 0;
-			for (size_t drive = MaxAxes; drive < NumDirectDrivers; ++drive)
+			for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); ++extruder)
 			{
-				const DriveMovement* const pdm = FindDM(drive);
+				const DriveMovement* const pdm = FindDM(ExtruderToLogicalDrive(extruder));
 				if (pdm != nullptr)								// if this extruder is active
 				{
 					taken += pdm->GetNetStepsTaken();

@@ -452,6 +452,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 	case DataType::IntArray:
 	case DataType::UIntArray:
 	case DataType::DriverIdArray:
+		CheckArrayLength(length);
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
 			arr[i].SetFromBinary(reinterpret_cast<const uint32_t*>(seenParameterValue)[i]);
@@ -548,6 +549,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		lastIndex = 0;
 		break;
 	case DataType::IntArray:
+		CheckArrayLength(length);
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
 			arr[i] = reinterpret_cast<const int32_t*>(seenParameterValue)[i];
@@ -556,6 +558,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		break;
 	case DataType::DriverIdArray:
 	case DataType::UIntArray:
+		CheckArrayLength(length);
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
 			arr[i] = reinterpret_cast<const uint32_t*>(seenParameterValue)[i];
@@ -563,6 +566,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		lastIndex = seenParameter->intValue - 1;
 		break;
 	case DataType::FloatArray:
+		CheckArrayLength(length);
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
 			arr[i] = reinterpret_cast<const float*>(seenParameterValue)[i];
@@ -584,6 +588,14 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 	else
 	{
 		length = lastIndex + 1;
+	}
+}
+
+void BinaryParser::CheckArrayLength(size_t maxLength) THROWS(GCodeException)
+{
+	if ((unsigned int)seenParameter->intValue > maxLength)
+	{
+		throw ConstructParseException("array too long, max length = %u", (uint32_t)maxLength);
 	}
 }
 

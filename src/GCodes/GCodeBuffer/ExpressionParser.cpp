@@ -611,7 +611,7 @@ void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 ExpressionValue ExpressionParser::ParseNumber() noexcept
 {
 	NumericConverter conv;
-	conv.Accumulate(CurrentCharacter(), true, true, [this]()->char { AdvancePointer(); return CurrentCharacter(); });		// must succeed because CurrentCharacter is a decimal digit
+	conv.Accumulate(CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex, [this]()->char { AdvancePointer(); return CurrentCharacter(); });		// must succeed because CurrentCharacter is a decimal digit
 	return (conv.FitsInInt32())
 			? ExpressionValue(conv.GetInt32())
 				: ExpressionValue(conv.GetFloat(), constrain<unsigned int>(conv.GetDigitsAfterPoint(), 1, MaxFloatDigitsDisplayedAfterPoint));
@@ -930,7 +930,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	}
 
 	// If we are not evaluating then the object expression doesn't have to exist, so don't retrieve it because that might throw an error
-	return (evaluate) ? reprap.GetObjectValue(context, id.c_str()) : ExpressionValue(nullptr);
+	return (evaluate) ? reprap.GetObjectValue(context, nullptr, id.c_str()) : ExpressionValue(nullptr);
 }
 
 // Parse a quoted string, given that the current character is double-quote

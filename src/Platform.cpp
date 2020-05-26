@@ -27,7 +27,7 @@
 #include "Movement/StepTimer.h"
 #include "Tools/Tool.h"
 #include "Endstops/ZProbe.h"
-#include "Network.h"
+#include "Networking/Network.h"
 #include "PrintMonitor.h"
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "RepRap.h"
@@ -67,8 +67,13 @@
 # include "Display/Display.h"
 #endif
 
+#if SUPPORT_IOBITS
+# include "PortControl.h"
+#endif
+
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
+# include "Linux/DataTransfer.h"
 #endif
 
 #if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
@@ -146,7 +151,7 @@ extern "C" void UrgentInit()
 	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
 	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the pins that control the drivers early here.
 	// On the production boards the ENN line is pulled high by an external pullup resistor and that prevents motor movements.
-	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
+	for (size_t drive = 0; drive < MaxSmartDrivers; ++drive)
 	{
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
@@ -249,10 +254,12 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
 
+#if HAS_CPU_TEMP_SENSOR
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().max, 1),												ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min, 1),												ObjectModelEntryFlags::none },
+#endif
 
 	// 2. vIn members
 #if HAS_VOLTAGE_MONITOR
@@ -264,16 +271,16 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 3. move.axes[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),		ObjectModelEntryFlags::none },
-	{ "current",			OBJECT_MODEL_FUNC(lrintf(self->GetMotorCurrent(context.GetLastIndex(), 906))),						ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)lrintf(self->GetMotorCurrent(context.GetLastIndex(), 906))),				ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_NOSELF(&axisDriversArrayDescriptor),												ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),					ObjectModelEntryFlags::live },
 	{ "jerk",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->GetInstantDv(context.GetLastIndex()), 1),				ObjectModelEntryFlags::none },
 	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),				ObjectModelEntryFlags::none },
 	{ "machinePosition",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().LiveCoordinate(context.GetLastIndex(), reprap.GetCurrentTool()), 3),	ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 2),									ObjectModelEntryFlags::none },
 	{ "maxProbed",			OBJECT_MODEL_FUNC(self->axisMaximaProbed.IsBitSet(context.GetLastIndex())),							ObjectModelEntryFlags::none },
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 7),																			ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->AxisMinimum(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->AxisMinimum(context.GetLastIndex()), 2),									ObjectModelEntryFlags::none },
 	{ "minProbed",			OBJECT_MODEL_FUNC(self->axisMinimaProbed.IsBitSet(context.GetLastIndex())),							ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->MaxFeedrate(context.GetLastIndex()), 1),					ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[context.GetLastIndex()], 2),								ObjectModelEntryFlags::none },
@@ -283,7 +290,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 	// 4. move.extruders[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex())), 1),			ObjectModelEntryFlags::none },
-	{ "current",			OBJECT_MODEL_FUNC(lrintf(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),	ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)lrintf(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),	ObjectModelEntryFlags::none },
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),									ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 2),			ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),									ObjectModelEntryFlags::none },
@@ -319,9 +326,11 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	9,																		// number of sections
+	8 + HAS_CPU_TEMP_SENSOR,																		// number of sections
 	12 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION + SUPPORTS_UNIQUE_ID,		// section 0: boards[0]
+#if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
+#endif
 #if HAS_VOLTAGE_MONITOR
 	3,																		// section 2: vIn
 #else
@@ -974,12 +983,21 @@ void Platform::SetNetMask(IPAddress nm) noexcept
 bool Platform::FlushAuxMessages() noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
-	// Write non-blocking data to the AUX line
-	MutexLocker lock(auxMutex);
-	OutputBuffer *auxOutputBuffer = auxOutput.GetFirstItem();
-	if (auxOutputBuffer != nullptr)
+	bool hasMore = !auxOutput.IsEmpty();
+	if (hasMore)
 	{
-		if (auxEnabled)
+		MutexLocker lock(auxMutex);
+		OutputBuffer *auxOutputBuffer = auxOutput.GetFirstItem();
+		if (auxOutputBuffer == nullptr)
+		{
+			(void)auxOutput.Pop();
+		}
+		else if (!auxEnabled)
+		{
+			OutputBuffer::ReleaseAll(auxOutputBuffer);
+			(void)auxOutput.Pop();
+		}
+		else
 		{
 			const size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
 			if (bytesToWrite > 0)
@@ -992,14 +1010,9 @@ bool Platform::FlushAuxMessages() noexcept
 				auxOutput.ReleaseFirstItem();
 			}
 		}
-		else
-		{
-			OutputBuffer *buf = auxOutput.Pop();
-			OutputBuffer::ReleaseAll(buf);
-		}
-
+		hasMore = !auxOutput.IsEmpty();
 	}
-	return auxOutput.GetFirstItem() != nullptr;
+	return hasMore;
 #else
 	return false;
 #endif
@@ -1012,11 +1025,21 @@ bool Platform::FlushMessages() noexcept
 
 #ifdef SERIAL_AUX2_DEVICE
 	// Write non-blocking data to the second AUX line
+	//TODO use common code with FlushAuxMessages()
 	bool aux2HasMore;
 	{
 		MutexLocker lock(aux2Mutex);
 		OutputBuffer *aux2OutputBuffer = aux2Output.GetFirstItem();
-		if (aux2OutputBuffer != nullptr)
+		if (aux2OutputBuffer == nullptr)
+		{
+			(void)aux2Output.Pop();
+		}
+		else if (!aux2Enabled)
+		{
+			OutputBuffer::ReleaseAll(aux2OutputBuffer);
+			(void)aux2Output.Pop();
+		}
+		else
 		{
 			const size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
 			if (bytesToWrite > 0)
@@ -1064,7 +1087,7 @@ bool Platform::FlushMessages() noexcept
 			}
 			else
 			{
-				 usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
+				usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
 			}
 		}
 		usbHasMore = !usbOutput.IsEmpty();
@@ -2160,23 +2183,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				}
 			}
 
-			uint32_t tim2 = 0;
-			for (unsigned int i = 0; i < 100; ++i)
-			{
-				const double angle = (double)0.01 * i;
-				cpu_irq_disable();
-				const uint32_t now2 = StepTimer::GetTimerTicks();
-				const double d1 = RepRap::SinCos(angle);
-				tim2 += StepTimer::GetTimerTicks() - now2;
-				cpu_irq_enable();
-				if (d1 >= (double)1.5)
-				{
-					ok = false;		// need to use f1 to prevent the calculations being omitted
-				}
-			}
+			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
 			if (ok)			// should always be true
 			{
-				reply.printf("Sine + cosine: float %.2fus, double %.2fus", (double)(tim1 * 10000)/StepTimer::StepClockRate, (double)(tim2 * 10000)/StepTimer::StepClockRate);
+				reply.printf("Sine + cosine: float %.2fus", (double)(tim1 * 10000)/StepTimer::StepClockRate);
 			}
 		}
 		break;
@@ -2203,10 +2213,61 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		break;
 
 	case (unsigned int)DiagnosticTestType::PrintObjectAddresses:
-		reply.printf
-				("Platform %08" PRIx32 "-%08" PRIx32 "\nGCodes %08" PRIx32 "-%08" PRIx32,
-					reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1,
-					reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
+		MessageF(MessageType::GenericMessage,
+					"Platform %08" PRIx32 "-%08" PRIx32
+#if HAS_LINUX_INTERFACE
+					"\nLinuxInterface %08" PRIx32 "-%08" PRIx32
+#endif
+					"\nNetwork %08" PRIx32 "-%08" PRIx32
+					"\nGCodes %08" PRIx32 "-%08" PRIx32
+					"\nMove %08" PRIx32 "-%08" PRIx32
+					"\nHeat %08" PRIx32 "-%08" PRIx32
+					, reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1
+#if HAS_LINUX_INTERFACE
+					, reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()), reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) + sizeof(LinuxInterface) - 1
+#endif
+					, reinterpret_cast<uint32_t>(&reprap.GetNetwork()), reinterpret_cast<uint32_t>(&reprap.GetNetwork()) + sizeof(Network) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetMove()), reinterpret_cast<uint32_t>(&reprap.GetMove()) + sizeof(Move) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetHeat()), reinterpret_cast<uint32_t>(&reprap.GetHeat()) + sizeof(Heat) - 1
+				);
+
+		MessageF(MessageType::GenericMessage,
+					"\nPrintMonitor %08" PRIx32 "-%08" PRIx32
+					"\nFansManager %08" PRIx32 "-%08" PRIx32
+#if SUPPORT_ROLAND
+					"\nRoland %08" PRIx32 "-%08" PRIx32
+#endif
+#if SUPPORT_SCANNER
+					"\nScanner %08" PRIx32 "-%08" PRIx32
+#endif
+#if SUPPORT_IOBITS
+					"\nPortControl %08" PRIx32 "-%08" PRIx32
+#endif
+#if SUPPORT_12864_LCD
+					"\nDisplay %08" PRIx32 "-%08" PRIx32
+#endif
+#if SUPPORT_CAN_EXPANSION
+					"\nExpansionManager %08" PRIx32 "-%08" PRIx32
+#endif
+
+					, reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()), reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()) + sizeof(PrintMonitor) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetFansManager()), reinterpret_cast<uint32_t>(&reprap.GetFansManager()) + sizeof(FansManager) - 1
+#if SUPPORT_ROLAND
+					, reinterpret_cast<uint32_t>(&reprap.GetRoland()), reinterpret_cast<uint32_t>(&reprap.GetRoland()) + sizeof(Roland) - 1
+#endif
+#if SUPPORT_SCANNER
+					, reinterpret_cast<uint32_t>(&reprap.GetScanner()), reinterpret_cast<uint32_t>(&reprap.GetScanner()) + sizeof(Scanner) - 1
+#endif
+#if SUPPORT_IOBITS
+					, reinterpret_cast<uint32_t>(&reprap.GetPortControl()), reinterpret_cast<uint32_t>(&reprap.GetPortControl()) + sizeof(PortControl) - 1
+#endif
+#if SUPPORT_12864_LCD
+					, reinterpret_cast<uint32_t>(&reprap.GetDisplay()), reinterpret_cast<uint32_t>(&reprap.GetDisplay()) + sizeof(Display) - 1
+#endif
+#if SUPPORT_CAN_EXPANSION
+					, reinterpret_cast<uint32_t>(&reprap.GetExpansion()), reinterpret_cast<uint32_t>(&reprap.GetExpansion()) + sizeof(ExpansionManager) - 1
+#endif
 				);
 		break;
 
@@ -2962,6 +3023,27 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 
 //-----------------------------------------------------------------------------------------------------
 
+// USB port functions
+
+void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
+{
+	if (   !SERIAL_MAIN_DEVICE.IsConnected()
+#if SUPPORT_SCANNER
+		|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
+#endif
+	   )
+	{
+		// If the serial USB line is not open, discard the message right away
+		OutputBuffer::ReleaseAll(buffer);
+	}
+	else
+	{
+		// Else append incoming data to the stack
+		MutexLocker lock(usbMutex);
+		usbOutput.Push(buffer);
+	}
+}
+
 // Aux port functions
 
 void Platform::EnableAux() noexcept
@@ -3210,21 +3292,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
-			MutexLocker lock(usbMutex);
-			if (   !SERIAL_MAIN_DEVICE.IsConnected()
-#if SUPPORT_SCANNER
-				|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
-#endif
-			   )
-			{
-				// If the serial USB line is not open, discard the message right away
-				OutputBuffer::ReleaseAll(buffer);
-			}
-			else
-			{
-				// Else append incoming data to the stack
-				usbOutput.Push(buffer);
-			}
+			AppendUsbReply(buffer);
 		}
 
 #if HAS_LINUX_INTERFACE
@@ -3616,6 +3684,9 @@ void Platform::SetBoardType(BoardType bt) noexcept
 			pinMode(VssaSensePin, INPUT);
 		}
 
+# if defined(USE_SBC)
+		board = (vssaSenseWorking) ? BoardType::Duet2SBC_102 : BoardType::Duet2SBC_10;
+# else
 		// Test whether the Ethernet module is present
 		if (digitalRead(W5500ModuleSensePin))					// the Ethernet module has this pin grounded
 		{
@@ -3625,6 +3696,7 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		{
 			board = (vssaSenseWorking) ? BoardType::DuetEthernet_102 : BoardType::DuetEthernet_10;
 		}
+# endif
 #elif defined(DUET_M)
 		board = BoardType::DuetM_10;
 #elif defined(DUET_06_085)
@@ -3671,6 +3743,8 @@ const char* Platform::GetElectronicsString() const noexcept
 	case BoardType::DuetWiFi_102:			return "Duet WiFi 1.02 or later";
 	case BoardType::DuetEthernet_10:		return "Duet Ethernet 1.0 or 1.01";
 	case BoardType::DuetEthernet_102:		return "Duet Ethernet 1.02 or later";
+	case BoardType::Duet2SBC_10:			return "Duet 2 1.0 or 1.01 + SBC";
+	case BoardType::Duet2SBC_102:			return "Duet 2 1.02 or later + SBC";
 #elif defined(DUET_M)
 	case BoardType::DuetM_10:				return "Duet Maestro 1.0";
 #elif defined(DUET_06_085)
@@ -3709,6 +3783,8 @@ const char* Platform::GetBoardString() const noexcept
 	case BoardType::DuetWiFi_102:			return "duetwifi102";
 	case BoardType::DuetEthernet_10:		return "duetethernet10";
 	case BoardType::DuetEthernet_102:		return "duetethernet102";
+	case BoardType::Duet2SBC_10:			return "duet2sbc10";
+	case BoardType::Duet2SBC_102:			return "duet2sbc102";
 #elif defined(DUET_M)
 	case BoardType::DuetM_10:				return "duetmaestro100";
 #elif defined(DUET_06_085)
@@ -3740,14 +3816,18 @@ bool Platform::IsDuetWiFi() const noexcept
 	return board == BoardType::DuetWiFi_10 || board == BoardType::DuetWiFi_102;
 }
 
-const char *Platform::GetBoardName() const
+const char *Platform::GetBoardName() const noexcept
 {
-	return (IsDuetWiFi()) ? BOARD_NAME_WIFI : BOARD_NAME_ETHERNET;
+	return (board == BoardType::Duet2SBC_10 || board == BoardType::Duet2SBC_102)
+			? BOARD_NAME_SBC
+			: (IsDuetWiFi()) ? BOARD_NAME_WIFI : BOARD_NAME_ETHERNET;
 }
 
-const char *Platform::GetBoardShortName() const
+const char *Platform::GetBoardShortName() const noexcept
 {
-	return (IsDuetWiFi()) ? BOARD_SHORT_NAME_WIFI : BOARD_SHORT_NAME_ETHERNET;
+	return (board == BoardType::Duet2SBC_10 || board == BoardType::Duet2SBC_102)
+			? BOARD_SHORT_NAME_SBC
+			: (IsDuetWiFi()) ? BOARD_SHORT_NAME_WIFI : BOARD_SHORT_NAME_ETHERNET;
 }
 
 #endif

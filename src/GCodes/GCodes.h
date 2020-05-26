@@ -101,7 +101,9 @@ public:
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
 	void GetCurrentCoordinates(const StringRef& s) const noexcept;				// Write where we are into a string
-	bool DoingFileMacro() const noexcept;										// Or still busy processing a macro file?
+	bool DoingFileMacro() const noexcept;										// Is a macro file being processed?
+	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
+
 	FilePosition GetFilePosition() const noexcept;								// Return the current position of the file being printed in bytes
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
@@ -256,6 +258,7 @@ public:
 	static constexpr const char* CONFIG_FILE = "config.g";
 	static constexpr const char* CONFIG_BACKUP_FILE = "config.g.bak";
 	static constexpr const char* BED_EQUATION_G = "bed.g";
+	static constexpr const char* MESH_G = "mesh.g";
 	static constexpr const char* PAUSE_G = "pause.g";
 	static constexpr const char* RESUME_G = "resume.g";
 	static constexpr const char* CANCEL_G = "cancel.g";
@@ -305,7 +308,7 @@ private:
 
 	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
 	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = -1) noexcept;
-		// Run a GCode macro file, optionally report error if not found
+																						// Run a GCode macro file, optionally report error if not found
 	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro
 
 	bool ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Do a G, M or T Code
@@ -456,7 +459,7 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
-#if HAS_NETWORKING
+#if HAS_NETWORKING || HAS_LINUX_INTERFACE
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
 #endif

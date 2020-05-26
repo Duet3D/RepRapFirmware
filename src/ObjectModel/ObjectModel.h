@@ -224,35 +224,43 @@ public:
 	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
 
 	// Function to report a value or object as JSON
-	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const THROWS(GCodeException);
+	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+							const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 
 	// Skip the current element in the ID or filter string
 	static const char* GetNextElement(const char *id) noexcept;
 
 protected:
 	// Construct a JSON representation of those parts of the object model requested by the user
-	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
+	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
 
 	// Report an entire array as JSON
-	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException);
+	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException);
 
 	// Get the value of an object that we hold
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, ExpressionValue val, const char *idString) const THROWS(GCodeException);
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const THROWS(GCodeException);
 
 	// Get the object model table entry for the current level object in the query
-	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) const noexcept;
+	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *idString) const noexcept;
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
 private:
-	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, ExpressionValue val) noexcept;
+	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
+	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
+	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;
+	__attribute__ ((noinline)) static void ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept;
+	__attribute__ ((noinline)) static void ReportBitmap1632Long(OutputBuffer *buf, const ExpressionValue& val) noexcept;
+	__attribute__ ((noinline)) static void ReportBitmap64Long(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 
 #ifdef DUET3
-	__attribute__ ((noinline)) static void ReportExpansionBoardDetail(OutputBuffer *buf, ExpressionValue val) noexcept;
-	__attribute__ ((noinline)) static ExpressionValue GetExpansionBoardDetailLength(ExpressionValue val) noexcept;
+	__attribute__ ((noinline)) static void ReportExpansionBoardDetail(OutputBuffer *buf, const ExpressionValue& val) noexcept;
+	__attribute__ ((noinline)) static ExpressionValue GetExpansionBoardDetailLength(const ExpressionValue& val) noexcept;
 #endif
 
 };
@@ -284,7 +292,7 @@ public:
 	bool Matches(const char *filter, const ObjectExplorationContext& context) const noexcept;
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter, bool first) const noexcept;
+	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const noexcept;
 
 	// Return the name of this field
 	const char* GetName() const noexcept { return name; }

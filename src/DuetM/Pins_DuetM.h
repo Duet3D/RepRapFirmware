@@ -166,8 +166,10 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 // This assumes that the Vih specification is met, which is 0.7 * Vcc = 3.5V @ Vcc=5V
 // The Duet Maestro level shifts all 3 LCD signals to 5V, so we meet the Vih specification and can reliably run at 2MHz.
 // For other electronics, there are reports that operation with 3.3V LCD signals may work if you reduce the clock frequency.
+// The ST7567 specifies minimum clock cycle time 50ns i.e. 20MHz @ Vcc=3.3V
 constexpr uint32_t LcdSpiClockFrequency = 2000000;		// 2.0MHz
 constexpr Pin LcdCSPin = PortCPin(9);
+constexpr Pin LcdA0Pin = PortAPin(21);
 constexpr Pin LcdBeepPin = PortAPin(15);
 constexpr Pin EncoderPinA = PortBPin(5);
 constexpr Pin EncoderPinB = PortCPin(3);
@@ -254,7 +256,7 @@ constexpr PinEntry PinTable[] =
 	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
 	{ PortBPin(2),	PinCapability::rw,		"urxd" },
 	{ PortBPin(3),	PinCapability::rw,		"utxd" },
-	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },
+	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },					// also used by ST7567 LCD controllers
 	{ PortAPin(22), PinCapability::ainrw,	"exp.pa22" },
 	{ PortAPin(3),	PinCapability::rw,		"exp.pa3,twd0" },
 	{ PortAPin(4),	PinCapability::rw,		"exp.pa4,twck0" },
