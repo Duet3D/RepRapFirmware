@@ -58,9 +58,8 @@ ST7565::ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noex
 	: DisplayDriver(width, height), dcPin(dcPin)
 {
 	spiDevice.csPin = csPin;
-	// Set CS (chip select) to be active low
-	//spiDevice.csPolarity = false;
-	// Needs to be true because CLK is gated with CS
+	// CS (chip select) should be active low for the ST7565
+	// But needs to be active high because CLK is AND-gated with CS
 	spiDevice.csPolarity = true;
 	// Data is sampled on the rising edge of the clock pulse and shifted out on the falling edge of the clock pulse
 	spiDevice.spiMode = 0;
@@ -76,15 +75,10 @@ void ST7565::OnInitialize() noexcept
 	// Set DC/A0 pin to be an output with initial LOW state (command: 0, data: 1)
 	IoPort::SetPinMode(dcPin, OUTPUT_LOW);
 
-	// Post-reset wait
+	// Post-reset wait of 6ms
 	delay(6);
 
 	sspi_master_init(&spiDevice, 8);
-
-	//numContinuationBytesLeft = 0;
-	//startRow = displayHeight;
-	//startCol = displayWidth;
-	//endRow = endCol = nextFlushRow = 0;
 
 	{
 		MutexLocker lock(Tasks::GetSpiMutex());
@@ -131,9 +125,6 @@ void ST7565::OnInitialize() noexcept
 
 void ST7565::OnEnable() noexcept
 {
-	//Clear();
-	//FlushAll();
-
 	{
 		MutexLocker lock(Tasks::GetSpiMutex());
 		sspi_master_setup_device(&spiDevice);
@@ -148,8 +139,6 @@ void ST7565::OnEnable() noexcept
 		delayMicroseconds(1);
 		sspi_deselect_device(&spiDevice);
 	}
-
-	//currentFontNumber = 0;
 }
 
 // Adjust the serial interface clock frequency
@@ -184,13 +173,15 @@ bool ST7565::Flush() noexcept
 	{
 		// The columns can be set one pixel at a time, but we quantize to 8 bit wide tiles instead due to the tile rotation we have to perform anyway.
 		// For a 128 pixel wide screen, this results in 16 horizontal tiles.
-		uint8_t startColNum = dirtyRectLeft >> 3;
-		const uint8_t endColNum = (dirtyRectRight + 7) >> 3;
+		// Column numbers are 0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120.
+		uint8_t startColNum = dirtyRectLeft & 0xF8;
+		const uint8_t endColNum = (dirtyRectRight + 7) & 0xF8;
 
-		// The rows are set 8 pixels at a time, so row numbers range from 0 to 7.
+		// The rows are set 8 pixels at a time, and we quantize to 8 bit high tiles.
 		// For a 64 pixel screen height, this results in 8 vertical tiles.
-		uint8_t startRowNum = dirtyRectTop >> 3;
-		const uint8_t endRowNum = (dirtyRectBottom + 7) >> 3;
+		// Row numbers are 0, 8, 16, 24, 32, 40, 48, 56.
+		uint8_t startRowNum = dirtyRectTop & 0xF8;
+		const uint8_t endRowNum = (dirtyRectBottom + 7) & 0xF8;
 
 		// Decide which row to flush next
 		// It can occur that the dirty area expands during subsequent Flush() calls
@@ -224,20 +215,18 @@ bool ST7565::Flush() noexcept
 			uint8_t tile[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
 			// Set the GDRAM address to send the bytes to
-			setGraphicsAddress(nextFlushRow, startColNum * 8);
+			setGraphicsAddress(nextFlushRow, startColNum);
 
 			startSendData();
 
 			// Send tiles of 8x8 for the desired (quantized) width of the dirty rectangle
-			//TODO: x can also be divided by factor 8 to optimize calculation
-			for(int x = startColNum; x < endColNum; x++)
+			for(int x = startColNum; x < endColNum; x += 8)
 			{
-				uint8_t* p = displayBuffer + x + (nextFlushRow * (displayWidth / 8));
+				uint8_t* p = displayBuffer + (nextFlushRow * (displayWidth / 8) + (x / 8));
 
 				// Fill the tile buffer
 				for(int i = 0; i < 8; i++)
 				{
-					//tile[i] = *(displayBuffer + x + ((nextFlushRow + i) * (displayWidth / 8)));
 					tile[i] = *p;
 					p += (displayWidth / 8);
 				}
@@ -298,7 +287,7 @@ void ST7565::flushEntireBuffer() noexcept
 				// Fill the tile buffer
 				for(int i = 0; i < 8; i++)
 				{
-					tile[i] = *(displayBuffer + ((y + i) * displayWidth / 8) + (x / 8));
+					tile[i] = *(displayBuffer + ((y + i) * (displayWidth / 8)) + (x / 8));
 				}
 				// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
 				for(int i = 7; i >= 0; i--)
