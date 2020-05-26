@@ -52,6 +52,7 @@ private:
 	void dataDelay() noexcept;
 	void setGraphicsAddress(unsigned int r, unsigned int c) noexcept;
 	uint8_t transformTile(uint8_t data[8], PixelNumber c) noexcept;
+	void flushEntireBuffer() noexcept;
 
 	// 11100010 System reset
 	constexpr static uint8_t SystemReset = 0xE2;

@@ -177,11 +177,44 @@ void ST7565::FlushAll() noexcept
 //      the dirty rectangle member variables can be made private then as well.
 bool ST7565::Flush() noexcept
 {
-	// See if there is anything to flush, right and bottom need to be at least one pixel larger than left and top.
+	// See if there is anything to flush
+	// Right and bottom need to be at least one pixel larger than left and top with this method of marking a dirty rectangle.
+	// TODO: perhaps a dirtyRectTop, dirtyRectLeft and dirtyRectWidth, dirtyRectHeight would work more robustly?
 	if (dirtyRectRight > dirtyRectLeft && dirtyRectBottom > dirtyRectTop)
 	{
-		// Test to flush entire display each time something is dirty
+		// The columns can be set one pixel at a time, but we quantize to 8 bit wide tiles instead due to the tile rotation we have to perform anyway.
+		// For a 128 pixel wide screen, this results in 16 horizontal tiles.
+		uint8_t startColNum = dirtyRectLeft >> 3;
+		const uint8_t endColNum = (dirtyRectRight + 7) >> 3;
+
+		// The rows are set 8 pixels at a time, so row numbers range from 0 to 7.
+		// For a 64 pixel screen height, this results in 8 vertical tiles.
+		uint8_t startRowNum = dirtyRectTop >> 3;
+		const uint8_t endRowNum = (dirtyRectBottom + 7) >> 3;
+
+		// Decide which row to flush next
+		// It can occur that the dirty area expands during subsequent Flush() calls
+		//TODO: maybe use the term currentFlushRow instead, because at this stage, it's the one to process, not the next to process?
+		if (nextFlushRow < startRowNum || nextFlushRow >= endRowNum)
 		{
+			// Start from the beginning
+			nextFlushRow = startRowNum;
+		}
+
+		// We are flushing from the beginning
+		if (nextFlushRow == startRowNum)
+		{
+			// Shrink the dirty rectangle pre-emptively (flag as flushed)
+			dirtyRectTop = startRowNum + 8;
+		}
+
+		// Flush that row (of tiles)
+		{
+			debugPrintf("flush dl=%u dr=%u dt=%u db=%u  cs=%u ce=%u rs=%u re=%u  nr=%u\n",
+					dirtyRectLeft, dirtyRectRight, dirtyRectTop, dirtyRectBottom,
+					startColNum, endColNum, startRowNum, endRowNum,
+					nextFlushRow);
+
 			MutexLocker lock(Tasks::GetSpiMutex());
 			sspi_master_setup_device(&spiDevice);
 			delayMicroseconds(1);
@@ -190,80 +223,38 @@ bool ST7565::Flush() noexcept
 
 			uint8_t tile[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-			// Send 8 rows of pixels in each transaction
-			for(int y = 0; y < displayHeight; y += 8)
+			// Set the GDRAM address to send the bytes to
+			setGraphicsAddress(nextFlushRow, startColNum * 8);
+
+			startSendData();
+
+			// Send tiles of 8x8 for the desired (quantized) width of the dirty rectangle
+			//TODO: x can also be divided by factor 8 to optimize calculation
+			for(int x = startColNum; x < endColNum; x++)
 			{
-				// Set where the bytes go
-				setGraphicsAddress(y, 0);
+				uint8_t* p = displayBuffer + x + (nextFlushRow * (displayWidth / 8));
 
-				startSendData();
-
-				// Send tiles of 8x8 for the entire display width
-				for(int x = 0; x < displayWidth; x += 8)
+				// Fill the tile buffer
+				for(int i = 0; i < 8; i++)
 				{
-					// Fill the tile buffer
-					for(int i = 0; i < 8; i++)
-					{
-						tile[i] = *(displayBuffer + ((y + i) * displayWidth / 8) + (x / 8));
-					}
-					// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
-					for(int i = 7; i >= 0; i--)
-					{
-						sendData(transformTile(tile, i));
-					}
+					//tile[i] = *(displayBuffer + x + ((nextFlushRow + i) * (displayWidth / 8)));
+					tile[i] = *p;
+					p += (displayWidth / 8);
 				}
-
-				endSendData();
+				// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
+				for(int i = 7; i >= 0; i--)
+				{
+					sendData(transformTile(tile, i));
+				}
 			}
+
+			endSendData();
 
 			// End update
 			delayMicroseconds(1);
 			sspi_deselect_device(&spiDevice);
-		}
 
-		// Reset dirty rectangle and row tracking
-		dirtyRectTop = displayHeight;
-		dirtyRectLeft = displayWidth;
-		dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
 
-/*
-		// The columns are set one pixel at a time
-		uint8_t startColNum = dirtyRectLeft;
-		const uint8_t endColNum = dirtyRectRight;
-		// The rows are set 8 pixels at a time
-		uint8_t startRowNum = dirtyRectTop/8;
-		const uint8_t endRowNum = (dirtyRectBottom + 7)/8;
-
-		// Decide which row to flush next
-		if (nextFlushRow < startRowNum || nextFlushRow >= endRowNum)
-		{
-			nextFlushRow = startRowNum;       // start from the beginning
-		}
-
-		if (nextFlushRow == startRowNum)	  // if we are starting from the beginning
-		{
-			// Shrink the dirty rectangle pre-emptively (flag as flushed)
-			dirtyRectTop = startRowNum + 8;
-		}
-
-		// Flush that row/tile
-		{
-//			debugPrintf("flush %u %u %u\n", nextFlushRow, startColNum, endColNum);
-
-			MutexLocker lock(Tasks::GetSpiMutex());
-			sspi_master_setup_device(&spiDevice);
-			sspi_select_device(&spiDevice);
-			delayMicroseconds(1);
-
-			setGraphicsAddress(nextFlushRow, startColNum);
-			uint8_t *ptr = displayBuffer + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
-			while (startColNum < endColNum)
-			{
-				sendLcdData(*ptr++);
-				sendLcdData(*ptr++);
-				++startColNum;
-				dataDelay();
-			}
 			sspi_deselect_device(&spiDevice);
 		}
 
@@ -277,9 +268,57 @@ bool ST7565::Flush() noexcept
 		dirtyRectTop = displayHeight;
 		dirtyRectLeft = displayWidth;
 		dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
-*/
 	}
 	return false;
+}
+
+// Test to flush entire display each time something is dirty, no matter how small
+void ST7565::flushEntireBuffer() noexcept
+{
+	{
+		MutexLocker lock(Tasks::GetSpiMutex());
+		sspi_master_setup_device(&spiDevice);
+		delayMicroseconds(1);
+		sspi_select_device(&spiDevice);
+		delayMicroseconds(1);
+
+		uint8_t tile[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+
+		// Send 8 rows of pixels in each transaction
+		for(int y = 0; y < displayHeight; y += 8)
+		{
+			// Set where the bytes go
+			setGraphicsAddress(y, 0);
+
+			startSendData();
+
+			// Send tiles of 8x8 for the entire display width
+			for(int x = 0; x < displayWidth; x += 8)
+			{
+				// Fill the tile buffer
+				for(int i = 0; i < 8; i++)
+				{
+					tile[i] = *(displayBuffer + ((y + i) * displayWidth / 8) + (x / 8));
+				}
+				// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
+				for(int i = 7; i >= 0; i--)
+				{
+					sendData(transformTile(tile, i));
+				}
+			}
+
+			endSendData();
+		}
+
+		// End update
+		delayMicroseconds(1);
+		sspi_deselect_device(&spiDevice);
+	}
+
+	// Reset dirty rectangle and row tracking
+	dirtyRectTop = displayHeight;
+	dirtyRectLeft = displayWidth;
+	dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
 }
 
 // Array of bytes is assumed to be 8 in size (square tile of 8x8 bits)
