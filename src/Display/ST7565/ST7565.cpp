@@ -1,11 +1,14 @@
 /*
- * UC1701.cpp
+ * ST7565.cpp
  *
  *  Created on : 2020-05-14
  *      Author : Martijn Schiedon
  */
 
-// Driver for 128x64 graphical LCD with UC1701, RT7565, NT7534 or compatible controller
+// Driver for 128x64 graphical LCD with ST7565, ST7567, UC1701, NT7534 or compatible controller
+
+//TODO: initially used the UC1701 datasheet, but it has poor information on timing,
+//      use the ST7565 datasheet and validate if timings are officially correct going forward
 
 // Note: these controllers work with 4-wire SPI:
 //   SS = Slave/Chip Select
@@ -43,7 +46,7 @@ pixel_width = 128,
 pixel_height = 64
 */
 
-#include "UC1701.h"
+#include <Display/ST7565/ST7565.h>
 
 #if SUPPORT_12864_LCD
 
@@ -51,7 +54,7 @@ pixel_height = 64
 #include "Tasks.h"
 #include "Hardware/IoPorts.h"
 
-UC1701::UC1701(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noexcept
+ST7565::ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noexcept
 	: DisplayDriver(width, height), dcPin(dcPin)
 {
 	spiDevice.csPin = csPin;
@@ -68,7 +71,7 @@ UC1701::UC1701(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noex
 #endif
 }
 
-void UC1701::OnInitialize() noexcept
+void ST7565::OnInitialize() noexcept
 {
 	// Set DC/A0 pin to be an output with initial LOW state (command: 0, data: 1)
 	IoPort::SetPinMode(dcPin, OUTPUT_LOW);
@@ -126,7 +129,7 @@ void UC1701::OnInitialize() noexcept
 	}
 }
 
-void UC1701::OnEnable() noexcept
+void ST7565::OnEnable() noexcept
 {
 	//Clear();
 	//FlushAll();
@@ -150,14 +153,14 @@ void UC1701::OnEnable() noexcept
 }
 
 // Adjust the serial interface clock frequency
-void UC1701::SetBusClockFrequency(uint32_t freq) noexcept
+void ST7565::SetBusClockFrequency(uint32_t freq) noexcept
 {
 	spiDevice.clockFrequency = freq;
 }
 
 // Flush all of the dirty part of the image to the lcd. Only called during startup and shutdown.
 //TODO: call this just Flush()?
-void UC1701::FlushAll() noexcept
+void ST7565::FlushAll() noexcept
 {
 	while (Flush())
 	{
@@ -172,7 +175,7 @@ void UC1701::FlushAll() noexcept
 //      and OnFlush() to let it flush based on these parameters, and return false when done,
 //      so that the Flush() in the DisplayDriver can submit a new dirty rectangle through OnStartFlush()
 //      the dirty rectangle member variables can be made private then as well.
-bool UC1701::Flush() noexcept
+bool ST7565::Flush() noexcept
 {
 	// See if there is anything to flush, right and bottom need to be at least one pixel larger than left and top.
 	if (dirtyRectRight > dirtyRectLeft && dirtyRectBottom > dirtyRectTop)
@@ -281,7 +284,7 @@ bool UC1701::Flush() noexcept
 
 // Array of bytes is assumed to be 8 in size (square tile of 8x8 bits)
 //TODO: define Tile data type?
-uint8_t UC1701::transformTile(uint8_t data[8], PixelNumber c) noexcept
+uint8_t ST7565::transformTile(uint8_t data[8], PixelNumber c) noexcept
 {
 	return ((data[0] >> c) & 1)
          | ((data[1] >> c) & 1) << 1
@@ -295,7 +298,7 @@ uint8_t UC1701::transformTile(uint8_t data[8], PixelNumber c) noexcept
 
 // Set the address to write to.
 // The display memory is organized in 8+1 pages (of horizontal rows) and 0-131 columns
-void UC1701::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
+void ST7565::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
 {
 	// 0001#### Set Column Address MSB
 	sendCommand(0x10 | ((c >> 4) & 0x0F));
@@ -308,7 +311,7 @@ void UC1701::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
 }
 
 // Send a command to the LCD. The SPI mutex is already owned
-void UC1701::sendCommand(uint8_t command) noexcept
+void ST7565::sendCommand(uint8_t command) noexcept
 {
 	uint8_t buffer[1];
 	buffer[0] = command;
@@ -317,7 +320,7 @@ void UC1701::sendCommand(uint8_t command) noexcept
 }
 
 // Send a data byte to the LCD. The SPI mutex is already owned
-void UC1701::sendArg(uint8_t arg) noexcept
+void ST7565::sendArg(uint8_t arg) noexcept
 {
 	uint8_t buffer[1];
 	buffer[0] = arg;
@@ -325,13 +328,13 @@ void UC1701::sendArg(uint8_t arg) noexcept
 	sspi_transceive_packet(buffer, nullptr, 1);
 }
 
-void UC1701::startSendData() noexcept
+void ST7565::startSendData() noexcept
 {
 	digitalWrite(dcPin, true);
 }
 
 // Send a data byte to the LCD. The SPI mutex is already owned
-void UC1701::sendData(uint8_t data) noexcept
+void ST7565::sendData(uint8_t data) noexcept
 {
 	uint8_t buffer[1];
 	buffer[0] = data;
@@ -339,17 +342,17 @@ void UC1701::sendData(uint8_t data) noexcept
 	sspi_transceive_packet(buffer, nullptr, 1);
 }
 
-void UC1701::endSendData() noexcept
+void ST7565::endSendData() noexcept
 {
 	digitalWrite(dcPin, false);
 }
 
-inline void UC1701::commandDelay() noexcept
+inline void ST7565::commandDelay() noexcept
 {
 	delayMicroseconds(CommandDelayMicros);
 }
 
-inline void UC1701::dataDelay() noexcept
+inline void ST7565::dataDelay() noexcept
 {
 	delayMicroseconds(DataDelayMicros);
 }

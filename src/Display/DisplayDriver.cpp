@@ -13,7 +13,7 @@
  *    DisplayUnit          -> Display.cpp
  *      + DisplayModule
  *        + DisplayDriver    -> DisplayDriver.cpp
- *          - UC1701         -> UC1701.cpp
+ *          - ST7565         -> ST7565.cpp
  *          - ST7920         -> ST7920.cpp
  *        + Display
  *      + RotaryEncoder      -> RotaryEncoder.cpp
@@ -55,7 +55,6 @@
 //      Also, in e.g. function parameter ordering, I prefer to have horizontal come first, then vertical, so x, y and column, row
 //TODO: set contrast option, controlled by Code
 //TODO: move character classes to a generic level as well?
-//TODO: decide on naming conventions for controller drivers, e.g. if UC1701 should be RT7565 instead.
 //TODO: make the A0/CD pin configurable from GCode.
 //TODO: perhaps rename this to DotMatrixScreen?
 //  - You paint on a screen

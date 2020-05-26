@@ -19,7 +19,7 @@
 
 #include "Fonts/Fonts.h"
 #include <Display/ST7920/ST7920.h>
-#include <Display/UC1701/UC1701.h>
+#include <Display/ST7565/ST7565.h>
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Hardware/IoPorts.h"
@@ -188,9 +188,9 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 					case 1:  // ST7920 128x64 display
 						lcd = new ST7920(128, 64, LcdCSPin);
 						break;
-					case 2:  // UC1701 128x64 display
+					case 2:  // ST7565 128x64 display
 						// NOTE: now using EXP_0, could be made configurable to use BEEP or EXT_1 pins as DC line
-						lcd = new UC1701(128, 64, LcdCSPin, Exp0Pin);
+						lcd = new ST7565(128, 64, LcdCSPin, Exp0Pin);
 						break;
 				}
 			}

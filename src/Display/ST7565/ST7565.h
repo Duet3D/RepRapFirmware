@@ -1,12 +1,12 @@
 /*
- * UC1701.h
+ * ST7565.h
  *
  *  Created on : 2020-05-14
  *      Author : Martijn Schiedon
  */
 
-#ifndef UC1701_H
-#define UC1701_H
+#ifndef ST7565_H
+#define ST7565_H
 
 #include "RepRapFirmware.h"
 
@@ -16,16 +16,15 @@
 #include <Display/DisplayDriver.h>
 #include <Display/Fonts/Fonts.h>
 
-// Class for driving 128x64 graphical LCD fitted with UC1701 controller
+// Driver for 128x64 graphical LCD with ST7565, ST7567, UC1701, NT7534 or compatible controller
 
 // This controller uses 1 bit wide x 8 bit high refresh tiles.
 
-
-class UC1701 : public DisplayDriver
+class ST7565 : public DisplayDriver
 {
 public:
 	// Construct the driver
-	UC1701(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noexcept;
+	ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noexcept;
 
 	// Handler to setup and initialize the specific driver.
 	void OnInitialize() noexcept override;
