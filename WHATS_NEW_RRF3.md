@@ -1,3 +1,22 @@
+RepRapFirmware 3.2-beta1 (in preparation
+========================
+
+Upgrade notes: none yet
+
+New features/changed behaviour:
+- Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using separate firmware build
+- [in progress] Support for ST7567-based 12864 displays on Duet Maestro (external hardware needed)
+- [in progress] Support for 12864 displays on Duet WiFi/Ethernet
+- A default filename is no longer provided in the M559 and M560 commands, so the P parameter must always be used
+- Numeric literals in GCode meta commands and in expressions enclosed by { } can now be in hex (0x prefix) or binary (0b prefix)
+- The minimum value for the P parameter of M584 is reduced from 3 to 2 so that the Z axis can be hidden
+- M906, M913 and M918 commands now wait for movement to stop, except when they are used in the power fail script
+- G29 with no S parameter now runs file sys/mesh.g if it exists; otherwise it behaves like G29 S0 as before
+
+Bug fixes:
+- Fixed a buffer overflow when the number of filaments reported by PrusaSlic3r exceeds the maximum number of supprted extruders
+- Fixed bug in GetProportionDone that might have caused an incorrect extrusion amount for the first move after restarting a print following a power failure
+
 RepRapFirmware 3.1.1
 ====================
 
