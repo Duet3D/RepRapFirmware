@@ -289,26 +289,22 @@ namespace StepPins
 		return (pinDesc.pPort == PIOC) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
 	}
 
-	// Set the specified step pins high
-	// This needs to be as fast as possible, so we do a parallel write to the port(s).
-	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversHigh(uint32_t driverMap)
+	// Set the specified step pins high. This needs to be fast.
+	static inline __attribute__((always_inline)) void StepDriversHigh(uint32_t driverMap)
 	{
-		PIOA->PIO_ODSR = driverMap;
-		PIOB->PIO_ODSR = driverMap;
-		PIOD->PIO_ODSR = driverMap;
-		PIOC->PIO_ODSR = driverMap >> 1;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
+		PIOA->PIO_SODR = driverMap & 0b00001001001000000100;
+		PIOB->PIO_SODR = driverMap & 0b10010000000000000000;
+		PIOD->PIO_SODR = driverMap & 0b00000000000001000000;
+		PIOC->PIO_SODR = (driverMap >> 1) & 0b1000000001000;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
 	}
 
-	// Set all step pins low
-	// This needs to be as fast as possible, so we do a parallel write to the port(s).
-	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversLow()
+	// Set the specified step pins low. This needs to be fast.
+	static inline __attribute__((always_inline)) void StepDriversLow(uint32_t driverMap)
 	{
-		PIOD->PIO_ODSR = 0;
-		PIOC->PIO_ODSR = 0;
-		PIOB->PIO_ODSR = 0;
-		PIOA->PIO_ODSR = 0;
+		PIOA->PIO_CODR = driverMap & 0b00001001001000000100;
+		PIOB->PIO_CODR = driverMap & 0b10010000000000000000;
+		PIOD->PIO_CODR = driverMap & 0b00000000000001000000;
+		PIOC->PIO_CODR = (driverMap >> 1) & 0b1000000001000;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
 	}
 }
 

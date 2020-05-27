@@ -245,7 +245,7 @@ void BinaryParser::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
 			for (;;)
 			{
 				const char *pp;
-				const unsigned long v = SafeStrtoul(p, &pp);
+				const uint32_t v = StrToU32(p, &pp);
 				if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
 				{
 					throw ConstructParseException("invalid IP address");
@@ -298,7 +298,7 @@ void BinaryParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 			for (;;)
 			{
 				const char *pp;
-				const unsigned long v = SafeStrtoul(p, &pp, 16);
+				const uint32_t v = StrHexToU32(p, &pp);
 				if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
 				{
 					throw ConstructParseException("invalid MAC address");

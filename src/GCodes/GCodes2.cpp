@@ -4079,7 +4079,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if HAS_SMART_DRIVERS
 		case 917: // Set/report standstill motor current percentage
 #endif
+#if HAS_VOLTAGE_MONITOR
 			if (gb.GetState() != GCodeState::powerFailPausing1)			// we don't wait for movement to stop if we are running the power fail script
+#endif
 			{
 				if (!LockMovementAndWaitForStandstill(gb))
 				{
@@ -4268,7 +4270,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_12864_LCD
 		case 918: // Configure direct-connect display
+# ifdef DUET_NG
+			// On Duet 2 configuring the display may affect the number of supported stepper drivers, so wait until there is no movement
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
+# endif
 			result = reprap.GetDisplay().Configure(gb, reply);
+# ifdef DUET_NG
+			platform.AdjustNumDrivers((reprap.GetDisplay().IsPresent()) ? 2 : 0);
+# endif
 			break;
 #endif
 

@@ -44,7 +44,7 @@ class FileInfoParser
 public:
 	FileInfoParser() noexcept;
 
-	// The following method needs to be called until it returns true - this may take a few runs
+	// The following method needs to be called repeatedly until it returns true - this may take a few runs
 	bool GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
 
 	static constexpr const char* SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
@@ -75,7 +75,7 @@ private:
 	// We used to allocate the following buffer on the stack; but now that this is called by more than one task
 	// it is more economical to allocate it permanently because that lets us use smaller stacks.
 	// Alternatively, we could allocate a FileBuffer temporarily.
-	uint32_t buf32[(GCODE_READ_SIZE + GCODE_OVERLAP_SIZE + 3)/4 + 1];	// buffer must be 32-bit aligned for HSMCI. We need the +1 so we can add a null terminator.
+	alignas(4) char buf[GCODE_READ_SIZE + GCODE_OVERLAP_SIZE + 1];		// buffer must be 32-bit aligned for HSMCI. We need the +1 so we can add a null terminator.
 };
 
 #endif

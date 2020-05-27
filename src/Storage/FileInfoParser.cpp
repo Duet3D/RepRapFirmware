@@ -21,6 +21,7 @@ FileInfoParser::FileInfoParser() noexcept
 	parserMutex.Create("FileInfoParser");
 }
 
+// This following method needs to be called repeatedly until it returns true - this may take a few runs
 bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
@@ -93,7 +94,6 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 	const uint32_t loopStartTime = millis();
 	do
 	{
-		char* const buf = reinterpret_cast<char*>(buf32);
 		size_t sizeToRead, sizeToScan;										// number of bytes we want to read and scan in this go
 
 		switch (parseState)
@@ -646,7 +646,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 		{
 			++p;	// this allows for " = " from default slic3r comment and ": " from default Cura comment
 		}
-		while (isDigit(*p))
+		while (isDigit(*p) && filamentsFound < maxFilaments)
 		{
 			const char* q;
 			float filamentLength = SafeStrtof(p, &q);

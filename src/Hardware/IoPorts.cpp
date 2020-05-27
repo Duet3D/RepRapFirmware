@@ -205,7 +205,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 #if defined(DUET3)
 	if (isdigit(*pn))
 	{
-		const uint32_t expansionNumber = SafeStrtoul(pn, &pn);
+		const uint32_t expansionNumber = StrToU32(pn, &pn);
 		if (*pn != '.')
 		{
 			reply.printf("Bad pin name '%s'", fullPinName);

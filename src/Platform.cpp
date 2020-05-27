@@ -560,6 +560,9 @@ void Platform::Init() noexcept
 	gateWay = DefaultGateway;
 
 	// Do hardware dependent initialisation
+#if VARIABLE_NUM_DRIVERS
+	numActualDirectDrivers = NumDirectDrivers;					// assume they are all available until we know otherwise
+#endif
 
 #if HAS_SMART_DRIVERS
 # if defined(DUET_NG)
@@ -671,19 +674,6 @@ void Platform::Init() noexcept
 
 	// Motors
 
-#ifndef __LPC17xx__
-	// Disable parallel writes to all pins. We re-enable them for the step pins.
-	PIOA->PIO_OWDR = 0xFFFFFFFF;
-	PIOB->PIO_OWDR = 0xFFFFFFFF;
-	PIOC->PIO_OWDR = 0xFFFFFFFF;
-# ifdef PIOD
-	PIOD->PIO_OWDR = 0xFFFFFFFF;
-# endif
-# ifdef PIOE
-	PIOE->PIO_OWDR = 0xFFFFFFFF;
-# endif
-#endif
-
 	// Clear out the axis and extruder driver bitmaps
 	for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
 	{
@@ -707,11 +697,6 @@ void Platform::Init() noexcept
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
 #if !defined(DUET3)
 		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
-#endif
-
-#ifndef __LPC17xx__
-		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
-		pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
 #endif
 	}
 
@@ -2523,7 +2508,7 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 // Disable a driver
 void Platform::DisableOneLocalDriver(size_t driver) noexcept
 {
-	if (driver < NumDirectDrivers)
+	if (driver < GetNumActualDirectDrivers())
 	{
 #if defined(DUET3) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
@@ -2576,7 +2561,7 @@ void Platform::DisableDrivers(size_t axisOrExtruder) noexcept
 // This is only called in an emergency, so we don't update the driver status
 void Platform::EmergencyDisableDrivers() noexcept
 {
-	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
+	for (size_t drive = 0; drive < GetNumActualDirectDrivers(); drive++)
 	{
 		if (!inInterrupt())		// on the Duet 06/085 we need interrupts running to send the I2C commands to set motor currents
 		{
@@ -2711,7 +2696,7 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 // This must not be called from an ISR, or with interrupts disabled.
 void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 {
-	if (driver < NumDirectDrivers)
+	if (driver < GetNumActualDirectDrivers())
 	{
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
@@ -2845,7 +2830,7 @@ void Platform::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t
 // Set the microstepping for a driver, returning true if successful
 bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode) noexcept
 {
-	if (driver < NumDirectDrivers)
+	if (driver < GetNumActualDirectDrivers())
 	{
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
@@ -2926,7 +2911,7 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 
 void Platform::SetEnableValue(size_t driver, int8_t eVal) noexcept
 {
-	if (driver < NumDirectDrivers)
+	if (driver < GetNumActualDirectDrivers())
 	{
 		enableValues[driver] = eVal;
 		DisableOneLocalDriver(driver);				// disable the drive, because the enable polarity may have been wrong before

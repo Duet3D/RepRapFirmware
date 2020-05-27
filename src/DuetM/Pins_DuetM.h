@@ -305,20 +305,16 @@ namespace StepPins
 				: 0;
 	}
 
-	// Set the specified step pins high
-	// This needs to be as fast as possible, so we do a parallel write to the port(s).
-	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversHigh(uint32_t driverMap) noexcept
+	// Set the specified step pins high. This needs to be fast.
+	static inline __attribute__((always_inline)) void StepDriversHigh(uint32_t driverMap) noexcept
 	{
-		PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
+		PIOC->PIO_SODR = driverMap;				// on Duet Maestro all step pins are on port C
 	}
 
-	// Set all step pins low
-	// This needs to be as fast as possible, so we do a parallel write to the port(s).
-	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversLow() noexcept
+	// Set the specified step pins low. This needs to be fast.
+	static inline void __attribute__((always_inline)) StepDriversLow(uint32_t driverMap) noexcept
 	{
-		PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
+		PIOC->PIO_CODR = driverMap;				// on Duet Maestro all step pins are on port C
 	}
 }
 

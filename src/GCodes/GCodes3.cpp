@@ -1155,7 +1155,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 	}
 #endif
 	const uint8_t drive = id.localDriver;
-	if (drive < NumDirectDrivers)
+	if (drive < platform.GetNumActualDirectDrivers())
 	{
 		bool seen = false;
 		if (gb.Seen('S'))
