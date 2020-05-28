@@ -361,7 +361,7 @@ typedef void (*FUNC_PTR)(void);
  */
 #define max(x, y) ((x) > (y) ? (x) : (y))
 
-#endif	//dc42 rrmeoved macros
+#endif	//dc42 removed macros
 
 /**@}*/
 

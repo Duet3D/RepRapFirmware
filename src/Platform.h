@@ -137,6 +137,8 @@ enum class BoardType : uint8_t
 	PCCB_v10 = 1
 #elif defined(PCCB_08) || defined(PCCB_08_X5)
 	PCCB_v08 = 1
+#elif defined(DUET_5LC)
+	Duet_5LC = 1
 #elif defined(__LPC17xx__)
 	Lpc = 1
 #else

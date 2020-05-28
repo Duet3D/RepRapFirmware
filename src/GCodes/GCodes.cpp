@@ -87,9 +87,9 @@ GCodes::GCodes(Platform& p) noexcept :
 
 #if defined(SERIAL_MAIN_DEVICE)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-	usbGCode = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
+	usbGCode = new GCodeBuffer(GCodeChannel::USBchan, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_LINUX_INTERFACE
-	usbGCode = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatbility::marlin);
+	usbGCode = new GCodeBuffer(GCodeChannel::USBchan, nullptr, fileInput, UsbMessage, Compatbility::marlin);
 #else
 	usbGCode = nullptr;
 #endif

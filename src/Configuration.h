@@ -24,6 +24,7 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #include <cstddef>			// for size_t
+#include <cstring>			// for strlen
 
 // Generic constants
 constexpr float ABS_ZERO = -273.15;						// Celsius

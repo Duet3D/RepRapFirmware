@@ -40,45 +40,14 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # undef array			// needed because some files include <functional>
 #endif
 
-#ifdef DUET_5LC
-# include <General/SimpleMath.h>
-//TODO need hardware-related includes here
-
-typedef uint8_t DmaChannel;
-typedef uint8_t Pin;
-constexpr Pin NoPin = 0xFF;
-
-inline constexpr Pin PortAPin(unsigned int n) noexcept { return n; }
-inline constexpr Pin PortBPin(unsigned int n) noexcept { return 32+n; }
-inline constexpr Pin PortCPin(unsigned int n) noexcept { return 64+n; }
-inline constexpr Pin PortDPin(unsigned int n) noexcept { return 96+n; }
-
-#else
 # include "Core.h"
-#endif
 
 #ifndef SAMC21
-# define SAMC21	(defined(__SAMC21G18A__) && __SAMC21G18A__)
+# define SAMC21	0
 #endif
 
 #ifndef SAME5x
-# define SAME5x	((defined(__SAME51N19A__) && __SAME51N19A__) || (defined(__SAME54P20A__) && __SAME54P20A__))
-#endif
-
-#ifndef SAM4E
-# define SAM4E	0
-#endif
-
-#ifndef SAM4S
-# define SAM4S	0
-#endif
-
-#ifndef SAM3XA
-# define SAM3XA	0
-#endif
-
-#ifndef SAME70
-# define SAME70	0
+# define SAME5x	0
 #endif
 
 #if SAME70

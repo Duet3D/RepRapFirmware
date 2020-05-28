@@ -27,9 +27,9 @@ public:
 
 	NetworkInterface *GetInterface() const noexcept { return interface; }
 
-	Port GetLocalPort() const noexcept { return localPort; }
+	TcpPort GetLocalPort() const noexcept { return localPort; }
 	IPAddress GetRemoteIP() const noexcept { return remoteIPAddress; }
-	Port GetRemotePort() const noexcept { return remotePort; }
+	TcpPort GetRemotePort() const noexcept { return remotePort; }
 	NetworkProtocol GetProtocol() const noexcept { return protocol; }
 
 	virtual void Poll() noexcept = 0;
@@ -57,7 +57,7 @@ protected:
 	};
 
 	NetworkInterface * const interface;
-	Port localPort, remotePort;							// The local and remote ports
+	TcpPort localPort, remotePort;							// The local and remote ports
 	NetworkProtocol protocol;							// What protocol this socket is for
 	IPAddress remoteIPAddress;							// The remote IP address
 	SocketState state;

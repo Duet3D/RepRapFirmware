@@ -104,11 +104,11 @@ constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(20), PortCPin(2), PortCPi
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortCPin(18), PortAPin(8), PortBPin(4), PortBPin(7), PortCPin(6), PortAPin(18), PortCPin(24) };
 
 // UART interface to stepper drivers
-Uart * const UART_TMC22xx = UART0;
-constexpr IRQn TMC22xx_UART_IRQn = UART0_IRQn;
-constexpr uint32_t ID_TMC22xx_UART = ID_UART0;
-constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
-#define TMC22xx_UART_Handler	UART0_Handler
+Sercom * const SERCOM_TMC22xx = SERCOM0;
+constexpr IRQn TMC22xx_SERCOM_IRQn = SERCOM0_IRQn;
+//constexpr uint32_t ID_TMC22xx_SERCOM = ID_SERCOM0;
+//constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
+#define TMC22xx_SERCOM_Handler	SERCOM0_Handler
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
@@ -263,20 +263,7 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 // Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
-// Duet pin numbers to control the W5500 interface
-#define W5500_SPI				SPI
-#define W5500_SPI_INTERFACE_ID	ID_SPI
-#define W5500_SPI_IRQn			SPI_IRQn
-#define W5500_SPI_HANDLER		SPI_Handler
-
-constexpr Pin APIN_W5500_SPI_MOSI = APIN_SPI_MOSI;
-constexpr Pin APIN_W5500_SPI_MISO = APIN_SPI_MISO;
-constexpr Pin APIN_W5500_SPI_SCK = APIN_SPI_SCK;
-constexpr Pin APIN_W5500_SPI_SS0 = APIN_SPI_SS0;
-
-constexpr Pin W5500ResetPin = PortCPin(13);									// Low on this in holds the W5500 in reset
-constexpr Pin W5500SsPin = PortAPin(11);									// SPI NPCS pin to W5500
-constexpr Pin W5500IntPin = PortAPin(23);									// Interrupt from W5500
+//TODO add Ethernet interface pins here
 
 // Timer allocation
 // TC0 channel 0 is used for step pulse generation and software timers (lower 16 bits)
@@ -301,7 +288,7 @@ namespace StepPins
 	static inline uint32_t CalcDriverBitmap(size_t driver) noexcept
 	{
 		return (driver < NumDirectDrivers)
-				? g_APinDescription[STEP_PINS[driver]].ulPin
+				? 1u << (STEP_PINS[driver] & 0x1Fu)
 				: 0;
 	}
 

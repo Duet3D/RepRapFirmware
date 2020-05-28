@@ -469,7 +469,7 @@ private:
 	GCodeBuffer*& httpGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)];
 	GCodeBuffer*& telnetGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)];
 	GCodeBuffer*& fileGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)];
-	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)];
+	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USBchan)];
 	GCodeBuffer*& auxGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)];					// This one is for the PanelDue on the async serial interface
 	GCodeBuffer*& triggerGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)];			// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)];

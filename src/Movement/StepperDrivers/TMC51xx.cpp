@@ -18,7 +18,7 @@
 #include <Endstops/Endstop.h>
 #include <General/Portability.h>
 
-#if SAME51 || SAMC21
+#if SAME5x || SAMC21
 
 # include <Hardware/IoPorts.h>
 # include <Hardware/Peripherals.h>
@@ -1219,7 +1219,7 @@ void SmartDrivers::Init() noexcept
 	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
 	pinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 
-#if SAME51 || SAMC21
+#if SAME5x || SAMC21
 	gpio_set_pin_function(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
 	gpio_set_pin_function(TMC51xxSclkPin, TMC51xxSclkPinPeriphMode);
 	gpio_set_pin_function(TMC51xxMisoPin, TMC51xxMisoPinPeriphMode);

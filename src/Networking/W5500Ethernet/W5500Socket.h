@@ -17,7 +17,7 @@ class W5500Socket : public Socket
 {
 public:
 	W5500Socket(NetworkInterface *iface) noexcept;
-	void Init(SocketNumber s, Port serverPort, NetworkProtocol p) noexcept;
+	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p) noexcept;
 
 	void Poll() noexcept override;
 	void Close() noexcept override;

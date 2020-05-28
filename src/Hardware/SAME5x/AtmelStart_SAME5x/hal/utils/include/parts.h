@@ -34,8 +34,11 @@
 #ifndef ATMEL_PARTS_H
 #define ATMEL_PARTS_H
 
-#include "same51.h"
-
-#include "hri_e51.h"
+#ifdef __SAME54P20A__
+# include "same54.h"
+# include "hri_e54.h"
+#else
+# error unsupported processor
+#endif
 
 #endif /* ATMEL_PARTS_H */

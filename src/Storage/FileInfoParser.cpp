@@ -488,7 +488,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 							else
 							{
 								float objectHeight = SafeStrtof(zpos, nullptr);
-								if (!isnan(objectHeight) && !isinf(objectHeight))
+								if (!std::isnan(objectHeight) && !std::isinf(objectHeight))
 								{
 									parsedFileInfo.objectHeight = objectHeight;
 									foundHeight = true;
@@ -517,7 +517,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 			if (len > 31 && StringStartsWithIgnoreCase(buf, kisslicerHeightString))
 			{
 				float objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
-				if (!isnan(objectHeight) && !isinf(objectHeight))
+				if (!std::isnan(objectHeight) && !std::isinf(objectHeight))
 				{
 					parsedFileInfo.objectHeight = objectHeight;
 					return true;
@@ -564,7 +564,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len) noexcept
 					}
 					const char *tailPtr;
 					const float val = SafeStrtof(pos, &tailPtr);
-					if (tailPtr != pos && !isnan(val) && !isinf(val))	// if we found and converted a number
+					if (tailPtr != pos && !std::isnan(val) && !std::isinf(val))	// if we found and converted a number
 					{
 						parsedFileInfo.layerHeight = val;
 						return true;
@@ -651,7 +651,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			const char* q;
 			float filamentLength = SafeStrtof(p, &q);
 			p = q;
-			if (!isnan(filamentLength) && !isinf(filamentLength))
+			if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 			{
 				parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 				if (*p == 'm')
@@ -693,7 +693,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			if (isDigit(*p))
 			{
 				float filamentLength = SafeStrtof(p, nullptr);
-				if (!isnan(filamentLength) && !isinf(filamentLength))
+				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
 					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 					++filamentsFound;
@@ -717,7 +717,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			if (isDigit(*p))
 			{
 				float filamentLength = SafeStrtof(p, nullptr);
-				if (!isnan(filamentLength) && !isinf(filamentLength))
+				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
 					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 					++filamentsFound;
@@ -750,7 +750,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			if (isDigit(*p))
 			{
 				float filamentLength = SafeStrtof(p, nullptr);
-				if (!isnan(filamentLength) && !isinf(filamentLength))
+				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
 					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 					++filamentsFound;
@@ -767,7 +767,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 		if (p != nullptr)
 		{
 			const float filamentCMM = SafeStrtof(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
-			if (!isnan(filamentCMM) && !isinf(filamentCMM))
+			if (!std::isnan(filamentCMM) && !std::isinf(filamentCMM))
 			{
 				parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
 			}

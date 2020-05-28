@@ -217,7 +217,7 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 	}
 	else if (protocol < NumProtocols)
 	{
-		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		MutexLocker lock(interfaceMutex);
 
 		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
@@ -340,7 +340,7 @@ void WiFiInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef&
 	}
 }
 
-NetworkProtocol WiFiInterface::GetProtocolByLocalPort(Port port) const noexcept
+NetworkProtocol WiFiInterface::GetProtocolByLocalPort(TcpPort port) const noexcept
 {
 	if (port == ftpDataPort)
 	{
@@ -1131,7 +1131,7 @@ void WiFiInterface::TerminateSockets() noexcept
 	}
 }
 
-void WiFiInterface::TerminateSockets(Port port) noexcept
+void WiFiInterface::TerminateSockets(TcpPort port) noexcept
 {
 	for (WiFiSocket *socket : sockets)
 	{
@@ -1155,7 +1155,7 @@ void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t other
 }
 
 // Open the FTP data port
-void WiFiInterface::OpenDataPort(Port port) noexcept
+void WiFiInterface::OpenDataPort(TcpPort port) noexcept
 {
 	for (WiFiSocket *s : sockets)
 	{
@@ -1661,7 +1661,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	return response;
 }
 
-void WiFiInterface::SendListenCommand(Port port, NetworkProtocol protocol, unsigned int maxConnections) noexcept
+void WiFiInterface::SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections) noexcept
 {
 	ListenOrConnectData lcb;
 	lcb.port = port;
@@ -1672,7 +1672,7 @@ void WiFiInterface::SendListenCommand(Port port, NetworkProtocol protocol, unsig
 }
 
 // Stop listening on a port
-void WiFiInterface::StopListening(Port port) noexcept
+void WiFiInterface::StopListening(TcpPort port) noexcept
 {
 	SendListenCommand(port, AnyProtocol, 0);
 }
