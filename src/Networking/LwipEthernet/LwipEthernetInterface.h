@@ -54,7 +54,7 @@ public:
 	// LwIP interfaces
 	bool ConnectionEstablished(tcp_pcb *pcb) noexcept;
 
-	void OpenDataPort(Port port) noexcept override;
+	void OpenDataPort(TcpPort port) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 protected:
@@ -82,7 +82,7 @@ private:
 	LwipSocket *sockets[NumEthernetSockets];
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
-	Port portNumbers[NumProtocols];					// port number used for each protocol
+	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 	bool closeDataPort;
 	tcp_pcb *listeningPcbs[NumTcpPorts];

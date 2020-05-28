@@ -175,7 +175,7 @@ void LwipSocket::ConnectionError(err_t err) noexcept
 }
 
 // Initialise a TCP socket
-void LwipSocket::Init(SocketNumber skt, Port serverPort, NetworkProtocol p) noexcept
+void LwipSocket::Init(SocketNumber skt, TcpPort serverPort, NetworkProtocol p) noexcept
 {
 	UNUSED(skt);
 	localPort = serverPort;

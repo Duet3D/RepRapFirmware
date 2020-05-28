@@ -147,7 +147,7 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 
 	if (protocol < NumProtocols)
 	{
-		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
@@ -580,7 +580,7 @@ GCodeResult LwipEthernetInterface::SetMacAddress(const MacAddress& mac, const St
 	return GCodeResult::ok;
 }
 
-void LwipEthernetInterface::OpenDataPort(Port port) noexcept
+void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
 {
 	if (listeningPcbs[NumProtocols] != nullptr)
 	{
