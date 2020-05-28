@@ -148,7 +148,7 @@ constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. 
 //     Using single-precision maths and up to 9-factor calibration: (9 + 5) * 4 bytes per point
 //     Using double-precision maths and up to 9-factor calibration: (9 + 5) * 8 bytes per point
 //   So 32 points using double precision arithmetic need 3584 bytes of stack space.
-#if SAM4E || SAM4S || SAME70
+#if SAM4E || SAM4S || SAME70 || SAME5x
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
 constexpr size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
@@ -244,7 +244,7 @@ constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that w
 // When using RTOS, it is best if it is possible to fit an HTTP response header in a single buffer. Our headers are currently about 230 bytes long.
 // A note on reserved buffers: the worst case is when a GCode with a long response is processed. After string the response, there must be enough buffer space
 // for the HTTP responder to return a status response. Otherwise DWC never gets to know that it needs to make a rr_reply call and the system deadlocks.
-#if SAME70
+#if SAME70 || SAME5x
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 40;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
@@ -267,7 +267,7 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved ou
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 // These two definitions are only used if TRACK_OBJECT_NAMES is defined, however that definition isn't available in this file
-#if SAME70
+#if SAME70 || SAME5x
 constexpr size_t MaxTrackedObjects = 30;				// How many build plate objects we track. Each one needs 24 bytes of storage, in addition to the string space.
 constexpr size_t ObjectNamesStringSpace = 600;			// How much space we reserve for the names of objects on the build plate
 #else

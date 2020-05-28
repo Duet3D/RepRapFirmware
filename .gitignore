@@ -1,13 +1,14 @@
+# Misc
+/.settings/language.settings.xml
+
+# Output folders
 /Duet2_RTOS/
-/Duet3_V05/
 /Duet3_V06/
 /Duet3_V06_CAN0/
 /Duet3_V06_Debug/
 /DuetM_RTOS/
-/PCCB_08/
-/PCCB_08_X5/
 /PCCB_10/
 /RADDS_RTOS/
 /SAME70XPLD/
-/.settings/language.settings.xml
 /Duet2_SBC_RTOS/
+/Duet_5LC/
