@@ -90,7 +90,7 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 #define SERIAL_AUX_DEVICE Serial
 
 // SerialUSB
-constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB port
+constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
 
 //#define I2C_IFACE	Wire							// First and only I2C interface
 //#define I2C_IRQn	WIRE_ISR_ID
@@ -98,17 +98,17 @@ constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB po
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
-constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all drivers
-constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin, PortCPin(27), PortCPin(25) };
-constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(20), PortCPin(2), PortCPin(28), PortCPin(4), PortCPin(5), PortCPin(31), PortCPin(21) };
-constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortCPin(18), PortAPin(8), PortBPin(4), PortBPin(7), PortCPin(6), PortAPin(18), PortCPin(24) };
+constexpr Pin GlobalTmc22xxEnablePin = PortAPin(1);	// The pin that drives ENN of all drivers
+PortGroup * const StepPio = &(PORT->Group[2]);		// the PIO that all the step pins are on (port C)
+constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(31), PortCPin(16), PortCPin(30), PortCPin(18), PortCPin(19) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortAPin(27), PortBPin(29), PortBPin(28), PortBPin(3), PortBPin(0), PortDPin(21), PortDPin(20), PortCPin(17) };
 
 // UART interface to stepper drivers
-Sercom * const SERCOM_TMC22xx = SERCOM0;
-constexpr IRQn TMC22xx_SERCOM_IRQn = SERCOM0_IRQn;
+Sercom * const SERCOM_TMC22xx = SERCOM1;
+constexpr IRQn TMC22xx_SERCOM_IRQn = SERCOM1_0_IRQn;
 //constexpr uint32_t ID_TMC22xx_SERCOM = ID_SERCOM0;
 //constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
-#define TMC22xx_SERCOM_Handler	SERCOM0_Handler
+#define TMC22xx_SERCOM_Handler	SERCOM1_Handler0	//TODO check this. Do we need more than one ISR?
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
@@ -120,12 +120,12 @@ constexpr uint32_t DriversBaudRate = 200000;
 constexpr uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-constexpr Pin TMC22xxMuxPins[3] = { PortCPin(14), PortCPin(16), PortCPin(17) };	// Pins that control the UART multiplexer, LSB first
+//constexpr Pin TMC22xxMuxPins[3] = { PortCPin(14), PortCPin(16), PortCPin(17) };	// Pins that control the UART multiplexer, LSB first
 
 // Thermistors
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortAPin(20), PortBPin(0), PortCPin(30), PortBPin(1) }; 	// Thermistor pin numbers
-constexpr Pin VssaSensePin = PortAPin(19);
-constexpr Pin VrefSensePin = PortAPin(17);
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(0), PortCPin(1), PortCPin(2) }; 	// Thermistor pin numbers
+constexpr Pin VssaSensePin = PortBPin(4);
+constexpr Pin VrefSensePin = PortBPin(5);
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;
@@ -140,7 +140,9 @@ constexpr float DefaultThermistorSeriesR = 2200.0;
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / 4) * 4700.0/((DefaultThermistorSeriesR / 4) + 4700.0);
 																			// there are 4 temperature sensing channels and a 4K7 load resistor
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[] = { PortBPin(14), PortCPin(19) };		// SPI0_CS1, SPI0_CS2
+constexpr Pin SpiTempSensorCsPins[] = { PortCPin(10), PortCPin(7) };		// SPI0_CS1, SPI0_CS2
+
+//TODO pin allocations below here not yet corrected*****
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PortAPin(0);
@@ -295,13 +297,13 @@ namespace StepPins
 	// Set the specified step pins high. This needs to be fast.
 	static inline __attribute__((always_inline)) void StepDriversHigh(uint32_t driverMap) noexcept
 	{
-		PIOC->PIO_SODR = driverMap;				// on Duet Maestro all step pins are on port C
+		StepPio->OUTSET.reg = driverMap;				// all step pins are on port C
 	}
 
 	// Set the specified step pins low. This needs to be fast.
 	static inline void __attribute__((always_inline)) StepDriversLow(uint32_t driverMap) noexcept
 	{
-		PIOC->PIO_CODR = driverMap;				// on Duet Maestro all step pins are on port C
+		StepPio->OUTCLR.reg = driverMap;				// all step pins are on port C
 	}
 }
 

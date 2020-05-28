@@ -1455,7 +1455,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Networking/LwipEthernet|src/DuetNG|src/Alligator|src/arm|src/Duet3_V06|src/Networking/ESP8266WiFi|src/Pccb|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Networking/W5500Ethernet|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/DuetNG|src/Alligator|src/arm|src/Duet3_V06|src/Networking/ESP8266WiFi|src/Pccb|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
