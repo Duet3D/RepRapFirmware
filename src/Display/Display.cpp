@@ -14,12 +14,11 @@
 // TODO: decide if the EXT_0 pin used as DC should be configurable from GCode.
 // TODO: discuss with David to maybe use exp_1 as csPin and set LcdCSPin (PortCPin(9)) high @ sspi_select_device so we can do without NAND inverter?
 //       or to use a more logical arrangement of unbuffered pins on Drive 5 in the Maestro or the temp daughterboard header?
+//       what about the pins for the Duet Wifi and Ethernet?
 
 #include "Display.h"
 
 #if SUPPORT_12864_LCD
-
-//#define USE_EXTERNAL_CS_INVERTER
 
 #include "Fonts/Fonts.h"
 #include <Display/ST7920/ST7920.h>
@@ -29,7 +28,8 @@
 #include "Hardware/IoPorts.h"
 #include "Pins.h"
 
-constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I have are 2 and -4
+// Value that seem to work fine with most displays
+constexpr int DefaultPulsesPerClick = -4;
 
 extern const LcdFont font11x14;
 extern const LcdFont font7x11;
@@ -77,7 +77,8 @@ void Display::Spin() noexcept
 					// New message box to display
 					if (!mboxActive)
 					{
-						menu->ClearHighlighting();					// cancel highlighting and adjustment
+						// Cancel highlighting and adjustment
+						menu->ClearHighlighting();
 						menu->Refresh();
 					}
 					mboxActive = true;
@@ -180,7 +181,7 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 		seen = true;
 		uint32_t displayType = gb.GetUIValue();
 
-		if (displayType == 1 || displayType == 2)
+		if (displayType >= 1 && displayType <= 3)
 		{
 			// TODO: should replace driver when displayType changes; the current code seems to only allow
 			// configuring a driver with M918 once. Spin() is designed to handle a null pointer for the driver,
@@ -189,20 +190,21 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				switch(displayType)
 				{
-					case 1:  // ST7920 128x64 display
+					case 1:  // ST7920 128x64 display type
 						lcd = new ST7920(128, 64, LcdCSPin);
 						break;
-					case 2:  // ST7565 128x64 display
-#ifdef USE_EXTERNAL_CS_INVERTER
-						// The driver uses the default buffered LCD_CS pin.
-						// This requires an additional external (74xxx00) component to invert the logic level of the CS.
-						// NOTE: now using EXP_0 as DC/A0 , but could be made configurable to other pins?
-						lcd = new ST7565(128, 64, LcdCSPin, Exp0Pin);
-#else
-						// Use an alternative configuration with
+					case 2:  // ST7565 128x64 display type
+						// This configuration requires no additional components IF the display logic is +3.3v
+						// It uses EXP_0 as A0/DC and EXP_1 as CS (active low).
+						// LCD_CS is disconnected but still needs to be controlled to gate MOSI and SCK (active high).
 						lcd = new ST7565(128, 64, Exp1Pin, Exp0Pin, false, LcdCSPin);
-#endif
-
+						break;
+					case 3:  // ST7565 128x64 display type
+						// The driver uses the default buffered LCD_CS pin.
+						// This requires an additional external (74xxx00) component to invert the logic level of LCD_CS.
+						// NOTE: now using EXP_0 as DC/A0 , but could be made configurable to other pins?
+						//       David used 'A0Pin' so the pin could be redefined in the Pins_<Config>.h
+						lcd = new ST7565(128, 64, LcdCSPin, Exp0Pin);
 						break;
 				}
 			}

@@ -47,6 +47,7 @@
 //      capabilities of the CPU (and CPU load), and would make the routine much simpler, and most importantly, the area to flush is
 //      not a single big rectangular area requiring flushing many pixels, but consists of multiple smaller areas, with (in total) less pixels to flush.
 //      it can be adapted to the topology of the driver better, at the cost of more RAM use.
+//TODO: is 'invalidate' not a better word to setting something 'dirty' (e.g. InvalidateRect)
 //TODO: consistency and standardization of terms and order; top, left, width, height, x, y, rows, columns, r, c, etc.
 //      I think that rows/COM and columns/SEG are display hardware terminology, which should be abstracted by functions that use x and y,
 //      and rows/columns and x/y sometimes have different meaning and effect (display row could be 8 pixels high)
@@ -67,7 +68,7 @@ const LcdFont * const defaultfonts[] = { &font7x11 };
 
 // Set one default font to use
 DisplayDriver::DisplayDriver(PixelNumber width, PixelNumber height) noexcept
-	: displayWidth(width), displayHeight(height), fonts(defaultfonts), numFonts(ARRAY_SIZE(defaultfonts)),
+	: displayWidth(width), displayHeight(height), fonts(defaultfonts), fontCount(ARRAY_SIZE(defaultfonts)),
 	  currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
 {
 	// sizeof(imageBuffer) was used in some places, which doesn't work with a pointer type
@@ -114,28 +115,33 @@ bool DisplayDriver::FlushRow() noexcept
 	//       if either dirtyRectWidth or dirtyRectHeight are 0, then nothing to flush, and you don't risk off by one errors.
 	if (dirtyRectRight > dirtyRectLeft && dirtyRectBottom > dirtyRectTop)
 	{
+/*
+		debugPrintf("flush dl=%u dr=%u dt=%u db=%u  cs=%u ce=%u rs=%u re=%u  nr=%u\n",
+				dirtyRectLeft, dirtyRectRight, dirtyRectTop, dirtyRectBottom,
+				startColNum, endColNum, startRowNum, endRowNum,
+				nextFlushRow);
+*/
+
 		// The rows are quantized to whole multiples of the tile height.
-		const uint8_t qr = GetTileHeight() - 1u;
+		const uint8_t qr = GetTileHeight() - 1;
 		uint8_t startRow = dirtyRectTop & ~qr;
 		const uint8_t endRow = (dirtyRectBottom + qr) & ~qr;
 
 		// The columns are quantized to whole multiples of the tile width.
-		const uint8_t qc = GetTileWidth() - 1u;
-		//uint8_t startColumn = dirtyRectLeft & ~qc;
-		//const uint8_t endColumn = (dirtyRectRight + qc) & ~qc;
-		uint8_t startColumn = dirtyRectLeft & (qc ^ 0b11111111);
-		const uint8_t endColumn = (dirtyRectRight + qc) & (qc ^ 0b11111111);
+		const uint8_t qc = GetTileWidth() - 1;
+		uint8_t startColumn = dirtyRectLeft & ~qc;
+		const uint8_t endColumn = (dirtyRectRight + qc) & ~qc;
 
 		// Decide which row to flush next
-		// It can occur that the dirty area expands during subsequent FlushRow() calls
-		// To assess if the dirty area has grown, we need to keep track of the currentFlushRow
-		if (flushedRow < startRow || flushedRow >= endRow)
+		// It can occur that the dirty area has expanded between subsequent FlushRow() calls
+		// To assess if the dirty area has grown, we need to keep track of the previously flushed row and column start and end
+		if (flushedRow < startRow || flushedRow >= endRow /*|| startColumn < flushedStartColumn || endColumn >= flushedEndColumn*/)
 		{
-			// Start from the beginning
+			// Start over and keep track of what is about to be flushed
 			flushedRow = startRow;
 		}
 
-		// We are flushing from the beginning
+		// If we are flushing from the beginning
 		if (flushedRow == startRow)
 		{
 			// Shrink the dirty rectangle pre-emptively (flag as flushed)
@@ -169,12 +175,12 @@ void DisplayDriver::SetFlushDone() noexcept
 void DisplayDriver::SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept
 {
 	fonts = fnts;
-	numFonts = nFonts;
+	fontCount = nFonts;
 }
 
 void DisplayDriver::SelectFont(size_t newFont) noexcept
 {
-	if (newFont < numFonts)
+	if (newFont < fontCount)
 	{
 		currentFontNumber = newFont;
 	}
@@ -191,7 +197,7 @@ PixelNumber DisplayDriver::GetFontHeight(size_t fontNumber) const noexcept
 {
 	if(fonts == nullptr) return 0;
 
-	if (fontNumber >= numFonts)
+	if (fontNumber >= fontCount)
 	{
 		fontNumber = currentFontNumber;
 	}
@@ -206,56 +212,56 @@ PixelNumber DisplayDriver::GetFontHeight(size_t fontNumber) const noexcept
 //TODO: check if this is intended behavior, the c + 1 seems counter-intuitive (but consistent, since ClearRect() has that too.
 void DisplayDriver::SetPixelDirty(PixelNumber r, PixelNumber c) noexcept
 {
-//	if (r >= displayHeight) { debugPrintf("r=%u\n", r); return; }
-//	if (c >= displayWidth) { debugPrintf("c=%u\n", c); return; }
-
 	// The r and c parameters must be no greater than displayHeight-1 and displayWidth-1 respectively.
-	if (r < 0 || c < 0 || r >= displayHeight || c >= displayWidth) return;
-
+	if (r >= displayHeight || c >= displayWidth) return;
 	SetRectDirty(r, c, r + 1, c + 1);
-
-/*
-	if (r < dirtyRectTop) { dirtyRectTop = r; }
-	if (c < dirtyRectLeft) { dirtyRectLeft = c; }
-	if (r >= dirtyRectBottom) { dirtyRectBottom = r + 1; }
-	if (c >= dirtyRectRight) { dirtyRectRight = c + 1; }
-*/
 }
 
 // Write a space
 void DisplayDriver::WriteSpaces(PixelNumber numPixels) noexcept
 {
 	const LcdFont * const currentFont = fonts[currentFontNumber];
-	uint8_t ySize = currentFont->height;
-	if (row >= displayHeight)
+	uint8_t fontHeight = currentFont->height;
+
+	// Check if we're writing off-screen
+	if (cursorRow >= displayHeight)
 	{
-		ySize = 0;				// we still execute the code, so that the caller can tell how many columns the text will occupy by writing it off-screen
+		// We still execute the code, so that the caller can tell how many columns the text
+		// will occupy by writing it off-screen. This is to support center/right alignment of text.
+		fontHeight = 0;
 	}
-	else if (row + ySize > displayHeight)
+	// Check if the operation is partially off-screen
+	else if (cursorRow + fontHeight > displayHeight)
 	{
-		ySize = displayHeight - row;
+		// Determine the height that still fits the screen
+		fontHeight = displayHeight - cursorRow;
 	}
 
-	while (numPixels != 0 && column < displayWidth)
+	while (numPixels != 0 && cursorColumn < displayWidth)
 	{
-		if (ySize != 0)
+		if (fontHeight != 0)
 		{
-			const uint8_t mask = 0x80 >> (column & 7);
-			uint8_t *p = displayBuffer + ((row * (displayWidth/8)) + (column/8));
-			for (uint8_t i = 0; i < ySize && p < (displayBuffer + displayBufferSize); ++i)
+			const uint8_t mask = 0x80 >> (cursorColumn & 7);
+			uint8_t *p = displayBuffer + ((cursorRow * (displayWidth >> 3)) + (cursorColumn >> 3));
+			
+			for (uint8_t i = 0; i < fontHeight && p < (displayBuffer + displayBufferSize); ++i)
 			{
 				const uint8_t oldVal = *p;
 				const uint8_t newVal = (textInverted) ? oldVal | mask : oldVal & ~mask;
+				
 				if (newVal != oldVal)
 				{
 					*p = newVal;
-					SetPixelDirty(row + i, column);
+					// Flag the affected area dirty, with a width of 8 bits, since a byte has been written
+					SetPixelDirty(cursorRow + i, cursorColumn);
 				}
+				
 				p += (displayWidth/8);
 			}
 		}
+		
 		--numPixels;
-		++column;
+		++cursorColumn;
 	}
 
 	lastCharColData = 0;
@@ -278,33 +284,40 @@ void DisplayDriver::SetRightMargin(PixelNumber c) noexcept
 void DisplayDriver::ClearToMargin() noexcept
 {
 	const uint8_t fontHeight = fonts[currentFontNumber]->height;
-	while (column < rightMargin)
+
+	while (cursorColumn < rightMargin)
 	{
-		uint8_t *p = displayBuffer + ((row * (displayWidth/8)) + (column/8));
-		uint8_t mask = 0xFF >> (column & 7);
+		//TODO: this statement to determine the relevant position in the buffer repeats a lot in the code, make a function out of it?
+		uint8_t *p = displayBuffer + ((cursorRow * (displayWidth >> 3)) + (cursorColumn >> 3));
+		uint8_t mask = 0xFF >> (cursorColumn & 7);
 		PixelNumber nextColumn;
-		if ((column & (~7)) < (rightMargin & (~7)))
+
+		if ((cursorColumn & (~7)) < (rightMargin & (~7)))
 		{
-			nextColumn = (column & (~7)) + 8;
+			nextColumn = (cursorColumn & (~7)) + 8;
 		}
 		else
 		{
 			mask ^= 0xFF >> (rightMargin & 7);
-			nextColumn = rightMargin;;
+			nextColumn = rightMargin;
 		}
 
 		for (uint8_t i = 0; i < fontHeight && p < (displayBuffer + displayBufferSize); ++i)
 		{
 			const uint8_t oldVal = *p;
 			const uint8_t newVal = (textInverted) ? oldVal | mask : oldVal & ~mask;
+
 			if (newVal != oldVal)
 			{
 				*p = newVal;
-				SetPixelDirty(row + i, column);			// we refresh 16-bit words, so setting 1 pixel dirty in byte will suffice
+				// Flag the affected area dirty
+				SetRectDirty(cursorRow + i, cursorColumn, cursorRow + i + 1, nextColumn);
 			}
-			p += (displayWidth/8);
+			
+			p += (displayWidth >> 3);
 		}
-		column = nextColumn;
+		
+		cursorColumn = nextColumn;
 	}
 }
 
@@ -325,64 +338,56 @@ void DisplayDriver::TextInvert(bool b) noexcept
 void DisplayDriver::Clear() noexcept
 {
 	ClearRect(0, 0, displayHeight, displayWidth);
-	/*
-	uint8_t* p = displayBuffer;
-	for(uint8_t i = 0; i < displayBufferSize; i++) { *p++ = 0; }
-
-	dirtyRectLeft = 0;
-	dirtyRectTop = 0;
-	dirtyRectRight = displayWidth;
-	dirtyRectBottom = displayHeight;
-
-	SetCursor(0, 0);
-	textInverted = false;
-	leftMargin = 0;
-	rightMargin = displayWidth;
-	*/
 }
 
 // Clear a rectangular block of pixels starting at rows, startCol ending just before endRow, endCol
 //TODO: seems counter-intuitive that the endRow and endCol are not inclusive and need to be at least start + 1!
-void DisplayDriver::ClearRect(PixelNumber startRow, PixelNumber startCol, PixelNumber endRow, PixelNumber endCol) noexcept
+//      perhaps top, left, width, height would be better and simpler to process.
+void DisplayDriver::ClearRect(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept
 {
-	if (endCol > displayWidth) { endCol = displayWidth; }
+	if (endColumn > displayWidth) { endColumn = displayWidth; }
 	if (endRow > displayHeight) { endRow = displayHeight; }
-	if (startCol < endCol && startRow < endRow)
+
+	if (startColumn < endColumn && startRow < endRow)
 	{
-		uint8_t sMask = ~(0xFF >> (startCol & 7));		// mask of bits we want to keep in the first byte of each row that we modify
-		const uint8_t eMask = 0xFF >> (endCol & 7);	// mask of bits we want to keep in the last byte of each row that we modify
-		if ((startCol & ~7) == (endCol & ~7))
+		// Mask of bits we want to keep in the first byte of each row that we modify
+		uint8_t startMask = ~(0xFF >> (startColumn & 7));
+		// Mask of bits we want to keep in the last byte of each row that we modify
+		const uint8_t endMask = 0xFF >> (endColumn & 7);
+
+		if ((startColumn & ~7) == (endColumn & ~7))
 		{
-			sMask |= eMask;							// special case of just clearing some middle bits
+			// Special case of clearing some middle bits
+			startMask |= endMask;
 		}
+
 		for (PixelNumber row = startRow; row < endRow; ++row)
 		{
-			uint8_t * p = displayBuffer + ((row * (displayWidth/8)) + (startCol/8));
-			uint8_t * const endp = displayBuffer + ((row * (displayWidth/8)) + (endCol/8));
-			*p &= sMask;
+			uint8_t * p = displayBuffer + ((row * (displayWidth/8)) + (startColumn/8));
+			uint8_t * const endp = displayBuffer + ((row * (displayWidth/8)) + (endColumn/8));
+			*p &= startMask;
+
 			if (p != endp)
 			{
 				while (++p < endp)
 				{
 					*p = 0;
 				}
-				if ((endCol & 7) != 0)
+				if ((endColumn & 7) != 0)
 				{
-					*p &= eMask;
+					*p &= endMask;
 				}
 			}
 		}
 
 		// Flag cleared part as dirty
-		if (startCol < dirtyRectLeft) { dirtyRectLeft = startCol; }
-		if (endCol >= dirtyRectRight) { dirtyRectRight = endCol; }
-		if (startRow < dirtyRectTop) { dirtyRectTop = startRow; }
-		if (endRow >= dirtyRectBottom) { dirtyRectBottom = endRow; }
+		SetRectDirty(startRow, startColumn, endRow, endColumn);
 
-		SetCursor(startRow, startCol);
+		SetCursor(startRow, startColumn);
+		
 		textInverted = false;
-		leftMargin = startCol;
-		rightMargin = endCol;
+		leftMargin = startColumn;
+		rightMargin = endColumn;
 	}
 }
 
@@ -456,12 +461,14 @@ void DisplayDriver::DrawCircle(PixelNumber x0, PixelNumber y0, PixelNumber radiu
 }
 
 // Draw a bitmap. x0 and displayWidth must be divisible by 8.
+//TODO: really fix parameter order consistency (x, y) vs. (top, left) and naming here (row, column, x, y, top, left)
 void DisplayDriver::DrawBitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNumber height, const uint8_t data[]) noexcept
 {
 	for (PixelNumber r = 0; r < height && r + y0 < displayHeight; ++r)
 	{
-		uint8_t *p = displayBuffer + (((r + y0) * (displayWidth/8)) + (x0/8));
+		uint8_t *p = displayBuffer + (((r + y0) * (displayWidth >> 3)) + (x0 >> 3));
 		uint16_t bitMapOffset = r * (width/8);
+		
 		for (PixelNumber c = 0; c < (width/8) && c + (x0/8) < displayWidth/8; ++c)
 		{
 			*p++ = data[bitMapOffset++];
@@ -470,19 +477,13 @@ void DisplayDriver::DrawBitmap(PixelNumber x0, PixelNumber y0, PixelNumber width
 
 	// Assume the whole area has changed
 	SetRectDirty(y0, x0, y0 + height, x0 + width);
-
-	/*
-	if (x0 < dirtyRectLeft) dirtyRectLeft = x0;
-	if (x0 + width > dirtyRectRight) dirtyRectRight = x0 + width;
-	if (y0 < dirtyRectTop) dirtyRectTop = y0;
-	if (y0 + height > dirtyRectBottom) dirtyRectBottom = y0 + height;
-	*/
 }
 
 void DisplayDriver::SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
 {
 	//TODO: Cap the coordinates to their maximum values?
-	//if (top < 0) top = 0; if (top > displayWidth) top = displayWidth; etc.
+	//if (top < dirtyRectTop) dirtyRectTop = min<PixelNumber>(top, displayHeight);
+	//etc.
 
 	if (top < dirtyRectTop) dirtyRectTop = top;
 	if (left < dirtyRectLeft) dirtyRectLeft = left;
@@ -496,22 +497,25 @@ void DisplayDriver::DrawBitmapRow(PixelNumber top, PixelNumber left, PixelNumber
 	if (width != 0)														// avoid possible arithmetic underflow
 	{
 		const uint8_t inv = (invert) ? 0xFF : 0;
-		uint8_t firstColIndex = left/8;									// column index of the first byte to write
-		const uint8_t lastColIndex = (left + width - 1)/8;				// column index of the last byte to write
-		const unsigned int firstDataShift = left % 8;					// number of bits in the first byte that we leave alone
-		uint8_t *p = displayBuffer + (top * displayWidth/8) + firstColIndex;
+		uint8_t firstColIndex = left >> 3;								// column index of the first byte to write
+		const uint8_t lastColIndex = ((left + width - 1) >> 3);			// column index of the last byte to write
+		const unsigned int firstDataShift = left & 7;					// number of bits in the first byte that we leave alone
+		uint8_t *p = displayBuffer + (top * displayWidth >> 3) + firstColIndex;
 
 		// Do all bytes except the last one
 		uint8_t accumulator = *p & (0xFF << (8 - firstDataShift));		// prime the accumulator
+		
 		while (firstColIndex < lastColIndex)
 		{
 			const uint8_t invData = *data ^ inv;
 			const uint8_t newVal = accumulator | (invData >> firstDataShift);
+
 			if (newVal != *p)
 			{
 				*p = newVal;
 				SetPixelDirty(top, 8 * firstColIndex);
 			}
+
 			accumulator = invData << (8 - firstDataShift);
 			++p;
 			++data;
@@ -519,15 +523,16 @@ void DisplayDriver::DrawBitmapRow(PixelNumber top, PixelNumber left, PixelNumber
 		}
 
 		// Do the last byte. 'accumulator' contains up to 'firstDataShift' of the most significant bits.
-		const unsigned int lastDataShift = 7 - ((left + width - 1) % 8);	// number of trailing bits in the last byte that we leave alone, 0 to 7
+		const unsigned int lastDataShift = 7 - ((left + width - 1) & 7);	// number of trailing bits in the last byte that we leave alone, 0 to 7
 		const uint8_t lastMask = (1u << lastDataShift) - 1;					// mask for bits we want to keep;
 		accumulator |= (*data ^ inv) >> firstDataShift;
 		accumulator &= ~lastMask;
 		accumulator |= *p & lastMask;
+
 		if (accumulator != *p)
 		{
 			*p = accumulator;
-			SetPixelDirty(top, 8 * firstColIndex);
+			SetPixelDirty(top, firstColIndex << 3);
 		}
 	}
 }
@@ -535,8 +540,8 @@ void DisplayDriver::DrawBitmapRow(PixelNumber top, PixelNumber left, PixelNumber
 // Set the cursor position
 void DisplayDriver::SetCursor(PixelNumber r, PixelNumber c) noexcept
 {
-	row = r;
-	column = c;
+	cursorRow = r;
+	cursorColumn = c;
 	lastCharColData = 0u;    // flag that we just set the cursor position, so no space before next character
 	justSetCursor = true;
 }
@@ -546,10 +551,10 @@ void DisplayDriver::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexc
 	if (y < displayHeight && x < rightMargin)
 	{
 		uint8_t * const p = displayBuffer + ((y * (displayWidth >> 3)) + (x >> 3));
-	//	const uint8_t mask = 0x80u >> (x & 0b111);
-		const uint8_t mask = 0x80u >> (x%8);
+		const uint8_t mask = 0x80u >> (x & 7);
 		const uint8_t oldVal = *p;
 		uint8_t newVal;
+
 		switch(mode)
 		{
 		case PixelMode::PixelClear:
@@ -576,10 +581,9 @@ void DisplayDriver::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexc
 
 bool DisplayDriver::ReadPixel(PixelNumber x, PixelNumber y) const noexcept
 {
-	if (x < 0 || y < 0 || x >= displayWidth || y >= displayHeight) return false;
+	if (x >= displayWidth || y >= displayHeight) return false;
 	const uint8_t* const p = displayBuffer + ((y * (displayWidth >> 3)) + (x >> 3));
-	return (*p & (0x80u >> (x%8))) != 0;
-	//return ((*ptr >> (x & 7u)) & 1u) != 0;
+	return (*p & (0x80u >> (x & 7))) != 0;
 }
 
 // Write a UTF8 byte.
@@ -631,6 +635,7 @@ size_t DisplayDriver::write(uint8_t c) noexcept
 	{
 		charVal = (charVal << 6) | (c & 0x3F);
 		--numContinuationBytesLeft;
+		
 		if (numContinuationBytesLeft == 0)
 		{
 			return writeNative((charVal < 0x10000) ? (uint16_t)charVal : 0x007F);
@@ -651,9 +656,10 @@ size_t DisplayDriver::write(uint8_t c) noexcept
 size_t DisplayDriver::writeNative(uint16_t ch) noexcept
 {
 	const LcdFont * const currentFont = fonts[currentFontNumber];
+	
 	if (ch == '\n')
 	{
-		SetCursor(row + currentFont->height + 1, leftMargin);
+		SetCursor(cursorRow + currentFont->height + 1, leftMargin);
 	}
 	else
 	{
@@ -666,14 +672,15 @@ size_t DisplayDriver::writeNative(uint16_t ch) noexcept
 		}
 
 		uint8_t ySize = currentFont->height;
-		const uint8_t bytesPerColumn = (ySize + 7)/8;
-		if (row >= displayHeight)
+		const uint8_t bytesPerColumn = (ySize + 7) >> 3;
+		
+		if (cursorRow >= displayHeight)
 		{
 			ySize = 0;				// we still execute the code, so that the caller can tell how many columns the text will occupy by writing it off-screen
 		}
-		else if (row + ySize > displayHeight)
+		else if (cursorRow + ySize > displayHeight)
 		{
-			ySize = displayHeight - row;
+			ySize = displayHeight - cursorRow;
 		}
 
 		const uint8_t bytesPerChar = (bytesPerColumn * currentFont->width) + 1;
@@ -681,6 +688,7 @@ size_t DisplayDriver::writeNative(uint16_t ch) noexcept
 		const uint16_t cmask = (1u << currentFont->height) - 1;
 
 		uint8_t nCols = *fontPtr++;
+		
 		if (lastCharColData != 0)		// if we have written anything other than spaces
 		{
 			uint8_t numSpaces = currentFont->numSpaces;
@@ -689,6 +697,7 @@ size_t DisplayDriver::writeNative(uint16_t ch) noexcept
 			// We don't add a space column before a space character.
 			// We add a space column after a space character if we would have added one between the preceding and following characters.
 			uint16_t thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr) & cmask;
+			
 			if (thisCharColData == 0)  // for characters with deliberate space column at the start, e.g. decimal point
 			{
 				thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr + 2) & cmask;
@@ -697,66 +706,79 @@ size_t DisplayDriver::writeNative(uint16_t ch) noexcept
 			const bool kern = (numSpaces >= 2)
 							? ((thisCharColData & lastCharColData) == 0)
 							: (((thisCharColData | (thisCharColData << 1)) & (lastCharColData | (lastCharColData << 1))) == 0);
+							
 			if (kern)
 			{
 				--numSpaces;	// kern the character pair
 			}
-			if (numSpaces != 0 && column < rightMargin)
+			
+			if (numSpaces != 0 && cursorColumn < rightMargin)
 			{
 				// Add a single space column after the character
 				if (ySize != 0)
 				{
-					const uint8_t mask = 0x80 >> (column & 7);
-					uint8_t *p = displayBuffer + ((row * (displayWidth/8)) + (column/8));
+					const uint8_t mask = 0x80 >> (cursorColumn & 7);
+					uint8_t *p = displayBuffer + ((cursorRow * (displayWidth >> 3)) + (cursorColumn >> 3));
+
 					for (uint8_t i = 0; i < ySize && p < (displayBuffer + displayBufferSize); ++i)
 					{
 						const uint8_t oldVal = *p;
 						const uint8_t newVal = (textInverted) ? oldVal | mask : oldVal & ~mask;
+						
 						if (newVal != oldVal)
 						{
 							*p = newVal;
-							SetPixelDirty(row + i, column);
+							SetPixelDirty(cursorRow + i, cursorColumn);
 						}
+						
 						p += (displayWidth/8);
 					}
 				}
-				++column;
+				
+				++cursorColumn;
 			}
 		}
 
-		while (nCols != 0 && column < rightMargin)
+		while (nCols != 0 && cursorColumn < rightMargin)
 		{
 			uint16_t colData = *reinterpret_cast<const uint16_t*>(fontPtr);
 			fontPtr += bytesPerColumn;
+			
 			if (colData != 0)
 			{
 				lastCharColData = colData & cmask;
 			}
+			
 			if (ySize != 0)
 			{
-				const uint8_t mask1 = 0x80 >> (column & 7);
+				const uint8_t mask1 = 0x80 >> (cursorColumn & 7);
 				const uint8_t mask2 = ~mask1;
-				uint8_t *p = displayBuffer + ((row * (displayWidth/8)) + (column/8));
+				uint8_t *p = displayBuffer + ((cursorRow * (displayWidth >> 3)) + (cursorColumn >> 3));
 				const uint16_t setPixelVal = (textInverted) ? 0 : 1;
+				
 				for (uint8_t i = 0; i < ySize; ++i)
 				{
 					const uint8_t oldVal = *p;
 					const uint8_t newVal = ((colData & 1u) == setPixelVal) ? oldVal | mask1 : oldVal & mask2;
+					
 					if (newVal != oldVal)
 					{
 						*p = newVal;
-						SetPixelDirty(row + i, column);
+						SetPixelDirty(cursorRow + i, cursorColumn);
 					}
+					
 					colData >>= 1;
-					p += (displayWidth/8);
+					p += (displayWidth >> 3);
 				}
 			}
+
 			--nCols;
-			++column;
+			++cursorColumn;
 		}
 
 		justSetCursor = false;
 	}
+	
 	return 1;
 }
 

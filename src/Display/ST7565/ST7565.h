@@ -12,7 +12,7 @@
 
 #if SUPPORT_12864_LCD
 
-//#define ALTERNATIVE_ST7565_FLUSHROW
+#define ALTERNATIVE_ST7565_FLUSHROW
 
 #include "SharedSpi.h"
 #include <Display/DisplayDriver.h>

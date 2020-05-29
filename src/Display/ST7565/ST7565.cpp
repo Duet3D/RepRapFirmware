@@ -147,13 +147,6 @@ void ST7565::SetBusClockFrequency(uint32_t freq) noexcept
 void ST7565::OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept
 {
 	{
-/*
-		debugPrintf("flush dl=%u dr=%u dt=%u db=%u  cs=%u ce=%u rs=%u re=%u  nr=%u\n",
-				dirtyRectLeft, dirtyRectRight, dirtyRectTop, dirtyRectBottom,
-				startColNum, endColNum, startRowNum, endRowNum,
-				nextFlushRow);
-*/
-
 		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 
@@ -209,6 +202,8 @@ void ST7565::OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumb
 	}
 }
 
+#ifndef ALTERNATIVE_ST7565_FLUSHROW
+
 // Array of bytes is assumed to be 8 in size (square tile of 8x8 bits)
 //TODO: define Tile data type?
 uint8_t ST7565::transformTile(uint8_t data[8], PixelNumber c) noexcept
@@ -222,6 +217,8 @@ uint8_t ST7565::transformTile(uint8_t data[8], PixelNumber c) noexcept
 		 | ((data[6] >> c) & 1) << 6
 		 | ((data[7] >> c) & 1) << 7;
 }
+
+#endif
 
 // Test to flush entire display each time something is dirty, no matter how small
 // If this function is not used, the linker ignores it and it will not contribute to the firmware size

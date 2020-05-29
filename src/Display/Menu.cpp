@@ -297,7 +297,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'F':
-			fontNumber = min<unsigned int>(StrToU32(args, &args), lcd.GetNumFonts() - 1);
+			fontNumber = min<unsigned int>(StrToU32(args, &args), lcd.GetFontCount() - 1);
 			break;
 
 		case 'V':

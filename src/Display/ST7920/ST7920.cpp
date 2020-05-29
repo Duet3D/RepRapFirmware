@@ -76,13 +76,6 @@ void ST7920::OnEnable() noexcept
 void ST7920::OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept
 {
 	{
-/*
-		debugPrintf("flush dl=%u dr=%u dt=%u db=%u  cs=%u ce=%u rs=%u re=%u  nr=%u\n",
-				dirtyRectLeft, dirtyRectRight, dirtyRectTop, dirtyRectBottom,
-				startColNum, endColNum, startRowNum, endRowNum,
-				nextFlushRow);
-*/
-
 		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 

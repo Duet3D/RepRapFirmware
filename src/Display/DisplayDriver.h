@@ -50,9 +50,12 @@ public:
 	// Let the driver return the delay in microseconds between flushing rows
 	virtual unsigned int GetFlushRowDelayMs() const noexcept = 0;
 	// Functions to return driver-specific flush control details
-	// NOTE: the tile width and height returned in pixels MUST be powers of two (1, 2, 4, 8, 16, etc.)
+	// NOTE: the tile width and height returned in pixels MUST be powers of two for now (1, 2, 4, 8, 16, etc.)
+	//       since the bitwise math used in the Flush method expects that.
 	virtual PixelNumber GetTileWidth() const noexcept = 0;
 	virtual PixelNumber GetTileHeight() const noexcept = 0;
+	// Number of tiles to flush in a single Flush call
+	//virtual PixelNumber GetFlushTileCount() const noexcept = 0;
 
 	// Get the display dimensions
 	constexpr PixelNumber GetDisplayWidth() const noexcept { return displayWidth; }
@@ -75,7 +78,7 @@ public:
 	void SelectFont(size_t newFont) noexcept;
 
 	// Return the number of fonts
-	size_t GetNumFonts() const noexcept { return numFonts; }
+	size_t GetFontCount() const noexcept { return fontCount; }
 
 	// Get the current font height
 	PixelNumber GetFontHeight() const noexcept;
@@ -96,10 +99,10 @@ public:
 	void SetCursor(PixelNumber r, PixelNumber c) noexcept;
 
 	// Get the cursor row. Useful after we have written some text.
-	PixelNumber GetRow() const noexcept { return row; }
+	PixelNumber GetRow() const noexcept { return cursorRow; }
 
 	// Get the cursor column. Useful after we have written some text.
-	PixelNumber GetColumn() const noexcept { return column; }
+	PixelNumber GetColumn() const noexcept { return cursorColumn; }
 
 	// Set the left margin. This is where the cursor goes to when we print newline.
 	void SetLeftMargin(PixelNumber c) noexcept;
@@ -166,23 +169,23 @@ public:
 protected:
 	const PixelNumber displayWidth, displayHeight;
 	const LcdFont* const* fonts;
-	size_t numFonts;
+	size_t fontCount;
 	size_t currentFontNumber;						                            // index of the current font
-	uint32_t charVal;
-	uint16_t lastCharColData;						                            // data for the last non-space column, used for kerning
-	uint8_t numContinuationBytesLeft;
-	PixelNumber row, column;                                                    // current cursor location
+	PixelNumber cursorRow, cursorColumn;                                        // current cursor location
 	PixelNumber leftMargin, rightMargin;
 	uint32_t displayBufferSize;
 	uint8_t* displayBuffer;	        		                                    // screen/display buffer
-	bool textInverted;
+	uint32_t charVal;
+	uint16_t lastCharColData;						                            // data for the last non-space column, used for kerning
 	bool justSetCursor;
+	uint8_t numContinuationBytesLeft;
+	bool textInverted;
 
 	size_t writeNative(uint16_t c) noexcept;		                            // write a decoded character
 
 private:
 	PixelNumber dirtyRectTop, dirtyRectLeft, dirtyRectBottom, dirtyRectRight;	// coordinates of the dirty rectangle
-	PixelNumber flushedRow;						                                // which row has been flushed after the previous FlushRow() call
+	PixelNumber flushedRow;														// which row has been flushed after the previous FlushRow() call
 };
 
 #endif
