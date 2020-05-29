@@ -1772,6 +1772,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
 				const char* const heaterName = (code == 141) ? "chamber" : "bed";
+				int state = -1;
 
 				// Active temperature
 				if (gb.Seen('S'))
@@ -1790,12 +1791,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						if (temperature < NEARLY_ABS_ZERO)
 						{
-							heat.SwitchOff(currentHeater);
+							state = 0;
 						}
 						else
 						{
+							state = 2;
 							heat.SetActiveTemperature(currentHeater, temperature);		// may throw
-							result = heat.Activate(currentHeater, reply);
 						}
 					}
 				}
@@ -1813,6 +1814,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						heat.SetStandbyTemperature(currentHeater, gb.GetFValue());
 					}
+				}
+
+				if (gb.Seen('Q'))
+				{
+					seen = true;
+					state = gb.GetIValue();
+				}
+
+				switch(state) {
+				case -1:
+					break;
+				case (int)HeaterStatus::off:
+					heat.SwitchOff(currentHeater);
+					break;
+				case (int)HeaterStatus::standby:
+					heat.Standby(currentHeater, nullptr);
+					break;
+				case (int)HeaterStatus::active:
+					heat.Activate(currentHeater, reply);
+					break;
 				}
 
 				if (!seen)
@@ -4407,6 +4428,23 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 
 	if (seen)
 	{
+		if (gb.Seen('H'))
+		{
+			int heater = gb.GetIValue();
+			if (gb.Seen('Q'))
+			{
+				int status = gb.GetIValue();
+				ReadLockedPointer<Tool> heatTool = reprap.GetTool(toolNum);
+				if (heatTool.IsNotNull())
+				{
+					heatTool->SetToolHeaterStatus(heater, status);
+				}
+			}
+			UnlockAll(gb);
+			HandleReply(gb, GCodeResult::ok, reply.c_str());
+			return true;
+		}
+
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return false;

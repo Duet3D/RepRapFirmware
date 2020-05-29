@@ -96,6 +96,7 @@ public:
 	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) THROWS(GCodeException);
 	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THROWS(GCodeException);
 	GCodeResult SetFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
+	void SetToolHeaterStatus(size_t heaterNumber, int status) noexcept;
 
 	bool HasTemperatureFault() const noexcept { return heaterFault; }
 

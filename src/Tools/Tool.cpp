@@ -594,6 +594,25 @@ void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THRO
 	}
 }
 
+void Tool::SetToolHeaterStatus(size_t heaterNumber, int status) noexcept
+{
+	if (heaterNumber < heaterCount)
+	{
+		switch(status) {
+		case (int)HeaterStatus::off:
+			reprap.GetHeat().SwitchOff(heaters[heaterNumber]);
+			break;
+		case (int)HeaterStatus::standby:
+			reprap.GetHeat().Standby(heaters[heaterNumber], this);
+			break;
+		case (int)HeaterStatus::active:
+			String<1> dummy;
+			reprap.GetHeat().Activate(heaters[heaterNumber], dummy.GetRef());
+			break;
+		}
+	}
+}
+
 void Tool::IterateExtruders(std::function<void(unsigned int)> f) const noexcept
 {
 	for (size_t i = 0; i < driveCount; ++i)
