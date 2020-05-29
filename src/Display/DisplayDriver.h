@@ -36,10 +36,6 @@ public:
 	DisplayDriver(PixelNumber width, PixelNumber height) noexcept;
 	~DisplayDriver();
 
-	// TODO: rename these GetDisplayWidth/GetDisplayHeight?
-	constexpr PixelNumber GetNumCols() const noexcept { return displayWidth; }
-	constexpr PixelNumber GetNumRows() const noexcept { return displayHeight; }
-
 	// Initialize the display.
 	virtual void Init() noexcept;
 
@@ -49,15 +45,25 @@ public:
 	virtual void OnEnable() noexcept = 0;
 	// Set the clock frequency of the interface (serial bus)
 	virtual void SetBusClockFrequency(uint32_t freq) noexcept = 0;
-	// Flush the entire display buffer to the display.
-	virtual void FlushAll() noexcept = 0;
-	// Flush units of dirty data to the display, returns true if there is more to flush
-	virtual bool Flush() noexcept = 0;
+	// Callback to flush the specified data to the display
+	virtual void OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept = 0;
+	// Let the driver return the delay in microseconds between flushing rows
+	virtual unsigned int GetFlushRowDelayMs() const noexcept = 0;
+	// Functions to return driver-specific flush control details
+	// NOTE: the tile width and height returned in pixels MUST be powers of two (1, 2, 4, 8, 16, etc.)
+	virtual PixelNumber GetTileWidth() const noexcept = 0;
+	virtual PixelNumber GetTileHeight() const noexcept = 0;
 
-	// Write a single character in the current font. Called by the 'print' functions.
-	//  c = character to write
-	// Returns the number of characters written (1 if we wrote it, 0 otherwise)
-	virtual size_t write(uint8_t c) noexcept;		// write a character
+	// Get the display dimensions
+	constexpr PixelNumber GetDisplayWidth() const noexcept { return displayWidth; }
+	constexpr PixelNumber GetDisplayHeight() const noexcept { return displayHeight; }
+
+	// Flush the entire display buffer to the display.
+	void Flush() noexcept;
+
+	// Flush a row of dirty data to the display, returns true if there is more to flush
+	// Potentially, in future releases, smaller units/tiles of data will be flushed
+	bool FlushRow() noexcept;
 
 	// Write a space
 	void WriteSpaces(PixelNumber numPixels) noexcept;
@@ -146,6 +152,17 @@ public:
 	//  data = bitmap image, must be ((width + 7)/8) bytes long
 	void DrawBitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept;
 
+	// This resets the dirty tracking of the entire display and resets tracking of the part to flush next
+	void SetFlushDone() noexcept;
+
+	//This routine sets or extends the dirty area
+	void SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;
+
+	// Write a single character in the current font. Called by the 'print' functions.
+	//  c = character to write
+	// Returns the number of characters written (1 if we wrote it, 0 otherwise)
+	virtual size_t write(uint8_t c) noexcept;		// write a character
+
 protected:
 	const PixelNumber displayWidth, displayHeight;
 	const LcdFont* const* fonts;
@@ -155,18 +172,17 @@ protected:
 	uint16_t lastCharColData;						                            // data for the last non-space column, used for kerning
 	uint8_t numContinuationBytesLeft;
 	PixelNumber row, column;                                                    // current cursor location
-	PixelNumber dirtyRectTop, dirtyRectLeft, dirtyRectBottom, dirtyRectRight;	// coordinates of the dirty rectangle
-	PixelNumber nextFlushRow;						                            // which row we need to flush next, owned by the Flush() method
 	PixelNumber leftMargin, rightMargin;
 	uint32_t displayBufferSize;
 	uint8_t* displayBuffer;	        		                                    // screen/display buffer
 	bool textInverted;
 	bool justSetCursor;
 
-	// Future idea
-	//const PixelNumber flushTileWidth, flushTileHeight;
-
 	size_t writeNative(uint16_t c) noexcept;		                            // write a decoded character
+
+private:
+	PixelNumber dirtyRectTop, dirtyRectLeft, dirtyRectBottom, dirtyRectRight;	// coordinates of the dirty rectangle
+	PixelNumber flushedRow;						                                // which row has been flushed after the previous FlushRow() call
 };
 
 #endif

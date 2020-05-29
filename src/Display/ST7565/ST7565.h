@@ -12,47 +12,64 @@
 
 #if SUPPORT_12864_LCD
 
+//#define ALTERNATIVE_ST7565_FLUSHROW
+
 #include "SharedSpi.h"
 #include <Display/DisplayDriver.h>
 #include <Display/Fonts/Fonts.h>
 
 // Driver for 128x64 graphical LCD with ST7565, ST7567, UC1701, NT7534 or compatible controller
-
 // This controller uses 1 bit wide x 8 bit high refresh tiles.
 
 class ST7565 : public DisplayDriver
 {
 public:
-	// Construct the driver
-	ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noexcept;
+	// Construct the driver.
+	// The gate pin is the pin to set active high to let MOSI and SCK through.
+	ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin, bool csPolarity = true, Pin gatePin = NoPin) noexcept;
 
 	// Handler to setup and initialize the specific driver.
 	void OnInitialize() noexcept override;
 	// Handler to enable the specific driver.
 	void OnEnable() noexcept override;
+	// Callback to flush the specified data to the display
+	void OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept;
+	// Let the driver return the delay in microseconds between flushing rows
+	unsigned int GetFlushRowDelayMs() const noexcept { return 0; };
 	// Set the SPI clock frequency
 	void SetBusClockFrequency(uint32_t freq) noexcept override;
-	// Flush the display buffer to the display. Data will not be committed to the display until this is called.
-	void FlushAll() noexcept override;
-	// Flush just some data, returning true if this needs to be called again
-	bool Flush() noexcept override;
+	// Functions to return driver-specific flush control details
+	// NOTE: the tile width and height returned in pixels MUST be powers of two (1, 2, 4, 8, 16, etc.)
+#ifdef ALTERNATIVE_ST7565_FLUSHROW
+	constexpr PixelNumber GetTileWidth() const noexcept { return 1; };
+	constexpr PixelNumber GetTileHeight() const noexcept { return 8; };
+#else
+	constexpr PixelNumber GetTileWidth() const noexcept { return 8; };
+	constexpr PixelNumber GetTileHeight() const noexcept { return 8; };
+#endif
 
 private:
 	sspi_device spiDevice;
 	// Pin configured to drive DC/A0 line
 	Pin dcPin;
+	// Optional pin to use as gate for SCK and MOSI
+	Pin gatePin;
 
+	void selectDevice() noexcept;
+	void deselectDevice() noexcept;
 	void sendCommand(uint8_t command) noexcept;
 	void sendArg(uint8_t data) noexcept;
-	void startSendData() noexcept;
+	void startDataTransaction() noexcept;
 	void sendData(uint8_t data) noexcept;
-	void endSendData() noexcept;
+	void endDataTransaction() noexcept;
 	//void sendLcd(uint8_t data) noexcept;
 	void commandDelay() noexcept;
 	void dataDelay() noexcept;
 	void setGraphicsAddress(unsigned int r, unsigned int c) noexcept;
 	uint8_t transformTile(uint8_t data[8], PixelNumber c) noexcept;
 	void flushEntireBuffer() noexcept;
+	void setPinMode(Pin pin, PinMode mode) noexcept;
+	void writeDigital(Pin pin, bool high) noexcept;
 
 	// 11100010 System reset
 	constexpr static uint8_t SystemReset = 0xE2;

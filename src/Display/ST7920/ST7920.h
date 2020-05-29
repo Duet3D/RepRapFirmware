@@ -31,15 +31,22 @@ public:
 	void OnInitialize() noexcept override;
 	// Handler to enable the specific driver.
 	void OnEnable() noexcept override;
+	// Callback to flush the specified data to the display
+	void OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept;
+	// Let the driver return the delay in microseconds between flushing rows
+	// @ 2MHz clock speed we need a delay, at 1MHz we don't
+	unsigned int GetFlushRowDelayMs() const noexcept { return 20; };
 	// Set the SPI clock frequency
 	void SetBusClockFrequency(uint32_t freq) noexcept override;
-	// Flush the display buffer to the display. Data will not be committed to the display until this is called.
-	void FlushAll() noexcept override;
-	// Flush just some data, returning true if this needs to be called again
-	bool Flush() noexcept override;
+	// Functions to return driver-specific flush control details
+	// NOTE: the tile width and height returned in pixels MUST be powers of two (1, 2, 4, 8, 16, etc.)
+	constexpr PixelNumber GetTileWidth() const noexcept { return 16; };
+	constexpr PixelNumber GetTileHeight() const noexcept { return 1; };
 
 private:
-	sspi_device device;
+	sspi_device spiDevice;
+	void selectDevice() noexcept;
+	void deselectDevice() noexcept;
 	void sendLcdCommand(uint8_t command) noexcept;
 	void sendLcdData(uint8_t data) noexcept;
 	void sendLcd(uint8_t data1, uint8_t data2) noexcept;

@@ -46,7 +46,7 @@ void MenuItem::PrintAligned(DisplayDriver& lcd, PixelNumber tOffset, PixelNumber
 	lcd.SelectFont(fontNumber);
 	if (align != 0)
 	{
-		lcd.SetCursor(lcd.GetNumRows(), column);
+		lcd.SetCursor(lcd.GetDisplayHeight(), column);
 		lcd.SetRightMargin(min<PixelNumber>(rightMargin, column + width));
 		CorePrint(lcd);
 		const PixelNumber w = lcd.GetColumn() - column;
@@ -132,8 +132,8 @@ void TextMenuItem::UpdateWidthAndHeight(DisplayDriver& lcd) noexcept
 	if (width == 0)
 	{
 		lcd.SelectFont(fontNumber);
-		lcd.SetCursor(lcd.GetNumRows(), 0);
-		lcd.SetRightMargin(lcd.GetNumCols());
+		lcd.SetCursor(lcd.GetDisplayHeight(), 0);
+		lcd.SetRightMargin(lcd.GetDisplayWidth());
 		lcd.TextInvert(false);
 		lcd.print(text);
 		width = lcd.GetColumn();
@@ -163,7 +163,7 @@ void ButtonMenuItem::CorePrint(DisplayDriver& lcd) noexcept
 
 void ButtonMenuItem::Draw(DisplayDriver& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
-	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetNumCols())
+	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetDisplayWidth())
 	{
 		highlighted = highlight;
 		PrintAligned(lcd, tOffset, rightMargin);
@@ -177,8 +177,8 @@ void ButtonMenuItem::UpdateWidthAndHeight(DisplayDriver& lcd) noexcept
 	if (width == 0)
 	{
 		lcd.SelectFont(fontNumber);
-		lcd.SetCursor(lcd.GetNumRows(), 0);
-		lcd.SetRightMargin(lcd.GetNumCols());
+		lcd.SetCursor(lcd.GetDisplayHeight(), 0);
+		lcd.SetRightMargin(lcd.GetDisplayWidth());
 		lcd.TextInvert(false);
 		CorePrint(lcd);
 		width = lcd.GetColumn();
@@ -218,7 +218,7 @@ PixelNumber ButtonMenuItem::GetVisibilityRowOffset(DisplayDriver& lcd, PixelNumb
 	PixelNumber tOffsetRequest = tCurrentOffset;
 
 	// Are we off the bottom of the visible window?
-	if (lcd.GetNumRows() + tCurrentOffset <= row + fontHeight + 1)
+	if (lcd.GetDisplayHeight() + tCurrentOffset <= row + fontHeight + 1)
 	{
 		tOffsetRequest = row - 3;
 	}
@@ -1118,12 +1118,12 @@ void ImageMenuItem::Draw(DisplayDriver& lcd, PixelNumber rightMargin, bool highl
 			{
 				const PixelNumber cols = widthAndHeight[0];
 				const PixelNumber rows = widthAndHeight[1];
-				if (cols != 0 && cols <= lcd.GetNumCols() && rows != 0)
+				if (cols != 0 && cols <= lcd.GetDisplayWidth() && rows != 0)
 				{
 					const size_t bytesPerRow = (cols + 7)/8;
 					for (PixelNumber irow = 0; irow < rows; ++irow)
 					{
-						uint8_t buffer[lcd.GetNumCols()/8];
+						uint8_t buffer[lcd.GetDisplayWidth()/8];
 						if (fs->Read(buffer, bytesPerRow) != (int)bytesPerRow)
 						{
 							break;

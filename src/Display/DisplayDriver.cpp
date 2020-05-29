@@ -43,30 +43,23 @@
  */
 
 //TODO: instead of tracking dirty areas using a dirty rectangle, consider a bitmap that tracks dirty tiles, adjusted to the display driver,
-//      so e.g. for ST7920 16x8, for UC1701 8x8; this would make flushing more or less blocks in Flush() much easier, there would be flushed less,
+//      so e.g. for ST7920 16x8, for UC1701 8x8; this would make flushing at a block level possible, with more or less blocks depending on the
+//      capabilities of the CPU (and CPU load), and would make the routine much simpler, and most importantly, the area to flush is
+//      not a single big rectangular area requiring flushing many pixels, but consists of multiple smaller areas, with (in total) less pixels to flush.
 //      it can be adapted to the topology of the driver better, at the cost of more RAM use.
-//TODO: consider OnDraw(Tile tile)/OnPaint(Tile tile) callback that a specific driver needs to implement,
-//      while dirty detection/flush logic remains in this class
-//TODO: remove ST7920 specific assumptions (e.g. "we refresh 16-bit words, so setting 1 pixel dirty in byte will suffice")
-//TODO: abstract generic drawing functions into a separate static helper class?
 //TODO: consistency and standardization of terms and order; top, left, width, height, x, y, rows, columns, r, c, etc.
 //      I think that rows/COM and columns/SEG are display hardware terminology, which should be abstracted by functions that use x and y,
 //      and rows/columns and x/y sometimes have different meaning and effect (display row could be 8 pixels high)
 //      Also, in e.g. function parameter ordering, I prefer to have horizontal come first, then vertical, so x, y and column, row
 //TODO: set contrast option, controlled by Code
-//TODO: move character classes to a generic level as well?
 //TODO: make the A0/CD pin configurable from GCode.
-//TODO: perhaps rename this to DotMatrixScreen?
-//  - You paint on a screen
-//  - The class is only suited to full-graphics screens with matrices of LEDs, LCD dots, OLED dots, etc.
-//  - When referencing the class in Menu or Display, it look natural, not artificial like DisplayDriver/DriverBase
-//  - It's a screen to write to, it becomes a display when looked at (semantics); the display more as user a interaction unit
 
 #include <Display/DisplayDriver.h>
 
 #if SUPPORT_12864_LCD
 
 #include "Fonts/Fonts.h"
+#include "Tasks.h"
 
 extern const LcdFont font7x11;
 
@@ -90,18 +83,87 @@ DisplayDriver::~DisplayDriver()
 void DisplayDriver::Init() noexcept
 {
 	numContinuationBytesLeft = 0;
-	dirtyRectTop = displayHeight;
-	dirtyRectLeft = displayWidth;
-	dirtyRectBottom = dirtyRectRight = nextFlushRow = 0;
+	currentFontNumber = 0;
+
+	SetFlushDone();
 
 	OnInitialize();
 
 	Clear();
-	FlushAll();
+	Flush();
 
 	OnEnable();
+}
 
-	currentFontNumber = 0;
+// Flush all of the dirty part of the image to the display. Only called during startup and shutdown.
+void DisplayDriver::Flush() noexcept
+{
+	while (FlushRow())
+	{
+		delayMicroseconds(GetFlushRowDelayMs());
+	}
+}
+
+// Flush some of the dirty part of the image to the LCD (in this case a (partial) row)
+// Returns true if there is more to do. The dirty area is shrunk by the height of the flushed row until the area has been cleared
+bool DisplayDriver::FlushRow() noexcept
+{
+	// See if there is anything to flush
+	// Right and bottom need to be at least one pixel larger than left and top with this method of marking a dirty rectangle.
+	// TODO: perhaps a dirtyRectTop, dirtyRectLeft and dirtyRectWidth, dirtyRectHeight would work more robustly?
+	//       if either dirtyRectWidth or dirtyRectHeight are 0, then nothing to flush, and you don't risk off by one errors.
+	if (dirtyRectRight > dirtyRectLeft && dirtyRectBottom > dirtyRectTop)
+	{
+		// The rows are quantized to whole multiples of the tile height.
+		const uint8_t qr = GetTileHeight() - 1u;
+		uint8_t startRow = dirtyRectTop & ~qr;
+		const uint8_t endRow = (dirtyRectBottom + qr) & ~qr;
+
+		// The columns are quantized to whole multiples of the tile width.
+		const uint8_t qc = GetTileWidth() - 1u;
+		//uint8_t startColumn = dirtyRectLeft & ~qc;
+		//const uint8_t endColumn = (dirtyRectRight + qc) & ~qc;
+		uint8_t startColumn = dirtyRectLeft & (qc ^ 0b11111111);
+		const uint8_t endColumn = (dirtyRectRight + qc) & (qc ^ 0b11111111);
+
+		// Decide which row to flush next
+		// It can occur that the dirty area expands during subsequent FlushRow() calls
+		// To assess if the dirty area has grown, we need to keep track of the currentFlushRow
+		if (flushedRow < startRow || flushedRow >= endRow)
+		{
+			// Start from the beginning
+			flushedRow = startRow;
+		}
+
+		// We are flushing from the beginning
+		if (flushedRow == startRow)
+		{
+			// Shrink the dirty rectangle pre-emptively (flag as flushed)
+			dirtyRectTop = startRow + GetTileHeight();
+		}
+
+		// Invoke the driver callback
+		OnFlushRow(startRow, startColumn, endRow, endColumn);
+
+		// Check if there is still area to flush
+		if (dirtyRectTop < dirtyRectBottom)
+		{
+			flushedRow += GetTileHeight();
+			return true;
+		}
+
+		// Reset dirty rectangle and row tracking
+		SetFlushDone();
+	}
+
+	return false;
+}
+
+void DisplayDriver::SetFlushDone() noexcept
+{
+	dirtyRectTop = displayHeight;
+	dirtyRectLeft = displayWidth;
+	dirtyRectBottom = dirtyRectRight = flushedRow = 0;
 }
 
 void DisplayDriver::SetFonts(const LcdFont * const fnts[], size_t nFonts) noexcept
@@ -148,13 +210,16 @@ void DisplayDriver::SetPixelDirty(PixelNumber r, PixelNumber c) noexcept
 //	if (c >= displayWidth) { debugPrintf("c=%u\n", c); return; }
 
 	// The r and c parameters must be no greater than displayHeight-1 and displayWidth-1 respectively.
-	if (r < 0 || r >= displayHeight) return;
-	if (c < 0 || c >= displayWidth) return;
+	if (r < 0 || c < 0 || r >= displayHeight || c >= displayWidth) return;
 
-	if (c < dirtyRectLeft) { dirtyRectLeft = c; }
-	if (c >= dirtyRectRight) { dirtyRectRight = c + 1; }
+	SetRectDirty(r, c, r + 1, c + 1);
+
+/*
 	if (r < dirtyRectTop) { dirtyRectTop = r; }
+	if (c < dirtyRectLeft) { dirtyRectLeft = c; }
 	if (r >= dirtyRectBottom) { dirtyRectBottom = r + 1; }
+	if (c >= dirtyRectRight) { dirtyRectRight = c + 1; }
+*/
 }
 
 // Write a space
@@ -403,12 +468,26 @@ void DisplayDriver::DrawBitmap(PixelNumber x0, PixelNumber y0, PixelNumber width
 		}
 	}
 
-	//TODO: change this to SetRectDirty()
 	// Assume the whole area has changed
+	SetRectDirty(y0, x0, y0 + height, x0 + width);
+
+	/*
 	if (x0 < dirtyRectLeft) dirtyRectLeft = x0;
 	if (x0 + width > dirtyRectRight) dirtyRectRight = x0 + width;
 	if (y0 < dirtyRectTop) dirtyRectTop = y0;
 	if (y0 + height > dirtyRectBottom) dirtyRectBottom = y0 + height;
+	*/
+}
+
+void DisplayDriver::SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
+{
+	//TODO: Cap the coordinates to their maximum values?
+	//if (top < 0) top = 0; if (top > displayWidth) top = displayWidth; etc.
+
+	if (top < dirtyRectTop) dirtyRectTop = top;
+	if (left < dirtyRectLeft) dirtyRectLeft = left;
+	if (bottom > dirtyRectBottom) dirtyRectBottom = bottom;
+	if (right > dirtyRectRight) dirtyRectRight = right;
 }
 
 // Draw a single bitmap row. 'left' and 'width' do not need to be divisible by 8.
@@ -466,7 +545,8 @@ void DisplayDriver::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexc
 {
 	if (y < displayHeight && x < rightMargin)
 	{
-		uint8_t * const p = displayBuffer + ((y * (displayWidth/8)) + (x/8));
+		uint8_t * const p = displayBuffer + ((y * (displayWidth >> 3)) + (x >> 3));
+	//	const uint8_t mask = 0x80u >> (x & 0b111);
 		const uint8_t mask = 0x80u >> (x%8);
 		const uint8_t oldVal = *p;
 		uint8_t newVal;
@@ -496,12 +576,10 @@ void DisplayDriver::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexc
 
 bool DisplayDriver::ReadPixel(PixelNumber x, PixelNumber y) const noexcept
 {
-	if (y < displayHeight && x < displayWidth)
-	{
-		const uint8_t * const p = displayBuffer + ((y * (displayWidth/8)) + (x/8));
-		return (*p & (0x80u >> (x%8))) != 0;
-	}
-	return false;
+	if (x < 0 || y < 0 || x >= displayWidth || y >= displayHeight) return false;
+	const uint8_t* const p = displayBuffer + ((y * (displayWidth >> 3)) + (x >> 3));
+	return (*p & (0x80u >> (x%8))) != 0;
+	//return ((*ptr >> (x & 7u)) & 1u) != 0;
 }
 
 // Write a UTF8 byte.

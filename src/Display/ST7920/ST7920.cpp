@@ -16,6 +16,118 @@
 
 // The LCD SPI clock frequency is now defined in the Pins.h file for the configuration being built
 
+ST7920::ST7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
+	: DisplayDriver(width, height)
+{
+	spiDevice.csPin = csPin;
+	// Active high chip select
+	spiDevice.csPolarity = true;
+	spiDevice.spiMode = 0;
+	spiDevice.clockFrequency = LcdSpiClockFrequency;
+#ifdef __LPC17xx__
+    spiDevice.sspChannel = LcdSpiChannel;
+#endif
+}
+
+// Set the SPI clock frequency
+void ST7920::SetBusClockFrequency(uint32_t freq) noexcept
+{
+	spiDevice.clockFrequency = freq;
+}
+
+void ST7920::OnInitialize() noexcept
+{
+	sspi_master_init(&spiDevice, 8);
+
+	{
+		MutexLocker lock(Tasks::GetSpiMutex());
+		selectDevice();
+
+		sendLcdCommand(FunctionSetBasicAlpha);
+		delay(2);
+		sendLcdCommand(FunctionSetBasicAlpha);
+		commandDelay();
+		sendLcdCommand(EntryModeSet);
+		commandDelay();
+		// Need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
+		sendLcdCommand(DisplayClear);
+		delay(DisplayClearDelayMillis);
+		sendLcdCommand(FunctionSetExtendedGraphic);
+		commandDelay();
+
+		deselectDevice();
+	}
+}
+
+void ST7920::OnEnable() noexcept
+{
+	{
+		MutexLocker lock(Tasks::GetSpiMutex());
+		selectDevice();
+
+		sendLcdCommand(DisplayOn);
+		commandDelay();
+
+		deselectDevice();
+	}
+}
+
+// Flush the specified row
+void ST7920::OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept
+{
+	{
+/*
+		debugPrintf("flush dl=%u dr=%u dt=%u db=%u  cs=%u ce=%u rs=%u re=%u  nr=%u\n",
+				dirtyRectLeft, dirtyRectRight, dirtyRectTop, dirtyRectBottom,
+				startColNum, endColNum, startRowNum, endRowNum,
+				nextFlushRow);
+*/
+
+		MutexLocker lock(Tasks::GetSpiMutex());
+		selectDevice();
+
+		setGraphicsAddress(startRow, startColumn);
+
+		uint8_t *ptr = displayBuffer + ((startRow * (displayWidth / 8)) + (startColumn / 8));
+
+		while (startColumn < endColumn)
+		{
+			sendLcdData(*ptr++);
+			sendLcdData(*ptr++);
+			startColumn += GetTileWidth();
+			dataDelay();
+		}
+
+		deselectDevice();
+	}
+}
+
+void ST7920::selectDevice() noexcept
+{
+	//TODO: can/should the "MutexLocker lock(Tasks::GetSpiMutex());" be moved here as well?
+	sspi_master_setup_device(&spiDevice);
+	delayMicroseconds(1);
+	sspi_select_device(&spiDevice);
+	delayMicroseconds(1);
+}
+
+void ST7920::deselectDevice() noexcept
+{
+	delayMicroseconds(1);
+	sspi_deselect_device(&spiDevice);
+}
+
+// Set the address to write to. The column address is in true coordinates, not 16-bit words anymore.
+void ST7920::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
+{
+	// First set vertical address (bits 5-0)
+	sendLcdCommand(SetGdramAddress | (r & 0b00111111));
+	// Then set horizontal address (bits 3-0) without delay
+	sendLcdCommand(SetGdramAddress | ((c >> 4) & 0b00001111));
+	// Standard 72us delay
+	commandDelay();
+}
+
 inline void ST7920::commandDelay() noexcept
 {
 	delayMicroseconds(CommandDelayMicros);
@@ -24,144 +136,6 @@ inline void ST7920::commandDelay() noexcept
 inline void ST7920::dataDelay() noexcept
 {
 	delayMicroseconds(DataDelayMicros);
-}
-
-ST7920::ST7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
-	: DisplayDriver(width, height)
-{
-	device.csPin = csPin;
-	device.csPolarity = true;						// active high chip select
-	device.spiMode = 0;
-	device.clockFrequency = LcdSpiClockFrequency;
-#ifdef __LPC17xx__
-    device.sspChannel = LcdSpiChannel;
-#endif
-}
-
-// Set the SPI clock frequency
-void ST7920::SetBusClockFrequency(uint32_t freq) noexcept
-{
-	device.clockFrequency = freq;
-}
-
-void ST7920::OnInitialize() noexcept
-{
-	sspi_master_init(&device, 8);
-
-	{
-		MutexLocker lock(Tasks::GetSpiMutex());
-		sspi_master_setup_device(&device);
-		delayMicroseconds(1);
-		sspi_select_device(&device);
-		delayMicroseconds(1);
-
-		sendLcdCommand(FunctionSetBasicAlpha);
-		delay(2);
-		sendLcdCommand(FunctionSetBasicAlpha);
-		commandDelay();
-		sendLcdCommand(EntryModeSet);
-		commandDelay();
-		sendLcdCommand(DisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
-		delay(DisplayClearDelayMillis);
-		sendLcdCommand(FunctionSetExtendedGraphic);
-		commandDelay();
-
-		sspi_deselect_device(&device);
-	}
-}
-
-void ST7920::OnEnable() noexcept
-{
-	{
-		MutexLocker lock(Tasks::GetSpiMutex());
-		sspi_master_setup_device(&device);
-		delayMicroseconds(1);
-		sspi_select_device(&device);
-		delayMicroseconds(1);
-
-		sendLcdCommand(DisplayOn);
-		commandDelay();
-
-		sspi_deselect_device(&device);
-	}
-}
-
-// Flush all of the dirty part of the image to the lcd. Only called during startup and shutdown.
-void ST7920::FlushAll() noexcept
-{
-	while (Flush())
-	{
-		delayMicroseconds(20);			// at 2MHz clock speed we need a delay here, at 1MHz we don't
-	}
-}
-
-//TODO: make Flush(bool full = false)
-// Flush some of the dirty part of the image to the LCD, returning true if there is more to do
-// The dirty area is shrunk by increasing startRow until startRow equals endRow
-bool ST7920::Flush() noexcept
-{
-	// See if there is anything to flush
-	if (dirtyRectRight > dirtyRectLeft && dirtyRectBottom > dirtyRectTop)
-	{
-		// Decide which row to flush next
-		if (nextFlushRow < dirtyRectTop || nextFlushRow >= dirtyRectBottom)
-		{
-			nextFlushRow = dirtyRectTop;	// start from the beginning
-		}
-
-		if (nextFlushRow == dirtyRectTop)	// if we are starting from the beginning
-		{
-			++dirtyRectTop;					// flag this row as flushed because this will happen in the next section
-		}
-
-		// Flush that row
-		{
-			uint8_t startColNum = dirtyRectLeft/16;
-			const uint8_t endColNum = (dirtyRectRight + 15)/16;
-//			debugPrintf("flush %u %u %u\n", nextFlushRow, startColNum, endColNum);
-
-			MutexLocker lock(Tasks::GetSpiMutex());
-			sspi_master_setup_device(&device);
-			delayMicroseconds(1);
-			sspi_select_device(&device);
-			delayMicroseconds(1);
-
-			setGraphicsAddress(nextFlushRow, startColNum);
-
-			uint8_t *ptr = displayBuffer + (((displayWidth/8) * nextFlushRow) + (2 * startColNum));
-
-			while (startColNum < endColNum)
-			{
-				sendLcdData(*ptr++);
-				sendLcdData(*ptr++);
-				++startColNum;
-				dataDelay();
-			}
-
-			sspi_deselect_device(&device);
-		}
-
-		if (dirtyRectTop < dirtyRectBottom)
-		{
-			++nextFlushRow;
-			return true;
-		}
-
-		// Reset dirty rectangle and row tracking
-		dirtyRectTop = displayHeight;
-		dirtyRectLeft = displayWidth;
-		dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
-	}
-	return false;
-}
-
-// Set the address to write to. The column address is in 16-bit words, so it ranges from 0 to 7.
-void ST7920::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
-{
-	sendLcdCommand(SetGdramAddress | (r & 31));
-	//commandDelay();  // don't seem to need this one
-	sendLcdCommand(SetGdramAddress | c | ((r & 32) >> 2));
-	commandDelay();    // we definitely need this one
 }
 
 // Send a command to the LCD. The SPI mutex is already owned

@@ -9,13 +9,17 @@
 
 // TODO: what function calls this class? Is M918 only allowed once?
 // TODO: how is the driver class destructed?
-// TODO: Isn't it better to put the graphics drawing stuff in this class so that menu calls Display instead of the driver?
-// TODO: Why let beep functionality depend on whether a display is configured or not?
-// TODO: Decide if the EXT_0 pin used as DC should be configurable from GCode.
+// TODO: isn't it better to put the graphics drawing stuff in this class so that menu calls Display instead of the driver?
+// TODO: why let beep functionality depend on whether a display is configured or not?
+// TODO: decide if the EXT_0 pin used as DC should be configurable from GCode.
+// TODO: discuss with David to maybe use exp_1 as csPin and set LcdCSPin (PortCPin(9)) high @ sspi_select_device so we can do without NAND inverter?
+//       or to use a more logical arrangement of unbuffered pins on Drive 5 in the Maestro or the temp daughterboard header?
 
 #include "Display.h"
 
 #if SUPPORT_12864_LCD
+
+//#define USE_EXTERNAL_CS_INVERTER
 
 #include "Fonts/Fonts.h"
 #include <Display/ST7920/ST7920.h>
@@ -106,7 +110,7 @@ void Display::Spin() noexcept
 			}
 		}
 
-		lcd->Flush();
+		lcd->FlushRow();
 
 		if (beepActive && millis() - whenBeepStarted > beepLength)
 		{
@@ -129,7 +133,7 @@ void Display::Exit() noexcept
 			lcd->SetCursor(20, 0);
 			lcd->print("Shutting down...");
 		}
-		lcd->FlushAll();
+		lcd->Flush();
 	}
 }
 
@@ -189,8 +193,16 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 						lcd = new ST7920(128, 64, LcdCSPin);
 						break;
 					case 2:  // ST7565 128x64 display
-						// NOTE: now using EXP_0, could be made configurable to use BEEP or EXT_1 pins as DC line
+#ifdef USE_EXTERNAL_CS_INVERTER
+						// The driver uses the default buffered LCD_CS pin.
+						// This requires an additional external (74xxx00) component to invert the logic level of the CS.
+						// NOTE: now using EXP_0 as DC/A0 , but could be made configurable to other pins?
 						lcd = new ST7565(128, 64, LcdCSPin, Exp0Pin);
+#else
+						// Use an alternative configuration with
+						lcd = new ST7565(128, 64, Exp1Pin, Exp0Pin, false, LcdCSPin);
+#endif
+
 						break;
 				}
 			}
@@ -261,7 +273,7 @@ void Display::UpdatingFirmware() noexcept
 		lcd->SelectFont(LargeFontNumber);
 		lcd->SetCursor(20, 0);
 		lcd->print("Updating firmware...");
-		lcd->FlushAll();
+		lcd->Flush();
 	}
 }
 

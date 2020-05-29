@@ -111,7 +111,7 @@ void Menu::LoadFixedMenu() noexcept
 	lcd.Clear();
 
 	// Instead of Reload():
-	lcd.SetRightMargin(lcd.GetNumCols() - currentMargin);
+	lcd.SetRightMargin(lcd.GetDisplayWidth() - currentMargin);
 
 	ResetCache();
 
@@ -150,12 +150,12 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	const PixelNumber sideMargin = 4;
 
 	// Draw and a box and clear the interior
-	lcd.SetRightMargin(lcd.GetNumCols());
-	lcd.DrawLine(topBottomMargin, sideMargin, topBottomMargin, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
-	lcd.DrawLine(topBottomMargin, lcd.GetNumCols() - sideMargin - 1, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
-	lcd.DrawLine(lcd.GetNumRows() - topBottomMargin - 1, sideMargin, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1, PixelMode::PixelSet);
-	lcd.DrawLine(topBottomMargin, sideMargin, lcd.GetNumRows() - topBottomMargin - 1, sideMargin, PixelMode::PixelSet);
-	lcd.ClearRect(topBottomMargin + 1, sideMargin + 1, lcd.GetNumRows() - topBottomMargin - 1, lcd.GetNumCols() - sideMargin - 1);
+	lcd.SetRightMargin(lcd.GetDisplayWidth());
+	lcd.DrawLine(topBottomMargin, sideMargin, topBottomMargin, lcd.GetDisplayWidth() - sideMargin - 1, PixelMode::PixelSet);
+	lcd.DrawLine(topBottomMargin, lcd.GetDisplayWidth() - sideMargin - 1, lcd.GetDisplayHeight() - topBottomMargin - 1, lcd.GetDisplayWidth() - sideMargin - 1, PixelMode::PixelSet);
+	lcd.DrawLine(lcd.GetDisplayHeight() - topBottomMargin - 1, sideMargin, lcd.GetDisplayHeight() - topBottomMargin - 1, lcd.GetDisplayWidth() - sideMargin - 1, PixelMode::PixelSet);
+	lcd.DrawLine(topBottomMargin, sideMargin, lcd.GetDisplayHeight() - topBottomMargin - 1, sideMargin, PixelMode::PixelSet);
+	lcd.ClearRect(topBottomMargin + 1, sideMargin + 1, lcd.GetDisplayHeight() - topBottomMargin - 1, lcd.GetDisplayWidth() - sideMargin - 1);
 
 	// We could draw the static text directly, but it is easier to use the existing classes
 	const uint8_t fontToUse = 0;
@@ -163,7 +163,7 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	const PixelNumber rowHeight = lcd.GetFontHeight(fontToUse) + 1;
 	const PixelNumber top = topBottomMargin + 1 + insideMargin;
 	const PixelNumber left = sideMargin + 1 + insideMargin;
-	const PixelNumber right = lcd.GetNumCols() - left;
+	const PixelNumber right = lcd.GetDisplayWidth() - left;
 	const PixelNumber availableWidth = right - left;
 	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.title.c_str()), false);
 	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.message.c_str()), false);	// only 1 row for now
@@ -394,7 +394,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		const char * const actionString = AppendString(action);
 		const char *const dir = AppendString(dirpath);
 		const char *const acFileString = AppendString(fname);
-		AddItem(new FilesMenuItem(row, 0, lcd.GetNumCols(), fontNumber, xVis, actionString, dir, acFileString, nparam), true);
+		AddItem(new FilesMenuItem(row, 0, lcd.GetDisplayWidth(), fontNumber, xVis, actionString, dir, acFileString, nparam), true);
 		row += nparam * lcd.GetFontHeight(fontNumber);
 		column = 0;
 	}
@@ -437,8 +437,8 @@ void Menu::Reload() noexcept
 	else
 	{
 		currentMargin = 0;
-		const PixelNumber right = lcd.GetNumCols();
-		const PixelNumber bottom = lcd.GetNumRows();
+		const PixelNumber right = lcd.GetDisplayWidth();
+		const PixelNumber bottom = lcd.GetDisplayHeight();
 		lcd.ClearRect(currentMargin, currentMargin, bottom, right);
 
 		// Draw the outline
@@ -453,7 +453,7 @@ void Menu::Reload() noexcept
 	ResetCache();
 	displayingErrorMessage = false;
 
-	lcd.SetRightMargin(lcd.GetNumCols() - currentMargin);
+	lcd.SetRightMargin(lcd.GetDisplayWidth() - currentMargin);
 	const char * const fname = filenames[numNestedMenus - 1].c_str();
 	FileStore * const file = reprap.GetPlatform().OpenFile(MENU_DIR, fname, OpenMode::read);
 	if (file == nullptr)
@@ -699,7 +699,7 @@ void Menu::DrawAll() noexcept
 	}
 
 	// Now draw items
-	const PixelNumber rightMargin = lcd.GetNumCols() - currentMargin;
+	const PixelNumber rightMargin = lcd.GetDisplayWidth() - currentMargin;
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
 		item->Draw(lcd, rightMargin, (item == highlightedItem), rowOffset);

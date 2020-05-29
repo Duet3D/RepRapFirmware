@@ -54,13 +54,15 @@ pixel_height = 64
 #include "Tasks.h"
 #include "Hardware/IoPorts.h"
 
-ST7565::ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noexcept
-	: DisplayDriver(width, height), dcPin(dcPin)
+ST7565::ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin, bool csPolarity, Pin gatePin) noexcept
+	: DisplayDriver(width, height), dcPin(dcPin), gatePin(gatePin)
 {
+	// The pin to use for CS
 	spiDevice.csPin = csPin;
 	// CS (chip select) should be active low for the ST7565
-	// But needs to be active high because CLK is AND-gated with CS
-	spiDevice.csPolarity = true;
+	// But this causes the MOSI and SCK to be permanently low because they are AND-gated with CS, so therefore
+	// an alternative CS pin can be used, and the regular CS pin (can be left disconnected) is set high just before chip select.
+	spiDevice.csPolarity = csPolarity;
 	// Data is sampled on the rising edge of the clock pulse and shifted out on the falling edge of the clock pulse
 	spiDevice.spiMode = 0;
 	// The LcdSpiClockFrequency is now defined in the Pins_xxxxx.h file for the configuration being built
@@ -73,7 +75,9 @@ ST7565::ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin) noex
 void ST7565::OnInitialize() noexcept
 {
 	// Set DC/A0 pin to be an output with initial LOW state (command: 0, data: 1)
-	IoPort::SetPinMode(dcPin, OUTPUT_LOW);
+	setPinMode(dcPin, OUTPUT_LOW);
+	// If an extra gate pin is defined, set that to LOW state initially as well
+	setPinMode(gatePin, OUTPUT_LOW);
 
 	// Post-reset wait of 6ms
 	delay(6);
@@ -82,10 +86,7 @@ void ST7565::OnInitialize() noexcept
 
 	{
 		MutexLocker lock(Tasks::GetSpiMutex());
-		sspi_master_setup_device(&spiDevice);
-		delayMicroseconds(1);
-		sspi_select_device(&spiDevice);
-		delayMicroseconds(1);
+		selectDevice();
 
 		//TODO: make these separate methods?
 		// 11100010 System reset
@@ -118,8 +119,7 @@ void ST7565::OnInitialize() noexcept
 		sendCommand(DisplayOff);
 		sendCommand(PixelOn);
 
-		delayMicroseconds(1);
-		sspi_deselect_device(&spiDevice);
+		deselectDevice();
 	}
 }
 
@@ -127,17 +127,13 @@ void ST7565::OnEnable() noexcept
 {
 	{
 		MutexLocker lock(Tasks::GetSpiMutex());
-		sspi_master_setup_device(&spiDevice);
-		delayMicroseconds(1);
-		sspi_select_device(&spiDevice);
-		delayMicroseconds(1);
+		selectDevice();
 
 		// Exit sleep mode, display on
 		sendCommand(PixelOff);
 		sendCommand(DisplayOn);
 
-		delayMicroseconds(1);
-		sspi_deselect_device(&spiDevice);
+		deselectDevice();
 	}
 }
 
@@ -147,167 +143,70 @@ void ST7565::SetBusClockFrequency(uint32_t freq) noexcept
 	spiDevice.clockFrequency = freq;
 }
 
-// Flush all of the dirty part of the image to the lcd. Only called during startup and shutdown.
-//TODO: call this just Flush()?
-void ST7565::FlushAll() noexcept
+// Flush the specified row
+void ST7565::OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept
 {
-	while (Flush())
 	{
-		delayMicroseconds(FlushRowDelayMicros);
-	}
-}
+/*
+		debugPrintf("flush dl=%u dr=%u dt=%u db=%u  cs=%u ce=%u rs=%u re=%u  nr=%u\n",
+				dirtyRectLeft, dirtyRectRight, dirtyRectTop, dirtyRectBottom,
+				startColNum, endColNum, startRowNum, endRowNum,
+				nextFlushRow);
+*/
 
-// Flush some of the dirty part of the image to the LCD, returning true if there is more to do
-//TODO: call this FlushBlock() or FlushRow() or FlushTile()?
-//TODO: move this method to the DriverBase class, and implement callback UpdateTile(c, r)?
-//      perhaps, offer the method in the specific driver the dirty rectangle in OnStartFlush() to let it determine the start parameters
-//      and OnFlush() to let it flush based on these parameters, and return false when done,
-//      so that the Flush() in the DisplayDriver can submit a new dirty rectangle through OnStartFlush()
-//      the dirty rectangle member variables can be made private then as well.
-bool ST7565::Flush() noexcept
-{
-	// See if there is anything to flush
-	// Right and bottom need to be at least one pixel larger than left and top with this method of marking a dirty rectangle.
-	// TODO: perhaps a dirtyRectTop, dirtyRectLeft and dirtyRectWidth, dirtyRectHeight would work more robustly?
-	if (dirtyRectRight > dirtyRectLeft && dirtyRectBottom > dirtyRectTop)
-	{
-		// The columns can be set one pixel at a time, but we quantize to 8 bit wide tiles instead due to the tile rotation we have to perform anyway.
-		// For a 128 pixel wide screen, this results in 16 horizontal tiles.
-		// Column numbers are 0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120.
-		uint8_t startColNum = dirtyRectLeft & 0xF8;
-		const uint8_t endColNum = (dirtyRectRight + 7) & 0xF8;
+		MutexLocker lock(Tasks::GetSpiMutex());
+		selectDevice();
 
-		// The rows are set 8 pixels at a time, and we quantize to 8 bit high tiles.
-		// For a 64 pixel screen height, this results in 8 vertical tiles.
-		// Row numbers are 0, 8, 16, 24, 32, 40, 48, 56.
-		uint8_t startRowNum = dirtyRectTop & 0xF8;
-		const uint8_t endRowNum = (dirtyRectBottom + 7) & 0xF8;
+		// Set the GDRAM address to send the bytes to
+		setGraphicsAddress(startRow, startColumn);
 
-		// Decide which row to flush next
-		// It can occur that the dirty area expands during subsequent Flush() calls
-		//TODO: maybe use the term currentFlushRow instead, because at this stage, it's the one to process, not the next to process?
-		if (nextFlushRow < startRowNum || nextFlushRow >= endRowNum)
+		startDataTransaction();
+
+#ifdef ALTERNATIVE_ST7565_FLUSHROW
+		// Send tiles of 1x8 for the desired (quantized) width of the dirty rectangle
+		for(int x = startColumn; x < endColumn; x += GetTileWidth())
 		{
-			// Start from the beginning
-			nextFlushRow = startRowNum;
-		}
+			uint8_t data = 0;
 
-		// We are flushing from the beginning
-		if (nextFlushRow == startRowNum)
-		{
-			// Shrink the dirty rectangle pre-emptively (flag as flushed)
-			dirtyRectTop = startRowNum + 8;
-		}
-
-		// Flush that row (of tiles)
-		{
-			debugPrintf("flush dl=%u dr=%u dt=%u db=%u  cs=%u ce=%u rs=%u re=%u  nr=%u\n",
-					dirtyRectLeft, dirtyRectRight, dirtyRectTop, dirtyRectBottom,
-					startColNum, endColNum, startRowNum, endRowNum,
-					nextFlushRow);
-
-			MutexLocker lock(Tasks::GetSpiMutex());
-			sspi_master_setup_device(&spiDevice);
-			delayMicroseconds(1);
-			sspi_select_device(&spiDevice);
-			delayMicroseconds(1);
-
-			uint8_t tile[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-
-			// Set the GDRAM address to send the bytes to
-			setGraphicsAddress(nextFlushRow, startColNum);
-
-			startSendData();
-
-			// Send tiles of 8x8 for the desired (quantized) width of the dirty rectangle
-			for(int x = startColNum; x < endColNum; x += 8)
+			// Gather the bits for a vertical line of 8 pixels (LSB is the top pixel)
+			for(uint8_t i = 0; i < 8; i++)
 			{
-				uint8_t* p = displayBuffer + (nextFlushRow * (displayWidth / 8) + (x / 8));
-
-				// Fill the tile buffer
-				for(int i = 0; i < 8; i++)
-				{
-					tile[i] = *p;
-					p += (displayWidth / 8);
-				}
-				// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
-				for(int i = 7; i >= 0; i--)
-				{
-					sendData(transformTile(tile, i));
+				if(ReadPixel(x, startRow + i)) {
+					data |= (1u << i);
 				}
 			}
 
-			endSendData();
-
-			// End update
-			delayMicroseconds(1);
-			sspi_deselect_device(&spiDevice);
-
-
-			sspi_deselect_device(&spiDevice);
+			sendData(data);
 		}
-
-		if (dirtyRectTop < dirtyRectBottom)
-		{
-			nextFlushRow += 8;
-			return true;
-		}
-
-		// Reset dirty rectangle and row tracking
-		dirtyRectTop = displayHeight;
-		dirtyRectLeft = displayWidth;
-		dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
-	}
-	return false;
-}
-
-// Test to flush entire display each time something is dirty, no matter how small
-void ST7565::flushEntireBuffer() noexcept
-{
-	{
-		MutexLocker lock(Tasks::GetSpiMutex());
-		sspi_master_setup_device(&spiDevice);
-		delayMicroseconds(1);
-		sspi_select_device(&spiDevice);
-		delayMicroseconds(1);
-
+#else
 		uint8_t tile[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-		// Send 8 rows of pixels in each transaction
-		for(int y = 0; y < displayHeight; y += 8)
+		// Send tiles of 8x8 for the desired (quantized) width of the dirty rectangle
+		for(int x = startColumn; x < endColumn; x += GetTileWidth())
 		{
-			// Set where the bytes go
-			setGraphicsAddress(y, 0);
 
-			startSendData();
+			uint8_t* ptr = displayBuffer + ((startRow * (displayWidth >> 3)) + (x >> 3));
 
-			// Send tiles of 8x8 for the entire display width
-			for(int x = 0; x < displayWidth; x += 8)
+			// Fill the tile buffer, so we're efficient and don't retrieve the same bytes 8x
+			for(int i = 0; i < 8; i++)
 			{
-				// Fill the tile buffer
-				for(int i = 0; i < 8; i++)
-				{
-					tile[i] = *(displayBuffer + ((y + i) * (displayWidth / 8)) + (x / 8));
-				}
-				// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
-				for(int i = 7; i >= 0; i--)
-				{
-					sendData(transformTile(tile, i));
-				}
+				tile[i] = *ptr;
+				ptr += (displayWidth / 8);
 			}
 
-			endSendData();
+			// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
+			for(int i = 7; i >= 0; i--)
+			{
+				sendData(transformTile(tile, i));
+			}
 		}
+#endif
+
+		endDataTransaction();
 
 		// End update
-		delayMicroseconds(1);
-		sspi_deselect_device(&spiDevice);
+		deselectDevice();
 	}
-
-	// Reset dirty rectangle and row tracking
-	dirtyRectTop = displayHeight;
-	dirtyRectLeft = displayWidth;
-	dirtyRectRight = dirtyRectBottom = nextFlushRow = 0;
 }
 
 // Array of bytes is assumed to be 8 in size (square tile of 8x8 bits)
@@ -324,16 +223,91 @@ uint8_t ST7565::transformTile(uint8_t data[8], PixelNumber c) noexcept
 		 | ((data[7] >> c) & 1) << 7;
 }
 
+// Test to flush entire display each time something is dirty, no matter how small
+// If this function is not used, the linker ignores it and it will not contribute to the firmware size
+void ST7565::flushEntireBuffer() noexcept
+{
+	{
+		MutexLocker lock(Tasks::GetSpiMutex());
+		selectDevice();
+
+		uint8_t tile[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+
+		// Send 8 rows of pixels in each transaction
+		for(int y = 0; y < displayHeight; y += GetTileHeight())
+		{
+			// Set where the bytes go
+			setGraphicsAddress(y, 0);
+
+			startDataTransaction();
+
+			// Send tiles of 8x8 for the entire display width
+			for(int x = 0; x < displayWidth; x += GetTileWidth())
+			{
+				// Fill the tile buffer
+				for(int i = 0; i < 8; i++)
+				{
+					tile[i] = *(displayBuffer + ((y + i) * (displayWidth / 8)) + (x / 8));
+				}
+				// Send the tile, as vertical rows made out of the bits 7, then a row of bits 6, and so on.
+				for(int i = 7; i >= 0; i--)
+				{
+					sendData(transformTile(tile, i));
+				}
+			}
+
+			endDataTransaction();
+		}
+
+		// End update
+		deselectDevice();
+	}
+
+	// Reset dirty rectangle and row tracking
+	SetFlushDone();
+}
+
+// Simple wrapper for IoPort::SetPinMode, that does nothing for a NoPin
+// (since I'm not sure if the lower level functions also do this).
+void ST7565::setPinMode(Pin pin, PinMode mode) noexcept
+{
+	if(pin != NoPin) { IoPort::SetPinMode(pin, mode); }
+}
+
+// Simple wrapper for IoPort::WriteDigital, that does nothing for a NoPin
+// (since I'm not sure if the lower level functions also do this).
+void ST7565::writeDigital(Pin pin, bool high) noexcept
+{
+	if(pin != NoPin) { IoPort::WriteDigital(pin, high); }
+}
+
+void ST7565::selectDevice() noexcept
+{
+	//TODO: can/should the "MutexLocker lock(Tasks::GetSpiMutex());" be moved here as well?
+	writeDigital(gatePin, true);
+	sspi_master_setup_device(&spiDevice);
+	delayMicroseconds(1);
+	sspi_select_device(&spiDevice);
+	delayMicroseconds(1);
+}
+
+void ST7565::deselectDevice() noexcept
+{
+	delayMicroseconds(1);
+	sspi_deselect_device(&spiDevice);
+	writeDigital(gatePin, false);
+}
+
 // Set the address to write to.
 // The display memory is organized in 8+1 pages (of horizontal rows) and 0-131 columns
 void ST7565::setGraphicsAddress(unsigned int r, unsigned int c) noexcept
 {
 	// 0001#### Set Column Address MSB
-	sendCommand(0x10 | ((c >> 4) & 0x0F));
+	sendCommand(0x10 | ((c >> 4) & 0b00001111));
 	// 0000#### Set Column Address LSB
-	sendCommand(0x00 | (c & 0x0F));
+	sendCommand(0x00 | (c & 0b00001111));
 	// 1011#### Set Page Address
-	sendCommand(0xB0 | ((r >> 3) & 0x0F));
+	sendCommand(0xB0 | ((r >> 3) & 0b00001111));
 
 	commandDelay();
 }
@@ -356,7 +330,7 @@ void ST7565::sendArg(uint8_t arg) noexcept
 	sspi_transceive_packet(buffer, nullptr, 1);
 }
 
-void ST7565::startSendData() noexcept
+void ST7565::startDataTransaction() noexcept
 {
 	digitalWrite(dcPin, true);
 }
@@ -370,7 +344,7 @@ void ST7565::sendData(uint8_t data) noexcept
 	sspi_transceive_packet(buffer, nullptr, 1);
 }
 
-void ST7565::endSendData() noexcept
+void ST7565::endDataTransaction() noexcept
 {
 	digitalWrite(dcPin, false);
 }
