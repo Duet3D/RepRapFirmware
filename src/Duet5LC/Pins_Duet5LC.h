@@ -268,16 +268,11 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noe
 //TODO add Ethernet interface pins here
 
 // Timer allocation
-// TC0 channel 0 is used for step pulse generation and software timers (lower 16 bits)
-// TC0 channel 1 is used for LCD beep
-// TC0 channel 2 is used for step pulse generation and software timers (upper 16 bits)
-#define STEP_TC				(TC0)
-#define STEP_TC_CHAN		(0)
-#define STEP_TC_CHAN_UPPER	(2)
-#define STEP_TC_ID			ID_TC0
-#define STEP_TC_ID_UPPER	ID_TC2
-#define STEP_TC_IRQN		TC0_IRQn
-#define STEP_TC_HANDLER		TC0_Handler
+// TC2 and TC3 are used for step pulse generation and software timers
+TcCount32 * const StepTc = &(TC2->COUNT32);
+constexpr IRQn StepTcIRQn = TC2_IRQn;
+constexpr unsigned int StepTcNumber = 2;
+#define STEP_TC_HANDLER		TC2_Handler
 
 namespace StepPins
 {

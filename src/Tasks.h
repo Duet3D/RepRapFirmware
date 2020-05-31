@@ -12,6 +12,8 @@
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
 
+extern "C" [[noreturn]] void AppMain() noexcept;
+
 namespace Tasks
 {
 	void Diagnostics(MessageType mtype) noexcept;

@@ -124,6 +124,8 @@ void Cache::Init() noexcept
 	ARM_MPU_Enable(0x01);
 # endif
 
+#elif SAME5x
+	qq;				//TODO enable cache and/or MPU
 #elif SAM4E
 	cmcc_config g_cmcc_cfg;
 	cmcc_get_config_defaults(&g_cmcc_cfg);

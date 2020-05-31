@@ -124,12 +124,42 @@ extern "C" [[noreturn]] void AppMain() noexcept
 		*heapend++ = memPattern;
 	}
 
+#if SAME5x
+	DmacManager::Init();
+
+# ifndef DEBUG
+
+	// Check that the bootloader is protected and EEPROM is configured
+#  if defined(SAME51)
+	uint64_t nvmUserRow0 = *reinterpret_cast<const uint64_t*>(NVMCTRL_USER);						// we only need values in the first 64 bits of the user area
+	constexpr uint64_t mask =     ((uint64_t)0x0F << 32) | ((uint64_t)0x07 << 36) | (0x0F << 26);	// we just want NVM_BOOT (bits 26-29), SEE.SBLK (bits 32-35) and SEE.PSZ (bits 36:38)
+	constexpr uint64_t reqValue = ((uint64_t)0x01 << 32) | ((uint64_t)0x03 << 36) | (0x07 << 26);	// 4K SMART EEPROM and 64K bootloader (SBLK=1 PSZ=3)
+#  elif defined(SAMC21)
+	uint32_t nvmUserRow0 = *reinterpret_cast<const uint32_t*>(NVMCTRL_USER);						// we only need values in the first 32 bits of the user area
+	constexpr uint32_t mask =     NVMCTRL_FUSES_EEPROM_SIZE_Msk | NVMCTRL_FUSES_BOOTPROT_Msk;		// we just want BOOTPROT (bits 0-2) and EEPROM (bits 4-6)
+#   ifdef SAMMYC21
+	constexpr uint32_t reqValue = (0x02 << NVMCTRL_FUSES_EEPROM_SIZE_Pos) | (0x03 << NVMCTRL_FUSES_BOOTPROT_Pos);	// 4K EEPROM and 4K bootloader
+#   else
+	constexpr uint32_t reqValue = (0x02 << NVMCTRL_FUSES_EEPROM_SIZE_Pos) | (0x01 << NVMCTRL_FUSES_BOOTPROT_Pos);	// 4K EEPROM and 16K bootloader
+#   endif
+#  endif
+
+	if ((nvmUserRow0 & mask) != reqValue)
+	{
+		nvmUserRow0 = (nvmUserRow0 & ~mask) | reqValue;												// set up the required value
+		_user_area_write(reinterpret_cast<void*>(NVMCTRL_USER), 0, reinterpret_cast<const uint8_t*>(&nvmUserRow0), sizeof(nvmUserRow0));
+
+		// If we reset immediately then the user area write doesn't complete and the bits get set to all 1s.
+		delayMicroseconds(10000);
+		Platform::ResetProcessor();
+	}
+# endif
+
+#endif
+
 	// Trap integer divide-by-zero.
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
-
-#if SAME70 && USE_MPU
-#endif
 
 #ifndef __LPC17xx__
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
@@ -141,7 +171,7 @@ extern "C" [[noreturn]] void AppMain() noexcept
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;
 #endif
 
-	Cache::Init();
+	Cache::Init();					// initialise the cache and/or the MPU, if applicable to this processor
 	Cache::Enable();
 
 #if SAM4S

@@ -61,6 +61,8 @@ public:
 
 #if SAME70
 	static constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
+#elif SAME5x
+	static constexpr uint32_t StepClockRate = (120000000/2)/64;					// just under 1MHz
 #elif defined(__LPC17xx__)
 	static constexpr uint32_t StepClockRate = 1000000;                          // 1MHz
 #else
@@ -90,6 +92,10 @@ inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks(
 {
 # ifdef __LPC17xx__
 	return STEP_TC->TC;
+# elif SAME5x
+	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+	while (StepTc->SYNCBUSY.bit.COUNT) { }
+	return StepTc->COUNT.reg;
 # else
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 # endif
@@ -101,6 +107,8 @@ inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noex
 {
 #ifdef __LPC17xx__
 	return (uint16_t)STEP_TC->TC;
+#elif SAME5x
+	return (uint16_t)GetTimerTicks();
 #else
 	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 #endif
