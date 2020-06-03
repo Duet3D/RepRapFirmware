@@ -14,7 +14,8 @@ New features/changed behaviour:
 - G29 with no S parameter now runs file sys/mesh.g if it exists; otherwise it behaves like G29 S0 as before
 
 Bug fixes:
-- Fixed a buffer overflow when the number of filaments reported by PrusaSlic3r exceeds the maximum number of supprted extruders
+- Fixed issue with G29 S1 on Duet 3 with attached SBC causing print to fail
+- Fixed a buffer overflow when the number of filaments reported by PrusaSlic3r exceeds the maximum number of supported extruders
 - Fixed bug in GetProportionDone that might have caused an incorrect extrusion amount for the first move after restarting a print following a power failure
 
 RepRapFirmware 3.1.1
