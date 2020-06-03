@@ -1605,8 +1605,7 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 	uint32_t rslt;
 	if (gb.buffer[readPointer] == '"')
 	{
-		++readPointer;
-		rslt = StrOptHexToU32(gb.buffer + readPointer, &endptr);
+		rslt = StrOptHexToU32(gb.buffer + readPointer + 1, &endptr);
 		if (*endptr != '"')
 		{
 			throw ConstructParseException("expected '\"'");
