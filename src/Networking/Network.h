@@ -74,7 +74,9 @@ public:
 	void Init() noexcept;
 	void Activate() noexcept;
 	void Exit() noexcept;
-	void Spin() noexcept;
+#if HAS_NETWORKING
+	[[noreturn]] void Spin() noexcept;
+#endif
 	void Diagnostics(MessageType mtype) noexcept;
 	bool IsWiFiInterface(unsigned int interface) const noexcept;
 
@@ -120,8 +122,11 @@ private:
 #if HAS_NETWORKING
 	NetworkInterface *interfaces[NumNetworkInterfaces];
 #endif
+
+#if HAS_RESPONDERS
 	NetworkResponder *responders;
 	NetworkResponder *nextResponderToPoll;
+#endif
 
 #if SUPPORT_HTTP
 	Mutex httpMutex;

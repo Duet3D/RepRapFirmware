@@ -490,7 +490,7 @@ GCodeResult LocalHeater::StartAutoTune(float targetTemp, float maxPwm, const Str
 	const float limit = GetHighestTemperatureLimit();
 	if (targetTemp > limit)
 	{
-		reply.printf("heater %u target temperature must be no hiher than the temperature limit for this heater (%.1fC)", GetHeaterNumber(), (double)limit);
+		reply.printf("heater %u target temperature must be no higher than the temperature limit for this heater (%.1fC)", GetHeaterNumber(), (double)limit);
 		return GCodeResult::error;
 	}
 

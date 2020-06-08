@@ -74,7 +74,10 @@ void MacAddress::SetFromBytes(const uint8_t mb[6]) noexcept
 }
 
 // Network members
-Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
+Network::Network(Platform& p) noexcept : platform(p)
+#if HAS_RESPONDERS
+			, responders(nullptr), nextResponderToPoll(nullptr)
+#endif
 {
 #if HAS_NETWORKING
 #if defined(DUET3_V03)
@@ -397,11 +400,7 @@ void Network::ResetWiFiForUpload(bool external) noexcept
 #if HAS_NETWORKING
 extern "C" [[noreturn]]void NetworkLoop(void *) noexcept
 {
-	for (;;)
-	{
-		reprap.GetNetwork().Spin();
-		RTOSIface::Yield();
-	}
+	reprap.GetNetwork().Spin();
 }
 #endif
 
@@ -477,50 +476,55 @@ bool Network::IsWiFiInterface(unsigned int interface) const noexcept
 #endif
 }
 
-// Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
+#if HAS_NETWORKING
+
+// Main spin loop
 void Network::Spin() noexcept
 {
-#if HAS_NETWORKING
-	const uint32_t lastTime = StepTimer::GetTimerTicks();
-
-	// Keep the network modules running
-	for (NetworkInterface *iface : interfaces)
+	for (;;)
 	{
-		iface->Spin();
-	}
+		const uint32_t lastTime = StepTimer::GetTimerTicks();
+
+		// Keep the network modules running
+		for (NetworkInterface *iface : interfaces)
+		{
+			iface->Spin();
+		}
 
 #if HAS_RESPONDERS
-	// Poll the responders
-	NetworkResponder *nr = nextResponderToPoll;
-	bool doneSomething = false;
-	do
-	{
-		if (nr == nullptr)
+		// Poll the responders
+		NetworkResponder *nr = nextResponderToPoll;
+		bool doneSomething = false;
+		do
 		{
-			nr = responders;		// 'responders' can't be null at this point
-		}
-		doneSomething = nr->Spin();
-		nr = nr->GetNext();
-	} while (!doneSomething && nr != nextResponderToPoll);
-	nextResponderToPoll = nr;
+			if (nr == nullptr)
+			{
+				nr = responders;		// 'responders' can't be null at this point
+			}
+			doneSomething = nr->Spin();
+			nr = nr->GetNext();
+		} while (!doneSomething && nr != nextResponderToPoll);
+		nextResponderToPoll = nr;
 #endif
 
 #if SUPPORT_HTTP
-	HttpResponder::CheckSessions();		// time out any sessions that have gone away
+		HttpResponder::CheckSessions();		// time out any sessions that have gone away
 #endif
 
-	// Keep track of the loop time
-	const uint32_t dt = StepTimer::GetTimerTicks() - lastTime;
-	if (dt < fastLoop)
-	{
-		fastLoop = dt;
+		// Keep track of the loop time
+		const uint32_t dt = StepTimer::GetTimerTicks() - lastTime;
+		if (dt < fastLoop)
+		{
+			fastLoop = dt;
+		}
+		if (dt > slowLoop)
+		{
+			slowLoop = dt;
+		}
+		RTOSIface::Yield();
 	}
-	if (dt > slowLoop)
-	{
-		slowLoop = dt;
-	}
-#endif
 }
+#endif
 
 void Network::Diagnostics(MessageType mtype) noexcept
 {
