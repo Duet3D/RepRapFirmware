@@ -1925,8 +1925,9 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 #if TRACK_OBJECT_NAMES
 	if (isPrintingMove)
 	{
-		buildObjects.UpdateObjectCoordinates(initialXY);
-		buildObjects.UpdateObjectCoordinates(currentUserPosition);
+		// Update the object coordinates limits. For efficiency, we only update the final coordinate.
+		// Except in the case of a straight line that is only one extrusion width wide, this is sufficient.
+		buildObjects.UpdateObjectCoordinates(currentUserPosition, axesMentioned);
 	}
 #endif
 
@@ -2270,7 +2271,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	{
 		//TODO ideally we should calculate the min and max X and Y coordinates of the entire arc here and call UpdateObjectCoordinates twice.
 		// But it is currently very rare to use G2/G3 with extrusion, so for now we don't bother.
-		buildObjects.UpdateObjectCoordinates(currentUserPosition);
+		buildObjects.UpdateObjectCoordinates(currentUserPosition, AxesBitmap::MakeLowestNBits(2));
 	}
 #endif
 

@@ -24,14 +24,16 @@ constexpr ObjectModelArrayDescriptor ObjectDirectoryEntry::xArrayDescriptor =
 {
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ObjectDirectoryEntry*)self)->x[context.GetLastIndex()], 1); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+			{ return ExpressionValue((int32_t)((const ObjectDirectoryEntry*)self)->x[context.GetLastIndex()]); }
 };
 
 constexpr ObjectModelArrayDescriptor ObjectDirectoryEntry::yArrayDescriptor =
 {
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ObjectDirectoryEntry*)self)->y[context.GetLastIndex()], 1); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+			{ return ExpressionValue((int32_t)((const ObjectDirectoryEntry*)self)->y[context.GetLastIndex()]); }
 };
 
 constexpr ObjectModelTableEntry ObjectDirectoryEntry::objectModelTable[] =
@@ -279,54 +281,64 @@ void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
 void ObjectDirectoryEntry::Init(const char *label) noexcept
 {
 	name = label;
-	x[0] = x[1] = y[0] = y[1] = std::numeric_limits<float>::quiet_NaN();
+	x[0] = x[1] = y[0] = y[1] = std::numeric_limits<int16_t>::min();
 }
 
 // Update the min and max object coordinates to include the coordinates passed, returning true if anything was changed
-bool ObjectDirectoryEntry::UpdateObjectCoordinates(const float coords[]) noexcept
+bool ObjectDirectoryEntry::UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept
 {
 	bool updated = false;
-	if (isnan(x[0]))
+	if (axes.IsBitSet(X_AXIS))
 	{
-		x[0] = x[1] = coords[X_AXIS];
-		y[0] = y[1] = coords[Y_AXIS];
-		updated = true;
+		const int16_t xVal = lrintf(coords[X_AXIS]);
+		if (x[1] == std::numeric_limits<int16_t>::min())
+		{
+			x[0] = x[1] = xVal;
+			updated = true;
+		}
+		else if (xVal < x[0])
+		{
+			x[0] = xVal;
+			updated = true;
+		}
+		else if (xVal > x[1])
+		{
+			x[1] = xVal;
+			updated = true;
+		}
 	}
-	else
-	{
-		if (coords[X_AXIS] < x[0])
-		{
-			x[0] = coords[X_AXIS];
-			updated = true;
-		}
-		else if (coords[X_AXIS] > x[1])
-		{
-			x[1] = coords[X_AXIS];
-			updated = true;
-		}
 
-		if (coords[Y_AXIS] < y[0])
+	if (axes.IsBitSet(Y_AXIS))
+	{
+		const int16_t yVal = lrintf(coords[Y_AXIS]);
+		if (y[1] == std::numeric_limits<int16_t>::min())
 		{
-			y[0] = coords[Y_AXIS];
+			y[0] = y[1] = yVal;
 			updated = true;
 		}
-		else if (coords[Y_AXIS] > y[1])
+		else if (yVal < y[0])
 		{
-			y[1] = coords[Y_AXIS];
+			y[0] = yVal;
+			updated = true;
+		}
+		else if (yVal > y[1])
+		{
+			y[1] = yVal;
 			updated = true;
 		}
 	}
+
 	return updated;
 }
 
 // Update the min and max object coordinates to include the coordinates passed
 // We could pass both the start and end coordinates of the printing move, however it is simpler just to pass the end coordinates.
 // This is OK because it is very unlikely that there won't be a subsequent extruding move that ends close to the original one.
-void ObjectTracker::UpdateObjectCoordinates(const float coords[]) noexcept
+void ObjectTracker::UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept
 {
 	if (currentObjectNumber >= 0 && currentObjectNumber < (int)numObjects)
 	{
-		if (objectDirectory[currentObjectNumber].UpdateObjectCoordinates(coords))
+		if (objectDirectory[currentObjectNumber].UpdateObjectCoordinates(coords, axes))
 		{
 			reprap.JobUpdated();
 		}

@@ -1002,7 +1002,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				String<MaxFilenameLength> filename;
 				gb.GetUnprecedentedString(filename.GetRef());
-				result = (platform.Delete(platform.GetGCodeDir(), filename.c_str())) ? GCodeResult::ok : GCodeResult::error;
+				result = (platform.Delete(platform.GetGCodeDir(), filename.c_str())) ? GCodeResult::ok : GCodeResult::warning;
 			}
 			break;
 #endif

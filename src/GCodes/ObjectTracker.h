@@ -19,10 +19,10 @@
 struct ObjectDirectoryEntry INHERIT_OBJECT_MODEL
 {
 	const char *name;					// pointer to the object name within the string buffer
-	float x[2], y[2];					// lowest and highest extrusion coordinates
+	int16_t x[2], y[2];					// lowest and highest extrusion coordinates
 
 	void Init(const char *label) noexcept;
-	bool UpdateObjectCoordinates(const float coords[]) noexcept;
+	bool UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -56,7 +56,7 @@ public:
 #if TRACK_OBJECT_NAMES
 	void StartObject(GCodeBuffer& gb, const char *label) noexcept;
 	void StopObject(GCodeBuffer& gb) noexcept;
-	void UpdateObjectCoordinates(const float coords[]) noexcept;
+	void UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept;
 	bool IsCancelled(size_t objectNumber) const noexcept { return objectsCancelled.IsBitSet(objectNumber); }
 #endif
 
