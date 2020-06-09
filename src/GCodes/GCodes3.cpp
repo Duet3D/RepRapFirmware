@@ -1154,7 +1154,28 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 		return CanInterface::ConfigureRemoteDriver(id, gb, reply);
 	}
 #endif
+
 	const uint8_t drive = id.localDriver;
+	if (gb.GetCommandFraction() != 0)
+	{
+#ifdef DUET3
+		// Main board drivers do not support closed loop modes
+		if (gb.Seen('S'))
+		{
+			if (gb.GetUIValue() == 0)
+			{
+				return GCodeResult::ok;
+			}
+			reply.printf("Driver %u does not support closed loop modes", drive);
+			return GCodeResult::error;
+		}
+		reply.copy("Driver %u mode is open loop", drive);
+		return GCodeResult::ok;
+#else
+		return GCodeResult::errorNotSupported;
+#endif
+	}
+
 	if (drive < platform.GetNumActualDirectDrivers())
 	{
 		bool seen = false;

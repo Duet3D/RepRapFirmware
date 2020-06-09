@@ -13,6 +13,7 @@
 
 // Enumeration to specify the result of attempting to process a GCode command
 // These are ordered such that errors > warnings > ok
+// *** Do not change the order! These must be the same for the main board and all CAN expansion boards! ***
 enum class GCodeResult : uint8_t
 {
 	notFinished,					// we haven't finished processing this command
