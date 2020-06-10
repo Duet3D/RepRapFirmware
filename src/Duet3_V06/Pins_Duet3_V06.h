@@ -52,7 +52,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
 
 // The physical capabilities of the machine
 
-#include <Duet3Limits.h>							// this file is in the CANlib project because both main and expansion boards need it
+#include <Duet3Common.h>							// this file is in the CANlib project because both main and expansion boards need it
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
