@@ -4226,6 +4226,11 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 	}
 #endif
 
+	if (ok)
+	{
+		ok = buildObjects.WriteObjectDirectory(f);
+	}
+
 	if (!f->Close())
 	{
 		ok = false;

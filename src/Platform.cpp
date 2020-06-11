@@ -2053,6 +2053,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		break;
 
 	case (int)DiagnosticTestType::SetWriteBuffer:
+#if SAME70
+		reply.copy("Write buffer not supported on this processor");
+		return GCodeResult::error;
+#else
 		if (gb.Seen('S'))
 		{
 			if (gb.GetUIValue() > 0)
@@ -2069,6 +2073,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			reply.printf("Write buffer is %s", (SCnSCB->ACTLR & SCnSCB_ACTLR_DISDEFWBUF_Msk) ? "disabled" : "enabled");
 		}
 		break;
+#endif
 
 	case (unsigned int)DiagnosticTestType::TestWatchdog:
 		deliberateError = true;
