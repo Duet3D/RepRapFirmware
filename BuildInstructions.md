@@ -70,7 +70,7 @@ Using Homebrew-Cask makes it very easy to install new software on macOS: https:/
 
 4. Download or clone the RepRapFirmware, CoreNG, FreeRTOS, RRFLibraries and DuetWiFiSocketServer projects into your workspace (also CANlib if you are building firmware for Duet 3). Keep the folder names as is.
 
-5. Open Eclipse and import RepRapFirmware, FreeRTOS, RRFLibraries and CoreNG projects.
+5. Open Eclipse and import RepRapFirmware, FreeRTOS, RRFLibraries and CoreNG projects using File -> Open Projects from File System.
 
 6. The build depends on the Eclipse workspace variable 'ArmGccPath" being set to the directory where your arm-none-eabi-g++ compiler resides. To set it, go to Windows -> Preferences -> C/C++ -> Build -> Build Variables and click "Add..."
 
