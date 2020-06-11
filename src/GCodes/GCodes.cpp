@@ -2506,9 +2506,11 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 					virtualExtruderPosition = moveArg;
 				}
 
-				// rawExtruderTotal is used to calculate print progress, so it must be based on the requested extrusion before accounting for mixing,
-				// otherwise IDEX ditto printing and similar gives strange results
-				if (isPrintingMove && moveBuffer.moveType == 0 && !doingToolChange)
+				// rawExtruderTotal is used to calculate print progress, so it must be based on the requested extrusion from the slicer
+				// before accounting for mixing, extrusion factor etc.
+				// We used to have 'isPrintingMove &&' in the condition too, but this excluded wipe-while-retracting moves, so it gave wrong results for % print complete.
+				// We still exclude extrusion during tool changing and other macros, because that is extrusion not known to the slicer.
+				if (moveBuffer.moveType == 0 && !gb.IsDoingFileMacro())
 				{
 					rawExtruderTotal += requestedExtrusionAmount;
 				}
@@ -2526,7 +2528,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 						{
 							extrusionAmount *= volumetricExtrusionFactors[drive];
 						}
-						if (isPrintingMove && moveBuffer.moveType == 0 && !doingToolChange)
+						if (moveBuffer.moveType == 0 && !gb.IsDoingFileMacro())
 						{
 							rawExtruderTotalByDrive[drive] += extrusionAmount;
 						}
@@ -2563,7 +2565,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 								extrusionAmount *= volumetricExtrusionFactors[drive];
 							}
 
-							if (isPrintingMove && moveBuffer.moveType == 0 && !doingToolChange)
+							if (moveBuffer.moveType == 0 && !gb.IsDoingFileMacro())
 							{
 								rawExtruderTotalByDrive[drive] += extrusionAmount;
 								rawExtruderTotal += extrusionAmount;
