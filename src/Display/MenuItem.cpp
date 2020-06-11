@@ -83,7 +83,10 @@ bool MenuItem::IsVisible() const
 	case 7:		return reprap.GetGCodes().IsReallyPrinting() || reprap.GetGCodes().IsResuming();
 	case 10:	return reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0);
 	case 11:	return !reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0);
-	case 20:	return reprap.GetCurrentOrDefaultTool()->HasTemperatureFault();
+	case 20:
+		{		const Tool * const tool = reprap.GetCurrentOrDefaultTool();			// this can be null, especially during startup
+				return tool != nullptr && tool->HasTemperatureFault();
+		}
 	case 28:	return reprap.GetHeat().GetStatus(reprap.GetHeat().GetBedHeater(0)) == Heat::HS_fault;
 	}
 }
