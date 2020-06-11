@@ -164,8 +164,10 @@ enum class DiagnosticTestType : unsigned int
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects
 
 #ifdef __LPC17xx__
-    PrintBoardConfiguration = 200,    //Prints out all pin/values loaded from SDCard to configure board
+	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
 #endif
+
+	SetWriteBuffer = 500,			// enable/disable the write buffer
 
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long

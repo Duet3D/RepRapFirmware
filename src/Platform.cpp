@@ -2052,6 +2052,24 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		}
 		break;
 
+	case (int)DiagnosticTestType::SetWriteBuffer:
+		if (gb.Seen('S'))
+		{
+			if (gb.GetUIValue() > 0)
+			{
+				SCnSCB->ACTLR &= ~SCnSCB_ACTLR_DISDEFWBUF_Msk;		// enable write buffer
+			}
+			else
+			{
+				SCnSCB->ACTLR |= SCnSCB_ACTLR_DISDEFWBUF_Msk;		// disable write buffer
+			}
+		}
+		else
+		{
+			reply.printf("Write buffer is %s", (SCnSCB->ACTLR & SCnSCB_ACTLR_DISDEFWBUF_Msk) ? "disabled" : "enabled");
+		}
+		break;
+
 	case (unsigned int)DiagnosticTestType::TestWatchdog:
 		deliberateError = true;
 		SysTick->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);			// disable the system tick interrupt so that we get a watchdog timeout reset

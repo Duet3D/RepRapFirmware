@@ -765,7 +765,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile) noexc
 			nameOfFileToSend = INDEX_PAGE_FILE;
 		}
 
-		if (isWebFile && strlen(nameOfFileToSend) > MaxExpectedWebDirFilenameLength)
+		if (strlen(nameOfFileToSend) > MaxExpectedWebDirFilenameLength)
 		{
 			// We have been asked for a file with a very long name. Don't try to open it, because that may lead to MassStorage::CombineName generating an error message.
 			// Instead, report a possible virus attack from the sending IP address.

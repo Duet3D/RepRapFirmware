@@ -838,6 +838,10 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 					{
 						pos += 7;
 					}
+					else if (StringStartsWithIgnoreCase(pos, "minute"))	// assume S3D also prints "1 minute"
+					{
+						pos += 6;
+					}
 					else
 					{
 						++pos;
