@@ -37,6 +37,8 @@ Licence: GPL
 #include "RestorePoint.h"
 #include "Movement/BedProbing/Grid.h"
 
+class UARTClass;										// needed for SAM5x build
+
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
 

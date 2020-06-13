@@ -96,6 +96,8 @@ struct SoftwareResetData
 
 #if SAM4E || SAM4S || SAME70
 static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in user signature area");
+#elif SAME5x
+// TODO
 #else
 static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 #endif

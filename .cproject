@@ -1460,7 +1460,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/W5500Ethernet|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/DuetNG|src/Alligator|src/arm|src/Duet3_V06|src/Networking/ESP8266WiFi|src/Pccb|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Networking/LwipEthernet/Lwip/src/apps/smtp|src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/http|src/Networking/LwipEthernet/Lwip/src/apps/altcp_tls|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/W5500Ethernet|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/DuetNG|src/Alligator|src/arm|src/Duet3_V06|src/Networking/ESP8266WiFi|src/Pccb|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

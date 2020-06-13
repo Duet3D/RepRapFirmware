@@ -3,9 +3,12 @@
 #include <RepRap.h>
 #include <ObjectModel/ObjectModel.h>
 #include <Libraries/Fatfs/diskio.h>
-#include <sd_mmc.h>
 
-#ifndef __LPC17xx__
+#if !SAME5x		//temp!!!!
+#include <sd_mmc.h>
+#endif
+
+#if !defined(__LPC17xx__) && !SAME5x
 # include <sam/drivers/hsmci/hsmci.h>
 #endif
 
