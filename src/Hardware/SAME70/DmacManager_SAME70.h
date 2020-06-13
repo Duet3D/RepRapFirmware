@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_DMACMANAGER_H_
-#define SRC_DMACMANAGER_H_
+#ifndef SRC_HARDWARE_SAME70_DMACMANAGER_SAME70_H_
+#define SRC_HARDWARE_SAME70_DMACMANAGER_SAME70_H_
 
 #if SAME70
 
@@ -78,4 +78,4 @@ namespace DmacManager
 
 #endif
 
-#endif /* SRC_DMACMANAGER_H_ */
+#endif /* SRC_HARDWARE_SAME70_DMACMANAGER_SAME70_H_ */

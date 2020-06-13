@@ -9,7 +9,7 @@
  */
 
 #include <RepRapFirmware.h>
-#include "DmacManager.h"
+#include "DmacManager_SAME70.h"
 
 #if SAME70
 

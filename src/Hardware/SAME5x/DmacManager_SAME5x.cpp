@@ -16,7 +16,7 @@
 # error Unsupported processor
 #endif
 
-#include <Hardware/DmacManager.h>
+#include "DmacManager_SAME5x.h"
 #include <RTOSIface/RTOSIface.h>
 
 // Descriptors for all used DMAC channels
