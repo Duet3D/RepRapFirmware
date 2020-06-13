@@ -39,6 +39,9 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 #ifdef array
 # undef array			// needed because some files include <functional>
 #endif
+#ifdef assert
+# undef assert
+#endif
 
 # include "Core.h"
 

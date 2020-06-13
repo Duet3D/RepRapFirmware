@@ -104,11 +104,21 @@ constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCP
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortAPin(27), PortBPin(29), PortBPin(28), PortBPin(3), PortBPin(0), PortDPin(21), PortDPin(20), PortCPin(17) };
 
 // UART interface to stepper drivers
+constexpr uint8_t TMC22xxSercomNumber = 1;
 Sercom * const SERCOM_TMC22xx = SERCOM1;
 constexpr IRQn TMC22xx_SERCOM_IRQn = SERCOM1_0_IRQn;
-//constexpr uint32_t ID_TMC22xx_SERCOM = ID_SERCOM0;
-//constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
-#define TMC22xx_SERCOM_Handler	SERCOM1_Handler0	//TODO check this. Do we need more than one ISR?
+constexpr Pin TMC22xxSercomTxPin = PortCPin(27);
+constexpr uint32_t TMC22xxSercomTxPinPeriphMode = GPIO_PIN_FUNCTION_C;
+constexpr Pin TMC22xxSercomRxPin = PortCPin(28);
+constexpr uint32_t TMC22xxSercomRxPinPeriphMode = GPIO_PIN_FUNCTION_C;
+constexpr uint8_t TMC22xxSercomRxPad = 1;
+constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
+
+#define TMC22xx_HAS_ENABLE_PINS			0
+#define TMC22xx_HAS_MUX					1
+#define TMC22xx_USES_SERCOM				1
+#define TMC22xx_VARIABLE_NUM_DRIVERS	1
+#define TMC22xx_SINGLE_DRIVER			0
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
@@ -266,6 +276,20 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 //TODO add Ethernet interface pins here
+
+// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
+constexpr DmaChannel TmcTxDmaChannel = 0;
+constexpr DmaChannel TmcRxDmaChannel = 1;
+constexpr DmaChannel Adc0TxDmaChannel = 2;
+// Next channel is used by ADC0 for receive
+constexpr DmaChannel Adc1TxDmaChannel = 4;
+// Next channel is used by ADC1 for receive
+
+constexpr unsigned int NumDmaChannelsUsed = 6;			// must be at least the number of channels used, may be larger. Max 32 on the SAME51.
+
+constexpr uint8_t TmcTxDmaPriority = 0;
+constexpr uint8_t TmcRxDmaPriority = 3;
+constexpr uint8_t AdcRxDmaPriority = 2;
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers

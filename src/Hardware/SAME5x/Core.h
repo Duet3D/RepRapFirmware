@@ -22,6 +22,8 @@
 #include <General/SimpleMath.h>
 #include <cctype>
 
+#include "AtmelStart_SAME5x/atmel_start_pins.h"
+
 #define SAM4E	0
 #define SAM4S	0
 #define SAM3XA	0

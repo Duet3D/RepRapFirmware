@@ -108,7 +108,14 @@ Uart * const UART_TMC22xx = UART0;
 constexpr IRQn TMC22xx_UART_IRQn = UART0_IRQn;
 constexpr uint32_t ID_TMC22xx_UART = ID_UART0;
 constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
-#define TMC22xx_UART_Handler	UART0_Handler
+
+#define TMC22xx_UART_Handler			UART0_Handler
+
+#define TMC22xx_USES_SERCOM				0
+#define TMC22xx_HAS_ENABLE_PINS			1
+#define TMC22xx_VARIABLE_NUM_DRIVERS	1
+#define TMC22xx_SINGLE_DRIVER			0
+#define TMC22xx_HAS_MUX					1
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
