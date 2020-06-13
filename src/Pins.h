@@ -182,11 +182,17 @@
 # define ALLOCATE_DEFAULT_PORTS	0
 #endif
 
-// We must define SUPPORTS_UNIQUE_ID as either 0 or 1 so we can use it in maths
-#if SAM4E || SAM4S || SAME70
-# define SUPPORTS_UNIQUE_ID		1
+// We must define MCU_HAS_UNIQUE_ID as either 0 or 1 so we can use it in maths
+#if SAM4E || SAM4S || SAME70 || SAME5x
+# define MCU_HAS_UNIQUE_ID		1
 #else
-# define SUPPORTS_UNIQUE_ID		0
+# define MCU_HAS_UNIQUE_ID		0
+#endif
+
+#if SAME70 || SAME5x
+# define MCU_HAS_TRUERANDOM	1
+#else
+# define MCU_HAS_TRUERANDOM	0
 #endif
 
 #endif // PINS_H__

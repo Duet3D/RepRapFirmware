@@ -17,6 +17,10 @@ extern Mutex lwipMutex;
 // ERR_IS_FATAL was defined like this in lwip 2.0.3 file err.h but isn't in 2.1.2
 #define ERR_IS_FATAL(e) ((e) <= ERR_ABRT)
 
+#ifndef UNUSED
+# define UNUSED(v)		(void)(v)
+#endif
+
 //***************************************************************************************************
 
 extern "C" {

@@ -756,7 +756,7 @@ void MassStorage::Spin() noexcept
 		SdCardInfo& inf = info[card];
 		if (inf.cdPin != NoPin)
 		{
-			if (digitalRead(inf.cdPin))
+			if (IoPort::ReadPin(inf.cdPin))
 			{
 				// Pin state says no card present
 				switch (inf.cardState)

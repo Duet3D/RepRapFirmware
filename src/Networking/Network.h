@@ -18,7 +18,7 @@
 
 #if defined(DUET3_V03)
 const size_t NumNetworkInterfaces = 2;
-#elif defined(SAME70XPLD) || defined(DUET3_V05) || defined(DUET3_V06) || defined(DUET_NG) || defined(DUET_M) || defined(__LPC17xx__) || defined(PCCB) || defined(__RADDS__)
+#elif defined(SAME70XPLD) || defined(DUET3_V05) || defined(DUET3_V06) || defined(DUET_NG) || defined(DUET_M) || defined(__LPC17xx__) || defined(PCCB) || defined(__RADDS__) || defined(DUET_5LC)
 const size_t NumNetworkInterfaces = 1;
 #else
 # error Wrong Network.h file included
@@ -31,7 +31,7 @@ const size_t NumFtpResponders = 0;		// the number of concurrent FTP sessions we 
 const size_t NumTelnetResponders = 0;	// the number of concurrent Telnet sessions we support
 #else
 
-# if SAME70
+# if SAME70 || SAME5x
 const size_t NumHttpResponders = 6;		// the number of concurrent HTTP requests we can process
 const size_t NumTelnetResponders = 2;	// the number of concurrent Telnet sessions we support
 # else

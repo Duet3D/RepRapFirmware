@@ -36,7 +36,8 @@ inline constexpr Pin PortBPin(unsigned int n) noexcept { return 32+n; }
 inline constexpr Pin PortCPin(unsigned int n) noexcept { return 64+n; }
 inline constexpr Pin PortDPin(unsigned int n) noexcept { return 96+n; }
 
-void digitalWrite(Pin pin, bool state) noexcept;
+uint32_t millis() noexcept;
+extern "C" uint32_t trueRandom() noexcept;
 
 // Pin mode enumeration. Would ideally be a C++ scoped enum, but we need to use it from C library functions.
 enum PinMode
@@ -136,6 +137,14 @@ static inline bool inInterrupt() noexcept
 	return (__get_IPSR() & 0x01FF) != 0;
 }
 
-extern uint32_t millis() noexcept;
+static inline int32_t random(uint32_t howbig) noexcept
+{
+	return trueRandom() % howbig;
+}
+
+static inline uint32_t random(uint32_t howsmall, uint32_t howbig) noexcept
+{
+	return random(howbig - howsmall) + howsmall;
+}
 
 #endif /* SRC_HARDWARE_SAME5X_CORE_H_ */

@@ -563,7 +563,7 @@ public:
 	const GpInputPort& GetGpInPort(size_t gpinPortNumber) const noexcept
 		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
 
-#if SUPPORTS_UNIQUE_ID
+#if MCU_HAS_UNIQUE_ID
 	uint32_t Random() noexcept;
 	const char *GetUniqueIdString() const noexcept { return uniqueIdChars; }
 #endif
@@ -612,7 +612,7 @@ private:
 	MacAddress defaultMacAddress;
 
 	// Board and processor
-#if SUPPORTS_UNIQUE_ID
+#if MCU_HAS_UNIQUE_ID
 	uint32_t uniqueId[5];
 	char uniqueIdChars[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
 #endif
@@ -952,7 +952,11 @@ inline void Platform::SetDriverDirection(uint8_t driver, bool direction) noexcep
 	if (driver < GetNumActualDirectDrivers())
 	{
 		const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
+#if SAME5x
+		IoPort::WriteDigital(DIRECTION_PINS[driver], d);
+#else
 		digitalWrite(DIRECTION_PINS[driver], d);
+#endif
 	}
 }
 
@@ -960,7 +964,11 @@ inline void Platform::SetDriverAbsoluteDirection(size_t driver, bool direction) 
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
+#if SAME5x
+		IoPort::WriteDigital(DIRECTION_PINS[driver], direction);
+#else
 		digitalWrite(DIRECTION_PINS[driver], direction);
+#endif
 	}
 }
 
