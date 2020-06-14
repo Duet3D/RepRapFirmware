@@ -90,12 +90,12 @@ private:
 
 inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
-# ifdef __LPC17xx__
-	return STEP_TC->TC;
-# elif SAME5x
+# if SAME5x
 	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
 	while (StepTc->SYNCBUSY.bit.COUNT) { }
 	return StepTc->COUNT.reg;
+# elif defined(__LPC17xx__)
+	return STEP_TC->TC;
 # else
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 # endif
@@ -105,10 +105,10 @@ inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks(
 
 inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noexcept
 {
-#ifdef __LPC17xx__
-	return (uint16_t)STEP_TC->TC;
-#elif SAME5x
+#if SAME5x
 	return (uint16_t)GetTimerTicks();
+#elif defined(__LPC17xx__)
+	return (uint16_t)STEP_TC->TC;
 #else
 	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 #endif

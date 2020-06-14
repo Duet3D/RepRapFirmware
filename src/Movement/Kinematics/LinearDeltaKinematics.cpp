@@ -210,7 +210,7 @@ bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	for (size_t axis = 0; axis < numTowers; ++axis)
 	{
 		const float pos = Transform(machinePos, axis);
-		if (isnan(pos) || isinf(pos))
+		if (std::isnan(pos) || std::isinf(pos))
 		{
 			ok = false;
 		}
@@ -480,7 +480,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 				const size_t adjustedJ = (numFactors == 8 && j >= 6) ? j + 1 : j;		// skip diagonal rod length if doing 8-factor calibration
 				const floatc_t d =
 					ComputeDerivative(adjustedJ, probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS));
-				if (isnan(d))			// a couple of users have reported getting Nans in the derivative, probably due to points being unreachable
+				if (std::isnan(d))			// a couple of users have reported getting Nans in the derivative, probably due to points being unreachable
 				{
 					reply.printf("Auto calibration failed because probe point P%u was unreachable using the current delta parameters. Try a smaller probing radius.", i);
 					return true;

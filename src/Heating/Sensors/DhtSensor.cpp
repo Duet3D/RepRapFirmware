@@ -14,6 +14,10 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Movement/StepTimer.h"
 
+#if SAME5x
+# include <Hardware/SAME5x/Peripherals.h>			// for delayMicroseconds
+#endif
+
 constexpr uint16_t MinimumReadInterval = 2000;		// ms
 constexpr uint8_t  MaximumReadTime = 20;			// ms
 constexpr uint8_t  MinimumOneBitLength = 50;		// microseconds

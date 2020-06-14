@@ -753,7 +753,9 @@ void Platform::Init() noexcept
 	// Initialise TMC driver module
 # if SUPPORT_TMC51xx
 	SmartDrivers::Init();
-# else
+# elif SUPPORT_TMC22xx
+	SmartDrivers::Init(numSmartDrivers);
+#else
 	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
 # endif
 	temperatureShutdownDrivers.Clear();

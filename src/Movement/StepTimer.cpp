@@ -9,7 +9,9 @@
 #include <RTOSIface/RTOSIface.h>
 #include "Move.h"
 
-#ifndef __LPC17xx__
+#if SAME5x
+# include <Hardware/SAME5x/Peripherals.h>
+#elif !defined(__LPC17xx__)
 # include "sam/drivers/tc/tc.h"
 #endif
 
@@ -24,7 +26,32 @@ void StepTimer::Init() noexcept
 	// 1.067us resolution on the Duet WiFi/Ethernet/Maestro (120MHz clock)
 	// On Duet 3 we need a step clock rate that can be programmed on SAME70, SAME5x and SAMC21 processors. We choose 750kHz (1.333us resolution)
 
-#ifdef __LPC17xx__
+#if SAME5x
+	EnableTcClock(StepTcNumber, GCLK_PCHCTRL_GEN_GCLK2_Val);
+	EnableTcClock(StepTcNumber + 1, GCLK_PCHCTRL_GEN_GCLK2_Val);
+
+	if (!hri_tc_is_syncing(StepTc, TC_SYNCBUSY_SWRST))
+	{
+		if (hri_tc_get_CTRLA_reg(StepTc, TC_CTRLA_ENABLE))
+		{
+			hri_tc_clear_CTRLA_ENABLE_bit(StepTc);
+			hri_tc_wait_for_sync(StepTc, TC_SYNCBUSY_ENABLE);
+		}
+		hri_tc_write_CTRLA_reg(StepTc, TC_CTRLA_SWRST);
+	}
+	hri_tc_wait_for_sync(StepTc, TC_SYNCBUSY_SWRST);
+
+	hri_tc_write_CTRLA_reg(StepTc, TC_CTRLA_MODE_COUNT32 | TC_CTRLA_PRESCALER_DIV64);
+	hri_tc_write_DBGCTRL_reg(StepTc, 0);
+	hri_tc_write_EVCTRL_reg(StepTc, 0);
+	hri_tc_write_WAVE_reg(StepTc, TC_WAVE_WAVEGEN_NFRQ);
+
+	hri_tc_set_CTRLA_ENABLE_bit(StepTc);
+
+	NVIC_DisableIRQ(StepTcIRQn);
+	NVIC_ClearPendingIRQ(StepTcIRQn);
+	NVIC_EnableIRQ(StepTcIRQn);
+#elif defined(__LPC17xx__)
 	//LPC has 32bit timers with 32bit prescalers
 	//Start a free running Timer using Match Registers to generate interrupts
 
@@ -122,15 +149,20 @@ void StepTimer::Init() noexcept
 bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 {
 	// We need to disable all interrupts, because once we read the current step clock we have only 6us to set up the interrupt, or we will miss it
-	const irqflags_t flags = cpu_irq_save();
+	AtomicCriticalSectionLocker lock;
+
 	const int32_t diff = (int32_t)(tim - GetTimerTicks());			// see how long we have to go
 	if (diff < (int32_t)MinInterruptInterval)						// if less than about 6us or already passed
 	{
-		cpu_irq_restore(flags);
 		return true;												// tell the caller to simulate an interrupt instead
 	}
 
-#ifdef __LPC17xx__
+#if SAME5x
+	StepTc->CC[0].reg = tim;
+	while (StepTc->SYNCBUSY.reg & TC_SYNCBUSY_CC0) { }
+	StepTc->INTFLAG.reg = TC_INTFLAG_MC0;							// clear any existing compare match
+	StepTc->INTENSET.reg = TC_INTFLAG_MC0;
+#elif defined(__LPC17xx__)
 	STEP_TC->MR[0] = tim;											// set MR0 compare register
 	STEP_TC->MCR |= (1u<<SBIT_MR0I);									// enable interrupt on MR0 match
 #else
@@ -139,14 +171,15 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPBS;			// enable the interrupt
 #endif
 
-	cpu_irq_restore(flags);
 	return false;
 }
 
 // Make sure we get no timer interrupts
 void StepTimer::DisableTimerInterrupt() noexcept
 {
-#ifdef __LPC17xx__
+#if SAME5x
+	StepTc->INTENCLR.reg = TC_INTFLAG_MC0;
+#elif defined(__LPC17xx__)
 	STEP_TC->MCR &= ~(1u<<SBIT_MR0I);								 // disable Int on MR1
 #else
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;
@@ -186,7 +219,14 @@ extern "C" void STEP_TC_HANDLER() noexcept __attribute__ ((hot));
 
 void STEP_TC_HANDLER() noexcept
 {
-#if defined(__LPC17xx__)
+#if SAME5x
+	uint8_t tcsr = StepTc->INTFLAG.reg;								// read the status register, which clears the status bits
+	tcsr &= StepTc->INTENSET.reg;									// select only enabled interrupts
+
+	if ((tcsr & TC_INTFLAG_MC0) != 0)								// the step interrupt uses MC0 compare
+	{
+		StepTc->INTENCLR.reg = TC_INTFLAG_MC0;						// disable the interrupt (no need to clear it, we do that before we re-enable it)
+#elif defined(__LPC17xx__)
 	uint32_t regval = STEP_TC->IR;
 	//find which Match Register triggered the interrupt
 	if (regval & (1u << SBIT_MRI0_IFM))								// Interrupt flag for match channel 1.

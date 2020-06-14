@@ -188,7 +188,7 @@ void TCC4_2_Handler          ( void ) __attribute__ ((weak, alias("Dummy_Handler
 #endif
 void TC0_Handler             ( void ) __attribute__ ((weak, alias("Dummy_Handler")));
 void TC1_Handler             ( void ) __attribute__ ((weak, alias("Dummy_Handler")));
-void TC2_Handler             ( void ) __attribute__ ((weak, alias("Dummy_Handler")));
+void TC2_Handler             ( void ) noexcept __attribute__ ((weak, alias("Dummy_Handler")));
 void TC3_Handler             ( void ) __attribute__ ((weak, alias("Dummy_Handler")));
 #ifdef ID_TC4
 void TC4_Handler             ( void ) __attribute__ ((weak, alias("Dummy_Handler")));

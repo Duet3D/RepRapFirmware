@@ -149,4 +149,16 @@ static inline uint32_t random(uint32_t howsmall, uint32_t howbig) noexcept
 	return random(howbig - howsmall) + howsmall;
 }
 
+// Set a pin high with no error checking
+inline void fastDigitalWriteHigh(uint32_t pin) noexcept
+{
+	hri_port_set_OUT_reg(PORT, GPIO_PORT(pin), 1U << GPIO_PIN(pin));
+}
+
+// Set a pin low with no error checking
+inline void fastDigitalWriteLow(uint32_t pin) noexcept
+{
+	hri_port_clear_OUT_reg(PORT, GPIO_PORT(pin), 1U << GPIO_PIN(pin));
+}
+
 #endif /* SRC_HARDWARE_SAME5X_CORE_H_ */
