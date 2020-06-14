@@ -13,7 +13,7 @@
 const uint32_t MCP3204_Frequency = 1000000;		// maximum for MCP3204 is 1MHz @ 2.7V, will be slightly higher at 3.3V
 
 // The MCP3204 samples input data on the rising edge and changes the output data on the rising edge.
-const uint8_t MCP3204_SpiMode = SPI_MODE_0;
+const SpiMode MCP3204_SpiMode = SPI_MODE_0;
 
 // Define the minimum interval between readings
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds

@@ -152,23 +152,4 @@ struct PinDescription
 	const char* pinNames;
 };
 
-// Definitions for the SAME5x that I can't find in the Microchip files
-static inline void delayMicroseconds(uint32_t) __attribute__((always_inline, unused));
-static inline void delayMicroseconds(uint32_t usec)
-{
-    // Based on Paul Stoffregen's implementation for Teensy 3.0 (http://www.pjrc.com/)
-    if (usec != 0)
-    {
-		uint32_t n = usec * (SystemCoreClock / 3000000);
-		asm volatile
-		(
-			".syntax unified"				"\n\t"
-			"L_%=_delayMicroseconds:"       "\n\t"
-			"subs   %0, #1"   				"\n\t"
-			"bne    L_%=_delayMicroseconds" "\n"
-			: "+r" (n) :
-		);
-    }
-}
-
 #endif /* SRC_HARDWARE_SAME5X_H_ */

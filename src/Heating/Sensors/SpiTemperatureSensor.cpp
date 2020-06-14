@@ -8,7 +8,7 @@
 #include "SpiTemperatureSensor.h"
 #include "Tasks.h"
 
-SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, uint8_t spiMode, uint32_t clockFrequency) noexcept
+SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, SpiMode spiMode, uint32_t clockFrequency) noexcept
 	: SensorWithPort(sensorNum, name)
 {
 	device.csPin = NoPin;
