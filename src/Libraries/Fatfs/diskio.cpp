@@ -44,8 +44,8 @@
 #include "compiler.h"
 #include "diskio.h"
 
-#include "ctrl_access.h"
-#include "conf_sd_mmc.h"
+#include <Libraries/sd_mmc/ctrl_access.h>
+#include <Libraries/sd_mmc/conf_sd_mmc.h>
 
 #include "RepRapFirmware.h"
 #include "RepRap.h"

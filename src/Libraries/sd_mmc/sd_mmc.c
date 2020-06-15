@@ -109,7 +109,7 @@ struct DriverInterface
 
 #if (SD_MMC_HSMCI_MEM_CNT != 0)
 
-# if SAME5x
+# ifdef __SAME54P20A__
 
 #  include <hal_mci_sync.h>
 
@@ -139,7 +139,7 @@ static const struct DriverInterface hsmciInterface = {
 
 # else
 
-#  include "hsmci.h"
+#  include <hsmci/hsmci.h>
 
 static const struct DriverInterface hsmciInterface = {
 	.select_device = hsmci_select_device,

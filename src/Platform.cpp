@@ -47,7 +47,7 @@
 # include "LPC/BoardConfig.h"
 #endif
 
-#include "sd_mmc.h"
+#include <Libraries/sd_mmc/sd_mmc.h>
 
 #if SUPPORT_TMC2660
 # include "Movement/StepperDrivers/TMC2660.h"

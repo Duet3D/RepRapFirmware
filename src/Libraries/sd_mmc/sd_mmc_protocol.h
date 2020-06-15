@@ -108,6 +108,11 @@ extern "C" {
  * @{
  */
 
+/****************************************** WARNING **********************************************
+ * There is a copy of this file in project CoreNG because it is #included by the HSMCI driver
+ * So beware of changing this file, they must be kept in step!
+ *************************************************************************************************/
+
 //! Value to define a SD/MMC/SDIO command
 typedef uint32_t sdmmc_cmd_def_t;
 

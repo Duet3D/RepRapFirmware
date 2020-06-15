@@ -64,7 +64,7 @@
  * @{
  */
 
-#include "../SharedSpi/SharedSpi.h"
+#include <SharedSpi.h>
 
 // Enable debug information for SD/MMC SPI module
 #ifdef SD_MMC_SPI_DEBUG
