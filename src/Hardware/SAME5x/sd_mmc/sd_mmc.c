@@ -1395,6 +1395,22 @@ bool sd_mmc_is_write_protected(uint8_t slot)
 	return false;
 }
 
+#if 1	// dc42
+
+// Unmount the card. Must call this to force it to be re-initialised when changing card.
+void sd_mmc_unmount(uint8_t slot)
+{
+	sd_mmc_cards[slot].state = SD_MMC_CARD_STATE_NO_CARD;
+}
+
+// Get the interface speed in bytes/sec
+uint32_t sd_mmc_get_interface_speed(uint8_t slot)
+{
+	return sd_mmc_cards[slot].iface->getInterfaceSpeed();
+}
+
+#endif
+
 sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_block)
 {
 	sd_mmc_err_t sd_mmc_err;
@@ -1666,22 +1682,6 @@ sd_mmc_err_t sdio_write_extended(uint8_t slot, uint8_t func_num, uint32_t addr, 
 	sd_mmc_deselect_slot();
 	return SD_MMC_OK;
 }
-#endif
-
-#if 1	// dc42
-
-// Unmount the card. Must call this to force it to be re-initialised when changing card.
-void sd_mmc_unmount(uint8_t slot)
-{
-	sd_mmc_cards[slot].state = SD_MMC_CARD_STATE_NO_CARD;
-}
-
-// Get the interface speed in bytes/sec
-uint32_t sd_mmc_get_interface_speed(uint8_t slot)
-{
-	return sd_mmc_cards[slot].iface->getInterfaceSpeed();
-}
-
 #endif
 
 /** @} */
