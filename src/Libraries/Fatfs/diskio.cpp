@@ -41,10 +41,10 @@
  *
  */
 
-#include "ctrl_access.h"
 #include "compiler.h"
-
 #include "diskio.h"
+
+#include "ctrl_access.h"
 #include "conf_sd_mmc.h"
 
 #include "RepRapFirmware.h"

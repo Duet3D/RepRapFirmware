@@ -1156,7 +1156,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 #endif
 
 	const uint8_t drive = id.localDriver;
-	if (gb.GetCommandFraction() != 0)
+	if (gb.GetCommandFraction() > 0)
 	{
 #ifdef DUET3
 		// Main board drivers do not support closed loop modes

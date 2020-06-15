@@ -4,9 +4,7 @@
 #include <ObjectModel/ObjectModel.h>
 #include <Libraries/Fatfs/diskio.h>
 
-#if !SAME5x		//temp!!!!
 #include <sd_mmc.h>
-#endif
 
 #if !defined(__LPC17xx__) && !SAME5x
 # include <sam/drivers/hsmci/hsmci.h>
