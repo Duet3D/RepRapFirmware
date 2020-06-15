@@ -1,69 +1,105 @@
-/* Auto-generated config file conf_sd_mmc.h */
-#ifndef CONF_SD_MMC_H
-#define CONF_SD_MMC_H
+/**
+ * \file
+ *
+ * \brief SD/MMC stack configuration file.
+ *
+ * Copyright (c) 2014-2015 Atmel Corporation. All rights reserved.
+ *
+ * \asf_license_start
+ *
+ * \page License
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. The name of Atmel may not be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * 4. This software may only be redistributed and used in connection with an
+ *    Atmel microcontroller product.
+ *
+ * THIS SOFTWARE IS PROVIDED BY ATMEL "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT ARE
+ * EXPRESSLY AND SPECIFICALLY DISCLAIMED. IN NO EVENT SHALL ATMEL BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * \asf_license_stop
+ *
+ */
+/*
+ * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
+ */
 
-// <q> Enable the SDIO support
-// <id> conf_sdio_support
-#define CONF_SDIO_SUPPORT 0
+#ifndef CONF_SD_MMC_H_INCLUDED
+#define CONF_SD_MMC_H_INCLUDED
 
-// <q> Enable the MMC card support
-// <id> conf_mmc_support
-#define CONF_MMC_SUPPORT 1
+// Define this to enable the SPI mode instead of Multimedia Card interface mode
+//#define SD_MMC_SPI_MODE
 
-// <q> Enable the OS support
-// <id> conf_sd_mmc_os_support
-#ifndef CONF_OS_SUPPORT
-#define CONF_OS_SUPPORT 0
+// Define this to enable the SDIO support
+//#define SDIO_SUPPORT_ENABLE
+
+// Define this to enable the debug trace to the current standard output (stdio)
+//#define SD_MMC_DEBUG
+
+/*! \name board MCI SD/MMC slot template definition
+ *
+ * The GPIO and MCI/HSMCI connections of the SD/MMC Connector must be added
+ * in board.h file.
+ */
+
+// SD card configuration for Duet and Duet WiFi
+#define SD_MMC_ENABLE
+
+#if defined(__RADDS__)
+
+#define SD_MMC_HSMCI_MEM_CNT		0			// Number of HSMCI card slots supported
+#define SD_MMC_SPI_MEM_CNT			2			// Number of SPI card slots supported
+
+#define SD_MMC_SPI_MAX_CLOCK		(4000000)	// Max 4MHz clock for SPI cards, to allow a reasonable cable length
+
+#define SD_MMC_WP_DETECT_VALUE		false
+
+#elif defined(__ALLIGATOR__)
+
+#define SD_MMC_HSMCI_MEM_CNT		0			// Number of HSMCI card slots supported
+#define SD_MMC_SPI_MEM_CNT			1			// Number of SPI card slots supported
+
+#define SD_MMC_SPI_MAX_CLOCK		(20000000)	// Max 20MHz clock for onboard SPI cards
+
+#define SD_MMC_WP_DETECT_VALUE		false
+
+
+#else
+
+#define CONF_BOARD_SD_MMC_HSMCI		1			// Enable HSMCI
+#define SD_MMC_HSMCI_MEM_CNT		1			// Number of HSMCI card slots supported
+#define SD_MMC_HSMCI_SLOT_0_SIZE	4			// HSMCI bus width
+#define SD_MMC_SPI_MEM_CNT			1			// Number of SPI card slots supported
+
+#define SD_MMC_SPI_MAX_CLOCK		(4000000)	// Max 4MHz clock for SPI cards, to allow a reasonable cable length
+
+#define SD_MMC_WP_DETECT_VALUE		false
+
 #endif
 
-// Detection (card/write protect) timeout (ms/ticks)
-// conf_sd_mmc_debounce
-#ifndef CONF_SD_MMC_DEBOUNCE
-#define CONF_SD_MMC_DEBOUNCE 1000
-#endif
+#define SD_MMC_MEM_CNT				(SD_MMC_HSMCI_MEM_CNT + SD_MMC_SPI_MEM_CNT)
 
-#define CONF_SD_MMC_MEM_CNT 2
+#define ACCESS_MEM_TO_RAM_ENABLED
 
-// <e> SD/MMC Slot 0
-// <id> conf_sd_mmc_0_enable
-#define CONF_SD_MMC_0_ENABLE 1
+#endif /* CONF_SD_MMC_H_INCLUDED */
 
-// <e> Card Detect (CD) 0 Enable
-// <id> conf_sd_mmc_0_cd_detect_en
-#ifndef CONF_SD_MMC_0_CD_DETECT_EN
-#define CONF_SD_MMC_0_CD_DETECT_EN 0
-#endif
-
-// <o> Card Detect (CD) detection level
-// <1=> High
-// <0=> Low
-// <id> conf_sd_mmc_0_cd_detect_value
-#ifndef CONF_SD_MMC_0_CD_DETECT_VALUE
-#define CONF_SD_MMC_0_CD_DETECT_VALUE 0
-#endif
-// </e>
-
-// <e> Write Protect (WP) 0 Enable
-// <id> conf_sd_mmc_0_wp_detect_en
-#ifndef CONF_SD_MMC_0_WP_DETECT_EN
-#define CONF_SD_MMC_0_WP_DETECT_EN 0
-#endif
-
-// <o> Write Protect (WP) detection level
-// <1=> High
-// <0=> Low
-// <id> conf_sd_mmc_0_wp_detect_value
-#ifndef CONF_SD_MMC_0_WP_DETECT_VALUE
-#define CONF_SD_MMC_0_WP_DETECT_VALUE 1
-#endif
-// </e>
-
-// </e>
-
-#ifndef CONF_MCI_OS_SUPPORT
-#define CONF_MCI_OS_SUPPORT 0
-#endif
-
-// <<< end of configuration section >>>
-
-#endif // CONF_SD_MMC_H

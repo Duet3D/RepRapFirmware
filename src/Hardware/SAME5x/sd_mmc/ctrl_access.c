@@ -60,262 +60,38 @@
 //_____ I N C L U D E S ____________________________________________________
 
 #include "compiler.h"
-#include "preprocessor.h"
 #include "ctrl_access.h"
+#include "sd_mmc_mem.h"
 
 
-//_____ D E F I N I T I O N S ______________________________________________
-
-#ifdef FREERTOS_USED
-
-/*! \name LUN Access Protection Macros
- */
-//! @{
-
-/*! \brief Locks accesses to LUNs.
- *
- * \return \c true if the access was successfully locked, else \c false.
- */
-#define Ctrl_access_lock()    ctrl_access_lock()
-
-/*! \brief Unlocks accesses to LUNs.
- */
-#define Ctrl_access_unlock()  xSemaphoreGive(ctrl_access_semphr)
-
-//! @}
-
-//! Handle to the semaphore protecting accesses to LUNs.
-static xSemaphoreHandle ctrl_access_semphr = NULL;
-
-#else
-
-/*! \name LUN Access Protection Macros
- */
-//! @{
-
-/*! \brief Locks accesses to LUNs.
- *
- * \return \c true if the access was successfully locked, else \c false.
- */
-#define Ctrl_access_lock()    true
-
-/*! \brief Unlocks accesses to LUNs.
- */
-#define Ctrl_access_unlock()
-
-//! @}
-
-#endif  // FREERTOS_USED
-
-
-#if MAX_LUN
-
-/*! \brief Initializes an entry of the LUN descriptor table.
- *
- * \param lun Logical Unit Number.
- *
- * \return LUN descriptor table entry initializer.
- */
-#define Lun_desc_entry(lun) \
-  {\
-    TPASTE3(Lun_, lun, _test_unit_ready),\
-    TPASTE3(Lun_, lun, _read_capacity),\
-    TPASTE3(Lun_, lun, _unload),\
-    TPASTE3(Lun_, lun, _wr_protect),\
-    TPASTE3(Lun_, lun, _removal),\
-    TPASTE3(Lun_, lun, _mem_2_ram),\
-    TPASTE3(Lun_, lun, _ram_2_mem),\
-    TPASTE3(LUN_, lun, _NAME)\
-  }
-
-//! LUN descriptor table.
-static const struct
+Ctrl_status mem_test_unit_ready(uint8_t lun)
 {
-  Ctrl_status (*test_unit_ready)(void);
-  Ctrl_status (*read_capacity)(U32 *);
-  bool (*unload)(bool);
-  bool (*wr_protect)(void);
-  bool (*removal)(void);
-#if ACCESS_MEM_TO_RAM == true
-  Ctrl_status (*mem_2_ram)(U32, void *, U32);
-  Ctrl_status (*ram_2_mem)(U32, const void *, U32);
-#endif
-  const char *name;
-} lun_desc[MAX_LUN] =
-{
-#if LUN_0 == ENABLE
-# ifndef Lun_0_unload
-#  define Lun_0_unload NULL
-# endif
-  Lun_desc_entry(0),
-#endif
-#if LUN_1 == ENABLE
-# ifndef Lun_1_unload
-#  define Lun_1_unload NULL
-# endif
-  Lun_desc_entry(1),
-#endif
-#if LUN_2 == ENABLE
-# ifndef Lun_2_unload
-#  define Lun_2_unload NULL
-# endif
-  Lun_desc_entry(2),
-#endif
-#if LUN_3 == ENABLE
-# ifndef Lun_3_unload
-#  define Lun_3_unload NULL
-# endif
-  Lun_desc_entry(3),
-#endif
-#if LUN_4 == ENABLE
-# ifndef Lun_4_unload
-#  define Lun_4_unload NULL
-# endif
-  Lun_desc_entry(4),
-#endif
-#if LUN_5 == ENABLE
-# ifndef Lun_5_unload
-#  define Lun_5_unload NULL
-# endif
-  Lun_desc_entry(5),
-#endif
-#if LUN_6 == ENABLE
-# ifndef Lun_6_unload
-#  define Lun_6_unload NULL
-# endif
-  Lun_desc_entry(6),
-#endif
-#if LUN_7 == ENABLE
-# ifndef Lun_7_unload
-#  define Lun_7_unload NULL
-# endif
-  Lun_desc_entry(7)
-#endif
-};
-
-#endif
-
-
-/*! \name Control Interface
- */
-//! @{
-
-
-Ctrl_status mem_test_unit_ready(U8 lun)
-{
-  Ctrl_status status;
-
-  if (!Ctrl_access_lock()) return CTRL_FAIL;
-
-  status =
-#if MAX_LUN
-         (lun < MAX_LUN) ? lun_desc[lun].test_unit_ready() :
-#endif
-                             CTRL_FAIL;
-
-  Ctrl_access_unlock();
-
-  return status;
+	return (lun < MAX_LUN) ? sd_mmc_test_unit_ready(lun) : CTRL_FAIL;
 }
 
-
-Ctrl_status mem_read_capacity(U8 lun, U32 *u32_nb_sector)
+Ctrl_status mem_read_capacity(uint8_t lun, uint32_t *u32_nb_sector)
 {
-  Ctrl_status status;
-
-  if (!Ctrl_access_lock()) return CTRL_FAIL;
-
-  status =
-#if MAX_LUN
-         (lun < MAX_LUN) ? lun_desc[lun].read_capacity(u32_nb_sector) :
-#endif
-                             CTRL_FAIL;
-
-  Ctrl_access_unlock();
-
-  return status;
+	return (lun < MAX_LUN) ? sd_mmc_read_capacity(lun, u32_nb_sector) : CTRL_FAIL;
 }
 
-
-U8 mem_sector_size(U8 lun)
+uint8_t mem_sector_size(uint8_t lun)
 {
-  U8 sector_size;
-
-  if (!Ctrl_access_lock()) return 0;
-
-  sector_size =
-#if MAX_LUN
-              (lun < MAX_LUN) ? 1 :
-#endif
-                                  0;
-
-  Ctrl_access_unlock();
-
-  return sector_size;
+	return 1;
 }
 
-
-bool mem_wr_protect(U8 lun)
+bool mem_wr_protect(uint8_t lun)
 {
-  bool wr_protect;
-
-  if (!Ctrl_access_lock()) return true;
-
-  wr_protect =
-#if MAX_LUN
-             (lun < MAX_LUN) ? lun_desc[lun].wr_protect() :
-#endif
-                                 true;
-
-  Ctrl_access_unlock();
-
-  return wr_protect;
+	return (lun < MAX_LUN) ? sd_mmc_wr_protect(lun) : true;
 }
 
-
-Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram, uint32_t numBlocks)
+Ctrl_status memory_2_ram(uint8_t lun, uint32_t addr, void *ram, uint32_t numBlocks)
 {
-  Ctrl_status status;
-#if MAX_LUN==0
-  UNUSED(lun);
-#endif
-
-  if (!Ctrl_access_lock()) return CTRL_FAIL;
-
-  memory_start_read_action(1);
-  status =
-#if MAX_LUN
-           (lun < MAX_LUN) ? lun_desc[lun].mem_2_ram(addr, ram, numBlocks) :
-#endif
-                             CTRL_FAIL;
-  memory_stop_read_action();
-
-  Ctrl_access_unlock();
-
-  return status;
+	return (lun < MAX_LUN) ? sd_mmc_mem_2_ram(lun, addr, ram, numBlocks) : CTRL_FAIL;
 }
 
-
-Ctrl_status ram_2_memory(U8 lun, U32 addr, const void *ram, uint32_t numBlocks)
+Ctrl_status ram_2_memory(uint8_t lun, uint32_t addr, const void *ram, uint32_t numBlocks)
 {
-  Ctrl_status status;
-#if MAX_LUN==0
-  UNUSED(lun);
-#endif
-
-  if (!Ctrl_access_lock()) return CTRL_FAIL;
-
-  memory_start_write_action(1);
-  status =
-#if MAX_LUN
-           (lun < MAX_LUN) ? lun_desc[lun].ram_2_mem(addr, ram, numBlocks) :
-#endif
-                             CTRL_FAIL;
-  memory_stop_write_action();
-
-  Ctrl_access_unlock();
-
-  return status;
+	return (lun < MAX_LUN) ? sd_mmc_ram_2_mem(lun, addr, ram, numBlocks) : CTRL_FAIL;
 }
 
 

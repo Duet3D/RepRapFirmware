@@ -74,99 +74,21 @@ extern "C" {
  */
 
 #include "compiler.h"
-#include "conf_access.h"
 
 #ifndef SECTOR_SIZE
-#define SECTOR_SIZE  512
+# define SECTOR_SIZE  512
 #endif
 
 //! Status returned by CTRL_ACCESS interfaces.
 typedef enum
 {
-  CTRL_GOOD       = PASS,     //!< Success, memory ready.
-  CTRL_FAIL       = FAIL,     //!< An error occurred.
-  CTRL_NO_PRESENT = FAIL + 1, //!< Memory unplugged.
-  CTRL_BUSY       = FAIL + 2  //!< Memory not initialized or changed.
+  CTRL_GOOD       = 0,		//!< Success, memory ready.
+  CTRL_FAIL       = 1,		//!< An error occurred.
+  CTRL_NO_PRESENT = 2,		//!< Memory unplugged.
+  CTRL_BUSY       = 3		//!< Memory not initialized or changed.
 } Ctrl_status;
 
-
-// FYI: Each Logical Unit Number (LUN) corresponds to a memory.
-
-// Check LUN defines.
-#ifndef LUN_0
-  #error LUN_0 must be defined as ENABLE or DISABLE in conf_access.h
-#endif
-#ifndef LUN_1
-  #error LUN_1 must be defined as ENABLE or DISABLE in conf_access.h
-#endif
-#ifndef LUN_2
-  #error LUN_2 must be defined as ENABLE or DISABLE in conf_access.h
-#endif
-#ifndef LUN_3
-  #error LUN_3 must be defined as ENABLE or DISABLE in conf_access.h
-#endif
-#ifndef LUN_4
-  #error LUN_4 must be defined as ENABLE or DISABLE in conf_access.h
-#endif
-#ifndef LUN_5
-  #error LUN_5 must be defined as ENABLE or DISABLE in conf_access.h
-#endif
-#ifndef LUN_6
-  #error LUN_6 must be defined as ENABLE or DISABLE in conf_access.h
-#endif
-#ifndef LUN_7
-  #error LUN_7 must be defined as ENABLE or DISABLE in conf_access.h
-#endif
-
-/*! \name LUN IDs
- */
-//! @{
-#define LUN_ID_0        (0)                 //!< First static LUN.
-#define LUN_ID_1        (LUN_ID_0 + LUN_0)
-#define LUN_ID_2        (LUN_ID_1 + LUN_1)
-#define LUN_ID_3        (LUN_ID_2 + LUN_2)
-#define LUN_ID_4        (LUN_ID_3 + LUN_3)
-#define LUN_ID_5        (LUN_ID_4 + LUN_4)
-#define LUN_ID_6        (LUN_ID_5 + LUN_5)
-#define LUN_ID_7        (LUN_ID_6 + LUN_6)
-#define MAX_LUN         (LUN_ID_7 + LUN_7)  //!< Number of static LUNs.
-#define LUN_ID_USB      (MAX_LUN)           //!< First dynamic LUN (USB host mass storage).
-//! @}
-
-
-// Include LUN header files.
-#if LUN_0 == ENABLE
-  #include LUN_0_INCLUDE
-#endif
-#if LUN_1 == ENABLE
-  #include LUN_1_INCLUDE
-#endif
-#if LUN_2 == ENABLE
-  #include LUN_2_INCLUDE
-#endif
-#if LUN_3 == ENABLE
-  #include LUN_3_INCLUDE
-#endif
-#if LUN_4 == ENABLE
-  #include LUN_4_INCLUDE
-#endif
-#if LUN_5 == ENABLE
-  #include LUN_5_INCLUDE
-#endif
-#if LUN_6 == ENABLE
-  #include LUN_6_INCLUDE
-#endif
-#if LUN_7 == ENABLE
-  #include LUN_7_INCLUDE
-#endif
-
-
-// Check the configuration of write protection in conf_access.h.
-#ifndef GLOBAL_WR_PROTECT
-  #error GLOBAL_WR_PROTECT must be defined as true or false in conf_access.h
-#endif
-
-
+#define MAX_LUN         2
 
 /*! \name Control Interface
  */
@@ -184,7 +106,7 @@ typedef enum
  *
  * \return Status.
  */
-extern Ctrl_status mem_test_unit_ready(U8 lun) noexcept;
+extern Ctrl_status mem_test_unit_ready(uint8_t lun) noexcept;
 
 /*! \brief Returns the address of the last valid sector (512 bytes) in the
  *         memory.
@@ -194,7 +116,7 @@ extern Ctrl_status mem_test_unit_ready(U8 lun) noexcept;
  *
  * \return Status.
  */
-extern Ctrl_status mem_read_capacity(U8 lun, U32 *u32_nb_sector) noexcept;
+extern Ctrl_status mem_read_capacity(uint8_t lun, uint32_t *u32_nb_sector) noexcept;
 
 /*! \brief Returns the size of the physical sector.
  *
@@ -202,7 +124,7 @@ extern Ctrl_status mem_read_capacity(U8 lun, U32 *u32_nb_sector) noexcept;
  *
  * \return Sector size (unit: 512 bytes).
  */
-extern U8 mem_sector_size(U8 lun) noexcept;
+extern uint8_t mem_sector_size(uint8_t lun) noexcept;
 
 /*! \brief Returns the write-protection state of the memory.
  *
@@ -213,7 +135,7 @@ extern U8 mem_sector_size(U8 lun) noexcept;
  * \note Only used by removable memories with hardware-specific write
  *       protection.
  */
-extern bool mem_wr_protect(U8 lun) noexcept;
+extern bool mem_wr_protect(uint8_t lun) noexcept;
 
 /*! \brief Copies 1 data sector from the memory to RAM.
  *
@@ -223,7 +145,7 @@ extern bool mem_wr_protect(U8 lun) noexcept;
  *
  * \return Status.
  */
-extern Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram, uint32_t numBlocks) noexcept;
+extern Ctrl_status memory_2_ram(uint8_t lun, uint32_t addr, void *ram, uint32_t numBlocks) noexcept;
 
 /*! \brief Copies 1 data sector from RAM to the memory.
  *
@@ -233,7 +155,7 @@ extern Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram, uint32_t numBlocks)
  *
  * \return Status.
  */
-extern Ctrl_status ram_2_memory(U8 lun, U32 addr, const void *ram, uint32_t numBlocks) noexcept;
+extern Ctrl_status ram_2_memory(uint8_t lun, uint32_t addr, const void *ram, uint32_t numBlocks) noexcept;
 
 //! @}
 
