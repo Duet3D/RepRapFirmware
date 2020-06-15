@@ -1614,7 +1614,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	do
 	{
 		espWaitingTask = TaskBase::GetCallerTaskHandle();
-		if (TaskBase::Take(WifiResponseTimeoutMillis))
+		if (!TaskBase::Take(WifiResponseTimeoutMillis))
 		{
 			if (reprap.Debug(moduleNetwork))
 			{

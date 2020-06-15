@@ -1377,7 +1377,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			currentDriver->StartTransfer();
 
 			// Wait for the end-of-transfer interrupt
-			const bool timedOut = TaskBase::Take(TransferTimeout);
+			const bool timedOut = !TaskBase::Take(TransferTimeout);
 #if TMC22xx_USES_SERCOM
 			DmacManager::DisableCompletedInterrupt(TmcRxDmaChannel);
 #elif TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER
