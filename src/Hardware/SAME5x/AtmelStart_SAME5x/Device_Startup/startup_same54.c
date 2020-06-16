@@ -27,7 +27,7 @@
  *
  */
 
-#include "same51.h"
+#include "same54.h"
 
 /* Initialize segments */
 extern uint32_t _sfixed;
@@ -530,7 +530,7 @@ void Reset_Handler(void)
         __DSB();
         __ISB();
 #else
-# warning FPU not used
+# error FPU not used
 #endif
 
         /* Initialize the C library */

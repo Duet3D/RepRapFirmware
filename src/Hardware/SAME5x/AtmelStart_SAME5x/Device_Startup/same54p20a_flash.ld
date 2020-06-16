@@ -1,9 +1,9 @@
 /**
  * \file
  *
- * \brief Linker script for running in internal FLASH on the SAME51N19A
+ * \brief Linker script for running in internal FLASH on the SAME54P20A
  *
- * Copyright (c) 2017 Microchip Technology Inc.
+ * Copyright (c) 2019 Microchip Technology Inc.
  *
  * \asf_license_start
  *
@@ -33,14 +33,16 @@ OUTPUT_ARCH(arm)
 SEARCH_DIR(.)
 
 /* Memory Spaces Definitions */
-/* Modified to provide for a 64kb bootloader at the start of flash memory. We choose 64K because that is the largest flash block size on the SAME51 processors. */
 MEMORY
 {
-  rom      (rx)  : ORIGIN = 0x00010000, LENGTH = 0x00070000
-  ram      (rwx) : ORIGIN = 0x20000000, LENGTH = 0x00030000
+  rom      (rx)  : ORIGIN = 0x00000000, LENGTH = 0x00100000
+  ram      (rwx) : ORIGIN = 0x20000000, LENGTH = 0x00040000
   bkupram  (rwx) : ORIGIN = 0x47000000, LENGTH = 0x00002000
   qspi     (rwx) : ORIGIN = 0x04000000, LENGTH = 0x01000000
 }
+
+/* The stack size used by the application. NOTE: you need to adjust according to your application. */
+STACK_SIZE = DEFINED(STACK_SIZE) ? STACK_SIZE : DEFINED(__stack_size__) ? __stack_size__ : 0x10000;
 
 /* Section Definitions */
 SECTIONS
@@ -115,9 +117,7 @@ SECTIONS
         _erelocate = .;
     } > ram
 
- 	_firmware_crc = _etext + (_erelocate - _srelocate);		/* We append the CRC32 to the binary file. This is its offset in memory. */
-
-   .bkupram (NOLOAD):
+    .bkupram (NOLOAD):
     {
         . = ALIGN(8);
         _sbkupram = .;
@@ -148,21 +148,16 @@ SECTIONS
         _ezero = .;
     } > ram
 
-    . = ALIGN(4);
-    _end = . ;
-
-	/* .stack_dummy section doesn't contains any symbols. It is only
-       used for linker to calculate size of stack sections, and assign
-       values to stack symbols later */
-    .stack_dummy :
+    /* stack section */
+    .stack (NOLOAD):
     {
-        *(.stack*)
+        . = ALIGN(8);
+        _sstack = .;
+        . = . + STACK_SIZE;
+        . = ALIGN(8);
+        _estack = .;
     } > ram
 
-    /* Set stack top to end of ram, and stack limit move down by
-     * size of stack_dummy section */
-    __StackTop = ORIGIN(ram) + LENGTH(ram);
-    __StackLimit = __StackTop - SIZEOF(.stack_dummy);
-    PROVIDE(_sstack = __StackLimit);
-    PROVIDE(_estack = __StackTop);
+    . = ALIGN(4);
+    _end = . ;
 }

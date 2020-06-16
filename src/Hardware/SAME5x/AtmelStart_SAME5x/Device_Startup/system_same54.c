@@ -27,7 +27,7 @@
  *
  */
 
-#include "same51.h"
+#include "same54.h"
 
 /**
  * Initial system clock frequency. The System RC Oscillator (RCSYS) provides
