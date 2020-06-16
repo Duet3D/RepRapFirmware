@@ -59,7 +59,6 @@
 
 //_____ I N C L U D E S ____________________________________________________
 
-#include "compiler.h"
 #include "ctrl_access.h"
 #include "sd_mmc_mem.h"
 

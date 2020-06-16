@@ -44,20 +44,11 @@
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 
-#include "Core.h"
+#include <Core.h>		// for digitalRead() and pinMode()
 #include <string.h>
 #include "sd_mmc_protocol.h"
 #include "sd_mmc.h"
 #include "conf_sd_mmc.h"
-
-#include "Core.h"		// for digitalRead() and pinMode()
-
-#ifdef FREERTOS_USED
-#include "FreeRTOS.h"
-#include "task.h"
-#include "portmacro.h"
-#include "projdefs.h"
-#endif
 
 /**
  * \ingroup sd_mmc_stack
@@ -113,33 +104,100 @@ struct DriverInterface
 
 #  include <hal_mci_sync.h>
 
-static const struct DriverInterface hsmciInterface = {
-	.select_device = mci_sync_select_device,
-	.deselect_device = mci_sync_deselect_device,
-	.get_bus_width = mci_sync_get_bus_width,
-	.is_high_speed_capable = mci_sync_is_high_speed_capable,
-	.send_clock = mci_sync_send_clock,
-	.send_cmd = mci_sync_send_cmd,
-	.get_response = mci_sync_get_response,
-	.get_response_128 = mci_sync_get_response_128,
-	.adtc_start = mci_sync_adtc_start,
-	.adtc_stop = mci_sync_send_cmd,			// adtc_stop aliased to send_cmd as in the ASF original
-	.read_word = mci_sync_read_word,
-	.write_word = mci_sync_write_word,
-	.start_read_blocks = mci_sync_start_read_blocks,
-	.wait_end_of_read_blocks = mci_sync_wait_end_of_read_blocks,
-	.start_write_blocks = mci_sync_start_write_blocks,
-	.wait_end_of_write_blocks = mci_sync_wait_end_of_write_blocks,
-#if 1	//dc42
-	.getInterfaceSpeed = mci_sync_get_speed,
-#endif
-	.set_idle_func = mci_sync_set_idle_func,
-	.is_spi = false
-};
+// Translations of hsmci function calls to mci_sync functions
+
+struct mci_sync_desc mci = { { SDHC1, 0, 0, 0 } };
+
+uint8_t hsmci_get_bus_width(uint8_t slot) noexcept
+{
+	return mci_sync_get_bus_width(&mci, slot);
+}
+
+bool hsmci_is_high_speed_capable(void) noexcept
+{
+	return mci_sync_is_high_speed_capable(&mci);
+}
+
+void hsmci_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept
+{
+	(void)mci_sync_select_device(&mci, slot, clock, bus_width, high_speed);
+}
+
+void hsmci_deselect_device(uint8_t slot) noexcept
+{
+	(void)mci_sync_deselect_device(&mci, slot);
+}
+
+void hsmci_send_clock(void) noexcept
+{
+	mci_sync_send_clock(&mci);
+}
+
+bool hsmci_send_cmd(sdmmc_cmd_def_t cmd, uint32_t arg) noexcept
+{
+	return mci_sync_send_cmd(&mci, cmd, arg);
+}
+
+uint32_t hsmci_get_response(void) noexcept
+{
+	return mci_sync_get_response(&mci);
+}
+
+void hsmci_get_response_128(uint8_t* response) noexcept
+{
+	mci_sync_get_response_128(&mci, response);
+}
+
+bool hsmci_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, bool access_block) noexcept
+{
+	return mci_sync_adtc_start(&mci, cmd, arg, block_size, nb_block, access_block);
+}
+
+bool hsmci_read_word(uint32_t* value) noexcept
+{
+	return mci_sync_read_word(&mci, value);
+}
+
+bool hsmci_write_word(uint32_t value) noexcept
+{
+	return mci_sync_write_word(&mci, value);
+}
+
+bool hsmci_start_read_blocks(void *dest, uint16_t nb_block) noexcept
+{
+	return mci_sync_start_read_blocks(&mci, dest, nb_block);
+}
+
+bool hsmci_wait_end_of_read_blocks(void) noexcept
+{
+	return mci_sync_wait_end_of_read_blocks(&mci);
+}
+
+bool hsmci_start_write_blocks(const void *src, uint16_t nb_block) noexcept
+{
+	return mci_sync_start_write_blocks(&mci, src, nb_block);
+}
+
+bool hsmci_wait_end_of_write_blocks(void) noexcept
+{
+	return mci_sync_wait_end_of_write_blocks(&mci);
+}
+
+uint32_t hsmci_get_speed(void) noexcept
+{
+	return mci_sync_get_speed();
+}
+
+driverIdleFunc_t hsmci_set_idle_func(driverIdleFunc_t func) noexcept
+{
+	return mci_sync_set_idle_func(func);
+}
 
 # else
 
 #  include <hsmci/hsmci.h>
+
+# endif
 
 static const struct DriverInterface hsmciInterface = {
 	.select_device = hsmci_select_device,
@@ -164,8 +222,6 @@ static const struct DriverInterface hsmciInterface = {
 	.set_idle_func = hsmci_set_idle_func,
 	.is_spi = false
 };
-
-# endif
 
 #endif
 
@@ -1746,7 +1802,12 @@ void sd_mmc_init(const Pin wpPins[], const Pin spiCsPins[])
 	sd_mmc_slot_sel = 0xFF;					// No slot selected
 
 #if SD_MMC_HSMCI_MEM_CNT != 0
+
+# ifdef __SAME54P20A__
+	mci_sync_init(&mci, SDHC1);
+# else
 	hsmci_init();
+# endif
 #endif
 
 #if SD_MMC_SPI_MEM_CNT != 0

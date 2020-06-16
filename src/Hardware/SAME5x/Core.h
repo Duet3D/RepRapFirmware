@@ -8,7 +8,6 @@
 #ifndef SRC_HARDWARE_SAME5X_CORE_H_
 #define SRC_HARDWARE_SAME5X_CORE_H_
 
-
 #ifdef __SAME54P20A__
 # include <same54.h>
 # define __ARM_ARCH_7M__	1
@@ -18,28 +17,19 @@
 # error unsupported processor
 #endif
 
-#include <cinttypes>				// for PRIu32 etc.
-#include <General/SimpleMath.h>
-#include <cctype>
-
-#include "AtmelStart_SAME5x/atmel_start_pins.h"
-
 #define SAM4E	0
 #define SAM4S	0
 #define SAM3XA	0
 #define SAME70	0
 
+#include <inttypes.h>				// for PRIu32 etc.
+#include <ctype.h>
+#include "AtmelStart_SAME5x/atmel_start_pins.h"
+
 typedef uint8_t DmaChannel;
 typedef uint8_t Pin;
-constexpr Pin NoPin = 0xFF;
 
-inline constexpr Pin PortAPin(unsigned int n) noexcept { return n; }
-inline constexpr Pin PortBPin(unsigned int n) noexcept { return 32+n; }
-inline constexpr Pin PortCPin(unsigned int n) noexcept { return 64+n; }
-inline constexpr Pin PortDPin(unsigned int n) noexcept { return 96+n; }
-
-uint32_t millis() noexcept;
-extern "C" uint32_t trueRandom() noexcept;
+const Pin NoPin = 0xFF;
 
 // Pin mode enumeration. Would ideally be a C++ scoped enum, but we need to use it from C library functions.
 enum PinMode
@@ -54,39 +44,44 @@ enum PinMode
 	SPECIAL,						// pin is used for the special function defined for it in the variant.cpp file
 	OUTPUT_PWM_LOW,					// PWM output mode, initially low
 	OUTPUT_PWM_HIGH,				// PWM output mode, initially high
-//	OUTPUT_LOW_OPEN_DRAIN,			// used in SX1509B expansion driver to put the pin in open drain output mode
-//	OUTPUT_HIGH_OPEN_DRAIN,			// used in SX1509B expansion driver to put the pin in open drain output mode
-//	OUTPUT_PWM_OPEN_DRAIN			// used in SX1509B expansion driver to put the pin in PWM output mode
 };
 
-typedef int8_t AnalogChannelNumber;	//TOD may need to change this
-constexpr AnalogChannelNumber NO_ADC = -1;
+#ifndef __cplusplus
 
-AnalogChannelNumber PinToAdcChannel(Pin p) noexcept;
+# include <stdbool.h>
+# define UNUSED(_x)	(void)_x
+# define Assert(expr) ((void) 0)
 
-enum InterruptMode
+#endif
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+uint32_t millis() noexcept;
+uint32_t trueRandom() noexcept;
+
+void pinMode(Pin pin, enum PinMode mode) noexcept;
+bool digitalRead(Pin pin) noexcept;
+
+static inline void delayMicroseconds(uint32_t) __attribute__((always_inline, unused));
+static inline void delayMicroseconds(uint32_t usec)
 {
-	INTERRUPT_MODE_NONE = 0,
-	INTERRUPT_MODE_LOW,
-	INTERRUPT_MODE_HIGH,
-	INTERRUPT_MODE_CHANGE,
-	INTERRUPT_MODE_FALLING,
-	INTERRUPT_MODE_RISING
-};
-
-union CallbackParameter
-{
-	void *vp;
-	uint32_t u32;
-	int32_t i32;
-
-	CallbackParameter(void *pp) noexcept : vp(pp) { }
-	CallbackParameter(uint32_t pp) noexcept : u32(pp) { }
-	CallbackParameter(int32_t pp) noexcept : i32(pp) { }
-	CallbackParameter() noexcept : u32(0) { }
-};
-
-typedef void (*StandardCallbackFunction)(CallbackParameter) noexcept;
+    // Based on Paul Stoffregen's implementation for Teensy 3.0 (http://www.pjrc.com/)
+    if (usec != 0)
+    {
+		uint32_t n = usec * (SystemCoreClock / 3000000);
+		asm volatile
+		(
+			".syntax unified"				"\n\t"
+			"L_%=_delayMicroseconds:"       "\n\t"
+			"subs   %0, #1"   				"\n\t"
+			"bne    L_%=_delayMicroseconds" "\n"
+			: "+r" (n) :
+		);
+    }
+}
 
 // Functions and macros to enable/disable interrupts
 static inline void cpu_irq_enable() noexcept
@@ -139,6 +134,47 @@ static inline bool inInterrupt() noexcept
 	return (__get_IPSR() & 0x01FF) != 0;
 }
 
+#ifdef __cplusplus
+}		// end extern "C"
+
+// The rest is available only when compiling in C++ mode
+
+#include <General/SimpleMath.h>
+
+inline constexpr Pin PortAPin(unsigned int n) noexcept { return n; }
+inline constexpr Pin PortBPin(unsigned int n) noexcept { return 32+n; }
+inline constexpr Pin PortCPin(unsigned int n) noexcept { return 64+n; }
+inline constexpr Pin PortDPin(unsigned int n) noexcept { return 96+n; }
+
+typedef int8_t AnalogChannelNumber;	//TOD may need to change this
+constexpr AnalogChannelNumber NO_ADC = -1;
+
+AnalogChannelNumber PinToAdcChannel(Pin p) noexcept;
+
+enum InterruptMode
+{
+	INTERRUPT_MODE_NONE = 0,
+	INTERRUPT_MODE_LOW,
+	INTERRUPT_MODE_HIGH,
+	INTERRUPT_MODE_CHANGE,
+	INTERRUPT_MODE_FALLING,
+	INTERRUPT_MODE_RISING
+};
+
+union CallbackParameter
+{
+	void *vp;
+	uint32_t u32;
+	int32_t i32;
+
+	CallbackParameter(void *pp) noexcept : vp(pp) { }
+	CallbackParameter(uint32_t pp) noexcept : u32(pp) { }
+	CallbackParameter(int32_t pp) noexcept : i32(pp) { }
+	CallbackParameter() noexcept : u32(0) { }
+};
+
+typedef void (*StandardCallbackFunction)(CallbackParameter) noexcept;
+
 static inline int32_t random(uint32_t howbig) noexcept
 {
 	return trueRandom() % howbig;
@@ -161,22 +197,6 @@ inline void fastDigitalWriteLow(uint32_t pin) noexcept
 	hri_port_clear_OUT_reg(PORT, GPIO_PORT(pin), 1U << GPIO_PIN(pin));
 }
 
-static inline void delayMicroseconds(uint32_t) __attribute__((always_inline, unused));
-static inline void delayMicroseconds(uint32_t usec)
-{
-    // Based on Paul Stoffregen's implementation for Teensy 3.0 (http://www.pjrc.com/)
-    if (usec != 0)
-    {
-		uint32_t n = usec * (SystemCoreClock / 3000000);
-		asm volatile
-		(
-			".syntax unified"				"\n\t"
-			"L_%=_delayMicroseconds:"       "\n\t"
-			"subs   %0, #1"   				"\n\t"
-			"bne    L_%=_delayMicroseconds" "\n"
-			: "+r" (n) :
-		);
-    }
-}
+#endif	// #if __cplusplus
 
 #endif /* SRC_HARDWARE_SAME5X_CORE_H_ */

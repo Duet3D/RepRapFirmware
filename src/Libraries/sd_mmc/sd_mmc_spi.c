@@ -44,15 +44,12 @@
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 #include <compiler.h>
-#include <status_codes.h>
-#include <board.h>
-#include <string.h>
 #include "Core.h"
-#include "conf_board.h"
 #include "conf_sd_mmc.h"
 #include "sd_mmc_protocol.h"
 #include "sd_mmc_spi.h"
 #include "sd_mmc.h"
+#include <string.h>
 
 #if SD_MMC_SPI_MEM_CNT != 0
 
