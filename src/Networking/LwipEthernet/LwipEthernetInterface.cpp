@@ -18,8 +18,9 @@
 #include "Networking/FtpResponder.h"
 #include "Networking/TelnetResponder.h"
 #include "General/IP4String.h"
-#include "Version.h"
+#include "Version.h"								// version is reported by MDNS
 #include "GMAC/ethernet_sam.h"
+#include <Hardware/SAME70/same70_gmac.h>			// for error counts used in function Diagnostics
 
 extern "C"
 {

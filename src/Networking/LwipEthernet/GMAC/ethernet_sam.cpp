@@ -42,6 +42,10 @@
  */
 
 #include "ethernet_sam.h"
+
+#include <Hardware/SAME70/same70_gmac.h>
+#include "lwip/netif.h"
+
 #include <cstring>
 
 extern "C" {
@@ -164,6 +168,12 @@ void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay) no
 
 	/* Set it up */
 	netif_set_up(&gs_net_if);
+}
+
+// Terminate Ethernet and stop any interrupts, tasks etc. Used when shutting down the whole system.
+void ethernet_terminate() noexcept
+{
+	ethernetif_terminate();
 }
 
 /** \brief Configure the Ethernet subsystem. Should be called after init_ethernet()
