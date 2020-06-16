@@ -125,7 +125,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Hardware/SAME70|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet/|src/DuetNG|src/Networking/W5500Ethernet/|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Display|src/Networking/ESP8266WiFi/|src/Pccb|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Hardware/ksz8081rna|src/Hardware/SAME70|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet/|src/DuetNG|src/Networking/W5500Ethernet/|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Display|src/Networking/ESP8266WiFi/|src/Pccb|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -285,7 +285,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Hardware/SAME70|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Pccb|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Hardware/ksz8081rna|src/Hardware/SAME70|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Pccb|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -444,7 +444,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Hardware/SAME70|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/DuetNG|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Networking/ESP8266WiFi|src/Pccb|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Hardware/ksz8081rna|src/Hardware/SAME70|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/DuetNG|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Networking/ESP8266WiFi|src/Pccb|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -604,7 +604,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Hardware/SAME70|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/DuetNG|src/Networking/W5500Ethernet/|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Display|src/Networking/ESP8266WiFi|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Hardware/ksz8081rna|src/Hardware/SAME70|src/atmel|src/Linux|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/DuetNG|src/Networking/W5500Ethernet/|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Display|src/Networking/ESP8266WiFi|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -682,7 +682,6 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/clock}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/components/ethernet_phy/ksz8081rna}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/cmsis/same70/include}&quot;"/>
@@ -744,7 +743,6 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/clock}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/components/ethernet_phy/ksz8081rna}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/gmac}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/services/flash_efc}&quot;"/>
@@ -1306,7 +1304,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Hardware/SAME70|src/atmel|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/Networking/W5500Ethernet/|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Networking/ESP8266WiFi/|src/Pccb|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Hardware/ksz8081rna|src/Hardware/SAME70|src/atmel|src/SAME70xpld|src/Duet3_V05|src/Duet3_V03|src/Duet|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/Networking/W5500Ethernet/|src/Alligator|src/arm|src/Duet5LC|src/Duet3_V06|src/Networking/ESP8266WiFi/|src/Pccb|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

@@ -495,7 +495,7 @@ void USB_0_Handler               ( void );
 void USB_1_Handler               ( void );
 void USB_2_Handler               ( void );
 void USB_3_Handler               ( void );
-void GMAC_Handler                ( void );
+void GMAC_Handler                ( void ) noexcept;
 void TCC0_0_Handler              ( void );
 void TCC0_1_Handler              ( void );
 void TCC0_2_Handler              ( void );

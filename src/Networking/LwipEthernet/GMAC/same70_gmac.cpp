@@ -32,12 +32,16 @@
  */
 
 #include "same70_gmac.h"
+
+#if defined(SAME70) && SAME70
 #include "pmc/pmc.h"
+#endif
+
 #include "conf_eth.h"
 #include <cstring>
 
 extern "C" {
-#include "ethernet_phy.h"
+#include <Hardware/ksz8081rna/ethernet_phy.h>
 #include "lwip/opt.h"
 #include "lwip/sys.h"
 #include "lwip/def.h"
@@ -92,11 +96,9 @@ unsigned int txBufferTooShortCount;
 #define GMAC_RX_ERRORS (GMAC_RSR_RXOVR | GMAC_RSR_HNO)
 
 /** TX descriptor lists */
-COMPILER_ALIGNED(8)
-static gmac_tx_descriptor_t gs_tx_desc_null;
+alignas(8) static gmac_tx_descriptor_t gs_tx_desc_null;
 /** RX descriptors lists */
-COMPILER_ALIGNED(8)
-static gmac_rx_descriptor_t gs_rx_desc_null;
+alignas(8) static gmac_rx_descriptor_t gs_rx_desc_null;
 /**
  * GMAC driver structure.
  */
