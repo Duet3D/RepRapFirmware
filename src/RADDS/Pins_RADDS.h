@@ -194,6 +194,14 @@ constexpr Pin SdCardDetectPins[NumSdCards] = { 14, 14 };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[2] = { 87, 77 };
 
+// Shared SPI definitions
+#define USART_SPI		0
+
+// We have to tell the processor which NPCS output we are using, even though we use other pins for CS
+// We choose NPCS3 because on the SAM3X, it is not physically connected
+#define PERIPHERAL_CHANNEL_ID		3
+#define PERIPHERAL_CHANNEL_CS_PIN	APIN_SPI_SS3
+
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
 enum class PinCapability: uint8_t

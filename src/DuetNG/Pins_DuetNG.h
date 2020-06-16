@@ -254,6 +254,11 @@ constexpr Pin LcdBeepPin = PortDPin(21);		// connlcd.10	-> exp1.10
 // connsd.6 (miso)	-> exp2.10
 #endif
 
+// Shared SPI definitions
+#define USART_SPI		1
+#define USART_SSPI		USART0
+#define ID_SSPI			ID_USART0
+
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
 enum class PinCapability: uint8_t
