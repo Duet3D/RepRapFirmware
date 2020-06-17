@@ -1,5 +1,5 @@
-#include <atmel_start.h>
-#include <Config/peripheral_clk_config.h>
+#include <AtmelStart_SAME5x/atmel_start.h>
+#include <AtmelStart_SAME5x/Config/peripheral_clk_config.h>
 
 #include "RepRapFirmware.h"
 #include "Tasks.h"

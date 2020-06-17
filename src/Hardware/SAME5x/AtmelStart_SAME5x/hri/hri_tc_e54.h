@@ -72,98 +72,98 @@ typedef uint8_t  hri_tccount8_count_reg_t;
 typedef uint8_t  hri_tccount8_per_reg_t;
 typedef uint8_t  hri_tccount8_perbuf_reg_t;
 
-static inline void hri_tc_wait_for_sync(const void *const hw, hri_tc_syncbusy_reg_t reg)
+static inline void hri_tc_wait_for_sync(volatile void *const hw, hri_tc_syncbusy_reg_t reg)
 {
 	while (((Tc *)hw)->COUNT8.SYNCBUSY.reg & reg) {
 	};
 }
 
-static inline bool hri_tc_is_syncing(const void *const hw, hri_tc_syncbusy_reg_t reg)
+static inline bool hri_tc_is_syncing(volatile void *const hw, hri_tc_syncbusy_reg_t reg)
 {
 	return ((Tc *)hw)->COUNT8.SYNCBUSY.reg & reg;
 }
 
-static inline bool hri_tc_get_INTFLAG_OVF_bit(const void *const hw)
+static inline bool hri_tc_get_INTFLAG_OVF_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTFLAG.reg & TC_INTFLAG_OVF) >> TC_INTFLAG_OVF_Pos;
 }
 
-static inline void hri_tc_clear_INTFLAG_OVF_bit(const void *const hw)
+static inline void hri_tc_clear_INTFLAG_OVF_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = TC_INTFLAG_OVF;
 }
 
-static inline bool hri_tc_get_INTFLAG_ERR_bit(const void *const hw)
+static inline bool hri_tc_get_INTFLAG_ERR_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTFLAG.reg & TC_INTFLAG_ERR) >> TC_INTFLAG_ERR_Pos;
 }
 
-static inline void hri_tc_clear_INTFLAG_ERR_bit(const void *const hw)
+static inline void hri_tc_clear_INTFLAG_ERR_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = TC_INTFLAG_ERR;
 }
 
-static inline bool hri_tc_get_INTFLAG_MC0_bit(const void *const hw)
+static inline bool hri_tc_get_INTFLAG_MC0_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTFLAG.reg & TC_INTFLAG_MC0) >> TC_INTFLAG_MC0_Pos;
 }
 
-static inline void hri_tc_clear_INTFLAG_MC0_bit(const void *const hw)
+static inline void hri_tc_clear_INTFLAG_MC0_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = TC_INTFLAG_MC0;
 }
 
-static inline bool hri_tc_get_INTFLAG_MC1_bit(const void *const hw)
+static inline bool hri_tc_get_INTFLAG_MC1_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTFLAG.reg & TC_INTFLAG_MC1) >> TC_INTFLAG_MC1_Pos;
 }
 
-static inline void hri_tc_clear_INTFLAG_MC1_bit(const void *const hw)
+static inline void hri_tc_clear_INTFLAG_MC1_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = TC_INTFLAG_MC1;
 }
 
-static inline bool hri_tc_get_interrupt_OVF_bit(const void *const hw)
+static inline bool hri_tc_get_interrupt_OVF_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTFLAG.reg & TC_INTFLAG_OVF) >> TC_INTFLAG_OVF_Pos;
 }
 
-static inline void hri_tc_clear_interrupt_OVF_bit(const void *const hw)
+static inline void hri_tc_clear_interrupt_OVF_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = TC_INTFLAG_OVF;
 }
 
-static inline bool hri_tc_get_interrupt_ERR_bit(const void *const hw)
+static inline bool hri_tc_get_interrupt_ERR_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTFLAG.reg & TC_INTFLAG_ERR) >> TC_INTFLAG_ERR_Pos;
 }
 
-static inline void hri_tc_clear_interrupt_ERR_bit(const void *const hw)
+static inline void hri_tc_clear_interrupt_ERR_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = TC_INTFLAG_ERR;
 }
 
-static inline bool hri_tc_get_interrupt_MC0_bit(const void *const hw)
+static inline bool hri_tc_get_interrupt_MC0_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTFLAG.reg & TC_INTFLAG_MC0) >> TC_INTFLAG_MC0_Pos;
 }
 
-static inline void hri_tc_clear_interrupt_MC0_bit(const void *const hw)
+static inline void hri_tc_clear_interrupt_MC0_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = TC_INTFLAG_MC0;
 }
 
-static inline bool hri_tc_get_interrupt_MC1_bit(const void *const hw)
+static inline bool hri_tc_get_interrupt_MC1_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTFLAG.reg & TC_INTFLAG_MC1) >> TC_INTFLAG_MC1_Pos;
 }
 
-static inline void hri_tc_clear_interrupt_MC1_bit(const void *const hw)
+static inline void hri_tc_clear_interrupt_MC1_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = TC_INTFLAG_MC1;
 }
 
-static inline hri_tc_intflag_reg_t hri_tc_get_INTFLAG_reg(const void *const hw, hri_tc_intflag_reg_t mask)
+static inline hri_tc_intflag_reg_t hri_tc_get_INTFLAG_reg(volatile void *const hw, hri_tc_intflag_reg_t mask)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.INTFLAG.reg;
@@ -171,27 +171,27 @@ static inline hri_tc_intflag_reg_t hri_tc_get_INTFLAG_reg(const void *const hw, 
 	return tmp;
 }
 
-static inline hri_tc_intflag_reg_t hri_tc_read_INTFLAG_reg(const void *const hw)
+static inline hri_tc_intflag_reg_t hri_tc_read_INTFLAG_reg(volatile void *const hw)
 {
 	return ((Tc *)hw)->COUNT16.INTFLAG.reg;
 }
 
-static inline void hri_tc_clear_INTFLAG_reg(const void *const hw, hri_tc_intflag_reg_t mask)
+static inline void hri_tc_clear_INTFLAG_reg(volatile void *const hw, hri_tc_intflag_reg_t mask)
 {
 	((Tc *)hw)->COUNT16.INTFLAG.reg = mask;
 }
 
-static inline void hri_tc_set_CTRLB_DIR_bit(const void *const hw)
+static inline void hri_tc_set_CTRLB_DIR_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.CTRLBSET.reg = TC_CTRLBSET_DIR;
 }
 
-static inline bool hri_tc_get_CTRLB_DIR_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLB_DIR_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.CTRLBSET.reg & TC_CTRLBSET_DIR) >> TC_CTRLBSET_DIR_Pos;
 }
 
-static inline void hri_tc_write_CTRLB_DIR_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLB_DIR_bit(volatile void *const hw, bool value)
 {
 	if (value == 0x0) {
 		((Tc *)hw)->COUNT16.CTRLBCLR.reg = TC_CTRLBSET_DIR;
@@ -200,22 +200,22 @@ static inline void hri_tc_write_CTRLB_DIR_bit(const void *const hw, bool value)
 	}
 }
 
-static inline void hri_tc_clear_CTRLB_DIR_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLB_DIR_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.CTRLBCLR.reg = TC_CTRLBSET_DIR;
 }
 
-static inline void hri_tc_set_CTRLB_LUPD_bit(const void *const hw)
+static inline void hri_tc_set_CTRLB_LUPD_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.CTRLBSET.reg = TC_CTRLBSET_LUPD;
 }
 
-static inline bool hri_tc_get_CTRLB_LUPD_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLB_LUPD_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.CTRLBSET.reg & TC_CTRLBSET_LUPD) >> TC_CTRLBSET_LUPD_Pos;
 }
 
-static inline void hri_tc_write_CTRLB_LUPD_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLB_LUPD_bit(volatile void *const hw, bool value)
 {
 	if (value == 0x0) {
 		((Tc *)hw)->COUNT16.CTRLBCLR.reg = TC_CTRLBSET_LUPD;
@@ -224,22 +224,22 @@ static inline void hri_tc_write_CTRLB_LUPD_bit(const void *const hw, bool value)
 	}
 }
 
-static inline void hri_tc_clear_CTRLB_LUPD_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLB_LUPD_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.CTRLBCLR.reg = TC_CTRLBSET_LUPD;
 }
 
-static inline void hri_tc_set_CTRLB_ONESHOT_bit(const void *const hw)
+static inline void hri_tc_set_CTRLB_ONESHOT_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.CTRLBSET.reg = TC_CTRLBSET_ONESHOT;
 }
 
-static inline bool hri_tc_get_CTRLB_ONESHOT_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLB_ONESHOT_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.CTRLBSET.reg & TC_CTRLBSET_ONESHOT) >> TC_CTRLBSET_ONESHOT_Pos;
 }
 
-static inline void hri_tc_write_CTRLB_ONESHOT_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLB_ONESHOT_bit(volatile void *const hw, bool value)
 {
 	if (value == 0x0) {
 		((Tc *)hw)->COUNT16.CTRLBCLR.reg = TC_CTRLBSET_ONESHOT;
@@ -248,17 +248,17 @@ static inline void hri_tc_write_CTRLB_ONESHOT_bit(const void *const hw, bool val
 	}
 }
 
-static inline void hri_tc_clear_CTRLB_ONESHOT_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLB_ONESHOT_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.CTRLBCLR.reg = TC_CTRLBSET_ONESHOT;
 }
 
-static inline void hri_tc_set_CTRLB_CMD_bf(const void *const hw, hri_tc_ctrlbset_reg_t mask)
+static inline void hri_tc_set_CTRLB_CMD_bf(volatile void *const hw, hri_tc_ctrlbset_reg_t mask)
 {
 	((Tc *)hw)->COUNT16.CTRLBSET.reg = TC_CTRLBSET_CMD(mask);
 }
 
-static inline hri_tc_ctrlbset_reg_t hri_tc_get_CTRLB_CMD_bf(const void *const hw, hri_tc_ctrlbset_reg_t mask)
+static inline hri_tc_ctrlbset_reg_t hri_tc_get_CTRLB_CMD_bf(volatile void *const hw, hri_tc_ctrlbset_reg_t mask)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLBSET.reg;
@@ -266,7 +266,7 @@ static inline hri_tc_ctrlbset_reg_t hri_tc_get_CTRLB_CMD_bf(const void *const hw
 	return tmp;
 }
 
-static inline hri_tc_ctrlbset_reg_t hri_tc_read_CTRLB_CMD_bf(const void *const hw)
+static inline hri_tc_ctrlbset_reg_t hri_tc_read_CTRLB_CMD_bf(volatile void *const hw)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLBSET.reg;
@@ -274,23 +274,23 @@ static inline hri_tc_ctrlbset_reg_t hri_tc_read_CTRLB_CMD_bf(const void *const h
 	return tmp;
 }
 
-static inline void hri_tc_write_CTRLB_CMD_bf(const void *const hw, hri_tc_ctrlbset_reg_t data)
+static inline void hri_tc_write_CTRLB_CMD_bf(volatile void *const hw, hri_tc_ctrlbset_reg_t data)
 {
 	((Tc *)hw)->COUNT16.CTRLBSET.reg = TC_CTRLBSET_CMD(data);
 	((Tc *)hw)->COUNT16.CTRLBCLR.reg = ~TC_CTRLBSET_CMD(data);
 }
 
-static inline void hri_tc_clear_CTRLB_CMD_bf(const void *const hw, hri_tc_ctrlbset_reg_t mask)
+static inline void hri_tc_clear_CTRLB_CMD_bf(volatile void *const hw, hri_tc_ctrlbset_reg_t mask)
 {
 	((Tc *)hw)->COUNT16.CTRLBCLR.reg = TC_CTRLBSET_CMD(mask);
 }
 
-static inline void hri_tc_set_CTRLB_reg(const void *const hw, hri_tc_ctrlbset_reg_t mask)
+static inline void hri_tc_set_CTRLB_reg(volatile void *const hw, hri_tc_ctrlbset_reg_t mask)
 {
 	((Tc *)hw)->COUNT16.CTRLBSET.reg = mask;
 }
 
-static inline hri_tc_ctrlbset_reg_t hri_tc_get_CTRLB_reg(const void *const hw, hri_tc_ctrlbset_reg_t mask)
+static inline hri_tc_ctrlbset_reg_t hri_tc_get_CTRLB_reg(volatile void *const hw, hri_tc_ctrlbset_reg_t mask)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLBSET.reg;
@@ -298,33 +298,33 @@ static inline hri_tc_ctrlbset_reg_t hri_tc_get_CTRLB_reg(const void *const hw, h
 	return tmp;
 }
 
-static inline hri_tc_ctrlbset_reg_t hri_tc_read_CTRLB_reg(const void *const hw)
+static inline hri_tc_ctrlbset_reg_t hri_tc_read_CTRLB_reg(volatile void *const hw)
 {
 	return ((Tc *)hw)->COUNT16.CTRLBSET.reg;
 }
 
-static inline void hri_tc_write_CTRLB_reg(const void *const hw, hri_tc_ctrlbset_reg_t data)
+static inline void hri_tc_write_CTRLB_reg(volatile void *const hw, hri_tc_ctrlbset_reg_t data)
 {
 	((Tc *)hw)->COUNT16.CTRLBSET.reg = data;
 	((Tc *)hw)->COUNT16.CTRLBCLR.reg = ~data;
 }
 
-static inline void hri_tc_clear_CTRLB_reg(const void *const hw, hri_tc_ctrlbset_reg_t mask)
+static inline void hri_tc_clear_CTRLB_reg(volatile void *const hw, hri_tc_ctrlbset_reg_t mask)
 {
 	((Tc *)hw)->COUNT16.CTRLBCLR.reg = mask;
 }
 
-static inline void hri_tc_set_INTEN_OVF_bit(const void *const hw)
+static inline void hri_tc_set_INTEN_OVF_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTENSET.reg = TC_INTENSET_OVF;
 }
 
-static inline bool hri_tc_get_INTEN_OVF_bit(const void *const hw)
+static inline bool hri_tc_get_INTEN_OVF_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTENSET.reg & TC_INTENSET_OVF) >> TC_INTENSET_OVF_Pos;
 }
 
-static inline void hri_tc_write_INTEN_OVF_bit(const void *const hw, bool value)
+static inline void hri_tc_write_INTEN_OVF_bit(volatile void *const hw, bool value)
 {
 	if (value == 0x0) {
 		((Tc *)hw)->COUNT16.INTENCLR.reg = TC_INTENSET_OVF;
@@ -333,22 +333,22 @@ static inline void hri_tc_write_INTEN_OVF_bit(const void *const hw, bool value)
 	}
 }
 
-static inline void hri_tc_clear_INTEN_OVF_bit(const void *const hw)
+static inline void hri_tc_clear_INTEN_OVF_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTENCLR.reg = TC_INTENSET_OVF;
 }
 
-static inline void hri_tc_set_INTEN_ERR_bit(const void *const hw)
+static inline void hri_tc_set_INTEN_ERR_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTENSET.reg = TC_INTENSET_ERR;
 }
 
-static inline bool hri_tc_get_INTEN_ERR_bit(const void *const hw)
+static inline bool hri_tc_get_INTEN_ERR_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTENSET.reg & TC_INTENSET_ERR) >> TC_INTENSET_ERR_Pos;
 }
 
-static inline void hri_tc_write_INTEN_ERR_bit(const void *const hw, bool value)
+static inline void hri_tc_write_INTEN_ERR_bit(volatile void *const hw, bool value)
 {
 	if (value == 0x0) {
 		((Tc *)hw)->COUNT16.INTENCLR.reg = TC_INTENSET_ERR;
@@ -357,22 +357,22 @@ static inline void hri_tc_write_INTEN_ERR_bit(const void *const hw, bool value)
 	}
 }
 
-static inline void hri_tc_clear_INTEN_ERR_bit(const void *const hw)
+static inline void hri_tc_clear_INTEN_ERR_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTENCLR.reg = TC_INTENSET_ERR;
 }
 
-static inline void hri_tc_set_INTEN_MC0_bit(const void *const hw)
+static inline void hri_tc_set_INTEN_MC0_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTENSET.reg = TC_INTENSET_MC0;
 }
 
-static inline bool hri_tc_get_INTEN_MC0_bit(const void *const hw)
+static inline bool hri_tc_get_INTEN_MC0_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTENSET.reg & TC_INTENSET_MC0) >> TC_INTENSET_MC0_Pos;
 }
 
-static inline void hri_tc_write_INTEN_MC0_bit(const void *const hw, bool value)
+static inline void hri_tc_write_INTEN_MC0_bit(volatile void *const hw, bool value)
 {
 	if (value == 0x0) {
 		((Tc *)hw)->COUNT16.INTENCLR.reg = TC_INTENSET_MC0;
@@ -381,22 +381,22 @@ static inline void hri_tc_write_INTEN_MC0_bit(const void *const hw, bool value)
 	}
 }
 
-static inline void hri_tc_clear_INTEN_MC0_bit(const void *const hw)
+static inline void hri_tc_clear_INTEN_MC0_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTENCLR.reg = TC_INTENSET_MC0;
 }
 
-static inline void hri_tc_set_INTEN_MC1_bit(const void *const hw)
+static inline void hri_tc_set_INTEN_MC1_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTENSET.reg = TC_INTENSET_MC1;
 }
 
-static inline bool hri_tc_get_INTEN_MC1_bit(const void *const hw)
+static inline bool hri_tc_get_INTEN_MC1_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.INTENSET.reg & TC_INTENSET_MC1) >> TC_INTENSET_MC1_Pos;
 }
 
-static inline void hri_tc_write_INTEN_MC1_bit(const void *const hw, bool value)
+static inline void hri_tc_write_INTEN_MC1_bit(volatile void *const hw, bool value)
 {
 	if (value == 0x0) {
 		((Tc *)hw)->COUNT16.INTENCLR.reg = TC_INTENSET_MC1;
@@ -405,17 +405,17 @@ static inline void hri_tc_write_INTEN_MC1_bit(const void *const hw, bool value)
 	}
 }
 
-static inline void hri_tc_clear_INTEN_MC1_bit(const void *const hw)
+static inline void hri_tc_clear_INTEN_MC1_bit(volatile void *const hw)
 {
 	((Tc *)hw)->COUNT16.INTENCLR.reg = TC_INTENSET_MC1;
 }
 
-static inline void hri_tc_set_INTEN_reg(const void *const hw, hri_tc_intenset_reg_t mask)
+static inline void hri_tc_set_INTEN_reg(volatile void *const hw, hri_tc_intenset_reg_t mask)
 {
 	((Tc *)hw)->COUNT16.INTENSET.reg = mask;
 }
 
-static inline hri_tc_intenset_reg_t hri_tc_get_INTEN_reg(const void *const hw, hri_tc_intenset_reg_t mask)
+static inline hri_tc_intenset_reg_t hri_tc_get_INTEN_reg(volatile void *const hw, hri_tc_intenset_reg_t mask)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.INTENSET.reg;
@@ -423,63 +423,63 @@ static inline hri_tc_intenset_reg_t hri_tc_get_INTEN_reg(const void *const hw, h
 	return tmp;
 }
 
-static inline hri_tc_intenset_reg_t hri_tc_read_INTEN_reg(const void *const hw)
+static inline hri_tc_intenset_reg_t hri_tc_read_INTEN_reg(volatile void *const hw)
 {
 	return ((Tc *)hw)->COUNT16.INTENSET.reg;
 }
 
-static inline void hri_tc_write_INTEN_reg(const void *const hw, hri_tc_intenset_reg_t data)
+static inline void hri_tc_write_INTEN_reg(volatile void *const hw, hri_tc_intenset_reg_t data)
 {
 	((Tc *)hw)->COUNT16.INTENSET.reg = data;
 	((Tc *)hw)->COUNT16.INTENCLR.reg = ~data;
 }
 
-static inline void hri_tc_clear_INTEN_reg(const void *const hw, hri_tc_intenset_reg_t mask)
+static inline void hri_tc_clear_INTEN_reg(volatile void *const hw, hri_tc_intenset_reg_t mask)
 {
 	((Tc *)hw)->COUNT16.INTENCLR.reg = mask;
 }
 
-static inline bool hri_tc_get_SYNCBUSY_SWRST_bit(const void *const hw)
+static inline bool hri_tc_get_SYNCBUSY_SWRST_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.SYNCBUSY.reg & TC_SYNCBUSY_SWRST) >> TC_SYNCBUSY_SWRST_Pos;
 }
 
-static inline bool hri_tc_get_SYNCBUSY_ENABLE_bit(const void *const hw)
+static inline bool hri_tc_get_SYNCBUSY_ENABLE_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.SYNCBUSY.reg & TC_SYNCBUSY_ENABLE) >> TC_SYNCBUSY_ENABLE_Pos;
 }
 
-static inline bool hri_tc_get_SYNCBUSY_CTRLB_bit(const void *const hw)
+static inline bool hri_tc_get_SYNCBUSY_CTRLB_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.SYNCBUSY.reg & TC_SYNCBUSY_CTRLB) >> TC_SYNCBUSY_CTRLB_Pos;
 }
 
-static inline bool hri_tc_get_SYNCBUSY_STATUS_bit(const void *const hw)
+static inline bool hri_tc_get_SYNCBUSY_STATUS_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.SYNCBUSY.reg & TC_SYNCBUSY_STATUS) >> TC_SYNCBUSY_STATUS_Pos;
 }
 
-static inline bool hri_tc_get_SYNCBUSY_COUNT_bit(const void *const hw)
+static inline bool hri_tc_get_SYNCBUSY_COUNT_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.SYNCBUSY.reg & TC_SYNCBUSY_COUNT) >> TC_SYNCBUSY_COUNT_Pos;
 }
 
-static inline bool hri_tc_get_SYNCBUSY_PER_bit(const void *const hw)
+static inline bool hri_tc_get_SYNCBUSY_PER_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.SYNCBUSY.reg & TC_SYNCBUSY_PER) >> TC_SYNCBUSY_PER_Pos;
 }
 
-static inline bool hri_tc_get_SYNCBUSY_CC0_bit(const void *const hw)
+static inline bool hri_tc_get_SYNCBUSY_CC0_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.SYNCBUSY.reg & TC_SYNCBUSY_CC0) >> TC_SYNCBUSY_CC0_Pos;
 }
 
-static inline bool hri_tc_get_SYNCBUSY_CC1_bit(const void *const hw)
+static inline bool hri_tc_get_SYNCBUSY_CC1_bit(volatile void *const hw)
 {
 	return (((Tc *)hw)->COUNT16.SYNCBUSY.reg & TC_SYNCBUSY_CC1) >> TC_SYNCBUSY_CC1_Pos;
 }
 
-static inline hri_tc_syncbusy_reg_t hri_tc_get_SYNCBUSY_reg(const void *const hw, hri_tc_syncbusy_reg_t mask)
+static inline hri_tc_syncbusy_reg_t hri_tc_get_SYNCBUSY_reg(volatile void *const hw, hri_tc_syncbusy_reg_t mask)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.SYNCBUSY.reg;
@@ -487,12 +487,12 @@ static inline hri_tc_syncbusy_reg_t hri_tc_get_SYNCBUSY_reg(const void *const hw
 	return tmp;
 }
 
-static inline hri_tc_syncbusy_reg_t hri_tc_read_SYNCBUSY_reg(const void *const hw)
+static inline hri_tc_syncbusy_reg_t hri_tc_read_SYNCBUSY_reg(volatile void *const hw)
 {
 	return ((Tc *)hw)->COUNT16.SYNCBUSY.reg;
 }
 
-static inline void hri_tc_set_CTRLA_SWRST_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_SWRST_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_SWRST;
@@ -500,7 +500,7 @@ static inline void hri_tc_set_CTRLA_SWRST_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_SWRST_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_SWRST_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_SWRST);
@@ -509,7 +509,7 @@ static inline bool hri_tc_get_CTRLA_SWRST_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_set_CTRLA_ENABLE_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_ENABLE_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;
@@ -517,7 +517,7 @@ static inline void hri_tc_set_CTRLA_ENABLE_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_ENABLE_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_ENABLE_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_SWRST | TC_SYNCBUSY_ENABLE);
@@ -526,7 +526,7 @@ static inline bool hri_tc_get_CTRLA_ENABLE_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_CTRLA_ENABLE_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLA_ENABLE_bit(volatile void *const hw, bool value)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -538,7 +538,7 @@ static inline void hri_tc_write_CTRLA_ENABLE_bit(const void *const hw, bool valu
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_ENABLE_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLA_ENABLE_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_ENABLE;
@@ -546,7 +546,7 @@ static inline void hri_tc_clear_CTRLA_ENABLE_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_ENABLE_bit(const void *const hw)
+static inline void hri_tc_toggle_CTRLA_ENABLE_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_ENABLE;
@@ -554,7 +554,7 @@ static inline void hri_tc_toggle_CTRLA_ENABLE_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_CTRLA_RUNSTDBY_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_RUNSTDBY_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_RUNSTDBY;
@@ -562,7 +562,7 @@ static inline void hri_tc_set_CTRLA_RUNSTDBY_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_RUNSTDBY_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_RUNSTDBY_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -570,7 +570,7 @@ static inline bool hri_tc_get_CTRLA_RUNSTDBY_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_CTRLA_RUNSTDBY_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLA_RUNSTDBY_bit(volatile void *const hw, bool value)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -582,7 +582,7 @@ static inline void hri_tc_write_CTRLA_RUNSTDBY_bit(const void *const hw, bool va
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_RUNSTDBY_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLA_RUNSTDBY_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_RUNSTDBY;
@@ -590,7 +590,7 @@ static inline void hri_tc_clear_CTRLA_RUNSTDBY_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_RUNSTDBY_bit(const void *const hw)
+static inline void hri_tc_toggle_CTRLA_RUNSTDBY_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_RUNSTDBY;
@@ -598,7 +598,7 @@ static inline void hri_tc_toggle_CTRLA_RUNSTDBY_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_CTRLA_ONDEMAND_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_ONDEMAND_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_ONDEMAND;
@@ -606,7 +606,7 @@ static inline void hri_tc_set_CTRLA_ONDEMAND_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_ONDEMAND_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_ONDEMAND_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -614,7 +614,7 @@ static inline bool hri_tc_get_CTRLA_ONDEMAND_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_CTRLA_ONDEMAND_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLA_ONDEMAND_bit(volatile void *const hw, bool value)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -626,7 +626,7 @@ static inline void hri_tc_write_CTRLA_ONDEMAND_bit(const void *const hw, bool va
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_ONDEMAND_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLA_ONDEMAND_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_ONDEMAND;
@@ -634,7 +634,7 @@ static inline void hri_tc_clear_CTRLA_ONDEMAND_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_ONDEMAND_bit(const void *const hw)
+static inline void hri_tc_toggle_CTRLA_ONDEMAND_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_ONDEMAND;
@@ -642,7 +642,7 @@ static inline void hri_tc_toggle_CTRLA_ONDEMAND_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_CTRLA_ALOCK_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_ALOCK_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_ALOCK;
@@ -650,7 +650,7 @@ static inline void hri_tc_set_CTRLA_ALOCK_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_ALOCK_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_ALOCK_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -658,7 +658,7 @@ static inline bool hri_tc_get_CTRLA_ALOCK_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_CTRLA_ALOCK_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLA_ALOCK_bit(volatile void *const hw, bool value)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -670,7 +670,7 @@ static inline void hri_tc_write_CTRLA_ALOCK_bit(const void *const hw, bool value
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_ALOCK_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLA_ALOCK_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_ALOCK;
@@ -678,7 +678,7 @@ static inline void hri_tc_clear_CTRLA_ALOCK_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_ALOCK_bit(const void *const hw)
+static inline void hri_tc_toggle_CTRLA_ALOCK_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_ALOCK;
@@ -686,7 +686,7 @@ static inline void hri_tc_toggle_CTRLA_ALOCK_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_CTRLA_CAPTEN0_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_CAPTEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_CAPTEN0;
@@ -694,7 +694,7 @@ static inline void hri_tc_set_CTRLA_CAPTEN0_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_CAPTEN0_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_CAPTEN0_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -702,7 +702,7 @@ static inline bool hri_tc_get_CTRLA_CAPTEN0_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_CTRLA_CAPTEN0_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLA_CAPTEN0_bit(volatile void *const hw, bool value)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -714,7 +714,7 @@ static inline void hri_tc_write_CTRLA_CAPTEN0_bit(const void *const hw, bool val
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_CAPTEN0_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLA_CAPTEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_CAPTEN0;
@@ -722,7 +722,7 @@ static inline void hri_tc_clear_CTRLA_CAPTEN0_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_CAPTEN0_bit(const void *const hw)
+static inline void hri_tc_toggle_CTRLA_CAPTEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_CAPTEN0;
@@ -730,7 +730,7 @@ static inline void hri_tc_toggle_CTRLA_CAPTEN0_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_CTRLA_CAPTEN1_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_CAPTEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_CAPTEN1;
@@ -738,7 +738,7 @@ static inline void hri_tc_set_CTRLA_CAPTEN1_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_CAPTEN1_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_CAPTEN1_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -746,7 +746,7 @@ static inline bool hri_tc_get_CTRLA_CAPTEN1_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_CTRLA_CAPTEN1_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLA_CAPTEN1_bit(volatile void *const hw, bool value)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -758,7 +758,7 @@ static inline void hri_tc_write_CTRLA_CAPTEN1_bit(const void *const hw, bool val
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_CAPTEN1_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLA_CAPTEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_CAPTEN1;
@@ -766,7 +766,7 @@ static inline void hri_tc_clear_CTRLA_CAPTEN1_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_CAPTEN1_bit(const void *const hw)
+static inline void hri_tc_toggle_CTRLA_CAPTEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_CAPTEN1;
@@ -774,7 +774,7 @@ static inline void hri_tc_toggle_CTRLA_CAPTEN1_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_CTRLA_COPEN0_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_COPEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_COPEN0;
@@ -782,7 +782,7 @@ static inline void hri_tc_set_CTRLA_COPEN0_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_COPEN0_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_COPEN0_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -790,7 +790,7 @@ static inline bool hri_tc_get_CTRLA_COPEN0_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_CTRLA_COPEN0_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLA_COPEN0_bit(volatile void *const hw, bool value)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -802,7 +802,7 @@ static inline void hri_tc_write_CTRLA_COPEN0_bit(const void *const hw, bool valu
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_COPEN0_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLA_COPEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_COPEN0;
@@ -810,7 +810,7 @@ static inline void hri_tc_clear_CTRLA_COPEN0_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_COPEN0_bit(const void *const hw)
+static inline void hri_tc_toggle_CTRLA_COPEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_COPEN0;
@@ -818,7 +818,7 @@ static inline void hri_tc_toggle_CTRLA_COPEN0_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_CTRLA_COPEN1_bit(const void *const hw)
+static inline void hri_tc_set_CTRLA_COPEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_COPEN1;
@@ -826,7 +826,7 @@ static inline void hri_tc_set_CTRLA_COPEN1_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_CTRLA_COPEN1_bit(const void *const hw)
+static inline bool hri_tc_get_CTRLA_COPEN1_bit(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -834,7 +834,7 @@ static inline bool hri_tc_get_CTRLA_COPEN1_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_CTRLA_COPEN1_bit(const void *const hw, bool value)
+static inline void hri_tc_write_CTRLA_COPEN1_bit(volatile void *const hw, bool value)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -846,7 +846,7 @@ static inline void hri_tc_write_CTRLA_COPEN1_bit(const void *const hw, bool valu
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_COPEN1_bit(const void *const hw)
+static inline void hri_tc_clear_CTRLA_COPEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_COPEN1;
@@ -854,7 +854,7 @@ static inline void hri_tc_clear_CTRLA_COPEN1_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_COPEN1_bit(const void *const hw)
+static inline void hri_tc_toggle_CTRLA_COPEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_COPEN1;
@@ -862,7 +862,7 @@ static inline void hri_tc_toggle_CTRLA_COPEN1_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_set_CTRLA_MODE_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_MODE(mask);
@@ -870,7 +870,7 @@ static inline void hri_tc_set_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrla_r
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_MODE_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -878,7 +878,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_MODE_bf(const void *const hw, 
 	return tmp;
 }
 
-static inline void hri_tc_write_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrla_reg_t data)
+static inline void hri_tc_write_CTRLA_MODE_bf(volatile void *const hw, hri_tc_ctrla_reg_t data)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -890,7 +890,7 @@ static inline void hri_tc_write_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrla
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_clear_CTRLA_MODE_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_MODE(mask);
@@ -898,7 +898,7 @@ static inline void hri_tc_clear_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrla
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_toggle_CTRLA_MODE_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_MODE(mask);
@@ -906,7 +906,7 @@ static inline void hri_tc_toggle_CTRLA_MODE_bf(const void *const hw, hri_tc_ctrl
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_MODE_bf(const void *const hw)
+static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_MODE_bf(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -914,7 +914,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_MODE_bf(const void *const hw)
 	return tmp;
 }
 
-static inline void hri_tc_set_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_set_CTRLA_PRESCSYNC_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_PRESCSYNC(mask);
@@ -922,7 +922,7 @@ static inline void hri_tc_set_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc_ct
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_PRESCSYNC_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -930,7 +930,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_PRESCSYNC_bf(const void *const
 	return tmp;
 }
 
-static inline void hri_tc_write_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc_ctrla_reg_t data)
+static inline void hri_tc_write_CTRLA_PRESCSYNC_bf(volatile void *const hw, hri_tc_ctrla_reg_t data)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -942,7 +942,7 @@ static inline void hri_tc_write_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_clear_CTRLA_PRESCSYNC_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_PRESCSYNC(mask);
@@ -950,7 +950,7 @@ static inline void hri_tc_clear_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_toggle_CTRLA_PRESCSYNC_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_PRESCSYNC(mask);
@@ -958,7 +958,7 @@ static inline void hri_tc_toggle_CTRLA_PRESCSYNC_bf(const void *const hw, hri_tc
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_PRESCSYNC_bf(const void *const hw)
+static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_PRESCSYNC_bf(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -966,7 +966,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_PRESCSYNC_bf(const void *cons
 	return tmp;
 }
 
-static inline void hri_tc_set_CTRLA_PRESCALER_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_set_CTRLA_PRESCALER_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_PRESCALER(mask);
@@ -974,7 +974,7 @@ static inline void hri_tc_set_CTRLA_PRESCALER_bf(const void *const hw, hri_tc_ct
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_PRESCALER_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_PRESCALER_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -982,7 +982,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_PRESCALER_bf(const void *const
 	return tmp;
 }
 
-static inline void hri_tc_write_CTRLA_PRESCALER_bf(const void *const hw, hri_tc_ctrla_reg_t data)
+static inline void hri_tc_write_CTRLA_PRESCALER_bf(volatile void *const hw, hri_tc_ctrla_reg_t data)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -994,7 +994,7 @@ static inline void hri_tc_write_CTRLA_PRESCALER_bf(const void *const hw, hri_tc_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_PRESCALER_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_clear_CTRLA_PRESCALER_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_PRESCALER(mask);
@@ -1002,7 +1002,7 @@ static inline void hri_tc_clear_CTRLA_PRESCALER_bf(const void *const hw, hri_tc_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_PRESCALER_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_toggle_CTRLA_PRESCALER_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_PRESCALER(mask);
@@ -1010,7 +1010,7 @@ static inline void hri_tc_toggle_CTRLA_PRESCALER_bf(const void *const hw, hri_tc
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_PRESCALER_bf(const void *const hw)
+static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_PRESCALER_bf(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -1018,7 +1018,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_PRESCALER_bf(const void *cons
 	return tmp;
 }
 
-static inline void hri_tc_set_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_set_CTRLA_CAPTMODE0_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_CAPTMODE0(mask);
@@ -1026,7 +1026,7 @@ static inline void hri_tc_set_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc_ct
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_CAPTMODE0_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -1034,7 +1034,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_CAPTMODE0_bf(const void *const
 	return tmp;
 }
 
-static inline void hri_tc_write_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc_ctrla_reg_t data)
+static inline void hri_tc_write_CTRLA_CAPTMODE0_bf(volatile void *const hw, hri_tc_ctrla_reg_t data)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1046,7 +1046,7 @@ static inline void hri_tc_write_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_clear_CTRLA_CAPTMODE0_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_CAPTMODE0(mask);
@@ -1054,7 +1054,7 @@ static inline void hri_tc_clear_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_toggle_CTRLA_CAPTMODE0_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_CAPTMODE0(mask);
@@ -1062,7 +1062,7 @@ static inline void hri_tc_toggle_CTRLA_CAPTMODE0_bf(const void *const hw, hri_tc
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_CAPTMODE0_bf(const void *const hw)
+static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_CAPTMODE0_bf(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -1070,7 +1070,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_CAPTMODE0_bf(const void *cons
 	return tmp;
 }
 
-static inline void hri_tc_set_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_set_CTRLA_CAPTMODE1_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= TC_CTRLA_CAPTMODE1(mask);
@@ -1078,7 +1078,7 @@ static inline void hri_tc_set_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc_ct
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_CAPTMODE1_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -1086,7 +1086,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_CAPTMODE1_bf(const void *const
 	return tmp;
 }
 
-static inline void hri_tc_write_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc_ctrla_reg_t data)
+static inline void hri_tc_write_CTRLA_CAPTMODE1_bf(volatile void *const hw, hri_tc_ctrla_reg_t data)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1098,7 +1098,7 @@ static inline void hri_tc_write_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_clear_CTRLA_CAPTMODE1_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~TC_CTRLA_CAPTMODE1(mask);
@@ -1106,7 +1106,7 @@ static inline void hri_tc_clear_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_toggle_CTRLA_CAPTMODE1_bf(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= TC_CTRLA_CAPTMODE1(mask);
@@ -1114,7 +1114,7 @@ static inline void hri_tc_toggle_CTRLA_CAPTMODE1_bf(const void *const hw, hri_tc
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_CAPTMODE1_bf(const void *const hw)
+static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_CAPTMODE1_bf(volatile void *const hw)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CTRLA.reg;
@@ -1122,7 +1122,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_CAPTMODE1_bf(const void *cons
 	return tmp;
 }
 
-static inline void hri_tc_set_CTRLA_reg(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_set_CTRLA_reg(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg |= mask;
@@ -1130,7 +1130,7 @@ static inline void hri_tc_set_CTRLA_reg(const void *const hw, hri_tc_ctrla_reg_t
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_reg(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_reg(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	uint32_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_SWRST | TC_SYNCBUSY_ENABLE);
@@ -1139,7 +1139,7 @@ static inline hri_tc_ctrla_reg_t hri_tc_get_CTRLA_reg(const void *const hw, hri_
 	return tmp;
 }
 
-static inline void hri_tc_write_CTRLA_reg(const void *const hw, hri_tc_ctrla_reg_t data)
+static inline void hri_tc_write_CTRLA_reg(volatile void *const hw, hri_tc_ctrla_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg = data;
@@ -1147,7 +1147,7 @@ static inline void hri_tc_write_CTRLA_reg(const void *const hw, hri_tc_ctrla_reg
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_CTRLA_reg(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_clear_CTRLA_reg(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg &= ~mask;
@@ -1155,7 +1155,7 @@ static inline void hri_tc_clear_CTRLA_reg(const void *const hw, hri_tc_ctrla_reg
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_CTRLA_reg(const void *const hw, hri_tc_ctrla_reg_t mask)
+static inline void hri_tc_toggle_CTRLA_reg(volatile void *const hw, hri_tc_ctrla_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CTRLA.reg ^= mask;
@@ -1163,20 +1163,20 @@ static inline void hri_tc_toggle_CTRLA_reg(const void *const hw, hri_tc_ctrla_re
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_reg(const void *const hw)
+static inline hri_tc_ctrla_reg_t hri_tc_read_CTRLA_reg(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_SWRST | TC_SYNCBUSY_ENABLE);
 	return ((Tc *)hw)->COUNT16.CTRLA.reg;
 }
 
-static inline void hri_tc_set_EVCTRL_TCINV_bit(const void *const hw)
+static inline void hri_tc_set_EVCTRL_TCINV_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg |= TC_EVCTRL_TCINV;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_EVCTRL_TCINV_bit(const void *const hw)
+static inline bool hri_tc_get_EVCTRL_TCINV_bit(volatile void *const hw)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.EVCTRL.reg;
@@ -1184,7 +1184,7 @@ static inline bool hri_tc_get_EVCTRL_TCINV_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_EVCTRL_TCINV_bit(const void *const hw, bool value)
+static inline void hri_tc_write_EVCTRL_TCINV_bit(volatile void *const hw, bool value)
 {
 	uint16_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1195,28 +1195,28 @@ static inline void hri_tc_write_EVCTRL_TCINV_bit(const void *const hw, bool valu
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_EVCTRL_TCINV_bit(const void *const hw)
+static inline void hri_tc_clear_EVCTRL_TCINV_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg &= ~TC_EVCTRL_TCINV;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_EVCTRL_TCINV_bit(const void *const hw)
+static inline void hri_tc_toggle_EVCTRL_TCINV_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg ^= TC_EVCTRL_TCINV;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_EVCTRL_TCEI_bit(const void *const hw)
+static inline void hri_tc_set_EVCTRL_TCEI_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg |= TC_EVCTRL_TCEI;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_EVCTRL_TCEI_bit(const void *const hw)
+static inline bool hri_tc_get_EVCTRL_TCEI_bit(volatile void *const hw)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.EVCTRL.reg;
@@ -1224,7 +1224,7 @@ static inline bool hri_tc_get_EVCTRL_TCEI_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_EVCTRL_TCEI_bit(const void *const hw, bool value)
+static inline void hri_tc_write_EVCTRL_TCEI_bit(volatile void *const hw, bool value)
 {
 	uint16_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1235,28 +1235,28 @@ static inline void hri_tc_write_EVCTRL_TCEI_bit(const void *const hw, bool value
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_EVCTRL_TCEI_bit(const void *const hw)
+static inline void hri_tc_clear_EVCTRL_TCEI_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg &= ~TC_EVCTRL_TCEI;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_EVCTRL_TCEI_bit(const void *const hw)
+static inline void hri_tc_toggle_EVCTRL_TCEI_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg ^= TC_EVCTRL_TCEI;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_EVCTRL_OVFEO_bit(const void *const hw)
+static inline void hri_tc_set_EVCTRL_OVFEO_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg |= TC_EVCTRL_OVFEO;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_EVCTRL_OVFEO_bit(const void *const hw)
+static inline bool hri_tc_get_EVCTRL_OVFEO_bit(volatile void *const hw)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.EVCTRL.reg;
@@ -1264,7 +1264,7 @@ static inline bool hri_tc_get_EVCTRL_OVFEO_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_EVCTRL_OVFEO_bit(const void *const hw, bool value)
+static inline void hri_tc_write_EVCTRL_OVFEO_bit(volatile void *const hw, bool value)
 {
 	uint16_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1275,28 +1275,28 @@ static inline void hri_tc_write_EVCTRL_OVFEO_bit(const void *const hw, bool valu
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_EVCTRL_OVFEO_bit(const void *const hw)
+static inline void hri_tc_clear_EVCTRL_OVFEO_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg &= ~TC_EVCTRL_OVFEO;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_EVCTRL_OVFEO_bit(const void *const hw)
+static inline void hri_tc_toggle_EVCTRL_OVFEO_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg ^= TC_EVCTRL_OVFEO;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_EVCTRL_MCEO0_bit(const void *const hw)
+static inline void hri_tc_set_EVCTRL_MCEO0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg |= TC_EVCTRL_MCEO0;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_EVCTRL_MCEO0_bit(const void *const hw)
+static inline bool hri_tc_get_EVCTRL_MCEO0_bit(volatile void *const hw)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.EVCTRL.reg;
@@ -1304,7 +1304,7 @@ static inline bool hri_tc_get_EVCTRL_MCEO0_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_EVCTRL_MCEO0_bit(const void *const hw, bool value)
+static inline void hri_tc_write_EVCTRL_MCEO0_bit(volatile void *const hw, bool value)
 {
 	uint16_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1315,28 +1315,28 @@ static inline void hri_tc_write_EVCTRL_MCEO0_bit(const void *const hw, bool valu
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_EVCTRL_MCEO0_bit(const void *const hw)
+static inline void hri_tc_clear_EVCTRL_MCEO0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg &= ~TC_EVCTRL_MCEO0;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_EVCTRL_MCEO0_bit(const void *const hw)
+static inline void hri_tc_toggle_EVCTRL_MCEO0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg ^= TC_EVCTRL_MCEO0;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_EVCTRL_MCEO1_bit(const void *const hw)
+static inline void hri_tc_set_EVCTRL_MCEO1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg |= TC_EVCTRL_MCEO1;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_EVCTRL_MCEO1_bit(const void *const hw)
+static inline bool hri_tc_get_EVCTRL_MCEO1_bit(volatile void *const hw)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.EVCTRL.reg;
@@ -1344,7 +1344,7 @@ static inline bool hri_tc_get_EVCTRL_MCEO1_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_EVCTRL_MCEO1_bit(const void *const hw, bool value)
+static inline void hri_tc_write_EVCTRL_MCEO1_bit(volatile void *const hw, bool value)
 {
 	uint16_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1355,28 +1355,28 @@ static inline void hri_tc_write_EVCTRL_MCEO1_bit(const void *const hw, bool valu
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_EVCTRL_MCEO1_bit(const void *const hw)
+static inline void hri_tc_clear_EVCTRL_MCEO1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg &= ~TC_EVCTRL_MCEO1;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_EVCTRL_MCEO1_bit(const void *const hw)
+static inline void hri_tc_toggle_EVCTRL_MCEO1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg ^= TC_EVCTRL_MCEO1;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_EVCTRL_EVACT_bf(const void *const hw, hri_tc_evctrl_reg_t mask)
+static inline void hri_tc_set_EVCTRL_EVACT_bf(volatile void *const hw, hri_tc_evctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg |= TC_EVCTRL_EVACT(mask);
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_evctrl_reg_t hri_tc_get_EVCTRL_EVACT_bf(const void *const hw, hri_tc_evctrl_reg_t mask)
+static inline hri_tc_evctrl_reg_t hri_tc_get_EVCTRL_EVACT_bf(volatile void *const hw, hri_tc_evctrl_reg_t mask)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.EVCTRL.reg;
@@ -1384,7 +1384,7 @@ static inline hri_tc_evctrl_reg_t hri_tc_get_EVCTRL_EVACT_bf(const void *const h
 	return tmp;
 }
 
-static inline void hri_tc_write_EVCTRL_EVACT_bf(const void *const hw, hri_tc_evctrl_reg_t data)
+static inline void hri_tc_write_EVCTRL_EVACT_bf(volatile void *const hw, hri_tc_evctrl_reg_t data)
 {
 	uint16_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1395,21 +1395,21 @@ static inline void hri_tc_write_EVCTRL_EVACT_bf(const void *const hw, hri_tc_evc
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_EVCTRL_EVACT_bf(const void *const hw, hri_tc_evctrl_reg_t mask)
+static inline void hri_tc_clear_EVCTRL_EVACT_bf(volatile void *const hw, hri_tc_evctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg &= ~TC_EVCTRL_EVACT(mask);
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_EVCTRL_EVACT_bf(const void *const hw, hri_tc_evctrl_reg_t mask)
+static inline void hri_tc_toggle_EVCTRL_EVACT_bf(volatile void *const hw, hri_tc_evctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg ^= TC_EVCTRL_EVACT(mask);
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_evctrl_reg_t hri_tc_read_EVCTRL_EVACT_bf(const void *const hw)
+static inline hri_tc_evctrl_reg_t hri_tc_read_EVCTRL_EVACT_bf(volatile void *const hw)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.EVCTRL.reg;
@@ -1417,14 +1417,14 @@ static inline hri_tc_evctrl_reg_t hri_tc_read_EVCTRL_EVACT_bf(const void *const 
 	return tmp;
 }
 
-static inline void hri_tc_set_EVCTRL_reg(const void *const hw, hri_tc_evctrl_reg_t mask)
+static inline void hri_tc_set_EVCTRL_reg(volatile void *const hw, hri_tc_evctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg |= mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_evctrl_reg_t hri_tc_get_EVCTRL_reg(const void *const hw, hri_tc_evctrl_reg_t mask)
+static inline hri_tc_evctrl_reg_t hri_tc_get_EVCTRL_reg(volatile void *const hw, hri_tc_evctrl_reg_t mask)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.EVCTRL.reg;
@@ -1432,40 +1432,40 @@ static inline hri_tc_evctrl_reg_t hri_tc_get_EVCTRL_reg(const void *const hw, hr
 	return tmp;
 }
 
-static inline void hri_tc_write_EVCTRL_reg(const void *const hw, hri_tc_evctrl_reg_t data)
+static inline void hri_tc_write_EVCTRL_reg(volatile void *const hw, hri_tc_evctrl_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg = data;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_EVCTRL_reg(const void *const hw, hri_tc_evctrl_reg_t mask)
+static inline void hri_tc_clear_EVCTRL_reg(volatile void *const hw, hri_tc_evctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg &= ~mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_EVCTRL_reg(const void *const hw, hri_tc_evctrl_reg_t mask)
+static inline void hri_tc_toggle_EVCTRL_reg(volatile void *const hw, hri_tc_evctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.EVCTRL.reg ^= mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_evctrl_reg_t hri_tc_read_EVCTRL_reg(const void *const hw)
+static inline hri_tc_evctrl_reg_t hri_tc_read_EVCTRL_reg(volatile void *const hw)
 {
 	return ((Tc *)hw)->COUNT16.EVCTRL.reg;
 }
 
-static inline void hri_tc_set_WAVE_WAVEGEN_bf(const void *const hw, hri_tc_wave_reg_t mask)
+static inline void hri_tc_set_WAVE_WAVEGEN_bf(volatile void *const hw, hri_tc_wave_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.WAVE.reg |= TC_WAVE_WAVEGEN(mask);
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_wave_reg_t hri_tc_get_WAVE_WAVEGEN_bf(const void *const hw, hri_tc_wave_reg_t mask)
+static inline hri_tc_wave_reg_t hri_tc_get_WAVE_WAVEGEN_bf(volatile void *const hw, hri_tc_wave_reg_t mask)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.WAVE.reg;
@@ -1473,7 +1473,7 @@ static inline hri_tc_wave_reg_t hri_tc_get_WAVE_WAVEGEN_bf(const void *const hw,
 	return tmp;
 }
 
-static inline void hri_tc_write_WAVE_WAVEGEN_bf(const void *const hw, hri_tc_wave_reg_t data)
+static inline void hri_tc_write_WAVE_WAVEGEN_bf(volatile void *const hw, hri_tc_wave_reg_t data)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1484,21 +1484,21 @@ static inline void hri_tc_write_WAVE_WAVEGEN_bf(const void *const hw, hri_tc_wav
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_WAVE_WAVEGEN_bf(const void *const hw, hri_tc_wave_reg_t mask)
+static inline void hri_tc_clear_WAVE_WAVEGEN_bf(volatile void *const hw, hri_tc_wave_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.WAVE.reg &= ~TC_WAVE_WAVEGEN(mask);
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_WAVE_WAVEGEN_bf(const void *const hw, hri_tc_wave_reg_t mask)
+static inline void hri_tc_toggle_WAVE_WAVEGEN_bf(volatile void *const hw, hri_tc_wave_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.WAVE.reg ^= TC_WAVE_WAVEGEN(mask);
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_wave_reg_t hri_tc_read_WAVE_WAVEGEN_bf(const void *const hw)
+static inline hri_tc_wave_reg_t hri_tc_read_WAVE_WAVEGEN_bf(volatile void *const hw)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.WAVE.reg;
@@ -1506,14 +1506,14 @@ static inline hri_tc_wave_reg_t hri_tc_read_WAVE_WAVEGEN_bf(const void *const hw
 	return tmp;
 }
 
-static inline void hri_tc_set_WAVE_reg(const void *const hw, hri_tc_wave_reg_t mask)
+static inline void hri_tc_set_WAVE_reg(volatile void *const hw, hri_tc_wave_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.WAVE.reg |= mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_wave_reg_t hri_tc_get_WAVE_reg(const void *const hw, hri_tc_wave_reg_t mask)
+static inline hri_tc_wave_reg_t hri_tc_get_WAVE_reg(volatile void *const hw, hri_tc_wave_reg_t mask)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.WAVE.reg;
@@ -1521,40 +1521,40 @@ static inline hri_tc_wave_reg_t hri_tc_get_WAVE_reg(const void *const hw, hri_tc
 	return tmp;
 }
 
-static inline void hri_tc_write_WAVE_reg(const void *const hw, hri_tc_wave_reg_t data)
+static inline void hri_tc_write_WAVE_reg(volatile void *const hw, hri_tc_wave_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.WAVE.reg = data;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_WAVE_reg(const void *const hw, hri_tc_wave_reg_t mask)
+static inline void hri_tc_clear_WAVE_reg(volatile void *const hw, hri_tc_wave_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.WAVE.reg &= ~mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_WAVE_reg(const void *const hw, hri_tc_wave_reg_t mask)
+static inline void hri_tc_toggle_WAVE_reg(volatile void *const hw, hri_tc_wave_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.WAVE.reg ^= mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_wave_reg_t hri_tc_read_WAVE_reg(const void *const hw)
+static inline hri_tc_wave_reg_t hri_tc_read_WAVE_reg(volatile void *const hw)
 {
 	return ((Tc *)hw)->COUNT16.WAVE.reg;
 }
 
-static inline void hri_tc_set_DRVCTRL_INVEN0_bit(const void *const hw)
+static inline void hri_tc_set_DRVCTRL_INVEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg |= TC_DRVCTRL_INVEN0;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_DRVCTRL_INVEN0_bit(const void *const hw)
+static inline bool hri_tc_get_DRVCTRL_INVEN0_bit(volatile void *const hw)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.DRVCTRL.reg;
@@ -1562,7 +1562,7 @@ static inline bool hri_tc_get_DRVCTRL_INVEN0_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_DRVCTRL_INVEN0_bit(const void *const hw, bool value)
+static inline void hri_tc_write_DRVCTRL_INVEN0_bit(volatile void *const hw, bool value)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1573,28 +1573,28 @@ static inline void hri_tc_write_DRVCTRL_INVEN0_bit(const void *const hw, bool va
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_DRVCTRL_INVEN0_bit(const void *const hw)
+static inline void hri_tc_clear_DRVCTRL_INVEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg &= ~TC_DRVCTRL_INVEN0;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_DRVCTRL_INVEN0_bit(const void *const hw)
+static inline void hri_tc_toggle_DRVCTRL_INVEN0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg ^= TC_DRVCTRL_INVEN0;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_DRVCTRL_INVEN1_bit(const void *const hw)
+static inline void hri_tc_set_DRVCTRL_INVEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg |= TC_DRVCTRL_INVEN1;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_DRVCTRL_INVEN1_bit(const void *const hw)
+static inline bool hri_tc_get_DRVCTRL_INVEN1_bit(volatile void *const hw)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.DRVCTRL.reg;
@@ -1602,7 +1602,7 @@ static inline bool hri_tc_get_DRVCTRL_INVEN1_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_DRVCTRL_INVEN1_bit(const void *const hw, bool value)
+static inline void hri_tc_write_DRVCTRL_INVEN1_bit(volatile void *const hw, bool value)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1613,28 +1613,28 @@ static inline void hri_tc_write_DRVCTRL_INVEN1_bit(const void *const hw, bool va
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_DRVCTRL_INVEN1_bit(const void *const hw)
+static inline void hri_tc_clear_DRVCTRL_INVEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg &= ~TC_DRVCTRL_INVEN1;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_DRVCTRL_INVEN1_bit(const void *const hw)
+static inline void hri_tc_toggle_DRVCTRL_INVEN1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg ^= TC_DRVCTRL_INVEN1;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_DRVCTRL_reg(const void *const hw, hri_tc_drvctrl_reg_t mask)
+static inline void hri_tc_set_DRVCTRL_reg(volatile void *const hw, hri_tc_drvctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg |= mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_drvctrl_reg_t hri_tc_get_DRVCTRL_reg(const void *const hw, hri_tc_drvctrl_reg_t mask)
+static inline hri_tc_drvctrl_reg_t hri_tc_get_DRVCTRL_reg(volatile void *const hw, hri_tc_drvctrl_reg_t mask)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.DRVCTRL.reg;
@@ -1642,40 +1642,40 @@ static inline hri_tc_drvctrl_reg_t hri_tc_get_DRVCTRL_reg(const void *const hw, 
 	return tmp;
 }
 
-static inline void hri_tc_write_DRVCTRL_reg(const void *const hw, hri_tc_drvctrl_reg_t data)
+static inline void hri_tc_write_DRVCTRL_reg(volatile void *const hw, hri_tc_drvctrl_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg = data;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_DRVCTRL_reg(const void *const hw, hri_tc_drvctrl_reg_t mask)
+static inline void hri_tc_clear_DRVCTRL_reg(volatile void *const hw, hri_tc_drvctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg &= ~mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_DRVCTRL_reg(const void *const hw, hri_tc_drvctrl_reg_t mask)
+static inline void hri_tc_toggle_DRVCTRL_reg(volatile void *const hw, hri_tc_drvctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DRVCTRL.reg ^= mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_drvctrl_reg_t hri_tc_read_DRVCTRL_reg(const void *const hw)
+static inline hri_tc_drvctrl_reg_t hri_tc_read_DRVCTRL_reg(volatile void *const hw)
 {
 	return ((Tc *)hw)->COUNT16.DRVCTRL.reg;
 }
 
-static inline void hri_tc_set_DBGCTRL_DBGRUN_bit(const void *const hw)
+static inline void hri_tc_set_DBGCTRL_DBGRUN_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DBGCTRL.reg |= TC_DBGCTRL_DBGRUN;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_DBGCTRL_DBGRUN_bit(const void *const hw)
+static inline bool hri_tc_get_DBGCTRL_DBGRUN_bit(volatile void *const hw)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.DBGCTRL.reg;
@@ -1683,7 +1683,7 @@ static inline bool hri_tc_get_DBGCTRL_DBGRUN_bit(const void *const hw)
 	return (bool)tmp;
 }
 
-static inline void hri_tc_write_DBGCTRL_DBGRUN_bit(const void *const hw, bool value)
+static inline void hri_tc_write_DBGCTRL_DBGRUN_bit(volatile void *const hw, bool value)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1694,28 +1694,28 @@ static inline void hri_tc_write_DBGCTRL_DBGRUN_bit(const void *const hw, bool va
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_DBGCTRL_DBGRUN_bit(const void *const hw)
+static inline void hri_tc_clear_DBGCTRL_DBGRUN_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DBGCTRL.reg &= ~TC_DBGCTRL_DBGRUN;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_DBGCTRL_DBGRUN_bit(const void *const hw)
+static inline void hri_tc_toggle_DBGCTRL_DBGRUN_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DBGCTRL.reg ^= TC_DBGCTRL_DBGRUN;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_set_DBGCTRL_reg(const void *const hw, hri_tc_dbgctrl_reg_t mask)
+static inline void hri_tc_set_DBGCTRL_reg(volatile void *const hw, hri_tc_dbgctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DBGCTRL.reg |= mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_dbgctrl_reg_t hri_tc_get_DBGCTRL_reg(const void *const hw, hri_tc_dbgctrl_reg_t mask)
+static inline hri_tc_dbgctrl_reg_t hri_tc_get_DBGCTRL_reg(volatile void *const hw, hri_tc_dbgctrl_reg_t mask)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.DBGCTRL.reg;
@@ -1723,33 +1723,33 @@ static inline hri_tc_dbgctrl_reg_t hri_tc_get_DBGCTRL_reg(const void *const hw, 
 	return tmp;
 }
 
-static inline void hri_tc_write_DBGCTRL_reg(const void *const hw, hri_tc_dbgctrl_reg_t data)
+static inline void hri_tc_write_DBGCTRL_reg(volatile void *const hw, hri_tc_dbgctrl_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DBGCTRL.reg = data;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_clear_DBGCTRL_reg(const void *const hw, hri_tc_dbgctrl_reg_t mask)
+static inline void hri_tc_clear_DBGCTRL_reg(volatile void *const hw, hri_tc_dbgctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DBGCTRL.reg &= ~mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tc_toggle_DBGCTRL_reg(const void *const hw, hri_tc_dbgctrl_reg_t mask)
+static inline void hri_tc_toggle_DBGCTRL_reg(volatile void *const hw, hri_tc_dbgctrl_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.DBGCTRL.reg ^= mask;
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_dbgctrl_reg_t hri_tc_read_DBGCTRL_reg(const void *const hw)
+static inline hri_tc_dbgctrl_reg_t hri_tc_read_DBGCTRL_reg(volatile void *const hw)
 {
 	return ((Tc *)hw)->COUNT16.DBGCTRL.reg;
 }
 
-static inline void hri_tccount8_set_COUNT_COUNT_bf(const void *const hw, hri_tccount8_count_reg_t mask)
+static inline void hri_tccount8_set_COUNT_COUNT_bf(volatile void *const hw, hri_tccount8_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.COUNT.reg |= TC_COUNT8_COUNT_COUNT(mask);
@@ -1757,7 +1757,7 @@ static inline void hri_tccount8_set_COUNT_COUNT_bf(const void *const hw, hri_tcc
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_count_reg_t hri_tccount8_get_COUNT_COUNT_bf(const void *const        hw,
+static inline hri_tccount8_count_reg_t hri_tccount8_get_COUNT_COUNT_bf(volatile void *const        hw,
                                                                        hri_tccount8_count_reg_t mask)
 {
 	uint8_t tmp;
@@ -1767,7 +1767,7 @@ static inline hri_tccount8_count_reg_t hri_tccount8_get_COUNT_COUNT_bf(const voi
 	return tmp;
 }
 
-static inline void hri_tccount8_write_COUNT_COUNT_bf(const void *const hw, hri_tccount8_count_reg_t data)
+static inline void hri_tccount8_write_COUNT_COUNT_bf(volatile void *const hw, hri_tccount8_count_reg_t data)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1779,7 +1779,7 @@ static inline void hri_tccount8_write_COUNT_COUNT_bf(const void *const hw, hri_t
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_COUNT_COUNT_bf(const void *const hw, hri_tccount8_count_reg_t mask)
+static inline void hri_tccount8_clear_COUNT_COUNT_bf(volatile void *const hw, hri_tccount8_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.COUNT.reg &= ~TC_COUNT8_COUNT_COUNT(mask);
@@ -1787,7 +1787,7 @@ static inline void hri_tccount8_clear_COUNT_COUNT_bf(const void *const hw, hri_t
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_COUNT_COUNT_bf(const void *const hw, hri_tccount8_count_reg_t mask)
+static inline void hri_tccount8_toggle_COUNT_COUNT_bf(volatile void *const hw, hri_tccount8_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.COUNT.reg ^= TC_COUNT8_COUNT_COUNT(mask);
@@ -1795,7 +1795,7 @@ static inline void hri_tccount8_toggle_COUNT_COUNT_bf(const void *const hw, hri_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_count_reg_t hri_tccount8_read_COUNT_COUNT_bf(const void *const hw)
+static inline hri_tccount8_count_reg_t hri_tccount8_read_COUNT_COUNT_bf(volatile void *const hw)
 {
 	uint8_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_COUNT);
@@ -1804,7 +1804,7 @@ static inline hri_tccount8_count_reg_t hri_tccount8_read_COUNT_COUNT_bf(const vo
 	return tmp;
 }
 
-static inline void hri_tccount8_set_COUNT_reg(const void *const hw, hri_tccount8_count_reg_t mask)
+static inline void hri_tccount8_set_COUNT_reg(volatile void *const hw, hri_tccount8_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.COUNT.reg |= mask;
@@ -1812,7 +1812,7 @@ static inline void hri_tccount8_set_COUNT_reg(const void *const hw, hri_tccount8
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_count_reg_t hri_tccount8_get_COUNT_reg(const void *const hw, hri_tccount8_count_reg_t mask)
+static inline hri_tccount8_count_reg_t hri_tccount8_get_COUNT_reg(volatile void *const hw, hri_tccount8_count_reg_t mask)
 {
 	uint8_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_COUNT);
@@ -1821,7 +1821,7 @@ static inline hri_tccount8_count_reg_t hri_tccount8_get_COUNT_reg(const void *co
 	return tmp;
 }
 
-static inline void hri_tccount8_write_COUNT_reg(const void *const hw, hri_tccount8_count_reg_t data)
+static inline void hri_tccount8_write_COUNT_reg(volatile void *const hw, hri_tccount8_count_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.COUNT.reg = data;
@@ -1829,7 +1829,7 @@ static inline void hri_tccount8_write_COUNT_reg(const void *const hw, hri_tccoun
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_COUNT_reg(const void *const hw, hri_tccount8_count_reg_t mask)
+static inline void hri_tccount8_clear_COUNT_reg(volatile void *const hw, hri_tccount8_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.COUNT.reg &= ~mask;
@@ -1837,7 +1837,7 @@ static inline void hri_tccount8_clear_COUNT_reg(const void *const hw, hri_tccoun
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_COUNT_reg(const void *const hw, hri_tccount8_count_reg_t mask)
+static inline void hri_tccount8_toggle_COUNT_reg(volatile void *const hw, hri_tccount8_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.COUNT.reg ^= mask;
@@ -1845,13 +1845,13 @@ static inline void hri_tccount8_toggle_COUNT_reg(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_count_reg_t hri_tccount8_read_COUNT_reg(const void *const hw)
+static inline hri_tccount8_count_reg_t hri_tccount8_read_COUNT_reg(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_COUNT);
 	return ((Tc *)hw)->COUNT8.COUNT.reg;
 }
 
-static inline void hri_tccount16_set_COUNT_COUNT_bf(const void *const hw, hri_tccount16_count_reg_t mask)
+static inline void hri_tccount16_set_COUNT_COUNT_bf(volatile void *const hw, hri_tccount16_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.COUNT.reg |= TC_COUNT16_COUNT_COUNT(mask);
@@ -1859,7 +1859,7 @@ static inline void hri_tccount16_set_COUNT_COUNT_bf(const void *const hw, hri_tc
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_count_reg_t hri_tccount16_get_COUNT_COUNT_bf(const void *const         hw,
+static inline hri_tccount16_count_reg_t hri_tccount16_get_COUNT_COUNT_bf(volatile void *const         hw,
                                                                          hri_tccount16_count_reg_t mask)
 {
 	uint16_t tmp;
@@ -1869,7 +1869,7 @@ static inline hri_tccount16_count_reg_t hri_tccount16_get_COUNT_COUNT_bf(const v
 	return tmp;
 }
 
-static inline void hri_tccount16_write_COUNT_COUNT_bf(const void *const hw, hri_tccount16_count_reg_t data)
+static inline void hri_tccount16_write_COUNT_COUNT_bf(volatile void *const hw, hri_tccount16_count_reg_t data)
 {
 	uint16_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1881,7 +1881,7 @@ static inline void hri_tccount16_write_COUNT_COUNT_bf(const void *const hw, hri_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_clear_COUNT_COUNT_bf(const void *const hw, hri_tccount16_count_reg_t mask)
+static inline void hri_tccount16_clear_COUNT_COUNT_bf(volatile void *const hw, hri_tccount16_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.COUNT.reg &= ~TC_COUNT16_COUNT_COUNT(mask);
@@ -1889,7 +1889,7 @@ static inline void hri_tccount16_clear_COUNT_COUNT_bf(const void *const hw, hri_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_toggle_COUNT_COUNT_bf(const void *const hw, hri_tccount16_count_reg_t mask)
+static inline void hri_tccount16_toggle_COUNT_COUNT_bf(volatile void *const hw, hri_tccount16_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.COUNT.reg ^= TC_COUNT16_COUNT_COUNT(mask);
@@ -1897,7 +1897,7 @@ static inline void hri_tccount16_toggle_COUNT_COUNT_bf(const void *const hw, hri
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_count_reg_t hri_tccount16_read_COUNT_COUNT_bf(const void *const hw)
+static inline hri_tccount16_count_reg_t hri_tccount16_read_COUNT_COUNT_bf(volatile void *const hw)
 {
 	uint16_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_COUNT);
@@ -1906,7 +1906,7 @@ static inline hri_tccount16_count_reg_t hri_tccount16_read_COUNT_COUNT_bf(const 
 	return tmp;
 }
 
-static inline void hri_tccount16_set_COUNT_reg(const void *const hw, hri_tccount16_count_reg_t mask)
+static inline void hri_tccount16_set_COUNT_reg(volatile void *const hw, hri_tccount16_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.COUNT.reg |= mask;
@@ -1914,7 +1914,7 @@ static inline void hri_tccount16_set_COUNT_reg(const void *const hw, hri_tccount
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_count_reg_t hri_tccount16_get_COUNT_reg(const void *const         hw,
+static inline hri_tccount16_count_reg_t hri_tccount16_get_COUNT_reg(volatile void *const         hw,
                                                                     hri_tccount16_count_reg_t mask)
 {
 	uint16_t tmp;
@@ -1924,7 +1924,7 @@ static inline hri_tccount16_count_reg_t hri_tccount16_get_COUNT_reg(const void *
 	return tmp;
 }
 
-static inline void hri_tccount16_write_COUNT_reg(const void *const hw, hri_tccount16_count_reg_t data)
+static inline void hri_tccount16_write_COUNT_reg(volatile void *const hw, hri_tccount16_count_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.COUNT.reg = data;
@@ -1932,7 +1932,7 @@ static inline void hri_tccount16_write_COUNT_reg(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_clear_COUNT_reg(const void *const hw, hri_tccount16_count_reg_t mask)
+static inline void hri_tccount16_clear_COUNT_reg(volatile void *const hw, hri_tccount16_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.COUNT.reg &= ~mask;
@@ -1940,7 +1940,7 @@ static inline void hri_tccount16_clear_COUNT_reg(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_toggle_COUNT_reg(const void *const hw, hri_tccount16_count_reg_t mask)
+static inline void hri_tccount16_toggle_COUNT_reg(volatile void *const hw, hri_tccount16_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.COUNT.reg ^= mask;
@@ -1948,13 +1948,13 @@ static inline void hri_tccount16_toggle_COUNT_reg(const void *const hw, hri_tcco
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_count_reg_t hri_tccount16_read_COUNT_reg(const void *const hw)
+static inline hri_tccount16_count_reg_t hri_tccount16_read_COUNT_reg(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_COUNT);
 	return ((Tc *)hw)->COUNT16.COUNT.reg;
 }
 
-static inline void hri_tccount32_set_COUNT_COUNT_bf(const void *const hw, hri_tccount32_count_reg_t mask)
+static inline void hri_tccount32_set_COUNT_COUNT_bf(volatile void *const hw, hri_tccount32_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.COUNT.reg |= TC_COUNT32_COUNT_COUNT(mask);
@@ -1962,7 +1962,7 @@ static inline void hri_tccount32_set_COUNT_COUNT_bf(const void *const hw, hri_tc
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_count_reg_t hri_tccount32_get_COUNT_COUNT_bf(const void *const         hw,
+static inline hri_tccount32_count_reg_t hri_tccount32_get_COUNT_COUNT_bf(volatile void *const         hw,
                                                                          hri_tccount32_count_reg_t mask)
 {
 	uint32_t tmp;
@@ -1972,7 +1972,7 @@ static inline hri_tccount32_count_reg_t hri_tccount32_get_COUNT_COUNT_bf(const v
 	return tmp;
 }
 
-static inline void hri_tccount32_write_COUNT_COUNT_bf(const void *const hw, hri_tccount32_count_reg_t data)
+static inline void hri_tccount32_write_COUNT_COUNT_bf(volatile void *const hw, hri_tccount32_count_reg_t data)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -1984,7 +1984,7 @@ static inline void hri_tccount32_write_COUNT_COUNT_bf(const void *const hw, hri_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_clear_COUNT_COUNT_bf(const void *const hw, hri_tccount32_count_reg_t mask)
+static inline void hri_tccount32_clear_COUNT_COUNT_bf(volatile void *const hw, hri_tccount32_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.COUNT.reg &= ~TC_COUNT32_COUNT_COUNT(mask);
@@ -1992,7 +1992,7 @@ static inline void hri_tccount32_clear_COUNT_COUNT_bf(const void *const hw, hri_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_toggle_COUNT_COUNT_bf(const void *const hw, hri_tccount32_count_reg_t mask)
+static inline void hri_tccount32_toggle_COUNT_COUNT_bf(volatile void *const hw, hri_tccount32_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.COUNT.reg ^= TC_COUNT32_COUNT_COUNT(mask);
@@ -2000,7 +2000,7 @@ static inline void hri_tccount32_toggle_COUNT_COUNT_bf(const void *const hw, hri
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_count_reg_t hri_tccount32_read_COUNT_COUNT_bf(const void *const hw)
+static inline hri_tccount32_count_reg_t hri_tccount32_read_COUNT_COUNT_bf(volatile void *const hw)
 {
 	uint32_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_COUNT);
@@ -2009,7 +2009,7 @@ static inline hri_tccount32_count_reg_t hri_tccount32_read_COUNT_COUNT_bf(const 
 	return tmp;
 }
 
-static inline void hri_tccount32_set_COUNT_reg(const void *const hw, hri_tccount32_count_reg_t mask)
+static inline void hri_tccount32_set_COUNT_reg(volatile void *const hw, hri_tccount32_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.COUNT.reg |= mask;
@@ -2017,7 +2017,7 @@ static inline void hri_tccount32_set_COUNT_reg(const void *const hw, hri_tccount
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_count_reg_t hri_tccount32_get_COUNT_reg(const void *const         hw,
+static inline hri_tccount32_count_reg_t hri_tccount32_get_COUNT_reg(volatile void *const         hw,
                                                                     hri_tccount32_count_reg_t mask)
 {
 	uint32_t tmp;
@@ -2027,7 +2027,7 @@ static inline hri_tccount32_count_reg_t hri_tccount32_get_COUNT_reg(const void *
 	return tmp;
 }
 
-static inline void hri_tccount32_write_COUNT_reg(const void *const hw, hri_tccount32_count_reg_t data)
+static inline void hri_tccount32_write_COUNT_reg(volatile void *const hw, hri_tccount32_count_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.COUNT.reg = data;
@@ -2035,7 +2035,7 @@ static inline void hri_tccount32_write_COUNT_reg(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_clear_COUNT_reg(const void *const hw, hri_tccount32_count_reg_t mask)
+static inline void hri_tccount32_clear_COUNT_reg(volatile void *const hw, hri_tccount32_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.COUNT.reg &= ~mask;
@@ -2043,7 +2043,7 @@ static inline void hri_tccount32_clear_COUNT_reg(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_toggle_COUNT_reg(const void *const hw, hri_tccount32_count_reg_t mask)
+static inline void hri_tccount32_toggle_COUNT_reg(volatile void *const hw, hri_tccount32_count_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.COUNT.reg ^= mask;
@@ -2051,13 +2051,13 @@ static inline void hri_tccount32_toggle_COUNT_reg(const void *const hw, hri_tcco
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_count_reg_t hri_tccount32_read_COUNT_reg(const void *const hw)
+static inline hri_tccount32_count_reg_t hri_tccount32_read_COUNT_reg(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_COUNT);
 	return ((Tc *)hw)->COUNT32.COUNT.reg;
 }
 
-static inline void hri_tccount8_set_PER_PER_bf(const void *const hw, hri_tccount8_per_reg_t mask)
+static inline void hri_tccount8_set_PER_PER_bf(volatile void *const hw, hri_tccount8_per_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PER.reg |= TC_COUNT8_PER_PER(mask);
@@ -2065,7 +2065,7 @@ static inline void hri_tccount8_set_PER_PER_bf(const void *const hw, hri_tccount
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_per_reg_t hri_tccount8_get_PER_PER_bf(const void *const hw, hri_tccount8_per_reg_t mask)
+static inline hri_tccount8_per_reg_t hri_tccount8_get_PER_PER_bf(volatile void *const hw, hri_tccount8_per_reg_t mask)
 {
 	uint8_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_PER);
@@ -2074,7 +2074,7 @@ static inline hri_tccount8_per_reg_t hri_tccount8_get_PER_PER_bf(const void *con
 	return tmp;
 }
 
-static inline void hri_tccount8_write_PER_PER_bf(const void *const hw, hri_tccount8_per_reg_t data)
+static inline void hri_tccount8_write_PER_PER_bf(volatile void *const hw, hri_tccount8_per_reg_t data)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -2086,7 +2086,7 @@ static inline void hri_tccount8_write_PER_PER_bf(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_PER_PER_bf(const void *const hw, hri_tccount8_per_reg_t mask)
+static inline void hri_tccount8_clear_PER_PER_bf(volatile void *const hw, hri_tccount8_per_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PER.reg &= ~TC_COUNT8_PER_PER(mask);
@@ -2094,7 +2094,7 @@ static inline void hri_tccount8_clear_PER_PER_bf(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_PER_PER_bf(const void *const hw, hri_tccount8_per_reg_t mask)
+static inline void hri_tccount8_toggle_PER_PER_bf(volatile void *const hw, hri_tccount8_per_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PER.reg ^= TC_COUNT8_PER_PER(mask);
@@ -2102,7 +2102,7 @@ static inline void hri_tccount8_toggle_PER_PER_bf(const void *const hw, hri_tcco
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_per_reg_t hri_tccount8_read_PER_PER_bf(const void *const hw)
+static inline hri_tccount8_per_reg_t hri_tccount8_read_PER_PER_bf(volatile void *const hw)
 {
 	uint8_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_PER);
@@ -2111,7 +2111,7 @@ static inline hri_tccount8_per_reg_t hri_tccount8_read_PER_PER_bf(const void *co
 	return tmp;
 }
 
-static inline void hri_tccount8_set_PER_reg(const void *const hw, hri_tccount8_per_reg_t mask)
+static inline void hri_tccount8_set_PER_reg(volatile void *const hw, hri_tccount8_per_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PER.reg |= mask;
@@ -2119,7 +2119,7 @@ static inline void hri_tccount8_set_PER_reg(const void *const hw, hri_tccount8_p
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_per_reg_t hri_tccount8_get_PER_reg(const void *const hw, hri_tccount8_per_reg_t mask)
+static inline hri_tccount8_per_reg_t hri_tccount8_get_PER_reg(volatile void *const hw, hri_tccount8_per_reg_t mask)
 {
 	uint8_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_PER);
@@ -2128,7 +2128,7 @@ static inline hri_tccount8_per_reg_t hri_tccount8_get_PER_reg(const void *const 
 	return tmp;
 }
 
-static inline void hri_tccount8_write_PER_reg(const void *const hw, hri_tccount8_per_reg_t data)
+static inline void hri_tccount8_write_PER_reg(volatile void *const hw, hri_tccount8_per_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PER.reg = data;
@@ -2136,7 +2136,7 @@ static inline void hri_tccount8_write_PER_reg(const void *const hw, hri_tccount8
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_PER_reg(const void *const hw, hri_tccount8_per_reg_t mask)
+static inline void hri_tccount8_clear_PER_reg(volatile void *const hw, hri_tccount8_per_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PER.reg &= ~mask;
@@ -2144,7 +2144,7 @@ static inline void hri_tccount8_clear_PER_reg(const void *const hw, hri_tccount8
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_PER_reg(const void *const hw, hri_tccount8_per_reg_t mask)
+static inline void hri_tccount8_toggle_PER_reg(volatile void *const hw, hri_tccount8_per_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PER.reg ^= mask;
@@ -2152,13 +2152,13 @@ static inline void hri_tccount8_toggle_PER_reg(const void *const hw, hri_tccount
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_per_reg_t hri_tccount8_read_PER_reg(const void *const hw)
+static inline hri_tccount8_per_reg_t hri_tccount8_read_PER_reg(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_PER);
 	return ((Tc *)hw)->COUNT8.PER.reg;
 }
 
-static inline void hri_tccount8_set_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
+static inline void hri_tccount8_set_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CC[index].reg |= TC_COUNT8_CC_CC(mask);
@@ -2166,7 +2166,7 @@ static inline void hri_tccount8_set_CC_CC_bf(const void *const hw, uint8_t index
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_cc_reg_t hri_tccount8_get_CC_CC_bf(const void *const hw, uint8_t index,
+static inline hri_tccount8_cc_reg_t hri_tccount8_get_CC_CC_bf(volatile void *const hw, uint8_t index,
                                                               hri_tccount8_cc_reg_t mask)
 {
 	uint8_t tmp;
@@ -2176,7 +2176,7 @@ static inline hri_tccount8_cc_reg_t hri_tccount8_get_CC_CC_bf(const void *const 
 	return tmp;
 }
 
-static inline void hri_tccount8_write_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount8_cc_reg_t data)
+static inline void hri_tccount8_write_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount8_cc_reg_t data)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -2188,7 +2188,7 @@ static inline void hri_tccount8_write_CC_CC_bf(const void *const hw, uint8_t ind
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
+static inline void hri_tccount8_clear_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CC[index].reg &= ~TC_COUNT8_CC_CC(mask);
@@ -2196,7 +2196,7 @@ static inline void hri_tccount8_clear_CC_CC_bf(const void *const hw, uint8_t ind
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
+static inline void hri_tccount8_toggle_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CC[index].reg ^= TC_COUNT8_CC_CC(mask);
@@ -2204,7 +2204,7 @@ static inline void hri_tccount8_toggle_CC_CC_bf(const void *const hw, uint8_t in
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_cc_reg_t hri_tccount8_read_CC_CC_bf(const void *const hw, uint8_t index)
+static inline hri_tccount8_cc_reg_t hri_tccount8_read_CC_CC_bf(volatile void *const hw, uint8_t index)
 {
 	uint8_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_CC0 | TC_SYNCBUSY_CC1);
@@ -2213,7 +2213,7 @@ static inline hri_tccount8_cc_reg_t hri_tccount8_read_CC_CC_bf(const void *const
 	return tmp;
 }
 
-static inline void hri_tccount8_set_CC_reg(const void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
+static inline void hri_tccount8_set_CC_reg(volatile void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CC[index].reg |= mask;
@@ -2221,7 +2221,7 @@ static inline void hri_tccount8_set_CC_reg(const void *const hw, uint8_t index, 
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_cc_reg_t hri_tccount8_get_CC_reg(const void *const hw, uint8_t index,
+static inline hri_tccount8_cc_reg_t hri_tccount8_get_CC_reg(volatile void *const hw, uint8_t index,
                                                             hri_tccount8_cc_reg_t mask)
 {
 	uint8_t tmp;
@@ -2231,7 +2231,7 @@ static inline hri_tccount8_cc_reg_t hri_tccount8_get_CC_reg(const void *const hw
 	return tmp;
 }
 
-static inline void hri_tccount8_write_CC_reg(const void *const hw, uint8_t index, hri_tccount8_cc_reg_t data)
+static inline void hri_tccount8_write_CC_reg(volatile void *const hw, uint8_t index, hri_tccount8_cc_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CC[index].reg = data;
@@ -2239,7 +2239,7 @@ static inline void hri_tccount8_write_CC_reg(const void *const hw, uint8_t index
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_CC_reg(const void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
+static inline void hri_tccount8_clear_CC_reg(volatile void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CC[index].reg &= ~mask;
@@ -2247,7 +2247,7 @@ static inline void hri_tccount8_clear_CC_reg(const void *const hw, uint8_t index
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_CC_reg(const void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
+static inline void hri_tccount8_toggle_CC_reg(volatile void *const hw, uint8_t index, hri_tccount8_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CC[index].reg ^= mask;
@@ -2255,13 +2255,13 @@ static inline void hri_tccount8_toggle_CC_reg(const void *const hw, uint8_t inde
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_cc_reg_t hri_tccount8_read_CC_reg(const void *const hw, uint8_t index)
+static inline hri_tccount8_cc_reg_t hri_tccount8_read_CC_reg(volatile void *const hw, uint8_t index)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_CC0 | TC_SYNCBUSY_CC1);
 	return ((Tc *)hw)->COUNT8.CC[index].reg;
 }
 
-static inline void hri_tccount16_set_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
+static inline void hri_tccount16_set_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CC[index].reg |= TC_COUNT16_CC_CC(mask);
@@ -2269,7 +2269,7 @@ static inline void hri_tccount16_set_CC_CC_bf(const void *const hw, uint8_t inde
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_cc_reg_t hri_tccount16_get_CC_CC_bf(const void *const hw, uint8_t index,
+static inline hri_tccount16_cc_reg_t hri_tccount16_get_CC_CC_bf(volatile void *const hw, uint8_t index,
                                                                 hri_tccount16_cc_reg_t mask)
 {
 	uint16_t tmp;
@@ -2279,7 +2279,7 @@ static inline hri_tccount16_cc_reg_t hri_tccount16_get_CC_CC_bf(const void *cons
 	return tmp;
 }
 
-static inline void hri_tccount16_write_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount16_cc_reg_t data)
+static inline void hri_tccount16_write_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount16_cc_reg_t data)
 {
 	uint16_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -2291,7 +2291,7 @@ static inline void hri_tccount16_write_CC_CC_bf(const void *const hw, uint8_t in
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_clear_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
+static inline void hri_tccount16_clear_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CC[index].reg &= ~TC_COUNT16_CC_CC(mask);
@@ -2299,7 +2299,7 @@ static inline void hri_tccount16_clear_CC_CC_bf(const void *const hw, uint8_t in
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_toggle_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
+static inline void hri_tccount16_toggle_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CC[index].reg ^= TC_COUNT16_CC_CC(mask);
@@ -2307,7 +2307,7 @@ static inline void hri_tccount16_toggle_CC_CC_bf(const void *const hw, uint8_t i
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_cc_reg_t hri_tccount16_read_CC_CC_bf(const void *const hw, uint8_t index)
+static inline hri_tccount16_cc_reg_t hri_tccount16_read_CC_CC_bf(volatile void *const hw, uint8_t index)
 {
 	uint16_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_CC0 | TC_SYNCBUSY_CC1);
@@ -2316,7 +2316,7 @@ static inline hri_tccount16_cc_reg_t hri_tccount16_read_CC_CC_bf(const void *con
 	return tmp;
 }
 
-static inline void hri_tccount16_set_CC_reg(const void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
+static inline void hri_tccount16_set_CC_reg(volatile void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CC[index].reg |= mask;
@@ -2324,7 +2324,7 @@ static inline void hri_tccount16_set_CC_reg(const void *const hw, uint8_t index,
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_cc_reg_t hri_tccount16_get_CC_reg(const void *const hw, uint8_t index,
+static inline hri_tccount16_cc_reg_t hri_tccount16_get_CC_reg(volatile void *const hw, uint8_t index,
                                                               hri_tccount16_cc_reg_t mask)
 {
 	uint16_t tmp;
@@ -2334,7 +2334,7 @@ static inline hri_tccount16_cc_reg_t hri_tccount16_get_CC_reg(const void *const 
 	return tmp;
 }
 
-static inline void hri_tccount16_write_CC_reg(const void *const hw, uint8_t index, hri_tccount16_cc_reg_t data)
+static inline void hri_tccount16_write_CC_reg(volatile void *const hw, uint8_t index, hri_tccount16_cc_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CC[index].reg = data;
@@ -2342,7 +2342,7 @@ static inline void hri_tccount16_write_CC_reg(const void *const hw, uint8_t inde
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_clear_CC_reg(const void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
+static inline void hri_tccount16_clear_CC_reg(volatile void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CC[index].reg &= ~mask;
@@ -2350,7 +2350,7 @@ static inline void hri_tccount16_clear_CC_reg(const void *const hw, uint8_t inde
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_toggle_CC_reg(const void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
+static inline void hri_tccount16_toggle_CC_reg(volatile void *const hw, uint8_t index, hri_tccount16_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CC[index].reg ^= mask;
@@ -2358,13 +2358,13 @@ static inline void hri_tccount16_toggle_CC_reg(const void *const hw, uint8_t ind
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_cc_reg_t hri_tccount16_read_CC_reg(const void *const hw, uint8_t index)
+static inline hri_tccount16_cc_reg_t hri_tccount16_read_CC_reg(volatile void *const hw, uint8_t index)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_CC0 | TC_SYNCBUSY_CC1);
 	return ((Tc *)hw)->COUNT16.CC[index].reg;
 }
 
-static inline void hri_tccount32_set_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
+static inline void hri_tccount32_set_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CC[index].reg |= TC_COUNT32_CC_CC(mask);
@@ -2372,7 +2372,7 @@ static inline void hri_tccount32_set_CC_CC_bf(const void *const hw, uint8_t inde
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_cc_reg_t hri_tccount32_get_CC_CC_bf(const void *const hw, uint8_t index,
+static inline hri_tccount32_cc_reg_t hri_tccount32_get_CC_CC_bf(volatile void *const hw, uint8_t index,
                                                                 hri_tccount32_cc_reg_t mask)
 {
 	uint32_t tmp;
@@ -2381,7 +2381,7 @@ static inline hri_tccount32_cc_reg_t hri_tccount32_get_CC_CC_bf(const void *cons
 	return tmp;
 }
 
-static inline void hri_tccount32_write_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount32_cc_reg_t data)
+static inline void hri_tccount32_write_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount32_cc_reg_t data)
 {
 	uint32_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -2393,7 +2393,7 @@ static inline void hri_tccount32_write_CC_CC_bf(const void *const hw, uint8_t in
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_clear_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
+static inline void hri_tccount32_clear_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CC[index].reg &= ~TC_COUNT32_CC_CC(mask);
@@ -2401,7 +2401,7 @@ static inline void hri_tccount32_clear_CC_CC_bf(const void *const hw, uint8_t in
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_toggle_CC_CC_bf(const void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
+static inline void hri_tccount32_toggle_CC_CC_bf(volatile void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CC[index].reg ^= TC_COUNT32_CC_CC(mask);
@@ -2409,7 +2409,7 @@ static inline void hri_tccount32_toggle_CC_CC_bf(const void *const hw, uint8_t i
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_cc_reg_t hri_tccount32_read_CC_CC_bf(const void *const hw, uint8_t index)
+static inline hri_tccount32_cc_reg_t hri_tccount32_read_CC_CC_bf(volatile void *const hw, uint8_t index)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT32.CC[index].reg;
@@ -2417,7 +2417,7 @@ static inline hri_tccount32_cc_reg_t hri_tccount32_read_CC_CC_bf(const void *con
 	return tmp;
 }
 
-static inline void hri_tccount32_set_CC_reg(const void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
+static inline void hri_tccount32_set_CC_reg(volatile void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CC[index].reg |= mask;
@@ -2425,7 +2425,7 @@ static inline void hri_tccount32_set_CC_reg(const void *const hw, uint8_t index,
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_cc_reg_t hri_tccount32_get_CC_reg(const void *const hw, uint8_t index,
+static inline hri_tccount32_cc_reg_t hri_tccount32_get_CC_reg(volatile void *const hw, uint8_t index,
                                                               hri_tccount32_cc_reg_t mask)
 {
 	uint32_t tmp;
@@ -2435,7 +2435,7 @@ static inline hri_tccount32_cc_reg_t hri_tccount32_get_CC_reg(const void *const 
 	return tmp;
 }
 
-static inline void hri_tccount32_write_CC_reg(const void *const hw, uint8_t index, hri_tccount32_cc_reg_t data)
+static inline void hri_tccount32_write_CC_reg(volatile void *const hw, uint8_t index, hri_tccount32_cc_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CC[index].reg = data;
@@ -2443,7 +2443,7 @@ static inline void hri_tccount32_write_CC_reg(const void *const hw, uint8_t inde
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_clear_CC_reg(const void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
+static inline void hri_tccount32_clear_CC_reg(volatile void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CC[index].reg &= ~mask;
@@ -2451,7 +2451,7 @@ static inline void hri_tccount32_clear_CC_reg(const void *const hw, uint8_t inde
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_toggle_CC_reg(const void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
+static inline void hri_tccount32_toggle_CC_reg(volatile void *const hw, uint8_t index, hri_tccount32_cc_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CC[index].reg ^= mask;
@@ -2459,13 +2459,13 @@ static inline void hri_tccount32_toggle_CC_reg(const void *const hw, uint8_t ind
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_cc_reg_t hri_tccount32_read_CC_reg(const void *const hw, uint8_t index)
+static inline hri_tccount32_cc_reg_t hri_tccount32_read_CC_reg(volatile void *const hw, uint8_t index)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_CC0 | TC_SYNCBUSY_CC1);
 	return ((Tc *)hw)->COUNT32.CC[index].reg;
 }
 
-static inline void hri_tccount8_set_PERBUF_PERBUF_bf(const void *const hw, hri_tccount8_perbuf_reg_t mask)
+static inline void hri_tccount8_set_PERBUF_PERBUF_bf(volatile void *const hw, hri_tccount8_perbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PERBUF.reg |= TC_COUNT8_PERBUF_PERBUF(mask);
@@ -2482,7 +2482,7 @@ static inline hri_tccount8_perbuf_reg_t hri_tccount8_get_PERBUF_PERBUF_bf(const 
 	return tmp;
 }
 
-static inline void hri_tccount8_write_PERBUF_PERBUF_bf(const void *const hw, hri_tccount8_perbuf_reg_t data)
+static inline void hri_tccount8_write_PERBUF_PERBUF_bf(volatile void *const hw, hri_tccount8_perbuf_reg_t data)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -2494,7 +2494,7 @@ static inline void hri_tccount8_write_PERBUF_PERBUF_bf(const void *const hw, hri
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_PERBUF_PERBUF_bf(const void *const hw, hri_tccount8_perbuf_reg_t mask)
+static inline void hri_tccount8_clear_PERBUF_PERBUF_bf(volatile void *const hw, hri_tccount8_perbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PERBUF.reg &= ~TC_COUNT8_PERBUF_PERBUF(mask);
@@ -2502,7 +2502,7 @@ static inline void hri_tccount8_clear_PERBUF_PERBUF_bf(const void *const hw, hri
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_PERBUF_PERBUF_bf(const void *const hw, hri_tccount8_perbuf_reg_t mask)
+static inline void hri_tccount8_toggle_PERBUF_PERBUF_bf(volatile void *const hw, hri_tccount8_perbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PERBUF.reg ^= TC_COUNT8_PERBUF_PERBUF(mask);
@@ -2510,7 +2510,7 @@ static inline void hri_tccount8_toggle_PERBUF_PERBUF_bf(const void *const hw, hr
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_perbuf_reg_t hri_tccount8_read_PERBUF_PERBUF_bf(const void *const hw)
+static inline hri_tccount8_perbuf_reg_t hri_tccount8_read_PERBUF_PERBUF_bf(volatile void *const hw)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT8.PERBUF.reg;
@@ -2518,7 +2518,7 @@ static inline hri_tccount8_perbuf_reg_t hri_tccount8_read_PERBUF_PERBUF_bf(const
 	return tmp;
 }
 
-static inline void hri_tccount8_set_PERBUF_reg(const void *const hw, hri_tccount8_perbuf_reg_t mask)
+static inline void hri_tccount8_set_PERBUF_reg(volatile void *const hw, hri_tccount8_perbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PERBUF.reg |= mask;
@@ -2526,7 +2526,7 @@ static inline void hri_tccount8_set_PERBUF_reg(const void *const hw, hri_tccount
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_perbuf_reg_t hri_tccount8_get_PERBUF_reg(const void *const         hw,
+static inline hri_tccount8_perbuf_reg_t hri_tccount8_get_PERBUF_reg(volatile void *const         hw,
                                                                     hri_tccount8_perbuf_reg_t mask)
 {
 	uint8_t tmp;
@@ -2536,7 +2536,7 @@ static inline hri_tccount8_perbuf_reg_t hri_tccount8_get_PERBUF_reg(const void *
 	return tmp;
 }
 
-static inline void hri_tccount8_write_PERBUF_reg(const void *const hw, hri_tccount8_perbuf_reg_t data)
+static inline void hri_tccount8_write_PERBUF_reg(volatile void *const hw, hri_tccount8_perbuf_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PERBUF.reg = data;
@@ -2544,7 +2544,7 @@ static inline void hri_tccount8_write_PERBUF_reg(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_PERBUF_reg(const void *const hw, hri_tccount8_perbuf_reg_t mask)
+static inline void hri_tccount8_clear_PERBUF_reg(volatile void *const hw, hri_tccount8_perbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PERBUF.reg &= ~mask;
@@ -2552,7 +2552,7 @@ static inline void hri_tccount8_clear_PERBUF_reg(const void *const hw, hri_tccou
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_PERBUF_reg(const void *const hw, hri_tccount8_perbuf_reg_t mask)
+static inline void hri_tccount8_toggle_PERBUF_reg(volatile void *const hw, hri_tccount8_perbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.PERBUF.reg ^= mask;
@@ -2560,13 +2560,13 @@ static inline void hri_tccount8_toggle_PERBUF_reg(const void *const hw, hri_tcco
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_perbuf_reg_t hri_tccount8_read_PERBUF_reg(const void *const hw)
+static inline hri_tccount8_perbuf_reg_t hri_tccount8_read_PERBUF_reg(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return ((Tc *)hw)->COUNT8.PERBUF.reg;
 }
 
-static inline void hri_tccount8_set_CCBUF_CCBUF_bf(const void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
+static inline void hri_tccount8_set_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CCBUF[index].reg |= TC_COUNT8_CCBUF_CCBUF(mask);
@@ -2574,7 +2574,7 @@ static inline void hri_tccount8_set_CCBUF_CCBUF_bf(const void *const hw, uint8_t
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_ccbuf_reg_t hri_tccount8_get_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline hri_tccount8_ccbuf_reg_t hri_tccount8_get_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                                        hri_tccount8_ccbuf_reg_t mask)
 {
 	uint8_t tmp;
@@ -2583,7 +2583,7 @@ static inline hri_tccount8_ccbuf_reg_t hri_tccount8_get_CCBUF_CCBUF_bf(const voi
 	return tmp;
 }
 
-static inline void hri_tccount8_write_CCBUF_CCBUF_bf(const void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t data)
+static inline void hri_tccount8_write_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t data)
 {
 	uint8_t tmp;
 	TC_CRITICAL_SECTION_ENTER();
@@ -2595,7 +2595,7 @@ static inline void hri_tccount8_write_CCBUF_CCBUF_bf(const void *const hw, uint8
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_CCBUF_CCBUF_bf(const void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
+static inline void hri_tccount8_clear_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CCBUF[index].reg &= ~TC_COUNT8_CCBUF_CCBUF(mask);
@@ -2603,7 +2603,7 @@ static inline void hri_tccount8_clear_CCBUF_CCBUF_bf(const void *const hw, uint8
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline void hri_tccount8_toggle_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                       hri_tccount8_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
@@ -2612,7 +2612,7 @@ static inline void hri_tccount8_toggle_CCBUF_CCBUF_bf(const void *const hw, uint
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_ccbuf_reg_t hri_tccount8_read_CCBUF_CCBUF_bf(const void *const hw, uint8_t index)
+static inline hri_tccount8_ccbuf_reg_t hri_tccount8_read_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index)
 {
 	uint8_t tmp;
 	tmp = ((Tc *)hw)->COUNT8.CCBUF[index].reg;
@@ -2620,7 +2620,7 @@ static inline hri_tccount8_ccbuf_reg_t hri_tccount8_read_CCBUF_CCBUF_bf(const vo
 	return tmp;
 }
 
-static inline void hri_tccount8_set_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
+static inline void hri_tccount8_set_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CCBUF[index].reg |= mask;
@@ -2628,7 +2628,7 @@ static inline void hri_tccount8_set_CCBUF_reg(const void *const hw, uint8_t inde
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_ccbuf_reg_t hri_tccount8_get_CCBUF_reg(const void *const hw, uint8_t index,
+static inline hri_tccount8_ccbuf_reg_t hri_tccount8_get_CCBUF_reg(volatile void *const hw, uint8_t index,
                                                                   hri_tccount8_ccbuf_reg_t mask)
 {
 	uint8_t tmp;
@@ -2638,7 +2638,7 @@ static inline hri_tccount8_ccbuf_reg_t hri_tccount8_get_CCBUF_reg(const void *co
 	return tmp;
 }
 
-static inline void hri_tccount8_write_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t data)
+static inline void hri_tccount8_write_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CCBUF[index].reg = data;
@@ -2646,7 +2646,7 @@ static inline void hri_tccount8_write_CCBUF_reg(const void *const hw, uint8_t in
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_clear_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
+static inline void hri_tccount8_clear_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CCBUF[index].reg &= ~mask;
@@ -2654,7 +2654,7 @@ static inline void hri_tccount8_clear_CCBUF_reg(const void *const hw, uint8_t in
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount8_toggle_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
+static inline void hri_tccount8_toggle_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount8_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT8.CCBUF[index].reg ^= mask;
@@ -2662,13 +2662,13 @@ static inline void hri_tccount8_toggle_CCBUF_reg(const void *const hw, uint8_t i
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount8_ccbuf_reg_t hri_tccount8_read_CCBUF_reg(const void *const hw, uint8_t index)
+static inline hri_tccount8_ccbuf_reg_t hri_tccount8_read_CCBUF_reg(volatile void *const hw, uint8_t index)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return ((Tc *)hw)->COUNT8.CCBUF[index].reg;
 }
 
-static inline void hri_tccount16_set_CCBUF_CCBUF_bf(const void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t mask)
+static inline void hri_tccount16_set_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CCBUF[index].reg |= TC_COUNT16_CCBUF_CCBUF(mask);
@@ -2676,7 +2676,7 @@ static inline void hri_tccount16_set_CCBUF_CCBUF_bf(const void *const hw, uint8_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_ccbuf_reg_t hri_tccount16_get_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline hri_tccount16_ccbuf_reg_t hri_tccount16_get_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                                          hri_tccount16_ccbuf_reg_t mask)
 {
 	uint16_t tmp;
@@ -2685,7 +2685,7 @@ static inline hri_tccount16_ccbuf_reg_t hri_tccount16_get_CCBUF_CCBUF_bf(const v
 	return tmp;
 }
 
-static inline void hri_tccount16_write_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline void hri_tccount16_write_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                       hri_tccount16_ccbuf_reg_t data)
 {
 	uint16_t tmp;
@@ -2698,7 +2698,7 @@ static inline void hri_tccount16_write_CCBUF_CCBUF_bf(const void *const hw, uint
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_clear_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline void hri_tccount16_clear_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                       hri_tccount16_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
@@ -2707,7 +2707,7 @@ static inline void hri_tccount16_clear_CCBUF_CCBUF_bf(const void *const hw, uint
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_toggle_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline void hri_tccount16_toggle_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                        hri_tccount16_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
@@ -2716,7 +2716,7 @@ static inline void hri_tccount16_toggle_CCBUF_CCBUF_bf(const void *const hw, uin
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_ccbuf_reg_t hri_tccount16_read_CCBUF_CCBUF_bf(const void *const hw, uint8_t index)
+static inline hri_tccount16_ccbuf_reg_t hri_tccount16_read_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index)
 {
 	uint16_t tmp;
 	tmp = ((Tc *)hw)->COUNT16.CCBUF[index].reg;
@@ -2724,7 +2724,7 @@ static inline hri_tccount16_ccbuf_reg_t hri_tccount16_read_CCBUF_CCBUF_bf(const 
 	return tmp;
 }
 
-static inline void hri_tccount16_set_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t mask)
+static inline void hri_tccount16_set_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CCBUF[index].reg |= mask;
@@ -2732,7 +2732,7 @@ static inline void hri_tccount16_set_CCBUF_reg(const void *const hw, uint8_t ind
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_ccbuf_reg_t hri_tccount16_get_CCBUF_reg(const void *const hw, uint8_t index,
+static inline hri_tccount16_ccbuf_reg_t hri_tccount16_get_CCBUF_reg(volatile void *const hw, uint8_t index,
                                                                     hri_tccount16_ccbuf_reg_t mask)
 {
 	uint16_t tmp;
@@ -2742,7 +2742,7 @@ static inline hri_tccount16_ccbuf_reg_t hri_tccount16_get_CCBUF_reg(const void *
 	return tmp;
 }
 
-static inline void hri_tccount16_write_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t data)
+static inline void hri_tccount16_write_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CCBUF[index].reg = data;
@@ -2750,7 +2750,7 @@ static inline void hri_tccount16_write_CCBUF_reg(const void *const hw, uint8_t i
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_clear_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t mask)
+static inline void hri_tccount16_clear_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CCBUF[index].reg &= ~mask;
@@ -2758,7 +2758,7 @@ static inline void hri_tccount16_clear_CCBUF_reg(const void *const hw, uint8_t i
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount16_toggle_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t mask)
+static inline void hri_tccount16_toggle_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount16_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.CCBUF[index].reg ^= mask;
@@ -2766,13 +2766,13 @@ static inline void hri_tccount16_toggle_CCBUF_reg(const void *const hw, uint8_t 
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount16_ccbuf_reg_t hri_tccount16_read_CCBUF_reg(const void *const hw, uint8_t index)
+static inline hri_tccount16_ccbuf_reg_t hri_tccount16_read_CCBUF_reg(volatile void *const hw, uint8_t index)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return ((Tc *)hw)->COUNT16.CCBUF[index].reg;
 }
 
-static inline void hri_tccount32_set_CCBUF_CCBUF_bf(const void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t mask)
+static inline void hri_tccount32_set_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CCBUF[index].reg |= TC_COUNT32_CCBUF_CCBUF(mask);
@@ -2780,7 +2780,7 @@ static inline void hri_tccount32_set_CCBUF_CCBUF_bf(const void *const hw, uint8_
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_ccbuf_reg_t hri_tccount32_get_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline hri_tccount32_ccbuf_reg_t hri_tccount32_get_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                                          hri_tccount32_ccbuf_reg_t mask)
 {
 	uint32_t tmp;
@@ -2789,7 +2789,7 @@ static inline hri_tccount32_ccbuf_reg_t hri_tccount32_get_CCBUF_CCBUF_bf(const v
 	return tmp;
 }
 
-static inline void hri_tccount32_write_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline void hri_tccount32_write_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                       hri_tccount32_ccbuf_reg_t data)
 {
 	uint32_t tmp;
@@ -2802,7 +2802,7 @@ static inline void hri_tccount32_write_CCBUF_CCBUF_bf(const void *const hw, uint
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_clear_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline void hri_tccount32_clear_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                       hri_tccount32_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
@@ -2811,7 +2811,7 @@ static inline void hri_tccount32_clear_CCBUF_CCBUF_bf(const void *const hw, uint
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_toggle_CCBUF_CCBUF_bf(const void *const hw, uint8_t index,
+static inline void hri_tccount32_toggle_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index,
                                                        hri_tccount32_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
@@ -2820,7 +2820,7 @@ static inline void hri_tccount32_toggle_CCBUF_CCBUF_bf(const void *const hw, uin
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_ccbuf_reg_t hri_tccount32_read_CCBUF_CCBUF_bf(const void *const hw, uint8_t index)
+static inline hri_tccount32_ccbuf_reg_t hri_tccount32_read_CCBUF_CCBUF_bf(volatile void *const hw, uint8_t index)
 {
 	uint32_t tmp;
 	tmp = ((Tc *)hw)->COUNT32.CCBUF[index].reg;
@@ -2828,7 +2828,7 @@ static inline hri_tccount32_ccbuf_reg_t hri_tccount32_read_CCBUF_CCBUF_bf(const 
 	return tmp;
 }
 
-static inline void hri_tccount32_set_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t mask)
+static inline void hri_tccount32_set_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CCBUF[index].reg |= mask;
@@ -2836,7 +2836,7 @@ static inline void hri_tccount32_set_CCBUF_reg(const void *const hw, uint8_t ind
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_ccbuf_reg_t hri_tccount32_get_CCBUF_reg(const void *const hw, uint8_t index,
+static inline hri_tccount32_ccbuf_reg_t hri_tccount32_get_CCBUF_reg(volatile void *const hw, uint8_t index,
                                                                     hri_tccount32_ccbuf_reg_t mask)
 {
 	uint32_t tmp;
@@ -2846,7 +2846,7 @@ static inline hri_tccount32_ccbuf_reg_t hri_tccount32_get_CCBUF_reg(const void *
 	return tmp;
 }
 
-static inline void hri_tccount32_write_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t data)
+static inline void hri_tccount32_write_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t data)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CCBUF[index].reg = data;
@@ -2854,7 +2854,7 @@ static inline void hri_tccount32_write_CCBUF_reg(const void *const hw, uint8_t i
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_clear_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t mask)
+static inline void hri_tccount32_clear_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CCBUF[index].reg &= ~mask;
@@ -2862,7 +2862,7 @@ static inline void hri_tccount32_clear_CCBUF_reg(const void *const hw, uint8_t i
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline void hri_tccount32_toggle_CCBUF_reg(const void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t mask)
+static inline void hri_tccount32_toggle_CCBUF_reg(volatile void *const hw, uint8_t index, hri_tccount32_ccbuf_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT32.CCBUF[index].reg ^= mask;
@@ -2870,19 +2870,19 @@ static inline void hri_tccount32_toggle_CCBUF_reg(const void *const hw, uint8_t 
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tccount32_ccbuf_reg_t hri_tccount32_read_CCBUF_reg(const void *const hw, uint8_t index)
+static inline hri_tccount32_ccbuf_reg_t hri_tccount32_read_CCBUF_reg(volatile void *const hw, uint8_t index)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return ((Tc *)hw)->COUNT32.CCBUF[index].reg;
 }
 
-static inline bool hri_tc_get_STATUS_STOP_bit(const void *const hw)
+static inline bool hri_tc_get_STATUS_STOP_bit(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return (((Tc *)hw)->COUNT16.STATUS.reg & TC_STATUS_STOP) >> TC_STATUS_STOP_Pos;
 }
 
-static inline void hri_tc_clear_STATUS_STOP_bit(const void *const hw)
+static inline void hri_tc_clear_STATUS_STOP_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.STATUS.reg = TC_STATUS_STOP;
@@ -2890,13 +2890,13 @@ static inline void hri_tc_clear_STATUS_STOP_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_STATUS_SLAVE_bit(const void *const hw)
+static inline bool hri_tc_get_STATUS_SLAVE_bit(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return (((Tc *)hw)->COUNT16.STATUS.reg & TC_STATUS_SLAVE) >> TC_STATUS_SLAVE_Pos;
 }
 
-static inline void hri_tc_clear_STATUS_SLAVE_bit(const void *const hw)
+static inline void hri_tc_clear_STATUS_SLAVE_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.STATUS.reg = TC_STATUS_SLAVE;
@@ -2904,13 +2904,13 @@ static inline void hri_tc_clear_STATUS_SLAVE_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_STATUS_PERBUFV_bit(const void *const hw)
+static inline bool hri_tc_get_STATUS_PERBUFV_bit(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return (((Tc *)hw)->COUNT16.STATUS.reg & TC_STATUS_PERBUFV) >> TC_STATUS_PERBUFV_Pos;
 }
 
-static inline void hri_tc_clear_STATUS_PERBUFV_bit(const void *const hw)
+static inline void hri_tc_clear_STATUS_PERBUFV_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.STATUS.reg = TC_STATUS_PERBUFV;
@@ -2918,13 +2918,13 @@ static inline void hri_tc_clear_STATUS_PERBUFV_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_STATUS_CCBUFV0_bit(const void *const hw)
+static inline bool hri_tc_get_STATUS_CCBUFV0_bit(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return (((Tc *)hw)->COUNT16.STATUS.reg & TC_STATUS_CCBUFV0) >> TC_STATUS_CCBUFV0_Pos;
 }
 
-static inline void hri_tc_clear_STATUS_CCBUFV0_bit(const void *const hw)
+static inline void hri_tc_clear_STATUS_CCBUFV0_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.STATUS.reg = TC_STATUS_CCBUFV0;
@@ -2932,13 +2932,13 @@ static inline void hri_tc_clear_STATUS_CCBUFV0_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline bool hri_tc_get_STATUS_CCBUFV1_bit(const void *const hw)
+static inline bool hri_tc_get_STATUS_CCBUFV1_bit(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return (((Tc *)hw)->COUNT16.STATUS.reg & TC_STATUS_CCBUFV1) >> TC_STATUS_CCBUFV1_Pos;
 }
 
-static inline void hri_tc_clear_STATUS_CCBUFV1_bit(const void *const hw)
+static inline void hri_tc_clear_STATUS_CCBUFV1_bit(volatile void *const hw)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.STATUS.reg = TC_STATUS_CCBUFV1;
@@ -2946,7 +2946,7 @@ static inline void hri_tc_clear_STATUS_CCBUFV1_bit(const void *const hw)
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_status_reg_t hri_tc_get_STATUS_reg(const void *const hw, hri_tc_status_reg_t mask)
+static inline hri_tc_status_reg_t hri_tc_get_STATUS_reg(volatile void *const hw, hri_tc_status_reg_t mask)
 {
 	uint8_t tmp;
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
@@ -2955,7 +2955,7 @@ static inline hri_tc_status_reg_t hri_tc_get_STATUS_reg(const void *const hw, hr
 	return tmp;
 }
 
-static inline void hri_tc_clear_STATUS_reg(const void *const hw, hri_tc_status_reg_t mask)
+static inline void hri_tc_clear_STATUS_reg(volatile void *const hw, hri_tc_status_reg_t mask)
 {
 	TC_CRITICAL_SECTION_ENTER();
 	((Tc *)hw)->COUNT16.STATUS.reg = mask;
@@ -2963,7 +2963,7 @@ static inline void hri_tc_clear_STATUS_reg(const void *const hw, hri_tc_status_r
 	TC_CRITICAL_SECTION_LEAVE();
 }
 
-static inline hri_tc_status_reg_t hri_tc_read_STATUS_reg(const void *const hw)
+static inline hri_tc_status_reg_t hri_tc_read_STATUS_reg(volatile void *const hw)
 {
 	hri_tc_wait_for_sync(hw, TC_SYNCBUSY_MASK);
 	return ((Tc *)hw)->COUNT16.STATUS.reg;

@@ -65,9 +65,10 @@ uint32_t trueRandom() noexcept;
 
 void pinMode(Pin pin, enum PinMode mode) noexcept;
 bool digitalRead(Pin pin) noexcept;
+void digitalWrite(Pin pin, bool high) noexcept;
 
-static inline void delayMicroseconds(uint32_t) __attribute__((always_inline, unused));
-static inline void delayMicroseconds(uint32_t usec)
+static inline void delayMicroseconds(uint32_t) noexcept __attribute__((always_inline, unused));
+static inline void delayMicroseconds(uint32_t usec) noexcept
 {
     // Based on Paul Stoffregen's implementation for Teensy 3.0 (http://www.pjrc.com/)
     if (usec != 0)
@@ -175,6 +176,10 @@ union CallbackParameter
 };
 
 typedef void (*StandardCallbackFunction)(CallbackParameter) noexcept;
+
+#include "Peripherals.h"
+#include "AnalogIn.h"
+using AnalogIn::AdcBits;
 
 static inline int32_t random(uint32_t howbig) noexcept
 {

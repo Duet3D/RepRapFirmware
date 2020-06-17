@@ -7,17 +7,25 @@
  *  Glue to allow some of our C++ functions to be called from C
  */
 
-#include "Core_C.h"
+#include "Core.h"
 #include <Hardware/IoPorts.h>
 
+// IoPort::SetPinMode calls this
 extern "C" void pinMode(Pin pin, enum PinMode mode) noexcept
 {
-	IoPort::SetPinMode(pin, mode);
+	qq;
 }
 
+// IoPort::ReadPin calls this
 extern "C" bool digitalRead(Pin pin) noexcept
 {
-	return IoPort::ReadPin(pin);
+	qq;
+}
+
+// IoPort::WriteDigital calls this
+extern "C" void digitalWrite(Pin pin, bool high) noexcept
+{
+	qq;
 }
 
 // End
