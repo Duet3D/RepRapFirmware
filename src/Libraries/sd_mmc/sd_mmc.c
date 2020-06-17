@@ -185,12 +185,14 @@ bool hsmci_wait_end_of_write_blocks(void) noexcept
 
 uint32_t hsmci_get_speed(void) noexcept
 {
-	return mci_sync_get_speed();
+	//TODO
+	return 0;
 }
 
 driverIdleFunc_t hsmci_set_idle_func(driverIdleFunc_t func) noexcept
 {
-	return mci_sync_set_idle_func(func);
+	//TODO
+	return NULL;
 }
 
 # else

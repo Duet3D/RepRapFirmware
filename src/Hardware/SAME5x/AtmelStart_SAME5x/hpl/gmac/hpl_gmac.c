@@ -36,6 +36,10 @@
 #include <hpl_mac_async.h>
 #include <hpl_gmac_config.h>
 
+#if 1	// dc42
+# define min(_x,_y)		((_x) < (_y) ? (_x) : (_y))
+#endif
+
 /**
  * @brief Transmit buffer descriptor
  **/
