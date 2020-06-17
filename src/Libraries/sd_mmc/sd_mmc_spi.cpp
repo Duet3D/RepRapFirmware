@@ -71,7 +71,7 @@ static sd_mmc_spi_errno_t sd_mmc_spi_err;
 
 //! Slot array of SPI structures
 static SharedSpiClient *sd_mmc_spi_devices[SD_MMC_SPI_MEM_CNT];
-static SharedSpiClient *currentSpiClient;
+static SharedSpiClient *currentSpiClient = nullptr;
 
 //! 32 bits response of the last command
 static uint32_t sd_mmc_spi_response_32;
@@ -333,28 +333,37 @@ void sd_mmc_spi_init(const Pin csPins[SD_MMC_SPI_MEM_CNT]) noexcept
 	}
 }
 
+// Note, every call to sd_mmc_spi_select_device must be matched to a call to sd_mmc_spi_deselect_device so that the SPI mutex gets released!
+// Unfortunately, sd_mmc.c calls this more than one without deselecting it in between. So check whether it is already selected.
 void sd_mmc_spi_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept
 {
 	UNUSED(bus_width);
 	UNUSED(high_speed);
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
 
-	if (clock > SD_MMC_SPI_MAX_CLOCK)
+	if (currentSpiClient == nullptr)
 	{
-		clock = SD_MMC_SPI_MAX_CLOCK;
-	}
+		if (clock > SD_MMC_SPI_MAX_CLOCK)
+		{
+			clock = SD_MMC_SPI_MAX_CLOCK;
+		}
 
-	currentSpiClient = sd_mmc_spi_devices[slot];
-	currentSpiClient->SetClockFrequency(clock);
-	currentSpiClient->Select();
-	delayMicroseconds(1);
+		currentSpiClient = sd_mmc_spi_devices[slot];
+		currentSpiClient->SetClockFrequency(clock);
+		currentSpiClient->Select();
+		delayMicroseconds(1);
+	}
 }
 
 void sd_mmc_spi_deselect_device(uint8_t slot) noexcept
 {
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
-	sd_mmc_spi_devices[slot]->Deselect();
-	delayMicroseconds(1);
+	if (currentSpiClient != nullptr)
+	{
+		currentSpiClient->Deselect();
+		currentSpiClient = nullptr;
+		delayMicroseconds(1);
+	}
 }
 
 void sd_mmc_spi_send_clock() noexcept

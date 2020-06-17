@@ -1820,17 +1820,11 @@ uint8_t sd_mmc_nb_slot(void)
 	return SD_MMC_MEM_CNT;
 }
 
+// Check that the card is ready and initialise it if necessary
+// The card is not selected on entry or at exit
 sd_mmc_err_t sd_mmc_check(uint8_t slot)
 {
-#if 1	//dc42
-	sd_mmc_err_t sd_mmc_err;
-	do
-	{
-		sd_mmc_err = sd_mmc_select_slot(slot);
-	} while (sd_mmc_err == SD_MMC_CD_DEBOUNCING);
-#else
 	sd_mmc_err_t sd_mmc_err = sd_mmc_select_slot(slot);
-#endif
 	if (sd_mmc_err != SD_MMC_INIT_ONGOING)
 	{
 		sd_mmc_deselect_slot();
@@ -1842,14 +1836,9 @@ sd_mmc_err_t sd_mmc_check(uint8_t slot)
 		sd_mmc_debug("SD/MMC card ready\n\r");
 		sd_mmc_card->state = SD_MMC_CARD_STATE_READY;
 		sd_mmc_deselect_slot();
-#if 1
-		// If we return SD_MMC_INIT_ONGOING here then I can't see how we can ever access the card
-		return SD_MMC_OK;
-#else
 		// To notify that the card has been just initialized
 		// It is necessary for USB Device MSC
 		return SD_MMC_INIT_ONGOING;
-#endif
 	}
 	sd_mmc_debug("SD/MMC card initialization failed\n\r");
 	sd_mmc_card->state = SD_MMC_CARD_STATE_UNUSABLE;
@@ -1905,6 +1894,9 @@ uint32_t sd_mmc_get_interface_speed(uint8_t slot)
 
 #endif
 
+// Initialise for reading blocks
+// On entry the card is not selected
+// If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
 sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_block)
 {
 	sd_mmc_err_t sd_mmc_err;
@@ -1955,26 +1947,35 @@ sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_b
 	return SD_MMC_OK;
 }
 
+// Start reading blocks
+// On entry the card is selected
+// If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
 sd_mmc_err_t sd_mmc_start_read_blocks(void *dest, uint16_t nb_block)
 {
 	Assert(sd_mmc_nb_block_remaining >= nb_block);
 
 	if (!sd_mmc_card->iface->start_read_blocks(dest, nb_block)) {
 		sd_mmc_nb_block_remaining = 0;
+		sd_mmc_deselect_slot();
 		return SD_MMC_ERR_COMM;
 	}
 	sd_mmc_nb_block_remaining -= nb_block;
 	return SD_MMC_OK;
 }
 
+// Wait until all blocks have been read
+// On entry the device is selected
+// On return it is not selected
 sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort)
 {
 	if (!sd_mmc_card->iface->wait_end_of_read_blocks()) {
+		sd_mmc_deselect_slot();
 		return SD_MMC_ERR_COMM;
 	}
 	if (abort) {
 		sd_mmc_nb_block_remaining = 0;
 	} else if (sd_mmc_nb_block_remaining) {
+		sd_mmc_deselect_slot();
 		return SD_MMC_OK;
 	}
 
@@ -1994,6 +1995,9 @@ sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort)
 	return SD_MMC_OK;
 }
 
+// Initialise for writing blocks
+// On entry the card is not selected
+// If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
 sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_block)
 {
 	sd_mmc_err_t sd_mmc_err;
@@ -2041,25 +2045,34 @@ sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_
 	return SD_MMC_OK;
 }
 
+// Start writing blocks
+// On entry the card is selected
+// If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
 sd_mmc_err_t sd_mmc_start_write_blocks(const void *src, uint16_t nb_block)
 {
 	Assert(sd_mmc_nb_block_remaining >= nb_block);
 	if (!sd_mmc_card->iface->start_write_blocks(src, nb_block)) {
 		sd_mmc_nb_block_remaining = 0;
+		sd_mmc_deselect_slot();
 		return SD_MMC_ERR_COMM;
 	}
 	sd_mmc_nb_block_remaining -= nb_block;
 	return SD_MMC_OK;
 }
 
+// Wait until all blocks have been written
+// On entry the device is selected
+// On return it is not selected
 sd_mmc_err_t sd_mmc_wait_end_of_write_blocks(bool abort)
 {
 	if (!sd_mmc_card->iface->wait_end_of_write_blocks()) {
+		sd_mmc_deselect_slot();
 		return SD_MMC_ERR_COMM;
 	}
 	if (abort) {
 		sd_mmc_nb_block_remaining = 0;
 	} else if (sd_mmc_nb_block_remaining) {
+		sd_mmc_deselect_slot();
 		return SD_MMC_OK;
 	}
 
