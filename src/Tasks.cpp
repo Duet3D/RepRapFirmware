@@ -64,7 +64,6 @@ extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuf
 #endif
 
 // Mutexes
-static Mutex spiMutex;
 static Mutex i2cMutex;
 static Mutex sysDirMutex;
 static Mutex mallocMutex;
@@ -195,7 +194,6 @@ extern "C" [[noreturn]] void AppMain() noexcept
 extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 {
 	mallocMutex.Create("Malloc");
-	spiMutex.Create("SPI");
 	i2cMutex.Create("I2C");
 	sysDirMutex.Create("SysDir");
 
@@ -291,11 +289,6 @@ namespace Tasks
 			}
 		}
 		p.MessageF(mtype, "\n");
-	}
-
-	const Mutex *GetSpiMutex() noexcept
-	{
-		return &spiMutex;
 	}
 
 	const Mutex *GetI2CMutex() noexcept

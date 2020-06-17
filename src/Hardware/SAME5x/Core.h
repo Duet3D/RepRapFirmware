@@ -47,17 +47,18 @@ enum PinMode
 };
 
 #ifndef __cplusplus
-
 # include <stdbool.h>
-# define UNUSED(_x)	(void)_x
-# define Assert(expr) ((void) 0)
-
 #endif
 
+#define UNUSED(_x)	(void)_x
+#define Assert(expr) ((void) 0)
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+extern uint32_t SystemCoreClock;
+extern uint32_t SystemPeripheralClock;
 
 uint32_t millis() noexcept;
 uint32_t trueRandom() noexcept;

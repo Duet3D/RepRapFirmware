@@ -6,7 +6,7 @@
 #if SUPPORT_12864_LCD
 
 #include "Pins.h"
-#include "Tasks.h"
+#include <Hardware/SharedSpi/SharedSpiDevice.h>
 
 // The LCD SPI clock frequency is now defined in the Pins.h file for the configuration being built
 
@@ -40,7 +40,7 @@ inline void Lcd7920::DataDelay() noexcept
 }
 
 Lcd7920::Lcd7920(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: fonts(fnts), numFonts(nFonts)
+	: fonts(fnts), numFonts(nFonts), device(SharedSpiDevice::GetMainSharedSpiDevice(), LcdSpiClockFrequency, SpiMode::mode0, NoPin, true)
 {
 }
 
@@ -53,14 +53,12 @@ void Lcd7920::Init(uint8_t p_controllerType, Pin csPin, Pin p_a0Pin, uint32_t fr
 	{
 		pinMode(p_a0Pin, OUTPUT_HIGH);
 	}
-	device.csPin = csPin;
-	device.csPolarity = (controllerType == 0);		// active high chip select for ST7920, active low for ST7567
-	device.spiMode = 0;
-	device.clockFrequency = freq;
+	device.SetClockFrequency(freq);
+	device.SetCsPin(csPin);
+	device.SetCsPolarity(controllerType == 0);		// active high chip select for ST7920, active low for ST7567
 #ifdef __LPC17xx__
     device.sspChannel = LcdSpiChannel;
 #endif
-	sspi_master_init(&device, 8);
 
 	numContinuationBytesLeft = 0;
 	textInverted = false;
@@ -68,40 +66,28 @@ void Lcd7920::Init(uint8_t p_controllerType, Pin csPin, Pin p_a0Pin, uint32_t fr
 	startCol = NumCols;
 	endRow = endCol = nextFlushRow = 0;
 
-	{
-		MutexLocker lock(Tasks::GetSpiMutex());
-		sspi_master_setup_device(&device);
-		delayMicroseconds(1);
-		sspi_select_device(&device);
-		delayMicroseconds(1);
-
-		sendLcdCommand(LcdFunctionSetBasicAlpha);
-		delay(2);
-		sendLcdCommand(LcdFunctionSetBasicAlpha);
-		CommandDelay();
-		sendLcdCommand(LcdEntryModeSet);
-		CommandDelay();
-		sendLcdCommand(LcdDisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
-		delay(LcdDisplayClearDelayMillis);
-		sendLcdCommand(LcdFunctionSetExtendedGraphic);
-		CommandDelay();
-
-		sspi_deselect_device(&device);
-	}
+	device.Select();
+	delayMicroseconds(1);
+	sendLcdCommand(LcdFunctionSetBasicAlpha);
+	delay(2);
+	sendLcdCommand(LcdFunctionSetBasicAlpha);
+	CommandDelay();
+	sendLcdCommand(LcdEntryModeSet);
+	CommandDelay();
+	sendLcdCommand(LcdDisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
+	delay(LcdDisplayClearDelayMillis);
+	sendLcdCommand(LcdFunctionSetExtendedGraphic);
+	CommandDelay();
+	device.Deselect();
 
 	Clear();
 	FlushAll();
 
-	{
-		MutexLocker lock(Tasks::GetSpiMutex());
-		sspi_master_setup_device(&device);
-		delayMicroseconds(1);
-		sspi_select_device(&device);
-		delayMicroseconds(1);
-		sendLcdCommand(LcdDisplayOn);
-		CommandDelay();
-		sspi_deselect_device(&device);
-	}
+	device.Select();
+	delayMicroseconds(1);
+	sendLcdCommand(LcdDisplayOn);
+	CommandDelay();
+	device.Deselect();
 	currentFontNumber = 0;
 }
 
@@ -626,9 +612,7 @@ bool Lcd7920::FlushSome() noexcept
 			const uint8_t endColNum = (endCol + 15)/16;
 //			debugPrintf("flush %u %u %u\n", nextFlushRow, startColNum, endColNum);
 
-			MutexLocker lock(Tasks::GetSpiMutex());
-			sspi_master_setup_device(&device);
-			sspi_select_device(&device);
+			device.Select();
 			delayMicroseconds(1);
 
 			setGraphicsAddress(nextFlushRow, startColNum);
@@ -640,7 +624,7 @@ bool Lcd7920::FlushSome() noexcept
 				++startColNum;
 				DataDelay();
 			}
-			sspi_deselect_device(&device);
+			device.Deselect();
 		}
 
 		if (startRow != endRow)
@@ -723,12 +707,12 @@ void Lcd7920::sendLcd(uint8_t byteToSend, bool isData) noexcept
 	{
 		digitalWrite(a0Pin, isData);
 		uint8_t data[1] = { byteToSend };
-		sspi_transceive_packet(data, nullptr, 1);
+		device.TransceivePacket(data, nullptr, 1);
 	}
 	else								// ST7960
 	{
 		uint8_t data[3] = { (isData) ? (uint8_t)0xFA : (uint8_t)0xF8, (uint8_t)(byteToSend & 0xF0), (uint8_t)(byteToSend << 4) };
-		sspi_transceive_packet(data, nullptr, 3);
+		device.TransceivePacket(data, nullptr, 3);
 	}
 }
 

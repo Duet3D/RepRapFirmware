@@ -19,7 +19,7 @@ const uint8_t TypeK = 3;
 // If the inactive state of SCL is LOW (CPOL = 0): (in the case of the MAX31865, this is sampled on the falling edge of CS):
 // The MAX31856 changes data after the rising edge of CLK, and samples input data on the falling edge.
 // This requires NCPHA = 0.
-const uint8_t MAX31856_SpiMode = SPI_MODE_1;
+const SpiMode MAX31856_SpiMode = SpiMode::mode1;
 
 // Define the minimum interval between readings
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds

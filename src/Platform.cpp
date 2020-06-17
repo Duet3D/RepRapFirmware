@@ -37,6 +37,7 @@
 #include "Tasks.h"
 #include "Hardware/DmacManager.h"
 #include "Hardware/Cache.h"
+#include "Hardware/SharedSpi/SharedSpiDevice.h"
 #include "Math/Isqrt.h"
 #include "Hardware/I2C.h"
 
@@ -534,6 +535,9 @@ void Platform::Init() noexcept
 
 	// Initialise the IO port subsystem
 	IoPort::Init();
+
+	// Shared SPI subsystem
+	SharedSpiDevice::Init();
 
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)

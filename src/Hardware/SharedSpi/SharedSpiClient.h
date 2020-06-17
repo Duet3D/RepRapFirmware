@@ -23,6 +23,7 @@ public:
 	SharedSpiClient(SharedSpiDevice& dev, uint32_t clockFreq, SpiMode m, Pin p, bool polarity) noexcept;
 
 	void SetCsPin(Pin p) noexcept { csPin = p; InitCsPin(); }
+	void SetCsPolarity(bool b) noexcept { csActivePolarity = b; }
 	void SetClockFrequency(uint32_t clockFreq) noexcept { clockFrequency = clockFreq; }
 
 	bool Select(uint32_t timeout = Mutex::TimeoutUnlimited) const noexcept;					// get SPI ownership and select the device, return true if successful

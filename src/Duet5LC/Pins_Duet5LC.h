@@ -187,6 +187,13 @@ constexpr Pin EncoderPinA = PortBPin(5);
 constexpr Pin EncoderPinB = PortCPin(3);
 constexpr Pin EncoderPinSw = PortAPin(7);
 
+// Shared SPI definitions
+constexpr uint8_t SharedSpiSercomNumber = 7;
+constexpr Pin SharedSpiMosiPin = PortCPin(12);
+constexpr Pin SharedSpiMisoPin = PortCPin(15);
+constexpr Pin SharedSpiSclkPin = PortCPin(13);
+constexpr uint32_t SharedSpiPinFunction = GPIO_PIN_FUNCTION_C;
+
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
 enum class PinCapability: uint8_t

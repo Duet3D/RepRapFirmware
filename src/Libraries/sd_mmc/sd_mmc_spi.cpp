@@ -46,22 +46,17 @@
 #include <compiler.h>
 #include "Core.h"
 #include "conf_sd_mmc.h"
-#include "sd_mmc_protocol.h"
-#include "sd_mmc_spi.h"
-#include "sd_mmc.h"
-#include <string.h>
 
 #if SD_MMC_SPI_MEM_CNT != 0
 
-/**
- * \ingroup sd_mmc_stack_spi
- * \defgroup sd_mmc_stack_spi_internal Common SPI interface for SD/MMC stack
- * implementation
- *
- * @{
- */
+#include "sd_mmc_protocol.h"
+#include "sd_mmc_spi.h"
+#include "sd_mmc.h"
+#include <cstring>
 
-#include <SharedSpi.h>
+#include <Hardware/SharedSpi/SharedSpiClient.h>
+#include <Hardware/SharedSpi/SharedSpiDevice.h>
+#include <General/Portability.h>
 
 // Enable debug information for SD/MMC SPI module
 #ifdef SD_MMC_SPI_DEBUG
@@ -75,7 +70,8 @@ extern void debugPrintf(const char* fmt, ...);
 static sd_mmc_spi_errno_t sd_mmc_spi_err;
 
 //! Slot array of SPI structures
-static struct sspi_device sd_mmc_spi_devices[SD_MMC_SPI_MEM_CNT];
+static SharedSpiClient *sd_mmc_spi_devices[SD_MMC_SPI_MEM_CNT];
+static SharedSpiClient *currentSpiClient;
 
 //! 32 bits response of the last command
 static uint32_t sd_mmc_spi_response_32;
@@ -86,13 +82,13 @@ static uint16_t sd_mmc_spi_block_size;
 //! Total number of block requested by last mci_adtc_start()
 static uint16_t sd_mmc_spi_nb_block;
 
-static uint8_t sd_mmc_spi_crc7(uint8_t * buf, uint8_t size);
-static bool sd_mmc_spi_wait_busy(void);
-static bool sd_mmc_spi_start_read_block(void);
-static void sd_mmc_spi_stop_read_block(void);
-static void sd_mmc_spi_start_write_block(void);
-static bool sd_mmc_spi_stop_write_block(void);
-static bool sd_mmc_spi_stop_multiwrite_block(void);
+static uint8_t sd_mmc_spi_crc7(uint8_t * buf, uint8_t size) noexcept;
+static bool sd_mmc_spi_wait_busy() noexcept;
+static bool sd_mmc_spi_start_read_block() noexcept;
+static void sd_mmc_spi_stop_read_block() noexcept;
+static void sd_mmc_spi_start_write_block() noexcept;
+static bool sd_mmc_spi_stop_write_block() noexcept;
+static bool sd_mmc_spi_stop_multiwrite_block() noexcept;
 
 /**
  * \brief Calculates the CRC7
@@ -102,7 +98,7 @@ static bool sd_mmc_spi_stop_multiwrite_block(void);
  *
  * \return CRC7 computed
  */
-static uint8_t sd_mmc_spi_crc7(uint8_t * buf, uint8_t size)
+static uint8_t sd_mmc_spi_crc7(uint8_t * buf, uint8_t size) noexcept
 {
 	uint8_t crc, value, i;
 
@@ -126,14 +122,14 @@ static uint8_t sd_mmc_spi_crc7(uint8_t * buf, uint8_t size)
  *
  * \return true if success, otherwise false
  */
-static bool sd_mmc_spi_wait_busy(void)
+static bool sd_mmc_spi_wait_busy() noexcept
 {
 	uint8_t line = 0xFF;
 
 	/* Delay before check busy
 	 * Nbr timing minimum = 8 cylces
 	 */
-	sspi_read_packet(&line, 1);
+	currentSpiClient->ReadPacket(&line, 1);
 
 	/* Wait end of busy signal
 	 * Nec timing: 0 to unlimited
@@ -141,9 +137,9 @@ static bool sd_mmc_spi_wait_busy(void)
 	 * 200 000 * 8 cycles
 	 */
 	uint32_t nec_timeout = 200000;
-	sspi_read_packet(&line, 1);
+	currentSpiClient->ReadPacket(&line, 1);
 	do {
-		sspi_read_packet(&line, 1);
+		currentSpiClient->ReadPacket(&line, 1);
 		if (!(nec_timeout--)) {
 			return false;
 		}
@@ -157,7 +153,7 @@ static bool sd_mmc_spi_wait_busy(void)
  * \return true if success, otherwise false
  *         with a update of \ref sd_mmc_spi_err.
  */
-static bool sd_mmc_spi_start_read_block(void)
+static bool sd_mmc_spi_start_read_block() noexcept
 {
 	uint32_t i;
 	uint8_t token;
@@ -181,7 +177,7 @@ static bool sd_mmc_spi_start_read_block(void)
 			sd_mmc_spi_debug("%s: Read blocks timeout\n\r", __func__);
 			return false;
 		}
-		sspi_read_packet(&token, 1);
+		currentSpiClient->ReadPacket(&token, 1);
 		if (SPI_TOKEN_DATA_ERROR_VALID(token)) {
 			Assert(SPI_TOKEN_DATA_ERROR_ERRORS & token);
 			if (token & (SPI_TOKEN_DATA_ERROR_ERROR
@@ -203,23 +199,23 @@ static bool sd_mmc_spi_start_read_block(void)
 /**
  * \brief Executed the end of a read block transfer
  */
-static void sd_mmc_spi_stop_read_block(void)
+static void sd_mmc_spi_stop_read_block() noexcept
 {
 	uint8_t crc[2];
 	// Read 16-bit CRC (not cheked)
-	sspi_read_packet(crc, 2);
+	currentSpiClient->ReadPacket(crc, 2);
 }
 
 /**
  * \brief Sends the correct TOKEN on the line to start a write block transfer
  */
-static void sd_mmc_spi_start_write_block(void)
+static void sd_mmc_spi_start_write_block() noexcept
 {
 	uint8_t dummy = 0xFF;
 	Assert(!(sd_mmc_spi_transfert_pos % sd_mmc_spi_block_size));
 	// Delay before start write block:
 	// Nwr timing minimum = 8 cycles
-	sspi_write_packet(&dummy, 1);
+	currentSpiClient->WritePacket(&dummy, 1);
 	// Send start token
 	uint8_t token;
 	if (1 == sd_mmc_spi_nb_block) {
@@ -227,7 +223,7 @@ static void sd_mmc_spi_start_write_block(void)
 	} else {
 		token = SPI_TOKEN_MULTI_WRITE;
 	}
-	sspi_write_packet(&token, 1);
+	currentSpiClient->WritePacket(&token, 1);
 }
 
 /**
@@ -236,16 +232,16 @@ static void sd_mmc_spi_start_write_block(void)
  * \return true if success, otherwise false
  *         with a update of \ref sd_mmc_spi_err.
  */
-static bool sd_mmc_spi_stop_write_block(void)
+static bool sd_mmc_spi_stop_write_block() noexcept
 {
 	uint8_t resp;
 	uint16_t crc;
 
 	// Send CRC
 	crc = 0xFFFF; /// CRC is disabled in SPI mode
-	sspi_write_packet((uint8_t *)&crc, 2);
+	currentSpiClient->WritePacket((uint8_t *)&crc, 2);
 	// Receive data response token
-	sspi_read_packet(&resp, 1);
+	currentSpiClient->ReadPacket(&resp, 1);
 	if (!SPI_TOKEN_DATA_RESP_VALID(resp)) {
 		sd_mmc_spi_err = SD_MMC_SPI_ERR;
 		sd_mmc_spi_debug("%s: Invalid Data Response Token 0x%x\n\r", __func__, resp);
@@ -274,7 +270,7 @@ static bool sd_mmc_spi_stop_write_block(void)
  * \return true if success, otherwise false
  *         with a update of \ref sd_mmc_spi_err.
  */
-static bool sd_mmc_spi_stop_multiwrite_block(void)
+static bool sd_mmc_spi_stop_multiwrite_block() noexcept
 {
 	uint8_t value;
 
@@ -288,10 +284,10 @@ static bool sd_mmc_spi_stop_multiwrite_block(void)
 	// Delay before start write block:
 	// Nwr timing minimum = 8 cylces
 	value = 0xFF;
-	sspi_write_packet(&value, 1);
+	currentSpiClient->WritePacket(&value, 1);
 	// Send stop token
 	value = SPI_TOKEN_STOP_TRAN;
-	sspi_write_packet(&value, 1);
+	currentSpiClient->WritePacket(&value, 1);
 	// Wait busy
 	if (!sd_mmc_spi_wait_busy()) {
 		sd_mmc_spi_err = SD_MMC_SPI_ERR_WRITE_TIMEOUT;
@@ -305,10 +301,8 @@ static bool sd_mmc_spi_stop_multiwrite_block(void)
 //-------------------------------------------------------------------
 //--------------------- PUBLIC FUNCTIONS ----------------------------
 
-#if 1	//dc42
-
 // Get the speed of the SPI SD card interface for reporting purposes, in bytes/sec
-uint32_t spi_mmc_get_speed(void)
+uint32_t spi_mmc_get_speed() noexcept
 {
 	return SD_MMC_SPI_MAX_CLOCK/8;
 }
@@ -316,61 +310,54 @@ uint32_t spi_mmc_get_speed(void)
 static spiIdleFunc_t spiIdleFunc = NULL;
 
 // Set the idle function and return the old one
-spiIdleFunc_t sd_mmc_spi_set_idle_func(spiIdleFunc_t p)
+spiIdleFunc_t sd_mmc_spi_set_idle_func(spiIdleFunc_t p) noexcept
 {
 	spiIdleFunc_t ret = spiIdleFunc;
 	spiIdleFunc = p;
 	return ret;
 }
 
-#endif
-
-sd_mmc_spi_errno_t sd_mmc_spi_get_errno(void)
+sd_mmc_spi_errno_t sd_mmc_spi_get_errno() noexcept
 {
 	return sd_mmc_spi_err;
 }
 
-void sd_mmc_spi_init(const Pin csPins[SD_MMC_SPI_MEM_CNT])
+void sd_mmc_spi_init(const Pin csPins[SD_MMC_SPI_MEM_CNT]) noexcept
 {
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
 
 	// Initialize SPI interface and enable it
 	for (size_t i = 0; i < SD_MMC_SPI_MEM_CNT; ++i)
 	{
-		sd_mmc_spi_devices[i].csPin = csPins[i];
-		sd_mmc_spi_devices[i].csPolarity = false;
-		sspi_master_init(&sd_mmc_spi_devices[i], 8);
+		sd_mmc_spi_devices[i] = new SharedSpiClient(SharedSpiDevice::GetMainSharedSpiDevice(), SD_MMC_SPI_MAX_CLOCK, SpiMode::mode0, csPins[i], false);
 	}
 }
 
-void sd_mmc_spi_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed)
+void sd_mmc_spi_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept
 {
 	UNUSED(bus_width);
 	UNUSED(high_speed);
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
 
-#ifdef SD_MMC_SPI_MAX_CLOCK
-	if (clock > SD_MMC_SPI_MAX_CLOCK) {
+	if (clock > SD_MMC_SPI_MAX_CLOCK)
+	{
 		clock = SD_MMC_SPI_MAX_CLOCK;
 	}
-#endif
 
-	struct sspi_device *dev = &sd_mmc_spi_devices[slot];
-	dev->spiMode = SPI_MODE_0;
-	dev->clockFrequency = clock;
-	sspi_master_setup_device(dev);
-	sspi_select_device(dev);
+	currentSpiClient = sd_mmc_spi_devices[slot];
+	currentSpiClient->SetClockFrequency(clock);
+	currentSpiClient->Select();
 	delayMicroseconds(1);
 }
 
-void sd_mmc_spi_deselect_device(uint8_t slot)
+void sd_mmc_spi_deselect_device(uint8_t slot) noexcept
 {
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
-	sspi_deselect_device(&sd_mmc_spi_devices[slot]);
+	sd_mmc_spi_devices[slot]->Deselect();
 	delayMicroseconds(1);
 }
 
-void sd_mmc_spi_send_clock(void)
+void sd_mmc_spi_send_clock() noexcept
 {
 	uint8_t i;
 	uint8_t dummy = 0xFF;
@@ -378,17 +365,16 @@ void sd_mmc_spi_send_clock(void)
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
 	//! Send 80 cycles
 	for (i = 0; i < 10; i++) {
-		sspi_write_packet(&dummy, 1); // 8 cycles
+		currentSpiClient->WritePacket(&dummy, 1); // 8 cycles
 	}
 }
 
-bool sd_mmc_spi_send_cmd(sdmmc_cmd_def_t cmd, uint32_t arg)
+bool sd_mmc_spi_send_cmd(sdmmc_cmd_def_t cmd, uint32_t arg) noexcept
 {
 	return sd_mmc_spi_adtc_start(cmd, arg, 0, 0, false);
 }
 
-bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg,
-		uint16_t block_size, uint16_t nb_block, bool access_block)
+bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, bool access_block) noexcept
 {
 	uint8_t dummy = 0xFF;
 	uint8_t cmd_token[6];
@@ -410,9 +396,9 @@ bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg,
 	// 8 cycles to respect Ncs timing
 	// Note: This byte does not include start bit "0",
 	// thus it is ignored by card.
-	sspi_write_packet(&dummy, 1);
+	currentSpiClient->WritePacket(&dummy, 1);
 	// Send command
-	sspi_write_packet(cmd_token, sizeof(cmd_token));
+	currentSpiClient->WritePacket(cmd_token, sizeof(cmd_token));
 
 	// Wait for response
 	// Two retry will be done to manage the Ncr timing between command and reponse
@@ -420,10 +406,10 @@ bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg,
 	// WORKAROUND for no compliance card (Atmel Internal ref. SD13):
 	r1 = 0xFF;
 	// Ignore first byte because Ncr min. = 8 clock cylces
-	sspi_read_packet(&r1, 1);
+	currentSpiClient->ReadPacket(&r1, 1);
 	ncr_timeout = 7;
 	while (1) {
-		sspi_read_packet(&r1, 1); // 8 cycles
+		currentSpiClient->ReadPacket(&r1, 1); // 8 cycles
 		if ((r1 & R1_SPI_ERROR) == 0) {
 			// Valid R1 response
 			break;
@@ -473,12 +459,12 @@ bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg,
 	}
 	if (cmd & SDMMC_RESP_8) {
 		sd_mmc_spi_response_32 = 0;
-		sspi_read_packet((uint8_t*) & sd_mmc_spi_response_32, 1);
-		sd_mmc_spi_response_32 = le32_to_cpu(sd_mmc_spi_response_32);
+		currentSpiClient->ReadPacket((uint8_t*) & sd_mmc_spi_response_32, 1);
+		sd_mmc_spi_response_32 = LoadLE32(&sd_mmc_spi_response_32);
 	}
 	if (cmd & SDMMC_RESP_32) {
-		sspi_read_packet((uint8_t*) & sd_mmc_spi_response_32, 4);
-		sd_mmc_spi_response_32 = be32_to_cpu(sd_mmc_spi_response_32);
+		currentSpiClient->ReadPacket((uint8_t*) & sd_mmc_spi_response_32, 4);
+		sd_mmc_spi_response_32 = LoadBE32(&sd_mmc_spi_response_32);
 	}
 
 	sd_mmc_spi_block_size = block_size;
@@ -487,12 +473,12 @@ bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg,
 	return true; // Command complete
 }
 
-uint32_t sd_mmc_spi_get_response(void)
+uint32_t sd_mmc_spi_get_response() noexcept
 {
 	return sd_mmc_spi_response_32;
 }
 
-bool sd_mmc_spi_read_word(uint32_t* value)
+bool sd_mmc_spi_read_word(uint32_t* value) noexcept
 {
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
 	Assert(sd_mmc_spi_nb_block >
@@ -505,8 +491,8 @@ bool sd_mmc_spi_read_word(uint32_t* value)
 		}
 	}
 	// Read data
-	sspi_read_packet((uint8_t*)value, 4);
-	*value = le32_to_cpu(*value);
+	currentSpiClient->ReadPacket((uint8_t*)value, 4);
+	*value = LoadLE32(value);
 	sd_mmc_spi_transfert_pos += 4;
 
 	if (!(sd_mmc_spi_transfert_pos % sd_mmc_spi_block_size)) {
@@ -516,7 +502,7 @@ bool sd_mmc_spi_read_word(uint32_t* value)
 	return true;
 }
 
-bool sd_mmc_spi_write_word(uint32_t value)
+bool sd_mmc_spi_write_word(uint32_t value) noexcept
 {
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
 	Assert(sd_mmc_spi_nb_block >
@@ -528,8 +514,8 @@ bool sd_mmc_spi_write_word(uint32_t value)
 	}
 
 	// Write data
-	value = cpu_to_le32(value);
-	sspi_write_packet((uint8_t*)&value, 4);
+	value = LoadBE32(&value);
+	currentSpiClient->WritePacket((uint8_t*)&value, 4);
 	sd_mmc_spi_transfert_pos += 4;
 
 	if (!(sd_mmc_spi_transfert_pos % sd_mmc_spi_block_size)) {
@@ -547,7 +533,7 @@ bool sd_mmc_spi_write_word(uint32_t value)
 	return sd_mmc_spi_stop_multiwrite_block();
 }
 
-bool sd_mmc_spi_start_read_blocks(void *dest, uint16_t nb_block)
+bool sd_mmc_spi_start_read_blocks(void *dest, uint16_t nb_block) noexcept
 {
 	uint32_t pos;
 
@@ -561,7 +547,7 @@ bool sd_mmc_spi_start_read_blocks(void *dest, uint16_t nb_block)
 		}
 
 		// Read block
-		sspi_read_packet(&((uint8_t*)dest)[pos], sd_mmc_spi_block_size);
+		currentSpiClient->ReadPacket(&((uint8_t*)dest)[pos], sd_mmc_spi_block_size);
 		pos += sd_mmc_spi_block_size;
 		sd_mmc_spi_transfert_pos += sd_mmc_spi_block_size;
 
@@ -570,12 +556,12 @@ bool sd_mmc_spi_start_read_blocks(void *dest, uint16_t nb_block)
 	return true;
 }
 
-bool sd_mmc_spi_wait_end_of_read_blocks(void)
+bool sd_mmc_spi_wait_end_of_read_blocks() noexcept
 {
 	return true;
 }
 
-bool sd_mmc_spi_start_write_blocks(const void *src, uint16_t nb_block)
+bool sd_mmc_spi_start_write_blocks(const void *src, uint16_t nb_block) noexcept
 {
 	uint32_t pos;
 
@@ -587,7 +573,7 @@ bool sd_mmc_spi_start_write_blocks(const void *src, uint16_t nb_block)
 		sd_mmc_spi_start_write_block();
 
 		// Write block
-		sspi_write_packet(&((uint8_t*)src)[pos], sd_mmc_spi_block_size);
+		currentSpiClient->WritePacket(&((uint8_t*)src)[pos], sd_mmc_spi_block_size);
 		pos += sd_mmc_spi_block_size;
 		sd_mmc_spi_transfert_pos += sd_mmc_spi_block_size;
 
@@ -608,7 +594,7 @@ bool sd_mmc_spi_start_write_blocks(const void *src, uint16_t nb_block)
 	return true;
 }
 
-bool sd_mmc_spi_wait_end_of_write_blocks(void)
+bool sd_mmc_spi_wait_end_of_write_blocks() noexcept
 {
 	// Wait busy due to data programmation of last block writed
 	if (!sd_mmc_spi_wait_busy()) {

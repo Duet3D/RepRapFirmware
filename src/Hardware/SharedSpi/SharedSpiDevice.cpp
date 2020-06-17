@@ -24,10 +24,17 @@ constexpr uint32_t SpiTimeout = 10000;
 
 // SharedSpiDevice members
 
-#if SAME5x
 SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum) noexcept
+#if SAME5x
 	: hardware(Serial::Sercoms[sercomNum])
+#elif USART_SPI
+	: hardware(USART_SSPI)			// we ignore the parameter and support just one shared SPI
+#else
+	: hardware(SHARED_SPI)			// we ignore the parameter and support just one shared SPI
+#endif
 {
+#if SAME5x
+
 	Serial::EnableSercomClock(sercomNum);
 
 	// Set up the SERCOM
@@ -73,21 +80,11 @@ SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum) noexcept
 
 	hardware->SPI.CTRLB.bit.RXEN = 1;
 
-	mutex.Create("SPI");
-}
-
 #elif USART_SPI
-
-SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum) noexcept
-	: hardware(USART_SSPI)			// we ignore the parameter and support just one shared SPI
-{
-	ConfigurePin(APIN_USART_SSPI_SCK);
-	ConfigurePin(APIN_USART_SSPI_MOSI);
-	ConfigurePin(APIN_USART_SSPI_MISO);
 
 	pmc_enable_periph_clk(ID_SSPI);
 
-	// Set USART0 in SPI master mode
+	// Set USART in SPI master mode
 	hardware->US_IDR = ~0u;
 	hardware->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
 	hardware->US_MR = US_MR_USART_MODE_SPI_MASTER
@@ -96,25 +93,19 @@ SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum) noexcept
 					| US_MR_CHMODE_NORMAL;
 	hardware->US_BRGR = SystemPeripheralClock()/DefaultSharedSpiClockFrequency;
 	hardware->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
-}
 
 #else
-
-SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum) noexcept
-	: hardware(SHARED_SPI)			// we ignore the parameter and support just one shared SPI
-{
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_SCK]);
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MOSI]);
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MISO]);
 
 	pmc_enable_periph_clk(SHARED_SPI_INTERFACE_ID);
 
 	hardware->SPI_CR = SPI_CR_SPIDIS;
 	hardware->SPI_CR = SPI_CR_SWRST;
 	hardware->SPI_MR = SPI_MR_MSTR | SPI_MR_MODFDIS;
-}
 
 #endif
+
+	mutex.Create("SPI");
+}
 
 // SharedSpiClient members
 
@@ -136,7 +127,7 @@ void SharedSpiDevice::Enable() const noexcept
 	hardware->SPI.CTRLA.bit.ENABLE = 1;
 	hri_sercomusart_wait_for_sync(hardware, SERCOM_USART_CTRLA_ENABLE);
 #elif USART_SPI
-	hardware->US_CR = US_CR_RXEN | US_CR_TXEN;			// enable transmitter and receiver
+	hardware->US_CR = US_CR_RXEN | US_CR_TXEN;				// enable transmitter and receiver
 #else
 	spi_enable(hardware);
 #endif
@@ -221,7 +212,7 @@ void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) cons
 	hri_sercomusart_write_CTRLA_reg(hardware, regCtrlA);
 	Enable();
 #elif USART_SPI
-	hardware->US_CR = US_CR_RXDIS | US_CR_TXDIS;			// disable transmitter and receiver
+	Disable();
 	hardware->US_BRGR = SystemPeripheralClock()/freq;
 	uint32_t mr = US_MR_USART_MODE_SPI_MASTER
 					| US_MR_USCLKS_MCK
@@ -238,7 +229,7 @@ void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) cons
 	}
 	hardware->US_MR = mr;
 	hardware->US_CR = US_CR_RSTRX | US_CR_RSTTX;			// reset transmitter and receiver (required - see datasheet)
-	hardware->US_CR = US_CR_RXEN | US_CR_TXEN;				// enable transmitter and receiver
+	Enable();
 #else
 	spi_reset(hardware);
 	hardware->SPI_MR = SPI_MR_MSTR | SPI_MR_MODFDIS;
@@ -320,6 +311,30 @@ bool SharedSpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data,
 	}
 
 	return true;	// success
+}
+
+// Static members
+
+SharedSpiDevice *SharedSpiDevice::mainSharedSpiDevice = nullptr;
+
+void SharedSpiDevice::Init() noexcept
+{
+#if SAME5x
+	gpio_set_pin_function(SharedSpiMosiPin, SharedSpiPinFunction);
+	gpio_set_pin_function(SharedSpiMisoPin, SharedSpiPinFunction);
+	gpio_set_pin_function(SharedSpiSclkPin, SharedSpiPinFunction);
+	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiSercomNumber);
+#elif USART_SPI
+	ConfigurePin(APIN_USART_SSPI_SCK);
+	ConfigurePin(APIN_USART_SSPI_MOSI);
+	ConfigurePin(APIN_USART_SSPI_MISO);
+	mainSharedSpiDevice = new SharedSpiDevice(0);
+#else
+	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_SCK]);
+	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MOSI]);
+	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MISO]);
+	mainSharedSpiDevice = new SharedSpiDevice(0);
+#endif
 }
 
 // End

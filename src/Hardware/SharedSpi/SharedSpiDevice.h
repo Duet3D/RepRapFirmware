@@ -24,7 +24,7 @@ public:
 	bool Take(uint32_t timeout) const noexcept { return mutex.Take(timeout); }					// get ownership of this SPI, return true if successful
 	void Release() const noexcept { mutex.Release(); }
 
-	static void InitMainSharedSpiDevice() noexcept;
+	static void Init() noexcept;
 	static SharedSpiDevice& GetMainSharedSpiDevice() noexcept { return *mainSharedSpiDevice; }
 
 private:

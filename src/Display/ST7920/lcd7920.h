@@ -6,7 +6,7 @@
 #if SUPPORT_12864_LCD
 
 #include "Print.h"
-#include "SharedSpi.h"
+#include <Hardware/SharedSpi/SharedSpiClient.h>
 
 // Enumeration for specifying drawing modes
 enum class PixelMode : uint8_t
@@ -143,7 +143,7 @@ private:
 	const size_t numFonts;
 	size_t currentFontNumber;						// index of the current font
 	uint32_t charVal;
-	sspi_device device;
+	SharedSpiClient device;
 	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
 	uint8_t controllerType;
 	Pin a0Pin;
