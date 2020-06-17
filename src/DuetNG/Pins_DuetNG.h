@@ -219,6 +219,7 @@ constexpr Pin VssaSensePin = PortBPin(7);
 constexpr Pin Z_PROBE_PIN = PortCPin(1);									// AFE1_AD4/PC1 Z probe analog input
 constexpr Pin Z_PROBE_MOD_PIN = PortCPin(2);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
+constexpr bool DiagOnPolarity = true;
 
 // SD cards
 constexpr size_t NumSdCards = 2;

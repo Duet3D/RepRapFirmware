@@ -2832,7 +2832,7 @@ void RepRap::StartIap() noexcept
 #endif
 
 #if defined(DUET_NG) || defined(DUET_M)
-	IoPort::WriteDigital(DiagPin, false);			// turn the DIAG LED off
+	IoPort::WriteDigital(DiagPin, !DiagOnPolarity);	// turn the DIAG LED off
 #endif
 
 	wdt_restart(WDT);								// kick the watchdog one last time

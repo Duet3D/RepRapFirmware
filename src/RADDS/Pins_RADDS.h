@@ -187,6 +187,7 @@ constexpr Pin Z_PROBE_PIN = A5;  // RADDS "ADC" pin
 // D34 -- unused X-max on RADDS
 constexpr Pin Z_PROBE_MOD_PIN = 34;
 constexpr Pin DiagPin = NoPin;
+constexpr bool DiagOnPolarity = true;
 
 // SD cards
 constexpr size_t NumSdCards = 2;

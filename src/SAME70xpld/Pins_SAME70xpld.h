@@ -118,6 +118,7 @@ constexpr Pin VrefSensePin = NoPin;
 
 // Diagnostic LED pin
 constexpr Pin DiagPin = NoPin;												// TBD
+constexpr bool DiagOnPolarity = true;
 
 // SD cards
 constexpr size_t NumSdCards = 2;

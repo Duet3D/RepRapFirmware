@@ -217,6 +217,7 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 constexpr size_t MaxZProbes = 1;
 
 constexpr Pin DiagPin = NoPin;
+constexpr bool DiagOnPolarity = true;
 
 // DotStar LED control (USART0 is SharedSPI so we use USART1)
 #define DOTSTAR_USES_USART	1

@@ -160,6 +160,7 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 constexpr Pin Z_PROBE_PIN = PortCPin(15);									// Z probe analog input
 constexpr Pin Z_PROBE_MOD_PIN = PortCPin(26);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
+constexpr bool DiagOnPolarity = true;
 
 // SD cards
 constexpr size_t NumSdCards = 2;

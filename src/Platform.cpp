@@ -397,9 +397,7 @@ Platform::Platform() noexcept :
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init() noexcept
 {
-	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
-
-#if defined(DUET3)
+#if defined(DUET3) || defined(DUET_5LC)
 	pinMode(PhyResetPin, OUTPUT_LOW);			// hold the Ethernet Phy chip in reset, hopefully this will prevent it being too noisy if Ethernet is not enabled
 #endif
 
@@ -412,7 +410,7 @@ void Platform::Init() noexcept
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 #endif
 
-#if defined(DUET_M) || defined(PCCB_08) || defined(PCCB_08_X5)
+#if defined(DUET_M) || defined(PCCB_08) || defined(PCCB_08_X5) || defined(DUET_5LC)
 	// Make sure the on-board TMC22xx drivers are disabled
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #endif
