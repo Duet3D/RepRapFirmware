@@ -29,7 +29,7 @@ public:
 	void Reset() noexcept;
 
 	void SetCoordsToTarget(float[MaxAxes]) const noexcept;
-	void SetTarget(const float[MaxAxes]) noexcept;						// Set target for G38 move
+	float* GetTarget() noexcept { return target; };
 
 	const StraightProbeType GetType() const noexcept { return type; }
 	void SetStraightProbeType(const StraightProbeType t) noexcept { type = t; }
