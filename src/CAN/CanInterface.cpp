@@ -844,6 +844,7 @@ pre(driver.IsRemote())
 {
 	switch (gb.GetCommandFraction())
 	{
+	case -1:
 	case 0:
 		{
 			CanMessageGenericConstructor cons(M569Params);
