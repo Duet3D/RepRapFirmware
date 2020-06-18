@@ -36,7 +36,10 @@ public:
 	void DetachInterrupt() const noexcept;
 
 	uint16_t ReadAnalog() const noexcept;
+
+#if !SAME5x
 	AnalogChannelNumber GetAnalogChannel() const noexcept { return PinToAdcChannel(PinTable[logicalPin].pin); }
+#endif
 
 	void WriteDigital(bool high) const noexcept;
 

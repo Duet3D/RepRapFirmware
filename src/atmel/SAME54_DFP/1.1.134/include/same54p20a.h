@@ -404,10 +404,10 @@ typedef struct _DeviceVectors
 /* Cortex-M4 processor handlers */
 void Reset_Handler               ( void );
 void NonMaskableInt_Handler      ( void );
-void HardFault_Handler           ( void );
+void HardFault_Handler           ( void ) noexcept;
 void MemManagement_Handler       ( void );
 void BusFault_Handler            ( void );
-void UsageFault_Handler          ( void );
+void UsageFault_Handler          ( void ) noexcept;
 void SVCall_Handler              ( void );
 void DebugMonitor_Handler        ( void );
 void PendSV_Handler              ( void );
@@ -424,7 +424,7 @@ void OSCCTRL_4_Handler           ( void );
 void OSC32KCTRL_Handler          ( void );
 void SUPC_0_Handler              ( void );
 void SUPC_1_Handler              ( void );
-void WDT_Handler                 ( void );
+void WDT_Handler                 ( void ) noexcept;
 void RTC_Handler                 ( void );
 void EIC_0_Handler               ( void );
 void EIC_1_Handler               ( void );

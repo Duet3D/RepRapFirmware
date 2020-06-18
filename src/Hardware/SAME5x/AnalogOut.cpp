@@ -114,14 +114,14 @@ namespace AnalogOut
 				hri_tccount16_write_CCBUF_CCBUF_bf(tcdev, output, cc);
 			}
 
-			gpio_set_pin_function(pin, GPIO_PIN_FUNCTION_E);			// TCs are all on peripheral select E
+			SetPinFunction(pin, GpioPinFunction::E);			// TCs are all on peripheral select E
 			return true;
 		}
 		return false;
 	}
 
 	// Write PWM to the specified TCC device. 'output' may be 0..5.
-	static bool AnalogWriteTcc(Pin pin, unsigned int device, unsigned int output, unsigned int peri, float val, PwmFrequency freq)
+	static bool AnalogWriteTcc(Pin pin, unsigned int device, unsigned int output, GpioPinFunction peri, float val, PwmFrequency freq)
 	{
 		static volatile Tcc* const TccDevices[] =
 		{
@@ -183,7 +183,7 @@ namespace AnalogOut
 				hri_tcc_write_CCBUF_CCBUF_bf(tccdev, output, cc);
 			}
 
-			gpio_set_pin_function(pin, peri);
+			SetPinFunction(pin, peri);
 			return true;
 		}
 		return false;

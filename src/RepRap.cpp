@@ -38,11 +38,19 @@
 #endif
 
 #if HAS_HIGH_SPEED_SD
-# include "sam/drivers/hsmci/hsmci.h"
-# include "conf_sd_mmc.h"
+
+# if SAME5x
+//TODO
+# else
+#  include "sam/drivers/hsmci/hsmci.h"
+#  include "conf_sd_mmc.h"
+# endif
+
 # if SAME70
+// Check correct DMA channel assigned
 static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel assignment");
 # endif
+
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -60,7 +68,7 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
-#ifndef __LPC17xx__
+#if !defined(__LPC17xx__) && !SAME5x	//TODO implement for SAME5x
 
 static TaskHandle hsmciTask = nullptr;									// the task that is waiting for a HSMCI command to complete
 
@@ -547,7 +555,7 @@ void RepRap::Init() noexcept
 		processingConfig = false;
 	}
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_HIGH_SPEED_SD && !SAME5x		//TODO implement for SAMR5x
 	hsmci_set_idle_func(hsmciIdle);
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
@@ -578,7 +586,7 @@ bool RepRap::RunStartupFile(const char *filename) noexcept
 
 void RepRap::Exit() noexcept
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_HIGH_SPEED_SD && !SAME5x		//TODO implement for SAME5x
 	hsmci_set_idle_func(nullptr);
 #endif
 	active = false;
@@ -828,7 +836,7 @@ void RepRap::EmergencyStop() noexcept
 void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 {
 	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
-	wdt_restart(WDT);							// kick the watchdog
+	watchdogReset();							// kick the watchdog
 
 #if SAM4E || SAME70
 	rswdt_restart(RSWDT);						// kick the secondary watchdog
@@ -930,7 +938,7 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 
 #if defined(__LPC17xx__)
     LPC_SYSCTL->RSID = 0x3F;					// Clear bits in reset reasons stored in RSID
-#else
+#elif !SAME5x
 # ifndef RSTC_MR_KEY_PASSWD
 // Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
 #  define RSTC_MR_KEY_PASSWD (0xA5u << 24)
@@ -1239,7 +1247,7 @@ void RepRap::Tick() noexcept
 	// Kicking the watchdog before it has been initialised may trigger it!
 	if (active)
 	{
-		wdt_restart(WDT);							// kick the watchdog
+		watchdogReset();							// kick the watchdog
 #if SAM4E || SAME70
 		rswdt_restart(RSWDT);						// kick the secondary watchdog
 #endif
@@ -2721,7 +2729,9 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
-#if SAM3XA
+#if SAME5x
+						HSRAM_ADDR + HSRAM_SIZE
+#elif SAM3XA
 						IRAM1_ADDR + IRAM1_SIZE
 #else
 						IRAM_ADDR + IRAM_SIZE
@@ -2805,14 +2815,16 @@ void RepRap::StartIap() noexcept
 	}
 
 	// Disable all PIO IRQs, because the core assumes they are all disabled when setting them up
+#if !SAME5x
 	PIOA->PIO_IDR = 0xFFFFFFFF;
 	PIOB->PIO_IDR = 0xFFFFFFFF;
 	PIOC->PIO_IDR = 0xFFFFFFFF;
-#ifdef PIOD
+# ifdef PIOD
 	PIOD->PIO_IDR = 0xFFFFFFFF;
-#endif
-#ifdef ID_PIOE
+# endif
+# ifdef ID_PIOE
 	PIOE->PIO_IDR = 0xFFFFFFFF;
+# endif
 #endif
 
 #if HAS_MASS_STORAGE
@@ -2820,7 +2832,9 @@ void RepRap::StartIap() noexcept
 	static const char filename[] = DEFAULT_SYS_DIR IAP_FIRMWARE_FILE;
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
 	if (topOfStack + sizeof(filename) <=
-# if SAM3XA
+# if SAME5x
+						HSRAM_ADDR + HSRAM_SIZE
+# elif SAM3XA
 						IRAM1_ADDR + IRAM1_SIZE
 # else
 						IRAM_ADDR + IRAM_SIZE
@@ -2835,7 +2849,7 @@ void RepRap::StartIap() noexcept
 	IoPort::WriteDigital(DiagPin, !DiagOnPolarity);	// turn the DIAG LED off
 #endif
 
-	wdt_restart(WDT);								// kick the watchdog one last time
+	watchdogReset();								// kick the watchdog one last time
 
 #if SAM4E || SAME70
 	rswdt_restart(RSWDT);							// kick the secondary watchdog
@@ -2862,6 +2876,7 @@ void RepRap::StartIap() noexcept
 	__asm volatile ("ldr r1, [r3, #4]");
 	__asm volatile ("orr r1, r1, #1");
 	__asm volatile ("bx r1");
+	for (;;) { }							// to keep gcc happy
 }
 
 #endif

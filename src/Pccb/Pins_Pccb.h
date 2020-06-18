@@ -233,6 +233,7 @@ constexpr size_t NumSdCards = 1;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(8) };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
+constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // Shared SPI definitions

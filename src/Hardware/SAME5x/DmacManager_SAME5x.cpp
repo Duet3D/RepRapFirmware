@@ -5,17 +5,12 @@
  *      Author: David
  */
 
-#include <utils.h>
-#include "Peripherals.h"
-
-#include <hri_dmac_e54.h>
-
 #include "DmacManager_SAME5x.h"
 #include <RTOSIface/RTOSIface.h>
+#include <hri_dmac_e54.h>
 
 // Descriptors for all used DMAC channels
-COMPILER_ALIGNED(16)
-static DmacDescriptor descriptor_section[NumDmaChannelsUsed];
+alignas(16) static DmacDescriptor descriptor_section[NumDmaChannelsUsed];
 
 // Write back descriptors for all used DMAC channels
 static DmacDescriptor write_back_section[NumDmaChannelsUsed];

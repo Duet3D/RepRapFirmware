@@ -320,9 +320,9 @@ SharedSpiDevice *SharedSpiDevice::mainSharedSpiDevice = nullptr;
 void SharedSpiDevice::Init() noexcept
 {
 #if SAME5x
-	gpio_set_pin_function(SharedSpiMosiPin, SharedSpiPinFunction);
-	gpio_set_pin_function(SharedSpiMisoPin, SharedSpiPinFunction);
-	gpio_set_pin_function(SharedSpiSclkPin, SharedSpiPinFunction);
+	SetPinFunction(SharedSpiMosiPin, SharedSpiPinFunction);
+	SetPinFunction(SharedSpiMisoPin, SharedSpiPinFunction);
+	SetPinFunction(SharedSpiSclkPin, SharedSpiPinFunction);
 	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiSercomNumber);
 #elif USART_SPI
 	ConfigurePin(APIN_USART_SSPI_SCK);

@@ -1461,8 +1461,8 @@ void SmartDrivers::Init() noexcept
 #if TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER
 # if TMC22xx_USES_SERCOM
 	// Set up the single UART that communicates with all TMC22xx drivers
-	gpio_set_pin_function(TMC22xxSercomTxPin, TMC22xxSercomTxPinPeriphMode);
-	gpio_set_pin_function(TMC22xxSercomRxPin, TMC22xxSercomRxPinPeriphMode);
+	SetPinFunction(TMC22xxSercomTxPin, TMC22xxSercomTxPinPeriphMode);
+	SetPinFunction(TMC22xxSercomRxPin, TMC22xxSercomRxPinPeriphMode);
 
 	Serial::InitUart(TMC22xxSercomNumber, DriversBaudRate, TMC22xxSercomRxPad);
 	DmacManager::SetInterruptCallback(TmcRxDmaChannel, TransferCompleteCallback, CallbackParameter(nullptr));

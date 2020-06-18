@@ -25,26 +25,8 @@
 
 // Pin change interrupt support
 
-enum class InterruptMode : uint8_t
-{
-	none = 0,
-	low,
-	high,
-	change,
-	falling,
-	rising
-};
-
-typedef void (*StandardCallbackFunction)(CallbackParameter);
-
 void InitialisePinChangeInterrupts();
 bool AttachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param);
 void DetachInterrupt(Pin pin);
-
-// Return true if we are in any interrupt service routine
-static inline bool inInterrupt()
-{
-	return (__get_IPSR() & 0x01FF) != 0;
-}
 
 #endif /* SRC_HARDWARE_PININTERRUPTS_H_ */

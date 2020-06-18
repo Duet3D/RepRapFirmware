@@ -10,9 +10,9 @@
 #include "Move.h"
 
 #if SAME5x
-# include <Hardware/SAME5x/Peripherals.h>
+# include <Core.h>
 #elif !defined(__LPC17xx__)
-# include "sam/drivers/tc/tc.h"
+# include <sam/drivers/tc/tc.h>
 #endif
 
 StepTimer * volatile StepTimer::pendingList = nullptr;

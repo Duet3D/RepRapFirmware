@@ -823,7 +823,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		case Function::isnan:
 			ConvertToFloat(rslt, evaluate);
 			rslt.SetType(TypeCode::Bool);
-			rslt.bVal = (isnan(rslt.fVal) != 0);
+			rslt.bVal = (std::isnan(rslt.fVal) != 0);
 			break;
 
 		case Function::floor:

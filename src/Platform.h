@@ -113,7 +113,9 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(DUET3)
+#if defined(DUET_5LC)
+	Duet5LC_v02,
+#elif defined(DUET3)
 	Duet3_v06_100 = 1,
 	Duet3_v101 = 2,
 #elif defined(SAME70XPLD)
@@ -613,6 +615,7 @@ private:
 
 	// Board and processor
 #if MCU_HAS_UNIQUE_ID
+	void ReadUniqueId();
 	uint32_t uniqueId[5];
 	char uniqueIdChars[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
 #endif

@@ -41,11 +41,13 @@
 #include "Math/Isqrt.h"
 #include "Hardware/I2C.h"
 
-#ifndef __LPC17xx__
+#if SAME5x
+// TODO
+#elif defined(__LPC17xx__)
+# include "LPC/BoardConfig.h"
+#else
 # include "sam/drivers/tc/tc.h"
 # include "sam/drivers/hsmci/hsmci.h"
-#else
-# include "LPC/BoardConfig.h"
 #endif
 
 #include <Libraries/sd_mmc/sd_mmc.h>
@@ -398,7 +400,7 @@ Platform::Platform() noexcept :
 void Platform::Init() noexcept
 {
 #if defined(DUET3) || defined(DUET_5LC)
-	pinMode(PhyResetPin, OUTPUT_LOW);			// hold the Ethernet Phy chip in reset, hopefully this will prevent it being too noisy if Ethernet is not enabled
+	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// hold the Ethernet Phy chip in reset, hopefully this will prevent it being too noisy if Ethernet is not enabled
 #endif
 
 	// Deal with power first (we assume this doesn't depend on identifying the board type)
@@ -420,88 +422,9 @@ void Platform::Init() noexcept
 #endif
 
 #if MCU_HAS_UNIQUE_ID
-	// Read the unique ID of the MCU, if it has one
-	memset(uniqueId, 0, sizeof(uniqueId));
-
-	Cache::Disable();
-	cpu_irq_disable();
-	const uint32_t rc = flash_read_unique_id(uniqueId, 4);
-	cpu_irq_enable();
-	Cache::Enable();
-
-	if (rc == 0)
-	{
-		// Put the checksum at the end
-		// We only print 30 5-bit characters = 128 data bits + 22 checksum bits. So compress the 32 checksum bits into 22.
-		uniqueId[4] = uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
-		uniqueId[4] ^= (uniqueId[4] >> 10);
-
-		// On the Duet Ethernet and SAM E70, use the unique chip ID as most of the MAC address.
-		// The unique ID is 128 bits long whereas the whole MAC address is only 48 bits,
-		// so we can't guarantee that each Duet will get a unique MAC address this way.
-		memset(defaultMacAddress.bytes, 0, sizeof(defaultMacAddress.bytes));
-		defaultMacAddress.bytes[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
-		const uint8_t * const idBytes = reinterpret_cast<const uint8_t *>(uniqueId);
-		for (size_t i = 0; i < 15; ++i)
-		{
-			defaultMacAddress.bytes[(i % 5) + 1] ^= idBytes[i];
-		}
-
-		// Convert the unique ID and checksum to a string as 30 base5 alphanumeric digits
-		char *digitPtr = uniqueIdChars;
-		for (size_t i = 0; i < 30; ++i)
-		{
-			if ((i % 5) == 0 && i != 0)
-			{
-				*digitPtr++ = '-';
-			}
-			const size_t index = (i * 5) / 32;
-			const size_t shift = (i * 5) % 32;
-			uint32_t val = uniqueId[index] >> shift;
-			if (shift > 32 - 5)
-			{
-				// We need some bits from the next dword too
-				val |= uniqueId[index + 1] << (32 - shift);
-			}
-			val &= 31;
-			char c;
-			if (val < 10)
-			{
-				c = val + '0';
-			}
-			else
-			{
-				c = val + ('A' - 10);
-				// We have 26 letters in the usual A-Z alphabet and we only need 22 of them plus 0-9.
-				// So avoid using letters C, E, I and O which are easily mistaken for G, F, 1 and 0.
-				if (c >= 'C')
-				{
-					++c;
-				}
-				if (c >= 'E')
-				{
-					++c;
-				}
-				if (c >= 'I')
-				{
-					++c;
-				}
-				if (c >= 'O')
-				{
-					++c;
-				}
-			}
-			*digitPtr++ = c;
-		}
-		*digitPtr = 0;
-
-	}
-	else
-	{
-		defaultMacAddress.SetDefault();
-		strcpy(uniqueIdChars, "unknown");
-	}
+	ReadUniqueId();
 #endif
+
 
 	// Real-time clock
 	realTime = 0;
@@ -890,6 +813,104 @@ void Platform::Init() noexcept
 #endif
 	active = true;
 }
+
+#if MCU_HAS_UNIQUE_ID
+
+// Read the unique ID of the MCU, if it has one
+void Platform::ReadUniqueId()
+{
+# if SAME5x
+	for (size_t i = 0; i < 4; ++i)
+	{
+		uniqueId[i] = *reinterpret_cast<const uint32_t*>(SerialNumberAddresses[i]);
+	}
+# else
+	memset(uniqueId, 0, sizeof(uniqueId));
+
+	Cache::Disable();
+	cpu_irq_disable();
+	const uint32_t rc = flash_read_unique_id(uniqueId, 4);
+	cpu_irq_enable();
+	Cache::Enable();
+
+	if (rc == 0)
+	{
+# endif
+		// Put the checksum at the end
+		// We only print 30 5-bit characters = 128 data bits + 22 checksum bits. So compress the 32 checksum bits into 22.
+		uniqueId[4] = uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
+		uniqueId[4] ^= (uniqueId[4] >> 10);
+
+		// On the Duet Ethernet and SAM E70, use the unique chip ID as most of the MAC address.
+		// The unique ID is 128 bits long whereas the whole MAC address is only 48 bits,
+		// so we can't guarantee that each Duet will get a unique MAC address this way.
+		memset(defaultMacAddress.bytes, 0, sizeof(defaultMacAddress.bytes));
+		defaultMacAddress.bytes[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
+		const uint8_t * const idBytes = reinterpret_cast<const uint8_t *>(uniqueId);
+		for (size_t i = 0; i < 15; ++i)
+		{
+			defaultMacAddress.bytes[(i % 5) + 1] ^= idBytes[i];
+		}
+
+		// Convert the unique ID and checksum to a string as 30 base5 alphanumeric digits
+		char *digitPtr = uniqueIdChars;
+		for (size_t i = 0; i < 30; ++i)
+		{
+			if ((i % 5) == 0 && i != 0)
+			{
+				*digitPtr++ = '-';
+			}
+			const size_t index = (i * 5) / 32;
+			const size_t shift = (i * 5) % 32;
+			uint32_t val = uniqueId[index] >> shift;
+			if (shift > 32 - 5)
+			{
+				// We need some bits from the next dword too
+				val |= uniqueId[index + 1] << (32 - shift);
+			}
+			val &= 31;
+			char c;
+			if (val < 10)
+			{
+				c = val + '0';
+			}
+			else
+			{
+				c = val + ('A' - 10);
+				// We have 26 letters in the usual A-Z alphabet and we only need 22 of them plus 0-9.
+				// So avoid using letters C, E, I and O which are easily mistaken for G, F, 1 and 0.
+				if (c >= 'C')
+				{
+					++c;
+				}
+				if (c >= 'E')
+				{
+					++c;
+				}
+				if (c >= 'I')
+				{
+					++c;
+				}
+				if (c >= 'O')
+				{
+					++c;
+				}
+			}
+			*digitPtr++ = c;
+		}
+		*digitPtr = 0;
+
+# if !SAME5x
+	}
+	else
+	{
+		defaultMacAddress.SetDefault();
+		strcpy(uniqueIdChars, "unknown");
+	}
+# endif
+}
+
+#endif
 
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::Beep(int freq, int ms) noexcept
@@ -1571,7 +1592,7 @@ bool Platform::GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage) noex
 
 #endif
 
-#if HAS_CPU_TEMP_SENSOR
+#if HAS_CPU_TEMP_SENSOR && !SAME5x
 
 float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const noexcept
 {
@@ -1594,12 +1615,12 @@ float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const noexcept
 
 void Platform::InitialiseInterrupts() noexcept
 {
-#if SAM4E || SAME70 || defined(__LPC17xx__)
+#if SAM4E || SAME70 || SAME5x || defined(__LPC17xx__)
 	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);			// set priority for watchdog interrupts
 #endif
 
 #if HAS_HIGH_SPEED_SD
-	NVIC_SetPriority(HSMCI_IRQn, NvicPriorityHSMCI);			// set priority for SD interface interrupts
+	NVIC_SetPriority(SdhcIRQn, NvicPriorityHSMCI);				// set priority for SD interface interrupts
 #endif
 
 	// Set PanelDue UART interrupt priority
@@ -1614,7 +1635,7 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(UART1_IRQn, NvicPriorityWiFiUart);			// set priority for WiFi UART interrupt
 #endif
 
-#if SUPPORT_TMC22xx
+#if SUPPORT_TMC22xx && !SAME5x											// SAME5x uses a DMA interrupt instead of the UART interrupt
 # if TMC22xx_HAS_MUX
 	NVIC_SetPriority(TMC22xx_UART_IRQn, NvicPriorityDriversSerialTMC);	// set priority for TMC2660 SPI interrupt
 # else
@@ -1627,22 +1648,25 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(TMC2660_SPI_IRQn, NvicPriorityDriversSerialTMC);	// set priority for TMC2660 SPI interrupt
 #endif
 
-	StepTimer::Init();										// initialise the step pulse timer
-
 #if HAS_LWIP_NETWORKING
 	// Set up the Ethernet interface priority here to because we have access to the priority definitions
-# if SAME70
+# if SAME70 || SAME5x
 	NVIC_SetPriority(GMAC_IRQn, NvicPriorityEthernet);
-	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 # else
 	NVIC_SetPriority(EMAC_IRQn, NvicPriorityEthernet);
 # endif
 #endif
 
+#if SAME5x
+	// DMA IRQ priority is set in DmacManager::Init
+#elif SAME70
+	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
+#endif
+
 #ifdef __LPC17xx__
 	// Interrupt for GPIO pins. Only port 0 and 2 support interrupts and both share EINT3
 	NVIC_SetPriority(EINT3_IRQn, NvicPriorityPins);
-#else
+#elif !SAME5x
 	NVIC_SetPriority(PIOA_IRQn, NvicPriorityPins);
 	NVIC_SetPriority(PIOB_IRQn, NvicPriorityPins);
 	NVIC_SetPriority(PIOC_IRQn, NvicPriorityPins);
@@ -1654,7 +1678,10 @@ void Platform::InitialiseInterrupts() noexcept
 # endif
 #endif
 
-#if SAME70
+#if SAME5x
+	NVIC_SetPriority(USB_0_IRQn, NvicPriorityUSB);
+	//TODO do we need the other 3 USB interrupts?
+#elif SAME70
 	NVIC_SetPriority(USBHS_IRQn, NvicPriorityUSB);
 #elif SAM4E || SAM4S
 	NVIC_SetPriority(UDP_IRQn, NvicPriorityUSB);
@@ -1663,7 +1690,7 @@ void Platform::InitialiseInterrupts() noexcept
 #elif defined(__LPC17xx__)
 	NVIC_SetPriority(USB_IRQn, NvicPriorityUSB);
 #else
-# error
+# error Unsupported processor
 #endif
 
 #if defined(DUET_NG) || defined(DUET_M) || defined(DUET_06_085)
@@ -1681,7 +1708,9 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(TIMER3_IRQn, NvicPriorityTimerPWM);    //Timer 3 runs the microsecond free running timer to generate heater/fan PWM
 #endif
 
-    // Tick interrupt for ADC conversions
+	StepTimer::Init();										// initialise the step pulse timer
+
+   // Tick interrupt for ADC conversions
 	tickState = 0;
 	currentFilterNumber = 0;
 }
@@ -1931,9 +1960,9 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				testFailed = true;
 			}
 # if HAS_HIGH_SPEED_SD
-			else if (hsmci_get_speed() != ExpectedSdCardSpeed)
+			else if (sd_mmc_get_interface_speed(0) != ExpectedSdCardSpeed)
 			{
-				buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)hsmci_get_speed() * 0.000001));
+				buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
 				testFailed = true;
 			}
 # endif
@@ -2109,7 +2138,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::BusFault:
 		// Read from the "Undefined (Abort)" area
-#if SAME70
+#if SAME5x
+		deliberateError = true;
+		(void)*(reinterpret_cast<const volatile char*>(0x30000000));		//TODO test whether this works
+#elif SAME70
 # if USE_MPU
 		deliberateError = true;
 		(void)*(reinterpret_cast<const volatile char*>(0x30000000));
@@ -2127,7 +2159,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		// The LPC176x/5x generates Bus Fault exception when accessing a reserved memory address
 		(void)*(reinterpret_cast<const volatile char*>(0x00080000));
 #else
-# error
+# error Unsupported processor
 #endif
 		break;
 
@@ -2520,10 +2552,12 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 		{
 			SmartDrivers::EnableDrive(driver, true);
 		}
+# if !defined(DUET_5LC)		// no enable pins on 5LC
 		else
 		{
 			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
 		}
+# endif
 #else
 		digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
 #endif
@@ -2544,10 +2578,12 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 		{
 			SmartDrivers::EnableDrive(driver, false);
 		}
+# if !defined(DUET_5LC)		// Duet 5LC has no enable pins
 		else
 		{
 			digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 		}
+# endif
 #else
 		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 #endif
@@ -3671,7 +3707,9 @@ void Platform::SetBoardType(BoardType bt) noexcept
 {
 	if (bt == BoardType::Auto)
 	{
-#if defined(DUET3)
+#if defined(DUET_5LC)
+		board = DEFAULT_BOARD_TYPE;
+#elif defined(DUET3)
 		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but won't on v1.01 boards
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
 		delayMicroseconds(20);										// give the pullup resistor time to work
@@ -3745,7 +3783,9 @@ const char* Platform::GetElectronicsString() const noexcept
 {
 	switch (board)
 	{
-#if defined(DUET3)
+#if defined(DUET_5LC)
+	case BoardType::Duet5LC_v02:			return "Duet 3 " BOARD_SHORT_NAME "v0.2";
+#elif defined(DUET3)
 	case BoardType::Duet3_v06_100:			return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
 	case BoardType::Duet3_v101:				return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(SAME70XPLD)
@@ -3785,7 +3825,9 @@ const char* Platform::GetBoardString() const noexcept
 {
 	switch (board)
 	{
-#if defined(DUET3)
+#if defined(DUET_5LC)
+	case BoardType::Duet5LC_v02:			return "duet5lc02";
+#elif defined(DUET3)
 	case BoardType::Duet3_v06_100:			return "duet3mb6hc100";
 	case BoardType::Duet3_v101:				return "duet3mb6hc101";
 #elif defined(SAME70XPLD)
@@ -4097,7 +4139,11 @@ MinMaxCurrent Platform::GetV12Voltages() const noexcept
 // TMC driver temperatures
 float Platform::GetTmcDriversTemperature(unsigned int board) const noexcept
 {
-#if defined(DUET3)
+#if defined(DUET_5LC)
+	const DriversBitmap mask = (board == 0)
+							? DriversBitmap::MakeLowestNBits(5)							// drivers 0-4 are on the main board
+								: DriversBitmap::MakeLowestNBits(3).ShiftUp(5);			// drivers 5-7 are on the daughter board
+#elif defined(DUET3)
 	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(6);						// there are 6 drivers, only one board
 #elif defined(DUET_NG)
 	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(5).ShiftUp(5 * board);	// there are 5 drivers on each board
@@ -4113,6 +4159,8 @@ float Platform::GetTmcDriversTemperature(unsigned int board) const noexcept
 	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(5);						// all drivers (0-4) are on the DueX, no further expansion supported
 #elif defined(PCCB_08)
 	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(2);						// drivers 0, 1 are on-board, no expansion supported
+#else
+# error Undefined board
 #endif
 	return (temperatureShutdownDrivers.Intersects(mask)) ? 150.0
 			: (temperatureWarningDrivers.Intersects(mask)) ? 100.0
@@ -4434,7 +4482,9 @@ uint32_t Platform::Random() noexcept
 
 void Platform::Tick() noexcept
 {
+#if !SAME5x
 	AnalogInFinaliseConversion();
+#endif
 
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
 	if (tickState != 0)
@@ -4551,7 +4601,7 @@ void Platform::Tick() noexcept
 	// To reduce noise, we use x16 hardware averaging on AFEC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
 	// There is enough time to convert all AFEC0 channels in one tick, but only one AFEC1 channel because of the higher averaging.
 	AnalogInStartConversion(0x0FFF | (1u << filteredAdcChannels[currentFilterNumber]));
-#else
+#elif !SAME5x
 	AnalogInStartConversion();
 #endif
 }

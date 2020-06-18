@@ -5,7 +5,7 @@
 
 #if SUPPORT_12864_LCD
 
-#include "Print.h"
+#include <Print.h>
 #include <Hardware/SharedSpi/SharedSpiClient.h>
 
 // Enumeration for specifying drawing modes

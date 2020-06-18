@@ -6,7 +6,6 @@
  */
 
 #include "Interrupts.h"
-#include "Peripherals.h"
 
 struct InterruptCallback
 {
@@ -75,12 +74,12 @@ bool AttachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode m
 	uint32_t modeWord;
 	switch (mode)
 	{
-	case InterruptMode::low:		modeWord = EIC_CONFIG_SENSE0_LOW_Val  | EIC_CONFIG_FILTEN0; break;
-	case InterruptMode::high:		modeWord = EIC_CONFIG_SENSE0_HIGH_Val | EIC_CONFIG_FILTEN0; break;
-	case InterruptMode::falling:	modeWord = EIC_CONFIG_SENSE0_FALL_Val | EIC_CONFIG_FILTEN0; break;
-	case InterruptMode::rising:		modeWord = EIC_CONFIG_SENSE0_RISE_Val | EIC_CONFIG_FILTEN0; break;
-	case InterruptMode::change:		modeWord = EIC_CONFIG_SENSE0_BOTH_Val | EIC_CONFIG_FILTEN0; break;
-	default:						modeWord = EIC_CONFIG_SENSE0_NONE_Val; break;
+	case InterruptMode::INTERRUPT_MODE_LOW:		modeWord = EIC_CONFIG_SENSE0_LOW_Val  | EIC_CONFIG_FILTEN0; break;
+	case InterruptMode::INTERRUPT_MODE_HIGH:	modeWord = EIC_CONFIG_SENSE0_HIGH_Val | EIC_CONFIG_FILTEN0; break;
+	case InterruptMode::INTERRUPT_MODE_FALLING:	modeWord = EIC_CONFIG_SENSE0_FALL_Val | EIC_CONFIG_FILTEN0; break;
+	case InterruptMode::INTERRUPT_MODE_RISING:	modeWord = EIC_CONFIG_SENSE0_RISE_Val | EIC_CONFIG_FILTEN0; break;
+	case InterruptMode::INTERRUPT_MODE_CHANGE:	modeWord = EIC_CONFIG_SENSE0_BOTH_Val | EIC_CONFIG_FILTEN0; break;
+	default:									modeWord = EIC_CONFIG_SENSE0_NONE_Val; break;
 	}
 
 	const irqflags_t flags = cpu_irq_save();
@@ -88,7 +87,7 @@ bool AttachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode m
 	exintCallbacks[exintNumber].param = param;
 
 	// Switch the pin into EIC mode
-	gpio_set_pin_function(pin, GPIO_PIN_FUNCTION_A);		// EIC is always on peripheral A
+	SetPinFunction(pin, GpioPinFunction::A);		// EIC is always on peripheral A
 
 	const unsigned int shift = (exintNumber & 7u) << 2u;
 	const uint32_t mask = ~(0x0000000F << shift);
@@ -145,7 +144,7 @@ void DetachInterrupt(Pin pin)
 			hri_eic_clear_INTFLAG_reg(EIC, 1ul << exintNumber);
 
 			// Switch the pin out of EIC mode
-			gpio_set_pin_function(pin, GPIO_PIN_FUNCTION_OFF);
+			ClearPinFunction(pin);
 
 			exintCallbacks[exintNumber].func = nullptr;
 		}

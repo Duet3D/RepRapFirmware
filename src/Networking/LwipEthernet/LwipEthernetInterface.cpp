@@ -315,9 +315,7 @@ GCodeResult LwipEthernetInterface::GetNetworkState(const StringRef& reply) noexc
 // Start up the network
 void LwipEthernetInterface::Start() noexcept
 {
-#if defined(DUET3)
-	digitalWrite(PhyResetPin, true);			// bring the Ethernet Phy out of reset
-#endif
+	digitalWrite(EthernetPhyResetPin, true);			// bring the Ethernet Phy out of reset
 
 	if (initialised)
 	{
@@ -353,9 +351,7 @@ void LwipEthernetInterface::Stop() noexcept
 	{
 		netif_set_down(&gs_net_if);
 
-#if defined(DUET3)
-		pinMode(PhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
-#endif
+		pinMode(EthernetPhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
 		SetState(NetworkState::disabled);
 	}
 }

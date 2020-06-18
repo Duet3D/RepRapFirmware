@@ -143,6 +143,7 @@ constexpr Pin SdCardDetectPins[1] = { PortAPin(29) };
 constexpr Pin SdWriteProtectPins[1] = { NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
+constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 
 // DotStar LED control
 #define DOTSTAR_USES_USART	0
@@ -153,8 +154,8 @@ constexpr uint32_t DotStarClockId = ID_QSPI;
 constexpr IRQn DotStarIRQn = QSPI_IRQn;
 
 // Ethernet
-constexpr Pin PhyInterruptPin = PortCPin(6);
-constexpr Pin PhyResetPin = PortDPin(11);
+constexpr Pin EthernetPhyInterruptPin = PortCPin(6);
+constexpr Pin EthernetPhyResetPin = PortDPin(11);
 
 // Shared SPI definitions
 #define USART_SPI		1

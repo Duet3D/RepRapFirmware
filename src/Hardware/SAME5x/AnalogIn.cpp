@@ -5,9 +5,7 @@
  *      Author: David
  */
 
-#include "Peripherals.h"
-
-#ifdef SAME51
+#include "Core.h"
 
 #include "AnalogIn.h"
 #include "RTOSIface/RTOSIface.h"
@@ -499,7 +497,5 @@ void AnalogIn::GetDebugInfo(uint32_t &convsStarted, uint32_t &convsCompleted, ui
 	convsCompleted = conversionsCompleted;
 	convTimeouts = conversionTimeouts;
 }
-
-#endif
 
 // End
