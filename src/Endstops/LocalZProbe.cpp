@@ -11,6 +11,11 @@
 #include "RepRap.h"
 #include "Platform.h"
 
+#if SAME5x
+# include <AnalogIn.h>
+using AnalogIn::AdcBits;
+#endif
+
 // Members of class LocalZProbe
 LocalZProbe::~LocalZProbe() noexcept
 {

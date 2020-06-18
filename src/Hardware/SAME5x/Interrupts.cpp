@@ -57,7 +57,7 @@ void InitialisePinChangeInterrupts()
 }
 
 // Attach an interrupt to the specified pin returning true if successful
-bool AttachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param)
+bool attachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param)
 {
 	if (pin >= ARRAY_SIZE(PinTable))
 	{
@@ -110,12 +110,13 @@ bool AttachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode m
 	hri_eic_set_INTEN_reg(EIC, 1ul << exintNumber);
 	cpu_irq_restore(flags);
 
+	NVIC_SetPriority((IRQn)(EIC_0_IRQn + exintNumber), NvicPriorityPins);
 	NVIC_EnableIRQ((IRQn)(EIC_0_IRQn + exintNumber));
 
 	return true;
 }
 
-void DetachInterrupt(Pin pin)
+void detachInterrupt(Pin pin)
 {
 	if (pin <= ARRAY_SIZE(PinTable))
 	{

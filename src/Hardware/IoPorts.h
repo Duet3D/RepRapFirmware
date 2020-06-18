@@ -37,12 +37,11 @@ public:
 
 	uint16_t ReadAnalog() const noexcept;
 
-#if !SAME5x
-	AnalogChannelNumber GetAnalogChannel() const noexcept { return PinToAdcChannel(PinTable[logicalPin].pin); }
-#endif
+	AnalogChannelNumber GetAnalogChannel() const noexcept { return PinToAdcChannel(GetPin()); }
 
 	void WriteDigital(bool high) const noexcept;
 
+	// Get the physical pin, or NoPin if the logical pin is not valid
 	Pin GetPin() const noexcept;
 
 	// Initialise static data
@@ -62,6 +61,17 @@ public:
 
 protected:
 	bool Allocate(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
+
+	// Get the physical pin without checking the validity of the logical pin
+	Pin GetPinNoCheck() const noexcept
+	{
+#if SAME5x
+		// New-style pin table is indexed by pin number
+		return logicalPin;
+#else
+		return PinTable[logicalPin].pin;
+#endif
+	}
 
 	static const char* TranslatePinAccess(PinAccess access) noexcept;
 

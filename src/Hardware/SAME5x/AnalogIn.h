@@ -28,17 +28,17 @@ namespace AnalogIn
 	// Readings will be taken and about every 'ticksPerCall' milliseconds the callback function will be called with the specified parameter and ADC reading.
 	// Set ticksPerCall to 0 to get a callback on every reading.
 	// Warning! there is nothing to stop you enabling a channel twice, in which case in the SAME51 configuration, it will be read twice in the sequence.
-	bool EnableChannel(Pin pin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall, bool useAlternateAdc);
+	bool EnableChannel(AdcInput adcin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall);
 
 	// Readings will be taken and about every 'ticksPerCall' milliseconds the callback function will be called with the specified parameter and ADC reading.
 	// Set ticksPerCall to 0 to get a callback on every reading.
-	bool SetCallback(Pin pin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall, bool useAlternateAdc);
+	bool SetCallback(AdcInput adcin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall);
 
 	// Return whether or not the channel is enabled
-	bool IsChannelEnabled(Pin pin, bool useAlternateAdc = false);
+	bool IsChannelEnabled(AdcInput adcin);
 
 	// Disable a previously-enabled channel
-	//bool DisableChannel(Pin pin);
+	void DisableChannel(AdcInput adcin);
 
 	// Get the latest result from a channel. the channel must have been enabled first.
 	uint16_t ReadChannel(AdcInput adcin);
@@ -46,14 +46,29 @@ namespace AnalogIn
 	// Get the number of conversions that were started
 	void GetDebugInfo(uint32_t &convsStarted, uint32_t &convsCompleted, uint32_t &convTimeouts);
 
-#ifdef SAME51
-	// Enable an on-chip MCU temperature sensor. We don't use this on the SAMC21 because that chip has a separate TSENS peripheral.
+	// Enable an on-chip MCU temperature sensor
 	bool EnableTemperatureSensor(unsigned int sensorNumber, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall, unsigned int adcnum);
-#endif
+}
 
-#ifdef SAMC21
-	void EnableTemperatureSensor(AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall);
-#endif
+// This is for backwards compatibility
+inline uint16_t AnalogInReadChannel(AdcInput adcin)
+{
+	return AnalogIn::ReadChannel(adcin);
+}
+
+inline void AnalogInEnableChannel(AdcInput adcin, bool enable)
+{
+	if (enable)
+	{
+		if (!AnalogIn::IsChannelEnabled(adcin))
+		{
+			AnalogIn::EnableChannel(adcin, nullptr, CallbackParameter(), 1000);
+		}
+	}
+	else
+	{
+		AnalogIn::DisableChannel(adcin);
+	}
 }
 
 #endif /* SRC_HARDWARE_ANALOGIN_H_ */

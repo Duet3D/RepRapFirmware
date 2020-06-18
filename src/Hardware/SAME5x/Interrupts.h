@@ -26,7 +26,7 @@
 // Pin change interrupt support
 
 void InitialisePinChangeInterrupts();
-bool AttachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param);
-void DetachInterrupt(Pin pin);
+bool attachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param);
+void detachInterrupt(Pin pin);
 
 #endif /* SRC_HARDWARE_PININTERRUPTS_H_ */

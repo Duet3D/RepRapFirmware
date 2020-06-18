@@ -9,6 +9,7 @@
 
 #include "Core.h"
 #include <Hardware/IoPorts.h>
+#include <DmacManager_SAME5x.h>
 
 // IoPort::SetPinMode calls this
 extern "C" void pinMode(Pin pin, enum PinMode mode) noexcept
@@ -114,18 +115,34 @@ void CoreSysTick() noexcept
 	}
 }
 
+void CoreInit() noexcept
+{
+	DmacManager::Init();
+	qq;		//TODO
+}
+
+void WatchdogInit() noexcept
+{
+	hri_mclk_set_APBAMASK_WDT_bit(MCLK);
+	delayMicroseconds(5);
+	hri_wdt_write_CTRLA_reg(WDT, 0);
+	hri_wdt_write_CONFIG_reg(WDT, WDT_CONFIG_PER_CYC1024);		// about 1 second
+	hri_wdt_write_EWCTRL_reg(WDT, WDT_EWCTRL_EWOFFSET_CYC512);	// early warning control, about 0.5 second
+	hri_wdt_write_CTRLA_reg(WDT, WDT_CTRLA_ENABLE);
+}
+
 void watchdogReset() noexcept
 {
 	WDT->CLEAR.reg = 0xA5;
 }
 
-void Reset()
+void Reset() noexcept
 {
 	SCB->AIRCR = (0x5FA << 16) | (1u << 2);						// reset the processor
 	for (;;) { }
 }
 
-void EnableTcClock(unsigned int tcNumber, uint32_t gclkVal)
+void EnableTcClock(unsigned int tcNumber, uint32_t gclkVal) noexcept
 {
 	static constexpr uint8_t TcClockIDs[] =
 	{
@@ -148,7 +165,7 @@ void EnableTcClock(unsigned int tcNumber, uint32_t gclkVal)
 	}
 }
 
-void EnableTccClock(unsigned int tccNumber, uint32_t gclkVal)
+void EnableTccClock(unsigned int tccNumber, uint32_t gclkVal) noexcept
 {
 	static constexpr uint8_t TccClockIDs[] =
 	{
@@ -166,6 +183,11 @@ void EnableTccClock(unsigned int tccNumber, uint32_t gclkVal)
 	case 3:	MCLK->APBCMASK.reg |= MCLK_APBCMASK_TCC3; break;
 	case 4:	MCLK->APBDMASK.reg |= MCLK_APBDMASK_TCC4; break;
 	}
+}
+
+AnalogChannelNumber PinToAdcChannel(Pin p) noexcept
+{
+	return (p < ARRAY_SIZE(PinTable)) ? PinTable[p].adc : AdcInput::none;
 }
 
 // End

@@ -133,8 +133,6 @@ extern "C" [[noreturn]] void AppMain() noexcept
 	}
 
 #if SAME5x
-	DmacManager::Init();
-
 # ifndef DEBUG
 	// Check that the bootloader is protected and EEPROM is configured
 	uint64_t nvmUserRow0 = *reinterpret_cast<const uint64_t*>(NVMCTRL_USER);						// we only need values in the first 64 bits of the user area
@@ -151,6 +149,8 @@ extern "C" [[noreturn]] void AppMain() noexcept
 		Reset();
 	}
 # endif
+
+	CoreInit();
 
 #endif
 

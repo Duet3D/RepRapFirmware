@@ -7,7 +7,7 @@
 #include "peripheral_clk_config.h"
 
 #ifndef CONF_BASE_FREQUENCY
-#define CONF_BASE_FREQUENCY CONF_SDHC0_FREQUENCY
+#define CONF_BASE_FREQUENCY CONF_SDHC1_FREQUENCY
 #endif
 
 // <o> Clock Generator Select

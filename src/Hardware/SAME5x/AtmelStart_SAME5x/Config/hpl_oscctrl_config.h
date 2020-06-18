@@ -11,22 +11,29 @@
 // <i> Indicates whether configuration for XOSC0 is enabled or not
 // <id> enable_xosc0
 #ifndef CONF_XOSC0_CONFIG
-#define CONF_XOSC0_CONFIG 1
+#define CONF_XOSC0_CONFIG 0
+#endif
+
+// <e> External Multipurpose Crystal Oscillator Configuration
+// <i> Indicates whether configuration for XOSC1 is enabled or not
+// <id> enable_xosc1
+#ifndef CONF_XOSC1_CONFIG
+#define CONF_XOSC1_CONFIG 1
 #endif
 
 // <o> Frequency <8000000-48000000>
 // <i> Oscillation frequency of the resonator connected to the External Multipurpose Crystal Oscillator.
 // <id> xosc0_frequency
-#ifndef CONF_XOSC_FREQUENCY
-#define CONF_XOSC0_FREQUENCY 12000000
+#ifndef CONF_XOSC1_FREQUENCY
+#define CONF_XOSC1_FREQUENCY 16000000
 #endif
 
 // <h> External Multipurpose Crystal Oscillator Control
 // <q> Oscillator enable
 // <i> Indicates whether External Multipurpose Crystal Oscillator is enabled or not
 // <id> xosc0_arch_enable
-#ifndef CONF_XOSC0_ENABLE
-#define CONF_XOSC0_ENABLE 1
+#ifndef CONF_XOSC1_ENABLE
+#define CONF_XOSC1_ENABLE 1
 #endif
 
 // <o> Start-Up Time
@@ -47,84 +54,77 @@
 // <0xE=>500000us
 // <0xF=>1000000us
 // <id> xosc0_arch_startup
-#ifndef CONF_XOSC0_STARTUP
-#define CONF_XOSC0_STARTUP 0
+#ifndef CONF_XOSC1_STARTUP
+#define CONF_XOSC1_STARTUP 0
 #endif
 
 // <q> Clock Switch Back
 // <i> Indicates whether Clock Switch Back is enabled or not
 // <id> xosc0_arch_swben
-#ifndef CONF_XOSC0_SWBEN
-#define CONF_XOSC0_SWBEN 0
+#ifndef CONF_XOSC1_SWBEN
+#define CONF_XOSC1_SWBEN 0
 #endif
 
 // <q> Clock Failure Detector
 // <i> Indicates whether Clock Failure Detector is enabled or not
 // <id> xosc0_arch_cfden
-#ifndef CONF_XOSC0_CFDEN
-#define CONF_XOSC0_CFDEN 0
+#ifndef CONF_XOSC1_CFDEN
+#define CONF_XOSC1_CFDEN 0
 #endif
 
 // <q> Automatic Loop Control Enable
 // <i> Indicates whether Automatic Loop Control is enabled or not
 // <id> xosc0_arch_enalc
-#ifndef CONF_XOSC0_ENALC
-#define CONF_XOSC0_ENALC 0
+#ifndef CONF_XOSC1_ENALC
+#define CONF_XOSC1_ENALC 0
 #endif
 
 // <q> Low Buffer Gain Enable
 // <i> Indicates whether Low Buffer Gain is enabled or not
 // <id> xosc0_arch_lowbufgain
-#ifndef CONF_XOSC0_LOWBUFGAIN
-#define CONF_XOSC0_LOWBUFGAIN 0
+#ifndef CONF_XOSC1_LOWBUFGAIN
+#define CONF_XOSC1_LOWBUFGAIN 0
 #endif
 
 // <q> On Demand Control
 // <i> Indicates whether On Demand Control is enabled or not
 // <id> xosc0_arch_ondemand
-#ifndef CONF_XOSC0_ONDEMAND
-#define CONF_XOSC0_ONDEMAND 0
+#ifndef CONF_XOSC1_ONDEMAND
+#define CONF_XOSC1_ONDEMAND 0
 #endif
 
 // <q> Run in Standby
 // <i> Indicates whether Run in Standby is enabled or not
 // <id> xosc0_arch_runstdby
-#ifndef CONF_XOSC0_RUNSTDBY
-#define CONF_XOSC0_RUNSTDBY 0
+#ifndef CONF_XOSC1_RUNSTDBY
+#define CONF_XOSC1_RUNSTDBY 0
 #endif
 
 // <q> Crystal connected to XIN/XOUT Enable
 // <i> Indicates whether the connections between the I/O pads and the external clock or crystal oscillator is enabled or not
 // <id> xosc0_arch_xtalen
-#ifndef CONF_XOSC0_XTALEN
-#define CONF_XOSC0_XTALEN 1
+#ifndef CONF_XOSC1_XTALEN
+#define CONF_XOSC1_XTALEN 1
 #endif
 //</h>
 //</e>
 
-#if CONF_XOSC0_FREQUENCY >= 32000000
-#define CONF_XOSC0_CFDPRESC 0x0
-#define CONF_XOSC0_IMULT 0x7
-#define CONF_XOSC0_IPTAT 0x3
-#elif CONF_XOSC0_FREQUENCY >= 24000000
-#define CONF_XOSC0_CFDPRESC 0x1
-#define CONF_XOSC0_IMULT 0x6
-#define CONF_XOSC0_IPTAT 0x3
-#elif CONF_XOSC0_FREQUENCY >= 16000000
-#define CONF_XOSC0_CFDPRESC 0x2
-#define CONF_XOSC0_IMULT 0x5
-#define CONF_XOSC0_IPTAT 0x3
-#elif CONF_XOSC0_FREQUENCY >= 8000000
-#define CONF_XOSC0_CFDPRESC 0x3
-#define CONF_XOSC0_IMULT 0x4
-#define CONF_XOSC0_IPTAT 0x3
-#endif
-
-// <e> External Multipurpose Crystal Oscillator Configuration
-// <i> Indicates whether configuration for XOSC1 is enabled or not
-// <id> enable_xosc1
-#ifndef CONF_XOSC1_CONFIG
-#define CONF_XOSC1_CONFIG 0
+#if CONF_XOSC1_FREQUENCY >= 32000000
+#define CONF_XOSC1_CFDPRESC 0x0
+#define CONF_XOSC1_IMULT 0x7
+#define CONF_XOSC1_IPTAT 0x3
+#elif CONF_XOSC1_FREQUENCY >= 24000000
+#define CONF_XOSC1_CFDPRESC 0x1
+#define CONF_XOSC1_IMULT 0x6
+#define CONF_XOSC1_IPTAT 0x3
+#elif CONF_XOSC1_FREQUENCY >= 16000000
+#define CONF_XOSC1_CFDPRESC 0x2
+#define CONF_XOSC1_IMULT 0x5
+#define CONF_XOSC1_IPTAT 0x3
+#elif CONF_XOSC1_FREQUENCY >= 8000000
+#define CONF_XOSC1_CFDPRESC 0x3
+#define CONF_XOSC1_IMULT 0x4
+#define CONF_XOSC1_IPTAT 0x3
 #endif
 
 // <e> DFLL Configuration
@@ -166,7 +166,7 @@
 // <i> Select the clock source.
 // <id> fdpll0_ref_clock
 #ifndef CONF_FDPLL0_GCLK
-#define CONF_FDPLL0_GCLK GCLK_GENCTRL_SRC_XOSC0
+#define CONF_FDPLL0_GCLK GCLK_GENCTRL_SRC_XOSC1
 #endif
 
 // <h> Digital Phase Locked Loop Control
@@ -200,13 +200,13 @@
 // <o> Loop Divider Ratio Integer Part <0x0-0x1FFF>
 // <id> fdpll0_ldr
 #ifndef CONF_FDPLL0_LDR
-#define CONF_FDPLL0_LDR 39
+#define CONF_FDPLL0_LDR 59	// multiply by 60 to get 60 * 2 = 120MHz
 #endif
 
 // <o> Clock Divider <0x0-0x7FF>
 // <id> fdpll0_clock_div
 #ifndef CONF_FDPLL0_DIV
-#define CONF_FDPLL0_DIV 1
+#define CONF_FDPLL0_DIV 3	// divide by 2 * (3 + 1) to get 2MHz (max allowed is 3MHz)
 #endif
 
 // <q> DCO Filter Enable
@@ -247,7 +247,7 @@
 // <0x3=>XOSC1 clock reference
 // <id> fdpll0_arch_refclk
 #ifndef CONF_FDPLL0_REFCLK
-#define CONF_FDPLL0_REFCLK 0x2
+#define CONF_FDPLL0_REFCLK 0x3
 #endif
 
 // <q> Wake Up Fast
@@ -291,7 +291,7 @@
 // <i> Select the clock source.
 // <id> fdpll1_ref_clock
 #ifndef CONF_FDPLL1_GCLK
-#define CONF_FDPLL1_GCLK GCLK_GENCTRL_SRC_XOSC0
+#define CONF_FDPLL1_GCLK GCLK_GENCTRL_SRC_XOSC1
 #endif
 
 // <h> Digital Phase Locked Loop Control
@@ -325,13 +325,13 @@
 // <o> Loop Divider Ratio Integer Part <0x0-0x1FFF>
 // <id> fdpll1_ldr
 #ifndef CONF_FDPLL1_LDR
-#define CONF_FDPLL1_LDR 15
+#define CONF_FDPLL1_LDR 24	// multiply 1MHz by 25 to get 25MHz
 #endif
 
 // <o> Clock Divider <0x0-0x7FF>
 // <id> fdpll1_clock_div
 #ifndef CONF_FDPLL1_DIV
-#define CONF_FDPLL1_DIV 1
+#define CONF_FDPLL1_DIV 7	// divide 16MHz by 2 * (7 + 1) to get 1MHz
 #endif
 
 // <q> DCO Filter Enable
@@ -372,7 +372,7 @@
 // <0x3=>XOSC1 clock reference
 // <id> fdpll1_arch_refclk
 #ifndef CONF_FDPLL1_REFCLK
-#define CONF_FDPLL1_REFCLK 0x2
+#define CONF_FDPLL1_REFCLK 0x3
 #endif
 
 // <q> Wake Up Fast

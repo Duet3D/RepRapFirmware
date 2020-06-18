@@ -152,20 +152,15 @@ inline constexpr Pin PortDPin(unsigned int n) noexcept { return 96+n; }
 // Pin function numbers for calls to gpio_set_pin_function
 enum class GpioPinFunction : uint32_t { A = 0, B, C, D, E, F, G, H, I, J, K, L, M, N };
 
-inline void SetPinFunction(Pin p, GpioPinFunction f)
+inline void SetPinFunction(Pin p, GpioPinFunction f) noexcept
 {
 	gpio_set_pin_function(p, (uint32_t)f);
 }
 
-inline void ClearPinFunction(Pin p)
+inline void ClearPinFunction(Pin p) noexcept
 {
 	gpio_set_pin_function(p, GPIO_PIN_FUNCTION_OFF);
 }
-
-typedef int8_t AnalogChannelNumber;	//TOD may need to change this
-constexpr AnalogChannelNumber NO_ADC = -1;
-
-AnalogChannelNumber PinToAdcChannel(Pin p) noexcept;
 
 enum InterruptMode
 {
@@ -194,8 +189,10 @@ typedef void (*StandardCallbackFunction)(CallbackParameter) noexcept;
 extern "C" uint32_t SystemCoreClock;			// in system_samxxx.c
 extern "C" uint32_t SystemPeripheralClock;		// in system_samxxx.c
 
+void WatchdogInit() noexcept;
 void watchdogReset() noexcept;
 void CoreSysTick() noexcept;
+void CoreInit() noexcept;
 
 static inline int32_t random(uint32_t howbig) noexcept
 {
@@ -219,7 +216,7 @@ inline void fastDigitalWriteLow(uint32_t pin) noexcept
 	hri_port_clear_OUT_reg(PORT, GPIO_PORT(pin), 1U << GPIO_PIN(pin));
 }
 
-[[noreturn]] void Reset();
+[[noreturn]] void Reset() noexcept;
 
 // Timer identifiers used in assigning PWM control devices
 enum class TcOutput : uint8_t
@@ -237,12 +234,12 @@ enum class TcOutput : uint8_t
 	none = 0xFF,
 };
 
-static inline constexpr unsigned int GetDeviceNumber(TcOutput tc) { return (uint8_t)tc >> 1; }
-static inline constexpr unsigned int GetOutputNumber(TcOutput tc) { return (uint8_t)tc & 1; }
+static inline constexpr unsigned int GetDeviceNumber(TcOutput tc) noexcept { return (uint8_t)tc >> 1; }
+static inline constexpr unsigned int GetOutputNumber(TcOutput tc) noexcept { return (uint8_t)tc & 1; }
 
 // Initialise a TC clock
-void EnableTcClock(unsigned int tcNumber, uint32_t gclkVal);
-void EnableTccClock(unsigned int tccNumber, uint32_t gclkVal);
+void EnableTcClock(unsigned int tcNumber, uint32_t gclkVal) noexcept;
+void EnableTccClock(unsigned int tccNumber, uint32_t gclkVal) noexcept;
 
 enum class TccOutput : uint8_t
 {
@@ -265,10 +262,10 @@ enum class TccOutput : uint8_t
 	none = 0xFF
 };
 
-static inline constexpr unsigned int GetDeviceNumber(TccOutput tcc) { return ((uint8_t)tcc & 0x7F) >> 3; }
-static inline constexpr unsigned int GetOutputNumber(TccOutput tcc) { return (uint8_t)tcc & 7; }
+static inline constexpr unsigned int GetDeviceNumber(TccOutput tcc) noexcept { return ((uint8_t)tcc & 0x7F) >> 3; }
+static inline constexpr unsigned int GetOutputNumber(TccOutput tcc) noexcept { return (uint8_t)tcc & 7; }
 
-static inline constexpr GpioPinFunction GetPeriNumber(TccOutput tcc)
+static inline constexpr GpioPinFunction GetPeriNumber(TccOutput tcc) noexcept
 {
 	return ((uint8_t)tcc >= 0x80) ? GpioPinFunction::G : GpioPinFunction::F;		// peripheral G or F
 }
@@ -282,8 +279,13 @@ enum class AdcInput : uint8_t
 	none = 0xFF
 };
 
-static inline constexpr unsigned int GetDeviceNumber(AdcInput ain) { return (uint8_t)ain >> 4; }
-static inline constexpr unsigned int GetInputNumber(AdcInput ain) { return (uint8_t)ain & 0x0F; }
+typedef AdcInput AnalogChannelNumber;			// for backwards compatibility
+constexpr AnalogChannelNumber NO_ADC = AdcInput::none;
+
+static inline constexpr unsigned int GetDeviceNumber(AdcInput ain) noexcept { return (uint8_t)ain >> 4; }
+static inline constexpr unsigned int GetInputNumber(AdcInput ain) noexcept { return (uint8_t)ain & 0x0F; }
+
+AnalogChannelNumber PinToAdcChannel(Pin p) noexcept;
 
 // SERCOM identifiers
 enum class SercomIo : uint8_t
@@ -301,8 +303,8 @@ enum class SercomIo : uint8_t
 	none = 0xFF
 };
 
-static inline constexpr unsigned int GetDeviceNumber(SercomIo sercom) { return (uint8_t)sercom & 7; }
-static inline constexpr unsigned int GetPeriNumber(SercomIo sercom) { return ((uint8_t)sercom >= 0x80) ? 3 : 2; }	// peripheral D or C
+static inline constexpr unsigned int GetDeviceNumber(SercomIo sercom) noexcept { return (uint8_t)sercom & 7; }
+static inline constexpr unsigned int GetPeriNumber(SercomIo sercom) noexcept { return ((uint8_t)sercom >= 0x80) ? 3 : 2; }	// peripheral D or C
 
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
@@ -329,22 +331,8 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexc
 	return (PinCapability)((uint8_t)a | (uint8_t)b);
 }
 
-#if 0
-// Struct to represent a pin that can be assigned to various functions
-// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
-struct PinEntry
-{
-	Pin GetPin() const noexcept { return pin; }
-	PinCapability GetCapability() const noexcept { return cap; }
-	const char* GetNames() const noexcept { return names; }
-
-	Pin pin;
-	PinCapability cap;
-	const char *names;
-};
-#endif
-
 // The pin description says what functions are available on each pin, filtered to avoid allocating the same function to more than one pin..
+// It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinDescription
 {
 	TcOutput tc;
@@ -355,8 +343,12 @@ struct PinDescription
 	uint8_t exintNumber;
 	PinCapability cap;
 	const char* pinNames;
+
+	PinCapability GetCapability() const noexcept { return cap; }
+	const char* GetNames() const noexcept { return pinNames; }
 };
 
+// Addresses of unique ID dwords for SAME5x
 constexpr uint32_t SerialNumberAddresses[4] = { 0x008061FC, 0x00806010, 0x00806014, 0x00806018 };
 
 #endif	// #if __cplusplus

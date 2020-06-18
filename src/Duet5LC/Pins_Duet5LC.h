@@ -376,6 +376,7 @@ constexpr unsigned int NumDmaChannelsUsed = 6;			// must be at least the number 
 
 constexpr uint8_t TmcTxDmaPriority = 0;
 constexpr uint8_t TmcRxDmaPriority = 3;
+constexpr uint8_t AdcTxDmaPriority = 0;
 constexpr uint8_t AdcRxDmaPriority = 2;
 
 // Timer allocation

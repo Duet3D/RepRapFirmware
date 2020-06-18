@@ -8,9 +8,10 @@
 #include "Core.h"
 
 #include "AnalogIn.h"
-#include "RTOSIface/RTOSIface.h"
-#include "DmacManager.h"
-#include "IoPorts.h"
+#include <RTOSIface/RTOSIface.h>
+#include <DmacManager_SAME5x.h>
+#include <Hardware/IoPorts.h>
+#include <TaskPriorities.h>
 #include "Interrupts.h"
 
 constexpr uint32_t AdcConversionTimeout = 5;		// milliseconds
@@ -20,7 +21,7 @@ static uint32_t conversionsCompleted = 0;
 static uint32_t conversionTimeouts = 0;
 
 // Constants that control the DMA sequencing
-// The SAME5x errata doc from mIcrochip say that order to use averaging, we need to include the AVGCTRL register in the sequence even if it doesn't change,
+// The SAME5x errata doc from Microchip say that order to use averaging, we need to include the AVGCTRL register in the sequence even if it doesn't change,
 // and that the prescaler must be <= 8 when we use DMA sequencing.
 
 // In order to use averaging, we need to include the AVGCTRL register in the sequence even if it doesn't change (see the SAME5x errata doc from Microchip).
@@ -422,47 +423,34 @@ void AnalogIn::Init()
 // Enable analog input on a pin.
 // Readings will be taken and about every 'ticksPerCall' milliseconds the callback function will be called with the specified parameter and ADC reading.
 // Set ticksPerCall to 0 to get a callback on every reading.
-bool AnalogIn::EnableChannel(Pin pin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall, bool useAlternateAdc)
+bool AnalogIn::EnableChannel(AdcInput adcin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall)
 {
-	if (pin < ARRAY_SIZE(PinTable))
+	if (adcin != AdcInput::none)
 	{
-		const AdcInput adcin = IoPort::PinToAdcInput(pin, useAlternateAdc);
-		if (adcin != AdcInput::none)
-		{
-			IoPort::SetPinMode(pin, AIN);
-			return Adcs[GetDeviceNumber(adcin)].EnableChannel(GetInputNumber(adcin), fn, param, ticksPerCall);
-		}
+		return Adcs[GetDeviceNumber(adcin)].EnableChannel(GetInputNumber(adcin), fn, param, ticksPerCall);
 	}
 	return false;
 }
 
 // Readings will be taken and about every 'ticksPerCall' milliseconds the callback function will be called with the specified parameter and ADC reading.
 // Set ticksPerCall to 0 to get a callback on every reading.
-bool AnalogIn::SetCallback(Pin pin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall, bool useAlternateAdc)
+bool AnalogIn::SetCallback(AdcInput adcin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall)
 {
-	if (pin < ARRAY_SIZE(PinTable))
+	if (adcin != AdcInput::none)
 	{
-		const AdcInput adcin = IoPort::PinToAdcInput(pin, useAlternateAdc);
-		if (adcin != AdcInput::none)
-		{
-			IoPort::SetPinMode(pin, AIN);
-			return Adcs[GetDeviceNumber(adcin)].SetCallback(GetInputNumber(adcin), fn, param, ticksPerCall);
-		}
+		return Adcs[GetDeviceNumber(adcin)].SetCallback(GetInputNumber(adcin), fn, param, ticksPerCall);
 	}
 	return false;
 }
 
 // Return whether or not the channel is enabled
-bool AnalogIn::IsChannelEnabled(Pin pin, bool useAlternateAdc)
+bool AnalogIn::IsChannelEnabled(AdcInput adcin)
 {
-	if (pin < ARRAY_SIZE(PinTable))
+	if (adcin != AdcInput::none)
 	{
-		const AdcInput adcin = IoPort::PinToAdcInput(pin, useAlternateAdc);
-		if (adcin != AdcInput::none)
-		{
-			return Adcs[GetDeviceNumber(adcin)].IsChannelEnabled(GetInputNumber(adcin));
-		}
+		return Adcs[GetDeviceNumber(adcin)].IsChannelEnabled(GetInputNumber(adcin));
 	}
+
 	return false;
 }
 

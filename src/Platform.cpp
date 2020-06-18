@@ -42,7 +42,8 @@
 #include "Hardware/I2C.h"
 
 #if SAME5x
-// TODO
+# include <AnalogIn.h>
+using AnalogIn::AdcBits;
 #elif defined(__LPC17xx__)
 # include "LPC/BoardConfig.h"
 #else
@@ -463,7 +464,7 @@ void Platform::Init() noexcept
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
 	{
-		setPullup(SdCardDetectPins[i], true);	// setPullup is safe to call with a NoPin argument
+		pinMode(SdCardDetectPins[i], INPUT_PULLUP);
 	}
 
 #if HAS_MASS_STORAGE
@@ -620,7 +621,7 @@ void Platform::Init() noexcept
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
-#if !defined(DUET3)
+#if !defined(DUET3) && !defined(DUET_5LC)
 		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
 #endif
 	}
@@ -734,7 +735,7 @@ void Platform::Init() noexcept
 	// Enable the pullup resistor, with luck this will make it float high instead.
 #if SAM3XA
 	pinMode(APIN_SHARED_SPI_MISO, INPUT_PULLUP);
-#elif defined(__LPC17xx__)
+#elif defined(__LPC17xx__) || defined(SAME5x)
 	// nothing to do here
 #else
 	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
@@ -1740,7 +1741,24 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 
-#ifndef __LPC17xx__
+#if SAME5x
+	{
+		String<StringLength100> resetString;
+		resetString.printf("Last reset %02d:%02d:%02d ago, cause", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
+		const uint8_t resetReason = RSTC->RCAUSE.reg;
+		// The datasheet says only one of these bits will be set, but we don't assume that
+		if (resetReason & RSTC_RCAUSE_POR)		{ resetString.cat(": power up"); }
+		if (resetReason & RSTC_RCAUSE_BODCORE)	{ resetString.cat(": core brownout"); }
+		if (resetReason & RSTC_RCAUSE_BODVDD)	{ resetString.cat(": Vdd brownout"); }
+		if (resetReason & RSTC_RCAUSE_WDT)		{ resetString.cat(": watchdog"); }
+		if (resetReason & RSTC_RCAUSE_NVM)		{ resetString.cat(": NVM"); }
+		if (resetReason & RSTC_RCAUSE_EXT)		{ resetString.cat(": reset button"); }
+		if (resetReason & RSTC_RCAUSE_SYST)		{ resetString.cat(": system reset request"); }
+		if (resetReason & RSTC_RCAUSE_POR)		{ resetString.cat(": backup/hibernate"); }
+		resetString.cat('\n');
+		Message(mtype, resetString.c_str());
+	}
+#elif !defined(__LPC17xx__)
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
 # ifdef DUET_NG
 	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
@@ -1756,8 +1774,12 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #endif //end ifndef __LPC17xx__
 
 	// Show the reset code stored at the last software reset
+#if SAME5x
+		//TODO
+		Message(mtype, "Last software reset details not available\n");
+#else
 	{
-#ifdef __LPC17xx__
+#if defined(__LPC17xx__)
 		// Reset Reason
 		MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: ",
 				 (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
@@ -1860,6 +1882,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 			Message(mtype, "Last software reset details not available\n");
 		}
 	}
+#endif	// if SAME5x
 
 	// Show the current error codes
 	MessageF(mtype, "Error status: %" PRIx32 "\n", errorCodeBits);

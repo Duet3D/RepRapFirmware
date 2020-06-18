@@ -465,7 +465,10 @@ void RepRap::Init() noexcept
 #endif
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
-#ifdef __LPC17xx__
+#if SAME5x
+	WatchdogInit();
+	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog early warning interrupt
+#elif defined(__LPC17xx__)
 	wdt_init(1); // set wdt to 1 second. reset the processor on a watchdog fault
 #else
 	{
@@ -851,7 +854,11 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 
 	if (reason == (uint16_t)SoftwareResetReason::erase)
 	{
+#if SAME5x
+		//TODO invalidate flash so the USB bootloader runs
+#else
 		EraseAndReset();
+#endif
  	}
 	else
 	{
@@ -888,7 +895,10 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
         SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
 #endif
 
-#if SAM4E || SAM4S || SAME70
+#if SAME5x
+        //TODO
+        memset(srdBuf, 0xFF, sizeof(srdBuf));
+#elif SAM4E || SAM4S || SAME70
 		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
 #elif SAM3XA
 		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
@@ -927,7 +937,9 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 #endif
 
 		// Save diagnostics data to Flash
-#if SAM4E || SAM4S || SAME70
+#if SAME5x
+        // TODO write to EEPROM
+#elif SAM4E || SAM4S || SAME70
 		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
 #elif defined(__LPC17xx__)
 		LPC_WriteSoftwareResetData(slot, srdBuf, sizeof(srdBuf));
