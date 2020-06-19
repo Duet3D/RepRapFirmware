@@ -9,7 +9,10 @@
 
 #include "Core.h"
 #include <Hardware/IoPorts.h>
-#include <DmacManager_SAME5x.h>
+#include "DmacManager_SAME5x.h"
+#include "Interrupts.h"
+#include "AnalogIn.h"
+#include "AnalogOut.h"
 
 // IoPort::SetPinMode calls this
 extern "C" void pinMode(Pin pin, enum PinMode mode) noexcept
@@ -118,7 +121,26 @@ void CoreSysTick() noexcept
 void CoreInit() noexcept
 {
 	DmacManager::Init();
-	qq;		//TODO
+
+	// Setup SD card interface pins
+	for (Pin p : SdMciPins)
+	{
+		SetPinFunction(p, SdMciPinsFunction);
+	}
+
+	//TODO check whether this is a WiFi or Ethernet board
+	// Setup Ethernet pins
+	SetPinFunction(EthernetClockOutPin, EthernetClockOutPinFunction);
+	for (Pin p : EthernetMacPins)
+	{
+		SetPinFunction(p, EthernetMacPinsPinFunction);
+	}
+	pinMode(EthernetPhyResetPin, OUTPUT_LOW);
+
+	InitialisePinChangeInterrupts();
+
+	AnalogIn::Init();
+	AnalogOut::Init();
 }
 
 void WatchdogInit() noexcept

@@ -490,8 +490,14 @@ bool _mci_sync_read_word(struct _mci_sync_device *const mci_dev, uint32_t *value
 		switch (nbytes) {
 		case 3:
 			value[0] = sr & 0xFFFFFF;
+#if 1	//dc42
+			break;
+#endif
 		case 2:
 			value[0] = sr & 0xFFFF;
+#if 1	//dc42
+			break;
+#endif
 		case 1:
 			value[0] = sr & 0xFF;
 			break;

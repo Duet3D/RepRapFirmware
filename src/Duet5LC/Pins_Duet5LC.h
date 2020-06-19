@@ -24,7 +24,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 #define HAS_WIFI_NETWORKING		0
 #define HAS_W5500_NETWORKING	0
 
-#define HAS_CPU_TEMP_SENSOR		1
+#define HAS_CPU_TEMP_SENSOR		0	//TODO temporary!
 #define HAS_HIGH_SPEED_SD		1
 #define SUPPORT_TMC22xx			1
 #define TMC22xx_HAS_MUX			1
@@ -200,11 +200,11 @@ constexpr Pin EthernetMacPins[] =
 	PortAPin(12), PortAPin(13), PortAPin(14), PortAPin(15), PortAPin(17), PortAPin(18), PortAPin(19),
 	PortCPin(20), PortCPin(22), PortAPin(23)
 };
-constexpr GpioPinFunction EthernetMacPinsPinMode = GpioPinFunction::L;
+constexpr GpioPinFunction EthernetMacPinsPinFunction = GpioPinFunction::L;
 
 constexpr Pin EthernetPhyResetPin = PortCPin(21);
 constexpr Pin EthernetClockOutPin = PortAPin(16);
-constexpr GpioPinFunction EthernetClockOutPinMode = GpioPinFunction::M;
+constexpr GpioPinFunction EthernetClockOutPinFunction = GpioPinFunction::M;
 constexpr unsigned int EthernetClockOutGclkNumber = 2;
 
 // WiFi pins. It happens that both SERCOMs use pin function D, so we can use a single pin list for both.
