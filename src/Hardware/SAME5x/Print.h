@@ -20,9 +20,8 @@
 #ifndef Print_h
 #define Print_h
 
-#include <inttypes.h>
-#include <stdio.h> // for size_t
-#include <string.h>
+#include "Core.h"
+#include <cstring>
 
 #define DEC 10
 #define HEX 16
@@ -40,13 +39,12 @@ public:
     virtual ~Print() {}
 
     virtual size_t write(uint8_t) noexcept = 0;
+    virtual size_t write(const uint8_t *buffer, size_t size) noexcept;		// this has a default implementation, but can be overridden for efficiency
 
     size_t write(const char *str) noexcept
     {
     	return (str == NULL) ? 0 : write((const uint8_t *)str, strlen(str));
     }
-
-    size_t write(const uint8_t *buffer, size_t size) noexcept;
 
     size_t write(const char *buffer, size_t size) noexcept
     {

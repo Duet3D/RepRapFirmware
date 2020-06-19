@@ -41,7 +41,7 @@
 #include <cstring>
 
 extern "C" {
-#include <Hardware/ksz8081rna/ethernet_phy.h>
+#include "ksz8081rna/ethernet_phy.h"
 #include "lwip/opt.h"
 #include "lwip/sys.h"
 #include "lwip/def.h"

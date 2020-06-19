@@ -43,7 +43,7 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # undef assert
 #endif
 
-# include "Core.h"
+#include <Core.h>
 
 #ifndef SAMC21
 # define SAMC21	0
@@ -57,6 +57,10 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # define __nocache		__attribute__((section(".ram_nocache")))
 #else
 # define __nocache		// nothing
+#endif
+
+#if SAME5x
+# include <CoreIO.h>
 #endif
 
 // API level definition.

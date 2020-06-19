@@ -37,15 +37,13 @@ Licence: GPL
 #include "RestorePoint.h"
 #include "Movement/BedProbing/Grid.h"
 
-class UARTClass;										// needed for SAM5x build
-
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
 
 // Bits for T-code P-parameter to specify which macros are supposed to be run
-constexpr uint8_t TFreeBit = 1 << 0;
-constexpr uint8_t TPreBit = 1 << 1;
-constexpr uint8_t TPostBit = 1 << 2;
+constexpr uint8_t TFreeBit = 1u << 0;
+constexpr uint8_t TPreBit = 1u << 1;
+constexpr uint8_t TPostBit = 1u << 2;
 constexpr uint8_t DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
 
 // Machine type enumeration. The numeric values must be in the same order as the corresponding M451..M453 commands.

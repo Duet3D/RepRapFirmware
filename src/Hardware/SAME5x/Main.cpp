@@ -4,8 +4,6 @@
 #include "RepRapFirmware.h"
 #include "Tasks.h"
 
-extern "C" [[noreturn]] void __cxa_pure_virtual() noexcept { while (1); }
-
 int main(void)
 {
 	atmel_start_init();								// Initialize MCU, drivers and middleware

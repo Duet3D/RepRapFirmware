@@ -122,13 +122,13 @@ void Serial::Disable(uint8_t sercomNumber)
 	hri_sercomusart_set_CTRLA_SWRST_bit(sercom);
 }
 
-Uart::Uart(uint8_t sercomNum, IRQn irqnum)
+Uart::Uart(uint8_t sercomNum, IRQn irqnum) noexcept
 	: sercom(Serial::GetSercom(sercomNum)), txWaitingTask(nullptr), irqNumber(irqnum), sercomNumber(sercomNum)
 {
 }
 
 // Initialise the UART. numRxSlots may be zero if we don't wish to receive.
-void Uart::Init(size_t numTxSlots, size_t numRxSlots, uint32_t baudRate, uint8_t rxPad)
+void Uart::Init(size_t numTxSlots, size_t numRxSlots, uint32_t baudRate, uint8_t rxPad) noexcept
 {
 	txBuffer.Init(numTxSlots);
 	rxBuffer.Init(numRxSlots);
@@ -142,14 +142,14 @@ void Uart::Init(size_t numTxSlots, size_t numRxSlots, uint32_t baudRate, uint8_t
 }
 
 // Non-blocking read, return 0 if no character available
-char Uart::GetChar()
+char Uart::GetChar() noexcept
 {
 	char c;
 	return (rxBuffer.GetItem(c)) ? c : 0;
 }
 
 // Write single character, blocking
-void Uart::PutChar(char c)
+void Uart::PutChar(char c) noexcept
 {
 	if (txBuffer.IsEmpty() && sercom->USART.INTFLAG.bit.DRE)
 	{
@@ -172,7 +172,7 @@ void Uart::PutChar(char c)
 }
 
 // Nonblocking write block
-size_t Uart::TryPutBlock(const char* buffer, size_t buflen)
+size_t Uart::TryPutBlock(const char* buffer, size_t buflen) noexcept
 {
 	const size_t written = txBuffer.PutBlock(buffer, buflen);
 	sercom->USART.INTENSET.reg = SERCOM_USART_INTENSET_DRE;
@@ -180,7 +180,7 @@ size_t Uart::TryPutBlock(const char* buffer, size_t buflen)
 }
 
 // Blocking write block
-void Uart::PutBlock(const char* buffer, size_t buflen)
+void Uart::PutBlock(const char* buffer, size_t buflen) noexcept
 {
 	for (;;)
 	{
@@ -197,13 +197,13 @@ void Uart::PutBlock(const char* buffer, size_t buflen)
 }
 
 // Blocking null-terminated string write
-void Uart::PutString(const char *str)
+void Uart::PutString(const char *str) noexcept
 {
 	PutBlock(str, strlen(str));
 }
 
 // Get and clear the errors
-Uart::ErrorFlags Uart::GetAndClearErrors()
+Uart::ErrorFlags Uart::GetAndClearErrors() noexcept
 {
 	__disable_irq();
 	const ErrorFlags errs = errors;
@@ -213,7 +213,7 @@ Uart::ErrorFlags Uart::GetAndClearErrors()
 }
 
 // Interrupts from the SERCOM arrive here
-void Uart::Interrupt()
+void Uart::Interrupt() noexcept
 {
 	const uint8_t status = sercom->USART.INTFLAG.reg;
 	if (status & SERCOM_USART_INTFLAG_RXC)

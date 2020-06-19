@@ -7,7 +7,7 @@
  *  Glue to allow some of our C++ functions to be called from C
  */
 
-#include "Core.h"
+#include <CoreIO.h>
 #include <Hardware/IoPorts.h>
 #include "DmacManager_SAME5x.h"
 #include "Interrupts.h"
@@ -211,5 +211,10 @@ AnalogChannelNumber PinToAdcChannel(Pin p) noexcept
 {
 	return (p < ARRAY_SIZE(PinTable)) ? PinTable[p].adc : AdcInput::none;
 }
+
+// Serial device support
+Uart *serialUart0;
+UsbSerial *serialUSB;
+
 
 // End

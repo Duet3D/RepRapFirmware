@@ -50,8 +50,6 @@
 
 extern "C" {
 
-#include <Hardware/ksz8081rna/ethernet_phy.h>
-
 /* lwIP includes */
 #include "lwip/api.h"
 #include "lwip/dhcp.h"

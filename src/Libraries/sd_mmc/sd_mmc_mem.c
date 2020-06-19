@@ -44,7 +44,7 @@
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 
-#include "Core.h"
+#include <Core.h>
 #include "sd_mmc.h"
 #include "sd_mmc_mem.h"
 

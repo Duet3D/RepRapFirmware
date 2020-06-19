@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "Core.h"
+#include <CoreIO.h>
 
 #include "AnalogIn.h"
 #include <RTOSIface/RTOSIface.h>

@@ -10,7 +10,7 @@
 #include "Move.h"
 
 #if SAME5x
-# include <Core.h>
+# include <CoreIO.h>
 #elif !defined(__LPC17xx__)
 # include <sam/drivers/tc/tc.h>
 #endif
