@@ -454,14 +454,11 @@ bool AnalogIn::IsChannelEnabled(AdcInput adcin)
 	return false;
 }
 
-#if 0
 // Disable a previously-enabled channel
-bool AnalogIn::DisableChannel(Pin pin)
+void AnalogIn::DisableChannel(AdcInput adcin)
 {
 	//TODO not implemented yet (do we need it?)
-	return false;
 }
-#endif
 
 uint16_t AnalogIn::ReadChannel(AdcInput adcin)
 {

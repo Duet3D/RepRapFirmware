@@ -42,8 +42,8 @@
  *
  */
 
-#ifndef ETHERNETIF_H_INCLUDED
-#define ETHERNETIF_H_INCLUDED
+#ifndef SAME70_GMAC_H_INCLUDED
+#define SAME70_GMAC_H_INCLUDED
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,4 +80,4 @@ extern unsigned int txErrorCount;
 extern unsigned int txBufferNotFreeCount;
 extern unsigned int txBufferTooShortCount;
 
-#endif /* ETHERNETIF_H_INCLUDED */
+#endif /* SAME70_GMAC_H_INCLUDED */

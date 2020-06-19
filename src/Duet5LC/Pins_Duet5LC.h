@@ -226,7 +226,7 @@ constexpr uint8_t Nx = 0xFF;	// this means no EXINT usable
 
 constexpr PinDescription PinTable[] =
 {
-	//	TC					TCC					ADC					SERCOM in			SERCOM out	  Exint PinName
+	//	TC					TCC					ADC					SERCOM in			SERCOM out	  Exint Capability				PinNames
 	// Port A
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		0,	PinCapability::none,	nullptr			},	// PA00 driver diag interrupt
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA01 drivers ENN

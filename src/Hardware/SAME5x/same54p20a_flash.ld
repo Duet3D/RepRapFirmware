@@ -120,28 +120,9 @@ SECTIONS
 
   	_firmware_crc = _etext + (_erelocate - _srelocate);		/* We append the CRC32 to the binary file. This is its offset in memory. */
 
-    .bkupram (NOLOAD):
-    {
-        . = ALIGN(8);
-        _sbkupram = .;
-        *(.bkupram .bkupram.*);
-        . = ALIGN(8);
-        _ebkupram = .;
-    } > bkupram
-
-    .qspi (NOLOAD):
-    {
-        . = ALIGN(8);
-        _sqspi = .;
-        *(.qspi .qspi.*);
-        . = ALIGN(8);
-        _eqspi = .;
-    } > qspi
-
     /* .bss section which is used for uninitialized data */
-    .bss (NOLOAD) :
+    .bss ALIGN(16) (NOLOAD) :
     {
-        . = ALIGN(4);
         _sbss = . ;
         _szero = .;
         *(.bss .bss.*)
@@ -161,6 +142,24 @@ SECTIONS
     {
         *(.stack*)
     } > ram
+
+    .bkupram (NOLOAD):
+    {
+        . = ALIGN(8);
+        _sbkupram = .;
+        *(.bkupram .bkupram.*);
+        . = ALIGN(8);
+        _ebkupram = .;
+    } > bkupram
+
+    .qspi (NOLOAD):
+    {
+        . = ALIGN(8);
+        _sqspi = .;
+        *(.qspi .qspi.*);
+        . = ALIGN(8);
+        _eqspi = .;
+    } > qspi
 
     /* Set stack top to end of ram, and stack limit move down by
      * size of stack_dummy section */

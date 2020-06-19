@@ -220,7 +220,7 @@ struct PinDescription
 // Addresses of unique ID dwords for SAME5x
 constexpr uint32_t SerialNumberAddresses[4] = { 0x008061FC, 0x00806010, 0x00806014, 0x00806018 };
 
-#include "Serial.h"
+#include "Uart.h"
 typedef Uart UARTClass;
 
 extern Uart *serialUart0;
