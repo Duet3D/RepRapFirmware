@@ -50,6 +50,10 @@
 #include "sd_mmc.h"
 #include "conf_sd_mmc.h"
 
+#if SAME5x
+# include <peripheral_clk_config.h>
+#endif
+
 /**
  * \ingroup sd_mmc_stack
  * \defgroup sd_mmc_stack_internal Implementation of SD/MMC/SDIO Stack
