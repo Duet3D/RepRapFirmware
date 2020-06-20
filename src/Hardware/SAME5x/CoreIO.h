@@ -225,8 +225,8 @@ typedef Uart UARTClass;
 
 extern Uart *serialUart0;
 
-#include "UsbSerial.h"
+#include "SerialCDC.h"
 
-extern UsbSerial *serialUSB;
+extern SerialCDC *serialUSB;
 
 #endif /* SRC_HARDWARE_SAME5X_COREIO_H_ */

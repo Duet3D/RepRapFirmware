@@ -5,9 +5,9 @@
  *      Author: David
  */
 
-#include <UsbSerial.h>
+#include "SerialCDC.h"
 
-UsbSerial::UsbSerial()
+SerialCDC::SerialCDC()
 {
 	// TODO Auto-generated constructor stub
 

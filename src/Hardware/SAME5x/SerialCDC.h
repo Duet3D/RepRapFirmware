@@ -5,15 +5,15 @@
  *      Author: David
  */
 
-#ifndef SRC_HARDWARE_SAME5X_USBSERIAL_H_
-#define SRC_HARDWARE_SAME5X_USBSERIAL_H_
+#ifndef SRC_HARDWARE_SAME5X_SERIALCDC_H_
+#define SRC_HARDWARE_SAME5X_SERIALCDC_H_
 
 #include "Stream.h"
 
-class UsbSerial : public Stream
+class SerialCDC : public Stream
 {
 public:
-	UsbSerial();
+	SerialCDC();
 
 	// Overridden virtual functions
 	int available() noexcept override;
@@ -33,4 +33,4 @@ public:
 	void end() noexcept;
 };
 
-#endif /* SRC_HARDWARE_SAME5X_USBSERIAL_H_ */
+#endif /* SRC_HARDWARE_SAME5X_SERIALCDC_H_ */

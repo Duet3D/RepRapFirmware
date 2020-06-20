@@ -23,20 +23,7 @@
   *
   */
 
-/*----------------------------------------------------------------------------
- *        Headers
- *----------------------------------------------------------------------------*/
-
-
 #include "syscalls.h"
-
-#include <stdio.h>
-#include <stdarg.h>
-#include "compiler.h"
-#if defined (  __GNUC__  ) /* GCC CS3 */
-  #include <sys/types.h>
-  #include <sys/stat.h>
-#endif
 
 // Helper macro to mark unused parameters and prevent compiler warnings.
 // Appends _UNUSED to the variable name to prevent accidentally using them.
@@ -53,7 +40,6 @@
 
 #undef errno
 int errno = 0;
-extern int  _end ;
 
 /*----------------------------------------------------------------------------
  *        Exported functions
