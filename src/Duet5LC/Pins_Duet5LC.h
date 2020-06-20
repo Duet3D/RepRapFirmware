@@ -194,6 +194,13 @@ constexpr Pin SharedSpiMisoPin = PortCPin(15);
 constexpr Pin SharedSpiSclkPin = PortCPin(13);
 constexpr GpioPinFunction SharedSpiPinFunction = GpioPinFunction::C;
 
+// Serial on IO0
+constexpr uint8_t Serial0SercomNumber = 2;
+constexpr uint8_t Sercom0RxPad = 1;
+constexpr Pin Serial0TxPin = PortBPin(25);
+constexpr Pin Serial0RxPin = PortBPin(24);
+constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
+
 // Ethernet pins
 constexpr Pin EthernetMacPins[] =
 {

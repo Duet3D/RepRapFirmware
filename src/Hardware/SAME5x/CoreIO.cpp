@@ -15,6 +15,10 @@
 #include "AnalogOut.h"
 #include <peripheral_clk_config.h>
 
+// Serial device support
+Uart *serialUart0;
+UsbSerial *serialUSB;
+
 // IoPort::SetPinMode calls this
 extern "C" void pinMode(Pin pin, enum PinMode mode) noexcept
 {
@@ -183,6 +187,25 @@ void CoreInit() noexcept
 	}
 #endif
 
+	// Random number generator
+	hri_mclk_set_APBCMASK_TRNG_bit(MCLK);
+	hri_trng_set_CTRLA_ENABLE_bit(TRNG);
+
+	// Initialise the I/O subsystem
+	InitialisePinChangeInterrupts();
+
+	// Initialise analog in and PWM out
+	AnalogIn::Init();
+	AnalogOut::Init();
+
+	// Serial interface
+	serialUart0 = new Uart(Serial0SercomNumber, Sercom0RxPad, 512, 512);
+	SetPinFunction(Serial0TxPin, Serial0PinFunction);
+	SetPinFunction(Serial0RxPin, Serial0PinFunction);
+
+	// USB
+	//TODO
+
 	//TODO check whether this is a WiFi or Ethernet board
 	// Setup Ethernet pins
 	pinMode(EthernetPhyResetPin, OUTPUT_LOW);
@@ -196,15 +219,6 @@ void CoreInit() noexcept
 		SetPinFunction(p, EthernetMacPinsPinFunction);
 	}
 
-	// Random number generator
-	hri_mclk_set_APBCMASK_TRNG_bit(MCLK);
-	hri_trng_set_CTRLA_ENABLE_bit(TRNG);
-
-	// Initialise the I/O subsystem
-	InitialisePinChangeInterrupts();
-
-	AnalogIn::Init();
-	AnalogOut::Init();
 }
 
 void WatchdogInit() noexcept
@@ -275,10 +289,6 @@ AnalogChannelNumber PinToAdcChannel(Pin p) noexcept
 {
 	return (p < ARRAY_SIZE(PinTable)) ? PinTable[p].adc : AdcInput::none;
 }
-
-// Serial device support
-Uart *serialUart0;
-UsbSerial *serialUSB;
 
 // Random number generator
 uint32_t trueRandom() noexcept
