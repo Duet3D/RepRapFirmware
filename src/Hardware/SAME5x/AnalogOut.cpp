@@ -76,7 +76,7 @@ namespace AnalogOut
 
 				if (tcFreq[device] == 0)
 				{
-					EnableTcClock(device, GCLK_PCHCTRL_GEN_GCLK1_Val);
+					EnableTcClock(device, GCLK_PCHCTRL_GEN_GCLK3_Val);
 
 					// Initialise the TC
 					hri_tc_clear_CTRLA_ENABLE_bit(tcdev);
@@ -152,7 +152,7 @@ namespace AnalogOut
 
 				if (tccFreq[device] == 0)
 				{
-					EnableTccClock(device, GCLK_PCHCTRL_GEN_GCLK1_Val);
+					EnableTccClock(device, GCLK_PCHCTRL_GEN_GCLK3_Val);
 
 					// Initialise the TCC
 					hri_tcc_clear_CTRLA_ENABLE_bit(tccdev);

@@ -88,8 +88,8 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
-#define SERIAL_MAIN_DEVICE (*serialUSB)
-#define SERIAL_AUX_DEVICE (*serialUart0)
+#define SERIAL_MAIN_DEVICE (serialUSB)
+#define SERIAL_AUX_DEVICE (serialUart0)
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
@@ -159,7 +159,11 @@ constexpr Pin ATX_POWER_PIN = PortDPin(10);									// aliased with io5.out
 constexpr Pin PowerMonitorVinDetectPin = PortBPin(8);						// Vin monitor
 constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider
 
+#ifdef DEBUG
+constexpr Pin DiagPin = NoPin;												// Diag pin is shared with SWD
+#else
 constexpr Pin DiagPin = PortAPin(31);
+#endif
 constexpr bool DiagOnPolarity = false;
 
 // SD cards
@@ -197,6 +201,11 @@ constexpr GpioPinFunction SharedSpiPinFunction = GpioPinFunction::C;
 // Serial on IO0
 constexpr uint8_t Serial0SercomNumber = 2;
 constexpr uint8_t Sercom0RxPad = 1;
+#define SERIAL0_ISR0	SERCOM2_0_Handler
+#define SERIAL0_ISR1	SERCOM2_1_Handler
+#define SERIAL0_ISR2	SERCOM2_2_Handler
+#define SERIAL0_ISR3	SERCOM2_3_Handler
+
 constexpr Pin Serial0TxPin = PortBPin(25);
 constexpr Pin Serial0RxPin = PortBPin(24);
 constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
@@ -369,6 +378,7 @@ constexpr PinDescription PinTable[] =
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 32+32+32+13);
+constexpr unsigned int NumTotalPins = 32+32+32+22;
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
 constexpr DmaChannel TmcTxDmaChannel = 0;

@@ -114,7 +114,8 @@ extern "C" [[noreturn]] void AppMain() noexcept
 			// CRC failed so flash the diagnostic LED 3 times, pause and repeat. This is the same error code used by the Duet 3 expansion boards bootloader.
 			for (unsigned int i = 0; ; ++i)
 			{
-				digitalWrite(DiagPin, (i & 1) == 0 && (i & 15) < 6);		// turn LED on if count is 0, 2, 4 or 16, 18, 20 etc. otherwise turn it off
+				const bool on = (i & 1) == 0 && (i & 15) < 6;				// turn LED on if count is 0, 2, 4 or 16, 18, 20 etc. otherwise turn it off
+				digitalWrite(DiagPin, XNor(on, DiagOnPolarity));
 				for (unsigned int j = 0; j < 500; ++j)
 				{
 					delayMicroseconds(1000);								// delayMicroseconds only works with low values of delay so do 1ms at a time

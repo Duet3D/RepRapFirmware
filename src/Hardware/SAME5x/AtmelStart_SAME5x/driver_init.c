@@ -8,6 +8,7 @@
 
 #include "driver_init.h"
 #include <peripheral_clk_config.h>
+#include <hpl_oscctrl_config.h>
 #include <utils.h>
 #include <hal_init.h>
 
@@ -37,8 +38,18 @@ void system_init(void)
 
 	// Now it's safe to configure the clocks
 	init_mcu();
-	SystemCoreClock = 120000000;			// GCLK0
-	SystemPeripheralClock = 60000000;		// GCLK1
 
-	// We initialise CAN later
+	// Now that GLK1 is running, reconfigure DFLL48M in closed loop mode
+	hri_gclk_write_PCHCTRL_reg(GCLK, OSCCTRL_GCLK_ID_DFLL48, (1 << GCLK_PCHCTRL_CHEN_Pos) | GCLK_PCHCTRL_GEN(CONF_DFLL_GCLK));
+
+	const uint8_t tmp = (CONF_DFLL_WAITLOCK << OSCCTRL_DFLLCTRLB_WAITLOCK_Pos) | (CONF_DFLL_BPLCKC << OSCCTRL_DFLLCTRLB_BPLCKC_Pos)
+					  | (CONF_DFLL_QLDIS << OSCCTRL_DFLLCTRLB_QLDIS_Pos) | (CONF_DFLL_CCDIS << OSCCTRL_DFLLCTRLB_CCDIS_Pos)
+					  | (CONF_DFLL_USBCRM << OSCCTRL_DFLLCTRLB_USBCRM_Pos) | (CONF_DFLL_LLAW << OSCCTRL_DFLLCTRLB_LLAW_Pos)
+					  | (CONF_DFLL_STABLE << OSCCTRL_DFLLCTRLB_STABLE_Pos) | (1u << OSCCTRL_DFLLCTRLB_MODE_Pos);
+	hri_oscctrl_write_DFLLCTRLB_reg(OSCCTRL, tmp);
+	while (hri_oscctrl_get_DFLLSYNC_DFLLCTRLB_bit(OSCCTRL)) { }
+
+	// All done
+	SystemCoreClock = CONF_CPU_FREQUENCY;			// GCLK0
+	SystemPeripheralClock = CONF_CPU_FREQUENCY/2;	// GCLK3
 }

@@ -396,6 +396,11 @@ RepRap::RepRap() noexcept
 	  , usingLinuxInterface(true)
 #endif
 {
+	// Don't call constructors for other objects here
+}
+
+void RepRap::Init() noexcept
+{
 	OutputBuffer::Init();
 	platform = new Platform();
 #if HAS_LINUX_INTERFACE
@@ -429,10 +434,7 @@ RepRap::RepRap() noexcept
 #if SUPPORT_12864_LCD
 	messageSequence = 0;
 #endif
-}
 
-void RepRap::Init() noexcept
-{
 	messageBoxMutex.Create("MessageBox");
 
 	platform->Init();

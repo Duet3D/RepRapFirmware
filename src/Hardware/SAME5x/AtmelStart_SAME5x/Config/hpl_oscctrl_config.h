@@ -131,13 +131,145 @@
 // <i> Indicates whether configuration for DFLL is enabled or not
 // <id> enable_dfll
 #ifndef CONF_DFLL_CONFIG
-#define CONF_DFLL_CONFIG 0
+#define CONF_DFLL_CONFIG 1
+#endif
+
+// <y> Reference Clock Source
+// <GCLK_PCHCTRL_GEN_GCLK0_Val"> Generic clock generator 0
+// <GCLK_PCHCTRL_GEN_GCLK1_Val"> Generic clock generator 1
+// <GCLK_PCHCTRL_GEN_GCLK2_Val"> Generic clock generator 2
+// <GCLK_PCHCTRL_GEN_GCLK3_Val"> Generic clock generator 3
+// <GCLK_PCHCTRL_GEN_GCLK4_Val"> Generic clock generator 4
+// <GCLK_PCHCTRL_GEN_GCLK5_Val"> Generic clock generator 5
+// <GCLK_PCHCTRL_GEN_GCLK6_Val"> Generic clock generator 6
+// <GCLK_PCHCTRL_GEN_GCLK7_Val"> Generic clock generator 7
+// <GCLK_PCHCTRL_GEN_GCLK8_Val"> Generic clock generator 8
+// <GCLK_PCHCTRL_GEN_GCLK9_Val"> Generic clock generator 9
+// <GCLK_PCHCTRL_GEN_GCLK10_Val"> Generic clock generator 10
+// <GCLK_PCHCTRL_GEN_GCLK11_Val"> Generic clock generator 11
+// <i> Select the clock source
+// <id> dfll_ref_clock
+#ifndef CONF_DFLL_GCLK
+#define CONF_DFLL_GCLK GCLK_PCHCTRL_GEN_GCLK1_Val
+#endif
+
+// <h> Digital Frequency Locked Loop Control
+// <q> DFLL Enable
+// <i> Indicates whether DFLL is enabled or not
+// <id> dfll_arch_enable
+#ifndef CONF_DFLL_ENABLE
+#define CONF_DFLL_ENABLE 1
+#endif
+
+// <q> On Demand Control
+// <i> Indicates whether On Demand Control is enabled or not
+// <id> dfll_arch_ondemand
+#ifndef CONF_DFLL_ONDEMAND
+#define CONF_DFLL_ONDEMAND 0
+#endif
+
+// <q> Run in Standby
+// <i> Indicates whether Run in Standby is enabled or not
+// <id> dfll_arch_runstdby
+#ifndef CONF_DFLL_RUNSTDBY
+#define CONF_DFLL_RUNSTDBY 0
+#endif
+
+// <q> USB Clock Recovery Mode
+// <i> Indicates whether USB Clock Recovery Mode is enabled or not
+// <id> dfll_arch_usbcrm
+#ifndef CONF_DFLL_USBCRM
+#define CONF_DFLL_USBCRM 0
+#endif
+
+// <q> Wait Lock
+// <i> Indicates whether Wait Lock is enabled or not
+// <id> dfll_arch_waitlock
+#ifndef CONF_DFLL_WAITLOCK
+#define CONF_DFLL_WAITLOCK 0
+#endif
+
+// <q> Bypass Coarse Lock
+// <i> Indicates whether Bypass Coarse Lock is enabled or not
+// <id> dfll_arch_bplckc
+#ifndef CONF_DFLL_BPLCKC
+#define CONF_DFLL_BPLCKC 0
+#endif
+
+// <q> Quick Lock Disable
+// <i> Indicates whether Quick Lock Disable is enabled or not
+// <id> dfll_arch_qldis
+#ifndef CONF_DFLL_QLDIS
+#define CONF_DFLL_QLDIS 0
+#endif
+
+// <q> Chill Cycle Disable
+// <i> Indicates whether Chill Cycle Disable is enabled or not
+// <id> dfll_arch_ccdis
+#ifndef CONF_DFLL_CCDIS
+#define CONF_DFLL_CCDIS 0
+#endif
+
+// <q> Lose Lock After Wake
+// <i> Indicates whether Lose Lock After Wake is enabled or not
+// <id> dfll_arch_llaw
+#ifndef CONF_DFLL_LLAW
+#define CONF_DFLL_LLAW 0
+#endif
+
+// <q> Stable DFLL Frequency
+// <i> Indicates whether Stable DFLL Frequency is enabled or not
+// <id> dfll_arch_stable
+#ifndef CONF_DFLL_STABLE
+#define CONF_DFLL_STABLE 0
+#endif
+
+// <o> Operating Mode Selection
+// <0=>Open Loop Mode
+// <1=>Closed Loop Mode
+// <id> dfll_mode
+#ifndef CONF_DFLL_MODE
+#define CONF_DFLL_MODE 0x0
+#endif
+
+// <o> Coarse Maximum Step <0x0-0x1F>
+// <id> dfll_arch_cstep
+#ifndef CONF_DFLL_CSTEP
+#define CONF_DFLL_CSTEP 0x1
+#endif
+
+// <o> Fine Maximum Step <0x0-0xFF>
+// <id> dfll_arch_fstep
+#ifndef CONF_DFLL_FSTEP
+#define CONF_DFLL_FSTEP 0x1
+#endif
+
+// <o> DFLL Multiply Factor <0x0-0xFFFF>
+//  <id> dfll_mul
+#ifndef CONF_DFLL_MUL
+#define CONF_DFLL_MUL 1464
+#endif
+
+// <e> DFLL Calibration Overwrite
+// <i> Indicates whether Overwrite Calibration value of DFLL
+// <id> dfll_arch_calibration
+#ifndef CONF_DFLL_OVERWRITE_CALIBRATION
+#define CONF_DFLL_OVERWRITE_CALIBRATION 0
+#endif
+
+// <o> Coarse Value <0x0-0x3F>
+// <id> dfll_arch_coarse
+#ifndef CONF_DFLL_COARSE
+#define CONF_DFLL_COARSE (0x1f / 4)
+#endif
+
+// <o> Fine Value <0x0-0xFF>
+// <id> dfll_arch_fine
+#ifndef CONF_DFLL_FINE
+#define CONF_DFLL_FINE (0x80)
 #endif
 
 //</e>
-
-//</h>
-
 //</e>
 
 // <e> FDPLL0 Configuration
@@ -325,13 +457,13 @@
 // <o> Loop Divider Ratio Integer Part <0x0-0x1FFF>
 // <id> fdpll1_ldr
 #ifndef CONF_FDPLL1_LDR
-#define CONF_FDPLL1_LDR 24	// multiply 1MHz by 25 to get 25MHz
+#define CONF_FDPLL1_LDR 49	// multiply 2MHz by 50 to get 100MHz
 #endif
 
 // <o> Clock Divider <0x0-0x7FF>
 // <id> fdpll1_clock_div
 #ifndef CONF_FDPLL1_DIV
-#define CONF_FDPLL1_DIV 7	// divide 16MHz by 2 * (7 + 1) to get 1MHz
+#define CONF_FDPLL1_DIV 3	// divide 16MHz by 2 * (3 + 1) to get 2MHz
 #endif
 
 // <q> DCO Filter Enable

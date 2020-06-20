@@ -223,10 +223,10 @@ constexpr uint32_t SerialNumberAddresses[4] = { 0x008061FC, 0x00806010, 0x008060
 #include "Uart.h"
 typedef Uart UARTClass;
 
-extern Uart *serialUart0;
+extern Uart serialUart0;
 
 #include "SerialCDC.h"
 
-extern SerialCDC *serialUSB;
+extern SerialCDC serialUSB;
 
 #endif /* SRC_HARDWARE_SAME5X_COREIO_H_ */

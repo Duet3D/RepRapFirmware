@@ -434,7 +434,9 @@ void Platform::Init() noexcept
 	baudRates[0] = MAIN_BAUD_RATE;
 	commsParams[0] = 0;
 	usbMutex.Create("USB");
-#if defined(__LPC17xx__)
+#if SAME5x
+    SERIAL_MAIN_DEVICE.Start();
+#elif defined(__LPC17xx__)
 	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 #else
     SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
@@ -446,6 +448,10 @@ void Platform::Init() noexcept
 	auxMutex.Create("Aux");
 	auxEnabled = auxRaw = false;
 	auxSeq = 0;
+#endif
+
+#ifdef DUET_5LC
+	EnableAux();			//TODO temporary!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #endif
 
 #ifdef SERIAL_AUX2_DEVICE
@@ -1118,9 +1124,9 @@ void Platform::Spin() noexcept
 		return;
 	}
 
-#if defined(DUET3) || defined(__LPC17xx__)
+#if defined(DUET3) || defined(DUET_5LC) || defined(__LPC17xx__)
 	// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-	digitalWrite(DiagPin, (StepTimer::GetTimerTicks() & (1u << 19)) != 0);
+	digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
 #endif
 
 #if HAS_MASS_STORAGE
@@ -3697,7 +3703,9 @@ void Platform::ResetChannel(size_t chan) noexcept
 	{
 	case 0:
 		SERIAL_MAIN_DEVICE.end();
-#if defined(__LPC17xx__)
+#if SAME5x
+        SERIAL_MAIN_DEVICE.Start();
+#elif defined(__LPC17xx__)
 		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 #else
         SERIAL_MAIN_DEVICE.Start(UsbVBusPin);

@@ -50,7 +50,7 @@
 #include "sd_mmc.h"
 #include "conf_sd_mmc.h"
 
-#if SAME5x
+#if defined(SAME5x) && SAME5x
 # include <peripheral_clk_config.h>
 #endif
 

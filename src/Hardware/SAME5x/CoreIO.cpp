@@ -16,13 +16,33 @@
 #include <peripheral_clk_config.h>
 
 // Serial device support
-Uart *serialUart0;
-SerialCDC *serialUSB;
+Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512);
+SerialCDC serialUSB(UsbVBusPin);
+
+void SERIAL0_ISR0() noexcept
+{
+	serialUart0.Interrupt();
+}
+
+void SERIAL0_ISR1() noexcept
+{
+	serialUart0.Interrupt();
+}
+
+void SERIAL0_ISR2() noexcept
+{
+	serialUart0.Interrupt();
+}
+
+void SERIAL0_ISR3() noexcept
+{
+	serialUart0.Interrupt();
+}
 
 // IoPort::SetPinMode calls this
 extern "C" void pinMode(Pin pin, enum PinMode mode) noexcept
 {
-	if (pin != NoPin)
+	if (pin < NumTotalPins)
 	{
 		switch (mode)
 		{
@@ -75,23 +95,31 @@ extern "C" void pinMode(Pin pin, enum PinMode mode) noexcept
 // IoPort::ReadPin calls this
 extern "C" bool digitalRead(Pin pin) noexcept
 {
-	const uint8_t port = GPIO_PORT(pin);
-	const uint32_t pinMask = 1U << GPIO_PIN(pin);
-	return (hri_port_read_IN_reg(PORT, port) & pinMask) != 0;
+	if (pin < NumTotalPins)
+	{
+		const uint8_t port = GPIO_PORT(pin);
+		const uint32_t pinMask = 1U << GPIO_PIN(pin);
+		return (hri_port_read_IN_reg(PORT, port) & pinMask) != 0;
+	}
+
+	return false;
 }
 
 // IoPort::WriteDigital calls this
 extern "C" void digitalWrite(Pin pin, bool high) noexcept
 {
-	const uint8_t port = GPIO_PORT(pin);
-	const uint32_t pinMask = 1U << GPIO_PIN(pin);
-	if (high)
+	if (pin < NumTotalPins)
 	{
-		hri_port_set_OUT_reg(PORT, port, pinMask);
-	}
-	else
-	{
-		hri_port_clear_OUT_reg(PORT, port, pinMask);
+		const uint8_t port = GPIO_PORT(pin);
+		const uint32_t pinMask = 1U << GPIO_PIN(pin);
+		if (high)
+		{
+			hri_port_set_OUT_reg(PORT, port, pinMask);
+		}
+		else
+		{
+			hri_port_clear_OUT_reg(PORT, port, pinMask);
+		}
 	}
 }
 
@@ -141,8 +169,6 @@ static void UsbInit() noexcept
 	gpio_set_pin_level(PortAPin(25), false);
 	gpio_set_pin_pull_mode(PortAPin(25), GPIO_PULL_OFF);
 	gpio_set_pin_function(PortAPin(25), PINMUX_PA25H_USB_DP);
-
-	serialUSB = new SerialCDC;
 }
 
 static void SdhcInit() noexcept
@@ -205,7 +231,7 @@ static void SerialInit()
 {
 	SetPinFunction(Serial0TxPin, Serial0PinFunction);
 	SetPinFunction(Serial0RxPin, Serial0PinFunction);
-	serialUart0 = new Uart(Serial0SercomNumber, Sercom0RxPad, 512, 512);
+	// We don't make the init call here, that's done by the GCodes module
 }
 
 static void EthernetInit() noexcept

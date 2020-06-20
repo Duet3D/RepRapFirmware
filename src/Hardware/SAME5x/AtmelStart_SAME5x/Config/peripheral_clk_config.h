@@ -123,7 +123,7 @@
 
 // <i> Select the clock source for USB.
 #ifndef CONF_GCLK_USB_SRC
-#define CONF_GCLK_USB_SRC GCLK_PCHCTRL_GEN_GCLK1_Val
+#define CONF_GCLK_USB_SRC GCLK_PCHCTRL_GEN_GCLK4_Val
 
 #endif
 
@@ -132,7 +132,7 @@
  * \brief USB's Clock frequency
  */
 #ifndef CONF_GCLK_USB_FREQUENCY
-#define CONF_GCLK_USB_FREQUENCY 60000000
+#define CONF_GCLK_USB_FREQUENCY 48000000
 #endif
 
 // <<< end of configuration section >>>
