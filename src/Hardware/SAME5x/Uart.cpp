@@ -51,6 +51,22 @@ int Uart::read() noexcept
 	return (rxBuffer.GetItem(c)) ? c : -1;
 }
 
+int Uart::available() noexcept
+{
+	return rxBuffer.ItemsPresent();
+}
+
+void Uart::flush() noexcept
+{
+	while (!txBuffer.IsEmpty()) { }
+	while (!sercom->USART.INTFLAG.bit.TXC) { }
+}
+
+size_t Uart::canWrite() const noexcept
+{
+	return txBuffer.SpaceLeft();
+}
+
 // Write single character, blocking
 size_t Uart::write(uint8_t c) noexcept
 {
