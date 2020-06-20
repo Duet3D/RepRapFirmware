@@ -524,6 +524,8 @@ void Platform::Init() noexcept
 	numSmartDrivers = MaxSmartDrivers;
 # elif defined(DUET3)
 	numSmartDrivers = MaxSmartDrivers;
+# elif defined(DUET_5LC)
+	numSmartDrivers = MaxSmartDrivers;
 # endif
 #endif
 
