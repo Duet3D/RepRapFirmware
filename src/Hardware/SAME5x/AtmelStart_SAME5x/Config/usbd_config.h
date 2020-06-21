@@ -56,13 +56,13 @@
 // <o> idVender <0x0000-0xFFFF>
 // <id> usb_cdcd_acm_idvender
 #ifndef CONF_USB_CDCD_ACM_IDVENDER
-#define CONF_USB_CDCD_ACM_IDVENDER 0x3eb
+#define CONF_USB_CDCD_ACM_IDVENDER 0x1d50
 #endif
 
 // <o> idProduct <0x0000-0xFFFF>
 // <id> usb_cdcd_acm_idproduct
 #ifndef CONF_USB_CDCD_ACM_IDPRODUCT
-#define CONF_USB_CDCD_ACM_IDPRODUCT 0x2404
+#define CONF_USB_CDCD_ACM_IDPRODUCT 0x60ee
 #endif
 
 // <o> bcdDevice <0x0000-0xFFFF>
@@ -74,7 +74,7 @@
 // <e> Enable string descriptor of iManufact
 // <id> usb_cdcd_acm_imanufact_en
 #ifndef CONF_USB_CDCD_ACM_IMANUFACT_EN
-#define CONF_USB_CDCD_ACM_IMANUFACT_EN 0
+#define CONF_USB_CDCD_ACM_IMANUFACT_EN 1
 #endif
 
 #ifndef CONF_USB_CDCD_ACM_IMANUFACT
@@ -84,7 +84,7 @@
 // <s> Unicode string of iManufact
 // <id> usb_cdcd_acm_imanufact_str
 #ifndef CONF_USB_CDCD_ACM_IMANUFACT_STR
-#define CONF_USB_CDCD_ACM_IMANUFACT_STR "Atmel"
+#define CONF_USB_CDCD_ACM_IMANUFACT_STR "Duet3D"
 #endif
 
 #ifndef CONF_USB_CDCD_ACM_IMANUFACT_STR_DESC

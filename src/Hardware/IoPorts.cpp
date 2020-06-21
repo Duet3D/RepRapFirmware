@@ -209,7 +209,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 
 	const char *const fullPinName = pn;			// the full pin name less the inversion and pullup flags
 
-#if defined(DUET3)
+#if SUPPORT_CAN_EXPANSION
 	if (isdigit(*pn))
 	{
 		const uint32_t expansionNumber = StrToU32(pn, &pn);

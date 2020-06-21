@@ -52,7 +52,9 @@ extern "C" {
 /**
  * \brief Retrieve array size
  */
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#ifndef ARRAY_SIZE
+# define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
 
 /**
  * \brief Emit the compiler pragma \a arg.

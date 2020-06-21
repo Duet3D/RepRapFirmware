@@ -551,12 +551,6 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (gotCommand)
 		{
 			gb.DecodeCommand();
-#if defined(SERIAL_AUX_DEVICE) && !defined(DUET3)
-			if (&gb == auxGCode && !platform.IsAuxEnabled())
-			{
-				platform.EnableAux();				// by default we assume no PanelDue is attached, so flag when we receive a command from it
-			}
-#endif
 		}
 #if HAS_LINUX_INTERFACE
 		else if (reprap.UsingLinuxInterface())

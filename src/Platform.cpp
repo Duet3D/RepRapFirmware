@@ -725,7 +725,7 @@ void Platform::Init() noexcept
 	// Initialise the configured heaters to just the default bed heater (there are no default chamber heaters)
 	configuredHeaters.Clear();
 
-#ifndef DUET3
+#if !defined(DUET3) && !defined(DUET_5LC)
 	if (DefaultBedHeater >= 0)
 	{
 		configuredHeaters.SetBit(DefaultBedHeater);
@@ -964,9 +964,7 @@ void Platform::Exit() noexcept
 	usbOutput.ReleaseAll();
 
 #ifdef SERIAL_AUX_DEVICE
-# ifdef DUET3
 	if (auxEnabled)
-# endif
 	{
 		SERIAL_AUX_DEVICE.end();
 	}

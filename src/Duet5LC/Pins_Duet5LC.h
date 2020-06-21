@@ -121,6 +121,7 @@ constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 #define TMC22xx_USES_SERCOM				1
 #define TMC22xx_VARIABLE_NUM_DRIVERS	1
 #define TMC22xx_SINGLE_DRIVER			0
+#define TMC22xx_USE_SLAVEADDR			1
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
