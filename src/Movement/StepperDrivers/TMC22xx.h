@@ -41,7 +41,7 @@ namespace SmartDrivers
 	void Init(size_t numTmcDrivers) noexcept
 	pre(numTmcDrivers <= MaxSmartDrivers);
 #else
-	void Init();
+	void Init() noexcept;
 #endif
 
 	void Exit() noexcept;

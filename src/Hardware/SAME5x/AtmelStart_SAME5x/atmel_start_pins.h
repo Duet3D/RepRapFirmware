@@ -10,7 +10,7 @@
 
 #include <hal_gpio.h>
 
-// SAME51 has 14 pin functions
+// SAME5x has 14 pin functions
 
 #define GPIO_PIN_FUNCTION_A 0
 #define GPIO_PIN_FUNCTION_B 1

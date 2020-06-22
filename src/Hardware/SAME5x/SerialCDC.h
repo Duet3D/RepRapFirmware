@@ -9,11 +9,13 @@
 #define SRC_HARDWARE_SAME5X_SERIALCDC_H_
 
 #include "Stream.h"
+#include <General/RingBuffer.h>
+#include <RTOSIface/RTOSIface.h>
 
 class SerialCDC : public Stream
 {
 public:
-	SerialCDC(Pin p) noexcept : vbusPin(p) { }
+	SerialCDC(Pin p, size_t numTxSlots, size_t numRxSlots) noexcept;
 
 	// Overridden virtual functions
 	int available() noexcept override;
@@ -31,7 +33,16 @@ public:
 	// Compatibility functions
 	void end() noexcept;
 
+	// These are called by the callback functions
+	void StartSending() noexcept;
+	void StartReceiving() noexcept;
+	void DataReceived(uint32_t count) noexcept;
+
 private:
+
+	RingBuffer<uint8_t> txBuffer;
+	RingBuffer<uint8_t> rxBuffer;
+	volatile TaskHandle txWaitingTask;
 	const Pin vbusPin;
 };
 

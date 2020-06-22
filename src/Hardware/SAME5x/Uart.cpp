@@ -91,6 +91,7 @@ size_t Uart::write(uint8_t c) noexcept
 	return 1;
 }
 
+#if 0
 // Nonblocking write block
 size_t Uart::TryPutBlock(const uint8_t* buffer, size_t buflen) noexcept
 {
@@ -98,6 +99,7 @@ size_t Uart::TryPutBlock(const uint8_t* buffer, size_t buflen) noexcept
 	sercom->USART.INTENSET.reg = SERCOM_USART_INTENSET_DRE;
 	return written;
 }
+#endif
 
 // Blocking write block
 size_t Uart::write(const uint8_t* buffer, size_t buflen) noexcept

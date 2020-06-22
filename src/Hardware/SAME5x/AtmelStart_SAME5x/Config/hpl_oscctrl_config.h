@@ -235,13 +235,13 @@
 // <o> Coarse Maximum Step <0x0-0x1F>
 // <id> dfll_arch_cstep
 #ifndef CONF_DFLL_CSTEP
-#define CONF_DFLL_CSTEP 0x1
+#define CONF_DFLL_CSTEP 0x4
 #endif
 
 // <o> Fine Maximum Step <0x0-0xFF>
 // <id> dfll_arch_fstep
 #ifndef CONF_DFLL_FSTEP
-#define CONF_DFLL_FSTEP 0x1
+#define CONF_DFLL_FSTEP 0x4
 #endif
 
 // <o> DFLL Multiply Factor <0x0-0xFFFF>

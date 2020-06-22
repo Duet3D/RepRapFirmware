@@ -1008,7 +1008,7 @@ static void SetupDMA() noexcept
 		xdmac_configure_transfer(XDMAC, DmacChanTmcTx, &p_cfg);
 	}
 
-#elif SAME51
+#elif SAME5x
 	DmacManager::DisableChannel(TmcRxDmaChannel);
 	DmacManager::DisableChannel(TmcTxDmaChannel);
 	DmacManager::SetTriggerSourceSercomRx(TmcRxDmaChannel, SERCOM_TMC51xx_NUMBER);
@@ -1029,7 +1029,7 @@ static inline void EnableDma() noexcept
 #if SAME70
 	xdmac_channel_enable(XDMAC, DmacChanTmcRx);
 	xdmac_channel_enable(XDMAC, DmacChanTmcTx);
-#elif SAME51
+#elif SAME5x
 	DmacManager::EnableChannel(TmcRxDmaChannel, TmcRxDmaPriority);
 	DmacManager::EnableChannel(TmcTxDmaChannel, TmcTxDmaPriority);
 #else
@@ -1042,7 +1042,7 @@ static inline void DisableDma() noexcept
 #if SAME70
 	xdmac_channel_disable(XDMAC, DmacChanTmcTx);
 	xdmac_channel_disable(XDMAC, DmacChanTmcRx);
-#elif SAME51
+#elif SAME5x
 	DmacManager::DisableChannel(TmcTxDmaChannel);
 	DmacManager::DisableChannel(TmcRxDmaChannel);
 #else
@@ -1169,7 +1169,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			}
 
 			// Kick off a transfer.
-			// On the SAME51 the only way I have found to get reliable transfers and no timeouts is to disable SPI, enable DMA, and then enable SPI.
+			// On the SAME5x the only way I have found to get reliable transfers and no timeouts is to disable SPI, enable DMA, and then enable SPI.
 			// Enabling SPI before DMA sometimes results in timeouts.
 			// Unfortunately, when we disable SPI the SCLK line floats. Therefore we disable SPI for as little time as possible.
 			{
@@ -1262,16 +1262,16 @@ void SmartDrivers::Init() noexcept
 
 	// Set up the DMA descriptors
 	// We use separate write-back descriptors, so we only need to set this up once
-	DmacManager::SetBtctrl(TmcRxDmaChannel, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
-								| DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_STEPSIZE_X1);
 	DmacManager::SetSourceAddress(TmcRxDmaChannel, &(SERCOM_TMC51xx->SPI.DATA.reg));
 	DmacManager::SetDestinationAddress(TmcRxDmaChannel, rcvData);
+	DmacManager::SetBtctrl(TmcRxDmaChannel, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
+								| DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_STEPSIZE_X1);
 	DmacManager::SetDataLength(TmcRxDmaChannel, ARRAY_SIZE(rcvData));
 
-	DmacManager::SetBtctrl(TmcTxDmaChannel, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
-								| DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_STEPSIZE_X1);
 	DmacManager::SetSourceAddress(TmcTxDmaChannel, sendData);
 	DmacManager::SetDestinationAddress(TmcTxDmaChannel, &(SERCOM_TMC51xx->SPI.DATA.reg));
+	DmacManager::SetBtctrl(TmcTxDmaChannel, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
+								| DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_STEPSIZE_X1);
 	DmacManager::SetDataLength(TmcTxDmaChannel, ARRAY_SIZE(sendData));
 
 	DmacManager::SetInterruptCallback(TmcRxDmaChannel, RxDmaCompleteCallback, 0U);

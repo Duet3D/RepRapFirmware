@@ -39,8 +39,8 @@
  *
  * \acme_license_stop
  *
- * Project: SAME51
- * Target:  ATSAME51N19A 
+ * Project: SAME54
+ * Target:  ATSAME54P20A
  *
  **/
 

@@ -1,7 +1,7 @@
 /**
  * \file
  *
- * \brief gcc starttup file for SAME51
+ * \brief gcc starttup file for SAME54
  *
  * Copyright (c) 2017 Microchip Technology Inc.
  *

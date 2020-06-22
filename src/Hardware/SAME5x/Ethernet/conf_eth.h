@@ -1,4 +1,4 @@
-// Ethernet configuration for SAME51
+// Ethernet configuration for SAME54
 
 #ifndef CONF_ETH_H_INCLUDED
 #define CONF_ETH_H_INCLUDED

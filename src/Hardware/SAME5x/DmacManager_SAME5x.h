@@ -23,8 +23,6 @@ typedef void (*DmaCallbackFunction)(CallbackParameter cb, DmaCallbackReason reas
 
 enum class DmaTrigSource : uint8_t
 {
-#if defined(SAME51)
-
 	disable = 0,
 	rtc,
 	dsu_dcc0,
@@ -96,98 +94,15 @@ enum class DmaTrigSource : uint8_t
 
 	qspi_rx = 0x53,
 	qspi_tx
-
-#elif defined(SAMC21)
-
-	disable = 0,
-	tsens,
-
-	sercom0_rx,
-	sercom0_tx,
-	sercom1_rx,
-	sercom1_tx,
-	sercom2_rx,
-	sercom2_tx,
-	sercom3_rx,
-	sercom3_tx,
-	sercom4_rx,
-	sercom4_tx,
-	sercom5_rx,
-	sercom5_tx,
-
-	can0_debug,
-	can1_debug,
-
-	tcc0_ovf,
-	tcc0_mc0,
-	tcc0_mc1,
-	tcc0_mc2,
-	tcc0_mc3,
-	tcc1_ovf,
-	tcc1_mc0,
-	tcc1_mc1,
-	tcc2_ovf,
-	tcc2_mc0,
-	tcc2_mc1,
-
-	tc0_ovf,
-	tc0_mc0,
-	tc0_mc1,
-	tc1_ovf,
-	tc1_mc0,
-	tc1_mc1,
-	tc2_ovf,
-	tc2_mc0,
-	tc2_mc1,
-	tc3_ovf,
-	tc3_mc0,
-	tc3_mc1,
-	tc4_ovf,
-	tc4_mc0,
-	tc4_mc1,
-
-	adc0_resrdy,
-	adc1_resrdy,
-	sdadc_resrdy,
-
-	dac_empty,
-	ptc_eoc,
-	ptc_wcomp,
-	ptc_seq,
-
-# if 0	// these are only available on the SAMC21N, which we don't support
-	sercom6_rx,
-	sercom6_tx,
-	sercom7_rx,
-	sercom7_tx,
-
-	tc5_ovf,
-	tc5_mc0,
-	tc5_mc1,
-	tc6_ovf,
-	tc6_mc0,
-	tc6_mc1,
-	tc7_ovf,
-	tc7_mc0,
-	tc7_mc1
-
-# endif
-#else
-# error Unsupported processor
-#endif
 };
 
-#if defined(SAMC21)
-static_assert((uint8_t)DmaTrigSource::ptc_seq == 0x30, "Error in DmaTrigSource enumeration");
-#endif
-
-// The following works for all sercoms on the SAME51 and sercoms 1 to 5 on the SAMC21. We don't support sercoms 6-7 on the SAMC21 because they only exist on the 100-pin version.
+// The following works for all sercoms on the SAME5x and sercoms 1 to 5 on the SAMC21. We don't support sercoms 6-7 on the SAMC21 because they only exist on the 100-pin version.
 static inline uint8_t GetSercomTxTrigSource(uint8_t sercomNumber)
 {
 	return (uint8_t)DmaTrigSource::sercom0_tx + (sercomNumber * 2);
 }
 
-// The following works for all sercoms on the SAME51 and sercoms 1 to 5 on the SAMC21. We don't support sercoms 6-7 on the SAMC21 because they only exist on the 100-pin version.
+// The following works for all sercoms on the SAME5x and sercoms 1 to 5 on the SAMC21. We don't support sercoms 6-7 on the SAMC21 because they only exist on the 100-pin version.
 static inline uint8_t GetSercomRxTrigSource(uint8_t sercomNumber)
 {
 	return (uint8_t)DmaTrigSource::sercom0_rx + (sercomNumber * 2);
@@ -196,10 +111,10 @@ static inline uint8_t GetSercomRxTrigSource(uint8_t sercomNumber)
 namespace DmacManager
 {
 	void Init();
-	void SetDestinationAddress(uint8_t channel, volatile void *const dst);
-	void SetSourceAddress(uint8_t channel, const volatile void *const src);
-	void SetDataLength(uint8_t channel, uint32_t amount);
-	void SetBtctrl(uint8_t channel, uint16_t val);
+	void SetBtctrl(uint8_t channel, uint16_t val);								// warning: call SetBtctrl, SetSourceAddress and SetDestinationAddress BEFORE SetDataLength!
+	void SetDataLength(uint8_t channel, uint32_t amount);						// warning: call SetBtctrl, SetSourceAddress and SetDestinationAddress BEFORE SetDataLength!
+	void SetSourceAddress(uint8_t channel, const volatile void *const src);		// warning: call SetBtctrl, SetSourceAddress and SetDestinationAddress BEFORE SetDataLength!
+	void SetDestinationAddress(uint8_t channel, volatile void *const dst);		// warning: call SetBtctrl, SetSourceAddress and SetDestinationAddress BEFORE SetDataLength!
 	void SetTriggerSource(uint8_t channel, DmaTrigSource source);
 	void SetTriggerSourceSercomTx(uint8_t channel, uint8_t sercomNumber);
 	void SetTriggerSourceSercomRx(uint8_t channel, uint8_t sercomNumber);

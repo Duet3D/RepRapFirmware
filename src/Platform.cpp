@@ -525,7 +525,7 @@ void Platform::Init() noexcept
 # elif defined(DUET3)
 	numSmartDrivers = MaxSmartDrivers;
 # elif defined(DUET_5LC)
-	numSmartDrivers = MaxSmartDrivers;
+	numSmartDrivers = MaxSmartDrivers;							// support the expansion board, but don't mind if it's missing
 # endif
 #endif
 
@@ -688,8 +688,12 @@ void Platform::Init() noexcept
 # if SUPPORT_TMC51xx
 	SmartDrivers::Init();
 # elif SUPPORT_TMC22xx
+#  if TMC22xx_VARIABLE_NUM_DRIVERS
 	SmartDrivers::Init(numSmartDrivers);
-#else
+#  else
+	SmartDrivers::Init();
+#  endif
+# else
 	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
 # endif
 	temperatureShutdownDrivers.Clear();
@@ -1687,7 +1691,9 @@ void Platform::InitialiseInterrupts() noexcept
 
 #if SAME5x
 	NVIC_SetPriority(USB_0_IRQn, NvicPriorityUSB);
-	//TODO do we need the other 3 USB interrupts?
+	NVIC_SetPriority(USB_1_IRQn, NvicPriorityUSB);
+	NVIC_SetPriority(USB_2_IRQn, NvicPriorityUSB);
+	NVIC_SetPriority(USB_3_IRQn, NvicPriorityUSB);
 #elif SAME70
 	NVIC_SetPriority(USBHS_IRQn, NvicPriorityUSB);
 #elif SAM4E || SAM4S
@@ -1921,7 +1927,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	// Show the motor stall status
 	for (size_t drive = 0; drive < numSmartDrivers; ++drive)
 	{
-		String<MediumStringLength> driverStatus;
+		String<StringLength256> driverStatus;
 		SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
 		MessageF(mtype, "Driver %u:%s\n", drive, driverStatus.c_str());
 	}

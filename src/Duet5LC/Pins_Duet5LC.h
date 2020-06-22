@@ -119,7 +119,7 @@ constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 #define TMC22xx_HAS_ENABLE_PINS			0
 #define TMC22xx_HAS_MUX					1
 #define TMC22xx_USES_SERCOM				1
-#define TMC22xx_VARIABLE_NUM_DRIVERS	1
+#define TMC22xx_VARIABLE_NUM_DRIVERS	0
 #define TMC22xx_SINGLE_DRIVER			0
 #define TMC22xx_USE_SLAVEADDR			1
 
@@ -129,8 +129,8 @@ constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 // To write a register we need to send 8 bytes. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
 // So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
 // In testing I found that 500kbaud was not reliable, so now using 200kbaud.
-constexpr uint32_t DriversBaudRate = 200000;
-constexpr uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
+constexpr uint32_t DriversBaudRate = 250000;
+constexpr uint32_t TransferTimeout = 2;					// any transfer should complete within 2 ticks @ 1ms/tick
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 // Thermistors

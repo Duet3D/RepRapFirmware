@@ -15,11 +15,7 @@ typedef void (*AnalogInCallbackFunction)(CallbackParameter p, uint16_t reading);
 namespace AnalogIn
 {
 	// The number of bits that the ADCs return
-#ifdef SAMC21
 	constexpr unsigned int AdcBits = 16;
-#else
-	constexpr unsigned int AdcBits = 16;
-#endif
 
 	// Initialise the analog input subsystem. Call this just once.
 	void Init();
@@ -27,7 +23,7 @@ namespace AnalogIn
 	// Enable analog input on a pin.
 	// Readings will be taken and about every 'ticksPerCall' milliseconds the callback function will be called with the specified parameter and ADC reading.
 	// Set ticksPerCall to 0 to get a callback on every reading.
-	// Warning! there is nothing to stop you enabling a channel twice, in which case in the SAME51 configuration, it will be read twice in the sequence.
+	// Warning! there is nothing to stop you enabling a channel twice, in which case in the SAME5x configuration, it will be read twice in the sequence.
 	bool EnableChannel(AdcInput adcin, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall);
 
 	// Readings will be taken and about every 'ticksPerCall' milliseconds the callback function will be called with the specified parameter and ADC reading.

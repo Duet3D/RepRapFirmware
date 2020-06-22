@@ -41,8 +41,10 @@ public:
 	void setInterruptPriority(uint32_t prio) const noexcept;
     InterruptCallbackFn SetInterruptCallback(InterruptCallbackFn f) noexcept;
 
+#if 0
 	// Non-blocking block write
 	size_t TryPutBlock(const uint8_t *buffer, size_t buflen) noexcept;
+#endif
 
 	// ISR, must be called by the ISR for the SERCOM
 	void Interrupt() noexcept;

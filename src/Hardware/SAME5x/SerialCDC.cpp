@@ -35,35 +35,34 @@ static struct usbd_descriptors single_desc[]
 #endif
 };
 
+static SerialCDC *device;
+static bool sending = false, receiving = false;
 static usb_cdc_control_signal_t cdcState;
 
 /** Ctrl endpoint buffer */
 static uint8_t ctrl_buffer[64];
 
-/** Buffers to receive and echo the communication bytes. */
-static uint32_t usbd_cdc_buffer[CDCD_ECHO_BUF_SIZ / 4];
+// Buffers to receive and send data. I am not sure that they need to be aligned.
+alignas(4) static uint8_t rxTempBuffer[64];
+alignas(4) static uint8_t txTempBuffer[64];
 
 /**
- * \brief Callback invoked when bulk OUT data received
+ * \brief Callback invoked when bulk data received
  */
-static bool usb_device_cb_bulk_out(const uint8_t ep, const enum usb_xfer_code rc, const uint32_t count)
+static bool usb_device_cb_bulk_rx(const uint8_t ep, const enum usb_xfer_code rc, const uint32_t count)
 {
-	cdcdf_acm_write((uint8_t *)usbd_cdc_buffer, count);
-
-	/* No error. */
-	return false;
+	device->DataReceived(count);
+	return false;						// no error
 }
 
 /**
- * \brief Callback invoked when bulk IN data received
+ * \brief Callback invoked when bulk data has been sent
  */
-static bool usb_device_cb_bulk_in(const uint8_t ep, const enum usb_xfer_code rc, const uint32_t count)
+static bool usb_device_cb_bulk_tx(const uint8_t ep, const enum usb_xfer_code rc, const uint32_t count)
 {
-	/* Echo data. */
-	cdcdf_acm_read((uint8_t *)usbd_cdc_buffer, sizeof(usbd_cdc_buffer));
-
-	/* No error. */
-	return false;
+	sending = false;
+	device->StartSending();
+	return false;						// no error
 }
 
 /**
@@ -72,16 +71,24 @@ static bool usb_device_cb_bulk_in(const uint8_t ep, const enum usb_xfer_code rc,
 static bool usb_device_cb_state_c(usb_cdc_control_signal_t state)
 {
 	cdcState = state;
-	if (state.rs232.DTR) {
-		/* Callbacks must be registered after endpoint allocation */
-		cdcdf_acm_register_callback(CDCDF_ACM_CB_READ, (FUNC_PTR)usb_device_cb_bulk_out);
-		cdcdf_acm_register_callback(CDCDF_ACM_CB_WRITE, (FUNC_PTR)usb_device_cb_bulk_in);
-		/* Start Rx */
-		cdcdf_acm_read((uint8_t *)usbd_cdc_buffer, sizeof(usbd_cdc_buffer));
+	if (state.rs232.DTR)
+	{
+		// Callbacks must be registered after endpoint allocation
+		cdcdf_acm_register_callback(CDCDF_ACM_CB_READ, (FUNC_PTR)usb_device_cb_bulk_rx);
+		cdcdf_acm_register_callback(CDCDF_ACM_CB_WRITE, (FUNC_PTR)usb_device_cb_bulk_tx);
+
+		// Start receive
+		device->StartReceiving();
 	}
 
 	/* No error. */
 	return false;
+}
+
+SerialCDC::SerialCDC(Pin p, size_t numTxSlots, size_t numRxSlots) noexcept : vbusPin(p)
+{
+	txBuffer.Init(numTxSlots);
+	rxBuffer.Init(numRxSlots);
 }
 
 void SerialCDC::Start() noexcept
@@ -96,10 +103,12 @@ void SerialCDC::Start() noexcept
 	usbdc_attach();
 
 	//TODO not sure whether this just waits for installation to complete or waits for a connection
-	while (!cdcdf_acm_is_enabled()) {
+	while (!cdcdf_acm_is_enabled())
+	{
 		// wait cdc acm to be installed
-	};
+	}
 
+	device = this;
 	cdcdf_acm_register_callback(CDCDF_ACM_CB_STATE_C, (FUNC_PTR)usb_device_cb_state_c);
 }
 
@@ -115,39 +124,102 @@ bool SerialCDC::IsConnected() const noexcept
 }
 
 // Overridden virtual functions
-int SerialCDC::available() noexcept
-{
-	//TODO
-	return 0;
-}
 
+// Non-blocking read, return 0 if no character available
 int SerialCDC::read() noexcept
 {
-	//TODO
+	uint8_t c;
+	if (rxBuffer.GetItem(c))
+	{
+		StartReceiving();
+		return c;
+	}
 	return -1;
+}
+
+int SerialCDC::available() noexcept
+{
+	return rxBuffer.ItemsPresent();
 }
 
 void SerialCDC::flush() noexcept
 {
-	//TODO
+	while (!txBuffer.IsEmpty()) { }
+	//TODO wait until no data in the USB buffer
 }
 
 size_t SerialCDC::canWrite() const noexcept
 {
-	//TODO
-	return 0;
+	return txBuffer.SpaceLeft();
 }
 
-size_t SerialCDC::write(uint8_t) noexcept
+// Write single character, blocking
+size_t SerialCDC::write(uint8_t c) noexcept
 {
-	//TODO
-	return 0;
+	for (;;)
+	{
+		if (txBuffer.PutItem(c))
+		{
+			StartSending();
+			break;
+		}
+		txWaitingTask = RTOSIface::GetCurrentTask();
+		StartSending();
+		TaskBase::Take(50);
+	}
+	return 1;
 }
 
-size_t SerialCDC::write(const uint8_t *buffer, size_t size) noexcept
+// Blocking write block
+size_t SerialCDC::write(const uint8_t *buffer, size_t buflen) noexcept
 {
-	//TODO
-	return 0;
+	const size_t ret = buflen;
+	for (;;)
+	{
+		buflen -= txBuffer.PutBlock(buffer, buflen);
+		if (buflen == 0)
+		{
+			StartSending();
+			break;
+		}
+		txWaitingTask = RTOSIface::GetCurrentTask();
+		StartSending();
+		TaskBase::Take(50);
+	}
+	return ret;
+}
+
+void SerialCDC::StartSending() noexcept
+{
+	if (!sending)
+	{
+		sending = true;
+		const size_t count = txBuffer.GetBlock(txTempBuffer, sizeof(txTempBuffer));
+		if (count == 0)
+		{
+			sending = false;
+		}
+		else
+		{
+			cdcdf_acm_write(txTempBuffer, count);
+		}
+	}
+}
+
+void SerialCDC::StartReceiving() noexcept
+{
+	if (!receiving && rxBuffer.SpaceLeft() > sizeof(rxTempBuffer))
+	{
+		receiving = true;
+		cdcdf_acm_read(rxTempBuffer, sizeof(rxTempBuffer));
+	}
+}
+
+void SerialCDC::DataReceived(uint32_t count) noexcept
+{
+	rxBuffer.PutBlock(rxTempBuffer, count);
+	receiving = false;
+	StartReceiving();
 }
 
 // End
