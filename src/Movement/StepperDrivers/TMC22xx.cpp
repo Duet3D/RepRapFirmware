@@ -58,6 +58,10 @@ constexpr bool DefaultInterpolation = true;					// interpolation enabled
 constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
 constexpr size_t TmcTaskStackWords = 100;
 
+#ifdef DUET_5LC
+constexpr uint16_t DriverNotPresentTimeouts = 20;
+#endif
+
 #if HAS_STALL_DETECT
 const int DefaultStallDetectThreshold = 1;
 const unsigned int DefaultMinimumStepsPerSecond = 200;		// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC5160 datasheet
@@ -391,9 +395,25 @@ public:
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
+#ifdef DUET_5LC
+	bool DriverAssumedPresent() const noexcept { return numWrites != 0 || numTimeouts < DriverNotPresentTimeouts; }
+#endif
+
 	void TransferDone() noexcept __attribute__ ((hot));		// called by the ISR when the SPI transfer has completed
 	void StartTransfer() noexcept __attribute__ ((hot));	// called to start a transfer
-	void TransferTimedOut() noexcept { ++numTimeouts; AbortTransfer(); }
+	void TransferTimedOut() noexcept
+	{
+#ifdef DUET_5LC
+		if (DriverAssumedPresent())
+		{
+			++numTimeouts;
+		}
+#else
+		++numTimeouts;
+#endif
+		AbortTransfer();
+	}
+
 	void DmaError() noexcept { ++numDmaErrors; AbortTransfer(); }
 	void AbortTransfer() noexcept;
 
@@ -1157,10 +1177,20 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	ResetLoadRegisters();
 #endif
 
-	reply.catf(", read errors %u, write errors %u, ifcount %u, reads %u, writes %u, timeouts %u, DMA errors %u, failedOp 0x%02x",
-					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors, failedOp);
+	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
+					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors);
+	if (failedOp != 0xFF)
+	{
+		reply.catf(", failedOp 0x%02x", failedOp);
+		failedOp = 0xFF;
+	}
+#ifdef DUET_5LC
+	if (!DriverAssumedPresent())
+	{
+		reply.cat(", assumed not present");
+	}
+#endif
 	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
-	failedOp = 0xFF;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -1449,7 +1479,8 @@ extern "C" void TmcLoop(void *) noexcept
 			}
 			else
 			{
-				currentDriverNumber = ((currentDriverNumber + (currentDriverNumber >> 2)) & 0x07) ^ 0x04;
+				static constexpr size_t nextDriver[] = { 4, 5, 6, 7, 1, 2, 3, 0 };
+				currentDriverNumber = nextDriver[currentDriverNumber];
 			}
 			currentDriver = &driverStates[currentDriverNumber];
 #else
@@ -1499,8 +1530,16 @@ extern "C" void TmcLoop(void *) noexcept
 						if (driverStates[i].UpdatePending())
 #endif
 						{
-							allInitialised = false;
-							break;
+#ifdef DUET_5LC
+							// Drivers 5-7 are on the expansion board, which may not be present. So if they consistently time out, ignore them.
+							if (i < 5 || driverStates[i].DriverAssumedPresent())
+							{
+#endif
+								allInitialised = false;
+								break;
+#ifdef DUET_5LC
+							}
+#endif
 						}
 					}
 
