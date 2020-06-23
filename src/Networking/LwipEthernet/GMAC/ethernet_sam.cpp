@@ -44,9 +44,9 @@
 #include "ethernet_sam.h"
 
 #if defined(__SAME70Q20B__)
-# include <Hardware/SAME70/Ethernet/gmac.h>
+# include <Hardware/SAME70/Ethernet/GmacInterface.h>
 #elif defined(__SAME54P20A__)
-# include <Hardware/SAME5x/Ethernet/gmac.h>
+# include <Hardware/SAME5x/Ethernet/GmacInterface.h>
 #else
 # error Unsupported processor
 #endif

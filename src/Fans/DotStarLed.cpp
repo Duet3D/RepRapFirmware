@@ -17,6 +17,9 @@
 # include <sam/drivers/usart/usart.h>
 #else
 # include <Hardware/DmacManager.h>
+# if SAME70
+#  include <sam/drivers/xdmac/xdmac.h>
+# endif
 #endif
 
 namespace DotStarLed

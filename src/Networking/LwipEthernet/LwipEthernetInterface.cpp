@@ -22,9 +22,9 @@
 #include "GMAC/ethernet_sam.h"
 
 #if SAME70
-# include <Hardware/SAME70/Ethernet/gmac.h>
+# include <Hardware/SAME70/Ethernet/GmacInterface.h>
 #elif SAME5x
-# include <Hardware/SAME5x/Ethernet/gmac.h>
+# include <Hardware/SAME5x/Ethernet/GmacInterface.h>
 #endif
 
 extern "C"

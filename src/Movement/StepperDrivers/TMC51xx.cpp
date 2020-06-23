@@ -29,6 +29,8 @@ static inline const Move& GetMoveInstance() noexcept { return *moveInstance; }
 
 #elif SAME70
 
+#include <sam/drivers/xdmac/xdmac.h>
+
 # define TMC51xx_USES_SERCOM	0
 static inline const Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
 

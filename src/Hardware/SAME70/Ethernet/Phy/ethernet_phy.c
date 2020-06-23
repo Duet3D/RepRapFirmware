@@ -50,9 +50,8 @@
 #include "pio/pio.h"
 #endif
 
-#include "gmac/gmac.h"
+#include <gmac/gmac.h>		// ASF3 gmac driver
 #include "conf_eth.h"
-#include "board.h"
 
 /// @cond 0
 /**INDENT-OFF**/

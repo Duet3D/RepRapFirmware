@@ -31,7 +31,7 @@
  *
  */
 
-#include "gmac.h"
+#include "GmacInterface.h"
 #include "pmc/pmc.h"
 
 #include "conf_eth.h"
@@ -51,7 +51,7 @@ extern "C" {
 
 #define __nocache	__attribute__((section(".ram_nocache")))
 
-extern void delay(uint32_t ms);
+extern void delay(uint32_t ms) noexcept;
 
 // We can't #include RepRapFirmware.h here because that leads to a duplicate definition of ERR_TIMEOUT
 #include <RTOSIface/RTOSIface.h>
@@ -221,7 +221,7 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t star
 
 			LWIP_DEBUGF(NETIF_DEBUG,
 					("gmac_rx_populate_queue: new pbuf allocated: %p [idx=%u]\n",
-					p, ul_index));
+					p, (unsigned int)ul_index));
 		}
 
 		++ul_index;
@@ -422,7 +422,7 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 
 	LWIP_DEBUGF(NETIF_DEBUG,
 			("gmac_low_level_output: DMA buffer sent, size=%d [idx=%u]\n",
-			p->tot_len, ps_gmac_dev->us_tx_idx));
+			p->tot_len, (unsigned int)ps_gmac_dev->us_tx_idx));
 
 	ps_gmac_dev->us_tx_idx = (ps_gmac_dev->us_tx_idx + 1) % GMAC_TX_BUFFERS;
 
@@ -498,7 +498,7 @@ static pbuf *gmac_low_level_input(struct netif *netif) noexcept
 
 		LWIP_DEBUGF(NETIF_DEBUG,
 				("gmac_low_level_input: DMA buffer %p received, size=%u [idx=%u]\n",
-				p, length, ps_gmac_dev->us_rx_idx));
+				p, (unsigned int)length, (unsigned int)ps_gmac_dev->us_rx_idx));
 
 		/* Set pbuf total packet size. */
 		p->tot_len = length;

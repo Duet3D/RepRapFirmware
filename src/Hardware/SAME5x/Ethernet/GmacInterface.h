@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_HARDWARE_SAME5X_ETHERNET_GMAC_H_
-#define SRC_HARDWARE_SAME5X_ETHERNET_GMAC_H_
+#ifndef SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_
+#define SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,4 +45,4 @@ extern unsigned int txBufferTooShortCount;
 
 
 
-#endif /* SRC_HARDWARE_SAME5X_ETHERNET_GMAC_H_ */
+#endif /* SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_ */
