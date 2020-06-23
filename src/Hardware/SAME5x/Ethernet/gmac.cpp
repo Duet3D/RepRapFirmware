@@ -1,5 +1,5 @@
 /*
- * SAME5x_gmac.cpp
+ * gmac.cpp
  *
  *  Created on: 19 Jun 2020
  *      Author: David
@@ -8,6 +8,7 @@
 //TODO
 
 #include <Core.h>
+#include "gmac.h"
 
 extern "C" {
 #include "lwip/opt.h"

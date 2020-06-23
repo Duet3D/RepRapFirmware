@@ -1471,18 +1471,20 @@ extern "C" void TmcLoop(void *) noexcept
 #elif defined(DUET_5LC)
 			// To avoid having to insert delays between addressing drivers on the same multiplexer channel,
 			// address drivers on alternate multiplexer channels, i.e in the order 04152637
-			static_assert(MaxSmartDrivers == 8);
-			static_assert(!TMC22xx_VARIABLE_NUM_DRIVERS);
-			if (currentDriver == nullptr)
+			if (currentDriver == nullptr || currentDriverNumber == GetNumTmcDrivers() - 1)
 			{
 				currentDriverNumber = 0;
 			}
 			else
 			{
-				static constexpr size_t nextDriver[] = { 4, 5, 6, 7, 1, 2, 3, 0 };
-				currentDriverNumber = nextDriver[currentDriverNumber];
+				++currentDriverNumber;
 			}
-			currentDriver = &driverStates[currentDriverNumber];
+			static constexpr TmcDriverState *drivers[] =
+			{
+				&driverStates[0], &driverStates[4], &driverStates[1], &driverStates[5], &driverStates[2], &driverStates[6], &driverStates[3], &driverStates[7]
+			};
+			static_assert(ARRAY_SIZE(drivers) == MaxSmartDrivers);
+			currentDriver = drivers[currentDriverNumber];
 #else
 			currentDriver = (currentDriver == nullptr || currentDriver + 1 == driverStates + GetNumTmcDrivers())
 								? driverStates

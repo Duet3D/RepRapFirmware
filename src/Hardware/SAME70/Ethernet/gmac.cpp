@@ -31,17 +31,14 @@
  *
  */
 
-#include "same70_gmac.h"
-
-#if defined(SAME70) && SAME70
+#include "gmac.h"
 #include "pmc/pmc.h"
-#endif
 
 #include "conf_eth.h"
 #include <cstring>
 
 extern "C" {
-#include "ksz8081rna/ethernet_phy.h"
+#include "Phy/ethernet_phy.h"
 #include "lwip/opt.h"
 #include "lwip/sys.h"
 #include "lwip/def.h"

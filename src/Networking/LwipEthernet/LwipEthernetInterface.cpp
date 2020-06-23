@@ -20,7 +20,12 @@
 #include "General/IP4String.h"
 #include "Version.h"								// version is reported by MDNS
 #include "GMAC/ethernet_sam.h"
-#include <Hardware/SAME70/same70_gmac.h>			// for error counts used in function Diagnostics
+
+#if SAME70
+# include <Hardware/SAME70/Ethernet/gmac.h>
+#elif SAME5x
+# include <Hardware/SAME5x/Ethernet/gmac.h>
+#endif
 
 extern "C"
 {

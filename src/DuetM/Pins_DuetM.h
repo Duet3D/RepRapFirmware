@@ -124,7 +124,7 @@ constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
 // To write a register we need to send 8 bytes. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
 // So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
 // In testing I found that 500kbaud was not reliable, so now using 250kbaud.
-constexpr uint32_t DriversBaudRate = 2500000;
+constexpr uint32_t DriversBaudRate = 250000;
 constexpr uint32_t TransferTimeout = 2;				// any transfer should complete within 2 ticks @ 1ms/tick
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 

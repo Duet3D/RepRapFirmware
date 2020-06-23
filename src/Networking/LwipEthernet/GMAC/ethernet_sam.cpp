@@ -43,7 +43,14 @@
 
 #include "ethernet_sam.h"
 
-#include <Hardware/SAME70/same70_gmac.h>
+#if defined(__SAME70Q20B__)
+# include <Hardware/SAME70/Ethernet/gmac.h>
+#elif defined(__SAME54P20A__)
+# include <Hardware/SAME5x/Ethernet/gmac.h>
+#else
+# error Unsupported processor
+#endif
+
 #include "lwip/netif.h"
 
 #include <cstring>
