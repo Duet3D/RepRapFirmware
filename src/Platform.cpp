@@ -1643,7 +1643,14 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 
 #if HAS_WIFI_NETWORKING
+# if defined(DUET_NG)
 	NVIC_SetPriority(UART1_IRQn, NvicPriorityWiFiUart);			// set priority for WiFi UART interrupt
+# elif defined(DUET_5LC)
+	NVIC_SetPriority(WiFiUartSercomIRQn, NvicPriorityWiFiUart);
+	NVIC_SetPriority((IRQn)(WiFiUartSercomIRQn + 1), NvicPriorityWiFiUart);
+	NVIC_SetPriority((IRQn)(WiFiUartSercomIRQn + 2), NvicPriorityWiFiUart);
+	NVIC_SetPriority((IRQn)(WiFiUartSercomIRQn + 3), NvicPriorityWiFiUart);
+# endif
 #endif
 
 #if SUPPORT_TMC22xx && !SAME5x											// SAME5x uses a DMA interrupt instead of the UART interrupt
@@ -3745,7 +3752,13 @@ void Platform::SetBoardType(BoardType bt) noexcept
 	if (bt == BoardType::Auto)
 	{
 #if defined(DUET_5LC)
-		board = DEFAULT_BOARD_TYPE;
+		// Test whether this is a WiFi or an Ethernet board. Currently we do this based on the processor type.
+		const uint16_t deviceId = DSU->DID.reg >> 16;
+		board = (deviceId == 0x6184)						// if SAME54P20A
+				? BoardType::Duet5LC_Ethernet
+				: (deviceId == 0x6006)						// SAMD51P20A rev D
+				  ? BoardType::Duet5LC_WiFi
+					: BoardType::Duet5LC_Unknown;
 #elif defined(DUET3)
 		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but won't on v1.01 boards
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
@@ -3821,7 +3834,9 @@ const char* Platform::GetElectronicsString() const noexcept
 	switch (board)
 	{
 #if defined(DUET_5LC)
-	case BoardType::Duet5LC_v02:			return "Duet 3 " BOARD_SHORT_NAME "v0.2";
+	case BoardType::Duet5LC_Unknown:		return "Duet 3 " BOARD_SHORT_NAME " unknown variant";
+	case BoardType::Duet5LC_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi";
+	case BoardType::Duet5LC_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
 #elif defined(DUET3)
 	case BoardType::Duet3_v06_100:			return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
 	case BoardType::Duet3_v101:				return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
@@ -3863,7 +3878,9 @@ const char* Platform::GetBoardString() const noexcept
 	switch (board)
 	{
 #if defined(DUET_5LC)
-	case BoardType::Duet5LC_v02:			return "duet5lc02";
+	case BoardType::Duet5LC_Unknown:		return "duet5lcunknown";
+	case BoardType::Duet5LC_WiFi:			return "duet5lcwifi";
+	case BoardType::Duet5LC_Ethernet:		return "duet5lcethernet";
 #elif defined(DUET3)
 	case BoardType::Duet3_v06_100:			return "duet3mb6hc100";
 	case BoardType::Duet3_v101:				return "duet3mb6hc101";
@@ -3919,6 +3936,16 @@ const char *Platform::GetBoardShortName() const noexcept
 	return (board == BoardType::Duet2SBC_10 || board == BoardType::Duet2SBC_102)
 			? BOARD_SHORT_NAME_SBC
 			: (IsDuetWiFi()) ? BOARD_SHORT_NAME_WIFI : BOARD_SHORT_NAME_ETHERNET;
+}
+
+#endif
+
+#ifdef DUET_5LC
+
+// Return true if this is a Duet WiFi, false if it is a Duet Ethernet
+bool Platform::IsDuetWiFi() const noexcept
+{
+	return board == BoardType::Duet5LC_WiFi || board == BoardType::Duet5LC_Unknown;
 }
 
 #endif

@@ -114,7 +114,9 @@ enum class BoardType : uint8_t
 {
 	Auto = 0,
 #if defined(DUET_5LC)
-	Duet5LC_v02,
+	Duet5LC_Unknown,
+	Duet5LC_WiFi,
+	Duet5LC_Ethernet,
 #elif defined(DUET3)
 	Duet3_v06_100 = 1,
 	Duet3_v101 = 2,
@@ -309,8 +311,11 @@ public:
 	size_t GetNumGpOutputsToReport() const noexcept;
 #endif
 
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(DUET_5LC)
 	bool IsDuetWiFi() const noexcept;
+#endif
+
+#ifdef DUET_NG
 	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
 	const char *GetBoardName() const noexcept;
 	const char *GetBoardShortName() const noexcept;

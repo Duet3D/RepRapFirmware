@@ -11,17 +11,19 @@
 #define BOARD_SHORT_NAME		"MB5LC"
 #define BOARD_NAME				"Duet 3 MB5LC"
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB5LC"
-#define DEFAULT_BOARD_TYPE		 BoardType::Duet5LC_v02
-constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
+#define DEFAULT_BOARD_TYPE		 BoardType::Duet5LC_Unknown
+constexpr size_t NumFirmwareUpdateModules = 2;		// main module and WiFi module
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
 #define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
 #define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap_" BOARD_SHORT_NAME ".bin"
-constexpr uint32_t IAP_IMAGE_START = 0x20010000;
+constexpr uint32_t IAP_IMAGE_START = 0x20030000;
+
+#define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
-#define HAS_WIFI_NETWORKING		0
+#define HAS_WIFI_NETWORKING		1
 #define HAS_W5500_NETWORKING	0
 
 #define HAS_CPU_TEMP_SENSOR		0	//TODO temporary!
@@ -227,10 +229,15 @@ constexpr unsigned int EthernetClockOutGclkNumber = 2;
 // WiFi pins. It happens that both SERCOMs use pin function D, so we can use a single pin list for both.
 constexpr unsigned int WiFiSpiSercomNumber = 4;
 constexpr unsigned int WiFiUartSercomNumber = 3;
+constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_0_IRQn;
+constexpr IRQn WiFiUartSercomIRQn = SERCOM3_0_IRQn;
 constexpr Pin WiFiSercomPins[] = { PortAPin(12), PortAPin(13), PortAPin(14), PortAPin(15), PortAPin(16), PortAPin(17) };
 constexpr GpioPinFunction WiFiSercomPinsMode = GpioPinFunction::D;
-constexpr Pin WiFiResetPin = PortCPin(21);
-constexpr Pin WiFiEnablePin = PortCPin(20);
+constexpr Pin EspResetPin = PortCPin(21);
+constexpr Pin EspEnablePin = PortCPin(20);
+constexpr Pin EspDataReadyPin = PortAPin(18);
+constexpr Pin SamTfrReadyPin = PortAPin(19);
+constexpr Pin SamCsPin = PortAPin(14);
 
 // Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;

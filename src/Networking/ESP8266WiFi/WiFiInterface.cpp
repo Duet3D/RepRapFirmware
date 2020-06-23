@@ -34,13 +34,27 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			1		// use XDMA controller
 
+#elif SAME5x
+
+#include <Hardware/DmacManager.h>
+#include <Interrupts.h>
+
+# define USE_PDC            0        // use peripheral DMA controller
+# define USE_DMAC           0        // use general DMA controller
+# define USE_XDMAC          0        // use XDMA controller
+
+// Compatibility with existing RRF Code
+//constexpr Pin APIN_ESP_SPI_MISO = SPI0_MOSI;
+//constexpr Pin APIN_ESP_SPI_SCK = SPI0_SCK;
+//constexpr SSPChannel ESP_SPI = SSP0;
+
 #elif defined(__LPC17xx__)
 
 # define USE_PDC            0        // use peripheral DMA controller
 # define USE_DMAC           0        // use general DMA controller
 # define USE_XDMAC          0        // use XDMA controller
 
-//Compatibility with existing RRF Code
+// Compatibility with existing RRF Code
 constexpr Pin APIN_ESP_SPI_MISO = SPI0_MOSI;
 constexpr Pin APIN_ESP_SPI_SCK = SPI0_SCK;
 constexpr SSPChannel ESP_SPI = SSP0;
@@ -61,7 +75,7 @@ constexpr SSPChannel ESP_SPI = SSP0;
 # include "xdmac/xdmac.h"
 #endif
 
-#ifndef __LPC17xx__
+#if !SAME5x && !defined(__LPC17xx__)
 # include "matrix/matrix.h"
 #endif
 
@@ -476,8 +490,8 @@ void WiFiInterface::Stop() noexcept
 	{
 		MutexLocker lock(interfaceMutex);
 
-		digitalWrite(SamTfrReadyPin, LOW);			// tell the ESP we can't receive
-		digitalWrite(EspResetPin, LOW);				// put the ESP back into reset
+		digitalWrite(SamTfrReadyPin, false);		// tell the ESP we can't receive
+		digitalWrite(EspResetPin, false);			// put the ESP back into reset
 		DisableEspInterrupt();						// ignore IRQs from the transfer request pin
 
 		NVIC_DisableIRQ(ESP_SPI_IRQn);
@@ -1608,7 +1622,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #endif
 
 	// Tell the ESP that we are ready to accept data
-	digitalWrite(SamTfrReadyPin, HIGH);
+	digitalWrite(SamTfrReadyPin, true);
 
 	// Wait until the DMA transfer is complete, with timeout
 	do
@@ -1750,7 +1764,7 @@ void WiFiInterface::SpiInterrupt() noexcept
 #endif
 
 		spi_disable(ESP_SPI);
-		digitalWrite(SamTfrReadyPin, LOW);
+		digitalWrite(SamTfrReadyPin, false);
 		if ((status & SPI_SR_OVRES) != 0)
 		{
 			++spiRxOverruns;
@@ -1769,7 +1783,7 @@ void WiFiInterface::SpiInterrupt() noexcept
 // Start the ESP
 void WiFiInterface::StartWiFi() noexcept
 {
-	digitalWrite(EspResetPin, HIGH);
+	digitalWrite(EspResetPin, true);
 #ifndef __LPC17xx__
 	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
 #endif
@@ -1783,7 +1797,7 @@ void WiFiInterface::StartWiFi() noexcept
 void WiFiInterface::ResetWiFi() noexcept
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
-	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
+	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins for now to avoid floating pins
 	pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 	currentMode = WiFiState::disabled;
 
@@ -1844,7 +1858,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	}
 
 	// Release the reset on the ESP8266
-	digitalWrite(EspResetPin, HIGH);
+	digitalWrite(EspResetPin, true);
 }
 
 // End
