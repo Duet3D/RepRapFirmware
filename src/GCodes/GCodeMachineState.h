@@ -100,6 +100,7 @@ enum class GCodeState : uint8_t
 
 #if HAS_MASS_STORAGE
 	timingSDwrite,
+	timingSDread,
 #endif
 
 #if HAS_LINUX_INTERFACE

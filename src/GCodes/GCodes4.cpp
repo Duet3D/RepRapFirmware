@@ -1280,17 +1280,30 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			if (timingBytesWritten >= timingBytesRequested)
 			{
-				sdTimingFile->Close();
 				const uint32_t ms = millis() - timingStartMillis;
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
-				reply.printf("SD write speed for %.1fMbyte file was %.2fMbytes/sec", (double)fileMbytes, (double)mbPerSec);
-				platform.Delete(platform.GetGCodeDir(), TimingFileName);
-				gb.SetState(GCodeState::normal);
+				platform.MessageF(gb.GetResponseMessageType(), "SD write speed for %.1fMbyte file was %.2fMbytes/sec\n", (double)fileMbytes, (double)mbPerSec);
+				sdTimingFile->Close();
+
+				sdTimingFile = platform.OpenFile(platform.GetGCodeDir(), TimingFileName, OpenMode::read);
+				if (sdTimingFile == nullptr)
+				{
+					platform.Delete(platform.GetGCodeDir(), TimingFileName);
+					gb.MachineState().SetError("Failed to re-open timing file");
+					gb.SetState(GCodeState::normal);
+					break;
+				}
+
+				platform.Message(gb.GetResponseMessageType(), "Testing SD card read speed...\n");
+				timingBytesWritten = 0;
+				timingStartMillis = millis();
+				gb.SetState(GCodeState::timingSDread);
 				break;
 			}
 
-			if (!sdTimingFile->Write(reply.c_str(), reply.Capacity()))
+			const unsigned int bytesToWrite = min<size_t>(reply.Capacity(), timingBytesRequested - timingBytesWritten);
+			if (!sdTimingFile->Write(reply.c_str(), bytesToWrite))
 			{
 				sdTimingFile->Close();
 				platform.Delete(platform.GetGCodeDir(), TimingFileName);
@@ -1298,8 +1311,37 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.SetState(GCodeState::normal);
 				break;
 			}
-			timingBytesWritten += reply.Capacity();
-			writtenThisTime += reply.Capacity();
+			timingBytesWritten += bytesToWrite;
+			writtenThisTime += bytesToWrite;
+		}
+		break;
+
+	case GCodeState::timingSDread:
+		for (uint32_t readThisTime = 0; readThisTime < 100 * 1024; )
+		{
+			if (timingBytesWritten >= timingBytesRequested)
+			{
+				const uint32_t ms = millis() - timingStartMillis;
+				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
+				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
+				sdTimingFile->Close();
+				reply.printf("SD read speed for %.1fMbyte file was %.2fMbytes/sec", (double)fileMbytes, (double)mbPerSec);
+				platform.Delete(platform.GetGCodeDir(), TimingFileName);
+				gb.SetState(GCodeState::normal);
+				break;
+			}
+
+			const unsigned int bytesToRead = min<size_t>(reply.Capacity(), timingBytesRequested - timingBytesWritten);
+			if (sdTimingFile->Read(reply.Pointer(), bytesToRead) != (int)bytesToRead)
+			{
+				sdTimingFile->Close();
+				platform.Delete(platform.GetGCodeDir(), TimingFileName);
+				gb.MachineState().SetError("Failed to read from timing file");
+				gb.SetState(GCodeState::normal);
+				break;
+			}
+			timingBytesWritten += bytesToRead;
+			readThisTime += bytesToRead;
 		}
 		break;
 #endif
