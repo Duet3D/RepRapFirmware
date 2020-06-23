@@ -47,6 +47,8 @@
 
 #ifdef __LPC17xx__
 constexpr size_t NetworkStackWords = 375;
+#elif defined(DEBUG)
+constexpr size_t NetworkStackWords = 1000;				// needs to be enough to support rr_model
 #else
 constexpr size_t NetworkStackWords = 550;				// needs to be enough to support rr_model
 #endif

@@ -31,6 +31,8 @@
  *
  */
 
+#if 0	//DC
+
 #include <string.h>
 #include <utils_assert.h>
 #include <hpl_mac_async.h>
@@ -540,3 +542,5 @@ int32_t _mac_async_read_phy_reg(struct _mac_async_device *const dev, uint16_t ad
 
 	return ERR_NONE;
 }
+
+#endif	//DC

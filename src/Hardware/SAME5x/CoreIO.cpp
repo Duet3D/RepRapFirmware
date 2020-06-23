@@ -237,25 +237,11 @@ static void SerialInit()
 	// We don't make the init call here, that's done by the GCodes module
 }
 
-static void EthernetInit() noexcept
-{
-	// Ensure the PHY is reset
-	pinMode(EthernetPhyResetPin, OUTPUT_LOW);
-
-	// Set up Ethernet clock
-	hri_mclk_set_AHBMASK_GMAC_bit(MCLK);
-	hri_mclk_set_APBCMASK_GMAC_bit(MCLK);
-
-	// Setup Ethernet pins
-	SetPinFunction(EthernetClockOutPin, EthernetClockOutPinFunction);
-	for (Pin p : EthernetMacPins)
-	{
-		SetPinFunction(p, EthernetMacPinsPinFunction);
-	}
-}
-
 void CoreInit() noexcept
 {
+	// Ensure the Ethernet PHY or WiFi module is held reset
+	pinMode(EthernetPhyResetPin, OUTPUT_LOW);
+
 	DmacManager::Init();
 	UsbInit();
 	SdhcInit();
@@ -270,8 +256,7 @@ void CoreInit() noexcept
 
 	SerialInit();
 
-	//TODO check whether this is a WiFi or Ethernet board
-	EthernetInit();
+	// Ethernet pins are now set up in the Ethernet driver
 }
 
 void WatchdogInit() noexcept

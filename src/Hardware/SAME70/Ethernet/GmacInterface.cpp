@@ -38,7 +38,7 @@
 #include <cstring>
 
 extern "C" {
-#include "Phy/ethernet_phy.h"
+#include "ksz8081rna/ethernet_phy.h"
 #include "lwip/opt.h"
 #include "lwip/sys.h"
 #include "lwip/def.h"
@@ -51,9 +51,7 @@ extern "C" {
 
 #define __nocache	__attribute__((section(".ram_nocache")))
 
-extern void delay(uint32_t ms) noexcept;
-
-// We can't #include RepRapFirmware.h here because that leads to a duplicate definition of ERR_TIMEOUT
+#include <RepRapFirmware.h>
 #include <RTOSIface/RTOSIface.h>
 #include <TaskPriorities.h>
 
@@ -783,8 +781,6 @@ void ethernetif_terminate() noexcept
 	NVIC_DisableIRQ(GMAC_IRQn);
 	ethernetTask.TerminateAndUnlink();
 }
-
-extern "C" u32_t millis() noexcept;
 
 extern "C" u32_t sys_now() noexcept
 {

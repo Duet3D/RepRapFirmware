@@ -215,7 +215,7 @@ constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
 constexpr Pin EthernetMacPins[] =
 {
 	PortAPin(12), PortAPin(13), PortAPin(14), PortAPin(15), PortAPin(17), PortAPin(18), PortAPin(19),
-	PortCPin(20), PortCPin(22), PortAPin(23)
+	PortCPin(20), PortCPin(22), PortCPin(23)
 };
 constexpr GpioPinFunction EthernetMacPinsPinFunction = GpioPinFunction::L;
 
@@ -229,6 +229,8 @@ constexpr unsigned int WiFiSpiSercomNumber = 4;
 constexpr unsigned int WiFiUartSercomNumber = 3;
 constexpr Pin WiFiSercomPins[] = { PortAPin(12), PortAPin(13), PortAPin(14), PortAPin(15), PortAPin(16), PortAPin(17) };
 constexpr GpioPinFunction WiFiSercomPinsMode = GpioPinFunction::D;
+constexpr Pin WiFiResetPin = PortCPin(21);
+constexpr Pin WiFiEnablePin = PortCPin(20);
 
 // Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
