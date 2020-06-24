@@ -20,6 +20,10 @@
 Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512);
 SerialCDC serialUSB(UsbVBusPin, 512, 512);
 
+# if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR1) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
+#  error SERIAL0_ISRn not defined
+# endif
+
 void SERIAL0_ISR0() noexcept
 {
 	serialUart0.Interrupt();

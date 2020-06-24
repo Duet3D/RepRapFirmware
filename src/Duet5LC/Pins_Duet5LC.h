@@ -226,13 +226,29 @@ constexpr Pin EthernetClockOutPin = PortAPin(16);
 constexpr GpioPinFunction EthernetClockOutPinFunction = GpioPinFunction::M;
 constexpr unsigned int EthernetClockOutGclkNumber = 2;
 
-// WiFi pins. It happens that both SERCOMs use pin function D, so we can use a single pin list for both.
-constexpr unsigned int WiFiSpiSercomNumber = 4;
+// WiFi pins
+
 constexpr unsigned int WiFiUartSercomNumber = 3;
-constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_0_IRQn;
-constexpr IRQn WiFiUartSercomIRQn = SERCOM3_0_IRQn;
-constexpr Pin WiFiSercomPins[] = { PortAPin(12), PortAPin(13), PortAPin(14), PortAPin(15), PortAPin(16), PortAPin(17) };
-constexpr GpioPinFunction WiFiSercomPinsMode = GpioPinFunction::D;
+constexpr uint8_t WiFiUartRxPad = 1;
+constexpr Pin WiFiUartSercomPins[] = { PortAPin(16), PortAPin(17) };
+constexpr GpioPinFunction WiFiUartSercomPinsMode = GpioPinFunction::D;
+constexpr IRQn WiFiUartSercomIRQn = SERCOM3_0_IRQn;			// this is the first of 4 interrupt numbers
+#define SERIAL_WIFI_ISR0	SERCOM3_0_Handler
+#define SERIAL_WIFI_ISR1	SERCOM3_1_Handler
+#define SERIAL_WIFI_ISR2	SERCOM3_2_Handler
+#define SERIAL_WIFI_ISR3	SERCOM3_3_Handler
+
+constexpr unsigned int WiFiSpiSercomNumber = 4;
+Sercom * const WiFiSpiSercom = SERCOM4;
+constexpr Pin EspMosiPin = PortAPin(15);
+constexpr Pin EspMisoPin = PortAPin(13);
+constexpr Pin EspSclkPin = PortAPin(12);
+constexpr Pin EspSSPin = PortAPin(14);
+constexpr Pin WiFiSpiSercomPins[] = { EspSclkPin, EspMisoPin, EspSSPin, EspMosiPin };
+constexpr GpioPinFunction WiFiSpiSercomPinsMode = GpioPinFunction::D;
+constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_3_IRQn;			// this is the SS Low interrupt, the only one we use
+#define ESP_SPI_HANDLER		SERCOM4_3_Handler
+
 constexpr Pin EspResetPin = PortCPin(21);
 constexpr Pin EspEnablePin = PortCPin(20);
 constexpr Pin EspDataReadyPin = PortAPin(18);
@@ -397,14 +413,19 @@ constexpr DmaChannel Adc0TxDmaChannel = 2;
 // Next channel is used by ADC0 for receive
 constexpr DmaChannel Adc1TxDmaChannel = 4;
 // Next channel is used by ADC1 for receive
-//TODO add WiFi DMA channel
+constexpr DmaChannel WiFiTxDmaChannel = 6;
+constexpr DmaChannel WiFiRxDmaChannel = 7;
+constexpr DmaChannel SbcTxDmaChannel = WiFiTxDmaChannel;
+constexpr DmaChannel SbcRxDmaChannel = WiFiRxDmaChannel;
 
 constexpr unsigned int NumDmaChannelsUsed = 6;			// must be at least the number of channels used, may be larger. Max 32 on the SAME5x.
 
 constexpr uint8_t TmcTxDmaPriority = 0;
-constexpr uint8_t TmcRxDmaPriority = 3;
+constexpr uint8_t TmcRxDmaPriority = 1;					// the baud rate is 250kbps so this is not very critical
 constexpr uint8_t AdcTxDmaPriority = 0;
 constexpr uint8_t AdcRxDmaPriority = 2;
+constexpr uint8_t WiFiDmaPriority = 3;					// high speed SPI in slave mode
+constexpr uint8_t SbcDmaPriority = 3;					// high speed SPI in slave mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers
