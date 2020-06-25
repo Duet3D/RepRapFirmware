@@ -247,6 +247,9 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullp
 
 #ifdef DUET_5LC
 	SerialWiFiDevice = new Uart(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512);
+	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUart);
+#else
+	SERIAL_WIFI_DEVICE.setInterruptPriority(NvicPriorityWiFiUart);
 #endif
 }
 

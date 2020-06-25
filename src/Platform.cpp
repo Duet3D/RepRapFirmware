@@ -1642,16 +1642,7 @@ void Platform::InitialiseInterrupts() noexcept
 	SERIAL_AUX2_DEVICE.setInterruptPriority(NvicPriorityPanelDueUart);
 #endif
 
-#if HAS_WIFI_NETWORKING
-# if defined(DUET_NG)
-	NVIC_SetPriority(UART1_IRQn, NvicPriorityWiFiUart);			// set priority for WiFi UART interrupt
-# elif defined(DUET_5LC)
-	NVIC_SetPriority(WiFiUartSercomIRQn, NvicPriorityWiFiUart);
-	NVIC_SetPriority((IRQn)(WiFiUartSercomIRQn + 1), NvicPriorityWiFiUart);
-	NVIC_SetPriority((IRQn)(WiFiUartSercomIRQn + 2), NvicPriorityWiFiUart);
-	NVIC_SetPriority((IRQn)(WiFiUartSercomIRQn + 3), NvicPriorityWiFiUart);
-# endif
-#endif
+// WiFi UART interrupt priority is now set in module WiFiInterface
 
 #if SUPPORT_TMC22xx && !SAME5x											// SAME5x uses a DMA interrupt instead of the UART interrupt
 # if TMC22xx_HAS_MUX

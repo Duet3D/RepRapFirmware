@@ -255,6 +255,19 @@ constexpr Pin EspDataReadyPin = PortAPin(18);
 constexpr Pin SamTfrReadyPin = PortAPin(19);
 constexpr Pin SamCsPin = PortAPin(14);
 
+// SBC interface
+constexpr unsigned int SbcSpiSercomNumber = 0;
+Sercom * const SbcSpiSercom = SERCOM0;
+//constexpr Pin SbcMosiPin = PortAPin(7);
+//constexpr Pin SbcMisoPin = PortAPin(4);
+//constexpr Pin SbcSclkPin = PortAPin(5);
+constexpr Pin SbcSSPin = PortAPin(6);
+constexpr Pin SbcDataReadyPin = PortBPin(7);
+constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), PortAPin(7) };
+constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
+constexpr IRQn SbcSpiSercomIRQn = SERCOM0_3_IRQn;			// this is the SS Low interrupt, the only one we use
+#define SBC_SPI_HANDLER		SERCOM0_3_Handler
+
 // Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
@@ -415,10 +428,10 @@ constexpr DmaChannel Adc1TxDmaChannel = 4;
 // Next channel is used by ADC1 for receive
 constexpr DmaChannel WiFiTxDmaChannel = 6;
 constexpr DmaChannel WiFiRxDmaChannel = 7;
-constexpr DmaChannel SbcTxDmaChannel = WiFiTxDmaChannel;
-constexpr DmaChannel SbcRxDmaChannel = WiFiRxDmaChannel;
+constexpr DmaChannel SbcTxDmaChannel = 8;
+constexpr DmaChannel SbcRxDmaChannel = 9;
 
-constexpr unsigned int NumDmaChannelsUsed = 6;			// must be at least the number of channels used, may be larger. Max 32 on the SAME5x.
+constexpr unsigned int NumDmaChannelsUsed = 10;			// must be at least the number of channels used, may be larger. Max 32 on the SAME5x.
 
 constexpr uint8_t TmcTxDmaPriority = 0;
 constexpr uint8_t TmcRxDmaPriority = 1;					// the baud rate is 250kbps so this is not very critical

@@ -504,12 +504,14 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 // Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
+
 #if SAME5x
 const uint32_t NvicPriorityPanelDueUart = 3;	// the SAME5x driver makes FreeRTOS calls
+const uint32_t NvicPriorityWiFiUart = 3;		// UART used to receive debug data from the WiFi module
 #else
 const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
-#endif
 const uint32_t NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
+#endif
 
 const uint32_t NvicPriorityMCan = 3;			// CAN interface
 const uint32_t NvicPriorityPins = 3;			// priority for GPIO pin interrupts - filament sensors must be higher than step
