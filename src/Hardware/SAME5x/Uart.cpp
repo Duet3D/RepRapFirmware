@@ -58,8 +58,12 @@ int Uart::available() noexcept
 
 void Uart::flush() noexcept
 {
-	while (!txBuffer.IsEmpty()) { }
-	while (!sercom->USART.INTFLAG.bit.TXC) { }
+	// If we have never transmitted then the TXC bit never gets set, so we mustn't wait for it
+	if (!txBuffer.IsEmpty() || !sercom->USART.INTFLAG.bit.DRE)
+	{
+		while (!txBuffer.IsEmpty()) { }
+		while (!sercom->USART.INTFLAG.bit.TXC) { }
+	}
 }
 
 size_t Uart::canWrite() const noexcept

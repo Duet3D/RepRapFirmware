@@ -1455,9 +1455,14 @@ static bool spi_dma_check_rx_complete() noexcept
 
 #if SAME5x
 	// We don't get and end-of-transfer interrupt, just a start-of-transfer one
-	//TODO can we use ESP_DATA_RDY to indicate end of transfer?
-	// So wait until SS is high
-	return digitalRead(EspSSPin);
+	// So wait until SS is high, then disable the SPI
+	//TODO can we use ESP_DATA_RDY to indicate end of transfer instead?
+	if (digitalRead(EspSSPin))
+	{
+		DisableSpi();
+		spi_dma_disable();
+		return true;
+	}
 #endif
 
 	return false;
@@ -1517,10 +1522,11 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength) noexcept
 
 #if USE_DMAC_MANAGER
 	//TODO use 32-bit SPI transfers
-	DmacManager::SetSourceAddress(WiFiTxDmaChannel, buf);
+	// We need to preload the first byte, so DMA all bytes except that one
+	DmacManager::SetSourceAddress(WiFiTxDmaChannel, (uint8_t *)buf + 1);
 	DmacManager::SetDestinationAddress(WiFiTxDmaChannel, &(WiFiSpiSercom->SPI.DATA.reg));
 	DmacManager::SetBtctrl(WiFiTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BLOCKACT_NOACT);
-	DmacManager::SetDataLength(WiFiTxDmaChannel, transferLength);			// must do this one last
+	DmacManager::SetDataLength(WiFiTxDmaChannel, transferLength - 1);			// must do this one last
 #endif
 }
 
@@ -1743,13 +1749,13 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 #if SAME5x
 	// TODO resetting may not be necessary, because disabling SPI may clear the transmit data register and transmit shift register
-	//ResetSpi();									// clear any extra data that has been shifted into the transmitter
+	//ResetSpi();								// clear any extra data that has been shifted into the transmitter
 	// If we do need to reset it, we also need to set the mode, preload bit etc. again
     spi_slave_dma_setup(dataOutLength, dataInLength);
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
 	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_SSL;	// enable the start of transfer (SS low) interrupt
-	//TODO preload the data register?
 	EnableSpi();
+	WiFiSpiSercom->SPI.DATA.reg = *(const uint8_t*)&bufferOut;	// preload the first byte
 #elif defined(__LPC17xx__)
     spi_slave_dma_setup(dataOutLength, dataInLength);
 #else

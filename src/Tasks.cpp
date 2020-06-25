@@ -24,14 +24,17 @@ const uint8_t memPattern = 0xA5;
 
 extern "C" char *sbrk(int i);
 extern char _end;						// defined in linker script
-extern uint32_t _firmware_crc;			// defined in linker script
 extern uint32_t _estack;				// defined in linker script
+
+#ifndef DEBUG
+extern uint32_t _firmware_crc;			// defined in linker script
+#endif
 
 // MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for delta auto calibration.
 // The worst case stack usage is after running delta auto calibration with Move debugging enabled.
 // The timer and idle tasks currently never do I/O, so they can be much smaller.
-#if SAME70
+#if SAME70 || SAME5x
 constexpr unsigned int MainTaskStackWords = 1800;			// on the SAME70 we use matrices of doubles
 #elif defined(__LPC17xx__)
 constexpr unsigned int MainTaskStackWords = 1110-(16*9);	// LPC builds only support 16 calibration points, so less space needed
