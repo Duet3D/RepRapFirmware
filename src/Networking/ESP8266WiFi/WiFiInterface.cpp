@@ -826,6 +826,7 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 	// Mapping from known ESP reset codes to reasons
 	static const char * const resetReasonTexts[] =
 	{
+		"Power up",
 		"Hardware watchdog",
 		"Exception",
 		"Software watchdog",

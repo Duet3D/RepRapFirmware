@@ -137,7 +137,8 @@ extern "C" [[noreturn]] void AppMain() noexcept
 	}
 
 #if SAME5x
-# ifndef DEBUG
+# if 0		// disable the bootloader protection code until we have a bootloader
+//# ifndef DEBUG
 	// Check that the bootloader is protected and EEPROM is configured
 	uint64_t nvmUserRow0 = *reinterpret_cast<const uint64_t*>(NVMCTRL_USER);						// we only need values in the first 64 bits of the user area
 	constexpr uint64_t mask =     ((uint64_t)0x0F << 32) | ((uint64_t)0x07 << 36) | (0x0F << 26);	// we just want NVM_BOOT (bits 26-29), SEE.SBLK (bits 32-35) and SEE.PSZ (bits 36:38)

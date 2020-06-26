@@ -574,6 +574,37 @@ bool _mci_sync_write_word(struct _mci_sync_device *const mci_dev, uint32_t value
  */
 bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *dst, uint16_t nb_block)
 {
+#if 1	//dc42 with thanks to alkgrove
+ 	do
+ 	{
+  		if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
+  		{
+			_mci_reset(mci_dev->hw);
+			return false;
+  		}
+  	} while (!hri_sdhc_get_NISTR_BRDRDY_bit(mci_dev->hw));		// until buffer read ready
+ 	hri_sdhc_set_NISTR_BRDRDY_bit(mci_dev->hw);					// clear the buffer read ready bit
+
+ 	// dc42 optimised the following loop by examining the generated assembler
+  	const unsigned int num_words = (nb_block * mci_dev->mci_sync_block_size)/4;
+	uint32_t *p = (uint32_t*)dst;
+	while (p < (uint32_t*)dst + num_words)
+	{
+		while (!hri_sdhc_get_PSR_BUFRDEN_bit(mci_dev->hw)) { }
+		*p = hri_sdhc_read_BDPR_reg(mci_dev->hw);
+		++p;
+	}
+
+	do
+	{
+  		if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
+  		{
+			_mci_reset(mci_dev->hw);
+			return false;
+  		}
+  	} while (!hri_sdhc_get_NISTR_TRFC_bit(mci_dev->hw));		// wait until transfer complete
+	hri_sdhc_set_NISTR_TRFC_bit(mci_dev->hw);
+#else
 	uint32_t nb_data;
 	uint8_t *ptr    = (uint8_t *)dst;
 	uint8_t  nbytes = 4;
@@ -592,6 +623,7 @@ bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *d
 		nb_data -= nbytes;
 		ptr += nbytes;
 	}
+#endif
 
 	return true;
 }
@@ -602,6 +634,39 @@ bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *d
  */
 bool _mci_sync_start_write_blocks(struct _mci_sync_device *const mci_dev, const void *src, uint16_t nb_block)
 {
+#if 1	//dc42 with thanks to alkgrove
+	do
+	{
+		if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
+		{
+			_mci_reset(mci_dev->hw);
+			return false;
+		}
+	} while (!hri_sdhc_get_NISTR_BWRRDY_bit(mci_dev->hw));
+	hri_sdhc_set_NISTR_BWRRDY_bit(mci_dev->hw);
+
+	// Write data
+    // dc42 optimised the following loop by examining the assembler
+	const unsigned int num_words = (nb_block * mci_dev->mci_sync_block_size)/4;
+	const uint32_t *p = (const uint32_t*)src;
+	while (p < (const uint32_t*)src + num_words)
+    {
+		const uint32_t currentWord = *p++;
+		while (!hri_sdhc_get_PSR_BUFWREN_bit(mci_dev->hw)) { }
+		hri_sdhc_write_BDPR_reg(mci_dev->hw, currentWord);
+    }
+
+    // Wait end of transfer
+    do
+    {
+  		if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
+  		{
+			_mci_reset(mci_dev->hw);
+			return false;
+  		}
+    } while (!hri_sdhc_get_NISTR_TRFC_bit(mci_dev->hw));		// wait until transfer complete
+    hri_sdhc_set_NISTR_TRFC_bit(mci_dev->hw);
+#else
 	uint32_t nb_data;
 	uint8_t *ptr    = (uint8_t *)src;
 	uint8_t  nbytes = 4;
@@ -620,6 +685,7 @@ bool _mci_sync_start_write_blocks(struct _mci_sync_device *const mci_dev, const 
 		nb_data -= nbytes;
 		ptr += nbytes;
 	}
+#endif
 
 	return true;
 }
