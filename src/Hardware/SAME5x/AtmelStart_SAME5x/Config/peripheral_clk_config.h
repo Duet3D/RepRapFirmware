@@ -42,7 +42,7 @@
 // <i> Select the clock source for SDHC.
 // <id> sdhc_gclk_selection
 #ifndef CONF_GCLK_SDHC1_SRC
-#define CONF_GCLK_SDHC1_SRC GCLK_PCHCTRL_GEN_GCLK5_Val
+#define CONF_GCLK_SDHC1_SRC GCLK_PCHCTRL_GEN_GCLK0_Val
 #endif
 
 // <y> SDHC clock slow source
@@ -83,7 +83,7 @@
  * \brief SDHC's Clock frequency
  */
 #ifndef CONF_SDHC1_FREQUENCY
-#define CONF_SDHC1_FREQUENCY 100000000
+#define CONF_SDHC1_FREQUENCY 120000000
 #endif
 
 /**

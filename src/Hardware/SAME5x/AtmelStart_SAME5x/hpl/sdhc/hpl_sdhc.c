@@ -113,6 +113,26 @@ static void _mci_set_speed(const void *const hw, uint32_t speed, uint8_t prog_cl
 	hri_sdhc_set_CCR_SDCLKEN_bit(hw);
 }
 
+#if 1	// dc42
+
+uint32_t _mci_get_clock_speed(const void *const hw)
+{
+	uint32_t clkbase = CONF_BASE_FREQUENCY;
+	uint32_t clkmul = hri_sdhc_read_CA1R_CLKMULT_bf(hw);
+
+	/* If programmable clock mode is enabled, baseclk is divided by 2 */
+	if (clkmul > 0)
+	{
+		clkbase = clkbase / 2;
+	}
+	const uint32_t div = (hri_sdhc_read_CCR_USDCLKFSEL_bf(hw) << 8) | hri_sdhc_read_CCR_SDCLKFSEL_bf(hw);
+	return (hri_sdhc_get_CCR_CLKGSEL_bit(hw))
+			? (clkbase * (clkmul + 1))/div				// Programmable clock mode
+				: clkbase / (2 * div);					// Divided clock mode
+}
+
+#endif
+
 /**
  * \brief Wait the end of busy signal on data line
  *
@@ -263,7 +283,9 @@ int32_t _mci_sync_select_device(struct _mci_sync_device *const mci_dev, uint8_t 
 	}
 
 	if (hri_sdhc_get_HC2R_PVALEN_bit(hw) == 0) {
+#if 0	//dc
 		_mci_set_speed(hw, clock, CONF_SDHC0_CLK_GEN_SEL);
+#endif
 		_mci_set_speed(hw, clock, CONF_SDHC1_CLK_GEN_SEL);
 	}
 

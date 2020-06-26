@@ -232,6 +232,12 @@ bool mci_sync_wait_end_of_write_blocks(struct mci_sync_desc *mci);
  */
 uint32_t mci_sync_get_version(void);
 
+#if 1	// dc42
+
+uint32_t mci_sync_get_speed(struct mci_sync_desc *mci);
+
+#endif
+
 /**@}*/
 
 #ifdef __cplusplus

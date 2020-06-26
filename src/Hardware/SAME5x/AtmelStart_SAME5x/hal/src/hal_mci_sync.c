@@ -218,6 +218,15 @@ uint32_t mci_sync_get_version(void)
 	return DRIVER_VERSION;
 }
 
+#if 1	// dc42
+
+uint32_t mci_sync_get_speed(struct mci_sync_desc *mci)
+{
+	return _mci_get_clock_speed(mci->device.hw) / 2;		// divide by 2 to convert clock speed to bytes/sec
+}
+
+#endif
+
 #ifdef __cplusplus
 }
 #endif

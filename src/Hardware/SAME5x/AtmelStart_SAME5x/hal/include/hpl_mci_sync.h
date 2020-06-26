@@ -248,6 +248,12 @@ bool _mci_sync_wait_end_of_read_blocks(struct _mci_sync_device *const mci_dev);
  */
 bool _mci_sync_wait_end_of_write_blocks(struct _mci_sync_device *const mci_dev);
 
+#if 1	// dc42
+
+uint32_t _mci_get_clock_speed(const void *const hw);
+
+#endif
+
 #ifdef __cplusplus
 }
 #endif
