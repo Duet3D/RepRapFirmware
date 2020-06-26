@@ -119,8 +119,7 @@ static inline void ResetSpi()
 	hri_sercomspi_set_CTRLA_SWRST_bit(WiFiSpiSercom);
 	WiFiSpiSercom->SPI.CTRLA.reg = SERCOM_SPI_CTRLA_CPHA | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_MODE(2);
 	hri_sercomspi_write_CTRLB_reg(WiFiSpiSercom, SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN);
-	hri_sercomspi_write_CTRLC_reg(WiFiSpiSercom, 0);
-	//TODO enable 32-bit mode in CTRLC
+	hri_sercomspi_write_CTRLC_reg(WiFiSpiSercom, SERCOM_SPI_CTRLC_DATA32B);
 #else
 	spi_reset(ESP_SPI);				// this clears the transmit and receive registers and puts the SPI into slave mode
 #endif
@@ -1517,11 +1516,10 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength) noexcept
 #endif
 
 #if USE_DMAC_MANAGER
-	//TODO use 32-bit SPI transfers
 	DmacManager::SetSourceAddress(WiFiTxDmaChannel, buf);
 	DmacManager::SetDestinationAddress(WiFiTxDmaChannel, &(WiFiSpiSercom->SPI.DATA.reg));
-	DmacManager::SetBtctrl(WiFiTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BLOCKACT_NOACT);
-	DmacManager::SetDataLength(WiFiTxDmaChannel, transferLength);			// must do this one last
+	DmacManager::SetBtctrl(WiFiTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetDataLength(WiFiTxDmaChannel, (transferLength + 3) >> 2);			// must do this one last
 	DmacManager::SetTriggerSourceSercomTx(WiFiTxDmaChannel, WiFiSpiSercomNumber);
 #endif
 }
@@ -1579,11 +1577,10 @@ static void spi_rx_dma_setup(void *buf, uint32_t transferLength) noexcept
 #endif
 
 #if USE_DMAC_MANAGER
-	//TODO use 32-bit SPI transfers
 	DmacManager::SetSourceAddress(WiFiRxDmaChannel, &(WiFiSpiSercom->SPI.DATA.reg));
 	DmacManager::SetDestinationAddress(WiFiRxDmaChannel, buf);
-	DmacManager::SetBtctrl(WiFiRxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BLOCKACT_INT);
-	DmacManager::SetDataLength(WiFiRxDmaChannel, transferLength);			// must do this one last
+	DmacManager::SetBtctrl(WiFiRxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
+	DmacManager::SetDataLength(WiFiRxDmaChannel, (transferLength + 3) >> 2);			// must do this one last
 	DmacManager::SetTriggerSourceSercomRx(WiFiRxDmaChannel, WiFiSpiSercomNumber);
 #endif
 }

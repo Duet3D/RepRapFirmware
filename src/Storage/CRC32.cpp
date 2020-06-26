@@ -48,7 +48,7 @@ constexpr uint32_t CRC_32_TAB[256] =
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
 
-#if SAME70
+#if SAME70 || SAME5x
 
 // On SAME70 we have more flash memory available, so use 4K table instead of 1K and the faster slicing-by-4 algorithm
 constexpr uint32_t CRC_32_TAB1[256] =
@@ -189,7 +189,7 @@ void CRC32::Update(const char *s, size_t len) noexcept
 		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
 	}
 
-#if SAME70
+#if SAME70 || SAME5x
 	const char * const endAligned = s + ((end - s) & ~7);
 	while (s != endAligned)
 	{
