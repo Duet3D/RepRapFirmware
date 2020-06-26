@@ -588,14 +588,20 @@ bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *d
 		hri_sdhc_set_NISTR_BRDRDY_bit(mci_dev->hw);					// clear the buffer read ready bit
 
 		// dc42 optimised the following loop by examining the generated assembler
-		const unsigned int num_words = (nb_block * mci_dev->mci_sync_block_size)/4;
-		uint32_t *p = (uint32_t*)dst - 1;
-		while (p < (uint32_t*)dst + num_words - 1)
+		const unsigned int NumQuadWords = (nb_block * mci_dev->mci_sync_block_size) >> 3;
+		uint32_t *p = (uint32_t*)dst;
+		do
 		{
+			while (!hri_sdhc_get_PSR_BUFRDEN_bit(mci_dev->hw)) { }
+			*p = hri_sdhc_read_BDPR_reg(mci_dev->hw);
+			asm volatile("" ::: "memory");
 			++p;
 			while (!hri_sdhc_get_PSR_BUFRDEN_bit(mci_dev->hw)) { }
 			*p = hri_sdhc_read_BDPR_reg(mci_dev->hw);
-		}
+			asm volatile("" ::: "memory");
+			++p;
+		} while (p < (uint32_t*)dst + (2 * NumQuadWords));
+
 
 		do
 		{
@@ -652,15 +658,22 @@ bool _mci_sync_start_write_blocks(struct _mci_sync_device *const mci_dev, const 
 
 		// Write data
 		// dc42 optimised the following loop by examining the assembler
-		const unsigned int num_words = (nb_block * mci_dev->mci_sync_block_size)/4;
+		const unsigned int numQuadWords = (nb_block * mci_dev->mci_sync_block_size) >> 3;
 		const uint32_t *p = (const uint32_t*)src;
-		uint32_t currentWord = *p++;
-		while (p < (const uint32_t*)src + num_words + 1)
+		do
 		{
+			uint32_t currentWord = *p++;
+			asm volatile("" ::: "memory");
 			while (!hri_sdhc_get_PSR_BUFWREN_bit(mci_dev->hw)) { }
 			hri_sdhc_write_BDPR_reg(mci_dev->hw, currentWord);
-			currentWord = *p++;			// this may read one word beyond the end of the buffer - it had better not be beyond the end of memory!
-		}
+			asm volatile("" ::: "memory");
+			currentWord = *p++;
+			asm volatile("" ::: "memory");
+			while (!hri_sdhc_get_PSR_BUFWREN_bit(mci_dev->hw)) { }
+			hri_sdhc_write_BDPR_reg(mci_dev->hw, currentWord);
+			asm volatile("" ::: "memory");
+		} while (p < (const uint32_t*)src + (2 * numQuadWords));
+
 
 		// Wait end of transfer
 		do
