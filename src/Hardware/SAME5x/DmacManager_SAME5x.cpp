@@ -33,7 +33,7 @@ void DmacManager::Init()
 	hri_dmac_write_DBGCTRL_DBGRUN_bit(DMAC, 0);
 
 	hri_dmac_write_PRICTRL0_reg(DMAC, DMAC_PRICTRL0_RRLVLEN0 | DMAC_PRICTRL0_RRLVLEN1 | DMAC_PRICTRL0_RRLVLEN2 | DMAC_PRICTRL0_RRLVLEN3
-									| DMAC_PRICTRL0_QOS0(0x02) | DMAC_PRICTRL0_QOS1(0x02)| DMAC_PRICTRL0_QOS2(0x02)| DMAC_PRICTRL0_QOS3(0x02));
+									| DMAC_PRICTRL0_QOS0(0x00) | DMAC_PRICTRL0_QOS1(0x01)| DMAC_PRICTRL0_QOS2(0x02)| DMAC_PRICTRL0_QOS3(0x03));
 
 	hri_dmac_write_BASEADDR_reg(DMAC, (uint32_t)descriptor_section);
 	hri_dmac_write_WRBADDR_reg(DMAC, (uint32_t)write_back_section);
