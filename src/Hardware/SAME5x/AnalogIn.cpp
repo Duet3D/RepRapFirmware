@@ -353,8 +353,8 @@ void AdcClass::ResultReadyCallback(DmaCallbackReason reason)
 // ADC instances
 static AdcClass Adcs[] =
 {
-	AdcClass(ADC0, ADC0_0_IRQn, Adc0TxDmaChannel, DmaTrigSource::adc0_resrdy),
-	AdcClass(ADC1, ADC1_0_IRQn, Adc1TxDmaChannel, DmaTrigSource::adc1_resrdy)
+	AdcClass(ADC0, ADC0_0_IRQn, DmacChanAdc0Tx, DmaTrigSource::adc0_resrdy),
+	AdcClass(ADC1, ADC1_0_IRQn, DmacChanAdc1Tx, DmaTrigSource::adc1_resrdy)
 };
 
 namespace AnalogIn

@@ -16,11 +16,20 @@
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
 # define USE_DMAC			1		// use general DMA controller
 # define USE_XDMAC			0		// use XDMA controller
+# define USE_DMAC_MANAGER	0		// use SAME5x DmacManager module
 
 #elif defined(DUET3) || defined(SAME70XPLD)
 
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			1		// use XDMA controller
+# define USE_DMAC_MANAGER	0		// use SAME5x DmacManager module
+
+#elif defined(DUET_5LC)
+
+# define USE_DMAC			0		// use general DMA controller
+# define USE_XDMAC			0		// use XDMA controller
+# define USE_DMAC_MANAGER	1		// use SAME5x DmacManager module
+constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 
 #else
 # error Unknown board
@@ -33,6 +42,10 @@
 
 #if USE_XDMAC
 # include "xdmac/xdmac.h"
+#endif
+
+#if USE_DMAC_MANAGER
+# include <Hardware/DmacManager.h>
 #endif
 
 #include "RepRapFirmware.h"
@@ -65,55 +78,65 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 #endif
 
-volatile bool dataReceived = false, transferReadyHigh = false;
+volatile bool dataReceived = false;				// warning: on the SAME5x this just means the transfer has started, not necessarily that it has ended!
+volatile bool transferReadyHigh = false;
 volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
 
 static void spi_dma_disable() noexcept
 {
 #if USE_DMAC
-	dmac_channel_disable(DMAC, DmacChanLinuxRx);
-	dmac_channel_disable(DMAC, DmacChanLinuxTx);
+	dmac_channel_disable(DMAC, DmacChanSbcRx);
+	dmac_channel_disable(DMAC, DmacChanSbcTx);
 #endif
 
 #if USE_XDMAC
-	xdmac_channel_disable(XDMAC, DmacChanLinuxRx);
-	xdmac_channel_disable(XDMAC, DmacChanLinuxTx);
+	xdmac_channel_disable(XDMAC, DmacChanSbcRx);
+	xdmac_channel_disable(XDMAC, DmacChanSbcTx);
+#endif
+
+#if USE_DMAC_MANAGER
+	DmacManager::DisableChannel(DmacChanSbcRx);
+	DmacManager::DisableChannel(DmacChanSbcTx);
 #endif
 }
+
+#if !SAME5x
 
 static bool spi_dma_check_rx_complete() noexcept
 {
 #if USE_DMAC
 	const uint32_t status = DMAC->DMAC_CHSR;
-	if (   ((status & (DMAC_CHSR_ENA0 << DmacChanLinuxRx)) == 0)	// controller is not enabled, perhaps because it finished a full buffer transfer
-		|| ((status & (DMAC_CHSR_EMPT0 << DmacChanLinuxRx)) != 0)	// controller is enabled, probably suspended, and the FIFO is empty
+	if (   ((status & (DMAC_CHSR_ENA0 << DmacChanSbcRx)) == 0)	// controller is not enabled, perhaps because it finished a full buffer transfer
+		|| ((status & (DMAC_CHSR_EMPT0 << DmacChanSbcRx)) != 0)	// controller is enabled, probably suspended, and the FIFO is empty
 	   )
 	{
 		// Disable the channel.
 		// We also need to set the resume bit, otherwise it remains suspended when we re-enable it.
-		DMAC->DMAC_CHDR = (DMAC_CHDR_DIS0 << DmacChanLinuxRx) | (DMAC_CHDR_RES0 << DmacChanLinuxRx);
+		DMAC->DMAC_CHDR = (DMAC_CHDR_DIS0 << DmacChanSbcRx) | (DMAC_CHDR_RES0 << DmacChanSbcRx);
 		return true;
 	}
 	return false;
 
 #elif USE_XDMAC
-	return (xdmac_channel_get_status(XDMAC) & ((1 << DmacChanLinuxRx) | (1 << DmacChanLinuxTx))) == 0;
+	return (xdmac_channel_get_status(XDMAC) & ((1 << DmacChanSbcRx) | (1 << DmacChanSbcTx))) == 0;
 #endif
 }
+
+#endif
 
 static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noexcept
 {
 #if USE_DMAC
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
-	dmac_channel_set_source_addr(DMAC, DmacChanLinuxTx, reinterpret_cast<uint32_t>(outBuffer));
-	dmac_channel_set_destination_addr(DMAC, DmacChanLinuxTx, reinterpret_cast<uint32_t>(&(SBC_SPI->SPI_TDR)));
-	dmac_channel_set_descriptor_addr(DMAC, DmacChanLinuxTx, 0);
-	dmac_channel_set_ctrlA(DMAC, DmacChanLinuxTx,
+	dmac_channel_set_source_addr(DMAC, DmacChanSbcTx, reinterpret_cast<uint32_t>(outBuffer));
+	dmac_channel_set_destination_addr(DMAC, DmacChanSbcTx, reinterpret_cast<uint32_t>(&(SBC_SPI->SPI_TDR)));
+	dmac_channel_set_descriptor_addr(DMAC, DmacChanSbcTx, 0);
+	dmac_channel_set_ctrlA(DMAC, DmacChanSbcTx,
 			bytesToTransfer |
 			DMAC_CTRLA_SRC_WIDTH_WORD |
 			DMAC_CTRLA_DST_WIDTH_BYTE);
-	dmac_channel_set_ctrlB(DMAC, DmacChanLinuxTx,
+	dmac_channel_set_ctrlB(DMAC, DmacChanSbcTx,
 		DMAC_CTRLB_SRC_DSCR |
 		DMAC_CTRLB_DST_DSCR |
 		DMAC_CTRLB_FC_MEM2PER_DMA_FC |
@@ -139,27 +162,35 @@ static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noex
 	xdmac_tx_cfg.mbr_ds = 0;
 	xdmac_tx_cfg.mbr_sus = 0;
 	xdmac_tx_cfg.mbr_dus = 0;
-	xdmac_configure_transfer(XDMAC, DmacChanLinuxTx, &xdmac_tx_cfg);
+	xdmac_configure_transfer(XDMAC, DmacChanSbcTx, &xdmac_tx_cfg);
 
-	xdmac_channel_set_descriptor_control(XDMAC, DmacChanLinuxTx, 0);
-	xdmac_channel_enable(XDMAC, DmacChanLinuxTx);
-	xdmac_disable_interrupt(XDMAC, DmacChanLinuxTx);
+	xdmac_channel_set_descriptor_control(XDMAC, DmacChanSbcTx, 0);
+	xdmac_channel_enable(XDMAC, DmacChanSbcTx);
+	xdmac_disable_interrupt(XDMAC, DmacChanSbcTx);
+#endif
+
+#if USE_DMAC_MANAGER
+	DmacManager::SetSourceAddress(DmacChanSbcTx, outBuffer);
+	DmacManager::SetDestinationAddress(DmacChanSbcTx, &(SbcSpiSercom->SPI.DATA.reg));
+	DmacManager::SetBtctrl(DmacChanSbcTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetDataLength(DmacChanSbcTx, (bytesToTransfer + 3) >> 2);			// must do this one last
+	DmacManager::SetTriggerSourceSercomTx(DmacChanSbcTx, SbcSpiSercomNumber);
 #endif
 }
 
-static void spi_rx_dma_setup(const void *inBuffer, size_t bytesToTransfer) noexcept
+static void spi_rx_dma_setup(void *inBuffer, size_t bytesToTransfer) noexcept
 {
 #if USE_DMAC
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
-	dmac_channel_set_source_addr(DMAC, DmacChanLinuxRx, reinterpret_cast<uint32_t>(&(SBC_SPI->SPI_RDR)));
-	dmac_channel_set_destination_addr(DMAC, DmacChanLinuxRx, reinterpret_cast<uint32_t>(inBuffer));
-	dmac_channel_set_descriptor_addr(DMAC, DmacChanLinuxRx, 0);
-	dmac_channel_set_ctrlA(DMAC, DmacChanLinuxRx,
+	dmac_channel_set_source_addr(DMAC, DmacChanSbcRx, reinterpret_cast<uint32_t>(&(SBC_SPI->SPI_RDR)));
+	dmac_channel_set_destination_addr(DMAC, DmacChanSbcRx, reinterpret_cast<uint32_t>(inBuffer));
+	dmac_channel_set_descriptor_addr(DMAC, DmacChanSbcRx, 0);
+	dmac_channel_set_ctrlA(DMAC, DmacChanSbcRx,
 			bytesToTransfer |
 			DMAC_CTRLA_SRC_WIDTH_BYTE |
 			DMAC_CTRLA_DST_WIDTH_WORD);
-	dmac_channel_set_ctrlB(DMAC, DmacChanLinuxRx,
+	dmac_channel_set_ctrlB(DMAC, DmacChanSbcRx,
 		DMAC_CTRLB_SRC_DSCR |
 		DMAC_CTRLB_DST_DSCR |
 		DMAC_CTRLB_FC_PER2MEM_DMA_FC |
@@ -185,11 +216,19 @@ static void spi_rx_dma_setup(const void *inBuffer, size_t bytesToTransfer) noexc
 	xdmac_tx_cfg.mbr_ds = 0;
 	xdmac_rx_cfg.mbr_sus = 0;
 	xdmac_rx_cfg.mbr_dus = 0;
-	xdmac_configure_transfer(XDMAC, DmacChanLinuxRx, &xdmac_rx_cfg);
+	xdmac_configure_transfer(XDMAC, DmacChanSbcRx, &xdmac_rx_cfg);
 
-	xdmac_channel_set_descriptor_control(XDMAC, DmacChanLinuxRx, 0);
-	xdmac_channel_enable(XDMAC, DmacChanLinuxRx);
-	xdmac_disable_interrupt(XDMAC, DmacChanLinuxRx);
+	xdmac_channel_set_descriptor_control(XDMAC, DmacChanSbcRx, 0);
+	xdmac_channel_enable(XDMAC, DmacChanSbcRx);
+	xdmac_disable_interrupt(XDMAC, DmacChanSbcRx);
+#endif
+
+#if USE_DMAC_MANAGER
+	DmacManager::SetSourceAddress(DmacChanSbcRx, &(SbcSpiSercom->SPI.DATA.reg));
+	DmacManager::SetDestinationAddress(DmacChanSbcRx, inBuffer);
+	DmacManager::SetBtctrl(DmacChanSbcRx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
+	DmacManager::SetDataLength(DmacChanSbcRx, (bytesToTransfer + 3) >> 2);			// must do this one last
+	DmacManager::SetTriggerSourceSercomRx(DmacChanSbcRx, SbcSpiSercomNumber);
 #endif
 }
 
@@ -198,21 +237,29 @@ static void spi_rx_dma_setup(const void *inBuffer, size_t bytesToTransfer) noexc
  */
 static void spi_slave_dma_setup(void *inBuffer, const void *outBuffer, size_t bytesToTransfer) noexcept
 {
-#if USE_DMAC
 	spi_dma_disable();
-#endif
-
 	spi_tx_dma_setup(outBuffer, bytesToTransfer);
 	spi_rx_dma_setup(inBuffer, bytesToTransfer);
 
 #if USE_DMAC
-	dmac_channel_enable(DMAC, DmacChanLinuxRx);
-	dmac_channel_enable(DMAC, DmacChanLinuxTx);
+	dmac_channel_enable(DMAC, DmacChanSbcRx);
+	dmac_channel_enable(DMAC, DmacChanSbcTx);
+#endif
+
+#if USE_XDMAC
+	xdmac_channel_enable(XDMAC, DmacChanSbcRx);
+	xdmac_channel_enable(XDMAC, DmacChanSbcTx);
+#endif
+
+#if USE_DMAC_MANAGER
+	DmacManager::EnableChannel(DmacChanSbcRx, SbcDmaPriority);
+	DmacManager::EnableChannel(DmacChanSbcTx, SbcDmaPriority);
 #endif
 }
 
 static void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer) noexcept
 {
+#if !SAME5x
 	// Reset SPI
 	spi_reset(SBC_SPI);
 	spi_set_slave_mode(SBC_SPI);
@@ -221,38 +268,46 @@ static void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTrans
 	spi_set_clock_polarity(SBC_SPI, 0, 0);
 	spi_set_clock_phase(SBC_SPI, 0, 1);
 	spi_set_bits_per_transfer(SBC_SPI, 0, SPI_CSR_BITS_8_BIT);
+#endif
 
 	// Initialize channel config for transmitter and receiver
 	spi_slave_dma_setup(inBuffer, outBuffer, bytesToTransfer);
 
 #if USE_DMAC
 	// Configure DMA RX channel
-	dmac_channel_set_configuration(DMAC, DmacChanLinuxRx,
+	dmac_channel_set_configuration(DMAC, DmacChanSbcRx,
 			DMAC_CFG_SRC_PER(SBC_SPI_RX_DMA_HW_ID) |
 			DMAC_CFG_SRC_H2SEL |
 			DMAC_CFG_SOD |
 			DMAC_CFG_FIFOCFG_ASAP_CFG);
 
 	// Configure DMA TX channel
-	dmac_channel_set_configuration(DMAC, DmacChanLinuxTx,
+	dmac_channel_set_configuration(DMAC, DmacChanSbcTx,
 			DMAC_CFG_DST_PER(SBC_SPI_TX_DMA_HW_ID) |
 			DMAC_CFG_DST_H2SEL |
 			DMAC_CFG_SOD |
 			DMAC_CFG_FIFOCFG_ASAP_CFG);
 #endif
 
-	// Enable SPI and notify the RaspPi we are ready
+	// Enable SPI and notify the SBC we are ready
+#if SAME5x
+	SbcSpiSercom->SPI.INTFLAG.reg = 0xFF;			// clear any pending interrupts
+	SbcSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_SSL;	// enable the start of transfer (SS low) interrupt
+	hri_sercomspi_set_CTRLA_ENABLE_bit(SbcSpiSercom);
+#else
 	spi_enable(SBC_SPI);
 
 	// Enable end-of-transfer interrupt
 	(void)SBC_SPI->SPI_SR;							// clear any pending interrupt
 	SBC_SPI->SPI_IER = SPI_IER_NSSR;				// enable the NSS rising interrupt
+#endif
+
 	NVIC_SetPriority(SBC_SPI_IRQn, NvicPrioritySpi);
 	NVIC_EnableIRQ(SBC_SPI_IRQn);
 
 	// Begin transfer
 	transferReadyHigh = !transferReadyHigh;
-	digitalWrite(LinuxTfrReadyPin, transferReadyHigh);
+	digitalWrite(SbcTfrReadyPin, transferReadyHigh);
 }
 
 void disable_spi() noexcept
@@ -260,7 +315,11 @@ void disable_spi() noexcept
 	spi_dma_disable();
 
 	// Disable SPI
+#if SAME5x
+	hri_sercomspi_clear_CTRLA_ENABLE_bit(SbcSpiSercom);
+#else
 	spi_disable(SBC_SPI);
+#endif
 }
 
 #ifndef SBC_SPI_HANDLER
@@ -269,6 +328,17 @@ void disable_spi() noexcept
 
 extern "C" void SBC_SPI_HANDLER() noexcept
 {
+#if SAME5x
+	// On the SAM5x we can't get an end-of-transfer interrupt, only a start-of-transfer interrupt.
+	// So we can't disable SPI or DMA in this ISR.
+	const uint8_t status = SbcSpiSercom->SPI.INTFLAG.reg;
+	if ((status & SERCOM_SPI_INTENSET_SSL) != 0)
+	{
+		SbcSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENSET_SSL;		// disable the interrupt
+		SbcSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTENSET_SSL;		// clear the status
+		dataReceived = true;
+	}
+#else
 	const uint32_t status = SBC_SPI->SPI_SR;							// read status and clear interrupt
 	SBC_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt
 	if ((status & SPI_SR_NSSR) != 0)
@@ -287,6 +357,7 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 			++spiTxUnderruns;
 		}
 	}
+#endif
 }
 
 /*-----------------------------------------------------------------------------------*/
@@ -317,17 +388,32 @@ DataTransfer::DataTransfer() noexcept : state(SpiState::ExchangingData), lastTra
 void DataTransfer::Init() noexcept
 {
 	// Initialise transfer ready pin
-	pinMode(LinuxTfrReadyPin, OUTPUT_LOW);
+	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
-	// Initialize SPI pins
+	// Initialize SPI
+#if SAME5x
+	for (Pin p : SbcSpiSercomPins)
+	{
+		SetPinFunction(p, SbcSpiSercomPinsMode);
+	}
+
+	Serial::EnableSercomClock(SbcSpiSercomNumber);
+	spi_dma_disable();
+
+	hri_sercomspi_set_CTRLA_SWRST_bit(SbcSpiSercom);
+	SbcSpiSercom->SPI.CTRLA.reg = SERCOM_SPI_CTRLA_CPHA | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_MODE(2);
+	hri_sercomspi_write_CTRLB_reg(SbcSpiSercom, SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN);
+	hri_sercomspi_write_CTRLC_reg(SbcSpiSercom, SERCOM_SPI_CTRLC_DATA32B);
+#else
 	ConfigurePin(APIN_SBC_SPI_MOSI);
 	ConfigurePin(APIN_SBC_SPI_MISO);
 	ConfigurePin(APIN_SBC_SPI_SCK);
 	ConfigurePin(APIN_SBC_SPI_SS0);
 
-	// Initialise SPI
 	spi_enable_clock(SBC_SPI);
 	spi_disable(SBC_SPI);
+#endif
+
 	dataReceived = false;
 
 #if false
@@ -465,7 +551,7 @@ void DataTransfer::ReadHeightMap() noexcept
 	map.ClearGridHeights();
 	for (size_t i = 0; i < numPoints; i++)
 	{
-		if (!isnan(points[i]))
+		if (!std::isnan(points[i]))
 		{
 			map.SetGridHeight(i, points[i]);
 		}
@@ -587,11 +673,25 @@ bool DataTransfer::IsReady() noexcept
 {
 	if (dataReceived)
 	{
+#if SAME5x
+		if (!digitalRead(SbcSSPin))			// transfer is complete if SS is high
+		{
+			return false;
+		}
+
+		if (SbcSpiSercom->SPI.STATUS.bit.BUFOVF)
+		{
+			++spiRxOverruns;
+		}
+
+		disable_spi();
+#else
 		// Wait for the current XDMA transfer to finish. Relying on the XDMAC IRQ for this is does not work well...
 		if (!spi_dma_check_rx_complete())
 		{
 			return false;
 		}
+#endif
 
 		// Transfer has finished
 		dataReceived = false;
@@ -760,7 +860,7 @@ bool DataTransfer::IsReady() noexcept
 		if (!transferReadyHigh)
 		{
 			transferReadyHigh = true;
-			digitalWrite(LinuxTfrReadyPin, true);
+			digitalWrite(SbcTfrReadyPin, true);
 		}
 	}
 	return false;

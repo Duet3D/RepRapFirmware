@@ -16,11 +16,11 @@ constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		0
-#define HAS_CPU_TEMP_SENSOR		1
-
 #define HAS_LINUX_INTERFACE		1
+
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
+#define HAS_CPU_TEMP_SENSOR		1
 
 #define SUPPORT_TMC51xx			1
 #define TMC51xx_USES_USART		1
@@ -265,7 +265,7 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
-// Duet pin numbers for the Linux interface
+// Duet pin numbers for the SBC interface
 #define SBC_SPI					SPI1
 #define SBC_SPI_INTERFACE_ID	ID_SPI1
 #define SBC_SPI_IRQn			SPI1_IRQn
@@ -276,8 +276,8 @@ constexpr Pin APIN_SBC_SPI_MISO = APIN_SPI1_MISO;
 constexpr Pin APIN_SBC_SPI_SCK = APIN_SPI1_SCK;
 constexpr Pin APIN_SBC_SPI_SS0 = APIN_SPI1_SS0;
 
-constexpr Pin LinuxTfrReadyPin = PortEPin(2);
-Spi * const LinuxSpi = SPI1;
+constexpr Pin SbcTfrReadyPin = PortEPin(2);
+// Note, the DMAC peripheral IDs are hard-coded in DataTransfer
 
 // Timer allocation
 // Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.
@@ -290,14 +290,14 @@ Spi * const LinuxSpi = SPI1;
 #define STEP_TC_ID_UPPER	ID_TC2
 
 // DMA channel allocation
-constexpr uint8_t DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver
-constexpr uint8_t DmacChanWiFiTx = 1;			// only on v0.3 board
-constexpr uint8_t DmacChanWiFiRx = 2;			// only on v0.3 board
-constexpr uint8_t DmacChanTmcTx = 3;
-constexpr uint8_t DmacChanTmcRx = 4;
-constexpr uint8_t DmacChanLinuxTx = 5;
-constexpr uint8_t DmacChanLinuxRx = 6;
-constexpr uint8_t DmacChanDotStarTx = 7;
+constexpr DmaChannel DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver
+constexpr DmaChannel DmacChanWiFiTx = 1;		// only on v0.3 board
+constexpr DmaChannel DmacChanWiFiRx = 2;		// only on v0.3 board
+constexpr DmaChannel DmacChanTmcTx = 3;
+constexpr DmaChannel DmacChanTmcRx = 4;
+constexpr DmaChannel DmacChanSbcTx = 5;
+constexpr DmaChannel DmacChanSbcRx = 6;
+constexpr DmaChannel DmacChanDotStarTx = 7;
 
 constexpr size_t NumDmaChannelsUsed = 8;
 

@@ -25,11 +25,15 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
 #define HAS_W5500_NETWORKING	0
+#define HAS_LINUX_INTERFACE		1
 
-#define HAS_CPU_TEMP_SENSOR		0	//TODO temporary!
+#define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
+#define HAS_CPU_TEMP_SENSOR		0	//TODO temporary!
+
 #define SUPPORT_TMC22xx			1
 #define TMC22xx_HAS_MUX			1
+
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
@@ -185,7 +189,7 @@ constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
 Sdhc * const SdDevice = SDHC1;
 constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
-constexpr uint32_t ExpectedSdCardSpeed = 15000000;	//TODO correct this!!!!!!!!!!!!!!!
+constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // 12864 LCD
 // The ST7920 datasheet specifies minimum clock cycle time 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low.
@@ -269,7 +273,7 @@ Sercom * const SbcSpiSercom = SERCOM0;
 //constexpr Pin SbcMisoPin = PortAPin(4);
 //constexpr Pin SbcSclkPin = PortAPin(5);
 constexpr Pin SbcSSPin = PortAPin(6);
-constexpr Pin SbcDataReadyPin = PortBPin(7);
+constexpr Pin SbcTfrReadyPin = PortBPin(7);
 constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), PortAPin(7) };
 constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn SbcSpiSercomIRQn = SERCOM0_3_IRQn;			// this is the SS Low interrupt, the only one we use
@@ -427,18 +431,19 @@ static_assert(NumNamedPins == 32+32+32+13);
 constexpr unsigned int NumTotalPins = 32+32+32+22;
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
-constexpr DmaChannel TmcTxDmaChannel = 0;
-constexpr DmaChannel TmcRxDmaChannel = 1;
-constexpr DmaChannel Adc0TxDmaChannel = 2;
+constexpr DmaChannel DmacChanTmcTx = 0;
+constexpr DmaChannel DmacChanTmcRx = 1;
+constexpr DmaChannel DmacChanAdc0Tx = 2;
 // Next channel is used by ADC0 for receive
-constexpr DmaChannel Adc1TxDmaChannel = 4;
+constexpr DmaChannel DmacChanAdc1Tx = 4;
 // Next channel is used by ADC1 for receive
-constexpr DmaChannel WiFiTxDmaChannel = 6;
-constexpr DmaChannel WiFiRxDmaChannel = 7;
-constexpr DmaChannel SbcTxDmaChannel = 8;
-constexpr DmaChannel SbcRxDmaChannel = 9;
+constexpr DmaChannel DmacChanWiFiTx = 6;
+constexpr DmaChannel DmacChanWiFiRx = 7;
+constexpr DmaChannel DmacChanSbcTx = 8;
+constexpr DmaChannel DmacChanSbcRx = 9;
+constexpr DmaChannel DmacChanDotStarTx = 10;
 
-constexpr unsigned int NumDmaChannelsUsed = 10;			// must be at least the number of channels used, may be larger. Max 32 on the SAME5x.
+constexpr unsigned int NumDmaChannelsUsed = 11;			// must be at least the number of channels used, may be larger. Max 32 on the SAME5x.
 
 constexpr uint8_t TmcTxDmaPriority = 0;
 constexpr uint8_t TmcRxDmaPriority = 1;					// the baud rate is 250kbps so this is not very critical

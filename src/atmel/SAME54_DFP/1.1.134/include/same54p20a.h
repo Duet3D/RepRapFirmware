@@ -460,7 +460,7 @@ void RAMECC_Handler              ( void );
 void SERCOM0_0_Handler           ( void );
 void SERCOM0_1_Handler           ( void );
 void SERCOM0_2_Handler           ( void );
-void SERCOM0_3_Handler           ( void );
+void SERCOM0_3_Handler           ( void ) noexcept;
 void SERCOM1_0_Handler           ( void );
 void SERCOM1_1_Handler           ( void );
 void SERCOM1_2_Handler           ( void );

@@ -403,6 +403,10 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noe
 #define ESP_SPI_IRQn			SPI_IRQn
 #define ESP_SPI_HANDLER			SPI_Handler
 
+// Hardware IDs of the SPI transmit and receive DMA interfaces. See atsam datasheet.
+const uint32_t DMA_HW_ID_SPI_TX = 1;
+const uint32_t DMA_HW_ID_SPI_RX = 2;
+
 constexpr Pin APIN_ESP_SPI_MOSI = APIN_SPI_MOSI;
 constexpr Pin APIN_ESP_SPI_MISO = APIN_SPI_MISO;
 constexpr Pin APIN_ESP_SPI_SCK = APIN_SPI_SCK;
@@ -430,7 +434,7 @@ constexpr Pin W5500InterruptPin = PortDPin(31);		// W5500 interrupt output, acti
 constexpr Pin W5500ModuleSensePin = PortAPin(5);	// URXD1, tied to ground on the Ethernet module
 constexpr Pin W5500SsPin = PortAPin(11);			// SPI NPCS pin, input from W5500 module
 
-// Duet pin numbers for the Linux interface
+// Duet pin numbers for the SBC interface
 #define SBC_SPI					SPI
 #define SBC_SPI_INTERFACE_ID	ID_SPI
 #define SBC_SPI_IRQn			SPI_IRQn
@@ -440,9 +444,7 @@ constexpr Pin APIN_SBC_SPI_MISO = 12;
 constexpr Pin APIN_SBC_SPI_SCK = 14;
 constexpr Pin APIN_SBC_SPI_SS0 = 11;
 
-constexpr Pin LinuxTfrReadyPin = PortDPin(31);
-constexpr uint8_t DmacChanLinuxTx = 1;
-constexpr uint8_t DmacChanLinuxRx = 2;
+constexpr Pin SbcTfrReadyPin = PortDPin(31);
 
 // Timer allocation (no network timer on DuetNG)
 // TC0 channel 0 is used for FAN2
@@ -453,6 +455,17 @@ constexpr uint8_t DmacChanLinuxRx = 2;
 #define STEP_TC_IRQN		TC2_IRQn
 #define STEP_TC_HANDLER		TC2_Handler
 #define STEP_TC_ID			ID_TC2
+
+// DMA channel allocation
+#if HAS_LINUX_INTERFACE
+constexpr DmaChannel DmacChanSbcTx = 1;
+constexpr DmaChannel DmacChanSbcRx = 2;
+#endif
+
+#if HAS_WIFI_NETWORKING
+constexpr DmaChannel DmacChanWiFiTx = 1;
+constexpr DmaChannel DmacChanWiFiRx = 2;
+#endif
 
 namespace StepPins
 {

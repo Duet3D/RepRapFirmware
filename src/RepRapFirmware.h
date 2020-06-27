@@ -51,6 +51,7 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 
 #ifndef SAME5x
 # define SAME5x	0
+typedef uint8_t DmaChannel;
 #endif
 
 #if SAME70

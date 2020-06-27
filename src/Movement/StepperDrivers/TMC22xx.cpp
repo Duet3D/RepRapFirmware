@@ -662,8 +662,8 @@ inline bool TmcDriverState::UpdatePending() const noexcept
 inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexcept
 {
 #if TMC22xx_USES_SERCOM
-	DmacManager::DisableChannel(TmcTxDmaChannel);
-	DmacManager::DisableChannel(TmcRxDmaChannel);
+	DmacManager::DisableChannel(DmacChanTmcTx);
+	DmacManager::DisableChannel(DmacChanTmcRx);
 #elif defined(SAM4E) || defined(SAM4S)
 	Pdc * const pdc = uart_get_pdc_base(uart);
 	pdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);	// disable the PDC
@@ -715,20 +715,20 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
 
 #if TMC22xx_USES_SERCOM
-	DmacManager::SetSourceAddress(TmcTxDmaChannel, sendData);
-	DmacManager::SetDestinationAddress(TmcTxDmaChannel, &(sercom->USART.DATA));
-	DmacManager::SetBtctrl(TmcTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
-	DmacManager::SetDataLength(TmcTxDmaChannel, 12/4);
-	DmacManager::SetTriggerSourceSercomTx(TmcTxDmaChannel, sercomNumber);
+	DmacManager::SetSourceAddress(DmacChanTmcTx, sendData);
+	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(sercom->USART.DATA));
+	DmacManager::SetBtctrl(DmacChanTmcTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetDataLength(DmacChanTmcTx, 12/4);
+	DmacManager::SetTriggerSourceSercomTx(DmacChanTmcTx, sercomNumber);
 
-	DmacManager::SetSourceAddress(TmcRxDmaChannel, &(sercom->USART.DATA));
-	DmacManager::SetDestinationAddress(TmcRxDmaChannel, receiveData);
-	DmacManager::SetBtctrl(TmcRxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
-	DmacManager::SetDataLength(TmcRxDmaChannel, 20/4);
-	DmacManager::SetTriggerSourceSercomRx(TmcRxDmaChannel, sercomNumber);
+	DmacManager::SetSourceAddress(DmacChanTmcRx, &(sercom->USART.DATA));
+	DmacManager::SetDestinationAddress(DmacChanTmcRx, receiveData);
+	DmacManager::SetBtctrl(DmacChanTmcRx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
+	DmacManager::SetDataLength(DmacChanTmcRx, 20/4);
+	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, sercomNumber);
 
-	DmacManager::EnableChannel(TmcTxDmaChannel, TmcTxDmaPriority);
-	DmacManager::EnableChannel(TmcRxDmaChannel, TmcRxDmaPriority);
+	DmacManager::EnableChannel(DmacChanTmcTx, TmcTxDmaPriority);
+	DmacManager::EnableChannel(DmacChanTmcRx, TmcRxDmaPriority);
 #elif defined(SAM4E) || defined(SAM4S)
 	pdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
 	pdc->PERIPH_TCR = 12;											// number of bytes to send: 8 bytes send request + 4 bytes read IFCOUNT request
@@ -746,8 +746,8 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 inline void TmcDriverState::SetupDMAReceive(uint8_t regNum) noexcept
 {
 #if TMC22xx_USES_SERCOM
-	DmacManager::DisableChannel(TmcTxDmaChannel);
-	DmacManager::DisableChannel(TmcRxDmaChannel);
+	DmacManager::DisableChannel(DmacChanTmcTx);
+	DmacManager::DisableChannel(DmacChanTmcRx);
 #elif defined(SAM4E) || defined(SAM4S)
 	Pdc * const pdc = uart_get_pdc_base(uart);
 	pdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);	// disable the PDC
@@ -768,20 +768,20 @@ inline void TmcDriverState::SetupDMAReceive(uint8_t regNum) noexcept
 	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
 
 #if TMC22xx_USES_SERCOM
-	DmacManager::SetSourceAddress(TmcTxDmaChannel, sendData);
-	DmacManager::SetDestinationAddress(TmcTxDmaChannel, &(sercom->USART.DATA));
-	DmacManager::SetBtctrl(TmcTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
-	DmacManager::SetDataLength(TmcTxDmaChannel, 4/4);
-	DmacManager::SetTriggerSourceSercomTx(TmcTxDmaChannel, sercomNumber);
+	DmacManager::SetSourceAddress(DmacChanTmcTx, sendData);
+	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(sercom->USART.DATA));
+	DmacManager::SetBtctrl(DmacChanTmcTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetDataLength(DmacChanTmcTx, 4/4);
+	DmacManager::SetTriggerSourceSercomTx(DmacChanTmcTx, sercomNumber);
 
-	DmacManager::SetSourceAddress(TmcRxDmaChannel, &(sercom->USART.DATA));
-	DmacManager::SetDestinationAddress(TmcRxDmaChannel, receiveData);
-	DmacManager::SetBtctrl(TmcRxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
-	DmacManager::SetDataLength(TmcRxDmaChannel, 12/4);
-	DmacManager::SetTriggerSourceSercomRx(TmcRxDmaChannel, sercomNumber);
+	DmacManager::SetSourceAddress(DmacChanTmcRx, &(sercom->USART.DATA));
+	DmacManager::SetDestinationAddress(DmacChanTmcRx, receiveData);
+	DmacManager::SetBtctrl(DmacChanTmcRx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
+	DmacManager::SetDataLength(DmacChanTmcRx, 12/4);
+	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, sercomNumber);
 
-	DmacManager::EnableChannel(TmcTxDmaChannel, TmcTxDmaPriority);
-	DmacManager::EnableChannel(TmcRxDmaChannel, TmcRxDmaPriority);
+	DmacManager::EnableChannel(DmacChanTmcTx, TmcTxDmaPriority);
+	DmacManager::EnableChannel(DmacChanTmcRx, TmcRxDmaPriority);
 #elif defined(SAM4E) || defined(SAM4S)
 	pdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
 	pdc->PERIPH_TCR = 4;											// send a 4 byte read data request
@@ -1290,8 +1290,8 @@ inline void TmcDriverState::TransferDone() noexcept
 void TmcDriverState::AbortTransfer() noexcept
 {
 #if TMC22xx_USES_SERCOM
-	DmacManager::DisableChannel(TmcTxDmaChannel);
-	DmacManager::DisableChannel(TmcRxDmaChannel);
+	DmacManager::DisableChannel(DmacChanTmcTx);
+	DmacManager::DisableChannel(DmacChanTmcRx);
 	sercom->USART.CTRLB.reg &= ~(SERCOM_USART_CTRLB_RXEN | SERCOM_USART_CTRLB_TXEN);
 	while (sercom->USART.SYNCBUSY.bit.CTRLB) { }
 #else
@@ -1367,7 +1367,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 		SetupDMASend(WriteRegNumbers[regNum], writeRegisters[regNum]);	// set up the PDC
 #if TMC22xx_USES_SERCOM
 		dmaFinishedReason = DmaCallbackReason::none;
-		DmacManager::EnableCompletedInterrupt(TmcRxDmaChannel);
+		DmacManager::EnableCompletedInterrupt(DmacChanTmcRx);
 		sercom->USART.CTRLB.reg |= (SERCOM_USART_CTRLB_RXEN | SERCOM_USART_CTRLB_TXEN);	// enable transmitter and receiver
 #else
 		uart->UART_IER = UART_IER_ENDRX;				// enable end-of-transfer interrupt
@@ -1389,7 +1389,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 		SetupDMAReceive(ReadRegNumbers[registerToRead]);	// set up the PDC
 #if TMC22xx_USES_SERCOM
 		dmaFinishedReason = DmaCallbackReason::none;
-		DmacManager::EnableCompletedInterrupt(TmcRxDmaChannel);
+		DmacManager::EnableCompletedInterrupt(DmacChanTmcRx);
 		sercom->USART.CTRLB.reg |= (SERCOM_USART_CTRLB_RXEN | SERCOM_USART_CTRLB_TXEN);	// enable transmitter and receiver
 #else
 		uart->UART_IER = UART_IER_ENDRX;				// enable end-of-receive interrupt
@@ -1405,7 +1405,7 @@ inline void TmcDriverState::UartTmcHandler() noexcept
 {
 #if !(TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER)
 # if TMC22xx_USES_SERCOM
-	DmacManager::DisableCompletedInterrupt(TmcRxDmaChannel);
+	DmacManager::DisableCompletedInterrupt(DmacChanTmcRx);
 # else
 	uart->UART_IDR = UART_IDR_ENDRX;					// disable the PDC interrupt
 # endif
@@ -1518,7 +1518,7 @@ extern "C" void TmcLoop(void *) noexcept
 			// Wait for the end-of-transfer interrupt
 			const bool timedOut = !TaskBase::Take(TransferTimeout);
 #if TMC22xx_USES_SERCOM
-			DmacManager::DisableCompletedInterrupt(TmcRxDmaChannel);
+			DmacManager::DisableCompletedInterrupt(DmacChanTmcRx);
 #elif TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER
 			UART_TMC22xx->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
 #else
@@ -1611,7 +1611,7 @@ void SmartDrivers::Init() noexcept
 	SetPinFunction(TMC22xxSercomRxPin, TMC22xxSercomRxPinPeriphMode);
 
 	Serial::InitUart(TMC22xxSercomNumber, DriversBaudRate, TMC22xxSercomRxPad, true);
-	DmacManager::SetInterruptCallback(TmcRxDmaChannel, TransferCompleteCallback, CallbackParameter(nullptr));
+	DmacManager::SetInterruptCallback(DmacChanTmcRx, TransferCompleteCallback, CallbackParameter(nullptr));
 # else
 	// Set up the single UART that communicates with all TMC22xx drivers
 	ConfigurePin(TMC22xx_UART_PINS);									// the pins are already set up for UART use in the pins table
@@ -1690,7 +1690,7 @@ void SmartDrivers::Exit() noexcept
 	IoPort::SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #if TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER
 # if TMC22xx_USES_SERCOM
-	DmacManager::SetInterruptCallback(TmcRxDmaChannel, nullptr, CallbackParameter(nullptr));
+	DmacManager::SetInterruptCallback(DmacChanTmcRx, nullptr, CallbackParameter(nullptr));
 # else
 	NVIC_DisableIRQ(TMC22xx_UART_IRQn);
 # endif
