@@ -132,8 +132,15 @@ constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 // So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
 // In testing I found that 500kbaud was not reliable, so now using 200kbaud.
 constexpr uint32_t DriversBaudRate = 250000;
-constexpr uint32_t TransferTimeout = 2;					// any transfer should complete within 2 ticks @ 1ms/tick
+constexpr uint32_t TransferTimeout = 2;										// any transfer should complete within 2 ticks @ 1ms/tick
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
+
+constexpr float DriverSenseResistor = 0.05 + 0.02;							// in ohms
+constexpr float DriverVRef = 180.0;											// in mV
+constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
+constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
+constexpr float MaximumMotorCurrent = 2000.0;
+constexpr float MaximumStandstillCurrent = 1500.0;
 
 // Thermistors
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(0), PortCPin(1), PortCPin(2) }; 	// Thermistor pin numbers

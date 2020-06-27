@@ -29,7 +29,7 @@ namespace Serial
 	inline constexpr IRQn GetSercomIRQn(uint8_t sercomNumber) { return SercomIRQns[sercomNumber]; }
 
 	void EnableSercomClock(uint8_t sercomNumber);
-	void InitUart(uint8_t sercomNumber, uint32_t baudRate, uint8_t rxPad);
+	void InitUart(uint8_t sercomNumber, uint32_t baudRate, uint8_t rxPad, bool use32bitMode = false);
 	void Disable(uint8_t sercomNumber);
 }
 

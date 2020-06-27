@@ -50,8 +50,6 @@
 // The TMC2224 does handle a write request immediately followed by a read request.
 // The TMC2224 does _not_ handle back-to-back read requests, it needs a short delay between them.
 
-constexpr float MaximumMotorCurrent = 1600.0;				// we can't go any higher without switching to the low sensitivity range
-constexpr float MaximumStandstillCurrent = 1400.0;
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
@@ -490,10 +488,10 @@ private:
 #endif
 
 #if HAS_STALL_DETECT
-	static constexpr unsigned int NumReadRegisters = 6;			// the number of registers that we read from on a TMC2209
-	static constexpr unsigned int NumReadRegistersNon09 = 5;	// the number of registers that we read from on a TMC2208/2224
+	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2209
+	static constexpr unsigned int NumReadRegistersNon09 = 6;	// the number of registers that we read from on a TMC2208/2224
 #else
-	static constexpr unsigned int NumReadRegisters = 5;			// the number of registers that we read from on a TMC2208/2224
+	static constexpr unsigned int NumReadRegisters = 6;			// the number of registers that we read from on a TMC2208/2224
 #endif
 	static const uint8_t ReadRegNumbers[NumReadRegisters];		// the register numbers that we read from
 
@@ -503,8 +501,9 @@ private:
 	static constexpr unsigned int ReadDrvStat = 2;			// drive status
 	static constexpr unsigned int ReadMsCnt = 3;			// microstep counter
 	static constexpr unsigned int ReadPwmScale = 4;			// PWM scaling
+	static constexpr unsigned int ReadPwmAuto = 5;			// PWM scaling
 #if HAS_STALL_DETECT
-	static constexpr unsigned int ReadSgResult = 5;			// stallguard result, TMC2209 only
+	static constexpr unsigned int ReadSgResult = 6;			// stallguard result, TMC2209 only
 #endif
 
 	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
@@ -516,7 +515,7 @@ private:
 
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
-	uint32_t motorCurrent;									// the configured motor current
+	float motorCurrent;										// the configured motor current
 	uint32_t maxOpenLoadStepInterval;						// the maximum step pulse interval for which we consider open load detection to be reliable
 
 #if HAS_STALL_DETECT
@@ -594,8 +593,8 @@ static bool dmaFinished;
 #endif
 
 // To write a register, we send one 8-byte packet to write it, then a 4-byte packet to ask for the IFCOUNT register, then we receive an 8-byte packet containing IFCOUNT.
-// This is the message we send - volatile because we care about when it is written
-volatile uint8_t TmcDriverState::sendData[12] =
+// This is the message we send - volatile because we care about when it is written, and dword-aligned so that we can use 32-bit mode on the SAME5x
+alignas(4) volatile uint8_t TmcDriverState::sendData[12] =
 {
 	0x05, 0x00,							// sync byte and slave address
 	0x00,								// register address and write flag (filled in)
@@ -615,8 +614,8 @@ constexpr size_t SendDataSlaveAddressIndex1 = 9;
 constexpr size_t SendDataCRCIndex0 = 7;
 constexpr size_t SendDataCRCIndex1 = 11;
 
-// Buffer for the message we receive when reading data. The first 4 or 12 bytes bytes are our own transmitted data.
-volatile uint8_t TmcDriverState::receiveData[20];
+// Buffer for the message we receive when reading data, dword-aligned so that we can use 32-bit mode on the SAME5x. The first 4 or 12 bytes bytes are our own transmitted data.
+alignas(4) volatile uint8_t TmcDriverState::receiveData[20];
 
 constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 {
@@ -641,6 +640,7 @@ constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_DRV_STATUS,
 	REGNUM_MSCNT,
 	REGNUM_PWM_SCALE,
+	REGNUM_PWM_AUTO,
 #if HAS_STALL_DETECT
 	REGNUM_SG_RESULT					// TMC2209 only
 #endif
@@ -717,14 +717,14 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 #if TMC22xx_USES_SERCOM
 	DmacManager::SetSourceAddress(TmcTxDmaChannel, sendData);
 	DmacManager::SetDestinationAddress(TmcTxDmaChannel, &(sercom->USART.DATA));
-	DmacManager::SetBtctrl(TmcTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BLOCKACT_NOACT);
-	DmacManager::SetDataLength(TmcTxDmaChannel, 12);
+	DmacManager::SetBtctrl(TmcTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetDataLength(TmcTxDmaChannel, 12/4);
 	DmacManager::SetTriggerSourceSercomTx(TmcTxDmaChannel, sercomNumber);
 
 	DmacManager::SetSourceAddress(TmcRxDmaChannel, &(sercom->USART.DATA));
 	DmacManager::SetDestinationAddress(TmcRxDmaChannel, receiveData);
-	DmacManager::SetBtctrl(TmcRxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BLOCKACT_INT);
-	DmacManager::SetDataLength(TmcRxDmaChannel, 20);
+	DmacManager::SetBtctrl(TmcRxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
+	DmacManager::SetDataLength(TmcRxDmaChannel, 20/4);
 	DmacManager::SetTriggerSourceSercomRx(TmcRxDmaChannel, sercomNumber);
 
 	DmacManager::EnableChannel(TmcTxDmaChannel, TmcTxDmaPriority);
@@ -770,14 +770,14 @@ inline void TmcDriverState::SetupDMAReceive(uint8_t regNum) noexcept
 #if TMC22xx_USES_SERCOM
 	DmacManager::SetSourceAddress(TmcTxDmaChannel, sendData);
 	DmacManager::SetDestinationAddress(TmcTxDmaChannel, &(sercom->USART.DATA));
-	DmacManager::SetBtctrl(TmcTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BLOCKACT_NOACT);
-	DmacManager::SetDataLength(TmcTxDmaChannel, 4);
+	DmacManager::SetBtctrl(TmcTxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetDataLength(TmcTxDmaChannel, 4/4);
 	DmacManager::SetTriggerSourceSercomTx(TmcTxDmaChannel, sercomNumber);
 
 	DmacManager::SetSourceAddress(TmcRxDmaChannel, &(sercom->USART.DATA));
 	DmacManager::SetDestinationAddress(TmcRxDmaChannel, receiveData);
-	DmacManager::SetBtctrl(TmcRxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BLOCKACT_INT);
-	DmacManager::SetDataLength(TmcRxDmaChannel, 12);
+	DmacManager::SetBtctrl(TmcRxDmaChannel, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
+	DmacManager::SetDataLength(TmcRxDmaChannel, 12/4);
 	DmacManager::SetTriggerSourceSercomRx(TmcRxDmaChannel, sercomNumber);
 
 	DmacManager::EnableChannel(TmcTxDmaChannel, TmcTxDmaPriority);
@@ -871,7 +871,7 @@ pre(!driversPowered)
 #endif
 	enabled = false;
 	registersToUpdate = 0;
-	motorCurrent = 0;
+	motorCurrent = 0.0;
 	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
 	UpdateRegister(WriteGConf, DefaultGConfReg);
 	UpdateRegister(WriteSlaveConf, DefaultSlaveConfReg);
@@ -1027,6 +1027,9 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 	case SmartDriverRegister::pwmScale:
 		return readRegisters[ReadPwmScale];
 
+	case SmartDriverRegister::pwmAuto:
+		return readRegisters[ReadPwmAuto];
+
 	case SmartDriverRegister::hdec:
 	case SmartDriverRegister::coolStep:
 	default:
@@ -1081,18 +1084,16 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 // Set the motor current
 void TmcDriverState::SetCurrent(float current) noexcept
 {
-	motorCurrent = static_cast<uint32_t>(constrain<float>(current, 50.0, MaximumMotorCurrent));
+	motorCurrent = constrain<float>(current, 50.0, MaximumMotorCurrent);
 	UpdateCurrent();
 }
 
 void TmcDriverState::UpdateCurrent() noexcept
 {
-	// The current sense resistor on the Duet M is 0.082 ohms, to which we must add 0.03 ohms internal resistance.
-	// Full scale peak motor current in the high sensitivity range is give by I = 0.18/(R+0.03) = 0.18/0.105 ~= 1.6A
-	// This gives us a range of 50mA to 1.6A in 50mA steps in the high sensitivity range (VSENSE = 1)
-	const uint32_t iRunCsBits = (32 * motorCurrent - 800)/1615;		// formula checked by simulation on a spreadsheet
-	const uint32_t iHoldCurrent = min<uint32_t>((motorCurrent * standstillCurrentFraction)/256, (uint32_t)MaximumStandstillCurrent);	// calculate standstill current
-	const uint32_t iHoldCsBits = (32 * iHoldCurrent - 800)/1615;	// formula checked by simulation on a spreadsheet
+	const float idealIRunCs = DriverCsMultiplier * motorCurrent;
+	const uint32_t iRunCsBits = constrain<uint32_t>((unsigned int)(idealIRunCs + 0.2), 1, 32) - 1;
+	const float idealIHoldCs = idealIRunCs * standstillCurrentFraction * (1.0/256.0);
+	const uint32_t iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
 }
@@ -1609,7 +1610,7 @@ void SmartDrivers::Init() noexcept
 	SetPinFunction(TMC22xxSercomTxPin, TMC22xxSercomTxPinPeriphMode);
 	SetPinFunction(TMC22xxSercomRxPin, TMC22xxSercomRxPinPeriphMode);
 
-	Serial::InitUart(TMC22xxSercomNumber, DriversBaudRate, TMC22xxSercomRxPad);
+	Serial::InitUart(TMC22xxSercomNumber, DriversBaudRate, TMC22xxSercomRxPad, true);
 	DmacManager::SetInterruptCallback(TmcRxDmaChannel, TransferCompleteCallback, CallbackParameter(nullptr));
 # else
 	// Set up the single UART that communicates with all TMC22xx drivers

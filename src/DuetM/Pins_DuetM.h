@@ -125,10 +125,17 @@ constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
 // So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
 // In testing I found that 500kbaud was not reliable, so now using 250kbaud.
 constexpr uint32_t DriversBaudRate = 250000;
-constexpr uint32_t TransferTimeout = 2;				// any transfer should complete within 2 ticks @ 1ms/tick
+constexpr uint32_t TransferTimeout = 2;										// any transfer should complete within 2 ticks @ 1ms/tick
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 constexpr Pin TMC22xxMuxPins[3] = { PortCPin(14), PortCPin(16), PortCPin(17) };	// Pins that control the UART multiplexer, LSB first
+
+constexpr float DriverSenseResistor = 0.083 + 0.03;							// in ohms
+constexpr float DriverVRef = 180.0;											// in mV
+constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
+constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
+constexpr float MaximumMotorCurrent = 1600.0;								// we can't go any higher without switching to the low sensitivity range
+constexpr float MaximumStandstillCurrent = 1400.0;
 
 // Thermistors
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortAPin(20), PortBPin(0), PortCPin(30), PortBPin(1) }; 	// Thermistor pin numbers

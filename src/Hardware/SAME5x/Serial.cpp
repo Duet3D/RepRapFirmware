@@ -76,7 +76,7 @@ void Serial::EnableSercomClock(uint8_t sercomNumber)
 }
 
 // Initialise the serial port. This does not set up the I/O pins.
-void Serial::InitUart(uint8_t sercomNumber, uint32_t baudRate, uint8_t rxPad)
+void Serial::InitUart(uint8_t sercomNumber, uint32_t baudRate, uint8_t rxPad, bool use32bitMode)
 {
 	EnableSercomClock(sercomNumber);
 	Sercom * const sercom = GetSercom(sercomNumber);
@@ -110,7 +110,7 @@ void Serial::InitUart(uint8_t sercomNumber, uint32_t baudRate, uint8_t rxPad)
 
 	sercom->USART.CTRLA.reg = ctrla;
 	sercom->USART.CTRLB.reg = SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN;
-	sercom->USART.CTRLC.reg = 0u;
+	sercom->USART.CTRLC.reg = (use32bitMode) ? SERCOM_USART_CTRLC_DATA32B(3) : 0u;
 	const uint32_t baudReg = 65536u - (((uint64_t)65536 * 16 * baudRate)/SystemPeripheralClock);
 	sercom->USART.BAUD.reg = baudReg;
 	hri_sercomusart_set_CTRLA_ENABLE_bit(sercom);
