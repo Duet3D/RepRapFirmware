@@ -57,6 +57,11 @@ enum PinMode
 #define UNUSED(_x)	(void)_x
 #define Assert(expr) ((void) 0)
 
+// Macro to give us the number of elements in an array
+#ifndef ARRAY_SIZE
+# define ARRAY_SIZE(_x)	(sizeof(_x)/sizeof((_x)[0]))
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

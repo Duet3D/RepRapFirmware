@@ -20,28 +20,23 @@
 Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512);
 SerialCDC serialUSB(UsbVBusPin, 512, 512);
 
-# if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR1) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
+# if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
 #  error SERIAL0_ISRn not defined
 # endif
 
 void SERIAL0_ISR0() noexcept
 {
-	serialUart0.Interrupt();
-}
-
-void SERIAL0_ISR1() noexcept
-{
-	serialUart0.Interrupt();
+	serialUart0.Interrupt0();
 }
 
 void SERIAL0_ISR2() noexcept
 {
-	serialUart0.Interrupt();
+	serialUart0.Interrupt2();
 }
 
 void SERIAL0_ISR3() noexcept
 {
-	serialUart0.Interrupt();
+	serialUart0.Interrupt3();
 }
 
 // IoPort::SetPinMode calls this

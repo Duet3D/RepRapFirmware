@@ -410,13 +410,6 @@ void AnalogIn::Init()
 	hri_mclk_set_APBDMASK_ADC1_bit(MCLK);
 	hri_gclk_write_PCHCTRL_reg(GCLK, ADC1_GCLK_ID, GCLK_PCHCTRL_GEN_GCLK3_Val | (1 << GCLK_PCHCTRL_CHEN_Pos));
 
-#if 0
-	// Set the supply controller to on-demand mode so that we can get at both temperature sensors
-	hri_supc_set_VREF_ONDEMAND_bit(SUPC);
-	hri_supc_set_VREF_TSEN_bit(SUPC);
-	hri_supc_clear_VREF_VREFOE_bit(SUPC);
-#endif
-
 	analogInTask.Create(AinLoop, "AIN", nullptr, TaskPriority::AinPriority);
 }
 
@@ -466,10 +459,18 @@ uint16_t AnalogIn::ReadChannel(AdcInput adcin)
 }
 
 // Enable an on-chip MCU temperature sensor
+// From the SAME5x-E5x errata document version K:
+// 2.23.1 Temperature Sensor
+// Both internal temperature sensors, TSENSP and TSENSC, are not supported and should not be used.
+// Workaround: None
+// Affected Silicon Revisions: A, D
 bool AnalogIn::EnableTemperatureSensor(unsigned int sensorNumber, AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall, unsigned int adcnum)
 {
 	if (adcnum < ARRAY_SIZE(Adcs))
 	{
+		// Set the supply controller to on-demand mode so that we can get at both temperature sensors
+		SUPC->VREF.reg |= (SUPC_VREF_ONDEMAND | SUPC_VREF_TSEN | SUPC_VREF_VREFOE);
+
 		return Adcs[adcnum].EnableTemperatureSensor(sensorNumber, fn, param, ticksPerCall);
 	}
 	return false;

@@ -19,11 +19,11 @@ void Uart::begin(uint32_t baudRate) noexcept
 {
 	Serial::InitUart(sercomNumber, baudRate, rxPad);
 	errors.all = 0;
+	numInterruptBytesMatched = 0;
 	sercom->USART.INTENSET.reg = SERCOM_USART_INTENSET_RXC | SERCOM_USART_INTENSET_ERROR;
 
 	const IRQn irqNumber = Serial::GetSercomIRQn(sercomNumber);
 	NVIC_EnableIRQ(irqNumber);
-	NVIC_EnableIRQ((IRQn)(irqNumber + 1));
 	NVIC_EnableIRQ((IRQn)(irqNumber + 2));
 	NVIC_EnableIRQ((IRQn)(irqNumber + 3));
 }
@@ -39,7 +39,6 @@ void Uart::end() noexcept
 	// Disable UART interrupt in NVIC
 	const IRQn irqNumber = Serial::GetSercomIRQn(sercomNumber);
 	NVIC_DisableIRQ(irqNumber);
-	NVIC_DisableIRQ((IRQn)(irqNumber + 1));
 	NVIC_DisableIRQ((IRQn)(irqNumber + 2));
 	NVIC_DisableIRQ((IRQn)(irqNumber + 3));
 }
@@ -135,69 +134,87 @@ Uart::ErrorFlags Uart::GetAndClearErrors() noexcept
 }
 
 // Interrupts from the SERCOM arrive here
-void Uart::Interrupt() noexcept
+// Interrupt 0 means transmit data register empty
+void Uart::Interrupt0() noexcept
 {
-	const uint8_t status = sercom->USART.INTFLAG.reg;
-	if (status & SERCOM_USART_INTFLAG_RXC)
+	uint8_t c;
+	if (txBuffer.GetItem(c))
 	{
-		const char c = sercom->USART.DATA.reg;
-		if (!rxBuffer.PutItem(c))
+		sercom->USART.DATA.reg = c;
+		if (txWaitingTask != nullptr && txBuffer.SpaceLeft() >= txBuffer.GetCapacity()/2)
 		{
-			errors.overrun = true;
+			TaskBase::GiveFromISR(txWaitingTask);
+			txWaitingTask = nullptr;
 		}
 	}
-	if (status & SERCOM_USART_INTFLAG_ERROR)
+	else
 	{
-		const uint16_t stat2 = sercom->USART.STATUS.reg;
-		if (stat2 & SERCOM_USART_STATUS_BUFOVF)
+		sercom->USART.INTENCLR.reg = SERCOM_USART_INTENSET_DRE;
+		if (txWaitingTask != nullptr)
 		{
-			errors.overrun = true;
+			TaskBase::GiveFromISR(txWaitingTask);
+			txWaitingTask = nullptr;
 		}
-		if (stat2 & SERCOM_USART_STATUS_FERR)
-		{
-			errors.framing = true;
-		}
-		sercom->USART.STATUS.reg = stat2;
-		sercom->USART.INTFLAG.reg = SERCOM_USART_INTFLAG_ERROR;			// clear the error
 	}
-	if (status & SERCOM_USART_INTFLAG_DRE)
+}
+
+// We don't use interrupt 1, it signals transmit complete
+// Interrupt 2 means receive character available
+void Uart::Interrupt2() noexcept
+{
+	const char c = sercom->USART.DATA.reg;
+	if (c == interruptSeq[numInterruptBytesMatched])
 	{
-		uint8_t c;
-		if (txBuffer.GetItem(c))
+		++numInterruptBytesMatched;
+		if (numInterruptBytesMatched == ARRAY_SIZE(interruptSeq))
 		{
-			sercom->USART.DATA.reg = c;
-			if (txWaitingTask != nullptr && txBuffer.SpaceLeft() >= txBuffer.GetCapacity()/2)
+			numInterruptBytesMatched = 0;
+			if (interruptCallback != nullptr)
 			{
-				TaskBase::GiveFromISR(txWaitingTask);
-				txWaitingTask = nullptr;
-			}
-		}
-		else
-		{
-			sercom->USART.INTENCLR.reg = SERCOM_USART_INTENSET_DRE;
-			if (txWaitingTask != nullptr)
-			{
-				TaskBase::GiveFromISR(txWaitingTask);
-				txWaitingTask = nullptr;
+				interruptCallback(this);
 			}
 		}
 	}
+	else
+	{
+		numInterruptBytesMatched = 0;
+	}
+
+	if (!rxBuffer.PutItem(c))
+	{
+		errors.overrun = true;
+	}
+}
+
+// Interrupt 3 means error or break or CTS change or receive start, but we only enable error
+void Uart::Interrupt3() noexcept
+{
+	const uint16_t stat2 = sercom->USART.STATUS.reg;
+	if (stat2 & SERCOM_USART_STATUS_BUFOVF)
+	{
+		errors.overrun = true;
+	}
+	if (stat2 & SERCOM_USART_STATUS_FERR)
+	{
+		errors.framing = true;
+	}
+	sercom->USART.STATUS.reg = stat2;
+	sercom->USART.INTFLAG.reg = SERCOM_USART_INTFLAG_ERROR;			// clear the error
 }
 
 Uart::InterruptCallbackFn Uart::SetInterruptCallback(InterruptCallbackFn f) noexcept
 {
-	InterruptCallbackFn ret = interruptCallback;
+	const InterruptCallbackFn ret = interruptCallback;
 	interruptCallback = f;
 	return ret;
 }
 
-void Uart::setInterruptPriority(uint32_t priority) const noexcept
+void Uart::setInterruptPriority(uint32_t rxPrio, uint32_t txAndErrorPrio) const noexcept
 {
 	const IRQn irqNumber = Serial::GetSercomIRQn(sercomNumber);
-	NVIC_SetPriority(irqNumber, priority);
-	NVIC_SetPriority((IRQn)(irqNumber + 1), priority);
-	NVIC_SetPriority((IRQn)(irqNumber + 2), priority);
-	NVIC_SetPriority((IRQn)(irqNumber + 3), priority);
+	NVIC_SetPriority(irqNumber, txAndErrorPrio);
+	NVIC_SetPriority((IRQn)(irqNumber + 2), rxPrio);
+	NVIC_SetPriority((IRQn)(irqNumber + 3), txAndErrorPrio);
 }
 
 // End

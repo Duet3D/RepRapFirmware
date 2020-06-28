@@ -38,7 +38,7 @@ public:
 	// Compatibility functions
 	void begin(uint32_t baudRate) noexcept;
 	void end() noexcept;
-	void setInterruptPriority(uint32_t prio) const noexcept;
+	void setInterruptPriority(uint32_t rxPrio, uint32_t txAndErrorPrio) const noexcept;
     InterruptCallbackFn SetInterruptCallback(InterruptCallbackFn f) noexcept;
 
 #if 0
@@ -46,8 +46,10 @@ public:
 	size_t TryPutBlock(const uint8_t *buffer, size_t buflen) noexcept;
 #endif
 
-	// ISR, must be called by the ISR for the SERCOM
-	void Interrupt() noexcept;
+	// ISRs, must be called by the ISRs for the SERCOM. We don't use interrupt 1.
+	void Interrupt0() noexcept;
+	void Interrupt2() noexcept;
+	void Interrupt3() noexcept;
 
 	// Get and clear the errors
 	ErrorFlags GetAndClearErrors() noexcept;
@@ -57,11 +59,11 @@ private:
 	RingBuffer<uint8_t> rxBuffer;
 	Sercom * const sercom;
 	volatile TaskHandle txWaitingTask;
+    InterruptCallbackFn interruptCallback;
 	const uint8_t sercomNumber;
 	const uint8_t rxPad;
 	ErrorFlags errors;
-    size_t numInterruptBytesMatched;
-    InterruptCallbackFn interruptCallback;
+    uint8_t numInterruptBytesMatched;
 
     static constexpr uint8_t interruptSeq[2] = { 0xF0, 0x0F };
 };

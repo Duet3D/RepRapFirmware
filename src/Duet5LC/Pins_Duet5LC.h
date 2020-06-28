@@ -29,7 +29,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
-#define HAS_CPU_TEMP_SENSOR		0	//TODO temporary!
+#define HAS_CPU_TEMP_SENSOR		0					// the temperature sensors don't work in revision A or D chips (revision D is latest as at 2020-06-28)
 
 #define SUPPORT_TMC22xx			1
 #define TMC22xx_HAS_MUX			1

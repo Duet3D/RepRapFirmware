@@ -65,13 +65,13 @@ constexpr bool BACKWARDS = !FORWARDS;
 #if HAS_VREF_MONITOR
 constexpr size_t VrefFilterIndex = NumThermistorInputs;
 constexpr size_t VssaFilterIndex = NumThermistorInputs + 1;
-# if HAS_CPU_TEMP_SENSOR
+# if HAS_CPU_TEMP_SENSOR && !SAME5x
 constexpr size_t CpuTempFilterIndex = NumThermistorInputs + 2;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 3;
 # else
 constexpr size_t NumAdcFilters = NumThermistorInputs + 2;
 # endif
-#elif HAS_CPU_TEMP_SENSOR
+#elif HAS_CPU_TEMP_SENSOR && !SAME5x
 constexpr size_t CpuTempFilterIndex = NumThermistorInputs;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 1;
 #else
@@ -104,6 +104,10 @@ constexpr unsigned int ThermistorAverageReadings = 16;
 // We read a thermistor on alternate ticks
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
 constexpr unsigned int ThermistorAverageReadings = 16;
+#endif
+
+#if SAME5x
+constexpr unsigned int TempSenseAverageReadings = 16;
 #endif
 
 constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
@@ -242,6 +246,9 @@ public:
 
 	static constexpr size_t NumAveraged() noexcept { return numAveraged; }
 
+	// Function used as an ADC callback to feed a result into an averaging filter
+	static void CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val);
+
 private:
 	uint16_t readings[numAveraged];
 	size_t index;
@@ -251,8 +258,17 @@ private:
 	//invariant(index < numAveraged)
 };
 
+template<size_t numAveraged> void AveragingFilter<numAveraged>::CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val)
+{
+	static_cast<AveragingFilter<numAveraged>*>(cp.vp)->ProcessReading(val);
+}
+
 typedef AveragingFilter<ThermistorAverageReadings> ThermistorAveragingFilter;
 typedef AveragingFilter<ZProbeAverageReadings> ZProbeAveragingFilter;
+
+#if SAME5x
+typedef AveragingFilter<TempSenseAverageReadings> TempSenseAveragingFilter;
+#endif
 
 // Enumeration of error condition bits
 enum class ErrorCode : uint32_t
@@ -593,7 +609,7 @@ private:
 
 	void RawMessage(MessageType type, const char *message) noexcept;	// called by Message after handling error/warning flags
 
-	float AdcReadingToCpuTemperature(uint32_t reading) const noexcept;
+	float GetCpuTemperature() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
 	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc, std::function<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
@@ -725,8 +741,13 @@ private:
 	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters
 
 #if HAS_CPU_TEMP_SENSOR
-	uint32_t highestMcuTemperature, lowestMcuTemperature;
+	float highestMcuTemperature, lowestMcuTemperature;
 	float mcuTemperatureAdjust;
+# if SAME5x
+	TempSenseAveragingFilter tpFilter, tcFilter;
+	int32_t tempCalF1, tempCalF2, tempCalF3, tempCalF4;				// temperature calibration factors
+	void TemperatureCalibrationInit() noexcept;
+# endif
 #endif
 
 	// Axes and endstops
@@ -739,7 +760,7 @@ private:
 #endif
 
 	// Heaters
-	HeatersBitmap configuredHeaters;										// bitmask of all real heaters in use
+	HeatersBitmap configuredHeaters;								// bitmap of all real heaters in use
 
 	// Fans
 	uint32_t lastFanCheckTime;

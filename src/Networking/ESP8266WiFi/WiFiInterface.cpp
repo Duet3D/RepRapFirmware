@@ -148,28 +148,23 @@ struct MessageBufferIn
 Uart *SerialWiFiDevice;
 # define SERIAL_WIFI_DEVICE	(*SerialWiFiDevice)
 
-# if !defined(SERIAL_WIFI_ISR0) || !defined(SERIAL_WIFI_ISR1) || !defined(SERIAL_WIFI_ISR2) || !defined(SERIAL_WIFI_ISR3)
+# if !defined(SERIAL_WIFI_ISR0) || !defined(SERIAL_WIFI_ISR2) || !defined(SERIAL_WIFI_ISR3)
 #  error SERIAL_WIFI_ISRn not defined
 # endif
 
 void SERIAL_WIFI_ISR0() noexcept
 {
-	SerialWiFiDevice->Interrupt();
-}
-
-void SERIAL_WIFI_ISR1() noexcept
-{
-	SerialWiFiDevice->Interrupt();
+	SerialWiFiDevice->Interrupt0();
 }
 
 void SERIAL_WIFI_ISR2() noexcept
 {
-	SerialWiFiDevice->Interrupt();
+	SerialWiFiDevice->Interrupt2();
 }
 
 void SERIAL_WIFI_ISR3() noexcept
 {
-	SerialWiFiDevice->Interrupt();
+	SerialWiFiDevice->Interrupt3();
 }
 
 #endif
@@ -250,7 +245,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullp
 
 #ifdef DUET_5LC
 	SerialWiFiDevice = new Uart(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512);
-	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUart);
+	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
 #else
 	SERIAL_WIFI_DEVICE.setInterruptPriority(NvicPriorityWiFiUart);
 #endif
