@@ -500,6 +500,8 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 // This interacts with FreeRTOS config constant configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY which is currently defined as 3 for the SAME70 and 5 for the SAM4x.
 // ISRs with better (numerically lower) priorities than this value cannot make FreeRTOS calls, but those interrupts wont be disabled even in FreeRTOS critical sections.
 
+typedef uint32_t NvicPriority;
+
 #if __NVIC_PRIO_BITS == 3
 // We have only 8 interrupt priority levels on the SAME70
 // Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
@@ -507,59 +509,59 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 
 #if SAME5x
-const uint32_t NvicPriorityPanelDueUartRx = 1;	// UART used to receive data from PanelDue or other serial input
-const uint32_t NvicPriorityPanelDueUartTx = 3;	// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
-const uint32_t NvicPriorityWiFiUartRx = 2;		// UART used to receive debug data from the WiFi module
-const uint32_t NvicPriorityWiFiUartTx = 3;		// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
+const NvicPriority NvicPriorityPanelDueUartRx = 1;	// UART used to receive data from PanelDue or other serial input
+const NvicPriority NvicPriorityPanelDueUartTx = 3;	// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
+const NvicPriority NvicPriorityWiFiUartRx = 2;		// UART used to receive debug data from the WiFi module
+const NvicPriority NvicPriorityWiFiUartTx = 3;		// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
 #else
-const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
-const uint32_t NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
+const NvicPriority NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const NvicPriority NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
 #endif
 
-const uint32_t NvicPriorityMCan = 3;			// CAN interface
-const uint32_t NvicPriorityPins = 3;			// priority for GPIO pin interrupts - filament sensors must be higher than step
-const uint32_t NvicPriorityDriversSerialTMC = 3; // USART or UART used to control and monitor the smart drivers
-const uint32_t NvicPriorityStep = 4;			// step interrupt is next highest, it can preempt most other interrupts
-const uint32_t NvicPriorityUSB = 5;				// USB interrupt
-const uint32_t NvicPriorityHSMCI = 5;			// HSMCI command complete interrupt
+const NvicPriority NvicPriorityMCan = 3;			// CAN interface
+const NvicPriority NvicPriorityPins = 3;			// priority for GPIO pin interrupts - filament sensors must be higher than step
+const NvicPriority NvicPriorityDriversSerialTMC = 3; // USART or UART used to control and monitor the smart drivers
+const NvicPriority NvicPriorityStep = 4;			// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityUSB = 5;				// USB interrupt
+const NvicPriority NvicPriorityHSMCI = 5;			// HSMCI command complete interrupt
 
 # if HAS_LWIP_NETWORKING
-const uint32_t NvicPriorityNetworkTick = 6;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
-const uint32_t NvicPriorityEthernet = 6;		// priority for Ethernet interface
+const NvicPriority NvicPriorityNetworkTick = 6;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
+const NvicPriority NvicPriorityEthernet = 6;		// priority for Ethernet interface
 # endif
 
-const uint32_t NvicPriorityDMA = 6;				// end-of-DMA interrupt used by TMC drivers and HSMCI
-const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+const NvicPriority NvicPriorityDMA = 6;				// end-of-DMA interrupt used by TMC drivers and HSMCI
+const NvicPriority NvicPrioritySpi = 6;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 
 #elif __NVIC_PRIO_BITS >= 4
 // We have at least 16 priority levels
 // Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
 # if SAM4E || defined(__LPC17xx__)
-const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
+const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 
-const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const NvicPriority NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 
 # if defined(__LPC17xx__)
-constexpr uint32_t NvicPriorityTimerPWM = 4;
-constexpr uint32_t NvicPriorityTimerServo = 5;
+constexpr NvicPriority NvicPriorityTimerPWM = 4;
+constexpr NvicPriority NvicPriorityTimerServo = 5;
 # endif
 
-const uint32_t NvicPriorityDriversSerialTMC = 5; // USART or UART used to control and monitor the smart drivers
-const uint32_t NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
-const uint32_t NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts
-const uint32_t NvicPriorityWiFiUart = 7;		// UART used to receive debug data from the WiFi module
-const uint32_t NvicPriorityUSB = 7;				// USB interrupt
-const uint32_t NvicPriorityHSMCI = 7;			// HSMCI command complete interrupt
+const NvicPriority NvicPriorityDriversSerialTMC = 5; // USART or UART used to control and monitor the smart drivers
+const NvicPriority NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
+const NvicPriority NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityWiFiUart = 7;		// UART used to receive debug data from the WiFi module
+const NvicPriority NvicPriorityUSB = 7;				// USB interrupt
+const NvicPriority NvicPriorityHSMCI = 7;			// HSMCI command complete interrupt
 
 # if HAS_LWIP_NETWORKING
-const uint32_t NvicPriorityNetworkTick = 8;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
-const uint32_t NvicPriorityEthernet = 8;		// priority for Ethernet interface
+const NvicPriority NvicPriorityNetworkTick = 8;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
+const NvicPriority NvicPriorityEthernet = 8;		// priority for Ethernet interface
 # endif
 
-const uint32_t NvicPrioritySpi = 8;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
-const uint32_t NvicPriorityTwi = 9;				// TWI is used to read endstop and other inputs on the DueXn
+const NvicPriority NvicPrioritySpi = 8;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+const NvicPriority NvicPriorityTwi = 9;				// TWI is used to read endstop and other inputs on the DueXn
 
 #endif
 

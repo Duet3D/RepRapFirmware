@@ -252,8 +252,8 @@ static void spi_slave_dma_setup(void *inBuffer, const void *outBuffer, size_t by
 #endif
 
 #if USE_DMAC_MANAGER
-	DmacManager::EnableChannel(DmacChanSbcRx, SbcDmaPriority);
-	DmacManager::EnableChannel(DmacChanSbcTx, SbcDmaPriority);
+	DmacManager::EnableChannel(DmacChanSbcRx, DmacPrioSbc);
+	DmacManager::EnableChannel(DmacChanSbcTx, DmacPrioSbc);
 #endif
 }
 

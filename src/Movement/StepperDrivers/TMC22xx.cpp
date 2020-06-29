@@ -727,8 +727,8 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 	DmacManager::SetDataLength(DmacChanTmcRx, 20/4);
 	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, sercomNumber);
 
-	DmacManager::EnableChannel(DmacChanTmcTx, TmcTxDmaPriority);
-	DmacManager::EnableChannel(DmacChanTmcRx, TmcRxDmaPriority);
+	DmacManager::EnableChannel(DmacChanTmcTx, DmacPrioTmcTx);
+	DmacManager::EnableChannel(DmacChanTmcRx, DmacPrioTmcRx);
 #elif defined(SAM4E) || defined(SAM4S)
 	pdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
 	pdc->PERIPH_TCR = 12;											// number of bytes to send: 8 bytes send request + 4 bytes read IFCOUNT request
@@ -780,8 +780,8 @@ inline void TmcDriverState::SetupDMAReceive(uint8_t regNum) noexcept
 	DmacManager::SetDataLength(DmacChanTmcRx, 12/4);
 	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, sercomNumber);
 
-	DmacManager::EnableChannel(DmacChanTmcTx, TmcTxDmaPriority);
-	DmacManager::EnableChannel(DmacChanTmcRx, TmcRxDmaPriority);
+	DmacManager::EnableChannel(DmacChanTmcTx, DmacPrioTmcTx);
+	DmacManager::EnableChannel(DmacChanTmcRx, DmacPrioTmcRx);
 #elif defined(SAM4E) || defined(SAM4S)
 	pdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
 	pdc->PERIPH_TCR = 4;											// send a 4 byte read data request

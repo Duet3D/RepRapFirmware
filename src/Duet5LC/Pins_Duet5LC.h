@@ -445,12 +445,12 @@ constexpr DmaChannel DmacChanDotStarTx = 10;
 
 constexpr unsigned int NumDmaChannelsUsed = 11;			// must be at least the number of channels used, may be larger. Max 32 on the SAME5x.
 
-constexpr uint8_t TmcTxDmaPriority = 0;
-constexpr uint8_t TmcRxDmaPriority = 1;					// the baud rate is 250kbps so this is not very critical
-constexpr uint8_t AdcTxDmaPriority = 0;
-constexpr uint8_t AdcRxDmaPriority = 2;
-constexpr uint8_t WiFiDmaPriority = 3;					// high speed SPI in slave mode
-constexpr uint8_t SbcDmaPriority = 3;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 250kbps so this is not very critical
+constexpr DmaPriority DmacPrioAdcTx = 0;
+constexpr DmaPriority DmacPrioAdcRx = 2;
+constexpr DmaPriority DmacPrioWiFi = 3;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioSbc = 3;					// high speed SPI in slave mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers

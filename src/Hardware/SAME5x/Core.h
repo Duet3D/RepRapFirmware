@@ -31,6 +31,7 @@
 #include <ctype.h>
 
 typedef uint8_t DmaChannel;
+typedef uint8_t DmaPriority;
 typedef uint8_t Pin;
 
 static const Pin NoPin = 0xFF;

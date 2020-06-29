@@ -300,8 +300,8 @@ bool AdcClass::StartConversion(TaskBase *p_taskToWake)
 		dmaFinishedReason = DmaCallbackReason::none;
 		DmacManager::EnableCompletedInterrupt(dmaChan + 1);
 
-		DmacManager::EnableChannel(dmaChan + 1, AdcRxDmaPriority);
-		DmacManager::EnableChannel(dmaChan, AdcTxDmaPriority);
+		DmacManager::EnableChannel(dmaChan + 1, DmacPrioAdcRx);
+		DmacManager::EnableChannel(dmaChan, DmacPrioAdcTx);
 
 		state = State::converting;
 		++conversionsStarted;

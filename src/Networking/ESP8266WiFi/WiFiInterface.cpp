@@ -1327,7 +1327,7 @@ static inline void spi_rx_dma_enable() noexcept
 #endif
 
 #if USE_DMAC_MANAGER
-	DmacManager::EnableChannel(DmacChanWiFiRx, WiFiDmaPriority);
+	DmacManager::EnableChannel(DmacChanWiFiRx, DmacPrioWiFi);
 #endif
 }
 
@@ -1346,7 +1346,7 @@ static inline void spi_tx_dma_enable() noexcept
 #endif
 
 #if USE_DMAC_MANAGER
-	DmacManager::EnableChannel(DmacChanWiFiTx, WiFiDmaPriority);
+	DmacManager::EnableChannel(DmacChanWiFiTx, DmacPrioWiFi);
 #endif
 }
 
