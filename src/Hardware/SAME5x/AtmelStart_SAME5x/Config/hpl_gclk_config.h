@@ -233,7 +233,7 @@
 //<o> Generic clock generator 2 division <0x0000-0xFFFF>
 // <id> gclk_gen_2_div
 #ifndef CONF_GCLK_GEN_2_DIV
-#define CONF_GCLK_GEN_2_DIV 2
+#define CONF_GCLK_GEN_2_DIV 4
 #endif
 // </h>
 // </e>
