@@ -19,7 +19,7 @@ set_property(CACHE BOARD PROPERTY STRINGS "DuetNG"
 
 set(unsupported "Pccb" "Alligator" "SAME70xpld" "Duet3_V05" "Duet3_V06" "RADDS")
 if(BOARD IN_LIST unsupported)
-    message(FATAL_ERROR "Chosen a currently unsupported board")
+    message(FATAL_ERROR "Chosen unsupported board '${BOARD}'")
 endif()
 
 # Set required external libraries. If not set, it is assumed that these libraries are
