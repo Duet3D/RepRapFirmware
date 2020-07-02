@@ -17,7 +17,7 @@ set_property(CACHE BOARD PROPERTY STRINGS "DuetNG"
                                           "Alligator"
                                           "SAME70xpld")
 
-set(unsupported "Pccb" "Alligator" "SAME70xpld" "Duet3_V05" "Duet3_V06" "RADDS")
+set(unsupported "Pccb" "Alligator" "SAME70xpld" "Duet3_V05" "RADDS")
 if(BOARD IN_LIST unsupported)
     message(FATAL_ERROR "Chosen unsupported board '${BOARD}'")
 endif()
@@ -32,6 +32,7 @@ find_package(RRFLibraries REQUIRED HINTS "${parent_dir}/RRFLibraries")
 
 # Optional libraries
 find_package(DuetWiFiSocketServer HINTS "${parent_dir}/DuetWiFiSocketServer")
+find_package(CANlib HINTS "${parent_dir}/CANlib")
 
 # Set build specifications
 add_compile_options(
