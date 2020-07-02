@@ -167,4 +167,4 @@ list(APPEND INCLUDE_DIRS
     "${CANlib_DIR}/src"
 )
 
-set(EXECUTABLE_NAME "Duet3Firmware_MB6HC.bin")
+set(EXECUTABLE_NAME "Duet3Firmware_MB6HC")
