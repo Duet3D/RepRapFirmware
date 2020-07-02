@@ -7,20 +7,6 @@ add_definitions("-D__SAME70Q20B__" "-DDUET3_V06" "-DHAS_LINUX_INTERFACE" "-DUSE_
 add_compile_options("-mcpu=cortex-m7" "-mfpu=fpv5-d16" "-mfloat-abi=hard")
 add_link_options("-mcpu=cortex-m7" "-mfpu=fpv5-d16" "-mfloat-abi=hard")
 
-list(REMOVE_ITEM SRCS
-    "src/Networking/ESP8266WiFi/WiFiInterface.cpp"
-    "src/Networking/ESP8266WiFi/WiFiSocket.cpp"
-    "src/Networking/ESP8266WiFi/WifiFirmwareUploader.cpp"
-    "src/Networking/W5500Ethernet/Wiznet/Internet/DHCP/dhcp.cpp"
-    "src/Networking/W5500Ethernet/Wiznet/Ethernet/W5500/w5500.cpp"
-    "src/Networking/W5500Ethernet/Wiznet/Ethernet/WizSpi.cpp"
-    "src/Networking/W5500Ethernet/Wiznet/Ethernet/socketlib.cpp"
-    "src/Networking/W5500Ethernet/Wiznet/Ethernet/wizchip_conf.cpp"
-    "src/Networking/W5500Ethernet/MdnsResponder.cpp"
-    "src/Networking/W5500Ethernet/W5500Interface.cpp"
-    "src/Networking/W5500Ethernet/W5500Socket.cpp"
-)
-
 list(APPEND SRCS
     "${CMAKE_CURRENT_LIST_DIR}/Pins_Duet3_V06.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Linux/LinuxInterface.cpp"
