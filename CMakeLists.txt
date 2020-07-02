@@ -26,10 +26,12 @@ endif()
 # on the same parent directory as RepRapFirmware.
 get_filename_component(parent_dir ${CMAKE_CURRENT_LIST_DIR} DIRECTORY)
 
-set(CoreNG "${parent_dir}/CoreNG" CACHE PATH "Path to CoreNG")
-set(FreeRTOS "${parent_dir}/FreeRTOS" CACHE PATH "Path to FreeRTOS")
-set(DuetWiFiSocketServer "${parent_dir}/DuetWiFiSocketServer" CACHE PATH "Path to DuetWiFiSocketServer")
-set(RRFLibraries "${parent_dir}/RRFLibraries" CACHE PATH "Path to RRFLibraries")
+find_package(CoreNG REQUIRED HINTS "${parent_dir}/CoreNG")
+find_package(FreeRTOS REQUIRED HINTS "${parent_dir}/FreeRTOS")
+find_package(RRFLibraries REQUIRED HINTS "${parent_dir}/RRFLibraries")
+
+# Optional libraries
+find_package(DuetWiFiSocketServer HINTS "${parent_dir}/DuetWiFiSocketServer")
 
 # Set build specifications
 add_compile_options(
@@ -211,7 +213,6 @@ set(INCLUDE_DIRS
     "src/Networking"
     "src/Networking/LwipEthernet/Lwip/src/include"
     "src/Networking/LwipEthernet/Lwip"
-    "${DuetWiFiSocketServer}/src/include"
 )
 
 # Pull in board-specific sources, include dirs and build-specifications.
@@ -219,9 +220,9 @@ set(INCLUDE_DIRS
 # respectively. Must set BOARD_SOC as well.
 include("src/${BOARD}/board.cmake")
 
-add_subdirectory(${FreeRTOS} FreeRTOS)
-add_subdirectory(${RRFLibraries} RRFLibraries)
-add_subdirectory(${CoreNG} CoreNG)
+add_subdirectory(${FreeRTOS_DIR} FreeRTOS)
+add_subdirectory(${RRFLibraries_DIR} RRFLibraries)
+add_subdirectory(${CoreNG_DIR} CoreNG)
 
 add_executable(RepRapFirmware ${SRCS})
 target_include_directories(RepRapFirmware PRIVATE ${INCLUDE_DIRS})
