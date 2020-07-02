@@ -13,13 +13,13 @@ set_property(CACHE BOARD PROPERTY STRINGS "DuetNG"
                                           "Pccb"
                                           "RADDS"
                                           "Duet3_V05"
-                                          "Duet3_v06"
+                                          "Duet3_V06"
                                           "Alligator"
                                           "SAME70xpld")
 
-# Support is for DuetNG only, for now.
-if(NOT BOARD STREQUAL "DuetNG")
-    message(FATAL_ERROR "Current support only for DuetNG build")
+set(unsupported "Pccb" "Alligator" "SAME70xpld" "Duet3_V05" "Duet3_V06" "RADDS")
+if(BOARD IN_LIST unsupported)
+    message(FATAL_ERROR "Chosen a currently unsupported board")
 endif()
 
 # Set required external libraries. If not set, it is assumed that these libraries are
