@@ -77,11 +77,6 @@ extern "C" {
 /* Max PHY number */
 #define ETH_PHY_MAX_ADDR   31
 
-#if 0	// chrishamm
-/* Ethernet PHY operation max retry count */
-#define ETH_PHY_RETRY_MAX 1000000
-#endif
-
 /* Ethernet PHY operation timeout */
 #define ETH_PHY_TIMEOUT 10
 
@@ -150,13 +145,7 @@ uint8_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t mck)
 	uint8_t uc_rc;
 	uint8_t uc_phy;
 
-#if 0	// chrishamm
-	pio_set_output(PIN_GMAC_RESET_PIO, PIN_GMAC_RESET_MASK, 1,  false, true);
-	pio_set_input(PIN_GMAC_INT_PIO, PIN_GMAC_INT_MASK, PIO_PULLUP);
-	pio_set_peripheral(PIN_GMAC_PIO, PIN_GMAC_PERIPH, PIN_GMAC_MASK);
-#endif
-
-	ethernet_phy_reset(GMAC,uc_phy_addr);
+	ethernet_phy_reset(GMAC, uc_phy_addr);
 
 	/* Configure GMAC runtime clock */
 	uc_rc = gmac_set_mdc_clock(p_gmac, mck);
@@ -274,10 +263,6 @@ uint8_t ethernet_phy_set_link(Gmac *p_gmac, uint8_t uc_phy_addr,
 static bool phyInitialized = false;
 uint8_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr)
 {
-#if 0	// chrishamm
-	uint32_t ul_retry_max = ETH_PHY_RETRY_MAX;
-	uint32_t ul_retry_count = 0;
-#endif
 	uint32_t ul_value;
 	uint32_t ul_phy_anar;
 	uint32_t ul_phy_analpar;
@@ -345,7 +330,6 @@ uint8_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr)
 	}
 
 	/* Check if auto negotiation is completed */
-#if 1	// chrishamm
 	uc_rc = gmac_phy_read(p_gmac, uc_phy_addr, GMII_BMSR, &ul_value);
 	if (uc_rc != GMAC_OK)
 	{
@@ -358,27 +342,6 @@ uint8_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr)
 		gmac_enable_management(p_gmac, false);
 		return GMAC_TIMEOUT;
 	}
-#else
-	while (1) {
-		uc_rc = gmac_phy_read(p_gmac, uc_phy_addr, GMII_BMSR, &ul_value);
-		if (uc_rc != GMAC_OK) {
-			gmac_enable_management(p_gmac, false);
-			return uc_rc;
-		}
-		/* Done successfully */
-		if (ul_value & GMII_AUTONEG_COMP) {
-			break;
-		}
-
-		/* Timeout check */
-		if (ul_retry_max) {
-			if (++ul_retry_count >= ul_retry_max) {
-				gmac_enable_management(p_gmac, false);
-				return GMAC_TIMEOUT;
-			}
-		}
-	}
-#endif
 
 	/* Get the auto negotiate link partner base page */
 	uc_rc = gmac_phy_read(p_gmac, uc_phy_addr, GMII_ANLPAR, &ul_phy_analpar);

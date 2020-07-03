@@ -247,7 +247,7 @@
 // <o> DFLL Multiply Factor <0x0-0xFFFF>
 //  <id> dfll_mul
 #ifndef CONF_DFLL_MUL
-#define CONF_DFLL_MUL 1464
+#define CONF_DFLL_MUL 1465
 #endif
 
 // <e> DFLL Calibration Overwrite
