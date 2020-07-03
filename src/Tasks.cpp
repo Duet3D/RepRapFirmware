@@ -101,15 +101,7 @@ extern "C" [[noreturn]] void AppMain() noexcept
 #if !defined(DEBUG) && !defined(__LPC17xx__)	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
-#if defined(IFLASH_ADDR)
-		const char *firmwareStart = reinterpret_cast<const char *>(IFLASH_ADDR);
-#elif defined(FLASH_ADDR)
-		const char *firmwareStart = reinterpret_cast<const char *>(FLASH_ADDR);
-#elif defined(IFLASH0_ADDR)
-		const char *firmwareStart = reinterpret_cast<const char *>(IFLASH0_ADDR);
-#else
-# error Unsupported processor
-#endif
+		const char *firmwareStart = reinterpret_cast<const char*>(SCB->VTOR & 0xFFFFFF80);
 		CRC32 crc;
 		crc.Update(firmwareStart, (const char*)&_firmware_crc - firmwareStart);
 		if (crc.Get() != _firmware_crc)

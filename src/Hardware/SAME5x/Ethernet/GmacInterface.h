@@ -1,5 +1,5 @@
 /*
- * SAME5x_gmac.h
+ * SAME5x GmacInterface.h
  *
  *  Created on: 19 Jun 2020
  *      Author: David
@@ -42,7 +42,5 @@ extern unsigned int rxBuffersNotFullyPopulatedCount;
 extern unsigned int txErrorCount;
 extern unsigned int txBufferNotFreeCount;
 extern unsigned int txBufferTooShortCount;
-
-
 
 #endif /* SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_ */
