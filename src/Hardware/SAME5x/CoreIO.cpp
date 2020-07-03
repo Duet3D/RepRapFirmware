@@ -143,12 +143,6 @@ uint64_t millis64() noexcept
 void CoreSysTick() noexcept
 {
 	g_ms_ticks++;
-
-	// If we kick the watchdog too often, sometimes it resets us. It uses a 1024Hz nominal clock, so presumably it has to be reset less often than that.
-	if ((((uint32_t)g_ms_ticks) & 0x07) == 0)
-	{
-		WDT->CLEAR.reg = 0xA5;
-	}
 }
 
 static void UsbInit() noexcept
@@ -265,12 +259,17 @@ void WatchdogInit() noexcept
 	hri_wdt_write_CTRLA_reg(WDT, 0);
 	hri_wdt_write_CONFIG_reg(WDT, WDT_CONFIG_PER_CYC1024);		// about 1 second
 	hri_wdt_write_EWCTRL_reg(WDT, WDT_EWCTRL_EWOFFSET_CYC512);	// early warning control, about 0.5 second
+	hri_wdt_set_INTEN_EW_bit(WDT);								// enable early earning interrupt
 	hri_wdt_write_CTRLA_reg(WDT, WDT_CTRLA_ENABLE);
 }
 
 void watchdogReset() noexcept
 {
-	WDT->CLEAR.reg = 0xA5;
+	// If we kick the watchdog too often, sometimes it resets us. It uses a 1024Hz nominal clock, so presumably it has to be reset less often than that.
+	if ((((uint32_t)g_ms_ticks) & 0x07) == 0)
+	{
+		WDT->CLEAR.reg = 0xA5;
+	}
 }
 
 void Reset() noexcept
