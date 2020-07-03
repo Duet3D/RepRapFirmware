@@ -330,10 +330,12 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	8 + HAS_CPU_TEMP_SENSOR,																		// number of sections
+	9,																		// number of sections
 	12 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
+#else
+	0,
 #endif
 #if HAS_VOLTAGE_MONITOR
 	3,																		// section 2: vIn

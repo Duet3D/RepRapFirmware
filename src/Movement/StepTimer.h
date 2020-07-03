@@ -92,6 +92,8 @@ inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks(
 {
 # if SAME5x
 	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+	// On the EXP3HC board it isn't enough just to wait for SYNCBUSY.COUNT here
+	while (StepTc->CTRLBSET.bit.CMD != 0) { }
 	while (StepTc->SYNCBUSY.bit.COUNT) { }
 	return StepTc->COUNT.reg;
 # elif defined(__LPC17xx__)

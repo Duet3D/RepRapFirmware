@@ -5,8 +5,8 @@
  *      Authors: David and Christian
  */
 
-#ifndef SRC_SAME70_LWIPSOCKET_H_
-#define SRC_SAME70_LWIPSOCKET_H_
+#ifndef SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_
+#define SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_
 
 #include "LwipEthernetInterface.h"
 #include "Networking/NetworkDefs.h"
@@ -74,4 +74,4 @@ private:
 	size_t unAcked;
 };
 
-#endif /* SRC_SAME70_LWIPSOCKET_H_ */
+#endif /* SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_ */

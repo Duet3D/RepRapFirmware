@@ -53,6 +53,9 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
 
+#define USE_CACHE				0					// ***TEMPORARY*** set nonzero to enable the cache
+#define USE_MPU					0					// set nonzero to enable the memory protection unit
+
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 8;				// The maximum number of drives supported by the electronics
