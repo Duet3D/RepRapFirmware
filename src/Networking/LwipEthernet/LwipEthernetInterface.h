@@ -5,8 +5,8 @@
  *      Authors: David and Christian
  */
 
-#ifndef SRC_SAME70_LWIPETHERNETINTERFACE_H_
-#define SRC_SAME70_LWIPETHERNETINTERFACE_H_
+#ifndef SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_
+#define SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_
 
 #include "Networking/NetworkInterface.h"
 #include "Networking/NetworkDefs.h"
@@ -97,4 +97,4 @@ private:
 	MacAddress macAddress;
 };
 
-#endif
+#endif	// SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_

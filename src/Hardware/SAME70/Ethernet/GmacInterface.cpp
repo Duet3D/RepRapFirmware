@@ -284,7 +284,7 @@ static void gmac_tx_init(struct gmac_device *ps_gmac_dev) noexcept
 	}
 	ps_gmac_dev->tx_desc[ul_index - 1].status.val |= GMAC_TXD_WRAP;
 
-	/* Set receive buffer queue base address pointer. */
+	/* Set transmit buffer queue base address pointer. */
 	gmac_set_tx_queue(GMAC, (uint32_t) &ps_gmac_dev->tx_desc[0]);
 }
 
@@ -397,7 +397,7 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 	{
 		uint8_t *buffer = reinterpret_cast<uint8_t*>(ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].addr);
 		size_t totalLength = 0;
-		for (const pbuf *q = p; q != NULL; q = q->next)
+		for (const pbuf *q = p; q != nullptr; q = q->next)
 		{
 			totalLength += q->len;
 			if (totalLength > GMAC_TX_UNITSIZE)
