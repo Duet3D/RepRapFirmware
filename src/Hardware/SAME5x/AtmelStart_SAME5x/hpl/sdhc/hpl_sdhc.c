@@ -148,26 +148,28 @@ static void _mci_set_speed(const void *const hw, uint32_t speed, uint8_t prog_cl
 	clkbase = CONF_BASE_FREQUENCY;
 	clkmul  = hri_sdhc_read_CA1R_CLKMULT_bf(hw);
 
-	/* If programmable clock mode is enabled, baseclk is divided by 2 */
+	/* If programmable clock mode is supported, baseclk is divided by 2 */
 	if (clkmul > 0)
 	{
 		clkbase = clkbase / 2;
 	}
+
+	// Calculate required divider, rounded up
+
 	if (prog_clock_mode == 0)
 	{
-		/* divided clock mode */
+		// Divided clock mode, speed = (div == 0) ? BaseClock : BaseClock/(2 * div)
 		hri_sdhc_clear_CCR_CLKGSEL_bit(hw);
-		/* speed = Base Clock / 2*div */
-		div = (clkbase / speed) / 2;
+		div = (clkbase + speed - 1)/speed;
+		div = (div == 1) ? 0 : (div + 1)/2;
 	}
 	else
 	{
-		/* programmable clock mode */
+		// Programmable clock mode, speed = BaseClock * (clkmul + 1) / (div+1)
 		hri_sdhc_set_CCR_CLKGSEL_bit(hw);
-		/* Specific constraint for SDHC/SDMMC IP
-		   speed = Base Clock * Multi Clock / (div+1) */
-		div = (clkbase * (clkmul + 1)) / speed;
-		if (div > 0)
+		clkbase *= clkmul + 1;
+		div = (clkbase + speed - 1)/speed;
+		if (div != 0)
 		{
 			div = div - 1;
 		}
@@ -200,15 +202,21 @@ uint32_t _mci_get_clock_speed(const void *const hw)
 	uint32_t clkbase = CONF_BASE_FREQUENCY;
 	uint32_t clkmul = hri_sdhc_read_CA1R_CLKMULT_bf(hw);
 
-	/* If programmable clock mode is enabled, baseclk is divided by 2 */
+	// If programmable clock mode is supported, baseclk is divided by 2
 	if (clkmul > 0)
 	{
 		clkbase = clkbase / 2;
 	}
-	const uint32_t div = (hri_sdhc_read_CCR_USDCLKFSEL_bf(hw) << 8) | hri_sdhc_read_CCR_SDCLKFSEL_bf(hw);
-	return (hri_sdhc_get_CCR_CLKGSEL_bit(hw))
-			? (clkbase * (clkmul + 1))/div				// Programmable clock mode
-				: clkbase / (2 * div);					// Divided clock mode
+
+	uint32_t div = (hri_sdhc_read_CCR_USDCLKFSEL_bf(hw) << 8) | hri_sdhc_read_CCR_SDCLKFSEL_bf(hw);
+	if (hri_sdhc_get_CCR_CLKGSEL_bit(hw))				// if programmable clock mode
+	{
+		return (clkbase * (clkmul + 1))/(div + 1);
+	}
+
+	// Divided clock mode
+	div = (div == 0) ? 1 : 2 * div;
+	return clkbase/div;
 }
 
 #endif
@@ -318,8 +326,7 @@ int32_t _mci_sync_init(struct _mci_sync_device *const mci_dev, void *const hw)
 	mci_dev->hw = hw;
 
 	hri_sdhc_set_SRR_SWRSTALL_bit(hw);
-	while (hri_sdhc_get_SRR_SWRSTALL_bit(hw))
-		;
+	while (hri_sdhc_get_SRR_SWRSTALL_bit(hw)) { }
 
 	/* Set the Data Timeout Register to 2 Mega Cycles */
 	hri_sdhc_write_TCR_reg(hw, SDHC_TCR_DTCVAL(0xE));
@@ -329,6 +336,11 @@ int32_t _mci_sync_init(struct _mci_sync_device *const mci_dev, void *const hw)
 
 	hri_sdhc_set_NISTER_reg(hw, SDHC_NISTER_MASK);
 	hri_sdhc_set_EISTER_reg(hw, SDHC_EISTER_MASK);
+
+#if 1	//dc42
+	// The clock divider defaults to 0. Set it to 1 so that M122 doesn't report a too-high interface speed when no card is present.
+	hri_sdhc_write_CCR_SDCLKFSEL_bf(hw, 1);
+#endif
 
 	return ERR_NONE;
 }
@@ -347,8 +359,7 @@ int32_t _mci_sync_deinit(struct _mci_sync_device *const mci_dev)
 /**
  *  \brief Select a device and initialize it
  */
-int32_t _mci_sync_select_device(struct _mci_sync_device *const mci_dev, uint8_t slot, uint32_t clock, uint8_t bus_width,
-                                bool high_speed)
+int32_t _mci_sync_select_device(struct _mci_sync_device *const mci_dev, uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed)
 {
 	(void)(slot);
 	void *hw;
