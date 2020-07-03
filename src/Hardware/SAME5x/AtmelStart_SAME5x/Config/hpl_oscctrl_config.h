@@ -25,7 +25,7 @@
 // <i> Oscillation frequency of the resonator connected to the External Multipurpose Crystal Oscillator.
 // <id> xosc0_frequency
 #ifndef CONF_XOSC1_FREQUENCY
-#define CONF_XOSC1_FREQUENCY 16000000
+#define CONF_XOSC1_FREQUENCY 25000000
 #endif
 
 // <h> External Multipurpose Crystal Oscillator Control
@@ -332,13 +332,13 @@
 // <o> Loop Divider Ratio Integer Part <0x0-0x1FFF>
 // <id> fdpll0_ldr
 #ifndef CONF_FDPLL0_LDR
-#define CONF_FDPLL0_LDR 59	// multiply by 60 to get 60 * 2 = 120MHz
+#define CONF_FDPLL0_LDR 47	// multiply by 48 to get 48 * 2.5 = 120MHz
 #endif
 
 // <o> Clock Divider <0x0-0x7FF>
 // <id> fdpll0_clock_div
 #ifndef CONF_FDPLL0_DIV
-#define CONF_FDPLL0_DIV 3	// divide by 2 * (3 + 1) to get 2MHz (max allowed is 3MHz)
+#define CONF_FDPLL0_DIV 4	// divide by 2 * (4 + 1) to get 2.5MHz (max allowed is 3MHz)
 #endif
 
 // <q> DCO Filter Enable
@@ -401,7 +401,7 @@
 // <i> Indicates whether configuration for FDPLL1 is enabled or not
 // <id> enable_fdpll1
 #ifndef CONF_FDPLL1_CONFIG
-#define CONF_FDPLL1_CONFIG 1
+#define CONF_FDPLL1_CONFIG 0
 #endif
 
 // <y> Reference Clock Source
