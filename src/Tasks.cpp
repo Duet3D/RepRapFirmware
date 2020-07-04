@@ -129,26 +129,29 @@ extern "C" [[noreturn]] void AppMain() noexcept
 	}
 
 #if SAME5x
-# if 0		// disable the bootloader protection code until we have a bootloader
-//# ifndef DEBUG
-	// Check that the bootloader is protected and EEPROM is configured
-	uint64_t nvmUserRow0 = *reinterpret_cast<const uint64_t*>(NVMCTRL_USER);						// we only need values in the first 64 bits of the user area
-	constexpr uint64_t mask =     ((uint64_t)0x0F << 32) | ((uint64_t)0x07 << 36) | (0x0F << 26);	// we just want NVM_BOOT (bits 26-29), SEE.SBLK (bits 32-35) and SEE.PSZ (bits 36:38)
-	constexpr uint64_t reqValue = ((uint64_t)0x01 << 32) | ((uint64_t)0x03 << 36) | (0x07 << 26);	// 4K SMART EEPROM and 64K bootloader (SBLK=1 PSZ=3)
-
-	if ((nvmUserRow0 & mask) != reqValue)
 	{
-		nvmUserRow0 = (nvmUserRow0 & ~mask) | reqValue;												// set up the required value
-		_user_area_write(reinterpret_cast<void*>(NVMCTRL_USER), 0, reinterpret_cast<const uint8_t*>(&nvmUserRow0), sizeof(nvmUserRow0));
+		const uint32_t bootloaderSize = SCB->VTOR & 0xFFFFFF80;
+		if (bootloaderSize == 0x4000)
+		{
+			// Looks like this is release firmware that was loaded by a bootloader in the first 16Kb of flash
+			// Check that the bootloader is protected and EEPROM is configured
+			uint64_t nvmUserRow0 = *reinterpret_cast<const uint64_t*>(NVMCTRL_USER);						// we only need values in the first 64 bits of the user area
+			constexpr uint64_t mask =     ((uint64_t)0x0F << 32) | ((uint64_t)0x07 << 36) | (0x0F << 26);	// we just want NVM_BOOT (bits 26-29), SEE.SBLK (bits 32-35) and SEE.PSZ (bits 36:38)
+			constexpr uint64_t reqValue = ((uint64_t)0x01 << 32) | ((uint64_t)0x03 << 36) | (13 << 26);		// 4K SMART EEPROM and 16K bootloader (SBLK=1 PSZ=3 BOOTPROT=13)
 
-		// If we reset immediately then the user area write doesn't complete and the bits get set to all 1s.
-		delayMicroseconds(10000);
-		Reset();
+			if ((nvmUserRow0 & mask) != reqValue)
+			{
+				nvmUserRow0 = (nvmUserRow0 & ~mask) | reqValue;												// set up the required value
+				_user_area_write(reinterpret_cast<void*>(NVMCTRL_USER), 0, reinterpret_cast<const uint8_t*>(&nvmUserRow0), sizeof(nvmUserRow0));
+
+				// If we reset immediately then the user area write doesn't complete and the bits get set to all 1s.
+				delayMicroseconds(10000);
+				Reset();
+			}
+		}
 	}
-# endif
 
 	CoreInit();
-
 #endif
 
 	// Trap integer divide-by-zero.
