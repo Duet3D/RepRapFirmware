@@ -42,6 +42,9 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 #ifdef assert
 # undef assert
 #endif
+#ifdef result
+# undef result
+#endif
 
 #include <Core.h>
 

@@ -2066,12 +2066,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					tool->SetFirmwareRetraction(gb, reply);
+					result = tool->SetFirmwareRetraction(gb, reply, outBuf);
 				}
 			}
 			else
 			{
-				reprap.SetAllToolsFirmwareRetraction(gb, reply);
+				result = reprap.SetAllToolsFirmwareRetraction(gb, reply, outBuf);
 			}
 			break;
 

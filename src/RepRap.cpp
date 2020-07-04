@@ -1230,12 +1230,14 @@ void RepRap::ReportAllToolTemperatures(const StringRef& reply) const noexcept
 	}
 }
 
-void RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException)
 {
-	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	GCodeResult rslt = GCodeResult::ok;
+	for (Tool *tool = toolList; tool != nullptr && rslt == GCodeResult::ok; tool = tool->Next())
 	{
-		tool->SetFirmwareRetraction(gb, reply);
+		rslt = tool->SetFirmwareRetraction(gb, reply, outBuf);
 	}
+	return rslt;
 }
 
 // Get the current axes used as X axes

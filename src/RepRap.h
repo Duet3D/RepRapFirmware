@@ -98,7 +98,7 @@ public:
 	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
 	unsigned int GetNumberOfContiguousTools() const noexcept;
 	void ReportAllToolTemperatures(const StringRef& reply) const noexcept;
-	void SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
 
 	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept;
 	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;

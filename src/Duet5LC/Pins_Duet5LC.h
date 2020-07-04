@@ -8,13 +8,13 @@
 #ifndef SRC_DUET5LC_PINS_DUET5LC_H_
 #define SRC_DUET5LC_PINS_DUET5LC_H_
 
-#define BOARD_SHORT_NAME		"MB5LC"
-#define BOARD_NAME				"Duet 3 MB5LC"
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB5LC"
+#define BOARD_SHORT_NAME		"Mini5plus"
+#define BOARD_NAME				"Duet 3 Mini 5+"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+"
 #define DEFAULT_BOARD_TYPE		 BoardType::Duet5LC_Unknown
 constexpr size_t NumFirmwareUpdateModules = 2;		// main module and WiFi module
 
-#define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
+#define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".uf2"
 #define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
 #define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20030000;
