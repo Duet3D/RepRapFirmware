@@ -65,6 +65,7 @@ public:
 	bool HasCommandNumber() const noexcept;
 	int GetCommandNumber() const noexcept;
 	int8_t GetCommandFraction() const noexcept;										// Return the command fraction, or -1 if none given
+	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return machineState->lineNumber; }
 	GCodeResult GetLastResult() const noexcept { return lastResult; }

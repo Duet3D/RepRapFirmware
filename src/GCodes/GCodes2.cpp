@@ -453,7 +453,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	// Pass file- and system-related commands to DSF if they came from somewhere else. They will be passed back to us via a binary buffer or separate SPI message if necessary.
 	if (   reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().IsConnected() && !gb.IsBinary()
 		&& (   code == 0 || code == 1
-			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26
+			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26 || code == 27
 			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
 			|| code == 112
 			|| code == 374 || code == 375
@@ -969,12 +969,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				// Pronterface keeps sending M27 commands if "Monitor status" is checked, and it specifically expects the following response syntax
 				FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-				reply.printf("SD printing byte %lu/%lu", GetFilePosition(), fileBeingPrinted.Length());
+				// In case there are short periods of time when PrintMonitor says a file is printing but the file is not open, or DSF passes M27 to us, check that we have a file
+				if (fileBeingPrinted.IsLive())
+				{
+					reply.printf("SD printing byte %lu/%lu", GetFilePosition(), fileBeingPrinted.Length());
+					break;
+				}
 			}
-			else
-			{
-				reply.copy("Not SD printing.");
-			}
+			reply.copy("Not SD printing.");
 			break;
 
 		case 28: // Write to file

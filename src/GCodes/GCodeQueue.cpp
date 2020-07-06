@@ -96,7 +96,9 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t scheduleAt) noexcept
 {
 	// Can we queue this code somewhere?
-	if (freeItems == nullptr || gb.DataLength() > BufferSizePerQueueItem)
+	if (freeItems == nullptr || gb.DataLength() > BufferSizePerQueueItem
+		|| gb.ContainsExpression()						// if it contains an expression then the expression value may change or refer to 'iterations'
+	   )
 	{
 		return false;
 	}

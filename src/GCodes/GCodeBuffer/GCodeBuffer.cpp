@@ -290,6 +290,11 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 	return PARSER_OPERATION(GetCommandFraction());
 }
 
+bool GCodeBuffer::ContainsExpression() const noexcept
+{
+	return PARSER_OPERATION(ContainsExpression());
+}
+
 // Is a character present?
 bool GCodeBuffer::Seen(char c) noexcept
 {

@@ -97,6 +97,23 @@ int8_t BinaryParser::GetCommandFraction() const noexcept
 	return (bufferLength != 0 && (header->flags & CodeFlags::HasMinorCommandNumber) != 0) ? header->minorCode : -1;
 }
 
+bool BinaryParser::ContainsExpression() const noexcept
+{
+	if (bufferLength != 0 && header->numParameters != 0)
+	{
+		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
+		for (size_t i = 0; i < header->numParameters; i++)
+		{
+			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
+			if (param->type == DataType::Expression)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 float BinaryParser::GetFValue() THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)

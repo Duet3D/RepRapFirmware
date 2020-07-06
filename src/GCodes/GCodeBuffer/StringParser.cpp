@@ -38,7 +38,7 @@ void StringParser::Init() noexcept
 	gcodeLineEnd = 0;
 	commandLength = 0;
 	readPointer = -1;
-	hadLineNumber = hadChecksum = overflowed = false;
+	hadLineNumber = hadChecksum = overflowed = seenExpression = false;
 	computedChecksum = 0;
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	commandIndent = 0;
@@ -204,6 +204,7 @@ bool StringParser::Put(char c) noexcept
 
 			case '{':
 				++braceCount;
+				seenExpression = true;
 				StoreAndAddToChecksum(c);
 				break;
 

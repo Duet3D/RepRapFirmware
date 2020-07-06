@@ -32,6 +32,7 @@ public:
 	bool HasCommandNumber() const noexcept;
 	int GetCommandNumber() const noexcept;
 	int8_t GetCommandFraction() const noexcept;
+	bool ContainsExpression() const noexcept;
 
 	float GetFValue() THROWS(GCodeException) __attribute__((hot));				// Get a float after a key letter
 	int32_t GetIValue() THROWS(GCodeException) __attribute__((hot));			// Get an integer after a key letter
