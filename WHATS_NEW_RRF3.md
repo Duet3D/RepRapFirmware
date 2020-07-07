@@ -73,7 +73,7 @@ Upgrade notes:
 Known issues and limitations:
 - If you execute a tool change at a Z value close to maximum then this could result in at attempt to exceed maximum Z depending on the difference between the old and new Z tool offsets.
 - Z probe types 1, 2 and 5 are only supported for Z probe 0, and if using Duet 3 only for a probe connected to the main board. All other Z probes must be of type 8 or 9.
-- Duet 3: an endstop switch on the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
+- Duet 3: an endstop switch or Z probe connected to the main board will not stop movement of a motor on an expansion board unless a motor on the main board is also moving
 - Duet 3: when updating the firmware on one or more tool boards or expansion boards, after the updates have completed you must reset the main board or at least run config.g in order to reconfigure the expansion or tool boards
 - Duet 3: additional limitations apply to systems with expansion and/or tool boards. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations.
 
