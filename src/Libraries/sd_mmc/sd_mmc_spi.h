@@ -170,7 +170,7 @@ static __inline__ void sd_mmc_spi_get_response_128(uint8_t *resp) noexcept
  *
  * \return true if success, otherwise false
  */
-bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, bool access_block) noexcept;
+bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr) noexcept;
 
 /** \brief Send a command to stop a adtc command on the selected slot
  *

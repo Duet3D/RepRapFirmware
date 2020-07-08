@@ -1182,8 +1182,7 @@ void HttpResponder::ProcessRequest() noexcept
 					}
 
 					// Start a new file upload
-					FileStore * const file = StartUpload(FS_PREFIX, filename, (postFileGotCrc) ? OpenMode::writeWithCrc : OpenMode::write, postFileLength);
-					if (file == nullptr)
+					if (!StartUpload(FS_PREFIX, filename, (postFileGotCrc) ? OpenMode::writeWithCrc : OpenMode::write, postFileLength))
 					{
 						RejectMessage("could not create file");
 						return;
@@ -1287,13 +1286,16 @@ void HttpResponder::DoUpload() noexcept
 		(void)CheckAuthenticated();							// uploading may take a long time, so make sure the requester IP is not timed out
 		timer = millis();									// reset the timer
 
-		if (!fileBeingUploaded.Write(buffer, len))
+		if (!dummyUpload)
 		{
-			uploadError = true;
-			GetPlatform().Message(ErrorMessage, "HTTP: could not write upload data\n");
-			CancelUpload();
-			SendJsonResponse("upload");
-			return;
+			if (!fileBeingUploaded.Write(buffer, len))
+			{
+				uploadError = true;
+				GetPlatform().Message(ErrorMessage, "HTTP: could not write upload data\n");
+				CancelUpload();
+				SendJsonResponse("upload");
+				return;
+			}
 		}
 	}
 	else if (!skt->CanRead() || millis() - timer >= HttpSessionTimeout)

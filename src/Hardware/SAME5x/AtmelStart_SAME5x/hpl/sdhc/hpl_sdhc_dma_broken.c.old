@@ -770,26 +770,13 @@ bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *d
 	if (nb_block != 0)
 	{
 # if USE_DMA
-#  if 1	// this code works
-		// Wait until end of transfer
-		do
-		{
-			if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND | SDHC_EISTR_ADMA_YES))
-			{
-				_mci_reset(mci_dev->hw);
-				return false;
-			}
-		} while (!hri_sdhc_get_NISTR_TRFC_bit(mci_dev->hw));		// wait until transfer complete
-		hri_sdhc_set_NISTR_TRFC_bit(mci_dev->hw);
-#  else	// this code doesn't work
 		const bool ok = WaitForDmaComplete((Sdhc*)mci_dev->hw);
 		if (!ok)
 		{
 			_mci_reset(mci_dev->hw);
 			return false;
 		}
-#  endif
-# else
+#else
 		do
 		{
 			if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))

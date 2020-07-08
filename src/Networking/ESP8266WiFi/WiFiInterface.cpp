@@ -512,9 +512,8 @@ void WiFiInterface::Start() noexcept
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
-#ifdef DUET_NG
-	// Take the ESP8266 out of power down
-	pinMode(EspEnablePin, OUTPUT_HIGH);
+#if defined(DUET_NG) || defined(DUET_5LC)
+	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
@@ -566,6 +565,9 @@ void WiFiInterface::Stop() noexcept
 
 		digitalWrite(SamTfrReadyPin, false);		// tell the ESP we can't receive
 		digitalWrite(EspResetPin, false);			// put the ESP back into reset
+#if defined(DUET_NG) || defined(DUET_5LC)
+		digitalWrite(EspEnablePin, false);
+#endif
 		DisableEspInterrupt();						// ignore IRQs from the transfer request pin
 
 		NVIC_DisableIRQ(ESP_SPI_IRQn);
@@ -1951,6 +1953,12 @@ void WiFiInterface::SpiInterrupt() noexcept
 void WiFiInterface::StartWiFi() noexcept
 {
 	digitalWrite(EspResetPin, true);
+
+#if defined(DUET_NG) || defined(DUET_5LC)
+	delayMicroseconds(150);										// ESP8266 datasheet specifies minimum 100us from releasing reset to power up
+	digitalWrite(EspEnablePin, true);
+#endif
+
 #if SAME5x
 	for (Pin p : WiFiUartSercomPins)
 	{
@@ -1969,6 +1977,11 @@ void WiFiInterface::StartWiFi() noexcept
 void WiFiInterface::ResetWiFi() noexcept
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
+
+#if defined(DUET_NG) || defined(DUET_5LC)
+	pinMode(EspEnablePin, OUTPUT_LOW);
+#endif
+
 #if defined(DUET_5LC)
 	for (Pin p : WiFiUartSercomPins)
 	{

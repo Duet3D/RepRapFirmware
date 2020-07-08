@@ -99,7 +99,7 @@ bool sd_mmc_wr_protect(uint8_t slot)
  */
 Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram, uint32_t numBlocks)
 {
-	switch (sd_mmc_init_read_blocks(slot, addr, numBlocks)) {
+	switch (sd_mmc_init_read_blocks(slot, addr, numBlocks, ram)) {
 	case SD_MMC_OK:
 		break;
 	case SD_MMC_ERR_NO_CARD:
@@ -118,7 +118,7 @@ Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram, uint32_t nu
 
 Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram, uint32_t numBlocks)
 {
-	switch (sd_mmc_init_write_blocks(slot, addr, numBlocks)) {
+	switch (sd_mmc_init_write_blocks(slot, addr, numBlocks, ram)) {
 	case SD_MMC_OK:
 		break;
 	case SD_MMC_ERR_NO_CARD:

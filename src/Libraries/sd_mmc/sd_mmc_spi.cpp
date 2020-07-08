@@ -380,17 +380,17 @@ void sd_mmc_spi_send_clock() noexcept
 
 bool sd_mmc_spi_send_cmd(sdmmc_cmd_def_t cmd, uint32_t arg) noexcept
 {
-	return sd_mmc_spi_adtc_start(cmd, arg, 0, 0, false);
+	return sd_mmc_spi_adtc_start(cmd, arg, 0, 0, nullptr);
 }
 
-bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, bool access_block) noexcept
+bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr) noexcept
 {
 	uint8_t dummy = 0xFF;
 	uint8_t cmd_token[6];
 	uint8_t ncr_timeout;
 	uint8_t r1; //! R1 response
 
-	UNUSED(access_block);
+	UNUSED(dmaAddr);
 	Assert(cmd & SDMMC_RESP_PRESENT); // Always a response in SPI mode
 	sd_mmc_spi_err = SD_MMC_SPI_NO_ERR;
 

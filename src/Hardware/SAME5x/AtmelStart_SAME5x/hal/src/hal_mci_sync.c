@@ -138,11 +138,10 @@ void mci_sync_get_response_128(struct mci_sync_desc *mci, uint8_t *response)
  *         An ADTC (Addressed Data Transfer Commands)
  *         command is used for read/write access.
  */
-bool mci_sync_adtc_start(struct mci_sync_desc *mci, uint32_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block,
-                         bool access_block)
+bool mci_sync_adtc_start(struct mci_sync_desc *mci, uint32_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr)
 {
 	ASSERT(mci);
-	return _mci_sync_adtc_start(&mci->device, cmd, arg, block_size, nb_block, access_block);
+	return _mci_sync_adtc_start(&mci->device, cmd, arg, block_size, nb_block, dmaAddr);
 }
 
 /**

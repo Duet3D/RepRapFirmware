@@ -181,8 +181,7 @@ void _mci_sync_get_response_128(struct _mci_sync_device *const mci_dev, uint8_t 
  *
  * \return true if success, otherwise false
  */
-bool _mci_sync_adtc_start(struct _mci_sync_device *const mci_dev, uint32_t cmd, uint32_t arg, uint16_t block_size,
-                          uint16_t nb_block, bool access_block);
+bool _mci_sync_adtc_start(struct _mci_sync_device *const mci_dev, uint32_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr);
 
 /**
  *  \brief Send a command to stop an ADTC command on the selected slot.
@@ -250,7 +249,7 @@ bool _mci_sync_wait_end_of_write_blocks(struct _mci_sync_device *const mci_dev);
 
 #if 1	// dc42
 
-uint32_t _mci_get_clock_speed(const void *const hw);
+uint32_t _mci_get_clock_speed(Sdhc *hw);
 
 #endif
 

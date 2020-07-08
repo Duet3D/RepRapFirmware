@@ -87,7 +87,7 @@ struct DriverInterface
 	bool (*send_cmd)(sdmmc_cmd_def_t cmd, uint32_t arg);
 	uint32_t (*get_response)(void);
 	void (*get_response_128)(uint8_t* response);
-	bool (*adtc_start)(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, bool access_block);
+	bool (*adtc_start)(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void* dmaAddr);
 	bool (*adtc_stop)(sdmmc_cmd_def_t cmd, uint32_t arg);
 	bool (*read_word)(uint32_t* value);
 	bool (*write_word)(uint32_t value);
@@ -152,9 +152,9 @@ void hsmci_get_response_128(uint8_t* response) noexcept
 	mci_sync_get_response_128(&mci, response);
 }
 
-bool hsmci_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, bool access_block) noexcept
+bool hsmci_adtc_start_glue(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr) noexcept
 {
-	return mci_sync_adtc_start(&mci, cmd, arg, block_size, nb_block, access_block);
+	return mci_sync_adtc_start(&mci, cmd, arg, block_size, nb_block, dmaAddr);
 }
 
 bool hsmci_read_word(uint32_t* value) noexcept
@@ -202,6 +202,11 @@ driverIdleFunc_t hsmci_set_idle_func(driverIdleFunc_t func) noexcept
 
 #  include <hsmci/hsmci.h>
 
+bool hsmci_adtc_start_glue(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr)
+{
+	return hsmci_adtc_start(cmd, arg, block_size, nb_block, dmaAddr != NULL;
+}
+
 # endif
 
 static const struct DriverInterface hsmciInterface = {
@@ -213,7 +218,7 @@ static const struct DriverInterface hsmciInterface = {
 	.send_cmd = hsmci_send_cmd,
 	.get_response = hsmci_get_response,
 	.get_response_128 = hsmci_get_response_128,
-	.adtc_start = hsmci_adtc_start,
+	.adtc_start = hsmci_adtc_start_glue,
 	.adtc_stop = hsmci_send_cmd,			// adtc_stop aliased to send_cmd as in the ASF original
 	.read_word = hsmci_read_word,
 	.write_word = hsmci_write_word,
@@ -825,7 +830,7 @@ static bool sd_cm6_set_high_speed(void)
 			| SD_CMD6_GRP3_NO_INFLUENCE
 			| SD_CMD6_GRP2_DEFAULT
 			| SD_CMD6_GRP1_HIGH_SPEED,
-			SD_SW_STATUS_BSIZE, 1, true)) {
+			SD_SW_STATUS_BSIZE, 1, switch_status)) {
 		return false;
 	}
 	if (!sd_mmc_card->iface->start_read_blocks(switch_status, 1)) {
@@ -981,8 +986,7 @@ static bool mmc_cmd8(uint8_t *b_authorize_high_speed)
 	uint32_t ext_csd;
 	uint32_t sec_count;
 
-	if (!sd_mmc_card->iface->adtc_start(MMC_CMD8_SEND_EXT_CSD, 0,
-			EXT_CSD_BSIZE, 1, false)) {
+	if (!sd_mmc_card->iface->adtc_start(MMC_CMD8_SEND_EXT_CSD, 0, EXT_CSD_BSIZE, 1, false)) {
 		return false;
 	}
 	//** Read and decode Extended Extended CSD
@@ -1024,8 +1028,7 @@ static bool mmc_cmd8(uint8_t *b_authorize_high_speed)
  */
 static bool sd_mmc_cmd9_spi(void)
 {
-	if (!sd_mmc_card->iface->adtc_start(SDMMC_SPI_CMD9_SEND_CSD, (uint32_t)sd_mmc_card->rca << 16,
-			CSD_REG_BSIZE, 1, true)) {
+	if (!sd_mmc_card->iface->adtc_start(SDMMC_SPI_CMD9_SEND_CSD, (uint32_t)sd_mmc_card->rca << 16, CSD_REG_BSIZE, 1, sd_mmc_card->csd)) {
 		return false;
 	}
 	if (!sd_mmc_card->iface->start_read_blocks(sd_mmc_card->csd, 1)) {
@@ -1296,8 +1299,7 @@ static bool sd_acmd51(void)
 	if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD55_APP_CMD, (uint32_t)sd_mmc_card->rca << 16)) {
 		return false;
 	}
-	if (!sd_mmc_card->iface->adtc_start(SD_ACMD51_SEND_SCR, 0,
-			SD_SCR_REG_BSIZE, 1, true)) {
+	if (!sd_mmc_card->iface->adtc_start(SD_ACMD51_SEND_SCR, 0, SD_SCR_REG_BSIZE, 1, scr)) {
 		return false;
 	}
 	if (!sd_mmc_card->iface->start_read_blocks(scr, 1)) {
@@ -1902,7 +1904,7 @@ uint32_t sd_mmc_get_interface_speed(uint8_t slot)
 // Initialise for reading blocks
 // On entry the card is not selected
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
-sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_block)
+sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_block, void *dmaAddr)
 {
 	sd_mmc_err_t sd_mmc_err;
 	uint32_t cmd, arg, resp;
@@ -1933,7 +1935,7 @@ sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_b
 		arg = (start * SD_MMC_BLOCK_SIZE);
 	}
 
-	if (!sd_mmc_card->iface->adtc_start(cmd, arg, SD_MMC_BLOCK_SIZE, nb_block, true)) {
+	if (!sd_mmc_card->iface->adtc_start(cmd, arg, SD_MMC_BLOCK_SIZE, nb_block, dmaAddr)) {
 		sd_mmc_deselect_slot();
 		return SD_MMC_ERR_COMM;
 	}
@@ -2003,7 +2005,7 @@ sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort)
 // Initialise for writing blocks
 // On entry the card is not selected
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
-sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_block)
+sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_block, const void *dmaAddr)
 {
 	sd_mmc_err_t sd_mmc_err;
 	uint32_t cmd, arg, resp;
@@ -2031,7 +2033,7 @@ sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_
 	} else {
 		arg = (start * SD_MMC_BLOCK_SIZE);
 	}
-	if (!sd_mmc_card->iface->adtc_start(cmd, arg, SD_MMC_BLOCK_SIZE, nb_block, true)) {
+	if (!sd_mmc_card->iface->adtc_start(cmd, arg, SD_MMC_BLOCK_SIZE, nb_block, dmaAddr)) {
 		sd_mmc_deselect_slot();
 		return SD_MMC_ERR_COMM;
 	}
