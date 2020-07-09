@@ -95,9 +95,7 @@ struct DriverInterface
 	bool (*wait_end_of_read_blocks)(void);
 	bool (*start_write_blocks)(const void *src, uint16_t nb_block);
 	bool (*wait_end_of_write_blocks)(void);
-#if 1	//dc42
 	uint32_t (*getInterfaceSpeed)(void);
-#endif
 	driverIdleFunc_t (*set_idle_func)(driverIdleFunc_t);
 	bool is_spi;			// true if the interface is SPI, false if it is HSMCI
 };
@@ -120,7 +118,7 @@ driverIdleFunc_t hsmci_set_idle_func(driverIdleFunc_t func) noexcept
 
 bool hsmci_adtc_start_glue(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr)
 {
-	return hsmci_adtc_start(cmd, arg, block_size, nb_block, dmaAddr != NULL;
+	return hsmci_adtc_start(cmd, arg, block_size, nb_block, dmaAddr != NULL);
 }
 
 # endif
@@ -134,11 +132,11 @@ static const struct DriverInterface hsmciInterface = {
 	.send_cmd = hsmci_send_cmd,
 	.get_response = hsmci_get_response,
 	.get_response_128 = hsmci_get_response_128,
-#if SAME5x
+# ifdef __SAME54P20A__
 	.adtc_start = hsmci_adtc_start,
-#else
+# else
 	.adtc_start = hsmci_adtc_start_glue,
-#endif
+# endif
 	.adtc_stop = hsmci_send_cmd,			// adtc_stop aliased to send_cmd as in the ASF original
 	.read_word = hsmci_read_word,
 	.write_word = hsmci_write_word,
@@ -154,7 +152,7 @@ static const struct DriverInterface hsmciInterface = {
 #endif
 
 #if (SD_MMC_SPI_MEM_CNT != 0)
-#  include "sd_mmc_spi.h"
+# include "sd_mmc_spi.h"
 
 static const struct DriverInterface spiInterface = {
 	.select_device = sd_mmc_spi_select_device,
@@ -173,18 +171,16 @@ static const struct DriverInterface spiInterface = {
 	.wait_end_of_read_blocks = sd_mmc_spi_wait_end_of_read_blocks,
 	.start_write_blocks = sd_mmc_spi_start_write_blocks,
 	.wait_end_of_write_blocks = sd_mmc_spi_wait_end_of_write_blocks,
-#if 1	//dc42
 	.getInterfaceSpeed = spi_mmc_get_speed,
-#endif
 	.set_idle_func = sd_mmc_spi_set_idle_func,
 	.is_spi = true
 };
 #endif
 
 #ifdef SDIO_SUPPORT_ENABLE
-#  define IS_SDIO()  (sd_mmc_card->type & CARD_TYPE_SDIO)
+# define IS_SDIO()  (sd_mmc_card->type & CARD_TYPE_SDIO)
 #else
-#  define IS_SDIO()  false
+# define IS_SDIO()  false
 #endif
 
 //! This SD MMC stack supports only the high voltage
@@ -207,9 +203,6 @@ struct sd_mmc_card {
 	const struct DriverInterface *iface;	// Pointer to driver interface functions
 	uint32_t clock;				//!< Card access clock
 	uint32_t capacity;			//!< Card capacity in KBytes
-#if 0	// dc42
-	Pin cd_gpio;         		//!< Card detect pin number, or -1 if none present
-#endif
 	Pin wp_gpio;				//!< Card write protection pin number, or -1 if none present
 	uint16_t rca;				//!< Relative card address
 	enum card_state state;		//!< Card state
