@@ -62,7 +62,7 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 #include "task.h"
 
 #if SAME70
-# include "Hardware/DmacManager.h"
+# include <DmacManager.h>
 #endif
 
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true

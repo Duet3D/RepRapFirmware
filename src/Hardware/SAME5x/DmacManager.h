@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_HARDWARE_SAME5X_DMACMANAGER_SAME5X_H_
-#define SRC_HARDWARE_SAME5X_DMACMANAGER_SAME5X_H_
+#ifndef SRC_HARDWARE_SAME5X_DMACMANAGER_H_
+#define SRC_HARDWARE_SAME5X_DMACMANAGER_H_
 
 #include "RepRapFirmware.h"
 
@@ -128,4 +128,4 @@ namespace DmacManager
 	uint16_t GetBytesTransferred(uint8_t channel);
 }
 
-#endif /* SRC_HARDWARE_SAME5X_DMACMANAGER_SAME5X_H_ */
+#endif /* SRC_HARDWARE_SAME5X_DMACMANAGER_H_ */

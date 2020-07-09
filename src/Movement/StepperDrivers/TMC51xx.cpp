@@ -14,7 +14,7 @@
 #include <RTOSIface/RTOSIface.h>
 #include <TaskPriorities.h>
 #include <Movement/Move.h>
-#include <Hardware/DmacManager.h>
+#include <DmacManager.h>
 #include <Endstops/Endstop.h>
 #include <General/Portability.h>
 

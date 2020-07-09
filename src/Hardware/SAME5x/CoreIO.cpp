@@ -9,7 +9,7 @@
 
 #include <CoreIO.h>
 #include <Hardware/IoPorts.h>
-#include "DmacManager_SAME5x.h"
+#include "DmacManager.h"
 #include "Interrupts.h"
 #include "AnalogIn.h"
 #include "AnalogOut.h"

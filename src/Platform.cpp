@@ -35,14 +35,17 @@
 #include "Version.h"
 #include "Logger.h"
 #include "Tasks.h"
-#include "Hardware/DmacManager.h"
 #include "Hardware/Cache.h"
 #include "Hardware/SharedSpi/SharedSpiDevice.h"
 #include "Math/Isqrt.h"
 #include "Hardware/I2C.h"
 
-#if SAME5x
+#if SAME70
+# include <DmacManager.h>
+static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA channels in CoreNG");
+#elif SAME5x
 # include <AnalogIn.h>
+# include <DmacManager.h>
 using AnalogIn::AdcBits;
 #elif defined(__LPC17xx__)
 # include "LPC/BoardConfig.h"

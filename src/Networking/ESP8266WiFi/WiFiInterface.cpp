@@ -38,7 +38,7 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 
 #elif SAME5x
 
-# include <Hardware/DmacManager.h>
+# include <DmacManager.h>
 # include <Interrupts.h>
 # include <Serial.h>
 # include <Uart.h>

@@ -16,7 +16,7 @@
 # include <sam/drivers/pdc/pdc.h>
 # include <sam/drivers/usart/usart.h>
 #else
-# include <Hardware/DmacManager.h>
+# include <DmacManager.h>
 # if SAME70
 #  include <sam/drivers/xdmac/xdmac.h>
 # endif

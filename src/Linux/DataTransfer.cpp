@@ -44,8 +44,8 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 # include "xdmac/xdmac.h"
 #endif
 
-#if USE_DMAC_MANAGER
-# include <Hardware/DmacManager.h>
+#if USE_DMAC_MANAGER || SAME70
+# include <DmacManager.h>
 #endif
 
 #include "RepRapFirmware.h"
@@ -56,7 +56,6 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 #include "OutputMemory.h"
 #include "RepRap.h"
 #include "RTOSIface/RTOSIface.h"
-#include "Hardware/DmacManager.h"
 
 #include <General/IP4String.h>
 

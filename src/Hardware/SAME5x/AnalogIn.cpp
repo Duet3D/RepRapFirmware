@@ -9,7 +9,7 @@
 
 #include "AnalogIn.h"
 #include <RTOSIface/RTOSIface.h>
-#include <DmacManager_SAME5x.h>
+#include <DmacManager.h>
 #include <Hardware/IoPorts.h>
 #include <TaskPriorities.h>
 #include "Interrupts.h"

@@ -38,8 +38,8 @@
 
 #if SAME5x
 # include <Hardware/IoPorts.h>
-# include <Hardware/DmacManager.h>
-# include <Hardware/SAME5x/Serial.h>
+# include <DmacManager.h>
+# include <Serial.h>
 # include <component/sercom.h>
 #else
 # include <sam/drivers/pdc/pdc.h>

@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "DmacManager_SAME5x.h"
+#include "DmacManager.h"
 #include <RTOSIface/RTOSIface.h>
 #include <hri_dmac_e54.h>
 

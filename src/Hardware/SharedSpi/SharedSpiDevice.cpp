@@ -10,9 +10,9 @@
 #include <Hardware/IoPorts.h>
 
 #if SAME5x
-# include <Hardware/DmacManager.h>
-# include "Serial.h"
-# include "peripheral_clk_config.h"
+# include <DmacManager.h>
+# include <Serial.h>
+# include <peripheral_clk_config.h>
 #elif USART_SPI
 # include <usart/usart.h>
 #else
