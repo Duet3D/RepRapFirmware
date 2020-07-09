@@ -31,15 +31,21 @@
  *
  */
 
-#include <utils_assert.h>
-#include "hpl_mci_sync.h"
-#include <hpl_sdhc_config.h>
+#include <Sdhc.h>
+#include <CoreIO.h>
 
-#define HSMCI_SLOT_0_SIZE 4
+// Define which SDHC controller we are using
+Sdhc* const hw = SDHC1;
+constexpr uint32_t CONF_BASE_FREQUENCY = 120000000;
 
-#define USE_DMA		1	//dc42
+#define HSMCI_SLOT_0_SIZE 		4
+#define CONF_SDHC_CLK_GEN_SEL	0
 
-#if USE_DMA
+//extern void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
+
+static uint64_t mci_sync_trans_pos;
+static uint16_t mci_sync_block_size;
+static uint16_t mci_sync_nb_block;
 
 typedef struct
 {
@@ -60,21 +66,18 @@ typedef struct
 
 __attribute__((aligned(32))) static SDHC_ADMA_DESCR sdhc1DmaDescrTable[1];
 
-#endif
-
-static void _mci_reset(const void *const hw);
-static void _mci_set_speed(const void *const hw, uint32_t speed, uint8_t prog_clock_mode);
-static bool _mci_wait_busy(const void *const hw);
-static bool _mci_send_cmd_execute(const void *const hw, uint32_t cmdr, uint32_t cmd, uint32_t arg);
+static void hsmci_reset();
+static void hsmci_set_speed(uint32_t speed, uint8_t prog_clock_mode);
+static bool hsmci_wait_busy();
+static bool hsmci_send_cmd_execute(uint32_t cmdr, uint32_t cmd, uint32_t arg);
 
 /**
  * \brief Reset the SDHC interface
  *
  * \param hw The pointer to MCI hardware instance
  */
-static void _mci_reset(const void *const hw)
+static void hsmci_reset()
 {
-	ASSERT(hw);
 	hri_sdhc_set_SRR_SWRSTCMD_bit(hw);
 }
 
@@ -85,7 +88,7 @@ static void _mci_reset(const void *const hw)
  * \param speed    SDHC clock speed in Hz.
  * \param prog_clock_mode     Use programmable clock mode
  */
-static void _mci_set_speed(const void *const hw, uint32_t speed, uint8_t prog_clock_mode)
+static void hsmci_set_speed(uint32_t speed, uint8_t prog_clock_mode)
 {
 #if 0	//dc42
 	// The following is based on the code from Harmony
@@ -220,52 +223,60 @@ static void _mci_set_speed(const void *const hw, uint32_t speed, uint8_t prog_cl
 #endif
 }
 
-#if USE_DMA
-
 // Setup the DMA transfer.
 // Each ADMA2 descriptor can transfer 65536 bytes (or 128 blocks) of data.
 // For simplicity we use only one descriptor, so numBytes must not exceed 65536.
-static void _mci_dma_setup (Sdhc* hw, const void* buffer, uint32_t numBytes)
+static void hsmci_dma_setup (const void* buffer, uint32_t numBytes)
 {
 	hri_sdhc_set_HC1R_DMASEL_bf(hw, SDHC_HC1R_DMASEL_32BIT_Val);
 
 	// Set up the descriptor
 	sdhc1DmaDescrTable[0].address = (uint32_t)(buffer);
 	sdhc1DmaDescrTable[0].length = numBytes;
-	sdhc1DmaDescrTable[0].attribute = (SDHC_DESC_TABLE_ATTR_XFER_DATA | SDHC_DESC_TABLE_ATTR_VALID /* | SDHC_DESC_TABLE_ATTR_INTR */ | SDHC_DESC_TABLE_ATTR_END);
+	sdhc1DmaDescrTable[0].attribute = (SDHC_DESC_TABLE_ATTR_XFER_DATA | SDHC_DESC_TABLE_ATTR_VALID | SDHC_DESC_TABLE_ATTR_INTR | SDHC_DESC_TABLE_ATTR_END);
 
 	// Set the starting address of the descriptor table
 	hw->ASAR[0].reg = (uint32_t)(&sdhc1DmaDescrTable[0]);
 }
 
 // Wait for a transfer to complete, returning true if OK, false if it failed
-static bool WaitForDmaComplete(Sdhc* hw)
+static bool WaitForDmaComplete()
 {
 	// TODO use the interrupt
 	// Note, a read transaction sets the TRFC bit, but a write transaction using DMA doesn't appear to. So use the DMA interrupt bit too.
-	uint16_t nistr;
-	do
+	while (true)
 	{
-		nistr = hw->NISTR.reg & (SDHC_NISTR_TRFC | SDHC_NISTR_DMAINT | SDHC_NISTR_ERRINT);
-	} while (nistr == 0);
+		uint16_t nistr;
+		do
+		{
+			nistr = hw->NISTR.reg;
+		} while ((nistr & (SDHC_NISTR_TRFC | SDHC_NISTR_ERRINT)) == 0);
 
-	uint16_t eistr = hw->EISTR.reg & (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND | SDHC_EISTR_ADMA_YES);
-	hw->NISTR.reg = nistr;					// clear the interrupt(s)
-	hw->EISTR.reg = eistr;					// clear the error status
+		uint16_t eistr = hw->EISTR.reg;
+		hw->NISTR.reg = nistr;					// clear the interrupt(s)
+		hw->EISTR.reg = eistr;					// clear the error status
 
-	if (nistr & SDHC_NISTR_TRFC)
-	{
-		eistr &= ~SDHC_EISTR_DATTEO;		// transfer complete preempts timeout
+		if ((nistr & SDHC_NISTR_ERRINT) == 0)
+		{
+			return true;						// transfer complete or DMA complete
+		}
+
+		eistr &= (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND | SDHC_EISTR_ADMA);		// get the errors we care about
+		if ((nistr & SDHC_NISTR_TRFC) != 0 && (eistr & ~SDHC_EISTR_DATTEO) == 0)
+		{
+			return true;						// we had transfer complete and timeout - the controller specification says treat this as a successful transfer
+		}
+
+		if (eistr != 0)							// if there were errors that we care about, quit
+		{
+			return false;
+		}
+
+		// Else we had an error interrupt but we don't care about that error, so wait again
 	}
-
-	return (nistr & SDHC_NISTR_ERRINT) == 0 || eistr == 0;
 }
 
-#endif
-
-#if 1	//dc42
-
-uint32_t _mci_get_clock_speed(Sdhc *hw)
+static uint32_t hsmci_get_clock_speed()
 {
 	uint32_t clkbase = CONF_BASE_FREQUENCY;
 	uint32_t clkmul = hri_sdhc_read_CA1R_CLKMULT_bf(hw);
@@ -287,15 +298,13 @@ uint32_t _mci_get_clock_speed(Sdhc *hw)
 	return clkbase/div;
 }
 
-#endif
-
 /**
  * \brief Wait the end of busy signal on data line
  *
  * \param hw       The pointer to MCI hardware instance
  * \return true if success, otherwise false
  */
-static bool _mci_wait_busy(const void *const hw)
+static bool hsmci_wait_busy()
 {
 	uint32_t busy_wait = 0xFFFFFFFF;
 	uint32_t psr;
@@ -306,7 +315,7 @@ static bool _mci_wait_busy(const void *const hw)
 		psr = hri_sdhc_read_PSR_reg(hw);
 
 		if (busy_wait-- == 0) {
-			_mci_reset(hw);
+			hsmci_reset();
 			return false;
 		}
 	} while (!(psr & SDHC_PSR_DATLL(1)));
@@ -323,10 +332,14 @@ static bool _mci_wait_busy(const void *const hw)
  *
  * \return true if success, otherwise false
  */
-static bool _mci_send_cmd_execute(const void *const hw, uint32_t cmdr, uint32_t cmd, uint32_t arg)
+static bool hsmci_send_cmd_execute(uint32_t cmdr, uint32_t cmd, uint32_t arg)
 {
 	uint32_t sr;
 	ASSERT(hw);
+
+	// dc42 clear all bits in NISTR and EISTR before we start
+	((Sdhc*)hw)->NISTR.reg = SDHC_NISTR_MASK & 0x7FFF;
+	((Sdhc*)hw)->EISTR.reg = SDHC_EISTR_MASK;
 
 	cmdr |= SDHC_CR_CMDIDX(cmd) | SDHC_CR_CMDTYP_NORMAL;
 
@@ -358,7 +371,7 @@ static bool _mci_send_cmd_execute(const void *const hw, uint32_t cmdr, uint32_t 
 			if (sr
 			    & (SDHC_EISTR_CMDTEO | SDHC_EISTR_CMDEND | SDHC_EISTR_CMDIDX | SDHC_EISTR_DATTEO | SDHC_EISTR_DATEND
 			       | SDHC_EISTR_ADMA)) {
-				_mci_reset(hw);
+				hsmci_reset();
 				hri_sdhc_set_EISTR_reg(hw, SDHC_EISTR_MASK);
 				return false;
 			}
@@ -366,17 +379,19 @@ static bool _mci_send_cmd_execute(const void *const hw, uint32_t cmdr, uint32_t 
 			if (sr
 			    & (SDHC_EISTR_CMDTEO | SDHC_EISTR_CMDEND | SDHC_EISTR_CMDIDX | SDHC_EISTR_CMDCRC | SDHC_EISTR_DATCRC
 			       | SDHC_EISTR_DATTEO | SDHC_EISTR_DATEND | SDHC_EISTR_ADMA)) {
-				_mci_reset(hw);
+				hsmci_reset();
 				hri_sdhc_set_EISTR_reg(hw, SDHC_EISTR_MASK);
 				return false;
 			}
 		}
 	} while (!hri_sdhc_get_NISTR_CMDC_bit(hw));
-	if (!(cmdr & SDHC_CR_DPSEL_DATA)) {
-		hri_sdhc_set_NISTR_CMDC_bit(hw);
+	if (!(cmdr & SDHC_CR_DPSEL_DATA))
+	{
+		// dc42 only clear the CMDC bit! In particular, don't clear TRFC.
+		((Sdhc*)hw)->NISTR.reg = SDHC_NISTR_CMDC;
 	}
 	if (cmd & MCI_RESP_BUSY) {
-		if (!_mci_wait_busy(hw)) {
+		if (!hsmci_wait_busy()) {
 			return false;
 		}
 	}
@@ -387,12 +402,8 @@ static bool _mci_send_cmd_execute(const void *const hw, uint32_t cmdr, uint32_t 
 /**
  *  \brief Initialize MCI low level driver.
  */
-int32_t _mci_sync_init(struct _mci_sync_device *const mci_dev, void *const hw)
+int32_t hsmci_init()
 {
-	ASSERT(mci_dev && hw);
-
-	mci_dev->hw = hw;
-
 	hri_sdhc_set_SRR_SWRSTALL_bit(hw);
 	while (hri_sdhc_get_SRR_SWRSTALL_bit(hw)) { }
 
@@ -405,35 +416,18 @@ int32_t _mci_sync_init(struct _mci_sync_device *const mci_dev, void *const hw)
 	hri_sdhc_set_NISTER_reg(hw, SDHC_NISTER_MASK);
 	hri_sdhc_set_EISTER_reg(hw, SDHC_EISTER_MASK);
 
-#if 1	//dc42
-	// The clock divider defaults to 0. Set it to 1 so that M122 doesn't report a too-high interface speed when no card is present.
+	// dc42 The clock divider defaults to 0. Set it to 1 so that M122 doesn't report a too-high interface speed when no card is present.
 	hri_sdhc_write_CCR_SDCLKFSEL_bf(hw, 1);
-#endif
 
-	return ERR_NONE;
-}
-
-/**
- *  \brief Deinitialize MCI low level driver.
- */
-int32_t _mci_sync_deinit(struct _mci_sync_device *const mci_dev)
-{
-	ASSERT(mci_dev);
-
-	mci_dev->hw = NULL;
 	return ERR_NONE;
 }
 
 /**
  *  \brief Select a device and initialize it
  */
-int32_t _mci_sync_select_device(struct _mci_sync_device *const mci_dev, uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed)
+void hsmci_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed)
 {
 	(void)(slot);
-	void *hw;
-
-	ASSERT(mci_dev && mci_dev->hw);
-	hw = mci_dev->hw;
 
 	if (high_speed) {
 		hri_sdhc_set_HC1R_HSEN_bit(hw);
@@ -441,49 +435,38 @@ int32_t _mci_sync_select_device(struct _mci_sync_device *const mci_dev, uint8_t 
 		hri_sdhc_clear_HC1R_HSEN_bit(hw);
 	}
 
-	if (hri_sdhc_get_HC2R_PVALEN_bit(hw) == 0) {
-#if 0	//dc
-		_mci_set_speed(hw, clock, CONF_SDHC0_CLK_GEN_SEL);
-#endif
-		_mci_set_speed(hw, clock, CONF_SDHC1_CLK_GEN_SEL);
+	if (hri_sdhc_get_HC2R_PVALEN_bit(hw) == 0)
+	{
+		hsmci_set_speed(clock, CONF_SDHC_CLK_GEN_SEL);
 	}
 
 	switch (bus_width) {
 	case 1:
+	default:
 		hri_sdhc_clear_HC1R_DW_bit(hw);
 		break;
 
 	case 4:
 		hri_sdhc_set_HC1R_DW_bit(hw);
 		break;
-
-	default:
-		return ERR_INVALID_ARG;
 	}
-
-	return ERR_NONE;
 }
 
 /**
  *  \brief Deselect a device by an assigned slot
  */
-int32_t _mci_sync_deselect_device(struct _mci_sync_device *const mci_dev, uint8_t slot)
+void hsmci_deselect_device(uint8_t slot)
 {
 	/* Nothing to do */
-	(void)(mci_dev);
 	(void)(slot);
-
-	return ERR_NONE;
 }
 
 /**
  *  \brief Get the maximum bus width of a device
  *         by a selected slot
  */
-uint8_t _mci_sync_get_bus_width(struct _mci_sync_device *const mci_dev, uint8_t slot)
+uint8_t hsmci_get_bus_width(uint8_t slot)
 {
-	(void)(mci_dev);
-
 	switch (slot) {
 	case 0:
 		return HSMCI_SLOT_0_SIZE;
@@ -497,19 +480,23 @@ uint8_t _mci_sync_get_bus_width(struct _mci_sync_device *const mci_dev, uint8_t 
 /**
  *  \brief Get the high speed capability of the device.
  */
-bool _mci_sync_is_high_speed_capable(struct _mci_sync_device *const mci_dev)
+bool hsmci_is_high_speed_capable()
 {
-	return hri_sdhc_get_CA0R_HSSUP_bit(mci_dev->hw);
+	return hri_sdhc_get_CA0R_HSSUP_bit(hw);
+}
+
+// Get the transfer rate in bytes/sec
+uint32_t hsmci_get_speed()
+{
+	return hsmci_get_clock_speed()/(8/HSMCI_SLOT_0_SIZE);
 }
 
 /**
  *  \brief Send 74 clock cycles on the line.
  *   Note: It is required after card plug and before card install.
  */
-void _mci_sync_send_clock(struct _mci_sync_device *const mci_dev)
+void hsmci_send_clock()
 {
-	ASSERT(mci_dev);
-
 	volatile uint32_t i;
 	for (i = 0; i < 5000; i++)
 		;
@@ -518,46 +505,30 @@ void _mci_sync_send_clock(struct _mci_sync_device *const mci_dev)
 /**
  *  \brief Send a command on the selected slot
  */
-bool _mci_sync_send_cmd(struct _mci_sync_device *const mci_dev, uint32_t cmd, uint32_t arg)
+bool hsmci_send_cmd(uint32_t cmd, uint32_t arg)
 {
-	void *hw;
-	ASSERT(mci_dev && mci_dev->hw);
-	hw = mci_dev->hw;
-
 	/* Check Command Inhibit (CMD) in the Present State register */
 	if (hri_sdhc_get_PSR_CMDINHC_bit(hw)) {
 		return false;
 	}
 
-#if !USE_DMA
-	hri_sdhc_clear_TMR_DMAEN_bit(hw);
-	hri_sdhc_write_BCR_reg(hw, 0);
-#endif
-
-	return _mci_send_cmd_execute(hw, 0, cmd, arg);
+	return hsmci_send_cmd_execute(0, cmd, arg);
 }
 
 /**
  *  \brief Get 32 bits response of the last command.
  */
-uint32_t _mci_sync_get_response(struct _mci_sync_device *const mci_dev)
+uint32_t hsmci_get_response()
 {
-	void *hw;
-	ASSERT(mci_dev && mci_dev->hw);
-	hw = mci_dev->hw;
-
 	return hri_sdhc_read_RR_reg(hw, 0);
 }
 
 /**
  *  \brief Get 128 bits response of the last command.
  */
-void _mci_sync_get_response_128(struct _mci_sync_device *const mci_dev, uint8_t *response)
+void hsmci_get_response_128(uint8_t *response)
 {
 	uint32_t response_32;
-	void *   hw;
-	ASSERT(mci_dev && mci_dev->hw);
-	hw = mci_dev->hw;
 
 	for (int8_t i = 3; i >= 0; i--) {
 		response_32 = hri_sdhc_read_RR_reg(hw, i);
@@ -579,16 +550,8 @@ void _mci_sync_get_response_128(struct _mci_sync_device *const mci_dev, uint8_t 
  *         An ADTC (Addressed Data Transfer Commands)
  *         command is used for read/write access.
  */
-bool _mci_sync_adtc_start(struct _mci_sync_device *const mci_dev, uint32_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr)
+bool hsmci_adtc_start(uint32_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr)
 {
-	ASSERT(mci_dev && mci_dev->hw);
-	void * hw = mci_dev->hw;
-
-#if !USE_DMA
-	/* No use without dma support */
-	(void)dmaAddr;
-#endif
-
 	/* Check Command Inhibit (CMD/DAT) in the Present State register */
 	if (hri_sdhc_get_PSR_CMDINHC_bit(hw) || hri_sdhc_get_PSR_CMDINHD_bit(hw)) {
 		return false;
@@ -601,11 +564,7 @@ bool _mci_sync_adtc_start(struct _mci_sync_device *const mci_dev, uint32_t cmd, 
 		tmr = SDHC_TMR_DTDSEL_READ;
 	}
 
-	if (cmd & MCI_CMD_SDIO_BYTE) {
-		tmr |= SDHC_TMR_MSBSEL_SINGLE;
-	} else if (cmd & MCI_CMD_SDIO_BLOCK) {
-		tmr |= SDHC_TMR_BCEN | SDHC_TMR_MSBSEL_MULTIPLE;
-	} else if (cmd & MCI_CMD_SINGLE_BLOCK) {
+	if (cmd & MCI_CMD_SINGLE_BLOCK) {
 		tmr |= SDHC_TMR_MSBSEL_SINGLE;
 	} else if (cmd & MCI_CMD_MULTI_BLOCK) {
 		tmr |= SDHC_TMR_BCEN | SDHC_TMR_MSBSEL_MULTIPLE;
@@ -613,31 +572,29 @@ bool _mci_sync_adtc_start(struct _mci_sync_device *const mci_dev, uint32_t cmd, 
 		return false;
 	}
 
-#if USE_DMA
+	hri_sdhc_write_BCR_reg(hw, SDHC_BCR_BCNT(nb_block));
+	hri_sdhc_write_BSR_reg(hw, SDHC_BSR_BLOCKSIZE(block_size) | SDHC_BSR_BOUNDARY_4K);
+
 	if (dmaAddr != NULL)
 	{
-		_mci_dma_setup((Sdhc*)mci_dev->hw, dmaAddr, nb_block * (uint32_t)block_size);
+		hsmci_dma_setup(dmaAddr, nb_block * (uint32_t)block_size);
 		tmr |= SDHC_TMR_DMAEN_ENABLE;
 	}
-#endif
 
 	hri_sdhc_write_TMR_reg(hw, tmr);
-	hri_sdhc_write_BSR_reg(hw, SDHC_BSR_BLOCKSIZE(block_size) | SDHC_BSR_BOUNDARY_512K);
-	hri_sdhc_write_BCR_reg(hw, SDHC_BCR_BCNT(nb_block));
 
-	mci_dev->mci_sync_trans_pos  = 0;
-	mci_dev->mci_sync_block_size = block_size;
-	mci_dev->mci_sync_nb_block   = nb_block;
+	mci_sync_trans_pos  = 0;
+	mci_sync_block_size = block_size;
+	mci_sync_nb_block   = nb_block;
 
-	return _mci_send_cmd_execute(hw, SDHC_CR_DPSEL_DATA, cmd, arg);
+	return hsmci_send_cmd_execute(SDHC_CR_DPSEL_DATA, cmd, arg);
 }
 
 /**
  *  \brief Send a command to stop an ADTC command on the selected slot.
  */
-bool _mci_sync_adtc_stop(struct _mci_sync_device *const mci_dev, uint32_t cmd, uint32_t arg)
+bool hsmci_adtc_stop(uint32_t cmd, uint32_t arg)
 {
-	ASSERT(mci_dev && mci_dev->hw);
 	/* Nothing to do */
 	(void)(cmd);
 	(void)(arg);
@@ -648,26 +605,25 @@ bool _mci_sync_adtc_stop(struct _mci_sync_device *const mci_dev, uint32_t cmd, u
 /**
  *  \brief Read a word on the line.
  */
-bool _mci_sync_read_word(struct _mci_sync_device *const mci_dev, uint32_t *value)
+bool hsmci_read_word(uint32_t *value)
 {
 	uint32_t sr;
 	uint8_t  nbytes;
-	void *   hw;
-
-	ASSERT(mci_dev && mci_dev->hw);
-	hw = mci_dev->hw;
 
 	/* Wait data available */
-	nbytes = (mci_dev->mci_sync_block_size * mci_dev->mci_sync_nb_block - mci_dev->mci_sync_trans_pos < 4)
-	             ? (mci_dev->mci_sync_block_size % 4)
+	nbytes = (mci_sync_block_size * mci_sync_nb_block - mci_sync_trans_pos < 4)
+	             ? (mci_sync_block_size % 4)
 	             : 4;
 
-	if (mci_dev->mci_sync_trans_pos % mci_dev->mci_sync_block_size == 0) {
-		do {
+	if (mci_sync_trans_pos % mci_sync_block_size == 0)
+	{
+		do
+		{
 			sr = hri_sdhc_read_EISTR_reg(hw);
 
-			if (sr & (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND)) {
-				_mci_reset(hw);
+			if (sr & (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
+			{
+				hsmci_reset();
 				return false;
 			}
 		} while (!hri_sdhc_get_NISTR_BRDRDY_bit(hw));
@@ -675,38 +631,40 @@ bool _mci_sync_read_word(struct _mci_sync_device *const mci_dev, uint32_t *value
 	}
 
 	/* Read data */
-	if (nbytes == 4) {
+	if (nbytes == 4)
+	{
 		*value = hri_sdhc_read_BDPR_reg(hw);
-	} else {
+	}
+	else
+	{
 		sr = hri_sdhc_read_BDPR_reg(hw);
 		switch (nbytes) {
 		case 3:
 			value[0] = sr & 0xFFFFFF;
-#if 1	//dc42
 			break;
-#endif
 		case 2:
 			value[0] = sr & 0xFFFF;
-#if 1	//dc42
 			break;
-#endif
 		case 1:
 			value[0] = sr & 0xFF;
 			break;
 		}
 	}
-	mci_dev->mci_sync_trans_pos += nbytes;
+	mci_sync_trans_pos += nbytes;
 
-	if (((uint64_t)mci_dev->mci_sync_block_size * mci_dev->mci_sync_nb_block) > mci_dev->mci_sync_trans_pos) {
+	if (((uint64_t)mci_sync_block_size * mci_sync_nb_block) > mci_sync_trans_pos)
+	{
 		return true;
 	}
 
 	/* Wait end of transfer */
-	do {
+	do
+	{
 		sr = hri_sdhc_read_EISTR_reg(hw);
 
-		if (sr & (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND)) {
-			_mci_reset(hw);
+		if (sr & (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
+		{
+			hsmci_reset();
 			return false;
 		}
 	} while (!hri_sdhc_get_NISTR_TRFC_bit(hw));
@@ -717,23 +675,19 @@ bool _mci_sync_read_word(struct _mci_sync_device *const mci_dev, uint32_t *value
 /**
  *  \brief Write a word on the line
  */
-bool _mci_sync_write_word(struct _mci_sync_device *const mci_dev, uint32_t value)
+bool hsmci_write_word(uint32_t value)
 {
 	uint32_t sr;
 	uint8_t  nbytes;
-	void *   hw;
-
-	ASSERT(mci_dev && mci_dev->hw);
-	hw = mci_dev->hw;
 
 	/* Wait data available */
 	nbytes = 4; //( mci_dev->mci_sync_block_size & 0x3 ) ? 1 : 4;
-	if (mci_dev->mci_sync_trans_pos % mci_dev->mci_sync_block_size == 0) {
+	if (mci_sync_trans_pos % mci_sync_block_size == 0) {
 		do {
 			sr = hri_sdhc_read_EISTR_reg(hw);
 
 			if (sr & (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND)) {
-				_mci_reset(hw);
+				hsmci_reset();
 				return false;
 			}
 		} while (!hri_sdhc_get_NISTR_BWRRDY_bit(hw));
@@ -741,18 +695,20 @@ bool _mci_sync_write_word(struct _mci_sync_device *const mci_dev, uint32_t value
 	}
 	/* Write data */
 	hri_sdhc_write_BDPR_reg(hw, value);
-	mci_dev->mci_sync_trans_pos += nbytes;
+	mci_sync_trans_pos += nbytes;
 
-	if (((uint64_t)mci_dev->mci_sync_block_size * mci_dev->mci_sync_nb_block) > mci_dev->mci_sync_trans_pos) {
+	if (((uint64_t)mci_sync_block_size * mci_sync_nb_block) > mci_sync_trans_pos) {
 		return true;
 	}
 
 	/* Wait end of transfer */
-	do {
+	do
+	{
 		sr = hri_sdhc_read_EISTR_reg(hw);
 
-		if (sr & (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND)) {
-			_mci_reset(hw);
+		if (sr & (SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
+		{
+			hsmci_reset();
 			return false;
 		}
 	} while (!hri_sdhc_get_NISTR_TRFC_bit(hw));
@@ -764,76 +720,17 @@ bool _mci_sync_write_word(struct _mci_sync_device *const mci_dev, uint32_t value
  *  \brief Start a read blocks transfer on the line
  *  Note: The driver will use the DMA available to speed up the transfer.
  */
-bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *dst, uint16_t nb_block)
+bool hsmci_start_read_blocks(void *dst, uint16_t nb_block)
 {
-#if 1	//dc42 with thanks to alkgrove
 	if (nb_block != 0)
 	{
-# if USE_DMA
-		const bool ok = WaitForDmaComplete((Sdhc*)mci_dev->hw);
+		const bool ok = WaitForDmaComplete();
 		if (!ok)
 		{
-			_mci_reset(mci_dev->hw);
+			hsmci_reset();
 			return false;
 		}
-#else
-		do
-		{
-			if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
-			{
-				_mci_reset(mci_dev->hw);
-				return false;
-			}
-		} while (!hri_sdhc_get_NISTR_BRDRDY_bit(mci_dev->hw));		// until buffer read ready
-		hri_sdhc_set_NISTR_BRDRDY_bit(mci_dev->hw);					// clear the buffer read ready bit
-
-		// dc42 optimised the following loop by examining the generated assembler
-		const unsigned int NumQuadWords = (nb_block * mci_dev->mci_sync_block_size) >> 3;
-		uint32_t *p = (uint32_t*)dst;
-		do
-		{
-			while (!hri_sdhc_get_PSR_BUFRDEN_bit(mci_dev->hw)) { }
-			*p = hri_sdhc_read_BDPR_reg(mci_dev->hw);
-			asm volatile("" ::: "memory");
-			++p;
-			while (!hri_sdhc_get_PSR_BUFRDEN_bit(mci_dev->hw)) { }
-			*p = hri_sdhc_read_BDPR_reg(mci_dev->hw);
-			asm volatile("" ::: "memory");
-			++p;
-		} while (p < (uint32_t*)dst + (2 * NumQuadWords));
-
-		// Wait until end of transfer
-		do
-		{
-			if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
-			{
-				_mci_reset(mci_dev->hw);
-				return false;
-			}
-		} while (!hri_sdhc_get_NISTR_TRFC_bit(mci_dev->hw));		// wait until transfer complete
-		hri_sdhc_set_NISTR_TRFC_bit(mci_dev->hw);
-# endif
 	}
-#else
-	uint32_t nb_data;
-	uint8_t *ptr    = (uint8_t *)dst;
-	uint8_t  nbytes = 4;
-
-	ASSERT(mci_dev && mci_dev->hw);
-	ASSERT(nb_block);
-	ASSERT(dst);
-
-	nb_data = nb_block * mci_dev->mci_sync_block_size;
-
-	while (nb_data) {
-		_mci_sync_read_word(mci_dev, (uint32_t *)ptr);
-		if (nb_data < nbytes) {
-			nbytes = mci_dev->mci_sync_block_size % nbytes;
-		}
-		nb_data -= nbytes;
-		ptr += nbytes;
-	}
-#endif
 
 	return true;
 }
@@ -842,68 +739,17 @@ bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *d
  *  \brief Start a write blocks transfer on the line
  *  Note: The driver will use the DMA available to speed up the transfer.
  */
-bool _mci_sync_start_write_blocks(struct _mci_sync_device *const mci_dev, const void *src, uint16_t nb_block)
+bool hsmci_start_write_blocks(const void *src, uint16_t nb_block)
 {
-#if 1	//dc42 with thanks to alkgrove
 	if (nb_block != 0)
 	{
-# if USE_DMA
-		const bool ok = WaitForDmaComplete((Sdhc*)mci_dev->hw);
+		const bool ok = WaitForDmaComplete();
 		if (!ok)
 		{
-			_mci_reset(mci_dev->hw);
+			hsmci_reset();
 			return false;
 		}
-# else
-		do
-		{
-			if (hri_sdhc_get_EISTR_reg(mci_dev->hw, SDHC_EISTR_DATTEO | SDHC_EISTR_DATCRC | SDHC_EISTR_DATEND))
-			{
-				_mci_reset(mci_dev->hw);
-				return false;
-			}
-		} while (!hri_sdhc_get_NISTR_BWRRDY_bit(mci_dev->hw));
-		hri_sdhc_set_NISTR_BWRRDY_bit(mci_dev->hw);
-
-		// Write data
-		// dc42 optimised the following loop by examining the assembler
-		const unsigned int numQuadWords = (nb_block * mci_dev->mci_sync_block_size) >> 3;
-		const uint32_t *p = (const uint32_t*)src;
-		do
-		{
-			uint32_t currentWord = *p++;
-			asm volatile("" ::: "memory");
-			while (!hri_sdhc_get_PSR_BUFWREN_bit(mci_dev->hw)) { }
-			hri_sdhc_write_BDPR_reg(mci_dev->hw, currentWord);
-			asm volatile("" ::: "memory");
-			currentWord = *p++;
-			asm volatile("" ::: "memory");
-			while (!hri_sdhc_get_PSR_BUFWREN_bit(mci_dev->hw)) { }
-			hri_sdhc_write_BDPR_reg(mci_dev->hw, currentWord);
-			asm volatile("" ::: "memory");
-		} while (p < (const uint32_t*)src + (2 * numQuadWords));
-#endif
 	}
-#else
-	uint32_t nb_data;
-	uint8_t *ptr    = (uint8_t *)src;
-	uint8_t  nbytes = 4;
-
-	ASSERT(mci_dev && mci_dev->hw);
-	ASSERT(nb_block);
-	ASSERT(src);
-
-	nb_data = nb_block * mci_dev->mci_sync_block_size;
-
-	while (nb_data) {
-		_mci_sync_write_word(mci_dev, *(uint32_t *)ptr);
-		if (nb_data < nbytes) {
-			nbytes = mci_dev->mci_sync_block_size % nbytes;
-		}
-		nb_data -= nbytes;
-		ptr += nbytes;
-	}
-#endif
 
 	return true;
 }
@@ -911,10 +757,8 @@ bool _mci_sync_start_write_blocks(struct _mci_sync_device *const mci_dev, const 
 /**
  *  \brief Wait the end of transfer initiated by mci_start_read_blocks()
  */
-bool _mci_sync_wait_end_of_read_blocks(struct _mci_sync_device *const mci_dev)
+bool hsmci_wait_end_of_read_blocks()
 {
-	ASSERT(mci_dev && mci_dev->hw);
-
 	/* Always return true for sync read blocks */
 	return true;
 }
@@ -922,10 +766,8 @@ bool _mci_sync_wait_end_of_read_blocks(struct _mci_sync_device *const mci_dev)
 /**
  *  \brief Wait the end of transfer initiated by mci_start_write_blocks()
  */
-bool _mci_sync_wait_end_of_write_blocks(struct _mci_sync_device *const mci_dev)
+bool hsmci_wait_end_of_write_blocks()
 {
-	ASSERT(mci_dev && mci_dev->hw);
-
 	/* Always return true for sync write blocks */
 	return true;
 }

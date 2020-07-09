@@ -68,32 +68,13 @@ extern "C" {
 //! @}
 
 /**
- * \brief mci sync device structure
- */
-struct _mci_sync_device {
-	void *   hw;
-	uint64_t mci_sync_trans_pos;
-	uint16_t mci_sync_block_size;
-	uint16_t mci_sync_nb_block;
-};
-
-/**
  *  \brief Initialize MCI low level driver.
  *
  *  \return Operation status.
  *  \retval 0 Success.
  *  \retval <0 Error code.
  */
-int32_t _mci_sync_init(struct _mci_sync_device *const mci_dev, void *const hw);
-
-/**
- *  \brief Deinitialize MCI low level driver.
- *
- *  \return Operation status.
- *  \retval 0 Success.
- *  \retval <0 Error code.
- */
-int32_t _mci_sync_deinit(struct _mci_sync_device *const mci_dev);
+int32_t hsmci_init();
 
 /**
  *  \brief Select a device and initialize it
@@ -102,22 +83,15 @@ int32_t _mci_sync_deinit(struct _mci_sync_device *const mci_dev);
  *  \param[in] clock   Maximum clock to use (Hz)
  *  \param[in] bus_width  Bus width to use (1, 4 or 8)
  *  \param[in] high_speed true, to enable high speed mode
- *  \return Operation status.
- *  \retval 0 Success.
- *  \retval <0 Error code.
  */
-int32_t _mci_sync_select_device(struct _mci_sync_device *const mci_dev, uint8_t slot, uint32_t clock, uint8_t bus_width,
-                                bool high_speed);
+void hsmci_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed);
 
 /**
  *  \brief Deselect a device by an assigned slot
  *
  *  \param[in] slot    Selected slot
- *  \return Operation status.
- *  \retval 0 Success.
- *  \retval <0 Error code.
  */
-int32_t _mci_sync_deselect_device(struct _mci_sync_device *const mci_dev, uint8_t slot);
+void hsmci_deselect_device(uint8_t slot);
 
 /**
  *  \brief Get the maximum bus width of a device
@@ -126,20 +100,20 @@ int32_t _mci_sync_deselect_device(struct _mci_sync_device *const mci_dev, uint8_
  *  \param[in] slot    Selected slot
  *  \return bus width.
  */
-uint8_t _mci_sync_get_bus_width(struct _mci_sync_device *const mci_dev, uint8_t slot);
+uint8_t hsmci_get_bus_width(uint8_t slot);
 
 /**
  *  \brief Get the high speed capability of the device.
  *
  *  \return true, if the high speed is supported.
  */
-bool _mci_sync_is_high_speed_capable(struct _mci_sync_device *const mci_dev);
+bool hsmci_is_high_speed_capable();
 
 /**
  *  \brief Send 74 clock cycles on the line.
  *   Note: It is required after card plug and before card install.
  */
-void _mci_sync_send_clock(struct _mci_sync_device *const mci_dev);
+void hsmci_send_clock();
 
 /**
  *  \brief Send a command on the selected slot
@@ -148,14 +122,14 @@ void _mci_sync_send_clock(struct _mci_sync_device *const mci_dev);
  *  \param[in] arg        Argument of the command
  *  \return true if success, otherwise false
  */
-bool _mci_sync_send_cmd(struct _mci_sync_device *const mci_dev, uint32_t cmd, uint32_t arg);
+bool hsmci_send_cmd(uint32_t cmd, uint32_t arg);
 
 /**
  *  \brief Get 32 bits response of the last command.
  *
  *  \return 32 bits response.
  */
-uint32_t _mci_sync_get_response(struct _mci_sync_device *const mci_dev);
+uint32_t hsmci_get_response();
 
 /**
  *  \brief Get 128 bits response of the last command.
@@ -163,7 +137,7 @@ uint32_t _mci_sync_get_response(struct _mci_sync_device *const mci_dev);
  *  \param[in] response   Pointer on the array to fill
  *                        with the 128 bits response.
  */
-void _mci_sync_get_response_128(struct _mci_sync_device *const mci_dev, uint8_t *response);
+void hsmci_get_response_128(uint8_t *response);
 
 /**
  *  \brief Send an ADTC command on the selected slot
@@ -181,7 +155,7 @@ void _mci_sync_get_response_128(struct _mci_sync_device *const mci_dev, uint8_t 
  *
  * \return true if success, otherwise false
  */
-bool _mci_sync_adtc_start(struct _mci_sync_device *const mci_dev, uint32_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr);
+bool hsmci_adtc_start(uint32_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr);
 
 /**
  *  \brief Send a command to stop an ADTC command on the selected slot.
@@ -191,7 +165,7 @@ bool _mci_sync_adtc_start(struct _mci_sync_device *const mci_dev, uint32_t cmd, 
  *
  * \return true if success, otherwise false
  */
-bool _mci_sync_adtc_stop(struct _mci_sync_device *const mci_dev, uint32_t cmd, uint32_t arg);
+bool hsmci_adtc_stop(uint32_t cmd, uint32_t arg);
 
 /**
  *  \brief Read a word on the line.
@@ -200,7 +174,7 @@ bool _mci_sync_adtc_stop(struct _mci_sync_device *const mci_dev, uint32_t cmd, u
  *
  *  \return true if success, otherwise false
  */
-bool _mci_sync_read_word(struct _mci_sync_device *const mci_dev, uint32_t *value);
+bool hsmci_read_word(uint32_t *value);
 
 /**
  *  \brief Write a word on the line
@@ -209,7 +183,7 @@ bool _mci_sync_read_word(struct _mci_sync_device *const mci_dev, uint32_t *value
  *
  *  \return true if success, otherwise false
  */
-bool _mci_sync_write_word(struct _mci_sync_device *const mci_dev, uint32_t value);
+bool hsmci_write_word(uint32_t value);
 
 /**
  *  \brief Start a read blocks transfer on the line
@@ -220,7 +194,7 @@ bool _mci_sync_write_word(struct _mci_sync_device *const mci_dev, uint32_t value
  *
  *  \return true if started, otherwise false
  */
-bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *dst, uint16_t nb_block);
+bool hsmci_start_read_blocks(void *dst, uint16_t nb_block);
 
 /**
  *  \brief Start a write blocks transfer on the line
@@ -231,27 +205,23 @@ bool _mci_sync_start_read_blocks(struct _mci_sync_device *const mci_dev, void *d
  *
  *  \return true if started, otherwise false
  */
-bool _mci_sync_start_write_blocks(struct _mci_sync_device *const mci_dev, const void *src, uint16_t nb_block);
+bool hsmci_start_write_blocks(const void *src, uint16_t nb_block);
 
 /**
  *  \brief Wait the end of transfer initiated by mci_start_read_blocks()
  *
  *  \return true if success, otherwise false
  */
-bool _mci_sync_wait_end_of_read_blocks(struct _mci_sync_device *const mci_dev);
+bool hsmci_wait_end_of_read_blocks();
 
 /**
  *  \brief Wait the end of transfer initiated by mci_start_write_blocks()
  *
  *  \return true if success, otherwise false
  */
-bool _mci_sync_wait_end_of_write_blocks(struct _mci_sync_device *const mci_dev);
+bool hsmci_wait_end_of_write_blocks();
 
-#if 1	// dc42
-
-uint32_t _mci_get_clock_speed(Sdhc *hw);
-
-#endif
+uint32_t hsmci_get_speed();
 
 #ifdef __cplusplus
 }
