@@ -9,8 +9,6 @@
 
 #include <peripheral_clk_config.h>
 #include <hal_gpio.h>
-#include <AtmelStart_SAME5x/atmel_start_pins.h>
-
 #include <hri_sercom_e54.h>
 
 constexpr uint32_t DiagBaudRate = 57600;		// the baud rate we use
