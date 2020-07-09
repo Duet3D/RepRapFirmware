@@ -8,10 +8,9 @@
 #ifndef SRC_SERIAL_H_
 #define SRC_SERIAL_H_
 
-#include <Core.h>
+#include <CoreIO.h>
 #include <General/RingBuffer.h>
 #include <RTOSIface/RTOSIface.h>
-#include "Stream.h"
 
 namespace Serial
 {
@@ -20,7 +19,7 @@ namespace Serial
 		SERCOM0, SERCOM1, SERCOM2, SERCOM3, SERCOM4, SERCOM5, SERCOM6, SERCOM7
 	};
 
-	static constexpr IRQn const SercomIRQns[] =
+	static constexpr IRQn SercomIRQns[] =
 	{
 		SERCOM0_0_IRQn, SERCOM1_0_IRQn, SERCOM2_0_IRQn, SERCOM3_0_IRQn, SERCOM4_0_IRQn, SERCOM5_0_IRQn, SERCOM6_0_IRQn, SERCOM7_0_IRQn
 	};
