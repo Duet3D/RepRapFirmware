@@ -25,7 +25,7 @@
 
 // Pin change interrupt support
 
-void InitialisePinChangeInterrupts();
+void InitialiseExints();
 bool attachInterrupt(Pin pin, StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param);
 void detachInterrupt(Pin pin);
 

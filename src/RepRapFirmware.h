@@ -65,6 +65,7 @@ typedef uint8_t DmaChannel;
 
 #if SAME5x
 # include <CoreIO.h>
+# include <Devices.h>
 #endif
 
 // API level definition.

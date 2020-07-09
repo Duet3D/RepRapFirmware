@@ -20,7 +20,7 @@ struct InterruptCallback
 // The pin table ensures that only one pin is flagged as able to use each EXINT.
 static InterruptCallback exintCallbacks[16];
 
-void InitialisePinChangeInterrupts()
+void InitialiseExints()
 {
 	hri_gclk_write_PCHCTRL_reg(GCLK, EIC_GCLK_ID, GCLK_PCHCTRL_GEN_GCLK0_Val | (1 << GCLK_PCHCTRL_CHEN_Pos));
 	hri_mclk_set_APBAMASK_EIC_bit(MCLK);

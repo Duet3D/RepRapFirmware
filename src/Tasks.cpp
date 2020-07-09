@@ -152,6 +152,7 @@ extern "C" [[noreturn]] void AppMain() noexcept
 	}
 
 	CoreInit();
+	DeviceInit();
 #endif
 
 	// Trap integer divide-by-zero.
