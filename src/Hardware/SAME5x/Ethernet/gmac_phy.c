@@ -34,7 +34,6 @@
  * Support and FAQ: visit <a href="https://www.microchip.com/support/">Microchip Support</a>
  */
 
-#include "compiler.h"
 #include "gmac.h"
 #include <string.h>
 #include "conf_eth.h"

@@ -37,7 +37,7 @@
 #ifndef GMAC_H_INCLUDED
 #define GMAC_H_INCLUDED
 
-#include "compiler.h"
+#include <Core.h>
 #include <component/gmac.h>
 
 /// @cond 0

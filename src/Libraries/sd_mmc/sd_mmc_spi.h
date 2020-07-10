@@ -47,7 +47,7 @@
 #ifndef SD_MMC_SPI_H_INCLUDED
 #define SD_MMC_SPI_H_INCLUDED
 
-#include "compiler.h"
+#include <Core.h>
 #include "sd_mmc_protocol.h"
 
 #ifdef __cplusplus

@@ -1,6 +1,6 @@
-#include <AtmelStart_SAME5x/Config/peripheral_clk_config.h>
-#include <AtmelStart_SAME5x/Config/hpl_oscctrl_config.h>
-#include <AtmelStart_SAME5x/hal/include/hal_init.h>
+#include <peripheral_clk_config.h>
+#include <hpl_oscctrl_config.h>
+#include <hal_init.h>
 
 #include "RepRapFirmware.h"
 #include "Tasks.h"

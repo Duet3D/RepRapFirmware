@@ -385,23 +385,6 @@ inline void SetBasePriority(uint32_t prio) noexcept
 	__set_BASEPRI(prio << (8 - __NVIC_PRIO_BITS));
 }
 
-// Atomic section locker, alternative to InterruptCriticalSectionLocker (is safe to call from within an ISR, and may be faster)
-class AtomicCriticalSectionLocker
-{
-public:
-	AtomicCriticalSectionLocker() : flags(cpu_irq_save())
-	{
-	}
-
-	~AtomicCriticalSectionLocker()
-	{
-		cpu_irq_restore(flags);
-	}
-
-private:
-	irqflags_t flags;
-};
-
 // Classes to facilitate range-based for loops that iterate from 0 up to just below a limit
 template<class T> class SimpleRangeIterator
 {

@@ -116,7 +116,7 @@ driverIdleFunc_t hsmci_set_idle_func(driverIdleFunc_t func) noexcept
 
 #  include <hsmci/hsmci.h>
 
-bool hsmci_adtc_start_glue(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr)
+bool hsmci_adtc_start_glue(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr) noexcept
 {
 	return hsmci_adtc_start(cmd, arg, block_size, nb_block, dmaAddr != NULL);
 }

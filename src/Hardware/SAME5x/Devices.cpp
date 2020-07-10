@@ -3,10 +3,13 @@
  *
  *  Created on: 9 Jul 2020
  *      Author: David
+ *  License: GNU GPL v3
  */
 
 #include "Devices.h"
 #include <RepRapFirmware.h>
+#include <AnalogIn.h>
+#include <AnalogOut.h>
 
 #include <hal_usb_device.h>
 #include <peripheral_clk_config.h>
@@ -118,6 +121,9 @@ void DeviceInit()
 	UsbInit();
 	SerialInit();
 	SdhcInit();
+
+	AnalogIn::Init(FirstAdcDmaChannel, DmacPrioAdcTx, DmacPrioAdcRx);
+	AnalogOut::Init();
 }
 
 // End

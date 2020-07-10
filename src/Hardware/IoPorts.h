@@ -8,7 +8,11 @@
 #ifndef SRC_IOPORTS_H_
 #define SRC_IOPORTS_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
+
+#if SAME5x
+# include <Interrupts.h>
+#endif
 
 // Class to represent a port
 class IoPort
@@ -32,7 +36,7 @@ public:
 	void ToggleInvert(bool pInvert) noexcept;
 
 	bool Read() const noexcept;
-	bool AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const noexcept;
+	bool AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept;
 	void DetachInterrupt() const noexcept;
 
 	uint16_t ReadAnalog() const noexcept;

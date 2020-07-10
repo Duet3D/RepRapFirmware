@@ -10,6 +10,12 @@
 
 // Hardware-dependent pins functions
 
+// Return a pointer to the pin description entry. Declared in and called from CoreN2G.
+const PinDescriptionBase *GetPinDescription(Pin p) noexcept
+{
+	return (p < ARRAY_SIZE(PinTable)) ? &PinTable[p] : nullptr;
+}
+
 // Function to look up a pin name and pass back the corresponding index into the pin table
 // On this platform, the mapping from pin names to pins is fixed, so this is a simple lookup
 bool LookupPinName(const char *pn, LogicalPin &lpin, bool &hardwareInverted) noexcept

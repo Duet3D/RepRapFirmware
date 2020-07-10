@@ -73,7 +73,7 @@ extern "C" {
  * \{
  */
 
-#include "compiler.h"
+#include <Core.h>
 
 #ifndef SECTOR_SIZE
 # define SECTOR_SIZE  512

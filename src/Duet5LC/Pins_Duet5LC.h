@@ -8,6 +8,8 @@
 #ifndef SRC_DUET5LC_PINS_DUET5LC_H_
 #define SRC_DUET5LC_PINS_DUET5LC_H_
 
+#include <PinDescription.h>
+
 #define BOARD_SHORT_NAME		"Mini5plus"
 #define BOARD_NAME				"Duet 3 Mini 5+"
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+"
@@ -431,15 +433,11 @@ constexpr PinDescription PinTable[] =
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 32+32+32+13);
-constexpr unsigned int NumTotalPins = 32+32+32+22;
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
 constexpr DmaChannel DmacChanTmcTx = 0;
 constexpr DmaChannel DmacChanTmcRx = 1;
-constexpr DmaChannel DmacChanAdc0Tx = 2;
-// Next channel is used by ADC0 for receive
-constexpr DmaChannel DmacChanAdc1Tx = 4;
-// Next channel is used by ADC1 for receive
+constexpr DmaChannel FirstAdcDmaChannel = 2;			// the ADCs use 4 DMA channels
 constexpr DmaChannel DmacChanWiFiTx = 6;
 constexpr DmaChannel DmacChanWiFiRx = 7;
 constexpr DmaChannel DmacChanSbcTx = 8;
