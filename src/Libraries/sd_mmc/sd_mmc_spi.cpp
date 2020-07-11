@@ -43,8 +43,7 @@
 /*
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
-#include <compiler.h>
-#include "Core.h"
+#include <Core.h>
 #include "conf_sd_mmc.h"
 
 #if SD_MMC_SPI_MEM_CNT != 0

@@ -49,12 +49,11 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 #include <Core.h>
 
 #ifndef SAMC21
-# define SAMC21	0
+# error SAMC21 should be defined as 0 or 1
 #endif
 
 #ifndef SAME5x
-# define SAME5x	0
-typedef uint8_t DmaChannel;
+# error SAME5X should be defined as 0 or 1
 #endif
 
 #if SAME70
