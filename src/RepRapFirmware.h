@@ -77,8 +77,6 @@ typedef uint8_t LogicalPin;				// type used to represent logical pin numbers
 constexpr LogicalPin NoLogicalPin = 0xFF;
 constexpr const char *NoPinName = "nil";
 
-typedef uint16_t PwmFrequency;				// type used to represent a PWM frequency. 0 sometimes means "default".
-
 // Enumeration to describe what we want to do with a pin
 enum class PinAccess : int
 {
@@ -485,8 +483,6 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 7 or 15 is the lowest.
 // This interacts with FreeRTOS config constant configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY which is currently defined as 3 for the SAME70 and 5 for the SAM4x.
 // ISRs with better (numerically lower) priorities than this value cannot make FreeRTOS calls, but those interrupts wont be disabled even in FreeRTOS critical sections.
-
-typedef uint32_t NvicPriority;
 
 #if __NVIC_PRIO_BITS == 3
 // We have only 8 interrupt priority levels on the SAME70

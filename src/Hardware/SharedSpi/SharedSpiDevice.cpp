@@ -57,7 +57,7 @@ SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum) noexcept
 	hri_sercomusart_write_CTRLA_reg(hardware, regCtrlA);
 	hri_sercomusart_write_CTRLB_reg(hardware, regCtrlB);
 	hri_sercomusart_write_CTRLC_reg(hardware, regCtrlC);
-	hri_sercomusart_write_BAUD_reg(hardware, SERCOM_SPI_BAUD_BAUD(SystemPeripheralClock/(2 * DefaultSharedSpiClockFrequency) - 1));
+	hri_sercomusart_write_BAUD_reg(hardware, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * DefaultSharedSpiClockFrequency) - 1));
 	hri_sercomusart_write_DBGCTRL_reg(hardware, SERCOM_I2CM_DBGCTRL_DBGSTOP);			// baud rate generator is stopped when CPU halted by debugger
 
 #if 0	// if using DMA
@@ -198,7 +198,7 @@ void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) cons
 	// We have to disable SPI device in order to change the baud rate and mode
 #if SAME5x
 	Disable();
-	hri_sercomusart_write_BAUD_reg(hardware, SERCOM_SPI_BAUD_BAUD(SystemPeripheralClock/(2 * freq) - 1));
+	hri_sercomusart_write_BAUD_reg(hardware, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * freq) - 1));
 
 	uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_FORM(0) | SERCOM_SPI_CTRLA_ENABLE;
 	if (((uint8_t)mode & 2) != 0)

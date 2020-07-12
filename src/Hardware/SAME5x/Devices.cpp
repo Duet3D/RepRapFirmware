@@ -10,9 +10,14 @@
 #include <RepRapFirmware.h>
 #include <AnalogIn.h>
 #include <AnalogOut.h>
+#include <TaskPriorities.h>
 
 #include <hal_usb_device.h>
 #include <peripheral_clk_config.h>
+
+// Analog input support
+constexpr size_t AnalogInTaskStackWords = 300;
+static Task<AnalogInTaskStackWords> analogInTask;
 
 // Serial device support
 Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512);
@@ -40,7 +45,7 @@ void SERIAL0_ISR3() noexcept
 static void UsbInit() noexcept
 {
 	// Set up USB clock
-	hri_gclk_write_PCHCTRL_reg(GCLK, USB_GCLK_ID, CONF_GCLK_USB_SRC | GCLK_PCHCTRL_CHEN);
+	hri_gclk_write_PCHCTRL_reg(GCLK, USB_GCLK_ID, GCLK_PCHCTRL_GEN(GclkNum48MHz) | GCLK_PCHCTRL_CHEN);
 	hri_mclk_set_AHBMASK_USB_bit(MCLK);
 	hri_mclk_set_APBBMASK_USB_bit(MCLK);
 
@@ -61,8 +66,8 @@ static void SdhcInit() noexcept
 {
 	// Set up SDHC clock
 	hri_mclk_set_AHBMASK_SDHC1_bit(MCLK);
-	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID, CONF_GCLK_SDHC1_SRC | (1 << GCLK_PCHCTRL_CHEN_Pos));
-	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID_SLOW, CONF_GCLK_SDHC1_SLOW_SRC | (1 << GCLK_PCHCTRL_CHEN_Pos));
+	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID, GCLK_PCHCTRL_GEN(GclkNum120MHz) | GCLK_PCHCTRL_CHEN);
+	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID_SLOW, GCLK_PCHCTRL_GEN(GclkNum32KHz) | GCLK_PCHCTRL_CHEN);
 
 	// Set up SDHC pins
 #if 1
@@ -124,6 +129,7 @@ void DeviceInit()
 
 	AnalogIn::Init(FirstAdcDmaChannel, DmacPrioAdcTx, DmacPrioAdcRx);
 	AnalogOut::Init();
+	analogInTask.Create(AnalogIn::TaskLoop, "AIN", nullptr, TaskPriority::AinPriority);
 }
 
 // End

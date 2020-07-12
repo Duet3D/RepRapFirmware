@@ -1700,7 +1700,11 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 
 #if SAME5x
-	// DMA IRQ priority is set in DmacManager::Init
+	// SAME5x DMAC has 5 contiguous IRQ numbers
+	for (unsigned int i = 0; i < 5; i++)
+	{
+		NVIC_SetPriority((IRQn)(DMAC_0_IRQn + i), NvicPriorityDMA);
+	}
 #elif SAME70
 	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 #endif
