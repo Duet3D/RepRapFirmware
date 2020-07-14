@@ -123,6 +123,7 @@ static bool spi_dma_check_rx_complete() noexcept
 
 #endif
 
+// Set up the transmit DMA but don't enable it
 static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noexcept
 {
 #if USE_DMAC
@@ -164,7 +165,6 @@ static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noex
 	xdmac_configure_transfer(XDMAC, DmacChanSbcTx, &xdmac_tx_cfg);
 
 	xdmac_channel_set_descriptor_control(XDMAC, DmacChanSbcTx, 0);
-	xdmac_channel_enable(XDMAC, DmacChanSbcTx);
 	xdmac_disable_interrupt(XDMAC, DmacChanSbcTx);
 #endif
 
@@ -177,6 +177,7 @@ static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noex
 #endif
 }
 
+// Set up the receive DMA but don't enable it
 static void spi_rx_dma_setup(void *inBuffer, size_t bytesToTransfer) noexcept
 {
 #if USE_DMAC
@@ -218,7 +219,6 @@ static void spi_rx_dma_setup(void *inBuffer, size_t bytesToTransfer) noexcept
 	xdmac_configure_transfer(XDMAC, DmacChanSbcRx, &xdmac_rx_cfg);
 
 	xdmac_channel_set_descriptor_control(XDMAC, DmacChanSbcRx, 0);
-	xdmac_channel_enable(XDMAC, DmacChanSbcRx);
 	xdmac_disable_interrupt(XDMAC, DmacChanSbcRx);
 #endif
 
