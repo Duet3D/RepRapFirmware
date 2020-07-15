@@ -22,6 +22,8 @@
 # endif
 #endif
 
+// Duet 5 Mini only supports NeoPixel, not DotStar. So the DotStar code is dead in the Duet 3 Mini build.
+
 namespace DotStarLed
 {
 	constexpr uint32_t DefaultDotStarSpiClockFrequency = 100000;		// try sending at 100kHz
@@ -33,7 +35,7 @@ namespace DotStarLed
 	constexpr unsigned int MaxDotStarChunkSize = ChunkBufferSize/4;		// maximum number of DotStarLEDs we DMA to in one go. Most strips have 30 LEDs/metre.
 	constexpr unsigned int MaxNeoPixelChunkSize = ChunkBufferSize/12;	// maximum number of NeoPixels we can support. A full ring contains 60.
 
-	static uint32_t ledType = 0;										// 0 = DotStar, 1 = NeoPixel
+	static uint32_t ledType = 1;										// 0 = DotStar (not supported on Duet 3 Mini), 1 = NeoPixel
 	static uint32_t whenDmaFinished = 0;								// the time in step clocks when we determined that the DMA had finished
 	static unsigned int numRemaining = 0;								// how much of the current request remains after the current transfer (DotStar only)
 	static unsigned int totalSent = 0;									// total amount of data sent since the start frame (DotStar only)
@@ -46,16 +48,23 @@ namespace DotStarLed
 	static void DmaSendChunkBuffer(size_t numBytes) noexcept
 	{
 #if DOTSTAR_USES_USART
-
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_TXDIS;			// reset transmitter and receiver, disable transmitter
 		Pdc * const usartPdc = usart_get_pdc_base(DotStarUsart);
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS;		// disable the PDC
-		usartPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(&chunkBuffer);
+		usartPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(chunkBuffer);
 		usartPdc->PERIPH_TCR = numBytes;										// number of bytes to transfer
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_TXTEN;								// enable the PDC to send data
-
 		DotStarUsart->US_CR = US_CR_TXEN;										// enable transmitter
-#else
+#elif SAME5x
+		//TODO use 16-bit mode to make the DMA more efficient, but that probably requires us to swap alternate bytes in the buffer
+		DmacManager::DisableChannel(DmacChanDotStarTx);
+		DmacManager::SetTriggerSource(DmacChanDotStarTx, DmaTrigSource::qspi_tx);
+		DmacManager::SetBtctrl(DmacChanDotStarTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_BYTE | DMAC_BTCTRL_BLOCKACT_NOACT);
+		DmacManager::SetSourceAddress(DmacChanDotStarTx, chunkBuffer);
+		DmacManager::SetDestinationAddress(DmacChanDotStarTx, &QSPI->TXDATA.reg);
+		DmacManager::SetDataLength(DmacChanDotStarTx, numBytes);				// must do this last!
+		DmacManager::EnableChannel(DmacChanDotStarTx, DmacPrioDotStar);
+#elif SAME70
 		xdmac_channel_disable(XDMAC, DmacChanDotStarTx);
 		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
 		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
@@ -73,6 +82,8 @@ namespace DotStarLed
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(QSPI->QSPI_TDR));
 		xdmac_configure_transfer(XDMAC, DmacChanDotStarTx, &p_cfg);
 		xdmac_channel_enable(XDMAC, DmacChanDotStarTx);
+#else
+# error Unsupported processor
 #endif
 		busy = true;
 	}
@@ -84,7 +95,9 @@ namespace DotStarLed
 		{
 #if DOTSTAR_USES_USART
 			if ((DotStarUsart->US_CSR & US_CSR_ENDTX) != 0)						// if we are no longer sending
-#else
+#elif SAME5x
+			if ((DmacManager::GetAndClearChannelStatus(DmacChanDotStarTx) & DMAC_CHINTFLAG_TCMPL) != 0)
+#elif SAME70
 			if ((xdmac_channel_get_interrupt_status(XDMAC, DmacChanDotStarTx) & XDMAC_CIS_BIS) != 0)	// if the last transfer has finished
 #endif
 			{
@@ -108,9 +121,15 @@ namespace DotStarLed
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		DotStarUsart->US_BRGR = SystemPeripheralClock()/frequency;		// set SPI clock frequency
+		DotStarUsart->US_BRGR = SystemPeripheralClock()/frequency;				// set SPI clock frequency
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
-#else
+#elif SAME5x
+		// DotStar on Duet 3 Mini uses the QSPI peripheral
+		QSPI->CTRLA.reg = QSPI_CTRLA_SWRST;										// software reset
+		QSPI->CTRLB.reg = 0;													// SPI mode, 8 bits per transfer
+		QSPI->BAUD.reg = QSPI_BAUD_CPOL | QSPI_BAUD_CPHA | QSPI_BAUD_BAUD(SystemCoreClockFreq/frequency - 1);
+		QSPI->CTRLA.reg = QSPI_CTRLA_ENABLE;
+#elif SAME70
 		// DotStar on Duet 3 uses the QSPI peripheral
 		QSPI->QSPI_CR = QSPI_CR_SWRST;
 		QSPI->QSPI_MR = 0;														// SPI mode, 8 bits per transfer
@@ -119,6 +138,7 @@ namespace DotStarLed
 #endif
 	}
 
+#ifndef DUET_5LC
 	// Send data to DotStar LEDs
 	static GCodeResult SendDotStarData(uint32_t data, uint32_t numLeds, bool following) noexcept
 	{
@@ -169,6 +189,7 @@ namespace DotStarLed
 		DmaSendChunkBuffer(4 * (p - reinterpret_cast<uint32_t*>(chunkBuffer)));
 		return (numRemaining == 0) ? GCodeResult::ok : GCodeResult::notFinished;
 	}
+#endif
 
 	// Encode one NeoPixel byte into the buffer.
 	// A 0 bit is encoded as 1000
@@ -210,14 +231,21 @@ namespace DotStarLed
 
 void DotStarLed::Init() noexcept
 {
+#if SAME5x
+	SetPinFunction(NeopixelOutPin, NeopixelOutPinFunction);
+	hri_mclk_set_AHBMASK_QSPI_bit(MCLK);
+	hri_mclk_clear_AHBMASK_QSPI_2X_bit(MCLK);			// we don't need the 2x clock
+	hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
+#else
 	// Set up the USART or QSPI pins for SPI mode. The pins are already set up for SPI in the pins table
 	ConfigurePin(DotStarMosiPin);
 	ConfigurePin(DotStarSclkPin);
 
 	// Enable the clock to the USART or SPI peripheral
 	pmc_enable_periph_clk(DotStarClockId);
+#endif
 
-	SetupSpi(DefaultDotStarSpiClockFrequency);
+	SetupSpi(DefaultSpiFrequencies[ledType]);
 
 	// Initialise variables
 	numRemaining = totalSent = 0;
@@ -253,6 +281,12 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 	{
 		seen = true;
 		const uint32_t newType = gb.GetLimitedUIValue('X', 2);				// only types 0 and 1 are supported
+#ifdef DUET_5LC
+		if (newType == 0)
+		{
+			throw GCodeException(gb.MachineState().lineNumber, -1, "DotStar not supported on this platform. Use NeoPixel.");
+		}
+#endif
 		const bool typeChanged = (newType != ledType);
 		bool setFrequency = typeChanged;
 
@@ -309,10 +343,16 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 	switch (ledType)
 	{
 	case 0:	// DotStar
+
+#ifdef DUET_5LC
+		// DotStar not supported, so avoid dragging the code for SendDotStarData in
+		break;
+#else
 		{
 			const uint32_t data = (brightness >> 3) | 0xE0 | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);
 			return SendDotStarData(data, numLeds, following);
 		}
+#endif
 
 	case 1:	// NeoPixel
 		{

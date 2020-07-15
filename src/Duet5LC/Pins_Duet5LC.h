@@ -40,6 +40,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
 
+#define SUPPORT_CAN_EXPANSION	0
+#define SUPPORT_DOTSTAR_LED		1
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER			1					// set zero to disable support for FreeLSS scanners
@@ -210,6 +212,11 @@ constexpr Pin EncoderPinA = PortCPin(11);
 constexpr Pin EncoderPinB = PortDPin(1);
 constexpr Pin EncoderPinSw = PortBPin(9);
 
+// Neopixel output
+constexpr Pin NeopixelOutPin = PortAPin(8);
+constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;		// QSPI Data[0]
+#define DOTSTAR_USES_USART		(0)
+
 // Shared SPI definitions
 constexpr uint8_t SharedSpiSercomNumber = 7;
 constexpr Pin SharedSpiMosiPin = PortCPin(12);
@@ -243,7 +250,6 @@ constexpr GpioPinFunction EthernetClockOutPinFunction = GpioPinFunction::M;
 constexpr unsigned int EthernetClockOutGclkNumber = 2;
 
 // WiFi pins
-
 constexpr unsigned int WiFiUartSercomNumber = 3;
 constexpr uint8_t WiFiUartRxPad = 1;
 constexpr Pin WiFiUartSercomPins[] = { PortAPin(16), PortAPin(17) };
@@ -452,6 +458,7 @@ constexpr DmaPriority DmacPrioAdcTx = 0;
 constexpr DmaPriority DmacPrioAdcRx = 2;
 constexpr DmaPriority DmacPrioWiFi = 3;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 3;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioDotStar = 1;				// QSPI in master mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers
