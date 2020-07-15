@@ -64,6 +64,7 @@ private:
 	GCodeBuffer& gb;
 
 	void CheckArrayLength(size_t maxLength) THROWS(GCodeException);
+	void SetDriverIdFromBinary(DriverId& did, uint32_t val) THROWS(GCodeException);
 	GCodeException ConstructParseException(const char *str) const noexcept;
 	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
 	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;

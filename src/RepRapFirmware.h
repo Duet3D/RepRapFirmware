@@ -186,9 +186,12 @@ struct DriverId
 
 #else
 
-	void SetFromBinary(uint32_t val) noexcept
+	// Set the driver ID from the binary value, returning true if there was a nonzero board number so that the caller knows the address is not valid
+	bool SetFromBinary(uint32_t val) noexcept
 	{
-		localDriver = (uint8_t)val;
+		localDriver = val & 0x000000FF;
+		const uint32_t brdNum = val >> 16;
+		return (brdNum != 0);
 	}
 
 	void SetLocal(unsigned int driver) noexcept

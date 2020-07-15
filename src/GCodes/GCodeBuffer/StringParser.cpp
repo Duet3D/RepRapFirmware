@@ -1656,7 +1656,20 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 		result.boardAddress = 0;
 	}
 #else
-	result.localDriver = v1;
+	// We now allow driver names of the form "0.x" on boards without CAN expansion
+	if (gb.buffer[readPointer] == '.')
+	{
+		if (v1 != 0)
+		{
+			throw ConstructParseException("Board address of driver must be 0");
+		}
+		++readPointer;
+		result.localDriver = ReadUIValue();
+	}
+	else
+	{
+		result.localDriver = v1;
+	}
 #endif
 	return result;
 }

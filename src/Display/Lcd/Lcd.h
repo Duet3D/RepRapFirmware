@@ -1,11 +1,12 @@
-#ifndef LCD7920_H
-#define LCD7920_H
+#ifndef SRC_DISPLAY_LCD_LCD_H
+#define SRC_DISPLAY_LCD_LCD_H
 
 #include "RepRapFirmware.h"
 
 #if SUPPORT_12864_LCD
 
 #include <Print.h>
+#include "Fonts/LcdFont.h"
 #include <Hardware/SharedSpi/SharedSpiClient.h>
 
 // Enumeration for specifying drawing modes
@@ -16,38 +17,27 @@ enum class PixelMode : uint8_t
 	PixelFlip = 2      // invert the pixel(s)
 };
 
-// Struct for describing a font table, always held in PROGMEM
-struct LcdFont
-{
-	const uint8_t *ptr;			// pointer to font table
-	uint16_t startCharacter;	// Unicode code point of the first character in the font
-	uint16_t endCharacter;		// Unicode code point of the last character in the font
-	uint8_t height;				// row height in pixels - only this number of pixels will be fetched and drawn - maximum 16 in this version of the software
-	uint8_t width;				// max character width in pixels (the font table contains this number of bytes or words per character, plus 1 for the active width)
-	uint8_t numSpaces;			// number of space columns between characters before kerning
-};
-
 typedef uint8_t PixelNumber;
-const PixelNumber NumRows = 64, NumCols = 128;
 
 // Class for driving 128x64 graphical LCD fitted with ST7920 controller
 // This drives the GLCD in serial mode so that it needs just 2 pins.
 
 // Derive the LCD class from the Print class so that we can print stuff to it in alpha mode
-class Lcd7920 : public Print
+class Lcd : public Print
 {
 public:
 	// Construct a GLCD driver.
-	Lcd7920(const LcdFont * const fnts[], size_t nFonts) noexcept;
+	Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept;
+	virtual ~Lcd();
 
 	// Initialize the display
-	void Init(uint8_t p_controllerType, Pin csPin, Pin p_a0Pin, uint32_t freq) noexcept;
+	void Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq) noexcept;
 
 	// Select the font to use for subsequent calls to write() in graphics mode
 	void SetFont(size_t newFont) noexcept;
 
-	constexpr PixelNumber GetNumRows() const noexcept { return NumRows; }
-	constexpr PixelNumber GetNumCols() const noexcept { return NumCols; }
+	const PixelNumber GetNumRows() const noexcept { return numRows; }
+	const PixelNumber GetNumCols() const noexcept { return numCols; }
 
 	// Write a single character in the current font. Called by the 'print' functions.
 	//  c = character to write
@@ -69,8 +59,14 @@ public:
 	// Select normal or inverted text (only works in graphics mode)
 	void TextInvert(bool b) noexcept;
 
-	// Clear the display and select non-inverted text.
-	void Clear(PixelNumber top = 0, PixelNumber left = 0, PixelNumber bottom = NumRows, PixelNumber right = NumCols) noexcept;
+	// Clear part of the display and select non-inverted text.
+	void Clear(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;
+
+	// Clear the whole display and select non-inverted text.
+	void Clear() noexcept
+	{
+		Clear(0, 0, numRows, numCols);
+	}
 
 	// Set the cursor position
 	//  r = row, the number of pixels from the top of the display to the top of the character.
@@ -96,7 +92,7 @@ public:
 	void FlushAll() noexcept;
 
 	// Flush just some data, returning true if this needs to be called again
-	bool FlushSome() noexcept;
+	virtual bool FlushSome() noexcept = 0;
 
 	// Set, clear or invert a pixel
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
@@ -138,36 +134,35 @@ public:
 	//  data = bitmap image, must be ((width + 7)/8) bytes long
 	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept;
 
-private:
+protected:
 	const LcdFont * const *fonts;
 	const size_t numFonts;
 	size_t currentFontNumber;						// index of the current font
 	uint32_t charVal;
+	size_t imageSize;
+	uint8_t *image;									// image buffer
 	SharedSpiClient device;
 	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
-	uint8_t controllerType;
+	const PixelNumber numRows, numCols;
 	Pin a0Pin;
 	uint8_t numContinuationBytesLeft;
 	PixelNumber row, column;
 	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
 	PixelNumber nextFlushRow;						// which row we need to flush next
 	PixelNumber leftMargin, rightMargin;
-	uint8_t image[(NumRows * NumCols)/8];			// image buffer, 1K in size
 	bool textInverted;
 	bool justSetCursor;
 
-	void sendLcdCommand(uint8_t command) noexcept { sendLcd(command, false); }
-	void sendLcdData(uint8_t data) noexcept { sendLcd(data, true); }
-	void sendLcd(uint8_t byteToSend, bool isData) noexcept;
+	virtual void HardwareInit() noexcept = 0;
+	virtual void CommandDelay() noexcept = 0;
+	virtual void DataDelay() noexcept = 0;
+	virtual void SendLcdCommand(uint8_t byteToSend) noexcept = 0;
+	virtual void SendLcdData(uint8_t byteToSend) noexcept = 0;
 
-	void CommandDelay() noexcept;
-	void DataDelay() noexcept;
-
-	void setGraphicsAddress(unsigned int r, unsigned int c) noexcept;
 	size_t writeNative(uint16_t c) noexcept;		// write a decoded character
 	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
 };
 
 #endif
 
-#endif
+#endif	// SRC_DISPLAY_LCD_LCD_H

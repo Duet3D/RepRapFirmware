@@ -302,7 +302,7 @@ bool GCodeBuffer::Seen(char c) noexcept
 }
 
 // Test for character present, throw error if not
-void GCodeBuffer::MustSee(char c)
+void GCodeBuffer::MustSee(char c) THROWS(GCodeException)
 {
 	if (!Seen(c))
 	{
@@ -311,19 +311,19 @@ void GCodeBuffer::MustSee(char c)
 }
 
 // Get a float after a key letter
-float GCodeBuffer::GetFValue()
+float GCodeBuffer::GetFValue() THROWS(GCodeException)
 {
 	return PARSER_OPERATION(GetFValue());
 }
 
 // Get a distance or coordinate and convert it from inches to mm if necessary
-float GCodeBuffer::GetDistance()
+float GCodeBuffer::GetDistance() THROWS(GCodeException)
 {
 	return ConvertDistance(GetFValue());
 }
 
 // Get an integer after a key letter
-int32_t GCodeBuffer::GetIValue()
+int32_t GCodeBuffer::GetIValue() THROWS(GCodeException)
 {
 	return PARSER_OPERATION(GetIValue());
 }
@@ -345,7 +345,7 @@ int32_t GCodeBuffer::GetLimitedIValue(char c, int32_t minValue, int32_t maxValue
 }
 
 // Get an unsigned integer value
-uint32_t GCodeBuffer::GetUIValue()
+uint32_t GCodeBuffer::GetUIValue() THROWS(GCodeException)
 {
 	return PARSER_OPERATION(GetUIValue());
 }
@@ -363,54 +363,54 @@ uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS
 }
 
 // Get an IP address quad after a key letter
-void GCodeBuffer::GetIPAddress(IPAddress& returnedIp)
+void GCodeBuffer::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetIPAddress(returnedIp));
 }
 
 // Get a MAC address sextet after a key letter
-void GCodeBuffer::GetMacAddress(MacAddress& mac)
+void GCodeBuffer::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetMacAddress(mac));
 }
 
 // Get a string with no preceding key letter
-void GCodeBuffer::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
+void GCodeBuffer::GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetUnprecedentedString(str, allowEmpty));
 }
 
 // Get and copy a quoted string
-void GCodeBuffer::GetQuotedString(const StringRef& str)
+void GCodeBuffer::GetQuotedString(const StringRef& str) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetQuotedString(str));
 }
 
 // Get and copy a string which may or may not be quoted
-void GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
+void GCodeBuffer::GetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetPossiblyQuotedString(str));
 }
 
-void GCodeBuffer::GetReducedString(const StringRef& str)
+void GCodeBuffer::GetReducedString(const StringRef& str) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetReducedString(str));
 }
 
 // Get a colon-separated list of floats after a key letter
-void GCodeBuffer::GetFloatArray(float arr[], size_t& length, bool doPad)
+void GCodeBuffer::GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetFloatArray(arr, length, doPad));
 }
 
 // Get a :-separated list of ints after a key letter
-void GCodeBuffer::GetIntArray(int32_t arr[], size_t& length, bool doPad)
+void GCodeBuffer::GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetIntArray(arr, length, doPad));
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
+void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetUnsignedArray(arr, length, doPad));
 }
@@ -422,7 +422,7 @@ void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length)
 }
 
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
-bool GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
+bool GCodeBuffer::TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException)
 {
 	const bool ret = Seen(c);
 	if (ret)
@@ -434,7 +434,7 @@ bool GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
 }
 
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
-bool GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
+bool GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeException)
 {
 	const bool ret = Seen(c);
 	if (ret)
@@ -464,7 +464,7 @@ bool GCodeBuffer::TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t 
 }
 
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
-bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
+bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException)
 {
 	const bool ret = Seen(c);
 	if (ret)
@@ -487,7 +487,7 @@ bool GCodeBuffer::TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32
 }
 
 // If the specified parameter character is found, fetch 'value' as a Boolean and set 'seen'. Otherwise leave val and seen alone.
-bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen)
+bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException)
 {
 	const bool ret = Seen(c);
 	if (ret)
@@ -501,7 +501,7 @@ bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen)
 // Try to get an int array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad)
+bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -523,7 +523,7 @@ bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const S
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad)
+bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -544,7 +544,7 @@ bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const S
 
 // Try to get a quoted string after parameter letter.
 // If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
-bool GCodeBuffer::TryGetQuotedString(char c, const StringRef& str, bool& seen)
+bool GCodeBuffer::TryGetQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -557,7 +557,7 @@ bool GCodeBuffer::TryGetQuotedString(char c, const StringRef& str, bool& seen)
 
 // Try to get a string, which may be quoted, after parameter letter.
 // If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
-bool GCodeBuffer::TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen)
+bool GCodeBuffer::TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -569,13 +569,13 @@ bool GCodeBuffer::TryGetPossiblyQuotedString(char c, const StringRef& str, bool&
 }
 
 // Get a PWM frequency
-PwmFrequency GCodeBuffer::GetPwmFrequency()
+PwmFrequency GCodeBuffer::GetPwmFrequency() THROWS(GCodeException)
 {
 	return (PwmFrequency)constrain<uint32_t>(GetUIValue(), 1, 65535);
 }
 
 // Get a PWM value. If may be in the old style 0..255 in which case convert it to be in the range 0.0..1.0
-float GCodeBuffer::GetPwmValue()
+float GCodeBuffer::GetPwmValue() THROWS(GCodeException)
 {
 	float v = GetFValue();
 	if (v > 1.0)
@@ -586,7 +586,7 @@ float GCodeBuffer::GetPwmValue()
 }
 
 // Get a driver ID
-DriverId GCodeBuffer::GetDriverId()
+DriverId GCodeBuffer::GetDriverId() THROWS(GCodeException)
 {
 	return PARSER_OPERATION(GetDriverId());
 }

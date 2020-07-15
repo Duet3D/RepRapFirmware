@@ -219,6 +219,18 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 	return value;
 }
 
+void BinaryParser::SetDriverIdFromBinary(DriverId& did, uint32_t val) THROWS(GCodeException)
+{
+#if SUPPORT_CAN_EXPANSION
+	did.SetFromBinary(val);
+#else
+	if (did.SetFromBinary(val))
+	{
+		throw ConstructParseException("Board address of driver must be 0");
+	}
+#endif
+}
+
 // Get a driver ID
 DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 {
@@ -233,7 +245,7 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 	case DataType::Int:
 	case DataType::UInt:
 	case DataType::DriverId:
-		value.SetFromBinary(seenParameter->uintValue);
+		SetDriverIdFromBinary(value, seenParameter->uintValue);
 		break;
 
 	default:
@@ -462,7 +474,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 	case DataType::Int:
 	case DataType::UInt:
 	case DataType::DriverId:
-		arr[0].SetFromBinary(seenParameter->uintValue);
+		SetDriverIdFromBinary(arr[0], seenParameter->uintValue);
 		length = 1;
 		break;
 
@@ -472,7 +484,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 		CheckArrayLength(length);
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
-			arr[i].SetFromBinary(reinterpret_cast<const uint32_t*>(seenParameterValue)[i]);
+			SetDriverIdFromBinary(arr[i], reinterpret_cast<const uint32_t*>(seenParameterValue)[i]);
 		}
 		length = seenParameter->intValue;
 		break;
