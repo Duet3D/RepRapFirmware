@@ -16,6 +16,7 @@
 #include "WifiFirmwareUploader.h"
 #include "General/IP4String.h"
 #include "WiFiSocket.h"
+#include <Hardware/Cache.h>
 
 static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and MessageFormats.h don't match");
 
@@ -1793,6 +1794,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 #endif
+	Cache::InvalidateAfterDMAReceive(&bufferIn, sizeof(bufferIn));
 
 	// Look at the response
 	if (bufferIn.hdr.formatVersion != MyFormatVersion)
