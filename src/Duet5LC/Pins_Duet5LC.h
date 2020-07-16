@@ -57,7 +57,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
 
-#define USE_CACHE				0					// ***TEMPORARY*** set nonzero to enable the cache
+#define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
 
 // The physical capabilities of the machine
@@ -215,6 +215,7 @@ constexpr Pin EncoderPinSw = PortBPin(9);
 // Neopixel output
 constexpr Pin NeopixelOutPin = PortAPin(8);
 constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;		// QSPI Data[0]
+constexpr Pin LcdNeopixelOutPin = PortBPin(14);			// shared with io4.out
 #define DOTSTAR_USES_USART		(0)
 
 // Shared SPI definitions

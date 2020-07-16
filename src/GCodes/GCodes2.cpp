@@ -4305,11 +4305,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-		case 952:	// set CAN-FD data rate
+		case 952:	// change expansion board CAN address
 			result = CanInterface::ChangeAddressAndNormalTiming(gb, reply);
 			break;
 
-		case 953:	// change expansion board CAN address
+		case 953:	// set CAN-FD data rate
 			result = CanInterface::ChangeFastTiming(gb, reply);
 			break;
 #endif

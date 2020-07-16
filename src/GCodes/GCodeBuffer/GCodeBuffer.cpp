@@ -351,15 +351,19 @@ uint32_t GCodeBuffer::GetUIValue() THROWS(GCodeException)
 }
 
 // Get an unsigned integer value, throw if >= limit
-uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS(GCodeException)
+uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t maxValuePlusOne, uint32_t minValue) THROWS(GCodeException)
 {
 	MustSee(c);
 	const uint32_t ret = GetUIValue();
-	if (ret < maxValuePlusOne)
+	if (ret < minValue)
 	{
-		return ret;
+		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too low", (uint32_t)c);
 	}
-	throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+	if (ret >= maxValuePlusOne)
+	{
+		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+	}
+	return ret;
 }
 
 // Get an IP address quad after a key letter
