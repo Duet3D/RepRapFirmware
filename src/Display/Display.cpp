@@ -20,9 +20,9 @@
 
 #if SUPPORT_12864_LCD
 
-#include "Fonts/Fonts.h"
-#include <Display/ST7920/ST7920.h>
-#include <Display/ST7565/ST7565.h>
+#include "Lcd/Fonts/Fonts.h"
+#include <Display/Lcd/ST7920/ST7920.h>
+#include <Display/Lcd/ST7565/ST7565.h>
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Hardware/IoPorts.h"
@@ -197,14 +197,14 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 						// This configuration requires no additional components IF the display logic is +3.3v
 						// It uses EXP_0 as A0/DC and EXP_1 as CS (active low).
 						// LCD_CS is disconnected but still needs to be controlled to gate MOSI and SCK (active high).
-						lcd = new ST7565(128, 64, Exp1Pin, Exp0Pin, false, LcdCSPin);
+						lcd = new ST7565(128, 64, LcdAltCSPin, LcdA0Pin, false, LcdCSPin);
 						break;
 					case 3:  // ST7565 128x64 display type
 						// The driver uses the default buffered LCD_CS pin.
 						// This requires an additional external (74xxx00) component to invert the logic level of LCD_CS.
 						// NOTE: now using EXP_0 as DC/A0 , but could be made configurable to other pins?
 						//       David used 'A0Pin' so the pin could be redefined in the Pins_<Config>.h
-						lcd = new ST7565(128, 64, LcdCSPin, Exp0Pin);
+						lcd = new ST7565(128, 64, LcdCSPin, LcdA0Pin);
 						break;
 				}
 			}

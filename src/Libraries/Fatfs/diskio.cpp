@@ -41,11 +41,11 @@
  *
  */
 
-#include "ctrl_access.h"
 #include "compiler.h"
-
 #include "diskio.h"
-#include "conf_sd_mmc.h"
+
+#include <Libraries/sd_mmc/ctrl_access.h>
+#include <Libraries/sd_mmc/conf_sd_mmc.h>
 
 #include "RepRapFirmware.h"
 #include "RepRap.h"
@@ -114,19 +114,10 @@ float DiskioGetAndClearLongestWriteTime() noexcept
  */
 DSTATUS disk_initialize(BYTE drv) noexcept
 {
-#if LUN_USB
-	/* USB disk with multiple LUNs */
-	if (drv > LUN_ID_USB + Lun_usb_get_lun()) {
-		return STA_NOINIT;
-	}
-#else
 	if (drv > MAX_LUN) {
 		/* At least one of the LUN should be defined */
 		return STA_NOINIT;
 	}
-#endif
-
-	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 	Ctrl_status mem_status;
 
@@ -160,8 +151,6 @@ DSTATUS disk_initialize(BYTE drv) noexcept
  */
 DSTATUS disk_status(BYTE drv) noexcept
 {
-	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
-
 	switch (mem_test_unit_ready(drv)) {
 	case CTRL_GOOD:
 		return 0;
@@ -188,9 +177,6 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 	{
 		debugPrintf("Read %u %u %lu\n", drv, count, sector);
 	}
-
-#if ACCESS_MEM_TO_RAM
-	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 	const uint8_t uc_sector_size = mem_sector_size(drv);
 	if (uc_sector_size == 0)
@@ -224,7 +210,6 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 			break;
 		}
 
-		lock.Release();
 		++retryNumber;
 		if (retryNumber == MaxSdCardTries)
 		{
@@ -232,7 +217,6 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 		}
 		delay(retryDelay);
 		retryDelay *= 2;
-		lock.ReAcquire();
 	}
 
 	if (retryNumber > highestSdRetriesDone)
@@ -241,10 +225,6 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 	}
 
 	return RES_OK;
-
-#else
-	return RES_ERROR;
-#endif
 }
 
 /**
@@ -269,9 +249,6 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcep
 	{
 		debugPrintf("Write %u %u %lu\n", drv, count, sector);
 	}
-
-#if ACCESS_MEM_TO_RAM
-	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 	const uint8_t uc_sector_size = mem_sector_size(drv);
 
@@ -307,7 +284,6 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcep
 			break;
 		}
 
-		lock.Release();
 		++retryNumber;
 		if (retryNumber == MaxSdCardTries)
 		{
@@ -315,7 +291,6 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcep
 		}
 		delay(retryDelay);
 		retryDelay *= 2;
-		lock.ReAcquire();
 	}
 
 	if (retryNumber > highestSdRetriesDone)
@@ -324,10 +299,6 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcep
 	}
 
 	return RES_OK;
-
-#else
-	return RES_ERROR;
-#endif
 }
 
 #endif /* _READONLY */
@@ -370,8 +341,6 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff) noexcept
 	/* Get the number of sectors on the disk (DWORD) */
 	case GET_SECTOR_COUNT:
 	{
-		MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
-
 		uint32_t ul_last_sector_num;
 
 		/* Check valid address */
@@ -386,8 +355,6 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff) noexcept
 	/* Get sectors on the disk (WORD) */
 	case GET_SECTOR_SIZE:
 	{
-		MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
-
 		uint8_t uc_sector_size = mem_sector_size(drv);
 
 		if ((uc_sector_size != SECTOR_SIZE_512) &&
@@ -398,7 +365,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff) noexcept
 			return RES_ERROR;
 		}
 
-		*(U8 *)buff = uc_sector_size * SECTOR_SIZE_DEFAULT;
+		*(uint8_t *)buff = uc_sector_size * SECTOR_SIZE_DEFAULT;
 
 		res = RES_OK;
 	}
@@ -407,8 +374,6 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff) noexcept
 	/* Make sure that data has been written */
 	case CTRL_SYNC:
 		{
-			MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
-
 			if (mem_test_unit_ready(drv) == CTRL_GOOD) {
 				res = RES_OK;
 			} else {

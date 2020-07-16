@@ -41,9 +41,9 @@ const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
 
 // Bits for T-code P-parameter to specify which macros are supposed to be run
-constexpr uint8_t TFreeBit = 1 << 0;
-constexpr uint8_t TPreBit = 1 << 1;
-constexpr uint8_t TPostBit = 1 << 2;
+constexpr uint8_t TFreeBit = 1u << 0;
+constexpr uint8_t TPreBit = 1u << 1;
+constexpr uint8_t TPostBit = 1u << 2;
 constexpr uint8_t DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
 
 // Machine type enumeration. The numeric values must be in the same order as the corresponding M451..M453 commands.
@@ -469,7 +469,7 @@ private:
 	GCodeBuffer*& httpGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)];
 	GCodeBuffer*& telnetGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)];
 	GCodeBuffer*& fileGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)];
-	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)];
+	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USBchan)];
 	GCodeBuffer*& auxGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)];					// This one is for the PanelDue on the async serial interface
 	GCodeBuffer*& triggerGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)];			// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)];

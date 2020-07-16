@@ -30,6 +30,8 @@
 #  define PLATFORM DuetM
 # elif defined(PCCB)
 #  define PLATFORM Pccb
+# elif defined(DUET_5LC)
+#  define PLATFORM Duet5LC
 # elif defined(__LPC17xx__)
 #  define PLATFORM LPC
 # else
@@ -96,6 +98,10 @@
 # define SUPPORT_TMC51xx		0
 #endif
 
+#ifndef VARIABLE_NUM_DRIVERS
+# define VARIABLE_NUM_DRIVERS	0
+#endif
+
 #ifndef SUPPORT_CAN_EXPANSION
 # define SUPPORT_CAN_EXPANSION	0
 #endif
@@ -109,7 +115,9 @@
 #endif
 
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)
-#define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)
+#ifndef HAS_STALL_DETECT
+# define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)
+#endif
 
 #ifndef HAS_12V_MONITOR
 # define HAS_12V_MONITOR		0
@@ -176,11 +184,17 @@
 # define ALLOCATE_DEFAULT_PORTS	0
 #endif
 
-// We must define SUPPORTS_UNIQUE_ID as either 0 or 1 so we can use it in maths
-#if SAM4E || SAM4S || SAME70
-# define SUPPORTS_UNIQUE_ID		1
+// We must define MCU_HAS_UNIQUE_ID as either 0 or 1 so we can use it in maths
+#if SAM4E || SAM4S || SAME70 || SAME5x
+# define MCU_HAS_UNIQUE_ID		1
 #else
-# define SUPPORTS_UNIQUE_ID		0
+# define MCU_HAS_UNIQUE_ID		0
+#endif
+
+#if SAME70 || SAME5x
+# define MCU_HAS_TRUERANDOM	1
+#else
+# define MCU_HAS_TRUERANDOM	0
 #endif
 
 #endif // PINS_H__

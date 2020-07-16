@@ -196,7 +196,7 @@ bool RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)
 	{
 		const float pos = Transform(machinePos, axis);
-		if (isnan(pos) || isinf(pos))
+		if (std::isnan(pos) || std::isinf(pos))
 		{
 			ok = false;
 		}

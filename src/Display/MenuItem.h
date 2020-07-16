@@ -13,7 +13,7 @@
 #if SUPPORT_12864_LCD
 
 #include "General/FreelistManager.h"
-#include <Display/DisplayDriver.h>
+#include <Display/Lcd/DisplayDriver.h>
 #include "Storage/MassStorage.h"
 
 // Menu item class hierarchy

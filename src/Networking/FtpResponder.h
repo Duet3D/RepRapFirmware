@@ -40,7 +40,7 @@ protected:
 	static const uint32_t ftpPasvPortTimeout = 10000;	// maximum time to wait for an FTP data connection in milliseconds
 
 	Socket *dataSocket;
-	Port passivePort;
+	TcpPort passivePort;
 	uint32_t passivePortOpenTime;
 	OutputBuffer *dataBuf;
 

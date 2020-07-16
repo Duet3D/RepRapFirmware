@@ -211,7 +211,7 @@ Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint1
 	return PollResult::incomplete;
 }
 
-// Return true if we are on the process of receiving data form the filament monitor
+// Return true if we are on the process of receiving data from the filament monitor
 bool Duet3DFilamentMonitor::IsReceiving() const noexcept
 {
 	return state == RxdState::waitingForEndOfStartBit || state == RxdState::waitingForNibble;

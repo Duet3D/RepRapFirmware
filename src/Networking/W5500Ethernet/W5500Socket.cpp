@@ -24,7 +24,7 @@ W5500Socket::W5500Socket(NetworkInterface *iface) noexcept
 }
 
 // Initialise a TCP socket
-void W5500Socket::Init(SocketNumber skt, Port serverPort, NetworkProtocol p) noexcept
+void W5500Socket::Init(SocketNumber skt, TcpPort serverPort, NetworkProtocol p) noexcept
 {
 	socketNum = skt;
 	localPort = serverPort;

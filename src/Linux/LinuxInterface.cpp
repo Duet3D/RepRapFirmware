@@ -512,7 +512,7 @@ void LinuxInterface::Spin()
 
 void LinuxInterface::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform().Message(mtype, "=== Linux interface ===\n");
+	reprap.GetPlatform().Message(mtype, "=== SBC interface ===\n");
 	transfer.Diagnostics(mtype);
 	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 "\n", numDisconnects);
 	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d\n", (int)rxPointer, (int)txPointer, (int)txLength);

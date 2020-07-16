@@ -340,6 +340,7 @@ void Scanner::ProcessCommand() noexcept
 	{
 		const float parsedProgress = SafeStrtof(&buffer[9]);
 		progress = constrain<float>(parsedProgress, 0.0f, 100.0f);
+		reprap.ScannerUpdated();
 	}
 
 	// Upload request: UPLOAD <SIZE> <FILENAME>

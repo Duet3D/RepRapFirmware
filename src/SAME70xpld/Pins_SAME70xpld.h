@@ -118,13 +118,24 @@ constexpr Pin VrefSensePin = NoPin;
 
 // Diagnostic LED pin
 constexpr Pin DiagPin = NoPin;												// TBD
+constexpr bool DiagOnPolarity = true;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(16), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
+constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
+
+// Shared SPI definitions
+#define USART_SPI		0
+
+// We have to tell the processor which NPCS output we are using, even though we use other pins for CS
+// We choose NPCS2 because on the SAME70, it is not physically connected
+#define SHARED_SPI					Spi0
+#define PERIPHERAL_CHANNEL_ID		2
+#define PERIPHERAL_CHANNEL_CS_PIN	APIN_SPI_SS2
 
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board

@@ -98,7 +98,7 @@ constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB po
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
-constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all drivers
+constexpr Pin GlobalTmc22xxEnablePin = PortAPin(1);	// The pin that drives ENN of all drivers
 constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin, PortCPin(27), PortCPin(25) };
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(20), PortCPin(2), PortCPin(28), PortCPin(4), PortCPin(5), PortCPin(31), PortCPin(21) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortCPin(18), PortAPin(8), PortBPin(4), PortBPin(7), PortCPin(6), PortAPin(18), PortCPin(24) };
@@ -108,19 +108,34 @@ Uart * const UART_TMC22xx = UART0;
 constexpr IRQn TMC22xx_UART_IRQn = UART0_IRQn;
 constexpr uint32_t ID_TMC22xx_UART = ID_UART0;
 constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
-#define TMC22xx_UART_Handler	UART0_Handler
+
+#define TMC22xx_UART_Handler			UART0_Handler
+
+#define TMC22xx_USES_SERCOM				0
+#define TMC22xx_HAS_ENABLE_PINS			1
+#define TMC22xx_VARIABLE_NUM_DRIVERS	1
+#define TMC22xx_SINGLE_DRIVER			0
+#define TMC22xx_HAS_MUX					1
+#define TMC22xx_USE_SLAVEADDR			0
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
 // We send data via a 1K series resistor. Even if we assume a 200pF load on the shared UART line, this gives a 200ns time constant, which is much less than the 2us bit time @ 500kbaud.
 // To write a register we need to send 8 bytes. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
 // So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
-// In testing I found that 500kbaud was not reliable, so now using 200kbaud.
-constexpr uint32_t DriversBaudRate = 200000;
-constexpr uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
+// In testing I found that 500kbaud was not reliable, so now using 250kbaud.
+constexpr uint32_t DriversBaudRate = 250000;
+constexpr uint32_t TransferTimeout = 2;										// any transfer should complete within 2 ticks @ 1ms/tick
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 constexpr Pin TMC22xxMuxPins[3] = { PortCPin(14), PortCPin(16), PortCPin(17) };	// Pins that control the UART multiplexer, LSB first
+
+constexpr float DriverSenseResistor = 0.083 + 0.03;							// in ohms
+constexpr float DriverVRef = 180.0;											// in mV
+constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
+constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
+constexpr float MaximumMotorCurrent = 1600.0;								// we can't go any higher without switching to the low sensitivity range
+constexpr float MaximumStandstillCurrent = 1400.0;
 
 // Thermistors
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortAPin(20), PortBPin(0), PortCPin(30), PortBPin(1) }; 	// Thermistor pin numbers
@@ -153,12 +168,14 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 constexpr Pin Z_PROBE_PIN = PortCPin(15);									// Z probe analog input
 constexpr Pin Z_PROBE_MOD_PIN = PortCPin(26);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
+constexpr bool DiagOnPolarity = true;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(8), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { PortBPin(13) };
+constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // 12864 LCD
@@ -170,14 +187,16 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 constexpr uint32_t LcdSpiClockFrequency = 2000000;		// 2.0MHz
 constexpr Pin LcdCSPin = PortCPin(9);
 constexpr Pin LcdA0Pin = PortAPin(21);
+constexpr Pin LcdAltCSPin = PortAPin(22);
 constexpr Pin LcdBeepPin = PortAPin(15);
 constexpr Pin EncoderPinA = PortBPin(5);
 constexpr Pin EncoderPinB = PortCPin(3);
 constexpr Pin EncoderPinSw = PortAPin(7);
 
-// Added EXP_0 and EXP_1 pins that may be used for the data/command (DC/A0) line of a 4-wire SPI display
-constexpr Pin Exp0Pin = PortAPin(21);
-constexpr Pin Exp1Pin = PortAPin(22);
+// Shared SPI definitions
+#define USART_SPI		1
+#define USART_SSPI		USART0
+#define ID_SSPI			ID_USART0
 
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
@@ -256,8 +275,8 @@ constexpr PinEntry PinTable[] =
 	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
 	{ PortBPin(2),	PinCapability::rw,		"urxd" },
 	{ PortBPin(3),	PinCapability::rw,		"utxd" },
-	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },					// also used by ST7567 LCD controllers
-	{ PortAPin(22), PinCapability::ainrw,	"exp.pa22" },
+	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },					// also used by ST7567 LCD controllers as A0 or C/D selector
+	{ PortAPin(22), PinCapability::ainrw,	"exp.pa22" },                   // also used by ST7567 LCD controllers as active low CS
 	{ PortAPin(3),	PinCapability::rw,		"exp.pa3,twd0" },
 	{ PortAPin(4),	PinCapability::rw,		"exp.pa4,twck0" },
 };
@@ -309,20 +328,16 @@ namespace StepPins
 				: 0;
 	}
 
-	// Set the specified step pins high
-	// This needs to be as fast as possible, so we do a parallel write to the port(s).
-	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversHigh(uint32_t driverMap) noexcept
+	// Set the specified step pins high. This needs to be fast.
+	static inline __attribute__((always_inline)) void StepDriversHigh(uint32_t driverMap) noexcept
 	{
-		PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
+		PIOC->PIO_SODR = driverMap;				// on Duet Maestro all step pins are on port C
 	}
 
-	// Set all step pins low
-	// This needs to be as fast as possible, so we do a parallel write to the port(s).
-	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversLow() noexcept
+	// Set the specified step pins low. This needs to be fast.
+	static inline void __attribute__((always_inline)) StepDriversLow(uint32_t driverMap) noexcept
 	{
-		PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
+		PIOC->PIO_CODR = driverMap;				// on Duet Maestro all step pins are on port C
 	}
 }
 

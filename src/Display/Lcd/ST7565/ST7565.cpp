@@ -46,27 +46,30 @@ pixel_width = 128,
 pixel_height = 64
 */
 
-#include <Display/ST7565/ST7565.h>
+#include <Display/Lcd/ST7565/ST7565.h>
 
 #if SUPPORT_12864_LCD
 
 #include "Pins.h"
-#include "Tasks.h"
+#include <Hardware/SharedSpi/SharedSpiDevice.h>
 #include "Hardware/IoPorts.h"
 
 ST7565::ST7565(PixelNumber width, PixelNumber height, Pin csPin, Pin dcPin, bool csPolarity, Pin gatePin) noexcept
-	: DisplayDriver(width, height), dcPin(dcPin), gatePin(gatePin)
+	: DisplayDriver(width, height),
+	  spiDevice(SharedSpiDevice::GetMainSharedSpiDevice(), LcdSpiClockFrequency, SpiMode::mode0, NoPin, true),
+	  dcPin(dcPin),
+	  gatePin(gatePin)
 {
 	// The pin to use for CS
-	spiDevice.csPin = csPin;
+	spiDevice.SetCsPin(csPin);
 	// CS (chip select) should be active low for the ST7565
 	// But this causes the MOSI and SCK to be permanently low because they are AND-gated with CS, so therefore
 	// an alternative CS pin can be used, and the regular CS pin (can be left disconnected) is set high just before chip select.
-	spiDevice.csPolarity = csPolarity;
+	spiDevice.SetCsPolarity(csPolarity);
 	// Data is sampled on the rising edge of the clock pulse and shifted out on the falling edge of the clock pulse
-	spiDevice.spiMode = 0;
+	//spiDevice.SetSpiMode = 0;
 	// The LcdSpiClockFrequency is now defined in the Pins_xxxxx.h file for the configuration being built
-	spiDevice.clockFrequency = LcdSpiClockFrequency;
+	spiDevice.SetClockFrequency(LcdSpiClockFrequency);
 #ifdef __LPC17xx__
 	spiDevice.sspChannel = LcdSpiChannel;
 #endif
@@ -82,10 +85,7 @@ void ST7565::OnInitialize() noexcept
 	// Post-reset wait of 6ms
 	delay(6);
 
-	sspi_master_init(&spiDevice, 8);
-
 	{
-		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 
 		//TODO: make these separate methods?
@@ -126,7 +126,6 @@ void ST7565::OnInitialize() noexcept
 void ST7565::OnEnable() noexcept
 {
 	{
-		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 
 		// Exit sleep mode, display on
@@ -140,14 +139,13 @@ void ST7565::OnEnable() noexcept
 // Adjust the serial interface clock frequency
 void ST7565::SetBusClockFrequency(uint32_t freq) noexcept
 {
-	spiDevice.clockFrequency = freq;
+	spiDevice.SetClockFrequency(freq);
 }
 
 // Flush the specified row
 void ST7565::OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept
 {
 	{
-		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 
 		// Set the GDRAM address to send the bytes to
@@ -225,7 +223,6 @@ uint8_t ST7565::transformTile(uint8_t data[8], PixelNumber c) noexcept
 void ST7565::flushEntireBuffer() noexcept
 {
 	{
-		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 
 		uint8_t tile[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -282,16 +279,15 @@ void ST7565::selectDevice() noexcept
 {
 	//TODO: can/should the "MutexLocker lock(Tasks::GetSpiMutex());" be moved here as well?
 	writeDigital(gatePin, true);
-	sspi_master_setup_device(&spiDevice);
 	delayMicroseconds(1);
-	sspi_select_device(&spiDevice);
+	spiDevice.Select();
 	delayMicroseconds(1);
 }
 
 void ST7565::deselectDevice() noexcept
 {
 	delayMicroseconds(1);
-	sspi_deselect_device(&spiDevice);
+	spiDevice.Deselect();
 	writeDigital(gatePin, false);
 }
 
@@ -315,7 +311,7 @@ void ST7565::sendCommand(uint8_t command) noexcept
 	uint8_t buffer[1];
 	buffer[0] = command;
 
-	sspi_transceive_packet(buffer, nullptr, 1);
+	spiDevice.TransceivePacket(buffer, nullptr, 1);
 }
 
 // Send a data byte to the LCD. The SPI mutex is already owned
@@ -324,7 +320,7 @@ void ST7565::sendArg(uint8_t arg) noexcept
 	uint8_t buffer[1];
 	buffer[0] = arg;
 
-	sspi_transceive_packet(buffer, nullptr, 1);
+	spiDevice.TransceivePacket(buffer, nullptr, 1);
 }
 
 void ST7565::startDataTransaction() noexcept
@@ -337,8 +333,7 @@ void ST7565::sendData(uint8_t data) noexcept
 {
 	uint8_t buffer[1];
 	buffer[0] = data;
-
-	sspi_transceive_packet(buffer, nullptr, 1);
+	spiDevice.TransceivePacket(buffer, nullptr, 1);
 }
 
 void ST7565::endDataTransaction() noexcept

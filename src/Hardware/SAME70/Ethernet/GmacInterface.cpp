@@ -31,13 +31,14 @@
  *
  */
 
-#include "same70_gmac.h"
+#include "GmacInterface.h"
 #include "pmc/pmc.h"
+
 #include "conf_eth.h"
 #include <cstring>
 
 extern "C" {
-#include "ethernet_phy.h"
+#include "ksz8081rna/ethernet_phy.h"
 #include "lwip/opt.h"
 #include "lwip/sys.h"
 #include "lwip/def.h"
@@ -50,9 +51,7 @@ extern "C" {
 
 #define __nocache	__attribute__((section(".ram_nocache")))
 
-extern void delay(uint32_t ms);
-
-// We can't #include RepRapFirmware.h here because that leads to a duplicate definition of ERR_TIMEOUT
+#include <RepRapFirmware.h>
 #include <RTOSIface/RTOSIface.h>
 #include <TaskPriorities.h>
 
@@ -92,11 +91,9 @@ unsigned int txBufferTooShortCount;
 #define GMAC_RX_ERRORS (GMAC_RSR_RXOVR | GMAC_RSR_HNO)
 
 /** TX descriptor lists */
-COMPILER_ALIGNED(8)
-static gmac_tx_descriptor_t gs_tx_desc_null;
+alignas(8) static gmac_tx_descriptor_t gs_tx_desc_null;
 /** RX descriptors lists */
-COMPILER_ALIGNED(8)
-static gmac_rx_descriptor_t gs_rx_desc_null;
+alignas(8) static gmac_rx_descriptor_t gs_rx_desc_null;
 /**
  * GMAC driver structure.
  */
@@ -222,7 +219,7 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t star
 
 			LWIP_DEBUGF(NETIF_DEBUG,
 					("gmac_rx_populate_queue: new pbuf allocated: %p [idx=%u]\n",
-					p, ul_index));
+					p, (unsigned int)ul_index));
 		}
 
 		++ul_index;
@@ -287,7 +284,7 @@ static void gmac_tx_init(struct gmac_device *ps_gmac_dev) noexcept
 	}
 	ps_gmac_dev->tx_desc[ul_index - 1].status.val |= GMAC_TXD_WRAP;
 
-	/* Set receive buffer queue base address pointer. */
+	/* Set transmit buffer queue base address pointer. */
 	gmac_set_tx_queue(GMAC, (uint32_t) &ps_gmac_dev->tx_desc[0]);
 }
 
@@ -400,7 +397,7 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 	{
 		uint8_t *buffer = reinterpret_cast<uint8_t*>(ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].addr);
 		size_t totalLength = 0;
-		for (const pbuf *q = p; q != NULL; q = q->next)
+		for (const pbuf *q = p; q != nullptr; q = q->next)
 		{
 			totalLength += q->len;
 			if (totalLength > GMAC_TX_UNITSIZE)
@@ -423,7 +420,7 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 
 	LWIP_DEBUGF(NETIF_DEBUG,
 			("gmac_low_level_output: DMA buffer sent, size=%d [idx=%u]\n",
-			p->tot_len, ps_gmac_dev->us_tx_idx));
+			p->tot_len, (unsigned int)ps_gmac_dev->us_tx_idx));
 
 	ps_gmac_dev->us_tx_idx = (ps_gmac_dev->us_tx_idx + 1) % GMAC_TX_BUFFERS;
 
@@ -499,7 +496,7 @@ static pbuf *gmac_low_level_input(struct netif *netif) noexcept
 
 		LWIP_DEBUGF(NETIF_DEBUG,
 				("gmac_low_level_input: DMA buffer %p received, size=%u [idx=%u]\n",
-				p, length, ps_gmac_dev->us_rx_idx));
+				p, (unsigned int)length, (unsigned int)ps_gmac_dev->us_rx_idx));
 
 		/* Set pbuf total packet size. */
 		p->tot_len = length;
@@ -784,8 +781,6 @@ void ethernetif_terminate() noexcept
 	NVIC_DisableIRQ(GMAC_IRQn);
 	ethernetTask.TerminateAndUnlink();
 }
-
-extern "C" u32_t millis() noexcept;
 
 extern "C" u32_t sys_now() noexcept
 {

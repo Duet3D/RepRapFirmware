@@ -32,6 +32,7 @@ public:
 	bool HasCommandNumber() const noexcept;
 	int GetCommandNumber() const noexcept;
 	int8_t GetCommandFraction() const noexcept;
+	bool ContainsExpression() const noexcept;
 
 	float GetFValue() THROWS(GCodeException) __attribute__((hot));				// Get a float after a key letter
 	int32_t GetIValue() THROWS(GCodeException) __attribute__((hot));			// Get an integer after a key letter
@@ -63,6 +64,7 @@ private:
 	GCodeBuffer& gb;
 
 	void CheckArrayLength(size_t maxLength) THROWS(GCodeException);
+	void SetDriverIdFromBinary(DriverId& did, uint32_t val) THROWS(GCodeException);
 	GCodeException ConstructParseException(const char *str) const noexcept;
 	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
 	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;

@@ -55,7 +55,7 @@
 //TODO: set contrast option, controlled by Code
 //TODO: make the A0/CD pin configurable from GCode.
 
-#include <Display/DisplayDriver.h>
+#include <Display/Lcd/DisplayDriver.h>
 
 #if SUPPORT_12864_LCD
 

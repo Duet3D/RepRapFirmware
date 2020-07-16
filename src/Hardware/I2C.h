@@ -8,17 +8,18 @@
 #ifndef SRC_HARDWARE_I2C_H_
 #define SRC_HARDWARE_I2C_H_
 
-#include "Wire.h"
 #include "RepRapFirmware.h"
 #include "Tasks.h"
+
+#ifdef I2C_IFACE
+# include "Wire.h"
+#endif
 
 namespace I2C
 {
 	void Init() noexcept;
 
 #ifdef I2C_IFACE
-
-#ifdef RTOS
 
 	uint32_t statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor) noexcept;
 
@@ -30,16 +31,6 @@ namespace I2C
 		MutexLocker Lock(Tasks::GetI2CMutex());
 		return I2C_IFACE.Transfer(address, buffer, numToWrite, numToRead, statusWaitFunc);
 	}
-
-#else
-
-	// Transfer data to/from an I2C peripheral
-	inline size_t Transfer(uint16_t address, uint8_t *buffer, size_t numToWrite, size_t numToRead) noexcept
-	{
-		return I2C_IFACE.Transfer(address, buffer, numToWrite, numToRead);
-	}
-
-#endif
 
 #endif
 

@@ -7,14 +7,11 @@
 
 #include "SpiTemperatureSensor.h"
 #include "Tasks.h"
+#include <Hardware/SharedSpi/SharedSpiDevice.h>
 
-SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, uint8_t spiMode, uint32_t clockFrequency) noexcept
-	: SensorWithPort(sensorNum, name)
+SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, SpiMode spiMode, uint32_t clockFrequency) noexcept
+	: SensorWithPort(sensorNum, name), device(SharedSpiDevice::GetMainSharedSpiDevice(), clockFrequency, spiMode, NoPin, false)
 {
-	device.csPin = NoPin;
-	device.csPolarity = false;						// active low chip select
-	device.spiMode = spiMode;
-	device.clockFrequency = clockFrequency;
 #if defined(__LPC17xx__)
     device.sspChannel = TempSensorSSPChannel;		// use SSP0 on LPC
 #endif
@@ -25,41 +22,32 @@ SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *n
 bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen)
 {
 	const bool ret = SensorWithPort::ConfigurePort(gb, reply, PinAccess::write1, seen);
-	device.csPin = port.GetPin();
+	device.SetCsPin(port.GetPin());
 	return ret;
 }
 
 void SpiTemperatureSensor::InitSpi() noexcept
 {
-	sspi_master_init(&device, 8);
 	lastReadingTime = millis();
 }
 
 // Send and receive 1 to 8 bytes of data and return the result as a single 32-bit word
 TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[], size_t nbytes, uint32_t& rslt) const noexcept
 {
-	uint8_t rawBytes[8];
-	spi_status_t sts;
+	if (!device.Select(10))
 	{
-		MutexLocker lock(Tasks::GetSpiMutex(), 10);
-		if (!lock)
-		{
-			return TemperatureError::busBusy;
-		}
-
-		sspi_master_setup_device(&device);
-		delayMicroseconds(1);
-		sspi_select_device(&device);
-		delayMicroseconds(1);
-
-		sts = sspi_transceive_packet(dataOut, rawBytes, nbytes);
-
-		delayMicroseconds(1);
-		sspi_deselect_device(&device);
-		delayMicroseconds(1);
+		return TemperatureError::busBusy;
 	}
 
-	if (sts != SPI_OK)
+	delayMicroseconds(1);
+	uint8_t rawBytes[8];
+	const bool ok = device.TransceivePacket(dataOut, rawBytes, nbytes);
+	delayMicroseconds(1);
+
+	device.Deselect();
+	delayMicroseconds(1);
+
+	if (!ok)
 	{
 		return TemperatureError::timeout;
 	}

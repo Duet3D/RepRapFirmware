@@ -14,7 +14,7 @@
 
 #if SUPPORT_12864_LCD
 
-#include "Print.h"
+#include <Print.h>
 #include "Fonts/Fonts.h"
 
 // Enumeration for specifying drawing modes

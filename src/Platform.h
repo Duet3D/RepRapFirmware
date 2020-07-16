@@ -65,13 +65,13 @@ constexpr bool BACKWARDS = !FORWARDS;
 #if HAS_VREF_MONITOR
 constexpr size_t VrefFilterIndex = NumThermistorInputs;
 constexpr size_t VssaFilterIndex = NumThermistorInputs + 1;
-# if HAS_CPU_TEMP_SENSOR
+# if HAS_CPU_TEMP_SENSOR && !SAME5x
 constexpr size_t CpuTempFilterIndex = NumThermistorInputs + 2;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 3;
 # else
 constexpr size_t NumAdcFilters = NumThermistorInputs + 2;
 # endif
-#elif HAS_CPU_TEMP_SENSOR
+#elif HAS_CPU_TEMP_SENSOR && !SAME5x
 constexpr size_t CpuTempFilterIndex = NumThermistorInputs;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 1;
 #else
@@ -96,7 +96,7 @@ constexpr unsigned int ZProbeAverageReadings = 8;		// We average this number of 
 // HEATERS - The bed is assumed to be the at index 0
 
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ^ AD_OVERSAMPLE_BITS.
-#ifdef SAME70
+#if SAME70
 // On the SAME70 we read a thermistor on every tick so that we can average a higher number of readings
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 1ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
 constexpr unsigned int ThermistorAverageReadings = 16;
@@ -106,6 +106,10 @@ constexpr unsigned int ThermistorAverageReadings = 16;
 constexpr unsigned int ThermistorAverageReadings = 16;
 #endif
 
+#if SAME5x
+constexpr unsigned int TempSenseAverageReadings = 16;
+#endif
+
 constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
 
 /****************************************************************************************************/
@@ -113,7 +117,11 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(DUET3)
+#if defined(DUET_5LC)
+	Duet5LC_Unknown,
+	Duet5LC_WiFi,
+	Duet5LC_Ethernet,
+#elif defined(DUET3)
 	Duet3_v06_100 = 1,
 	Duet3_v101 = 2,
 #elif defined(SAME70XPLD)
@@ -137,6 +145,8 @@ enum class BoardType : uint8_t
 	PCCB_v10 = 1
 #elif defined(PCCB_08) || defined(PCCB_08_X5)
 	PCCB_v08 = 1
+#elif defined(DUET_5LC)
+	Duet_5LC = 1
 #elif defined(__LPC17xx__)
 	Lpc = 1
 #else
@@ -162,8 +172,10 @@ enum class DiagnosticTestType : unsigned int
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects
 
 #ifdef __LPC17xx__
-    PrintBoardConfiguration = 200,    //Prints out all pin/values loaded from SDCard to configure board
+	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
 #endif
+
+	SetWriteBuffer = 500,			// enable/disable the write buffer
 
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
@@ -234,6 +246,9 @@ public:
 
 	static constexpr size_t NumAveraged() noexcept { return numAveraged; }
 
+	// Function used as an ADC callback to feed a result into an averaging filter
+	static void CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val);
+
 private:
 	uint16_t readings[numAveraged];
 	size_t index;
@@ -243,8 +258,17 @@ private:
 	//invariant(index < numAveraged)
 };
 
+template<size_t numAveraged> void AveragingFilter<numAveraged>::CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val)
+{
+	static_cast<AveragingFilter<numAveraged>*>(cp.vp)->ProcessReading(val);
+}
+
 typedef AveragingFilter<ThermistorAverageReadings> ThermistorAveragingFilter;
 typedef AveragingFilter<ZProbeAverageReadings> ZProbeAveragingFilter;
+
+#if SAME5x
+typedef AveragingFilter<TempSenseAverageReadings> TempSenseAveragingFilter;
+#endif
 
 // Enumeration of error condition bits
 enum class ErrorCode : uint32_t
@@ -303,8 +327,11 @@ public:
 	size_t GetNumGpOutputsToReport() const noexcept;
 #endif
 
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(DUET_5LC)
 	bool IsDuetWiFi() const noexcept;
+#endif
+
+#ifdef DUET_NG
 	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
 	const char *GetBoardName() const noexcept;
 	const char *GetBoardShortName() const noexcept;
@@ -382,6 +409,7 @@ public:
 
 	// Movement
 	void EmergencyStop() noexcept;
+	size_t GetNumActualDirectDrivers() const noexcept;
 	void SetDirection(size_t axisOrExtruder, bool direction) noexcept;
 	void SetDirectionValue(size_t driver, bool dVal) noexcept;
 	bool GetDirectionValue(size_t driver) const noexcept;
@@ -558,13 +586,17 @@ public:
 	const GpInputPort& GetGpInPort(size_t gpinPortNumber) const noexcept
 		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
 
-#if SUPPORTS_UNIQUE_ID
+#if MCU_HAS_UNIQUE_ID
 	uint32_t Random() noexcept;
 	const char *GetUniqueIdString() const noexcept { return uniqueIdChars; }
 #endif
 
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
+#endif
+
+#if VARIABLE_NUM_DRIVERS
+	void AdjustNumDrivers(size_t numDriversNotAvailable) noexcept;
 #endif
 
 protected:
@@ -577,7 +609,7 @@ private:
 
 	void RawMessage(MessageType type, const char *message) noexcept;	// called by Message after handling error/warning flags
 
-	float AdcReadingToCpuTemperature(uint32_t reading) const noexcept;
+	float GetCpuTemperature() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
 	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc, std::function<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
@@ -603,7 +635,8 @@ private:
 	MacAddress defaultMacAddress;
 
 	// Board and processor
-#if SUPPORTS_UNIQUE_ID
+#if MCU_HAS_UNIQUE_ID
+	void ReadUniqueId();
 	uint32_t uniqueId[5];
 	char uniqueIdChars[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
 #endif
@@ -623,6 +656,10 @@ private:
 	void UpdateMotorCurrent(size_t driver, float current) noexcept;
 	void SetDriverDirection(uint8_t driver, bool direction) noexcept
 	pre(driver < DRIVES);
+
+#if VARIABLE_NUM_DRIVERS && SUPPORT_12864_LCD
+	size_t numActualDirectDrivers;
+#endif
 
 	bool directions[NumDirectDrivers];
 	int8_t enableValues[NumDirectDrivers];
@@ -704,8 +741,13 @@ private:
 	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters
 
 #if HAS_CPU_TEMP_SENSOR
-	uint32_t highestMcuTemperature, lowestMcuTemperature;
+	float highestMcuTemperature, lowestMcuTemperature;
 	float mcuTemperatureAdjust;
+# if SAME5x
+	TempSenseAveragingFilter tpFilter, tcFilter;
+	int32_t tempCalF1, tempCalF2, tempCalF3, tempCalF4;				// temperature calibration factors
+	void TemperatureCalibrationInit() noexcept;
+# endif
 #endif
 
 	// Axes and endstops
@@ -718,7 +760,7 @@ private:
 #endif
 
 	// Heaters
-	HeatersBitmap configuredHeaters;										// bitmask of all real heaters in use
+	HeatersBitmap configuredHeaters;								// bitmap of all real heaters in use
 
 	// Fans
 	uint32_t lastFanCheckTime;
@@ -906,6 +948,24 @@ inline void Platform::SetInstantDv(size_t drive, float value) noexcept
 	instantDvs[drive] = max<float>(value, 0.1);			// don't allow zero or negative values, they causes Move to loop indefinitely
 }
 
+inline size_t Platform::GetNumActualDirectDrivers() const noexcept
+{
+#if VARIABLE_NUM_DRIVERS
+	return numActualDirectDrivers;
+#else
+	return NumDirectDrivers;
+#endif
+}
+
+#if VARIABLE_NUM_DRIVERS
+
+inline void Platform::AdjustNumDrivers(size_t numDriversNotAvailable) noexcept
+{
+	numActualDirectDrivers = NumDirectDrivers - numDriversNotAvailable;
+}
+
+#endif
+
 inline void Platform::SetDirectionValue(size_t drive, bool dVal) noexcept
 {
 	directions[drive] = dVal;
@@ -918,18 +978,26 @@ inline bool Platform::GetDirectionValue(size_t drive) const noexcept
 
 inline void Platform::SetDriverDirection(uint8_t driver, bool direction) noexcept
 {
-	if (driver < NumDirectDrivers)
+	if (driver < GetNumActualDirectDrivers())
 	{
 		const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
+#if SAME5x
+		IoPort::WriteDigital(DIRECTION_PINS[driver], d);
+#else
 		digitalWrite(DIRECTION_PINS[driver], d);
+#endif
 	}
 }
 
 inline void Platform::SetDriverAbsoluteDirection(size_t driver, bool direction) noexcept
 {
-	if (driver < NumDirectDrivers)
+	if (driver < GetNumActualDirectDrivers())
 	{
+#if SAME5x
+		IoPort::WriteDigital(DIRECTION_PINS[driver], direction);
+#else
 		digitalWrite(DIRECTION_PINS[driver], direction);
+#endif
 	}
 }
 
@@ -955,7 +1023,7 @@ inline float Platform::AxisTotalLength(size_t axis) const noexcept
 
 // For the Duet we use the fan output for this
 // DC 2015-03-21: To allow users to control the cooling fan via gcodes generated by slic3r etc.,
-// only turn the fan on/off if the extruder ancilliary PWM has been set nonzero.
+// only turn the fan on/off if the extruder ancillary PWM has been set nonzero.
 // Caution: this is often called from an ISR, or with interrupts disabled!
 inline void Platform::ExtrudeOn() noexcept
 {

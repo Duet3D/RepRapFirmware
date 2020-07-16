@@ -21,6 +21,7 @@ FileInfoParser::FileInfoParser() noexcept
 	parserMutex.Create("FileInfoParser");
 }
 
+// This following method needs to be called repeatedly until it returns true - this may take a few runs
 bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
@@ -93,7 +94,6 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 	const uint32_t loopStartTime = millis();
 	do
 	{
-		char* const buf = reinterpret_cast<char*>(buf32);
 		size_t sizeToRead, sizeToScan;										// number of bytes we want to read and scan in this go
 
 		switch (parseState)
@@ -488,7 +488,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 							else
 							{
 								float objectHeight = SafeStrtof(zpos, nullptr);
-								if (!isnan(objectHeight) && !isinf(objectHeight))
+								if (!std::isnan(objectHeight) && !std::isinf(objectHeight))
 								{
 									parsedFileInfo.objectHeight = objectHeight;
 									foundHeight = true;
@@ -517,7 +517,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 			if (len > 31 && StringStartsWithIgnoreCase(buf, kisslicerHeightString))
 			{
 				float objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
-				if (!isnan(objectHeight) && !isinf(objectHeight))
+				if (!std::isnan(objectHeight) && !std::isinf(objectHeight))
 				{
 					parsedFileInfo.objectHeight = objectHeight;
 					return true;
@@ -564,7 +564,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len) noexcept
 					}
 					const char *tailPtr;
 					const float val = SafeStrtof(pos, &tailPtr);
-					if (tailPtr != pos && !isnan(val) && !isinf(val))	// if we found and converted a number
+					if (tailPtr != pos && !std::isnan(val) && !std::isinf(val))	// if we found and converted a number
 					{
 						parsedFileInfo.layerHeight = val;
 						return true;
@@ -646,12 +646,12 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 		{
 			++p;	// this allows for " = " from default slic3r comment and ": " from default Cura comment
 		}
-		while (isDigit(*p))
+		while (isDigit(*p) && filamentsFound < maxFilaments)
 		{
 			const char* q;
 			float filamentLength = SafeStrtof(p, &q);
 			p = q;
-			if (!isnan(filamentLength) && !isinf(filamentLength))
+			if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 			{
 				parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 				if (*p == 'm')
@@ -693,7 +693,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			if (isDigit(*p))
 			{
 				float filamentLength = SafeStrtof(p, nullptr);
-				if (!isnan(filamentLength) && !isinf(filamentLength))
+				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
 					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 					++filamentsFound;
@@ -717,7 +717,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			if (isDigit(*p))
 			{
 				float filamentLength = SafeStrtof(p, nullptr);
-				if (!isnan(filamentLength) && !isinf(filamentLength))
+				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
 					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 					++filamentsFound;
@@ -750,7 +750,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 			if (isDigit(*p))
 			{
 				float filamentLength = SafeStrtof(p, nullptr);
-				if (!isnan(filamentLength) && !isinf(filamentLength))
+				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
 					parsedFileInfo.filamentNeeded[filamentsFound] = filamentLength;
 					++filamentsFound;
@@ -767,7 +767,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 		if (p != nullptr)
 		{
 			const float filamentCMM = SafeStrtof(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
-			if (!isnan(filamentCMM) && !isinf(filamentCMM))
+			if (!std::isnan(filamentCMM) && !std::isinf(filamentCMM))
 			{
 				parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
 			}
@@ -837,6 +837,10 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 					if (StringStartsWithIgnoreCase(pos, "minutes"))
 					{
 						pos += 7;
+					}
+					else if (StringStartsWithIgnoreCase(pos, "minute"))	// assume S3D also prints "1 minute"
+					{
+						pos += 6;
 					}
 					else
 					{

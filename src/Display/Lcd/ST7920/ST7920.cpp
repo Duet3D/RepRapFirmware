@@ -7,23 +7,24 @@
  *      Author  : Martijn Schiedon
  */
 
-#include <Display/ST7920/ST7920.h>
+#include <Display/Lcd/ST7920/ST7920.h>
 
 #if SUPPORT_12864_LCD
 
 #include "Pins.h"
-#include "Tasks.h"
+#include <Hardware/SharedSpi/SharedSpiDevice.h>
 
 // The LCD SPI clock frequency is now defined in the Pins.h file for the configuration being built
 
 ST7920::ST7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
-	: DisplayDriver(width, height)
+	: DisplayDriver(width, height),
+	  spiDevice(SharedSpiDevice::GetMainSharedSpiDevice(), LcdSpiClockFrequency, SpiMode::mode0, NoPin, true)
 {
-	spiDevice.csPin = csPin;
+	spiDevice.SetCsPin(csPin);
 	// Active high chip select
-	spiDevice.csPolarity = true;
-	spiDevice.spiMode = 0;
-	spiDevice.clockFrequency = LcdSpiClockFrequency;
+	spiDevice.SetCsPolarity(true);
+	//spiDevice.spiMode = 0;
+	spiDevice.SetClockFrequency(LcdSpiClockFrequency);
 #ifdef __LPC17xx__
     spiDevice.sspChannel = LcdSpiChannel;
 #endif
@@ -32,15 +33,12 @@ ST7920::ST7920(PixelNumber width, PixelNumber height, Pin csPin) noexcept
 // Set the SPI clock frequency
 void ST7920::SetBusClockFrequency(uint32_t freq) noexcept
 {
-	spiDevice.clockFrequency = freq;
+	spiDevice.SetClockFrequency(freq);
 }
 
 void ST7920::OnInitialize() noexcept
 {
-	sspi_master_init(&spiDevice, 8);
-
 	{
-		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 
 		sendLcdCommand(FunctionSetBasicAlpha);
@@ -62,7 +60,6 @@ void ST7920::OnInitialize() noexcept
 void ST7920::OnEnable() noexcept
 {
 	{
-		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 
 		sendLcdCommand(DisplayOn);
@@ -76,7 +73,6 @@ void ST7920::OnEnable() noexcept
 void ST7920::OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumber endRow, PixelNumber endColumn) noexcept
 {
 	{
-		MutexLocker lock(Tasks::GetSpiMutex());
 		selectDevice();
 
 		setGraphicsAddress(startRow, startColumn);
@@ -97,17 +93,15 @@ void ST7920::OnFlushRow(PixelNumber startRow, PixelNumber startColumn, PixelNumb
 
 void ST7920::selectDevice() noexcept
 {
-	//TODO: can/should the "MutexLocker lock(Tasks::GetSpiMutex());" be moved here as well?
-	sspi_master_setup_device(&spiDevice);
 	delayMicroseconds(1);
-	sspi_select_device(&spiDevice);
+	spiDevice.Select();
 	delayMicroseconds(1);
 }
 
 void ST7920::deselectDevice() noexcept
 {
 	delayMicroseconds(1);
-	sspi_deselect_device(&spiDevice);
+	spiDevice.Deselect();
 }
 
 // Set the address to write to. The column address is in true coordinates, not 16-bit words anymore.
@@ -151,7 +145,7 @@ void ST7920::sendLcd(uint8_t data1, uint8_t data2) noexcept
 	data[0] = data1;
 	data[1] = data2 & 0xF0;
 	data[2] = data2 << 4;
-	sspi_transceive_packet(data, nullptr, 3);
+	spiDevice.TransceivePacket(data, nullptr, 3);
 }
 
 #endif

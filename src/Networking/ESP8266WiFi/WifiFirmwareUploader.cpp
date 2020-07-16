@@ -603,7 +603,6 @@ void WifiFirmwareUploader::Spin() noexcept
 				MessageF("Trying to connect at %u baud: ", baud);
 			}
 			uploadPort.begin(baud);
-			uploadPort.setInterruptPriority(1);				// we are going to move data at seriously high speeds
 			interface.ResetWiFiForUpload(false);
 			lastAttemptTime = lastResetTime = millis();
 			state = UploadState::connecting;

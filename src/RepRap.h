@@ -98,7 +98,7 @@ public:
 	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
 	unsigned int GetNumberOfContiguousTools() const noexcept;
 	void ReportAllToolTemperatures(const StringRef& reply) const noexcept;
-	void SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
 
 	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept;
 	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;
@@ -171,7 +171,7 @@ public:
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept;
 	void UpdateFirmware() noexcept;
 	void PrepareToLoadIap() noexcept;
-	void StartIap() noexcept;
+	[[noreturn]] void StartIap() noexcept;
 
 	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error
 	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) noexcept;

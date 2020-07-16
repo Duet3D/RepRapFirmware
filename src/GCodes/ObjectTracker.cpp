@@ -10,76 +10,59 @@
 #include <RepRap.h>
 #include "GCodes.h"
 
-#if TRACK_OBJECT_NAMES && SUPPORT_OBJECT_MODEL
-
-// Object model tables and functions for class ObjectDirectoryEntry
-// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
-// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
-
-// Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC_ODE(...) OBJECT_MODEL_FUNC_BODY(ObjectDirectoryEntry, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_ODE_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(ObjectDirectoryEntry, _condition,__VA_ARGS__)
-
-constexpr ObjectModelArrayDescriptor ObjectDirectoryEntry::xArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ObjectDirectoryEntry*)self)->x[context.GetLastIndex()], 1); }
-};
-
-constexpr ObjectModelArrayDescriptor ObjectDirectoryEntry::yArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ObjectDirectoryEntry*)self)->y[context.GetLastIndex()], 1); }
-};
-
-constexpr ObjectModelTableEntry ObjectDirectoryEntry::objectModelTable[] =
-{
-	// Within each group, these entries must be in alphabetical order
-	// 0. ObjectDirectoryEntry root
-	{ "cancelled",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetBuildObjects()->IsCancelled(context.GetLastIndex())),	ObjectModelEntryFlags::none },
-	{ "name",		OBJECT_MODEL_FUNC_ODE(self->name),																		ObjectModelEntryFlags::none },
-	{ "x",			OBJECT_MODEL_FUNC_NOSELF(&xArrayDescriptor),															ObjectModelEntryFlags::none },
-	{ "y",			OBJECT_MODEL_FUNC_NOSELF(&yArrayDescriptor),															ObjectModelEntryFlags::none },
-};
-
-constexpr uint8_t ObjectDirectoryEntry::objectModelTableDescriptor[] =
-{
-	1,		// number of sub-tables
-	4
-};
-
-DEFINE_GET_OBJECT_MODEL_TABLE(ObjectDirectoryEntry)
+#if TRACK_OBJECT_NAMES
 
 // Object model tables and functions for class ObjectTracker
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC_OT(...) OBJECT_MODEL_FUNC_BODY(ObjectTracker, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_OT_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(ObjectTracker, _condition,__VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ObjectTracker, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(ObjectTracker, _condition,__VA_ARGS__)
 
 constexpr ObjectModelArrayDescriptor ObjectTracker::objectsArrayDescriptor =
 {
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ObjectTracker*)self)->numObjects; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-									-> ExpressionValue { return ExpressionValue(&(((const ObjectTracker*)self)->objectDirectory[context.GetLastIndex()]), 0); }
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
+};
+
+constexpr ObjectModelArrayDescriptor ObjectTracker::xArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ((const ObjectTracker*)self)->GetXCoordinate(context); }
+};
+
+constexpr ObjectModelArrayDescriptor ObjectTracker::yArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ((const ObjectTracker*)self)->GetYCoordinate(context); }
 };
 
 constexpr ObjectModelTableEntry ObjectTracker::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. BuildObjects root
-	{ "currentObject",	OBJECT_MODEL_FUNC_OT((int32_t)self->currentObjectNumber),			ObjectModelEntryFlags::live },
-	{ "m486Names",		OBJECT_MODEL_FUNC_OT(self->usingM486Naming),						ObjectModelEntryFlags::none },
-	{ "m486Numbers",	OBJECT_MODEL_FUNC_OT(self->usingM486Labelling),						ObjectModelEntryFlags::none },
+	{ "currentObject",	OBJECT_MODEL_FUNC((int32_t)self->currentObjectNumber),				ObjectModelEntryFlags::live },
+	{ "m486Names",		OBJECT_MODEL_FUNC(self->usingM486Naming),							ObjectModelEntryFlags::none },
+	{ "m486Numbers",	OBJECT_MODEL_FUNC(self->usingM486Labelling),						ObjectModelEntryFlags::none },
 	{ "objects",		OBJECT_MODEL_FUNC_NOSELF(&objectsArrayDescriptor),					ObjectModelEntryFlags::none },
+#if TRACK_OBJECT_NAMES
+	// 1. ObjectDirectoryEntry root
+	{ "cancelled",	OBJECT_MODEL_FUNC(self->IsCancelled(context.GetLastIndex())),			ObjectModelEntryFlags::none },
+	{ "name",		OBJECT_MODEL_FUNC(self->objectDirectory[context.GetLastIndex()].name),	ObjectModelEntryFlags::none },
+	{ "x",			OBJECT_MODEL_FUNC_NOSELF(&xArrayDescriptor),							ObjectModelEntryFlags::none },
+	{ "y",			OBJECT_MODEL_FUNC_NOSELF(&yArrayDescriptor),							ObjectModelEntryFlags::none },
+#endif
 };
 
 constexpr uint8_t ObjectTracker::objectModelTableDescriptor[] =
 {
-	1,		// number of sub-tables
+	1 + TRACK_OBJECT_NAMES,		// number of sub-tables
+	4,
+#if TRACK_OBJECT_NAMES
 	4
+#endif
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ObjectTracker)
@@ -273,60 +256,117 @@ void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
 	}
 }
 
+#if HAS_MASS_STORAGE
+
+// Write the object details to file, returning true of successful
+bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
+{
+	bool ok = true;
+
+	// Write the object list
+#if TRACK_OBJECT_NAMES
+	for (size_t i = 0; ok && i < min<unsigned int>(numObjects, MaxTrackedObjects); ++i)
+	{
+		String<StringLength100> buf;
+		buf.printf("M486 S%u A\"%s\"\n", i, objectDirectory[i].name);
+		ok = f->Write(buf.c_str());
+	}
+#else
+	{
+		String<StringLength20> buf;
+		buf.printf("M486 T%u", numObjects);
+		ok = f->Write(buf.c_str());
+	}
+#endif
+
+	if (ok)
+	{
+		// Write which objects have been cancelled
+		ok = objectsCancelled.IterateWhile([f](unsigned int index, bool first) -> bool
+											{
+												String<StringLength20> buf;
+												buf.printf("M486 P%u\n", index);
+												return f->Write(buf.c_str());
+											});
+	}
+
+	// Write the current object
+	if (ok)
+	{
+		String<StringLength20> buf;
+		buf.printf("M486 S%d", currentObjectNumber);
+		ok = f->Write(buf.c_str());
+	}
+
+	return ok;
+}
+
+#endif
+
 #if TRACK_OBJECT_NAMES
 
 // Create a new entry in the object directory
 void ObjectDirectoryEntry::Init(const char *label) noexcept
 {
 	name = label;
-	x[0] = x[1] = y[0] = y[1] = std::numeric_limits<float>::quiet_NaN();
+	x[0] = x[1] = y[0] = y[1] = std::numeric_limits<int16_t>::min();
 }
 
 // Update the min and max object coordinates to include the coordinates passed, returning true if anything was changed
-bool ObjectDirectoryEntry::UpdateObjectCoordinates(const float coords[]) noexcept
+bool ObjectDirectoryEntry::UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept
 {
 	bool updated = false;
-	if (isnan(x[0]))
+	if (axes.IsBitSet(X_AXIS))
 	{
-		x[0] = x[1] = coords[X_AXIS];
-		y[0] = y[1] = coords[Y_AXIS];
-		updated = true;
+		const int16_t xVal = lrintf(coords[X_AXIS]);
+		if (x[1] == std::numeric_limits<int16_t>::min())
+		{
+			x[0] = x[1] = xVal;
+			updated = true;
+		}
+		else if (xVal < x[0])
+		{
+			x[0] = xVal;
+			updated = true;
+		}
+		else if (xVal > x[1])
+		{
+			x[1] = xVal;
+			updated = true;
+		}
 	}
-	else
-	{
-		if (coords[X_AXIS] < x[0])
-		{
-			x[0] = coords[X_AXIS];
-			updated = true;
-		}
-		else if (coords[X_AXIS] > x[1])
-		{
-			x[1] = coords[X_AXIS];
-			updated = true;
-		}
 
-		if (coords[Y_AXIS] < y[0])
+	if (axes.IsBitSet(Y_AXIS))
+	{
+		const int16_t yVal = lrintf(coords[Y_AXIS]);
+		if (y[1] == std::numeric_limits<int16_t>::min())
 		{
-			y[0] = coords[Y_AXIS];
+			y[0] = y[1] = yVal;
 			updated = true;
 		}
-		else if (coords[Y_AXIS] > y[1])
+		else if (yVal < y[0])
 		{
-			y[1] = coords[Y_AXIS];
+			y[0] = yVal;
+			updated = true;
+		}
+		else if (yVal > y[1])
+		{
+			y[1] = yVal;
 			updated = true;
 		}
 	}
+
 	return updated;
 }
 
 // Update the min and max object coordinates to include the coordinates passed
 // We could pass both the start and end coordinates of the printing move, however it is simpler just to pass the end coordinates.
 // This is OK because it is very unlikely that there won't be a subsequent extruding move that ends close to the original one.
-void ObjectTracker::UpdateObjectCoordinates(const float coords[]) noexcept
+void ObjectTracker::UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept
 {
 	if (currentObjectNumber >= 0 && currentObjectNumber < (int)numObjects)
 	{
-		if (objectDirectory[currentObjectNumber].UpdateObjectCoordinates(coords))
+		if (objectDirectory[currentObjectNumber].UpdateObjectCoordinates(coords, axes))
 		{
 			reprap.JobUpdated();
 		}
@@ -392,6 +432,18 @@ void ObjectTracker::StopObject(GCodeBuffer& gb) noexcept
 	{
 		ChangeToObject(gb, -1);
 	}
+}
+
+ExpressionValue ObjectTracker::GetXCoordinate(const ObjectExplorationContext& context) const noexcept
+{
+	const int16_t val = objectDirectory[context.GetIndex(1)].x[context.GetIndex(0)];
+	return (val == std::numeric_limits<int16_t>::min()) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)val);
+}
+
+ExpressionValue ObjectTracker::GetYCoordinate(const ObjectExplorationContext& context) const noexcept
+{
+	const int16_t val = objectDirectory[context.GetIndex(1)].y[context.GetIndex(0)];
+	return (val == std::numeric_limits<int16_t>::min()) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)val);
 }
 
 #endif

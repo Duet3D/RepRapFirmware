@@ -49,6 +49,10 @@ extern "C" {
  * @{
  */
 
+#ifdef ERR_TIMEOUT			// Atmel Start file err_codes.h defies this
+# undef ERR_TIMEOUT
+#endif
+
 /** Definitions for error constants. */
 typedef enum {
 /** No error, everything OK. */

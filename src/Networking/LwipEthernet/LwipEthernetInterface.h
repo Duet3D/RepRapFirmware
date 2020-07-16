@@ -5,8 +5,8 @@
  *      Authors: David and Christian
  */
 
-#ifndef SRC_SAME70_LWIPETHERNETINTERFACE_H_
-#define SRC_SAME70_LWIPETHERNETINTERFACE_H_
+#ifndef SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_
+#define SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_
 
 #include "Networking/NetworkInterface.h"
 #include "Networking/NetworkDefs.h"
@@ -54,7 +54,7 @@ public:
 	// LwIP interfaces
 	bool ConnectionEstablished(tcp_pcb *pcb) noexcept;
 
-	void OpenDataPort(Port port) noexcept override;
+	void OpenDataPort(TcpPort port) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 protected:
@@ -82,7 +82,7 @@ private:
 	LwipSocket *sockets[NumEthernetSockets];
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
-	Port portNumbers[NumProtocols];					// port number used for each protocol
+	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 	bool closeDataPort;
 	tcp_pcb *listeningPcbs[NumTcpPorts];
@@ -97,4 +97,4 @@ private:
 	MacAddress macAddress;
 };
 
-#endif
+#endif	// SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_

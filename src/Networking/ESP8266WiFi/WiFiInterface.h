@@ -62,7 +62,7 @@ public:
 	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
 	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
-	void OpenDataPort(Port port) noexcept override;
+	void OpenDataPort(TcpPort port) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 	// The remaining functions are specific to the WiFi version
@@ -83,8 +83,8 @@ protected:
 private:
 	void InitSockets() noexcept;
 	void TerminateSockets() noexcept;
-	void TerminateSockets(Port port) noexcept;
-	void StopListening(Port port) noexcept;
+	void TerminateSockets(TcpPort port) noexcept;
+	void StopListening(TcpPort port) noexcept;
 
 	void StartProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumProtocols);
@@ -95,7 +95,7 @@ private:
 	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 	pre(protocol < NumProtocols);
 
-	NetworkProtocol GetProtocolByLocalPort(Port port) const noexcept;
+	NetworkProtocol GetProtocolByLocalPort(TcpPort port) const noexcept;
 
 	void SetupSpi() noexcept;
 
@@ -106,7 +106,7 @@ private:
 		return SendCommand(cmd, socket, flags, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
 	}
 
-	void SendListenCommand(Port port, NetworkProtocol protocol, unsigned int maxConnections) noexcept;
+	void SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections) noexcept;
 	void GetNewStatus() noexcept;
 	static const char* TranslateWiFiResponse(int32_t response) noexcept;
 
@@ -121,8 +121,8 @@ private:
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
-	Port portNumbers[NumProtocols];					// port number used for each protocol
-	Port ftpDataPort;
+	TcpPort portNumbers[NumProtocols];					// port number used for each protocol
+	TcpPort ftpDataPort;
 	bool closeDataPort;
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 

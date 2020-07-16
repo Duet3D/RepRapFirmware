@@ -16,18 +16,13 @@
 
 #if TRACK_OBJECT_NAMES
 
-struct ObjectDirectoryEntry INHERIT_OBJECT_MODEL
+struct ObjectDirectoryEntry
 {
 	const char *name;					// pointer to the object name within the string buffer
-	float x[2], y[2];					// lowest and highest extrusion coordinates
+	int16_t x[2], y[2];					// lowest and highest extrusion coordinates
 
 	void Init(const char *label) noexcept;
-	bool UpdateObjectCoordinates(const float coords[]) noexcept;
-
-protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(x)
-	OBJECT_MODEL_ARRAY(y)
+	bool UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept;
 };
 
 #endif
@@ -56,8 +51,12 @@ public:
 #if TRACK_OBJECT_NAMES
 	void StartObject(GCodeBuffer& gb, const char *label) noexcept;
 	void StopObject(GCodeBuffer& gb) noexcept;
-	void UpdateObjectCoordinates(const float coords[]) noexcept;
+	void UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept;
 	bool IsCancelled(size_t objectNumber) const noexcept { return objectsCancelled.IsBitSet(objectNumber); }
+#endif
+
+#if HAS_MASS_STORAGE
+	bool WriteObjectDirectory(FileStore *f) const noexcept;
 #endif
 
 protected:
@@ -65,6 +64,8 @@ protected:
 #if TRACK_OBJECT_NAMES
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(objects)
+	OBJECT_MODEL_ARRAY(x)
+	OBJECT_MODEL_ARRAY(y)
 #endif
 
 private:
@@ -78,6 +79,8 @@ private:
 #if TRACK_OBJECT_NAMES
 	void CreateObject(unsigned int number, const char *label) noexcept;
 	void SetObjectName(unsigned int number, const char *label) noexcept;
+	ExpressionValue GetXCoordinate(const ObjectExplorationContext& context) const noexcept;
+	ExpressionValue GetYCoordinate(const ObjectExplorationContext& context) const noexcept;
 #endif
 
 	RestorePoint rp;									// The user coordinates at the point of restarting moves after skipping an object

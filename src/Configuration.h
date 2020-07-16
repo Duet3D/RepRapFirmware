@@ -24,6 +24,7 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #include <cstddef>			// for size_t
+#include <cstring>			// for strlen
 
 // Generic constants
 constexpr float ABS_ZERO = -273.15;						// Celsius
@@ -148,7 +149,7 @@ constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. 
 //     Using single-precision maths and up to 9-factor calibration: (9 + 5) * 4 bytes per point
 //     Using double-precision maths and up to 9-factor calibration: (9 + 5) * 8 bytes per point
 //   So 32 points using double precision arithmetic need 3584 bytes of stack space.
-#if SAM4E || SAM4S || SAME70
+#if SAM4E || SAM4S || SAME70 || SAME5x
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
 constexpr size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
@@ -207,7 +208,7 @@ constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 constexpr size_t MaxMessageLength = 256;
 constexpr size_t MaxTitleLength = 61;
 
-#if SAM4E || SAM4S || SAME70 || defined(ESP_NETWORKING)
+#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
 constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
 constexpr size_t MaxVariableNameLength = 120;
 #else
@@ -231,7 +232,7 @@ constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
 constexpr size_t StringBufferLength = StringLength256;	// Length of the string buffer used by the expression parser
 
-#if SAM4E || SAM4S || SAME70 || defined(ESP_NETWORKING)
+#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer
 constexpr size_t GCODE_LENGTH = 201;					// maximum number of non-comment characters in a line of GCode including the null terminator
 constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that we can queue to synchronise it to a move
@@ -244,7 +245,7 @@ constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that w
 // When using RTOS, it is best if it is possible to fit an HTTP response header in a single buffer. Our headers are currently about 230 bytes long.
 // A note on reserved buffers: the worst case is when a GCode with a long response is processed. After string the response, there must be enough buffer space
 // for the HTTP responder to return a status response. Otherwise DWC never gets to know that it needs to make a rr_reply call and the system deadlocks.
-#if SAME70
+#if SAME70 || SAME5x
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 40;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
@@ -267,12 +268,12 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved ou
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 // These two definitions are only used if TRACK_OBJECT_NAMES is defined, however that definition isn't available in this file
-#if SAME70
-constexpr size_t MaxTrackedObjects = 30;				// How many build plate objects we track. Each one needs 24 bytes of storage, in addition to the string space.
-constexpr size_t ObjectNamesStringSpace = 600;			// How much space we reserve for the names of objects on the build plate
+#if SAME70 || SAME5x
+constexpr size_t MaxTrackedObjects = 32;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
+constexpr size_t ObjectNamesStringSpace = 1000;			// How much space we reserve for the names of objects on the build plate
 #else
-constexpr size_t MaxTrackedObjects = 10;				// How many build plate objects we track. Each one needs 24 bytes of storage, in addition to the string space.
-constexpr size_t ObjectNamesStringSpace = 200;			// How much space we reserve for the names of objects on the build plate
+constexpr size_t MaxTrackedObjects = 20;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
+constexpr size_t ObjectNamesStringSpace = 500;			// How much space we reserve for the names of objects on the build plate
 #endif
 
 // Move system

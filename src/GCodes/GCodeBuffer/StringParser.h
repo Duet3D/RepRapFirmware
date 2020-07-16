@@ -41,6 +41,7 @@ public:
 	bool HasCommandNumber() const noexcept { return hasCommandNumber; }
 	int GetCommandNumber() const noexcept { return commandNumber; }
 	int8_t GetCommandFraction() const noexcept { return commandFraction; }
+	bool ContainsExpression() const noexcept { return seenExpression; }
 
 	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?
 	float GetFValue() THROWS(GCodeException) __attribute__((hot));				// Get a float after a key letter
@@ -153,6 +154,7 @@ private:
 	bool seenMetaCommand;
 	bool warnedAboutMixedSpacesAndTabs;
 	bool overflowed;
+	bool seenExpression;
 
 	bool checksumRequired;								// True if we only accept commands with a valid checksum
 	int8_t commandFraction;

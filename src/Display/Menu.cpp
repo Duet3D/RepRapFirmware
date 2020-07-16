@@ -69,8 +69,7 @@
 
 #if SUPPORT_12864_LCD
 
-//#include "ST7920/lcd7920.h"
-#include <Display/DisplayDriver.h>
+#include <Display/Lcd/DisplayDriver.h>
 #include "RepRap.h"
 #include "Platform.h"
 #include "Display/Display.h"

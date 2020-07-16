@@ -18,8 +18,8 @@
 
 #if SUPPORT_12864_LCD
 
-#include <Display/DisplayDriver.h>
-#include "SharedSpi.h"
+#include <Display/Lcd/DisplayDriver.h>
+#include <Hardware/SharedSpi/SharedSpiClient.h>
 
 class ST7920 : public DisplayDriver
 {
@@ -44,7 +44,7 @@ public:
 	constexpr PixelNumber GetTileHeight() const noexcept { return 1; };
 
 private:
-	sspi_device spiDevice;
+	SharedSpiClient spiDevice;
 	void selectDevice() noexcept;
 	void deselectDevice() noexcept;
 	void sendLcdCommand(uint8_t command) noexcept;

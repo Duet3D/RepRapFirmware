@@ -64,7 +64,8 @@ public:
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;
 	int GetCommandNumber() const noexcept;
-	int8_t GetCommandFraction() const noexcept;
+	int8_t GetCommandFraction() const noexcept;										// Return the command fraction, or -1 if none given
+	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return machineState->lineNumber; }
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
@@ -79,8 +80,9 @@ public:
 	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
 		post(minValue <= result; result <= maxValue);								// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
-	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS(GCodeException)
-		post(result < maxValuePlusOne);												// Get an unsigned integer value, throw if >= limit
+	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne, uint32_t minValue = 0) THROWS(GCodeException)
+		pre(maxValuePlusOne > minValue)
+		post(result >= minValue; result < maxValuePlusOne);							// Get an unsigned integer value, throw if outside limits
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);				// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);						// Get a MAC address sextet after a key letter
 	PwmFrequency GetPwmFrequency() THROWS(GCodeException);							// Get a PWM frequency

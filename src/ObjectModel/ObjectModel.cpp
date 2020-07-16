@@ -940,7 +940,7 @@ void ObjectModel::ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noe
 	{
 		buf->cat('0');							// replace 0.000... in JSON by 0. This is mostly to save space when writing workplace coordinates.
 	}
-	else if (isnan(val.fVal) || isinf(val.fVal))
+	else if (std::isnan(val.fVal) || std::isinf(val.fVal))
 	{
 		buf->cat("null");						// avoid generating bad JSON if the value is a NaN or infinity
 	}

@@ -38,11 +38,19 @@
 #endif
 
 #if HAS_HIGH_SPEED_SD
-# include "sam/drivers/hsmci/hsmci.h"
-# include "conf_sd_mmc.h"
+
+# if SAME5x
+//TODO
+# else
+#  include "sam/drivers/hsmci/hsmci.h"
+#  include "conf_sd_mmc.h"
+# endif
+
 # if SAME70
+// Check correct DMA channel assigned
 static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel assignment");
 # endif
+
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -54,13 +62,13 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 #include "task.h"
 
 #if SAME70
-# include "Hardware/DmacManager.h"
+# include <DmacManager.h>
 #endif
 
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
-#ifndef __LPC17xx__
+#if !defined(__LPC17xx__) && !SAME5x	//TODO implement for SAME5x
 
 static TaskHandle hsmciTask = nullptr;									// the task that is waiting for a HSMCI command to complete
 
@@ -111,7 +119,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 		XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CIE = dmaBits;
 		XDMAC->XDMAC_GIE = 1u << DmacChanHsmci;
 #endif
-		if (TaskBase::Take(200))
+		if (!TaskBase::Take(200))
 		{
 			// We timed out waiting for the HSMCI operation to complete
 			reprap.GetPlatform().LogError(ErrorCode::HsmciTimeout);
@@ -255,7 +263,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if SUPPORT_CAN_EXPANSION
 	{ "drivers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(NumDirectDrivers + MaxCanDrivers)),	ObjectModelEntryFlags::verbose },
 #else
-	{ "drivers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),					ObjectModelEntryFlags::verbose },
+	{ "drivers",				OBJECT_MODEL_FUNC((int32_t)self->platform->GetNumActualDirectDrivers()), ObjectModelEntryFlags::verbose },
 #endif
 	{ "driversPerAxis",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxDriversPerAxis),					ObjectModelEntryFlags::verbose },
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxExtruders),						ObjectModelEntryFlags::verbose },
@@ -388,6 +396,11 @@ RepRap::RepRap() noexcept
 	  , usingLinuxInterface(true)
 #endif
 {
+	// Don't call constructors for other objects here
+}
+
+void RepRap::Init() noexcept
+{
 	OutputBuffer::Init();
 	platform = new Platform();
 #if HAS_LINUX_INTERFACE
@@ -421,10 +434,7 @@ RepRap::RepRap() noexcept
 #if SUPPORT_12864_LCD
 	messageSequence = 0;
 #endif
-}
 
-void RepRap::Init() noexcept
-{
 	messageBoxMutex.Create("MessageBox");
 
 	platform->Init();
@@ -457,7 +467,10 @@ void RepRap::Init() noexcept
 #endif
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
-#ifdef __LPC17xx__
+#if SAME5x
+	WatchdogInit();
+	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog early warning interrupt
+#elif defined(__LPC17xx__)
 	wdt_init(1); // set wdt to 1 second. reset the processor on a watchdog fault
 #else
 	{
@@ -547,7 +560,7 @@ void RepRap::Init() noexcept
 		processingConfig = false;
 	}
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_HIGH_SPEED_SD && !SAME5x		//TODO implement for SAMR5x
 	hsmci_set_idle_func(hsmciIdle);
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
@@ -578,7 +591,7 @@ bool RepRap::RunStartupFile(const char *filename) noexcept
 
 void RepRap::Exit() noexcept
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_HIGH_SPEED_SD && !SAME5x		//TODO implement for SAME5x
 	hsmci_set_idle_func(nullptr);
 #endif
 	active = false;
@@ -756,7 +769,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	platform->MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
 #endif
 
-#if SUPPORTS_UNIQUE_ID
+#if MCU_HAS_UNIQUE_ID
 	platform->MessageF(mtype, "Board ID: %s\n", platform->GetUniqueIdString());
 #endif
 
@@ -828,7 +841,7 @@ void RepRap::EmergencyStop() noexcept
 void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 {
 	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
-	wdt_restart(WDT);							// kick the watchdog
+	watchdogReset();							// kick the watchdog
 
 #if SAM4E || SAME70
 	rswdt_restart(RSWDT);						// kick the secondary watchdog
@@ -843,7 +856,11 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 
 	if (reason == (uint16_t)SoftwareResetReason::erase)
 	{
+#if SAME5x
+		//TODO invalidate flash so the USB bootloader runs
+#else
 		EraseAndReset();
+#endif
  	}
 	else
 	{
@@ -880,7 +897,10 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
         SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
 #endif
 
-#if SAM4E || SAM4S || SAME70
+#if SAME5x
+        //TODO
+        memset(srdBuf, 0xFF, sizeof(srdBuf));
+#elif SAM4E || SAM4S || SAME70
 		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
 #elif SAM3XA
 		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
@@ -919,7 +939,9 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 #endif
 
 		// Save diagnostics data to Flash
-#if SAM4E || SAM4S || SAME70
+#if SAME5x
+        // TODO write to EEPROM
+#elif SAM4E || SAM4S || SAME70
 		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
 #elif defined(__LPC17xx__)
 		LPC_WriteSoftwareResetData(slot, srdBuf, sizeof(srdBuf));
@@ -930,7 +952,7 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 
 #if defined(__LPC17xx__)
     LPC_SYSCTL->RSID = 0x3F;					// Clear bits in reset reasons stored in RSID
-#else
+#elif !SAME5x
 # ifndef RSTC_MR_KEY_PASSWD
 // Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
 #  define RSTC_MR_KEY_PASSWD (0xA5u << 24)
@@ -1208,12 +1230,14 @@ void RepRap::ReportAllToolTemperatures(const StringRef& reply) const noexcept
 	}
 }
 
-void RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException)
 {
-	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	GCodeResult rslt = GCodeResult::ok;
+	for (Tool *tool = toolList; tool != nullptr && rslt == GCodeResult::ok; tool = tool->Next())
 	{
-		tool->SetFirmwareRetraction(gb, reply);
+		rslt = tool->SetFirmwareRetraction(gb, reply, outBuf);
 	}
+	return rslt;
 }
 
 // Get the current axes used as X axes
@@ -1239,7 +1263,7 @@ void RepRap::Tick() noexcept
 	// Kicking the watchdog before it has been initialised may trigger it!
 	if (active)
 	{
-		wdt_restart(WDT);							// kick the watchdog
+		watchdogReset();							// kick the watchdog
 #if SAM4E || SAME70
 		rswdt_restart(RSWDT);						// kick the secondary watchdog
 #endif
@@ -2721,7 +2745,9 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
-#if SAM3XA
+#if SAME5x
+						HSRAM_ADDR + HSRAM_SIZE
+#elif SAM3XA
 						IRAM1_ADDR + IRAM1_SIZE
 #else
 						IRAM_ADDR + IRAM_SIZE
@@ -2805,14 +2831,16 @@ void RepRap::StartIap() noexcept
 	}
 
 	// Disable all PIO IRQs, because the core assumes they are all disabled when setting them up
+#if !SAME5x
 	PIOA->PIO_IDR = 0xFFFFFFFF;
 	PIOB->PIO_IDR = 0xFFFFFFFF;
 	PIOC->PIO_IDR = 0xFFFFFFFF;
-#ifdef PIOD
+# ifdef PIOD
 	PIOD->PIO_IDR = 0xFFFFFFFF;
-#endif
-#ifdef ID_PIOE
+# endif
+# ifdef ID_PIOE
 	PIOE->PIO_IDR = 0xFFFFFFFF;
+# endif
 #endif
 
 #if HAS_MASS_STORAGE
@@ -2820,7 +2848,9 @@ void RepRap::StartIap() noexcept
 	static const char filename[] = DEFAULT_SYS_DIR IAP_FIRMWARE_FILE;
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
 	if (topOfStack + sizeof(filename) <=
-# if SAM3XA
+# if SAME5x
+						HSRAM_ADDR + HSRAM_SIZE
+# elif SAM3XA
 						IRAM1_ADDR + IRAM1_SIZE
 # else
 						IRAM_ADDR + IRAM_SIZE
@@ -2832,10 +2862,10 @@ void RepRap::StartIap() noexcept
 #endif
 
 #if defined(DUET_NG) || defined(DUET_M)
-	IoPort::WriteDigital(DiagPin, false);			// turn the DIAG LED off
+	IoPort::WriteDigital(DiagPin, !DiagOnPolarity);	// turn the DIAG LED off
 #endif
 
-	wdt_restart(WDT);								// kick the watchdog one last time
+	watchdogReset();								// kick the watchdog one last time
 
 #if SAM4E || SAME70
 	rswdt_restart(RSWDT);							// kick the secondary watchdog
@@ -2862,6 +2892,7 @@ void RepRap::StartIap() noexcept
 	__asm volatile ("ldr r1, [r3, #4]");
 	__asm volatile ("orr r1, r1, #1");
 	__asm volatile ("bx r1");
+	for (;;) { }							// to keep gcc happy
 }
 
 #endif

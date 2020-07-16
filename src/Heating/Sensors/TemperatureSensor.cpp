@@ -295,9 +295,9 @@ const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 			low = mid + 1u;
 		}
 	}
-	assert(low <= NumTempTableEntries);
-	assert(low == 0 || tempTable[low - 1] < ohmsx100);
-	assert(low == NumTempTableEntries || ohmsx100 <= tempTable[low]);
+	_ecv_assert(low <= NumTempTableEntries);
+	_ecv_assert(low == 0 || tempTable[low - 1] < ohmsx100);
+	_ecv_assert(low == NumTempTableEntries || ohmsx100 <= tempTable[low]);
 
 	if (low == 0)									// if off the bottom of the table
 	{

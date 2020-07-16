@@ -30,7 +30,7 @@ public:
 
 	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept = 0;
 	virtual bool IsProtocolEnabled(NetworkProtocol protocol) noexcept { return protocolEnabled[protocol]; }
-	virtual Port GetProtocolPort(NetworkProtocol protocol) noexcept { return portNumbers[protocol]; }
+	virtual TcpPort GetProtocolPort(NetworkProtocol protocol) noexcept { return portNumbers[protocol]; }
 	virtual GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept = 0;
 	virtual GCodeResult ReportProtocols(const StringRef& reply) const noexcept = 0;
 
@@ -41,7 +41,7 @@ public:
 
 	virtual void UpdateHostname(const char *hostname) noexcept = 0;
 
-	virtual void OpenDataPort(Port port) noexcept = 0;
+	virtual void OpenDataPort(TcpPort port) noexcept = 0;
 	virtual void TerminateDataPort() noexcept = 0;
 
 	Mutex interfaceMutex;							// mutex to protect against multiple tasks using the same interface concurrently. Public so that sockets can lock it.
@@ -51,7 +51,7 @@ protected:
 	void SetState(NetworkState::RawType newState) noexcept;
 	const char *GetStateName() const noexcept { return state.ToString(); }
 
-	Port portNumbers[NumProtocols];					// port number used for each protocol
+	TcpPort portNumbers[NumProtocols];					// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 
 private:

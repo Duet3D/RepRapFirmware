@@ -60,8 +60,10 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the secon
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
-#define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
+#define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
+
+#define VARIABLE_NUM_DRIVERS	SUPPORT_12864_LCD	// nonzero means that some pins may only support drivers if not used for other purposes e.g. LCD
 
 #if defined(USE_SBC)
 # define SUPPORT_HTTP			0
@@ -82,12 +84,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the secon
 
 // The physical capabilities of the machine
 
-#if SUPPORT_12864_LCD
-constexpr size_t NumDirectDrivers = 11;				// The maximum number of drives supported directly by the electronics
-#else
 constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives supported directly by the electronics
-#endif
-
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
 constexpr size_t MaxSensors = 32;
@@ -222,12 +219,14 @@ constexpr Pin VssaSensePin = PortBPin(7);
 constexpr Pin Z_PROBE_PIN = PortCPin(1);									// AFE1_AD4/PC1 Z probe analog input
 constexpr Pin Z_PROBE_MOD_PIN = PortCPin(2);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
+constexpr bool DiagOnPolarity = true;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(21), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { PortCPin(24) };
+constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 20000000;
 
 #if SUPPORT_12864_LCD
@@ -235,21 +234,32 @@ constexpr uint32_t ExpectedSdCardSpeed = 20000000;
 // This assumes that the Vih specification is met, which is 0.7 * Vcc = 3.5V @ Vcc=5V
 // The Duet Maestro level shifts all 3 LCD signals to 5V, so we meet the Vih specification and can reliably run at 2MHz.
 // For other electronics, there are reports that operation with 3.3V LCD signals may work if you reduce the clock frequency.
+// Displays based on the ST7567 use level shifters because the ST7567 is a 3.3V device.
 constexpr uint32_t LcdSpiClockFrequency = 2000000;             // 2.0MHz
-constexpr Pin LcdCSPin = PortDPin(21);      //connlcd.10 --> gate -> exp2.4
-constexpr Pin LcdBeepPin = PortAPin(8);     //connlcd.4           -> exp1.1
-constexpr Pin LcdA0Pin = NoPin;	//TODO assign a pin
-constexpr Pin EncoderPinA = PortAPin(25);   //connlcd.8           -> exp2.5
-constexpr Pin EncoderPinB = PortCPin(28);   //connlcd.6           -> exp2.3
-constexpr Pin EncoderPinSw = PortAPin(7);   //connsd.7            -> exp1.2
-                                            //additional spi wiring:
-                                            //connsd.6            <- exp2.1
-                                            //connsd.5   --> gate -> exp1.3
-                                            //            `->     -> exp2.6
-                                            //connsd.4   --> gate -> exp1.5
-                                            //            `->     -> exp2.2
-                                            //connsd.3            -> exp2.4
+
+constexpr Pin EncoderPinB = PortCPin(7);		// connlcd.3	-> exp2.6
+constexpr Pin EncoderPinA = PortAPin(8);		// connlcd.4	-> exp2.8
+constexpr Pin LcdNeopixelPin = PortDPin(18);	// connlcd.5	-> exp1.5
+constexpr Pin LcdResetPin = PortCPin(28);		// connlcd.6	-> exp1.6
+constexpr Pin LcdA0Pin = PortDPin(19);			// connlcd.7	-> exp1.7
+constexpr Pin LcdCSPin = PortAPin(25);			// connlcd.8	-> exp1.8
+constexpr Pin EncoderPinSw = PortDPin(20);		// connlcd.9	-> exp1.9
+constexpr Pin LcdBeepPin = PortDPin(21);		// connlcd.10	-> exp1.10
+
+// Additional spi wiring for FYSETC Mini 12864 display:
+// connlcd.2 (gnd)	-> exp1.2
+// connsd.1 (+5V)	-> exp1.1
+// connsd.2 (gnd)	-> exp2.2
+// connsd.3 (SD CS)	-> exp2.7
+// connsd.4 (sck)	-> exp2.9
+// connsd.5 (mosi)	-> exp2.5
+// connsd.6 (miso)	-> exp2.10
 #endif
+
+// Shared SPI definitions
+#define USART_SPI		1
+#define USART_SSPI		USART0
+#define ID_SSPI			ID_USART0
 
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
@@ -393,6 +403,10 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noe
 #define ESP_SPI_IRQn			SPI_IRQn
 #define ESP_SPI_HANDLER			SPI_Handler
 
+// Hardware IDs of the SPI transmit and receive DMA interfaces. See atsam datasheet.
+const uint32_t DMA_HW_ID_SPI_TX = 1;
+const uint32_t DMA_HW_ID_SPI_RX = 2;
+
 constexpr Pin APIN_ESP_SPI_MOSI = APIN_SPI_MOSI;
 constexpr Pin APIN_ESP_SPI_MISO = APIN_SPI_MISO;
 constexpr Pin APIN_ESP_SPI_SCK = APIN_SPI_SCK;
@@ -420,7 +434,7 @@ constexpr Pin W5500InterruptPin = PortDPin(31);		// W5500 interrupt output, acti
 constexpr Pin W5500ModuleSensePin = PortAPin(5);	// URXD1, tied to ground on the Ethernet module
 constexpr Pin W5500SsPin = PortAPin(11);			// SPI NPCS pin, input from W5500 module
 
-// Duet pin numbers for the Linux interface
+// Duet pin numbers for the SBC interface
 #define SBC_SPI					SPI
 #define SBC_SPI_INTERFACE_ID	ID_SPI
 #define SBC_SPI_IRQn			SPI_IRQn
@@ -430,9 +444,7 @@ constexpr Pin APIN_SBC_SPI_MISO = 12;
 constexpr Pin APIN_SBC_SPI_SCK = 14;
 constexpr Pin APIN_SBC_SPI_SS0 = 11;
 
-constexpr Pin LinuxTfrReadyPin = PortDPin(31);
-constexpr uint8_t DmacChanLinuxTx = 1;
-constexpr uint8_t DmacChanLinuxRx = 2;
+constexpr Pin SbcTfrReadyPin = PortDPin(31);
 
 // Timer allocation (no network timer on DuetNG)
 // TC0 channel 0 is used for FAN2
@@ -444,6 +456,17 @@ constexpr uint8_t DmacChanLinuxRx = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 #define STEP_TC_ID			ID_TC2
 
+// DMA channel allocation
+#if HAS_LINUX_INTERFACE
+constexpr DmaChannel DmacChanSbcTx = 1;
+constexpr DmaChannel DmacChanSbcRx = 2;
+#endif
+
+#if HAS_WIFI_NETWORKING
+constexpr DmaChannel DmacChanWiFiTx = 1;
+constexpr DmaChannel DmacChanWiFiRx = 2;
+#endif
+
 namespace StepPins
 {
 	// *** These next three functions must use the same bit assignments in the drivers bitmap ***
@@ -452,27 +475,23 @@ namespace StepPins
 	// All our step pins are on port D, so the bitmap is just the map of step bits in port D.
 
 	// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
-	static inline __attribute__((always_inline)) uint32_t CalcDriverBitmap(size_t driver) noexcept
+	static inline uint32_t CalcDriverBitmap(size_t driver) noexcept
 	{
 		return (driver < NumDirectDrivers)
 				? g_APinDescription[STEP_PINS[driver]].ulPin
 				: 0;
 	}
 
-	// Set the specified step pins high
-	// This needs to be as fast as possible, so we do a parallel write to the port(s).
-	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
+	// Set the specified step pins high. This needs to be fast.
 	static inline __attribute__((always_inline)) void StepDriversHigh(uint32_t driverMap) noexcept
 	{
-		PIOD->PIO_ODSR = driverMap;				// on Duet WiFi/Ethernet all step pins are on port D
+		PIOD->PIO_SODR = driverMap;				// on Duet WiFi/Ethernet all step pins are on port D
 	}
 
-	// Set all step pins low
-	// This needs to be as fast as possible, so we do a parallel write to the port(s).
-	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline __attribute__((always_inline)) void StepDriversLow() noexcept
+	// Set all step pins low. This needs to be fast.
+	static inline __attribute__((always_inline)) void StepDriversLow(uint32_t driverMap) noexcept
 	{
-		PIOD->PIO_ODSR = 0;						// on Duet WiFi/Ethernet all step pins are on port D
+		PIOD->PIO_CODR = driverMap;				// on Duet WiFi/Ethernet all step pins are on port D
 	}
 }
 

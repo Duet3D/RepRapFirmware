@@ -628,7 +628,7 @@ const char *Tool::GetFilamentName() const noexcept
 	return (filament == nullptr) ? "" : filament->GetName();
 }
 
-void Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
+GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply, OutputBuffer*& outBuf) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('S'))
@@ -663,9 +663,15 @@ void Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply) THROWS
 	}
 	else
 	{
-		reply.lcatf("Tool %u retract/reprime: length %.2f/%.2fmm, speed %.1f/%.1fmm/sec, Z hop %.2fmm",
+		// Use an output buffer because M207 can report on all tools
+		if (outBuf == nullptr && !OutputBuffer::Allocate(outBuf))
+		{
+			return GCodeResult::notFinished;
+		}
+		outBuf->lcatf("Tool %u retract/reprime: length %.2f/%.2fmm, speed %.1f/%.1fmm/sec, Z hop %.2fmm",
 			myNumber, (double)retractLength, (double)(retractLength + retractExtra), (double)retractSpeed, (double)unRetractSpeed, (double)retractHop);
 	}
+	return GCodeResult::ok;
 }
 
 // End

@@ -12,11 +12,12 @@
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
 
+extern "C" [[noreturn]] void AppMain() noexcept;
+
 namespace Tasks
 {
 	void Diagnostics(MessageType mtype) noexcept;
 	uint32_t GetNeverUsedRam() noexcept;
-	const Mutex *GetSpiMutex() noexcept;
 	const Mutex *GetI2CMutex() noexcept;
 	const Mutex *GetSysDirMutex() noexcept;
 }

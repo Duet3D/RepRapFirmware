@@ -13,6 +13,8 @@
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
 
+#include <Stream.h>
+
 const size_t GCodeInputBufferSize = 256;						// How many bytes can we cache per input source?
 const size_t GCodeInputFileReadThreshold = 128;					// How many free bytes must be available before data is read from the SD card?
 

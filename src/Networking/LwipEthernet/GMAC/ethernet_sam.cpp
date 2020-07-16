@@ -42,11 +42,20 @@
  */
 
 #include "ethernet_sam.h"
+
+#if defined(__SAME70Q20B__)
+# include <Hardware/SAME70/Ethernet/GmacInterface.h>
+#elif defined(__SAME54P20A__)
+# include <Hardware/SAME5x/Ethernet/GmacInterface.h>
+#else
+# error Unsupported processor
+#endif
+
+#include "lwip/netif.h"
+
 #include <cstring>
 
 extern "C" {
-
-#include "ethernet_phy.h"
 
 /* lwIP includes */
 #include "lwip/api.h"
@@ -164,6 +173,12 @@ void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay) no
 
 	/* Set it up */
 	netif_set_up(&gs_net_if);
+}
+
+// Terminate Ethernet and stop any interrupts, tasks etc. Used when shutting down the whole system.
+void ethernet_terminate() noexcept
+{
+	ethernetif_terminate();
 }
 
 /** \brief Configure the Ethernet subsystem. Should be called after init_ethernet()

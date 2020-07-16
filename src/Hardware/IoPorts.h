@@ -8,7 +8,11 @@
 #ifndef SRC_IOPORTS_H_
 #define SRC_IOPORTS_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
+
+#if SAME5x
+# include <Interrupts.h>
+#endif
 
 // Class to represent a port
 class IoPort
@@ -32,14 +36,16 @@ public:
 	void ToggleInvert(bool pInvert) noexcept;
 
 	bool Read() const noexcept;
-	bool AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const noexcept;
+	bool AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept;
 	void DetachInterrupt() const noexcept;
 
 	uint16_t ReadAnalog() const noexcept;
-	AnalogChannelNumber GetAnalogChannel() const noexcept { return PinToAdcChannel(PinTable[logicalPin].pin); }
+
+	AnalogChannelNumber GetAnalogChannel() const noexcept { return PinToAdcChannel(GetPin()); }
 
 	void WriteDigital(bool high) const noexcept;
 
+	// Get the physical pin, or NoPin if the logical pin is not valid
 	Pin GetPin() const noexcept;
 
 	// Initialise static data
@@ -59,6 +65,17 @@ public:
 
 protected:
 	bool Allocate(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
+
+	// Get the physical pin without checking the validity of the logical pin
+	Pin GetPinNoCheck() const noexcept
+	{
+#if SAME5x
+		// New-style pin table is indexed by pin number
+		return logicalPin;
+#else
+		return PinTable[logicalPin].pin;
+#endif
+	}
 
 	static const char* TranslatePinAccess(PinAccess access) noexcept;
 

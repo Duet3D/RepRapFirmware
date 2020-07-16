@@ -14,9 +14,8 @@
 
 #define ALTERNATIVE_ST7565_FLUSHROW
 
-#include "SharedSpi.h"
-#include <Display/DisplayDriver.h>
-#include <Display/Fonts/Fonts.h>
+#include <Display/Lcd/DisplayDriver.h>
+#include <Hardware/SharedSpi/SharedSpiClient.h>
 
 // Driver for 128x64 graphical LCD with ST7565, ST7567, UC1701, NT7534 or compatible controller
 // This controller uses 1 bit wide x 8 bit high refresh tiles.
@@ -49,7 +48,7 @@ public:
 #endif
 
 private:
-	sspi_device spiDevice;
+	SharedSpiClient spiDevice;
 	// Pin configured to drive DC/A0 line
 	Pin dcPin;
 	// Optional pin to use as gate for SCK and MOSI

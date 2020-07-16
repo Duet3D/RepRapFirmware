@@ -1097,9 +1097,10 @@ namespace SmartDrivers
 								do
 								{
 									delayMicroseconds(1);
-									StepPins::StepDriversHigh(StepPins::CalcDriverBitmap(i));
+									const uint32_t driverBitmap = StepPins::CalcDriverBitmap(i);
+									StepPins::StepDriversHigh(driverBitmap);
 									delayMicroseconds(1);
-									StepPins::StepDriversLow();
+									StepPins::StepDriversLow(driverBitmap);
 									--count;
 								} while (count != 0);
 								driverStates[i].ClearMicrostepPosition();

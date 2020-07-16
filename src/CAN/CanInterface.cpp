@@ -842,9 +842,26 @@ bool CanInterface::SetRemotePressureAdvance(const CanDriversData& data, const St
 GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 pre(driver.IsRemote())
 {
-	CanMessageGenericConstructor cons(M569Params);
-	cons.PopulateFromCommand(gb);
-	return cons.SendAndGetResponse(CanMessageType::m569, driver.boardAddress, reply);
+	switch (gb.GetCommandFraction())
+	{
+	case -1:
+	case 0:
+		{
+			CanMessageGenericConstructor cons(M569Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m569, driver.boardAddress, reply);
+		}
+
+	case 1:
+		{
+			CanMessageGenericConstructor cons(M569Point1Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m569p1, driver.boardAddress, reply);
+		}
+
+	default:
+		return GCodeResult::errorNotSupported;
+	}
 }
 
 // Handle M915 for a collection of remote drivers

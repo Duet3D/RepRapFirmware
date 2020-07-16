@@ -718,8 +718,7 @@ void FtpResponder::ProcessLine() noexcept
 			filenameBeingProcessed.Clear();
 
 			const char * const filename = GetParameter("STOR");
-			FileStore * const file = StartUpload(currentDirectory.c_str(), filename, OpenMode::write);
-			if (file != nullptr)
+			if (StartUpload(currentDirectory.c_str(), filename, OpenMode::write))
 			{
 				outBuf->copy("150 OK to send data.\r\n");
 				Commit(ResponderState::uploading);

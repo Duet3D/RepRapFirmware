@@ -87,7 +87,7 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 	{
 		MutexLocker lock(interfaceMutex);
 
-		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
@@ -428,7 +428,7 @@ void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IP
 	gateway = p_gateway;
 }
 
-void W5500Interface::OpenDataPort(Port port) noexcept
+void W5500Interface::OpenDataPort(TcpPort port) noexcept
 {
 	sockets[ftpDataSocket]->Init(ftpDataSocket, port, FtpDataProtocol);
 }

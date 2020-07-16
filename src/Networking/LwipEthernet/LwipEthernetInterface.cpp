@@ -18,8 +18,14 @@
 #include "Networking/FtpResponder.h"
 #include "Networking/TelnetResponder.h"
 #include "General/IP4String.h"
-#include "Version.h"
+#include "Version.h"								// version is reported by MDNS
 #include "GMAC/ethernet_sam.h"
+
+#if SAME70
+# include <Hardware/SAME70/Ethernet/GmacInterface.h>
+#elif SAME5x
+# include <Hardware/SAME5x/Ethernet/GmacInterface.h>
+#endif
 
 extern "C"
 {
@@ -147,7 +153,7 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 
 	if (protocol < NumProtocols)
 	{
-		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
@@ -314,9 +320,7 @@ GCodeResult LwipEthernetInterface::GetNetworkState(const StringRef& reply) noexc
 // Start up the network
 void LwipEthernetInterface::Start() noexcept
 {
-#if defined(DUET3)
-	digitalWrite(PhyResetPin, true);			// bring the Ethernet Phy out of reset
-#endif
+	digitalWrite(EthernetPhyResetPin, true);			// bring the Ethernet Phy out of reset
 
 	if (initialised)
 	{
@@ -352,9 +356,7 @@ void LwipEthernetInterface::Stop() noexcept
 	{
 		netif_set_down(&gs_net_if);
 
-#if defined(DUET3)
-		pinMode(PhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
-#endif
+		pinMode(EthernetPhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
 		SetState(NetworkState::disabled);
 	}
 }
@@ -580,7 +582,7 @@ GCodeResult LwipEthernetInterface::SetMacAddress(const MacAddress& mac, const St
 	return GCodeResult::ok;
 }
 
-void LwipEthernetInterface::OpenDataPort(Port port) noexcept
+void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
 {
 	if (listeningPcbs[NumProtocols] != nullptr)
 	{

@@ -61,6 +61,8 @@ public:
 
 #if SAME70
 	static constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
+#elif SAME5x
+	static constexpr uint32_t StepClockRate = (120000000/2)/64;					// just under 1MHz
 #elif defined(__LPC17xx__)
 	static constexpr uint32_t StepClockRate = 1000000;                          // 1MHz
 #else
@@ -88,7 +90,13 @@ private:
 
 inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
-# ifdef __LPC17xx__
+# if SAME5x
+	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+	// On the EXP3HC board it isn't enough just to wait for SYNCBUSY.COUNT here
+	while (StepTc->CTRLBSET.bit.CMD != 0) { }
+	while (StepTc->SYNCBUSY.bit.COUNT) { }
+	return StepTc->COUNT.reg;
+# elif defined(__LPC17xx__)
 	return STEP_TC->TC;
 # else
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
@@ -99,7 +107,9 @@ inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks(
 
 inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noexcept
 {
-#ifdef __LPC17xx__
+#if SAME5x
+	return (uint16_t)GetTimerTicks();
+#elif defined(__LPC17xx__)
 	return (uint16_t)STEP_TC->TC;
 #else
 	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;

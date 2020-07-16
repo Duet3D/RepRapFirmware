@@ -38,7 +38,7 @@ void StringParser::Init() noexcept
 	gcodeLineEnd = 0;
 	commandLength = 0;
 	readPointer = -1;
-	hadLineNumber = hadChecksum = overflowed = false;
+	hadLineNumber = hadChecksum = overflowed = seenExpression = false;
 	computedChecksum = 0;
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	commandIndent = 0;
@@ -204,6 +204,7 @@ bool StringParser::Put(char c) noexcept
 
 			case '{':
 				++braceCount;
+				seenExpression = true;
 				StoreAndAddToChecksum(c);
 				break;
 
@@ -1605,8 +1606,7 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 	uint32_t rslt;
 	if (gb.buffer[readPointer] == '"')
 	{
-		++readPointer;
-		rslt = StrOptHexToU32(gb.buffer + readPointer, &endptr);
+		rslt = StrOptHexToU32(gb.buffer + readPointer + 1, &endptr);
 		if (*endptr != '"')
 		{
 			throw ConstructParseException("expected '\"'");
@@ -1656,7 +1656,20 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 		result.boardAddress = 0;
 	}
 #else
-	result.localDriver = v1;
+	// We now allow driver names of the form "0.x" on boards without CAN expansion
+	if (gb.buffer[readPointer] == '.')
+	{
+		if (v1 != 0)
+		{
+			throw ConstructParseException("Board address of driver must be 0");
+		}
+		++readPointer;
+		result.localDriver = ReadUIValue();
+	}
+	else
+	{
+		result.localDriver = v1;
+	}
 #endif
 	return result;
 }

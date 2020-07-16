@@ -15,7 +15,7 @@
 #if SUPPORT_12864_LCD
 
 #include "RotaryEncoder.h"
-#include <Display/DisplayDriver.h>
+#include <Display/Lcd/DisplayDriver.h>
 #include "Menu.h"
 #include "GCodes/GCodeResult.h"
 

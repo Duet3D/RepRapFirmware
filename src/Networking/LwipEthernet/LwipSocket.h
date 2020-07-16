@@ -5,8 +5,8 @@
  *      Authors: David and Christian
  */
 
-#ifndef SRC_SAME70_LWIPSOCKET_H_
-#define SRC_SAME70_LWIPSOCKET_H_
+#ifndef SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_
+#define SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_
 
 #include "LwipEthernetInterface.h"
 #include "Networking/NetworkDefs.h"
@@ -32,7 +32,7 @@ public:
 	void ConnectionError(err_t err) noexcept;
 
 	// Inherited members of the Socket class
-	void Init(SocketNumber s, Port serverPort, NetworkProtocol p) noexcept;
+	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p) noexcept;
 	void TerminateAndDisable() noexcept override;
 	void Poll() noexcept override;
 	void Close() noexcept override;
@@ -74,4 +74,4 @@ private:
 	size_t unAcked;
 };
 
-#endif /* SRC_SAME70_LWIPSOCKET_H_ */
+#endif /* SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_ */

@@ -87,9 +87,9 @@ GCodes::GCodes(Platform& p) noexcept :
 
 #if defined(SERIAL_MAIN_DEVICE)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-	usbGCode = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
+	usbGCode = new GCodeBuffer(GCodeChannel::USBchan, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_LINUX_INTERFACE
-	usbGCode = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatbility::marlin);
+	usbGCode = new GCodeBuffer(GCodeChannel::USBchan, nullptr, fileInput, UsbMessage, Compatbility::marlin);
 #else
 	usbGCode = nullptr;
 #endif
@@ -551,12 +551,6 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (gotCommand)
 		{
 			gb.DecodeCommand();
-#if defined(SERIAL_AUX_DEVICE) && !defined(DUET3)
-			if (&gb == auxGCode && !platform.IsAuxEnabled())
-			{
-				platform.EnableAux();				// by default we assume no PanelDue is attached, so flag when we receive a command from it
-			}
-#endif
 		}
 #if HAS_LINUX_INTERFACE
 		else if (reprap.UsingLinuxInterface())
@@ -1925,8 +1919,9 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 #if TRACK_OBJECT_NAMES
 	if (isPrintingMove)
 	{
-		buildObjects.UpdateObjectCoordinates(initialXY);
-		buildObjects.UpdateObjectCoordinates(currentUserPosition);
+		// Update the object coordinates limits. For efficiency, we only update the final coordinate.
+		// Except in the case of a straight line that is only one extrusion width wide, this is sufficient.
+		buildObjects.UpdateObjectCoordinates(currentUserPosition, axesMentioned);
 	}
 #endif
 
@@ -2270,7 +2265,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	{
 		//TODO ideally we should calculate the min and max X and Y coordinates of the entire arc here and call UpdateObjectCoordinates twice.
 		// But it is currently very rare to use G2/G3 with extrusion, so for now we don't bother.
-		buildObjects.UpdateObjectCoordinates(currentUserPosition);
+		buildObjects.UpdateObjectCoordinates(currentUserPosition, AxesBitmap::MakeLowestNBits(2));
 	}
 #endif
 
@@ -4224,6 +4219,11 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 		ok = WriteWorkplaceCoordinates(f);
 	}
 #endif
+
+	if (ok)
+	{
+		ok = buildObjects.WriteObjectDirectory(f);
+	}
 
 	if (!f->Close())
 	{
