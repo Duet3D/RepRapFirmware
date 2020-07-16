@@ -79,7 +79,7 @@ bool Lcd7920::FlushSome() noexcept
 			nextFlushRow = startRow;	// start from the beginning
 		}
 
-		if (nextFlushRow == startRow)	// if we are starting form the beginning
+		if (nextFlushRow == startRow)	// if we are starting from the beginning
 		{
 			++startRow;					// flag this row as flushed because it will be soon
 		}

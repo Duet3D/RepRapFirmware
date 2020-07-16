@@ -135,32 +135,30 @@ public:
 	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept;
 
 protected:
+	virtual void HardwareInit() noexcept = 0;
+
+	size_t writeNative(uint16_t c) noexcept;		// write a decoded character
+	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
+
+	size_t imageSize;
+	uint8_t *image;									// image buffer
+	SharedSpiClient device;
+	const PixelNumber numRows, numCols;
+	Pin a0Pin;
+	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
+	PixelNumber nextFlushRow;						// which row we need to flush next
+
+private:
 	const LcdFont * const *fonts;
 	const size_t numFonts;
 	size_t currentFontNumber;						// index of the current font
 	uint32_t charVal;
-	size_t imageSize;
-	uint8_t *image;									// image buffer
-	SharedSpiClient device;
 	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
-	const PixelNumber numRows, numCols;
-	Pin a0Pin;
 	uint8_t numContinuationBytesLeft;
 	PixelNumber row, column;
-	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
-	PixelNumber nextFlushRow;						// which row we need to flush next
 	PixelNumber leftMargin, rightMargin;
 	bool textInverted;
 	bool justSetCursor;
-
-	virtual void HardwareInit() noexcept = 0;
-	virtual void CommandDelay() noexcept = 0;
-	virtual void DataDelay() noexcept = 0;
-	virtual void SendLcdCommand(uint8_t byteToSend) noexcept = 0;
-	virtual void SendLcdData(uint8_t byteToSend) noexcept = 0;
-
-	size_t writeNative(uint16_t c) noexcept;		// write a decoded character
-	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
 };
 
 #endif

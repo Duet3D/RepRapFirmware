@@ -22,12 +22,12 @@ public:
 
 protected:
 	void HardwareInit() noexcept override;
-	void CommandDelay() noexcept override;
-	void DataDelay() noexcept override;
-	void SendLcdCommand(uint8_t byteToSend) noexcept override;
-	void SendLcdData(uint8_t byteToSend) noexcept override;
 
 private:
+	void CommandDelay() noexcept;
+	void DataDelay() noexcept;
+	void SendLcdCommand(uint8_t byteToSend) noexcept;
+	void SendLcdData(uint8_t byteToSend) noexcept;
 	void SetGraphicsAddress(unsigned int r, unsigned int c) noexcept;
 };
 
