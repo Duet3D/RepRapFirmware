@@ -297,10 +297,9 @@ namespace DotStarLed
 		if (!following)
 		{
 			const uint8_t *q = chunkBuffer;
+			uint32_t nextDelay = T0L;
 			cpu_irq_disable();
-#if 1
 			uint32_t lastTransitionTime = SysTick->VAL & 0x00FFFFFF;
-			uint32_t nextDelay = SystemCoreClockFreq/1000000;
 			while (q < p)
 			{
 				uint8_t c = *q++;
@@ -325,31 +324,6 @@ namespace DotStarLed
 					c <<= 1;
 				}
 			}
-#else
-			while (q < p)
-			{
-				uint8_t c = *q++;
-				for (unsigned int i = 0; i < 8; ++i)
-				{
-					// The delays in the following have been adjusted to work on the SAMD51 with cache disabled
-					if (c & 0x80)
-					{
-						fastDigitalWriteHigh(LcdNeopixelOutPin);
-						delayCycles3(10);			// about 800ns total high time
-						fastDigitalWriteLow(LcdNeopixelOutPin);
-						delayCycles3(7);			// about 475ns total low time
-					}
-					else
-					{
-						fastDigitalWriteHigh(LcdNeopixelOutPin);
-						delayCycles3(7);			// about 350ns total high time
-						fastDigitalWriteLow(LcdNeopixelOutPin);
-						delayCycles3(11);			// about 850ns total low time
-					}
-					c <<= 1;
-				}
-			}
-#endif
 			cpu_irq_enable();
 			numAlreadyInBuffer = 0;
 			whenDmaFinished = StepTimer::GetTimerTicks();

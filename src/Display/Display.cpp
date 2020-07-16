@@ -203,11 +203,12 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	{
 		if (lcd != nullptr)
 		{
-			reply.printf("12864 display is configured, pulses-per-click is %d", encoder->GetPulsesPerClick());
+			reply.printf("Direct connect display: %s, %.2fMHz, %d encoder pulses per click",
+							lcd->GetDisplayTypeName(), (double)(lcd->GetSpiFrequency() * 0.000001), encoder->GetPulsesPerClick());
 		}
 		else
 		{
-			reply.copy("12864 display is not present or not configured");
+			reply.copy("Direct-connect display not present or not configured");
 		}
 	}
 	return GCodeResult::ok;

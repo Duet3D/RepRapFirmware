@@ -25,6 +25,9 @@ public:
 	// Flush just some data, returning true if this needs to be called again
 	bool FlushSome() noexcept override;
 
+	// Get the display type
+	const char *GetDisplayTypeName() const noexcept override;
+
 protected:
 	void HardwareInit() noexcept override;
 

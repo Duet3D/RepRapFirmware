@@ -9,12 +9,18 @@
 
 #if SUPPORT_12864_LCD
 
-constexpr unsigned int TILE_WIDTH = 8;
+constexpr unsigned int TILE_WIDTH = 1;
 constexpr unsigned int TILE_HEIGHT = 8;
 
 Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Lcd(128, 64, fnts, nFonts)
+	: Lcd(132, 64, fnts, nFonts)
 {
+}
+
+// Get the display type
+const char *Lcd7567::GetDisplayTypeName() const noexcept
+{
+	return "132x64 mono graphics with ST7567 controller";
 }
 
 void Lcd7567::HardwareInit() noexcept

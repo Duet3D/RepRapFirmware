@@ -70,16 +70,21 @@ PixelNumber Lcd::GetFontHeight(size_t fontNumber) const noexcept
 }
 
 // Flag a pixel as dirty. The r and c parameters must be no greater than NumRows-1 and NumCols-1 respectively.
-// Only one pixel in each 16-bit word needs to be flagged dirty for the whole word to get refreshed.
 void Lcd::SetDirty(PixelNumber r, PixelNumber c) noexcept
 {
-//	if (r >= NumRows) { debugPrintf("r=%u\n", r); return; }
-//	if (c >= NumCols) { debugPrintf("c=%u\n", c); return; }
-
 	if (c < startCol) { startCol = c; }
 	if (c >= endCol) { endCol = c + 1; }
 	if (r < startRow) { startRow = r; }
 	if (r >= endRow) { endRow = r + 1; }
+}
+
+// Flag a rectangle as dirty. Inline because it is called from only one place.
+inline void Lcd::SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
+{
+	if (top < startRow) startRow = top;
+	if (bottom > endRow) endRow = bottom;
+	if (left < startCol) startCol = left;
+	if (right > endCol) endCol = right;
 }
 
 // Write a UTF8 byte.
@@ -316,6 +321,8 @@ void Lcd::SetRightMargin(PixelNumber r) noexcept
 void Lcd::ClearToMargin() noexcept
 {
 	const uint8_t fontHeight = fonts[currentFontNumber]->height;
+	// TODO make this more efficient by finding the extent of the pixels changed the then calling SetRectDirty just once.
+	// Or maybe don't bother, just call SetRectDirty on the whole rectangle
 	while (column < rightMargin)
 	{
 		uint8_t *p = image + ((row * (numCols/8)) + (column/8));
@@ -338,7 +345,7 @@ void Lcd::ClearToMargin() noexcept
 			if (newVal != oldVal)
 			{
 				*p = newVal;
-				SetDirty(row + i, column);			// we refresh 16-bit words, so setting 1 pixel dirty in byte will suffice
+				SetRectDirty(row + i, column, row + i + 1, nextColumn);
 			}
 			p += (numCols/8);
 		}

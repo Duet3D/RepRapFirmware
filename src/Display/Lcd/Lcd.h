@@ -30,6 +30,15 @@ public:
 	Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept;
 	virtual ~Lcd();
 
+	// Flush just some data, returning true if this needs to be called again
+	virtual bool FlushSome() noexcept = 0;
+
+	// Get the display type
+	virtual const char *GetDisplayTypeName() const noexcept = 0;
+
+	// Get the SPI frequency
+	uint32_t GetSpiFrequency() const noexcept { return device.GetFrequency(); }
+
 	// Initialize the display
 	void Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq) noexcept;
 
@@ -91,9 +100,6 @@ public:
 	// Flush the display buffer to the display. Data will not be committed to the display until this is called.
 	void FlushAll() noexcept;
 
-	// Flush just some data, returning true if this needs to be called again
-	virtual bool FlushSome() noexcept = 0;
-
 	// Set, clear or invert a pixel
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
 	//  y = y-coordinate of the pixel, measured down from the top of the display
@@ -139,6 +145,7 @@ protected:
 
 	size_t writeNative(uint16_t c) noexcept;		// write a decoded character
 	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
+	void SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;
 
 	size_t imageSize;
 	uint8_t *image;									// image buffer

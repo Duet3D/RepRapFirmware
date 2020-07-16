@@ -26,6 +26,8 @@ public:
 	void SetCsPolarity(bool b) noexcept { csActivePolarity = b; }
 	void SetClockFrequency(uint32_t clockFreq) noexcept { clockFrequency = clockFreq; }
 
+	uint32_t GetFrequency() const noexcept { return clockFrequency; }
+
 	bool Select(uint32_t timeout = Mutex::TimeoutUnlimited) const noexcept;					// get SPI ownership and select the device, return true if successful
 	void Deselect() const noexcept;
 	bool TransceivePacket(const uint8_t *tx_data, uint8_t *rx_data, size_t len) const noexcept;
