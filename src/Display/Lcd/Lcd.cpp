@@ -8,10 +8,8 @@
 #include "Pins.h"
 #include <Hardware/SharedSpi/SharedSpiDevice.h>
 
-// The LCD SPI clock frequency is now defined in the Pins.h file for the configuration being built
-
-Lcd::Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept
-	: device(SharedSpiDevice::GetMainSharedSpiDevice(), LcdSpiClockFrequency, SpiMode::mode0, NoPin, true),
+Lcd::Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode) noexcept
+	: device(SharedSpiDevice::GetMainSharedSpiDevice(), LcdSpiClockFrequency, mode, NoPin, true),
 	  numRows(nr), numCols(nc),
 	  fonts(fnts), numFonts(nFonts)
 {

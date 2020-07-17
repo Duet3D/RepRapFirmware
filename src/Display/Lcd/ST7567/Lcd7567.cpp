@@ -13,7 +13,7 @@ constexpr unsigned int TILE_WIDTH = 1;
 constexpr unsigned int TILE_HEIGHT = 8;
 
 Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Lcd(64, 128, fnts, nFonts)
+	: Lcd(64, 128, fnts, nFonts, SpiMode::mode3)
 {
 }
 
@@ -31,6 +31,7 @@ void Lcd7567::HardwareInit() noexcept
 	delay(6);
 
 	device.Select();
+	delayMicroseconds(1);
 
 	// 11100010 System reset
 	SendByte(SystemReset);
@@ -60,23 +61,26 @@ void Lcd7567::HardwareInit() noexcept
 
 	// Enter sleep mode
 	// 10101110 Set display enable to off
-	SendByte(0xAE);
+	SendByte(DisplayOff);
 	// 10100101 Set all pixel on
-	SendByte(0xA5);
+	SendByte(PixelOn);
 
+	delayMicroseconds(1);
 	device.Deselect();
 
 	Clear();
 	FlushAll();
 
 	device.Select();
+	delayMicroseconds(1);
 
 	// Enable display
 	// 10100100 Set all pixel off
-	SendByte(0xA4);
+	SendByte(PixelOff);
 	// 10101111 Set display enable to on
-	SendByte(0xAF);
+	SendByte(DisplayOn);
 
+	delayMicroseconds(1);
 	device.Deselect();
 }
 
@@ -98,29 +102,32 @@ bool Lcd7567::FlushSome() noexcept
 		}
 
 		// Flush that row (which is 8 pixels high)
+		device.Select();
+		delayMicroseconds(1);
+
+		SetGraphicsAddress(nextFlushRow, startCol);
+		StartDataTransaction();
+
+		// Send tiles of 1x8 for the desired (quantized) width of the dirty rectangle
+		for (int x = startCol; x < endCol; x += TILE_WIDTH)
 		{
-			device.Select();
+			uint8_t data = 0;
 
-			SetGraphicsAddress(nextFlushRow, startCol);
-
-			// Send tiles of 1x8 for the desired (quantized) width of the dirty rectangle
-			for(int x = startCol; x < endCol; x += TILE_WIDTH)
+			// Gather the bits for a vertical line of 8 pixels (LSB is the top pixel)
+			for (uint8_t i = 0; i < 8; i++)
 			{
-				uint8_t data = 0;
-
-				// Gather the bits for a vertical line of 8 pixels (LSB is the top pixel)
-				for(uint8_t i = 0; i < 8; i++)
+				if (ReadPixel(x, startRow + i))
 				{
-					if(ReadPixel(x, startRow + i)) {
-						data |= (1u << i);
-					}
+					data |= (1u << i);
 				}
-
-				SendByte(data);
 			}
 
-			device.Deselect();
+			SendByte(data);
 		}
+
+		EndDataTransaction();
+		delayMicroseconds(1);
+		device.Deselect();
 
 		// Check if there is still area to flush
 		if (startRow != endRow)

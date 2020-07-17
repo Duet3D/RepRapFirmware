@@ -335,6 +335,9 @@ SharedSpiDevice *SharedSpiDevice::mainSharedSpiDevice = nullptr;
 void SharedSpiDevice::Init() noexcept
 {
 #if SAME5x
+	pinMode(SharedSpiMosiPin, INPUT_PULLDOWN);
+	pinMode(SharedSpiMisoPin, INPUT_PULLDOWN);
+	pinMode(SharedSpiSclkPin, INPUT_PULLDOWN);
 	SetPinFunction(SharedSpiMosiPin, SharedSpiPinFunction);
 	SetPinFunction(SharedSpiMisoPin, SharedSpiPinFunction);
 	SetPinFunction(SharedSpiSclkPin, SharedSpiPinFunction);

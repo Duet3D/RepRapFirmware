@@ -27,7 +27,7 @@ class Lcd : public Print
 {
 public:
 	// Construct a GLCD driver.
-	Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept;
+	Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode) noexcept;
 	virtual ~Lcd();
 
 	// Flush just some data, returning true if this needs to be called again

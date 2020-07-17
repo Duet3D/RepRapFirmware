@@ -27,7 +27,7 @@ constexpr unsigned int LcdDataDelayMicros = 4;			// delay between sending data b
 constexpr unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
 Lcd7920::Lcd7920(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Lcd(64, 128, fnts, nFonts)
+	: Lcd(64, 128, fnts, nFonts, SpiMode::mode0)
 {
 }
 
