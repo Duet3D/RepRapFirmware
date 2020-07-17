@@ -6,12 +6,12 @@
 
 #include <Libraries/sd_mmc/sd_mmc.h>
 
-#if !defined(__LPC17xx__) && !SAME5x
-# include <sam/drivers/hsmci/hsmci.h>
-#endif
-
 // Check that the LFN configuration in FatFS is sufficient
 static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
+
+// Check that the correct number of SD cards is configured in the library
+#include <Libraries/sd_mmc/conf_sd_mmc.h>
+static_assert(SD_MMC_MEM_CNT == NumSdCards);
 
 // A note on using mutexes:
 // Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.

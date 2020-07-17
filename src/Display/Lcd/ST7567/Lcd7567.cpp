@@ -13,14 +13,14 @@ constexpr unsigned int TILE_WIDTH = 1;
 constexpr unsigned int TILE_HEIGHT = 8;
 
 Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Lcd(132, 64, fnts, nFonts)
+	: Lcd(64, 128, fnts, nFonts)
 {
 }
 
 // Get the display type
 const char *Lcd7567::GetDisplayTypeName() const noexcept
 {
-	return "132x64 mono graphics with ST7567 controller";
+	return "128x64 mono graphics with ST7567 controller";
 }
 
 void Lcd7567::HardwareInit() noexcept
@@ -58,9 +58,24 @@ void Lcd7567::HardwareInit() noexcept
 	// 10101100 Set static indicator off
 	SendByte(0xAC);
 
-	// Exit sleep mode, display on
-	SendByte(PixelOff);
-	SendByte(DisplayOn);
+	// Enter sleep mode
+	// 10101110 Set display enable to off
+	SendByte(0xAE);
+	// 10100101 Set all pixel on
+	SendByte(0xA5);
+
+	device.Deselect();
+
+	Clear();
+	FlushAll();
+
+	device.Select();
+
+	// Enable display
+	// 10100100 Set all pixel off
+	SendByte(0xA4);
+	// 10101111 Set display enable to on
+	SendByte(0xAF);
 
 	device.Deselect();
 }

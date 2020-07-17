@@ -1800,7 +1800,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		if (resetReason & RSTC_RCAUSE_WDT)		{ resetString.cat(": watchdog"); }
 		if (resetReason & RSTC_RCAUSE_NVM)		{ resetString.cat(": NVM"); }
 		if (resetReason & RSTC_RCAUSE_EXT)		{ resetString.cat(": reset button"); }
-		if (resetReason & RSTC_RCAUSE_SYST)		{ resetString.cat(": system reset request"); }
+		if (resetReason & RSTC_RCAUSE_SYST)		{ resetString.cat(": software"); }
 		if (resetReason & RSTC_RCAUSE_POR)		{ resetString.cat(": backup/hibernate"); }
 		resetString.cat('\n');
 		Message(mtype, resetString.c_str());

@@ -198,7 +198,11 @@ void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) cons
 	// We have to disable SPI device in order to change the baud rate and mode
 #if SAME5x
 	Disable();
-	hri_sercomusart_write_BAUD_reg(hardware, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * freq) - 1));
+	// Round the clock frequency rate down. For example, using 60MHz clock, if we ask for 4MHz:
+	// Without rounding, divisor = 60/(2*4) = 7, actual clock rate = 4.3MHz
+	// With rounding, divisor = 67/8 = 8, actual clock rate = 3.75MHz
+	// To get more accurate speeds we could increase the clock frequency to 100MHz
+	hri_sercomusart_write_BAUD_reg(hardware, SERCOM_SPI_BAUD_BAUD((Serial::SercomFastGclkFreq + (2 * freq) - 1)/(2 * freq) - 1));
 
 	uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_FORM(0) | SERCOM_SPI_CTRLA_ENABLE;
 	if (((uint8_t)mode & 2) != 0)
@@ -254,6 +258,15 @@ void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) cons
 
 bool SharedSpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_t len) const noexcept
 {
+	// Clear any existing data
+#if SAME5x
+	(void)hardware->SPI.DATA.reg;
+#elif USART_SPI
+	(void)hardware->US_RHR;
+#else
+	(void)hardware->SPI_RDR;
+#endif
+
 	for (uint32_t i = 0; i < len; ++i)
 	{
 		uint32_t dOut = (tx_data == nullptr) ? 0x000000FF : (uint32_t)*tx_data++;
@@ -297,10 +310,12 @@ bool SharedSpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data,
 		}
 	}
 
-	// If we didn't wait to receive, then we need to wait for transmit to finish and clear the receive buffer
+	// Wait for transmitter empty, to make sure that the last clock pulse has finished
+	waitForTxEmpty();
+
+	// If we were not receiving, clear data from the receive buffer
 	if (rx_data == nullptr)
 	{
-		waitForTxEmpty();
 #if SAME5x
 		(void)hardware->SPI.DATA.reg;
 #elif USART_SPI

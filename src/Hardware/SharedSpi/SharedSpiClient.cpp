@@ -31,6 +31,7 @@ bool SharedSpiClient::Select(uint32_t timeout) const noexcept
 	if (ok)
 	{
 		device.SetClockFrequencyAndMode(clockFrequency, mode);
+		delayMicroseconds(1);										// allow the clock time to settle
 		IoPort::WriteDigital(csPin, csActivePolarity);
 	}
 	return ok;
@@ -39,6 +40,7 @@ bool SharedSpiClient::Select(uint32_t timeout) const noexcept
 void SharedSpiClient::Deselect() const noexcept
 {
 	IoPort::WriteDigital(csPin, !csActivePolarity);
+	delayMicroseconds(1);											// in case the clock makes an abrupt transition when we disable SPI
 	device.Disable();
 	device.Release();
 }

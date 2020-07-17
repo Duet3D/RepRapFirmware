@@ -57,7 +57,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
 
-#define USE_CACHE				1					// set nonzero to enable the cache
+#define USE_CACHE				0					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
 
 // The physical capabilities of the machine
@@ -191,7 +191,7 @@ constexpr bool DiagOnPolarity = false;
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), PortAPin(2) };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { PortCPin(14) };
+constexpr Pin SdSpiCSPins[NumSdCards - 1] = { PortCPin(14) };
 constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin(19), PortBPin(20), PortBPin(21) };
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
 Sdhc * const SdDevice = SDHC1;

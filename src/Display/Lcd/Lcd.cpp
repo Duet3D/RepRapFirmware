@@ -24,13 +24,14 @@ Lcd::~Lcd()
 	delete image;
 }
 
-// Initialise. cControllerType is 1 for ST7567 controller, 0 for ST7920. a0Pin is only used by the ST7567.
+// Initialise. a0Pin is only used by the ST7567.
 void Lcd::Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq) noexcept
 {
 	a0Pin = p_a0Pin;
 	device.SetClockFrequency(freq);
 	device.SetCsPin(csPin);
 	device.SetCsPolarity(csPolarity);		// normally active high chip select for ST7920, active low for ST7567
+	pinMode(csPin, (csPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);
 #ifdef __LPC17xx__
     device.sspChannel = LcdSpiChannel;
 #endif
@@ -69,22 +70,19 @@ PixelNumber Lcd::GetFontHeight(size_t fontNumber) const noexcept
 	return fonts[fontNumber]->height;
 }
 
-// Flag a pixel as dirty. The r and c parameters must be no greater than NumRows-1 and NumCols-1 respectively.
-void Lcd::SetDirty(PixelNumber r, PixelNumber c) noexcept
-{
-	if (c < startCol) { startCol = c; }
-	if (c >= endCol) { endCol = c + 1; }
-	if (r < startRow) { startRow = r; }
-	if (r >= endRow) { endRow = r + 1; }
-}
-
-// Flag a rectangle as dirty. Inline because it is called from only one place.
+// Flag a rectangle as dirty. Inline because it is called from only two places.
 inline void Lcd::SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
 {
 	if (top < startRow) startRow = top;
 	if (bottom > endRow) endRow = bottom;
 	if (left < startCol) startCol = left;
 	if (right > endCol) endCol = right;
+}
+
+// Flag a pixel as dirty. The r and c parameters must be no greater than NumRows-1 and NumCols-1 respectively.
+void Lcd::SetDirty(PixelNumber r, PixelNumber c) noexcept
+{
+	SetRectDirty(r, c, r + 1, c + 1);
 }
 
 // Write a UTF8 byte.
@@ -335,7 +333,7 @@ void Lcd::ClearToMargin() noexcept
 		else
 		{
 			mask ^= 0xFF >> (rightMargin & 7);
-			nextColumn = rightMargin;;
+			nextColumn = rightMargin;
 		}
 
 		for (uint8_t i = 0; i < fontHeight && p < (image + imageSize); ++i)
