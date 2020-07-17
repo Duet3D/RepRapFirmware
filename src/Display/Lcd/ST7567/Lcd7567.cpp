@@ -27,49 +27,9 @@ void Lcd7567::HardwareInit() noexcept
 {
 	pinMode(a0Pin, OUTPUT_LOW);				// set DC/A0 pin to be an output with initial LOW state so as to be in command mode (command: 0, data: 1)
 
-	// Post-reset wait of 6ms
-	delay(6);
-
 	device.Select();
 	delayMicroseconds(1);
 
-#if 0
-
-	SendByte(SetBias7);						// LCD bias select
-	SendByte(SetAdcNormal);					// ADC select
-	SendByte(SetComNormal);					// SHL select
-	SendByte(SetDisplayStartLine);			// Initial display line
-	SendByte(SetPowerControl | 0x4);		// turn on voltage converter (VC=1, VR=0, VF=0)
-	delay(50);								// wait for 50% rising
-
-	SendByte(SetPowerControl | 0x6);		// turn on voltage regulator (VC=1, VR=1, VF=0)
-	delay(50);								// wait >=50ms
-
-	SendByte(SetPowerControl | 0x7);		// turn on voltage follower (VC=1, VR=1, VF=1)
-	delay(10);								// wait
-
-	SendByte(SetResistorRatio | 0x6);		// set lcd operating voltage (regulator resistor, ref voltage resistor)
-
-#elif 0
-
-	SendByte(SetDisplayStartLine);			// set display start line
-	SendByte(SetAdcReverse);				// ADC set to reverse
-	SendByte(SetComNormal);					// common output mode: set scan direction normal operation
-	SendByte(SetDisplayNormal);				// display normal (none reverse)
-	SendByte(SetBias9);						// LCD bias 1/9
-	SendByte(SetPowerControl | 0x7);		// all power control circuits on
-	SendByte(SetBoosterFirst);				// set booster ratio to
-	SendByte(0x00);							// 4x
-	SendByte(SetResistorRatio | 0x07);		// set V0 voltage resistor ratio to large
-	SendByte(SetVolumeFirst);				// set contrast
-	SendByte(0x018);						// contrast value, EA default: 0x016
-	SendByte(SetStaticOff);					// indicator
-	SendByte(0x00);							// disable
-	SendByte(PixelOff);						// normal display (not all on)
-	SendByte(DisplayOn);					// display on
-	delay(50);								// delay 50 ms
-
-#else
 	SendByte(SystemReset);					// 11100010 System reset
 	SendByte(DisplayOff);
 	SendByte(SetDisplayStartLine);			// 01000000 Set scroll line to 0 (6-bit value)
@@ -82,29 +42,12 @@ void Lcd7567::HardwareInit() noexcept
 	SendByte(0x00);
 	SendByte(SetResistorRatio | 0x06);		// 00100011 Set Vlcd resistor ratio 1+Rb/Ra to 6.5 for the voltage regulator (contrast)
 	SendByte(SetVolumeFirst);				// 10000001 Set electronic volume (2-byte command) 6-bit contrast value
-	SendByte(0x18);
+	SendByte(0x18);							// contrast value, EA default: 0x016
 	SendByte(SetStaticOff);					// 10101100 Set static indicator off
-
-#if 0
-	// Enter sleep mode
-	SendByte(DisplayOff);					// 10101110 Set display enable to off
-	SendByte(PixelOn);						// 10100101 Set all pixel on
-
-	delayMicroseconds(1);
-	device.Deselect();
-
-	Clear();
-	FlushAll();
-
-	device.Select();
-	delayMicroseconds(1);
-#endif
 
 	// Enable display
 	SendByte(PixelOff);						// 10100100 Set all pixel off
 	SendByte(DisplayOn);					// 10101111 Set display enable to on
-
-#endif
 
 	delayMicroseconds(1);
 	device.Deselect();
