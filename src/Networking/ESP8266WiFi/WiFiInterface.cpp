@@ -614,16 +614,17 @@ void WiFiInterface::Spin() noexcept
 
 					// Read the status to get the WiFi server version and MAC address
 					Receiver<NetworkStatusResponse> status;
-					const int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
+					int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
 					if (rc > 0)
 					{
 						SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
 						macAddress.SetFromBytes(status.Value().macAddress);
 
 						// Set the hostname before anything else is done
-						if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, reprap.GetNetwork().GetHostname(), HostNameLength, nullptr, 0) != ResponseEmpty)
+						rc = SendCommand(NetworkCommand::networkSetHostName, 0, 0, reprap.GetNetwork().GetHostname(), HostNameLength, nullptr, 0);
+						if (rc != ResponseEmpty)
 						{
-							reprap.GetPlatform().Message(NetworkInfoMessage, "Error: Could not set WiFi hostname\n");
+							reprap.GetPlatform().MessageF(NetworkInfoMessage, "Error: Could not set WiFi hostname: %s\n", TranslateWiFiResponse(rc));
 						}
 
 						SetState(NetworkState::active);
@@ -633,7 +634,7 @@ void WiFiInterface::Spin() noexcept
 					{
 						// Something went wrong, maybe a bad firmware image was flashed
 						// Disable the WiFi chip again in this case
-						platform.MessageF(NetworkInfoMessage, "Error: Failed to initialise WiFi module, code %" PRIi32 "\n", rc);
+						platform.MessageF(NetworkInfoMessage, "Error: Failed to initialise WiFi module: %s\n", TranslateWiFiResponse(rc));
 						Stop();
 					}
 				}
@@ -690,7 +691,7 @@ void WiFiInterface::Spin() noexcept
 			else
 			{
 				Stop();
-				platform.MessageF(NetworkInfoMessage, "Failed to change WiFi mode (code %" PRIi32 ")\n", rslt);
+				platform.MessageF(NetworkInfoMessage, "Failed to change WiFi mode: %s\n", TranslateWiFiResponse(rslt));
 			}
 		}
 		else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
@@ -1042,7 +1043,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			}
 			else
 			{
-				reply.copy("Failed to add SSID to remembered list");
+				reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
 			}
 		}
 		else
@@ -1080,7 +1081,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				return GCodeResult::ok;
 			}
 
-			reply.copy("Failed to retrieve network list");
+			reply.printf("Failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
 		}
 		return GCodeResult::error;
 
@@ -1097,7 +1098,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					return GCodeResult::ok;
 				}
 
-				reply.copy("Failed to reset the WiFi module to factory settings");
+				reply.printf("Failed to reset the WiFi module to factory settings: %s", TranslateWiFiResponse(rslt));
 				return GCodeResult::error;
 			}
 
@@ -1109,12 +1110,30 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				return GCodeResult::ok;
 			}
 
-			reply.copy("Failed to remove SSID from remembered list");
+			reply.printf("Failed to remove SSID from remembered list: %s", TranslateWiFiResponse(rslt));
 			return GCodeResult::error;
 		}
 
 	case 589:	// Configure access point
-		if (gb.Seen('S'))
+		if (gb.Seen('T'))
+		{
+			// Special code to set max transmitter power, 0 to 20.5dBm
+			const float powerTimes4 = gb.GetFValue() * 4;
+			if (powerTimes4 < 0.0 || powerTimes4 > 82.0)
+			{
+				reply.copy("Power setting out of range");
+			}
+			else
+			{
+				const int32_t rslt = SendCommand(NetworkCommand::networkSetTxPower, 0, (uint8_t)powerTimes4, nullptr, 0, nullptr, 0);
+				if (rslt == ResponseEmpty)
+				{
+					return GCodeResult::ok;
+				}
+				reply.printf("Failed to set maximum transmit power: %s", TranslateWiFiResponse(rslt));
+			}
+		}
+		else if (gb.Seen('S'))
 		{
 			// Configure access point parameters
 			WirelessConfigurationData config;
@@ -1152,7 +1171,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				return GCodeResult::ok;
 			}
 
-			reply.copy("Failed to configure access point parameters");
+			reply.printf("Failed to configure access point parameters: %s", TranslateWiFiResponse(rslt));
 		}
 		else
 		{
@@ -1175,7 +1194,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			}
 			else
 			{
-				reply.copy("Failed to retrieve own SSID data");
+				reply.printf("Failed to retrieve own SSID data: %s", TranslateWiFiResponse(rslt));
 			}
 		}
 		return GCodeResult::error;
@@ -1191,9 +1210,10 @@ void WiFiInterface::UpdateHostname(const char *hostname) noexcept
 	// Update the hostname if possible
 	if (GetState() == NetworkState::active)
 	{
-		if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
+		const int32_t rslt = SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0);
+		if (rslt != ResponseEmpty)
 		{
-			platform.Message(GenericMessage, "Error: Could not set WiFi hostname\n");
+			platform.MessageF(GenericMessage, "Error: Could not set WiFi hostname: %s\n", TranslateWiFiResponse(rslt));
 		}
 	}
 }
