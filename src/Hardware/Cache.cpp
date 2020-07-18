@@ -48,7 +48,25 @@ extern uint32_t _nocache_ram_end;
 #endif
 
 #if SAME5x
-# include <hal_cache.h>
+
+void cache_disable()
+{
+	while (CMCC->SR.bit.CSTS)
+	{
+		CMCC->CTRL.reg = 0;
+	}
+}
+
+void cache_enable()
+{
+	CMCC->CTRL.reg = CMCC_CTRL_CEN;
+}
+
+void cache_invalidate_all()
+{
+	CMCC->MAINT0.reg = CMCC_MAINT0_INVALL;
+}
+
 #endif
 
 static bool enabled = false;
@@ -146,8 +164,8 @@ void Cache::Enable() noexcept
 		SCB_EnableICache();
 		SCB_EnableDCache();
 #elif SAME5x
-		cache_invalidate_all(CMCC);
-		cache_enable(CMCC);
+		cache_invalidate_all();
+		cache_enable();
 #elif SAM4E
 		cmcc_invalidate_all(CMCC);
 		cmcc_enable(CMCC);
@@ -164,7 +182,7 @@ void Cache::Disable() noexcept
 		SCB_DisableICache();
 		SCB_DisableDCache();
 #elif SAME5x
-		cache_disable(CMCC);
+		cache_disable();
 #elif SAM4E
 		cmcc_disable(CMCC);
 #endif
@@ -203,9 +221,9 @@ void Cache::Invalidate(const volatile void *start, size_t length) noexcept
 		}
 #elif SAME5x
 		//TODO invalidate just the relevant cache line(s)
-		cache_disable(CMCC);
-		cache_invalidate_all(CMCC);
-		cache_enable(CMCC);
+		cache_disable();
+		cache_invalidate_all();
+		cache_enable();
 #elif SAM4E
 		// The cache is only 2kb on the SAM4E so we just invalidate the whole cache
 		cmcc_disable(CMCC);

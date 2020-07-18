@@ -1749,6 +1749,8 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	espWaitingTask = TaskBase::GetCallerTaskHandle();
 	transferPending = true;
 
+	Cache::FlushBeforeDMASend(&bufferIn, sizeof(bufferIn));
+
 #if SAME5x
     spi_slave_dma_setup(dataOutLength, dataInLength);
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
@@ -1791,6 +1793,8 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		}
 	} while (transferPending);
 
+	espWaitingTask = nullptr;
+
 #if SAME5x
 	{
 		// We don't get and end-of-transfer interrupt, just a start-of-transfer one. So wait until SS is high, then disable the SPI.
@@ -1814,6 +1818,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 #endif
+
 	Cache::InvalidateAfterDMAReceive(&bufferIn, sizeof(bufferIn));
 
 	// Look at the response
