@@ -898,8 +898,7 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 #endif
 
 #if SAME5x
-        //TODO
-        memset(srdBuf, 0xFF, sizeof(srdBuf));
+        memcpy(srdBuf, reinterpret_cast<const void*>(SEEPROM_ADDR), sizeof(srdBuf));
 #elif SAM4E || SAM4S || SAME70
 		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
 #elif SAM3XA
@@ -923,10 +922,12 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 		if (slot == SoftwareResetData::numberOfSlots)
 		{
 			// No free slots, so erase the area
-#if SAM4E || SAM4S || SAME70
+#if SAME5x
+			memset(reinterpret_cast<void*>(SEEPROM_ADDR), 0xFF, sizeof(srdBuf));
+#elif SAM4E || SAM4S || SAME70
 			flash_erase_user_signature();
 #elif defined(__LPC17xx__)
-			LPC_EraseSoftwareResetDataSlots(); // erase the last flash sector
+			LPC_EraseSoftwareResetDataSlots();	// erase the last flash sector
 #endif
 			memset(srdBuf, 0xFF, sizeof(srdBuf));
 			slot = 0;
@@ -940,7 +941,8 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 
 		// Save diagnostics data to Flash
 #if SAME5x
-        // TODO write to EEPROM
+        while (NVMCTRL->SEESTAT.bit.BUSY) { }
+        memcpy(reinterpret_cast<uint8_t*>(SEEPROM_ADDR) + (slot * sizeof(SoftwareResetData)), &srdBuf[slot], sizeof(SoftwareResetData));
 #elif SAM4E || SAM4S || SAME70
 		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
 #elif defined(__LPC17xx__)
@@ -2901,6 +2903,25 @@ void RepRap::StartIap() noexcept
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b) noexcept
 {
 	return a/b;
+}
+
+// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate bus fault or memory protection error
+/*static*/ void RepRap::GenerateBusFault() noexcept
+{
+#if SAME5x
+	(void)*(reinterpret_cast<const volatile char*>(0x30000000));
+#elif SAME70 && USE_MPU
+	(void)*(reinterpret_cast<const volatile char*>(0x30000000));
+#elif SAM4E || SAM4S
+	(void)*(reinterpret_cast<const volatile char*>(0x20800000));
+#elif SAM3XA
+	(void)*(reinterpret_cast<const volatile char*>(0x20200000));
+#elif defined(__LPC17xx__)
+	// The LPC176x/5x generates Bus Fault exception when accessing a reserved memory address
+	(void)*(reinterpret_cast<const volatile char*>(0x00080000));
+#else
+# error Unsupported processor
+#endif
 }
 
 // Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine

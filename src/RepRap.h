@@ -177,6 +177,7 @@ public:
 	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) noexcept;
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
+	static void GenerateBusFault() noexcept;							// helper function for diagnostic tests
 	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
