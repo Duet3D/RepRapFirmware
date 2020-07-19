@@ -1604,6 +1604,7 @@ static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexc
 #endif
 
 #if USE_DMAC || USE_XDMAC || USE_DMAC_MANAGER
+	spi_dma_disable();					// if we don't do this we get strange crashes on the Duet 3 Mini
 	DisableSpi();
 	spi_rx_dma_setup(&bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
 	spi_tx_dma_setup(&bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
@@ -1679,7 +1680,6 @@ void WiFiInterface::SetupSpi() noexcept
 #endif
 
 #if SAME5x
-	// Set up the correct SPI mode etc. (I am assuming that we don't need to reset the SPI between transactions)
 	WiFiSpiSercom->SPI.INTENCLR.reg = 0xFF;		// disable all interrupts
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
 #else
