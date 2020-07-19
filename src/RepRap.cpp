@@ -538,7 +538,6 @@ void RepRap::Init() noexcept
 	}
 #endif
 
-
 #if HAS_LINUX_INTERFACE
 	if (usingLinuxInterface)
 	{
@@ -2910,7 +2909,7 @@ void RepRap::StartIap() noexcept
 {
 #if SAME5x
 	(void)*(reinterpret_cast<const volatile char*>(0x30000000));
-#elif SAME70 && USE_MPU
+#elif SAME70
 	(void)*(reinterpret_cast<const volatile char*>(0x30000000));
 #elif SAM4E || SAM4S
 	(void)*(reinterpret_cast<const volatile char*>(0x20800000));

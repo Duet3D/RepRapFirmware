@@ -11,6 +11,8 @@
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
+#include <RepRap.h>
+#include <GCodes/GCodes.h>
 
 #if DOTSTAR_USES_USART
 # include <sam/drivers/pdc/pdc.h>
@@ -427,6 +429,15 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 				return GCodeResult::notFinished;
 			}
 #endif
+		}
+	}
+
+	if (ledType == 2)
+	{
+		// Interrupts are disabled while bit-banging the data, so make sure movement has stopped
+		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
 		}
 	}
 
