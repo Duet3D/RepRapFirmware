@@ -98,6 +98,13 @@ extern "C" [[noreturn]] void AppMain() noexcept
 {
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);	// set up diag LED for debugging and turn it off
 
+#if SAME5x
+	// delayMicroseconds in CoreN2G uses systick to get accurate delays
+	// Temporarily set up systick so that delayMicroseconds works
+	SysTick->LOAD = ((SystemCoreClockFreq/1000) - 1) << SysTick_LOAD_RELOAD_Pos;
+	SysTick->CTRL = (1 << SysTick_CTRL_ENABLE_Pos) | (1 << SysTick_CTRL_CLKSOURCE_Pos);
+#endif
+
 #if !defined(DEBUG) && !defined(__LPC17xx__)	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
