@@ -49,20 +49,24 @@ extern uint32_t _nocache_ram_end;
 
 #if SAME5x
 
-void cache_disable()
+inline void cache_disable()
 {
 	while (CMCC->SR.bit.CSTS)
 	{
 		CMCC->CTRL.reg = 0;
+		__ISB();
+		__DSB();
 	}
 }
 
-void cache_enable()
+inline void cache_enable()
 {
 	CMCC->CTRL.reg = CMCC_CTRL_CEN;
+	__ISB();
+	__DSB();
 }
 
-void cache_invalidate_all()
+inline void cache_invalidate_all()
 {
 	CMCC->MAINT0.reg = CMCC_MAINT0_INVALL;
 }
@@ -220,15 +224,21 @@ void Cache::Invalidate(const volatile void *start, size_t length) noexcept
 			SCB_InvalidateDCache_by_Addr(reinterpret_cast<uint32_t*>(startAddr & ~3), length + (startAddr & 3));
 		}
 #elif SAME5x
-		//TODO invalidate just the relevant cache line(s)
+		//TODO can we invalidate just the relevant cache line(s)?
+		// Disable interrupts throughout the sequence, otherwise we could get a task switch while the cache is disabled.
+		// The can cause a crash because we end up invalidating the cache while it is enabled.
+		const irqflags_t flags = cpu_irq_save();
 		cache_disable();
 		cache_invalidate_all();
 		cache_enable();
+		cpu_irq_restore(flags);
 #elif SAM4E
 		// The cache is only 2kb on the SAM4E so we just invalidate the whole cache
+		const irqflags_t flags = cpu_irq_save();
 		cmcc_disable(CMCC);
 		cmcc_invalidate_all(CMCC);
 		cmcc_enable(CMCC);
+		cpu_irq_restore(flags);
 #endif
 	}
 }

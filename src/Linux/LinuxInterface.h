@@ -8,6 +8,10 @@
 #ifndef SRC_LINUX_LINUXINTERFACE_H_
 #define SRC_LINUX_LINUXINTERFACE_H_
 
+#include <RepRapFirmware.h>
+
+#if HAS_LINUX_INTERFACE
+
 #include "RTOSIface/RTOSIface.h"
 
 #include "GCodes/GCodeChannel.h"
@@ -78,5 +82,7 @@ inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedRea
 	pauseReason = reason;
 	reportPause = true;
 }
+
+#endif
 
 #endif
