@@ -15,6 +15,13 @@
 # include "DuetNG/DueXn.h"
 #endif
 
+#if SAME5x
+# include <AnalogIn.h>
+using AnalogIn::AdcBits;
+# include <AnalogOut.h>
+# include <Interrupts.h>
+#endif
+
 #if SUPPORT_CAN_EXPANSION
 # include <CanId.h>
 #endif
@@ -141,14 +148,14 @@ void IoPort::Release() noexcept
 		// Release PWM/Servo from pin if needed
 		if (logicalPinModes[logicalPin] == OUTPUT_SERVO_HIGH || logicalPinModes[logicalPin] == OUTPUT_SERVO_LOW)
 		{
-			ReleaseServoPin(PinTable[logicalPin].pin);
+			ReleaseServoPin(GetPinNoCheck());
 		}
 		if (logicalPinModes[logicalPin] == OUTPUT_PWM_HIGH || logicalPinModes[logicalPin] == OUTPUT_PWM_LOW)
 		{
-			ReleasePWMPin(PinTable[logicalPin].pin);
+			ReleasePWMPin(GetPinNoCheck());
 		}
 #endif
-		detachInterrupt(PinTable[logicalPin].pin);
+		detachInterrupt(GetPinNoCheck());
 		portUsedBy[logicalPin] = PinUsedBy::unused;
 		logicalPinModes[logicalPin] = PIN_MODE_NOT_CONFIGURED;
 	}
@@ -159,14 +166,14 @@ void IoPort::Release() noexcept
 // Attach an interrupt to the pin. Nor permitted if we allocated the pin in shared input mode.
 bool IoPort::AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const noexcept
 {
-	return IsValid() && !isSharedInput && attachInterrupt(PinTable[logicalPin].pin, callback, mode, param);
+	return IsValid() && !isSharedInput && attachInterrupt(GetPinNoCheck(), callback, mode, param);
 }
 
 void IoPort::DetachInterrupt() const noexcept
 {
 	if (IsValid() && !isSharedInput)
 	{
-		detachInterrupt(PinTable[logicalPin].pin);
+		detachInterrupt(GetPinNoCheck());
 	}
 }
 
@@ -202,7 +209,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 
 	const char *const fullPinName = pn;			// the full pin name less the inversion and pullup flags
 
-#if defined(DUET3)
+#if SUPPORT_CAN_EXPANSION
 	if (isdigit(*pn))
 	{
 		const uint32_t expansionNumber = StrToU32(pn, &pn);
@@ -307,12 +314,12 @@ bool IoPort::SetMode(PinAccess access) noexcept
 
 	if (logicalPinModes[logicalPin] != (int8_t)desiredMode)
 	{
-		const AnalogChannelNumber chan = PinToAdcChannel(PinTable[logicalPin].pin);
+		const AnalogChannelNumber chan = PinToAdcChannel(GetPinNoCheck());
 		if (chan != NO_ADC)
 		{
 			if (access == PinAccess::readAnalog)
 			{
-				IoPort::SetPinMode(PinTable[logicalPin].pin, AIN);		// SAME70 errata says we must disable the pullup resistor before enabling the AFEC channel
+				IoPort::SetPinMode(GetPinNoCheck(), AIN);		// SAME70 errata says we must disable the pullup resistor before enabling the AFEC channel
 				AnalogInEnableChannel(chan, true);
 				logicalPinModes[logicalPin] = (int8_t)desiredMode;
 				return true;
@@ -329,20 +336,20 @@ bool IoPort::SetMode(PinAccess access) noexcept
 #ifdef __LPC17xx__
 		if (access == PinAccess::servo)
 		{
-			if (!IsServoCapable(PinTable[logicalPin].pin)) //check that we have slots free to provide Servo
+			if (!IsServoCapable(GetPinNoCheck)) //check that we have slots free to provide Servo
 			{
 				return false;
 			}
 		}
 		else if (access == PinAccess::pwm)
 		{
-			if (!IsPwmCapable(PinTable[logicalPin].pin)) //Check if there is enough slots free for PWM
+			if (!IsPwmCapable(GetPinNoCheck)) //Check if there is enough slots free for PWM
 			{
 				return false;
 			}
 		}
 #endif
-		IoPort::SetPinMode(PinTable[logicalPin].pin, desiredMode);
+		IoPort::SetPinMode(GetPinNoCheck(), desiredMode);
 		logicalPinModes[logicalPin] = (int8_t)desiredMode;
 	}
 	return true;
@@ -474,20 +481,20 @@ void IoPort::WriteDigital(bool high) const noexcept
 {
 	if (IsValid())
 	{
-		WriteDigital(PinTable[logicalPin].pin, (totalInvert) ? !high : high);
+		WriteDigital(GetPinNoCheck(), (totalInvert) ? !high : high);
 	}
 }
 
 Pin IoPort::GetPin() const noexcept
 {
-	return (IsValid()) ? PinTable[logicalPin].pin : NoPin;
+	return (IsValid()) ? GetPinNoCheck() : NoPin;
 }
 
 bool IoPort::Read() const noexcept
 {
 	if (IsValid())
 	{
-		const bool b = ReadPin(PinTable[logicalPin].pin);
+		const bool b = ReadPin(GetPinNoCheck());
 		return (totalInvert) ? !b : b;
 	}
 	return false;
@@ -580,7 +587,9 @@ uint16_t IoPort::ReadAnalog() const noexcept
 
 /*static*/ void IoPort::WriteAnalog(Pin pin, float pwm, uint16_t freq) noexcept
 {
-#ifdef DUET_NG
+#if SAME5x
+	AnalogOut::Write(pin, pwm, freq);
+#elif defined(DUET_NG)
 	if (pin >= DueXnExpansionStart)
 	{
 		DuetExpansion::AnalogOut(pin, pwm);
@@ -613,7 +622,7 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 {
 	if (IsValid())
 	{
-		IoPort::WriteAnalog(PinTable[logicalPin].pin, ((totalInvert) ? 1.0 - pwm : pwm), frequency);
+		IoPort::WriteAnalog(GetPinNoCheck(), ((totalInvert) ? 1.0 - pwm : pwm), frequency);
 	}
 }
 

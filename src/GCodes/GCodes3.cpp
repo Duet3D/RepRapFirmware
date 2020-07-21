@@ -38,7 +38,9 @@
 # include <CAN/ExpansionManager.h>
 #endif
 
-#include "Wire.h"
+#ifdef I2C_IFACE
+# include "Wire.h"
+#endif
 
 // Deal with G60
 GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

@@ -65,13 +65,13 @@ constexpr bool BACKWARDS = !FORWARDS;
 #if HAS_VREF_MONITOR
 constexpr size_t VrefFilterIndex = NumThermistorInputs;
 constexpr size_t VssaFilterIndex = NumThermistorInputs + 1;
-# if HAS_CPU_TEMP_SENSOR
+# if HAS_CPU_TEMP_SENSOR && !SAME5x
 constexpr size_t CpuTempFilterIndex = NumThermistorInputs + 2;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 3;
 # else
 constexpr size_t NumAdcFilters = NumThermistorInputs + 2;
 # endif
-#elif HAS_CPU_TEMP_SENSOR
+#elif HAS_CPU_TEMP_SENSOR && !SAME5x
 constexpr size_t CpuTempFilterIndex = NumThermistorInputs;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 1;
 #else
@@ -96,7 +96,7 @@ constexpr unsigned int ZProbeAverageReadings = 8;		// We average this number of 
 // HEATERS - The bed is assumed to be the at index 0
 
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ^ AD_OVERSAMPLE_BITS.
-#ifdef SAME70
+#if SAME70
 // On the SAME70 we read a thermistor on every tick so that we can average a higher number of readings
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 1ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
 constexpr unsigned int ThermistorAverageReadings = 16;
@@ -106,6 +106,10 @@ constexpr unsigned int ThermistorAverageReadings = 16;
 constexpr unsigned int ThermistorAverageReadings = 16;
 #endif
 
+#if SAME5x
+constexpr unsigned int TempSenseAverageReadings = 16;
+#endif
+
 constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
 
 /****************************************************************************************************/
@@ -113,7 +117,11 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(DUET3)
+#if defined(DUET_5LC)
+	Duet5LC_Unknown,
+	Duet5LC_WiFi,
+	Duet5LC_Ethernet,
+#elif defined(DUET3)
 	Duet3_v06_100 = 1,
 	Duet3_v101 = 2,
 #elif defined(SAME70XPLD)
@@ -238,6 +246,9 @@ public:
 
 	static constexpr size_t NumAveraged() noexcept { return numAveraged; }
 
+	// Function used as an ADC callback to feed a result into an averaging filter
+	static void CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val);
+
 private:
 	uint16_t readings[numAveraged];
 	size_t index;
@@ -247,8 +258,17 @@ private:
 	//invariant(index < numAveraged)
 };
 
+template<size_t numAveraged> void AveragingFilter<numAveraged>::CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val)
+{
+	static_cast<AveragingFilter<numAveraged>*>(cp.vp)->ProcessReading(val);
+}
+
 typedef AveragingFilter<ThermistorAverageReadings> ThermistorAveragingFilter;
 typedef AveragingFilter<ZProbeAverageReadings> ZProbeAveragingFilter;
+
+#if SAME5x
+typedef AveragingFilter<TempSenseAverageReadings> TempSenseAveragingFilter;
+#endif
 
 // Enumeration of error condition bits
 enum class ErrorCode : uint32_t
@@ -307,8 +327,11 @@ public:
 	size_t GetNumGpOutputsToReport() const noexcept;
 #endif
 
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(DUET_5LC)
 	bool IsDuetWiFi() const noexcept;
+#endif
+
+#ifdef DUET_NG
 	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
 	const char *GetBoardName() const noexcept;
 	const char *GetBoardShortName() const noexcept;
@@ -586,7 +609,7 @@ private:
 
 	void RawMessage(MessageType type, const char *message) noexcept;	// called by Message after handling error/warning flags
 
-	float AdcReadingToCpuTemperature(uint32_t reading) const noexcept;
+	float GetCpuTemperature() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
 	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc, std::function<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
@@ -613,6 +636,7 @@ private:
 
 	// Board and processor
 #if MCU_HAS_UNIQUE_ID
+	void ReadUniqueId();
 	uint32_t uniqueId[5];
 	char uniqueIdChars[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
 #endif
@@ -717,8 +741,13 @@ private:
 	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters
 
 #if HAS_CPU_TEMP_SENSOR
-	uint32_t highestMcuTemperature, lowestMcuTemperature;
+	float highestMcuTemperature, lowestMcuTemperature;
 	float mcuTemperatureAdjust;
+# if SAME5x
+	TempSenseAveragingFilter tpFilter, tcFilter;
+	int32_t tempCalF1, tempCalF2, tempCalF3, tempCalF4;				// temperature calibration factors
+	void TemperatureCalibrationInit() noexcept;
+# endif
 #endif
 
 	// Axes and endstops
@@ -731,7 +760,7 @@ private:
 #endif
 
 	// Heaters
-	HeatersBitmap configuredHeaters;										// bitmask of all real heaters in use
+	HeatersBitmap configuredHeaters;								// bitmap of all real heaters in use
 
 	// Fans
 	uint32_t lastFanCheckTime;

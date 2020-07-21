@@ -39,7 +39,8 @@ enum class SmartDriverRegister : unsigned int
 	tpwmthrs,
 	thigh,
 	mstepPos,
-	pwmScale
+	pwmScale,
+	pwmAuto
 };
 
 #endif /* SRC_MOVEMENT_STEPPERDRIVERS_DRIVERMODE_H_ */

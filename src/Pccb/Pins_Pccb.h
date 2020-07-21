@@ -217,6 +217,7 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 constexpr size_t MaxZProbes = 1;
 
 constexpr Pin DiagPin = NoPin;
+constexpr bool DiagOnPolarity = true;
 
 // DotStar LED control (USART0 is SharedSPI so we use USART1)
 #define DOTSTAR_USES_USART	1
@@ -232,7 +233,13 @@ constexpr size_t NumSdCards = 1;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(8) };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
+constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
+
+// Shared SPI definitions
+#define USART_SPI		1
+#define USART_SSPI		USART0
+#define ID_SSPI			ID_USART0
 
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board

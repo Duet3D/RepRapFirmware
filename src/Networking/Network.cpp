@@ -47,6 +47,8 @@
 
 #ifdef __LPC17xx__
 constexpr size_t NetworkStackWords = 375;
+#elif defined(DEBUG)
+constexpr size_t NetworkStackWords = 1000;				// needs to be enough to support rr_model
 #else
 constexpr size_t NetworkStackWords = 550;				// needs to be enough to support rr_model
 #endif
@@ -83,9 +85,9 @@ Network::Network(Platform& p) noexcept : platform(p)
 #if defined(DUET3_V03)
 	interfaces[0] = new LwipEthernetInterface(p);
 	interfaces[1] = new WiFiInterface(p);
-#elif defined(SAME70XPLD) || defined(DUET3_V05) || defined(DUET3_V06) || defined(DUET_5LC)
+#elif defined(SAME70XPLD) || defined(DUET3_V05) || defined(DUET3_V06)
 	interfaces[0] = new LwipEthernetInterface(p);
-#elif defined(DUET_NG)
+#elif defined(DUET_NG) || defined(DUET_5LC)
 	interfaces[0] = nullptr;			// we set this up in Init()
 #elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
@@ -152,13 +154,23 @@ void Network::Init() noexcept
 #endif
 
 #if defined(DUET_NG) && HAS_NETWORKING
-#if HAS_WIFI_NETWORKING && HAS_W5500_NETWORKING
+# if HAS_WIFI_NETWORKING && HAS_W5500_NETWORKING
 	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));
-#elif HAS_WIFI_NETWORKING
+# elif HAS_WIFI_NETWORKING
 	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
-#elif HAS_W5500_NETWORKING
+# elif HAS_W5500_NETWORKING
 	interfaces[0] = static_cast<NetworkInterface*>(new W5500Interface(platform));
+# endif
 #endif
+
+#if defined(DUET_5LC) && HAS_NETWORKING
+# if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING
+	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
+# elif HAS_WIFI_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
+# elif HAS_LWIP_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>new LwipEthernetInterface(platform);
+# endif
 #endif
 
 #if SUPPORT_HTTP

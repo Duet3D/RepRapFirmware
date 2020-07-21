@@ -83,10 +83,16 @@
 
 #define SD_MMC_WP_DETECT_VALUE		false
 
+#elif defined(DUET3_V06)
 
-#else
+#define SD_MMC_HSMCI_MEM_CNT		1			// Number of HSMCI card slots supported
+#define SD_MMC_HSMCI_SLOT_0_SIZE	4			// HSMCI bus width
+#define SD_MMC_SPI_MEM_CNT			0			// Number of SPI card slots supported
 
-#define CONF_BOARD_SD_MMC_HSMCI		1			// Enable HSMCI
+#define SD_MMC_WP_DETECT_VALUE		false
+
+#else	// Duet 2, Maestro, Duet 3 Mini
+
 #define SD_MMC_HSMCI_MEM_CNT		1			// Number of HSMCI card slots supported
 #define SD_MMC_HSMCI_SLOT_0_SIZE	4			// HSMCI bus width
 #define SD_MMC_SPI_MEM_CNT			1			// Number of SPI card slots supported
@@ -98,8 +104,6 @@
 #endif
 
 #define SD_MMC_MEM_CNT				(SD_MMC_HSMCI_MEM_CNT + SD_MMC_SPI_MEM_CNT)
-
-#define ACCESS_MEM_TO_RAM_ENABLED
 
 #endif /* CONF_SD_MMC_H_INCLUDED */
 

@@ -208,7 +208,7 @@ constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 constexpr size_t MaxMessageLength = 256;
 constexpr size_t MaxTitleLength = 61;
 
-#if SAM4E || SAM4S || SAME70 || defined(ESP_NETWORKING)
+#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
 constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
 constexpr size_t MaxVariableNameLength = 120;
 #else
@@ -232,7 +232,7 @@ constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
 constexpr size_t StringBufferLength = StringLength256;	// Length of the string buffer used by the expression parser
 
-#if SAM4E || SAM4S || SAME70 || defined(ESP_NETWORKING)
+#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer
 constexpr size_t GCODE_LENGTH = 201;					// maximum number of non-comment characters in a line of GCode including the null terminator
 constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that we can queue to synchronise it to a move

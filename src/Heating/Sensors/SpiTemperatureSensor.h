@@ -9,7 +9,7 @@
 #define SRC_HEATING_SPITEMPERATURESENSOR_H_
 
 #include "SensorWithPort.h"
-#include "SharedSpi.h"				// for sspi_device
+#include <Hardware/SharedSpi/SharedSpiClient.h>
 
 class SpiTemperatureSensor : public SensorWithPort
 {
@@ -20,11 +20,7 @@ protected:
 	TemperatureError DoSpiTransaction(const uint8_t dataOut[], size_t nbytes, uint32_t& rslt) const noexcept
 		pre(nbytes <= 8);
 
-#if SAME5x
 	SharedSpiClient device;
-#else
-	sspi_device device;
-#endif
 	uint32_t lastReadingTime;
 	float lastTemperature;
 	TemperatureError lastResult;

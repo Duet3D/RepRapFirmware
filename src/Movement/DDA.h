@@ -135,7 +135,7 @@ public:
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t HiccupTime = 20;														// how long we hiccup for
-#elif SAM4E || SAM4S
+#elif SAM4E || SAM4S || SAME5x
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t HiccupTime = 20;														// how long we hiccup for

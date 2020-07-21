@@ -10,7 +10,7 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
-const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is also 5MHz
+const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is 5MHz
 
 // SPI modes:
 // If the inactive state of SCL is LOW (CPOL = 0) (in the case of the MAX31865, this is sampled on the falling edge of CS):

@@ -47,6 +47,28 @@ extern uint32_t _nocache_ram_end;
 # include <cmcc/cmcc.h>
 #endif
 
+#if SAME5x
+
+void cache_disable()
+{
+	while (CMCC->SR.bit.CSTS)
+	{
+		CMCC->CTRL.reg = 0;
+	}
+}
+
+void cache_enable()
+{
+	CMCC->CTRL.reg = CMCC_CTRL_CEN;
+}
+
+void cache_invalidate_all()
+{
+	CMCC->MAINT0.reg = CMCC_MAINT0_INVALL;
+}
+
+#endif
+
 static bool enabled = false;
 
 void Cache::Init() noexcept
@@ -125,7 +147,7 @@ void Cache::Init() noexcept
 # endif
 
 #elif SAME5x
-	qq;				//TODO enable cache and/or MPU
+	// No need to do any initialisation
 #elif SAM4E
 	cmcc_config g_cmcc_cfg;
 	cmcc_get_config_defaults(&g_cmcc_cfg);
@@ -141,7 +163,9 @@ void Cache::Enable() noexcept
 #if SAME70
 		SCB_EnableICache();
 		SCB_EnableDCache();
-
+#elif SAME5x
+		cache_invalidate_all();
+		cache_enable();
 #elif SAM4E
 		cmcc_invalidate_all(CMCC);
 		cmcc_enable(CMCC);
@@ -157,6 +181,8 @@ void Cache::Disable() noexcept
 		SCB_CleanDCache();
 		SCB_DisableICache();
 		SCB_DisableDCache();
+#elif SAME5x
+		cache_disable();
 #elif SAM4E
 		cmcc_disable(CMCC);
 #endif
@@ -193,9 +219,16 @@ void Cache::Invalidate(const volatile void *start, size_t length) noexcept
 			const uint32_t startAddr = reinterpret_cast<uint32_t>(start);
 			SCB_InvalidateDCache_by_Addr(reinterpret_cast<uint32_t*>(startAddr & ~3), length + (startAddr & 3));
 		}
+#elif SAME5x
+		//TODO invalidate just the relevant cache line(s)
+		cache_disable();
+		cache_invalidate_all();
+		cache_enable();
 #elif SAM4E
 		// The cache is only 2kb on the SAM4E so we just invalidate the whole cache
+		cmcc_disable(CMCC);
 		cmcc_invalidate_all(CMCC);
+		cmcc_enable(CMCC);
 #endif
 	}
 }

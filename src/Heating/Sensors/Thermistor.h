@@ -10,6 +10,11 @@
 
 #include "SensorWithPort.h"
 
+#if SAME5x
+# include <AnalogIn.h>
+using AnalogIn::AdcBits;
+#endif
+
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3
 //

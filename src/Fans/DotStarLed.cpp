@@ -11,13 +11,28 @@
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
+#include <RepRap.h>
+#include <GCodes/GCodes.h>
 
 #if DOTSTAR_USES_USART
 # include <sam/drivers/pdc/pdc.h>
 # include <sam/drivers/usart/usart.h>
 #else
-# include <Hardware/DmacManager.h>
+# include <DmacManager.h>
+# if SAME5x
+#  include <Hardware/IoPorts.h>
+# elif SAME70
+#  include <sam/drivers/xdmac/xdmac.h>
+# endif
 #endif
+
+#define USE_16BIT_SPI	1		// set to use 16-bit SPI transfers instead of 8-bit
+
+#if USE_16BIT_SPI && DOTSTAR_USES_USART
+# error Invalid combination
+#endif
+
+// Duet 5 Mini only supports NeoPixel, not DotStar. So the DotStar code is dead in the Duet 3 Mini build.
 
 namespace DotStarLed
 {
@@ -30,7 +45,7 @@ namespace DotStarLed
 	constexpr unsigned int MaxDotStarChunkSize = ChunkBufferSize/4;		// maximum number of DotStarLEDs we DMA to in one go. Most strips have 30 LEDs/metre.
 	constexpr unsigned int MaxNeoPixelChunkSize = ChunkBufferSize/12;	// maximum number of NeoPixels we can support. A full ring contains 60.
 
-	static uint32_t ledType = 0;										// 0 = DotStar, 1 = NeoPixel
+	static uint32_t ledType = 1;										// 0 = DotStar (not supported on Duet 3 Mini), 1 = NeoPixel, 2 = NeoPixel on Mini 12864 display (Duet 3 Mini only)
 	static uint32_t whenDmaFinished = 0;								// the time in step clocks when we determined that the DMA had finished
 	static unsigned int numRemaining = 0;								// how much of the current request remains after the current transfer (DotStar only)
 	static unsigned int totalSent = 0;									// total amount of data sent since the start frame (DotStar only)
@@ -43,33 +58,54 @@ namespace DotStarLed
 	static void DmaSendChunkBuffer(size_t numBytes) noexcept
 	{
 #if DOTSTAR_USES_USART
-
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_TXDIS;			// reset transmitter and receiver, disable transmitter
 		Pdc * const usartPdc = usart_get_pdc_base(DotStarUsart);
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS;		// disable the PDC
-		usartPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(&chunkBuffer);
+		usartPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(chunkBuffer);
 		usartPdc->PERIPH_TCR = numBytes;										// number of bytes to transfer
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_TXTEN;								// enable the PDC to send data
-
 		DotStarUsart->US_CR = US_CR_TXEN;										// enable transmitter
-#else
+#elif SAME5x
+		//TODO use 16-bit mode to make the DMA more efficient, but that probably requires us to swap alternate bytes in the buffer
+		DmacManager::DisableChannel(DmacChanDotStarTx);
+		DmacManager::SetTriggerSource(DmacChanDotStarTx, DmaTrigSource::qspi_tx);
+# if USE_16BIT_SPI
+		DmacManager::SetBtctrl(DmacChanDotStarTx, DMAC_BTCTRL_STEPSIZE_X2 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+# else
+		DmacManager::SetBtctrl(DmacChanDotStarTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_BYTE | DMAC_BTCTRL_BLOCKACT_NOACT);
+# endif
+		DmacManager::SetSourceAddress(DmacChanDotStarTx, chunkBuffer);
+		DmacManager::SetDestinationAddress(DmacChanDotStarTx, &QSPI->TXDATA.reg);
+		DmacManager::SetDataLength(DmacChanDotStarTx, numBytes);				// must do this last!
+		DmacManager::EnableChannel(DmacChanDotStarTx, DmacPrioDotStar);
+#elif SAME70
 		xdmac_channel_disable(XDMAC, DmacChanDotStarTx);
 		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
 		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
 						| XDMAC_CC_MBSIZE_SINGLE
 						| XDMAC_CC_DSYNC_MEM2PER
 						| XDMAC_CC_CSIZE_CHK_1
+# if USE_16BIT_SPI
+						| XDMAC_CC_DWIDTH_HALFWORD
+# else
 						| XDMAC_CC_DWIDTH_BYTE
+# endif
 						| XDMAC_CC_SIF_AHB_IF0
 						| XDMAC_CC_DIF_AHB_IF1
 						| XDMAC_CC_SAM_INCREMENTED_AM
 						| XDMAC_CC_DAM_FIXED_AM
 						| XDMAC_CC_PERID((uint32_t)DmaTrigSource::qspitx);
+# if USE_16BIT_SPI
+		p_cfg.mbr_ubc = numBytes/2;			//TODO is this correct? The datasheet isn't clear.
+#else
 		p_cfg.mbr_ubc = numBytes;
+#endif
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(chunkBuffer);
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(QSPI->QSPI_TDR));
 		xdmac_configure_transfer(XDMAC, DmacChanDotStarTx, &p_cfg);
 		xdmac_channel_enable(XDMAC, DmacChanDotStarTx);
+#else
+# error Unsupported processor
 #endif
 		busy = true;
 	}
@@ -81,7 +117,9 @@ namespace DotStarLed
 		{
 #if DOTSTAR_USES_USART
 			if ((DotStarUsart->US_CSR & US_CSR_ENDTX) != 0)						// if we are no longer sending
-#else
+#elif SAME5x
+			if ((DmacManager::GetAndClearChannelStatus(DmacChanDotStarTx) & DMAC_CHINTFLAG_TCMPL) != 0)
+#elif SAME70
 			if ((xdmac_channel_get_interrupt_status(XDMAC, DmacChanDotStarTx) & XDMAC_CIS_BIS) != 0)	// if the last transfer has finished
 #endif
 			{
@@ -105,17 +143,32 @@ namespace DotStarLed
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		DotStarUsart->US_BRGR = SystemPeripheralClock()/frequency;		// set SPI clock frequency
+		DotStarUsart->US_BRGR = SystemPeripheralClock()/frequency;				// set SPI clock frequency
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
-#else
+#elif SAME5x
+		// DotStar on Duet 3 Mini uses the QSPI peripheral
+		QSPI->CTRLA.reg = QSPI_CTRLA_SWRST;										// software reset
+# if USE_16BIT_SPI
+		QSPI->CTRLB.reg = QSPI_CTRLB_DATALEN_16BITS;							// SPI mode, 8 bits per transfer
+# else
+		QSPI->CTRLB.reg = QSPI_CTRLB_DATALEN_8BITS;								// SPI mode, 8 bits per transfer
+# endif
+		QSPI->BAUD.reg = QSPI_BAUD_CPOL | QSPI_BAUD_CPHA | QSPI_BAUD_BAUD(SystemCoreClockFreq/frequency - 1);
+		QSPI->CTRLA.reg = QSPI_CTRLA_ENABLE;
+#elif SAME70
 		// DotStar on Duet 3 uses the QSPI peripheral
 		QSPI->QSPI_CR = QSPI_CR_SWRST;
-		QSPI->QSPI_MR = 0;														// SPI mode, 8 bits per transfer
+# if USE_16BIT_SPI
+		QSPI->QSPI_MR = QSPI_MR_NBBITS_16_BIT;									// SPI mode, 16 bits per transfer
+# else
+		QSPI->QSPI_MR = QSPI_MR_NBBITS_8_BIT;									// SPI mode, 8 bits per transfer
+# endif
 		QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/frequency - 1);
 		QSPI->QSPI_CR = QSPI_CR_QSPIEN;
 #endif
 	}
 
+#ifndef DUET_5LC
 	// Send data to DotStar LEDs
 	static GCodeResult SendDotStarData(uint32_t data, uint32_t numLeds, bool following) noexcept
 	{
@@ -166,6 +219,7 @@ namespace DotStarLed
 		DmaSendChunkBuffer(4 * (p - reinterpret_cast<uint32_t*>(chunkBuffer)));
 		return (numRemaining == 0) ? GCodeResult::ok : GCodeResult::notFinished;
 	}
+#endif
 
 	// Encode one NeoPixel byte into the buffer.
 	// A 0 bit is encoded as 1000
@@ -175,14 +229,27 @@ namespace DotStarLed
 	{
 		static constexpr uint8_t EncodedByte[4] = { 0b10001000, 0b10001110, 0b11101000, 0b11101110 };
 
-		*p++ = EncodedByte[val >> 6];
-		*p++ = EncodedByte[(val >> 4) & 3];
-		*p++ = EncodedByte[(val >> 2) & 3];
-		*p++ = EncodedByte[val & 3];
+#if USE_16BIT_SPI
+		if (ledType == 1)
+		{
+			// Swap bytes for 16-bit DMA
+			*p++ = EncodedByte[(val >> 4) & 3];
+			*p++ = EncodedByte[val >> 6];
+			*p++ = EncodedByte[val & 3];
+			*p++ = EncodedByte[(val >> 2) & 3];
+		}
+		else
+#endif
+		{
+			*p++ = EncodedByte[val >> 6];
+			*p++ = EncodedByte[(val >> 4) & 3];
+			*p++ = EncodedByte[(val >> 2) & 3];
+			*p++ = EncodedByte[val & 3];
+		}
 	}
 
-	// Send data to NeoPixel LEDs
-	static GCodeResult SendNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint32_t numLeds, bool following) noexcept
+	// Send data to NeoPixel LEDs by DMA to SPI
+	static GCodeResult SpiSendNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint32_t numLeds, bool following) noexcept
 	{
 		uint8_t *p = chunkBuffer + (12 * numAlreadyInBuffer);
 		while (numLeds != 0 && p <= chunkBuffer + ARRAY_SIZE(chunkBuffer) - 12)
@@ -196,25 +263,95 @@ namespace DotStarLed
 			--numLeds;
 			++numAlreadyInBuffer;
 		}
+
 		if (!following)
 		{
-			DmaSendChunkBuffer(12 * numAlreadyInBuffer);
+			DmaSendChunkBuffer(12 * numAlreadyInBuffer);			// send data by DMA to SPI
 			numAlreadyInBuffer = 0;
 		}
 		return GCodeResult::ok;
 	}
+
+#ifdef DUET_5LC
+	constexpr uint32_t NanosecondsToCycles(uint32_t ns) noexcept
+	{
+		return (ns * (uint64_t)SystemCoreClockFreq)/1000000000u;
+	}
+
+	constexpr uint32_t T0H = NanosecondsToCycles(350);
+	constexpr uint32_t T0L = NanosecondsToCycles(850);
+	constexpr uint32_t T1H = NanosecondsToCycles(800);
+	constexpr uint32_t T1L = NanosecondsToCycles(475);
+
+	// Send data to NeoPixel LEDs by bit banging
+	static GCodeResult BitBangNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint32_t numLeds, bool following) noexcept
+	{
+		uint8_t *p = chunkBuffer + (3 * numAlreadyInBuffer);
+		while (numLeds != 0 && p <= chunkBuffer + ARRAY_SIZE(chunkBuffer) - 3)
+		{
+			*p++ = green;
+			*p++ = red;
+			*p++ = blue;
+			--numLeds;
+			++numAlreadyInBuffer;
+		}
+
+		if (!following)
+		{
+			const uint8_t *q = chunkBuffer;
+			uint32_t nextDelay = T0L;
+			cpu_irq_disable();
+			uint32_t lastTransitionTime = SysTick->VAL & 0x00FFFFFF;
+			while (q < p)
+			{
+				uint8_t c = *q++;
+				for (unsigned int i = 0; i < 8; ++i)
+				{
+					if (c & 0x80)
+					{
+						lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
+						fastDigitalWriteHigh(LcdNeopixelOutPin);
+						lastTransitionTime = DelayCycles(lastTransitionTime, T1H);
+						fastDigitalWriteLow(LcdNeopixelOutPin);
+						nextDelay = T1L;
+					}
+					else
+					{
+						lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
+						fastDigitalWriteHigh(LcdNeopixelOutPin);
+						lastTransitionTime = DelayCycles(lastTransitionTime, T0H);
+						fastDigitalWriteLow(LcdNeopixelOutPin);
+						nextDelay = T0L;
+					}
+					c <<= 1;
+				}
+			}
+			cpu_irq_enable();
+			numAlreadyInBuffer = 0;
+			whenDmaFinished = StepTimer::GetTimerTicks();
+		}
+		return GCodeResult::ok;
+	}
+#endif
 }
 
 void DotStarLed::Init() noexcept
 {
+#if SAME5x
+	SetPinFunction(NeopixelOutPin, NeopixelOutPinFunction);
+	hri_mclk_set_AHBMASK_QSPI_bit(MCLK);
+	hri_mclk_clear_AHBMASK_QSPI_2X_bit(MCLK);			// we don't need the 2x clock
+	hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
+#else
 	// Set up the USART or QSPI pins for SPI mode. The pins are already set up for SPI in the pins table
 	ConfigurePin(DotStarMosiPin);
 	ConfigurePin(DotStarSclkPin);
 
 	// Enable the clock to the USART or SPI peripheral
 	pmc_enable_periph_clk(DotStarClockId);
+#endif
 
-	SetupSpi(DefaultDotStarSpiClockFrequency);
+	SetupSpi(DefaultSpiFrequencies[ledType]);
 
 	// Initialise variables
 	numRemaining = totalSent = 0;
@@ -238,7 +375,7 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 		return GCodeResult::notFinished;
 	}
 
-	if (needStartFrame && ledType == 1 && StepTimer::GetTimerTicks() - whenDmaFinished < MinNeoPixelResetTicks)
+	if (needStartFrame && (ledType == 1 || ledType == 2) && StepTimer::GetTimerTicks() - whenDmaFinished < MinNeoPixelResetTicks)
 	{
 		return GCodeResult::notFinished;									// give the NeoPixels time to reset
 	}
@@ -249,15 +386,25 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 	if (gb.Seen('X'))
 	{
 		seen = true;
-		const uint32_t newType = gb.GetLimitedUIValue('X', 2);				// only types 0 and 1 are supported
+		const uint32_t newType = gb.GetLimitedUIValue('X',
+#ifdef DUET_5LC
+				3, 1														// types 1 and 2 are supported
+#else
+				2, 0														// types 0 and 1 are supported
+#endif
+			);
 		const bool typeChanged = (newType != ledType);
-		bool setFrequency = typeChanged;
 
-		uint32_t frequency = DefaultSpiFrequencies[newType];
-		gb.TryGetUIValue('Q', frequency, setFrequency);
-		if (setFrequency)
+		if (newType != 2)
 		{
-			SetupSpi(frequency);
+			bool setFrequency = typeChanged;
+
+			uint32_t frequency = DefaultSpiFrequencies[newType];
+			gb.TryGetUIValue('Q', frequency, setFrequency);
+			if (setFrequency)
+			{
+				SetupSpi(frequency);
+			}
 		}
 
 		if (typeChanged)
@@ -273,6 +420,24 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 				DmaSendChunkBuffer(1);
 				return GCodeResult::notFinished;
 			}
+#ifdef DUET_5LC
+			else if (ledType == 2)
+			{
+				// Set the data output low to start a WS2812 reset sequence
+				IoPort::SetPinMode(LcdNeopixelOutPin, PinMode::OUTPUT_LOW);
+				whenDmaFinished = StepTimer::GetTimerTicks();
+				return GCodeResult::notFinished;
+			}
+#endif
+		}
+	}
+
+	if (ledType == 2)
+	{
+		// Interrupts are disabled while bit-banging the data, so make sure movement has stopped
+		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
 		}
 	}
 
@@ -305,21 +470,36 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	switch (ledType)
 	{
+#ifndef DUET_5LC
 	case 0:	// DotStar
 		{
-			const uint32_t data = (brightness >> 3) | 0xE0 | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);
+#if USE_16BIT_SPI
+			// Swap bytes for 16-bit SPI
+			const uint32_t data = ((brightness >> 11) | (0xE0 << 8)) | ((blue & 255)) | ((green & 255) << 24) | ((red & 255) << 16);
+#else
+			const uint32_t data = ((brightness >> 3) | 0xE0) | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);
+#endif
 			return SendDotStarData(data, numLeds, following);
 		}
+#endif
 
 	case 1:	// NeoPixel
-		{
-			// Scale RGB by the brightness
-			return SendNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
-										(uint8_t)((green * brightness + 255) >> 8),
-										(uint8_t)((blue * brightness + 255) >> 8),
-										numLeds, following
-								   );
-		}
+		// Scale RGB by the brightness
+		return SpiSendNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
+									(uint8_t)((green * brightness + 255) >> 8),
+									(uint8_t)((blue * brightness + 255) >> 8),
+									numLeds, following
+							      );
+
+#ifdef DUET_5LC
+	case 2:
+		// Scale RGB by the brightness
+		return BitBangNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
+									(uint8_t)((green * brightness + 255) >> 8),
+									(uint8_t)((blue * brightness + 255) >> 8),
+									numLeds, following
+							      );
+#endif
 	}
 	return GCodeResult::ok;													// should never get here
 }

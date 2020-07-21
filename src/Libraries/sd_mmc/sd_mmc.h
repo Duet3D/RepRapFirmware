@@ -47,7 +47,7 @@
 #ifndef SD_MMC_H_INCLUDED
 #define SD_MMC_H_INCLUDED
 
-#include "compiler.h"
+#include <Core.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -189,7 +189,7 @@ uint32_t sd_mmc_get_interface_speed(uint8_t slot) noexcept;
  * \return return SD_MMC_OK if success,
  *         otherwise return an error code (\ref sd_mmc_err_t).
  */
-sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_block) noexcept;
+sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_block, void *dmaAddr) noexcept;
 
 /**
  * \brief Start the read blocks of data from the card.
@@ -224,7 +224,7 @@ sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort) noexcept;
  * \return return SD_MMC_OK if success,
  *         otherwise return an error code (\ref sd_mmc_err_t).
  */
-sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_block) noexcept;
+sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_block, const void *dmaAddr) noexcept;
 
 /**
  * \brief Start the write blocks of data

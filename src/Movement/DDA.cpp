@@ -212,7 +212,7 @@ void DDA::DebugPrintVector(const char *name, const float *vec, size_t len) const
 void DDA::DebugPrint(const char *tag) const noexcept
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	debugPrintf("%s DDA:", tag);
+	debugPrintf("%s %u ts=%" PRIu32 "DDA:", tag, (unsigned int)state, afterPrepare.moveStartTime);
 	if (flags.endCoordinatesValid)
 	{
 		float startCoordinates[MaxAxes];
@@ -1759,7 +1759,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 // The remaining functions are speed-critical, so use full optimisation
 // The GCC optimize pragma appears to be broken, if we try to force O3 optimisation here then functions are never inlined
 
-// Start executing this move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled or basepri >= set interrupt priority, to avoid a race condition.
+// Start executing this move. Must be called with interrupts disabled or basepri >= set interrupt priority, to avoid a race condition.
 void DDA::Start(Platform& p, uint32_t tim) noexcept
 pre(state == frozen)
 {
@@ -1847,7 +1847,8 @@ pre(state == frozen)
 uint32_t DDA::lastStepLowTime = 0;
 uint32_t DDA::lastDirChangeTime = 0;
 
-// Generate the step pulses of internal drivers used by this DDA. Return true if the move is complete and the next move should be started.
+// Generate the step pulses of internal drivers used by this DDA
+// Sets the status to 'completed' if the move is complete and the next move should be started
 void DDA::StepDrivers(Platform& p) noexcept
 {
 	// 1. Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
@@ -1920,9 +1921,17 @@ void DDA::StepDrivers(Platform& p) noexcept
 	StepPins::StepDriversLow(driversStepping);						// set the step pins low
 
 	// 6. If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
-	if (activeDMs == nullptr && StepTimer::GetTimerTicks() - afterPrepare.moveStartTime + WakeupTime >= clocksNeeded)
+	if (activeDMs == nullptr)
 	{
-		state = completed;
+		// We set a move as current up to MovementStartDelayClocks (about 10ms) before it is due to start.
+		// We need to make sure it has really started, or we can get arithmetic wrap round in the case that there are no local drivers stepping.
+		const uint32_t timeRunning = StepTimer::GetTimerTicks() - afterPrepare.moveStartTime;
+		if (   timeRunning + WakeupTime >= clocksNeeded				// if it looks like the move has almost finished
+			&& timeRunning < 0 - MovementStartDelayClocks			// and it really has started
+			)
+		{
+			state = completed;
+		}
 	}
 }
 

@@ -9,6 +9,8 @@
 
 #if SUPPORT_12864_LCD
 
+#include "Lcd/ST7920/Lcd7920.h"
+#include "Lcd/ST7567/Lcd7567.h"
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Hardware/IoPorts.h"
@@ -144,38 +146,45 @@ void Display::ErrorBeep() noexcept
 	Beep(500, 1000);
 }
 
-GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
+void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, bool defaultCsPolarity) THROWS(GCodeException)
+{
+	newLcd->Init(LcdCSPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency);
+	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
+	newLcd->SetFont(SmallFontNumber);
+	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
+	newLcd->SetFont(SmallFontNumber);
+
+	if (encoder == nullptr)
+	{
+		encoder = new RotaryEncoder(EncoderPinA, EncoderPinB, EncoderPinSw);
+		encoder->Init(DefaultPulsesPerClick);
+	}
+	menu = new Menu(*newLcd);
+	menu->Load("main");
+	lcd = newLcd;
+}
+
+GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 
 	if (gb.Seen('P'))
 	{
+		Lcd *tempLcd = nullptr;
+		std::swap(lcd, tempLcd);
+		delete tempLcd;
+		delete menu;
+		menu = nullptr;
+
 		seen = true;
-		const unsigned int displayType = gb.GetUIValue();
-		switch (displayType)
+		switch (gb.GetUIValue())
 		{
 		case 1:		// 12864 display, ST7920 controller
-		case 2:		// 12864 display, ST7567 controller
-			if (lcd == nullptr)
-			{
-				lcd = new Lcd7920(fonts, ARRAY_SIZE(fonts));
-			}
-			lcd->Init(displayType - 1, LcdCSPin, LcdA0Pin, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency);
-			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
-			lcd->SetFont(SmallFontNumber);
-			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
-			lcd->SetFont(SmallFontNumber);
+			InitDisplay(gb, new Lcd7920(fonts, ARRAY_SIZE(fonts)), true);
+			break;
 
-			if (encoder == nullptr)
-			{
-				encoder = new RotaryEncoder(EncoderPinA, EncoderPinB, EncoderPinSw);
-				encoder->Init(DefaultPulsesPerClick);
-			}
-			if (menu == nullptr)
-			{
-				menu = new Menu(*lcd);
-			}
-			menu->Load("main");
+		case 2:		// 12864 display, ST7567 controller
+			InitDisplay(gb, new Lcd7567(fonts, ARRAY_SIZE(fonts)), false);
 			break;
 
 		default:
@@ -194,11 +203,12 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		if (lcd != nullptr)
 		{
-			reply.printf("12864 display is configured, pulses-per-click is %d", encoder->GetPulsesPerClick());
+			reply.printf("Direct connect display: %s, %.2fMHz, %d encoder pulses per click",
+							lcd->GetDisplayTypeName(), (double)(lcd->GetSpiFrequency() * 0.000001), encoder->GetPulsesPerClick());
 		}
 		else
 		{
-			reply.copy("12864 display is not present or not configured");
+			reply.copy("Direct-connect display not present or not configured");
 		}
 	}
 	return GCodeResult::ok;
