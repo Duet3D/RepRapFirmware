@@ -9,7 +9,7 @@ compatible branches of these projects. Since RepRapFirmware v3.1.0, releases are
 | project | tag | notes | 
 | :-- | --: | --- |
 |[RepRapFirmware](https://github.com/Duet3D/RepRapFirmware)| 3.1.1||
-|[CANlib](https://github.com/Duet3D/CoreNG)| 3.1.0 | _only needed for Duet3 CAN support_ |
+|[CANlib](https://github.com/Duet3D/CANlib)| 3.1.0 | _only needed for Duet3 CAN support_ |
 |[CoreNG](https://github.com/Duet3D/CoreNG)| 3.1.0||
 |[FreeRTOS](https://github.com/Duet3D/FreeRTOS)| 3.1.0||
 |[RRFLibraries](https://github.com/Duet3D/RRFLibraries)| 3.1.0||
