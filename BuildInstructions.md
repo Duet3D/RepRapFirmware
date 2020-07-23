@@ -60,7 +60,7 @@ pre-compiled binaries for Windows, Linux and MacOS x86-64.
 7. Download this github project as a zip file and unzip it into
    `C:/Eclipse/Firmware`. Then rename folder `ReprapFirmware-dev` in that folder
    to `RepRapFirmware`. Alternately, change into the directory
-   `C:/Eclipse/Firmware` in a Terminal and run `git checkout
+   `C:/Eclipse/Firmware` in a Terminal and run `git clone
    https://github.com/Duet3D/ReprapFirmware.git -branch dev`
 
 8. Repeat the previous step for github project CoreNG. The folder name should
