@@ -93,7 +93,7 @@ pre-compiled binaries for Windows, Linux and MacOS x86-64.
     Build Variables** and click "Add..."
 
 14. Build dependencies:
-    - Duet3 Mini builds depend on [CoreN2G](https://github.com/Duet3D/Core2NG),
+    - Duet3 Mini builds depend on [CoreN2G](https://github.com/Duet3D/CoreN2G),
       [FreeRTOS](https://github.com/Duet3D/FreeRTOS), and
       [RRFLibraries](https://github.com/Duet3D/RRFLibraries). The WiFi version
       requires [DuetWifiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer),
