@@ -324,7 +324,7 @@ extern "C"
 	}
 
 	// The fault handler implementation calls a function called hardFaultDispatcher()
-    void HardFault_Handler() noexcept __attribute__((naked, noreturn));
+    [[noreturn]] void HardFault_Handler() noexcept __attribute__((naked));
 	void HardFault_Handler() noexcept
 	{
 	    __asm volatile

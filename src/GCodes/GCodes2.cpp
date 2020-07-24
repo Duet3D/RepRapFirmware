@@ -2700,7 +2700,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = GCodeResult::error;
 				}
 			}
-			if (gb.Seen('F'))
+			if (gb.Seen('F') || gb.Seen('Q'))
 			{
 				platform.SetLaserPwmFrequency(gb.GetPwmFrequency());
 			}

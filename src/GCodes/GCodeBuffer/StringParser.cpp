@@ -1603,21 +1603,7 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 
 	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits. We could stop supporting this because we already support {0xNNNN}.
 	const char *endptr;
-	uint32_t rslt;
-	if (gb.buffer[readPointer] == '"')
-	{
-		rslt = StrOptHexToU32(gb.buffer + readPointer + 1, &endptr);
-		if (*endptr != '"')
-		{
-			throw ConstructParseException("expected '\"'");
-		}
-		++endptr;
-	}
-	else
-	{
-		rslt = StrToU32(gb.buffer + readPointer, &endptr);
-	}
-
+	const uint32_t rslt = StrToU32(gb.buffer + readPointer, &endptr);
 	readPointer = endptr - gb.buffer;
 	return rslt;
 }
