@@ -35,7 +35,7 @@ extern "C" void AppInit() noexcept
 // GCLK2	25MHz from XOSC1, output to Ethernet PHY on Duet 3 Mini Ethernet
 // GCLK3	FDPLL0 divided by 2, 60MHz (for slower peripherals)
 // GCLK4	DFLL, 48MHz (for USB, could also be used for CAN)
-// GCLK5	FDPLL1, 100MHz (for SDHC)
+// GCLK5	FDPLL1, 90MHz (for SDHC). 100MHz was unreliable with unbranded SDHC cards, perhaps because of DPLL jitter.
 
 static void InitClocks()
 {
@@ -61,12 +61,12 @@ static void InitClocks()
 	// Initialise MCLK
 	hri_mclk_write_CPUDIV_reg(MCLK, MCLK_CPUDIV_DIV(MCLK_CPUDIV_DIV_DIV1_Val));
 
-	// Initialise FDPLL0
+	// Initialise FDPLL0. (25MHz / 10) * 48 = 120MHz
 	hri_oscctrl_write_DPLLRATIO_reg(OSCCTRL, 0,
 			  OSCCTRL_DPLLRATIO_LDRFRAC(0)
-			| OSCCTRL_DPLLRATIO_LDR(47));
+			| OSCCTRL_DPLLRATIO_LDR(47));			// multiply by 48
 	hri_oscctrl_write_DPLLCTRLB_reg(OSCCTRL, 0,
-			  OSCCTRL_DPLLCTRLB_DIV(4)
+			  OSCCTRL_DPLLCTRLB_DIV(4)				// divide by 10.
 			| (0 << OSCCTRL_DPLLCTRLB_DCOEN_Pos)
 			| OSCCTRL_DPLLCTRLB_DCOFILTER(0)
 			| (0 << OSCCTRL_DPLLCTRLB_LBYPASS_Pos)
@@ -78,10 +78,10 @@ static void InitClocks()
 			  (0 << OSCCTRL_DPLLCTRLA_RUNSTDBY_Pos)
 			| (1 << OSCCTRL_DPLLCTRLA_ENABLE_Pos));
 
-	// Initialise FDPLL1
+	// Initialise FDPLL1. (25MHz / 10) * 72 = 180MHz which we will divide by 2 to get 90MHz.
 	hri_oscctrl_write_DPLLRATIO_reg(OSCCTRL, 1,
 			  OSCCTRL_DPLLRATIO_LDRFRAC(0)
-			| OSCCTRL_DPLLRATIO_LDR(39));
+			| OSCCTRL_DPLLRATIO_LDR(71));
 	hri_oscctrl_write_DPLLCTRLB_reg(OSCCTRL, 1,
 			  OSCCTRL_DPLLCTRLB_DIV(4)
 			| (0 << OSCCTRL_DPLLCTRLB_DCOEN_Pos)
@@ -163,12 +163,18 @@ static void InitClocks()
 			| (0 << GCLK_GENCTRL_OOV_Pos) | (0 << GCLK_GENCTRL_IDC_Pos)
 			| (1 << GCLK_GENCTRL_GENEN_Pos) | 6);
 
-	// GCLK5: FDPLL1, 100MHz for SDHC
+	// GCLK5: FDPLL1, 90MHz for SDHC
 	hri_gclk_write_GENCTRL_reg(GCLK, 5,
-			  GCLK_GENCTRL_DIV(1) | (0 << GCLK_GENCTRL_RUNSTDBY_Pos)
+			  GCLK_GENCTRL_DIV(2) | (0 << GCLK_GENCTRL_RUNSTDBY_Pos)
 			| (0 << GCLK_GENCTRL_DIVSEL_Pos) | (0 << GCLK_GENCTRL_OE_Pos)
 			| (0 << GCLK_GENCTRL_OOV_Pos) | (0 << GCLK_GENCTRL_IDC_Pos)
 			| (1 << GCLK_GENCTRL_GENEN_Pos) | 8);
+}
+
+// External function to get the SDHC peripheral clock speed. This must be provided by the client project if using SDHC.
+uint32_t GetSdhcClockSpeed() noexcept
+{
+	return 90000000;
 }
 
 // End

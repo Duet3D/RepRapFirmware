@@ -44,7 +44,7 @@ void UploadingNetworkResponder::CancelUpload() noexcept
 // Start writing to a new file, returning true if successful
 bool UploadingNetworkResponder::StartUpload(const char* folder, const char *fileName, const OpenMode mode, const uint32_t preAllocSize) noexcept
 {
-	if (fileName[0] == 0)
+	if (fileName[0] == 0 || strcmp(fileName, "dummy.dummy"))
 	{
 		filenameBeingProcessed.Clear();
 		dummyUpload = true;
