@@ -8,7 +8,7 @@
 #include "Tasks.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include "Hardware/Cache.h"
+#include <Cache.h>
 #include <TaskPriorities.h>
 
 #if SAME5x

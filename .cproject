@@ -1384,15 +1384,14 @@
 							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${LinkFlags1} ${INPUTS} ${LinkFlags2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.2004372159" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
 								<option id="gnu.cpp.link.option.nostdlibs.683803634" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" useByScannerDiscovery="false" value="false" valueType="boolean"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.paths.962018907" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/SAME5x_RTOS}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/SAME5x_SDHC_RTOS}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAME51_RTOS}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAME51}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.libs.1259594400" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="CoreN2G"/>
-									<listOptionValue builtIn="false" value="RRFLibraries"/>
-									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="RRFLibraries"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="supc++"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.1579948697" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="--specs=nosys.specs -Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -T&quot;${workspace_loc:/${ProjName}/src/Hardware/SAME5x/same54p20a_flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
@@ -1465,7 +1464,7 @@
 				<externalSettings containerId="CoreN2G;cdt.managedbuild.config.gnu.cross.lib.release.675522878.1031364120.1670975982" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
 					<externalSetting>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/CoreN2G"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CoreN2G/SAME5x_RTOS"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CoreN2G/SAME5x_SDHC_RTOS"/>
 						<entry flags="RESOLVED" kind="libraryFile" name="CoreN2G" srcPrefixMapping="" srcRootPath=""/>
 					</externalSetting>
 				</externalSettings>
@@ -1542,9 +1541,9 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAME51_Debug}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.libs.1490942753" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
-									<listOptionValue builtIn="false" value="CoreN2G"/>
-									<listOptionValue builtIn="false" value="RRFLibraries"/>
-									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="CoreN2G"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="RRFLibraries"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="supc++"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.710319389" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="--specs=nosys.specs -Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -T&quot;${workspace_loc:/${ProjName}/src/Hardware/SAME5x/same54p20a_flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
@@ -1618,7 +1617,7 @@
 				<externalSettings containerId="CoreN2G;cdt.managedbuild.config.gnu.cross.lib.release.675522878.1031364120.1670975982" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
 					<externalSetting>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/CoreN2G"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CoreN2G/SAME5x_RTOS"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CoreN2G/SAME5x_SDHC_RTOS"/>
 						<entry flags="RESOLVED" kind="libraryFile" name="CoreN2G" srcPrefixMapping="" srcRootPath=""/>
 					</externalSetting>
 				</externalSettings>
@@ -1769,7 +1768,7 @@
 				<externalSettings containerId="CoreN2G;cdt.managedbuild.config.gnu.cross.lib.release.675522878.1031364120.1670975982" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
 					<externalSetting>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/CoreN2G"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CoreN2G/SAME5x_RTOS"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CoreN2G/SAME5x_SDHC_RTOS"/>
 						<entry flags="RESOLVED" kind="libraryFile" name="CoreN2G" srcPrefixMapping="" srcRootPath=""/>
 					</externalSetting>
 				</externalSettings>

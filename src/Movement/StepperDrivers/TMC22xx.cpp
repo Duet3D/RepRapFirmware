@@ -34,7 +34,7 @@
 #include <TaskPriorities.h>
 #include <Movement/Move.h>
 #include <Movement/StepTimer.h>
-#include <Hardware/Cache.h>
+#include <Cache.h>
 
 #if SAME5x
 # include <Hardware/IoPorts.h>

@@ -55,7 +55,7 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 #include "ObjectModel/ObjectModel.h"
 #include "OutputMemory.h"
 #include "RepRap.h"
-#include <Hardware/Cache.h>
+#include <Cache.h>
 #include "RTOSIface/RTOSIface.h"
 
 #include <General/IP4String.h>

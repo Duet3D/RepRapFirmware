@@ -17,7 +17,7 @@
 #include "Tools/Filament.h"
 #include "Endstops/ZProbe.h"
 #include "Tasks.h"
-#include "Hardware/Cache.h"
+#include <Cache.h>
 #include "Fans/FansManager.h"
 #include "Version.h"
 

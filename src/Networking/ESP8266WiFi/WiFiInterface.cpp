@@ -16,7 +16,7 @@
 #include "WifiFirmwareUploader.h"
 #include "General/IP4String.h"
 #include "WiFiSocket.h"
-#include <Hardware/Cache.h>
+#include <Cache.h>
 
 static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and MessageFormats.h don't match");
 

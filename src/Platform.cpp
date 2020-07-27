@@ -35,7 +35,7 @@
 #include "Version.h"
 #include "Logger.h"
 #include "Tasks.h"
-#include "Hardware/Cache.h"
+#include <Cache.h>
 #include "Hardware/SharedSpi/SharedSpiDevice.h"
 #include "Math/Isqrt.h"
 #include "Hardware/I2C.h"

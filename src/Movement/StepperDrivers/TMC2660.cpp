@@ -14,7 +14,7 @@
 #include "Movement/Move.h"
 #include "Movement/StepTimer.h"
 #include "Endstops/Endstop.h"
-#include "Hardware/Cache.h"
+#include <Cache.h>
 
 # if SAME70
 #  include "sam/drivers/xdmac/xdmac.h"
