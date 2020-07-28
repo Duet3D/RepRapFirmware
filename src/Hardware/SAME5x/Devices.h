@@ -14,6 +14,7 @@ typedef Uart UARTClass;
 
 extern Uart serialUart0;
 
+#define SUPPORT_USB		1		// needed by SerialCDC.h
 #include "SerialCDC.h"
 
 extern SerialCDC serialUSB;

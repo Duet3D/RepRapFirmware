@@ -253,10 +253,12 @@ void debugPrintf(const char* fmt, ...) noexcept
 	}
 }
 
+#if !SAME5x		// CoreN2G defines delay() so this is not needed for the SAME5x build
 void delay(uint32_t ms) noexcept
 {
 	vTaskDelay(ms);
 }
+#endif
 
 // Convert a float to double for passing to printf etc. If it is a NaN or infinity, convert it to 9999.9 to avoid getting JSON parse errors.
 double HideNan(float val) noexcept

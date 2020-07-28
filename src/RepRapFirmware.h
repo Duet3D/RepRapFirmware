@@ -351,7 +351,10 @@ extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((forma
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
+
+#if !SAME5x		// CoreN2G defines delay() so this is not needed for the SAME5x build
 void delay(uint32_t ms) noexcept;
+#endif
 
 double HideNan(float val) noexcept;
 
