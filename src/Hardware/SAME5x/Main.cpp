@@ -177,4 +177,7 @@ uint32_t GetSdhcClockSpeed() noexcept
 	return 90000000;
 }
 
+// Define replacement standard library functions
+#include <syscalls.h>
+
 // End
