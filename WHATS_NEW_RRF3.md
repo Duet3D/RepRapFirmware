@@ -25,6 +25,7 @@ Bug fixes:
 - Fixed bug in GetProportionDone that might have caused an incorrect extrusion amount for the first move after restarting a print following a power failure
 - The output from M207 without parameters was truncated when there were 4 or more tools
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
+- When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
 
 RepRapFirmware 3.1.1
 ====================
