@@ -16,7 +16,7 @@
 #include "WifiFirmwareUploader.h"
 #include "General/IP4String.h"
 #include "WiFiSocket.h"
-#include <Hardware/Cache.h>
+#include <Cache.h>
 
 static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and MessageFormats.h don't match");
 
@@ -621,7 +621,7 @@ void WiFiInterface::Spin() noexcept
 						macAddress.SetFromBytes(status.Value().macAddress);
 
 						// Set the hostname before anything else is done
-						rc = SendCommand(NetworkCommand::networkSetHostName, 0, 0, reprap.GetNetwork().GetHostname(), HostNameLength, nullptr, 0);
+						rc = SendCommand(NetworkCommand::networkSetHostName, 0, 0, 0, reprap.GetNetwork().GetHostname(), HostNameLength, nullptr, 0);
 						if (rc != ResponseEmpty)
 						{
 							reprap.GetPlatform().MessageF(NetworkInfoMessage, "Error: Could not set WiFi hostname: %s\n", TranslateWiFiResponse(rc));
@@ -673,15 +673,15 @@ void WiFiInterface::Spin() noexcept
 			if (currentMode != WiFiState::idle)
 			{
 				// We must set WiFi module back to idle before changing to the new state
-				rslt = SendCommand(NetworkCommand::networkStop, 0, 0, nullptr, 0, nullptr, 0);
+				rslt = SendCommand(NetworkCommand::networkStop, 0, 0, 0, nullptr, 0, nullptr, 0);
 			}
 			else if (requestedMode == WiFiState::connected)
 			{
-				rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, requestedSsid, SsidLength, nullptr, 0);
+				rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, 0, requestedSsid, SsidLength, nullptr, 0);
 			}
 			else if (requestedMode == WiFiState::runningAsAccessPoint)
 			{
-				rslt = SendCommand(NetworkCommand::networkStartAccessPoint, 0, 0, nullptr, 0, nullptr, 0);
+				rslt = SendCommand(NetworkCommand::networkStartAccessPoint, 0, 0, 0, nullptr, 0, nullptr, 0);
 			}
 
 			if (rslt >= 0)
@@ -853,6 +853,7 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 	if (GetState() != NetworkState::disabled && GetState() != NetworkState::starting1 && GetState() != NetworkState::starting2)
 	{
 		Receiver<NetworkStatusResponse> status;
+		status.Value().clockReg = 0xFFFFFFFF;				// older WiFi firmware doesn't return this value, so preset it
 		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
 		{
 			NetworkStatusResponse& r = status.Value();
@@ -878,9 +879,10 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 				platform.MessageF(mtype, "Connected clients %u\n", (unsigned int)r.numClients);
 			}
 			// status, ssid and hostName not displayed
+			platform.MessageF(mtype, "Clock register %08" PRIx32 "\n", r.clockReg);
 
 			// Print LwIP stats and other values over the ESP's UART line
-			if (SendCommand(NetworkCommand::diagnostics, 0, 0, nullptr, 0, nullptr, 0) != ResponseEmpty)
+			if (SendCommand(NetworkCommand::diagnostics, 0, 0, 0, nullptr, 0, nullptr, 0) != ResponseEmpty)
 			{
 				platform.Message(mtype, "Failed to request ESP stats\n");
 			}
@@ -1036,7 +1038,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				config.netmask = temp.GetV4LittleEndian();
 			}
 
-			const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, &config, sizeof(config), nullptr, 0);
+			const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
 			if (rslt == ResponseEmpty)
 			{
 				return GCodeResult::ok;
@@ -1051,7 +1053,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			// List remembered networks
 			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;	// enough for all the remembered SSID data
 			uint32_t buffer[NumDwords(declaredBufferLength)];
-			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, declaredBufferLength);
+			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, 0, nullptr, 0, buffer, declaredBufferLength);
 			if (rslt >= 0)
 			{
 				size_t offset = ReducedWirelessConfigurationDataSize;		// skip own SSID details
@@ -1092,7 +1094,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			gb.GetQuotedString(ssidText.GetRef());
 			if (strcmp(ssidText.c_str(), "*") == 0)
 			{
-				const int32_t rslt = SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
+				const int32_t rslt = SendCommand(NetworkCommand::networkFactoryReset, 0, 0, 0, nullptr, 0, nullptr, 0);
 				if (rslt == ResponseEmpty)
 				{
 					return GCodeResult::ok;
@@ -1104,7 +1106,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 			uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
 			memcpy(ssid32, ssidText.c_str(), SsidLength);
-			const int32_t rslt = SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
+			const int32_t rslt = SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, 0, ssid32, SsidLength, nullptr, 0);
 			if (rslt == ResponseEmpty)
 			{
 				return GCodeResult::ok;
@@ -1125,13 +1127,23 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			}
 			else
 			{
-				const int32_t rslt = SendCommand(NetworkCommand::networkSetTxPower, 0, (uint8_t)powerTimes4, nullptr, 0, nullptr, 0);
+				const int32_t rslt = SendCommand(NetworkCommand::networkSetTxPower, 0, (uint8_t)powerTimes4, 0, nullptr, 0, nullptr, 0);
 				if (rslt == ResponseEmpty)
 				{
 					return GCodeResult::ok;
 				}
 				reply.printf("Failed to set maximum transmit power: %s", TranslateWiFiResponse(rslt));
 			}
+		}
+		else if (gb.Seen('C'))
+		{
+			const uint32_t clockVal = gb.GetUIValue();
+			const int32_t rslt = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, clockVal, nullptr, 0, nullptr, 0);
+			if (rslt == ResponseEmpty)
+			{
+				return GCodeResult::ok;
+			}
+			reply.printf("Failed to set clock: %s", TranslateWiFiResponse(rslt));
 		}
 		else if (gb.Seen('S'))
 		{
@@ -1165,7 +1177,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
 			}
 
-			const int32_t rslt = SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
+			const int32_t rslt = SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, 0, &config, sizeof(config), nullptr, 0);
 			if (rslt == ResponseEmpty)
 			{
 				return GCodeResult::ok;
@@ -1177,7 +1189,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 		{
 			// Report access point parameters
 			uint32_t buffer[NumDwords(ReducedWirelessConfigurationDataSize)];
-			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, ReducedWirelessConfigurationDataSize);
+			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, 0, nullptr, 0, buffer, ReducedWirelessConfigurationDataSize);
 			if (rslt >= 0)
 			{
 				WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(buffer);
@@ -1210,7 +1222,7 @@ void WiFiInterface::UpdateHostname(const char *hostname) noexcept
 	// Update the hostname if possible
 	if (GetState() == NetworkState::active)
 	{
-		const int32_t rslt = SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0);
+		const int32_t rslt = SendCommand(NetworkCommand::networkSetHostName, 0, 0, 0, hostname, HostNameLength, nullptr, 0);
 		if (rslt != ResponseEmpty)
 		{
 			platform.MessageF(GenericMessage, "Error: Could not set WiFi hostname: %s\n", TranslateWiFiResponse(rslt));
@@ -1604,6 +1616,7 @@ static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexc
 #endif
 
 #if USE_DMAC || USE_XDMAC || USE_DMAC_MANAGER
+	spi_dma_disable();					// if we don't do this we get strange crashes on the Duet 3 Mini
 	DisableSpi();
 	spi_rx_dma_setup(&bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
 	spi_tx_dma_setup(&bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
@@ -1679,7 +1692,6 @@ void WiFiInterface::SetupSpi() noexcept
 #endif
 
 #if SAME5x
-	// Set up the correct SPI mode etc. (I am assuming that we don't need to reset the SPI between transactions)
 	WiFiSpiSercom->SPI.INTENCLR.reg = 0xFF;		// disable all interrupts
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
 #else
@@ -1694,7 +1706,7 @@ void WiFiInterface::SetupSpi() noexcept
 #endif //end ifndef __LPC17xx__
 
 // Send a command to the ESP and get the result
-int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
+int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
 	if (GetState() == NetworkState::disabled)
 	{
@@ -1738,7 +1750,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	bufferOut.hdr.command = cmd;
 	bufferOut.hdr.socketNumber = socketNum;
 	bufferOut.hdr.flags = flags;
-	bufferOut.hdr.param32 = 0;
+	bufferOut.hdr.param32 = param32;
 	bufferOut.hdr.dataLength = (uint16_t)dataOutLength;
 	bufferOut.hdr.dataBufferAvailable = (uint16_t)dataInLength;
 	if (dataOut != nullptr)
@@ -1860,7 +1872,7 @@ void WiFiInterface::SendListenCommand(TcpPort port, NetworkProtocol protocol, un
 	lcb.protocol = protocol;
 	lcb.remoteIp = AnyIp;
 	lcb.maxConnections = maxConnections;
-	SendCommand(NetworkCommand::networkListen, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
+	SendCommand(NetworkCommand::networkListen, 0, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
 }
 
 // Stop listening on a port

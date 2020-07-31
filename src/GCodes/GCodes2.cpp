@@ -1462,7 +1462,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			break;
 
-		case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
+		case 110: // Set line numbers
+			//TODO
 			break;
 
 		case 111: // Debug level
@@ -2700,7 +2701,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = GCodeResult::error;
 				}
 			}
-			if (gb.Seen('F'))
+			if (gb.Seen('F') || gb.Seen('Q'))
 			{
 				platform.SetLaserPwmFrequency(gb.GetPwmFrequency());
 			}

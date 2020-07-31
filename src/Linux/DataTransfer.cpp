@@ -55,7 +55,7 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 #include "ObjectModel/ObjectModel.h"
 #include "OutputMemory.h"
 #include "RepRap.h"
-#include <Hardware/Cache.h>
+#include <Cache.h>
 #include "RTOSIface/RTOSIface.h"
 
 #include <General/IP4String.h>
@@ -416,7 +416,7 @@ void DataTransfer::Init() noexcept
 
 	dataReceived = false;
 
-#if false
+#if false // if SAME70
 	// This does not seem to change anything...
 	// The XDMAC is master 4+5 and the SRAM is slave 0+1. Give the XDMAC the highest priority.
 	matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);

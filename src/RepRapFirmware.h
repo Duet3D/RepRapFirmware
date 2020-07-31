@@ -351,7 +351,10 @@ extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((forma
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
+
+#if !SAME5x		// CoreN2G defines delay() so this is not needed for the SAME5x build
 void delay(uint32_t ms) noexcept;
+#endif
 
 double HideNan(float val) noexcept;
 
@@ -362,28 +365,6 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept;
 
 // UTF8 code for the degree-symbol
 #define DEGREE_SYMBOL	"\xC2\xB0"	// Unicode degree-symbol as UTF8
-
-// Functions to change the base priority, to shut out interrupts up to a priority level
-
-// Get the base priority and shut out interrupts lower than or equal to a specified priority
-inline uint32_t ChangeBasePriority(uint32_t prio) noexcept
-{
-	const uint32_t oldPrio = __get_BASEPRI();
-	__set_BASEPRI_MAX(prio << (8 - __NVIC_PRIO_BITS));
-	return oldPrio;
-}
-
-// Restore the base priority following a call to ChangeBasePriority
-inline void RestoreBasePriority(uint32_t prio) noexcept
-{
-	__set_BASEPRI(prio);
-}
-
-// Set the base priority when we are not interested in the existing value i.e. definitely in non-interrupt code
-inline void SetBasePriority(uint32_t prio) noexcept
-{
-	__set_BASEPRI(prio << (8 - __NVIC_PRIO_BITS));
-}
 
 // Classes to facilitate range-based for loops that iterate from 0 up to just below a limit
 template<class T> class SimpleRangeIterator

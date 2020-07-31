@@ -8,8 +8,7 @@
 #ifndef SRC_NETWORKING_NETWORKDEFS_H_
 #define SRC_NETWORKING_NETWORKDEFS_H_
 
-#include <cstdint>
-#include <cstddef>
+#include <RepRapFirmware.h>
 #include <General/IPAddress.h>
 
 class NetworkBuffer;
@@ -55,6 +54,8 @@ constexpr TcpPort MdnsPort = 5353;
 
 #if defined(__LPC17xx__)
 constexpr size_t NetworkBufferCount = 2;			// number of MSS sized buffers
+#elif SAME70 || SAME5x
+constexpr size_t NetworkBufferCount = 10;			// number of 2K network buffers
 #else
 constexpr size_t NetworkBufferCount = 6;			// number of 2K network buffers
 #endif

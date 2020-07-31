@@ -18,7 +18,7 @@
 #include "Tools/Filament.h"
 #include "RepRap.h"
 #include "RepRapFirmware.h"
-#include <Hardware/Cache.h>
+#include <Cache.h>
 
 LinuxInterface::LinuxInterface() : wasConnected(false), numDisconnects(0),
 	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),

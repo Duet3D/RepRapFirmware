@@ -46,6 +46,9 @@
 
 #include <Core.h>		// for digitalRead() and pinMode()
 #include <string.h>
+
+#define SUPPORT_SDHC	1
+
 #include "sd_mmc_protocol.h"
 #include "sd_mmc.h"
 #include "conf_sd_mmc.h"

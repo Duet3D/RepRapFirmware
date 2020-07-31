@@ -6,7 +6,7 @@
  */
 
 #include <Core.h>
-#include <Hardware/Cache.h>
+#include <Cache.h>
 #include "GmacInterface.h"
 #include "gmac.h"
 

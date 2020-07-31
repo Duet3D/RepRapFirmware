@@ -96,6 +96,8 @@ private:
 
 	const char* GetKeyValue(const char *key) const noexcept;	// return the value of the specified key, or nullptr if not present
 
+	static void RemoveSession(size_t sessionToRemove) noexcept;
+
 	HttpParseState parseState;
 
 	// Buffers for processing HTTP input

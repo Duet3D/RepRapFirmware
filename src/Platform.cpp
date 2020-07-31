@@ -35,7 +35,7 @@
 #include "Version.h"
 #include "Logger.h"
 #include "Tasks.h"
-#include "Hardware/Cache.h"
+#include <Cache.h>
 #include "Hardware/SharedSpi/SharedSpiDevice.h"
 #include "Math/Isqrt.h"
 #include "Hardware/I2C.h"
@@ -752,7 +752,7 @@ void Platform::Init() noexcept
 	// Enable the pullup resistor, with luck this will make it float high instead.
 #if SAM3XA
 	pinMode(APIN_SHARED_SPI_MISO, INPUT_PULLUP);
-#elif defined(__LPC17xx__) || defined(SAME5x)
+#elif defined(__LPC17xx__) || SAME5x
 	// nothing to do here
 #else
 	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
@@ -1905,11 +1905,11 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 								reasonText,
 								GetModuleName(srdBuf[slot].resetReason & 0x1F), srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
+			// The task name may include nulls at the end, so print it as a string
+			const uint32_t taskName[2] = { srdBuf[slot].taskName, 0 };
 			MessageF(mtype,
-					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task %c%c%c%c\n",
-					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp,
-					(unsigned int)(srdBuf[slot].taskName & 0xFF), (unsigned int)((srdBuf[slot].taskName >> 8) & 0xFF),
-					(unsigned int)((srdBuf[slot].taskName >> 16) & 0xFF), (unsigned int)((srdBuf[slot].taskName >> 24) & 0xFF)
+					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task %s\n",
+					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp, (const char *)&taskName
 				);
 			if (srdBuf[slot].sp != 0xFFFFFFFF)
 			{
