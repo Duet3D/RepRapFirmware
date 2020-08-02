@@ -59,10 +59,8 @@ public:
 	// ISR called from StepTimer
 	static void Interrupt() noexcept;
 
-#if SAME70
+#if SAME70 || SAME5x
 	static constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
-#elif SAME5x
-	static constexpr uint32_t StepClockRate = (120000000/2)/64;					// just under 1MHz
 #elif defined(__LPC17xx__)
 	static constexpr uint32_t StepClockRate = 1000000;                          // 1MHz
 #else

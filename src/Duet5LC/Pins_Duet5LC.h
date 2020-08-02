@@ -300,7 +300,6 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noe
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
 // Table of pin functions that we are allowed to use
-constexpr uint8_t Nx = 0xFF;	// this means no EXINT usable
 
 constexpr PinDescription PinTable[] =
 {

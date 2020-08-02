@@ -94,7 +94,11 @@ extern "C" void __malloc_unlock (struct _reent *_r) noexcept
 }
 
 // Application entry point
+#if SAME5x		// if using CoreN2G
+[[noreturn]] void AppMain() noexcept
+#else			// using CoreNG
 extern "C" [[noreturn]] void AppMain() noexcept
+#endif
 {
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);	// set up diag LED for debugging and turn it off
 

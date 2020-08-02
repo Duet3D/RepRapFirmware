@@ -27,8 +27,9 @@ void StepTimer::Init() noexcept
 	// On Duet 3 we need a step clock rate that can be programmed on SAME70, SAME5x and SAMC21 processors. We choose 750kHz (1.333us resolution)
 
 #if SAME5x
-	EnableTcClock(StepTcNumber, GCLK_PCHCTRL_GEN_GCLK3_Val);
-	EnableTcClock(StepTcNumber + 1, GCLK_PCHCTRL_GEN_GCLK3_Val);
+	// Step clock runs at 750KHz, same as other Duet 3 boards
+	EnableTcClock(StepTcNumber, GclkNum48MHz);
+	EnableTcClock(StepTcNumber + 1, GclkNum48MHz);
 
 	if (!hri_tc_is_syncing(StepTc, TC_SYNCBUSY_SWRST))
 	{
