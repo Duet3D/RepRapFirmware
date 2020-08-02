@@ -63,9 +63,18 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 #endif
 
 #if SAME5x
+
 # include <CoreIO.h>
 # include <Devices.h>
+
+#else
+
+// Functions needed for builds that use CoreNG. Not needed when using CoreN2G.
+void delay(uint32_t ms) noexcept;
+static inline void WatchdogReset() noexcept { return watchdogReset(); }
+
 #endif
+
 
 // API level definition.
 // ApiLevel 1 is the first level that supports rr_model.
@@ -288,7 +297,7 @@ class ExpansionManager;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
-#if SAME70
+#if SAME70 || SAME5x
 typedef double floatc_t;						// type of matrix element used for calibration
 #else
 // We are more memory-constrained on the older processors
@@ -351,10 +360,6 @@ extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((forma
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
-
-#if !SAME5x		// CoreN2G defines delay() so this is not needed for the SAME5x build
-void delay(uint32_t ms) noexcept;
-#endif
 
 double HideNan(float val) noexcept;
 

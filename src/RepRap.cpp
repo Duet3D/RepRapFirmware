@@ -840,7 +840,7 @@ void RepRap::EmergencyStop() noexcept
 void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 {
 	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
-	watchdogReset();							// kick the watchdog
+	WatchdogReset();							// kick the watchdog
 
 #if SAM4E || SAME70
 	rswdt_restart(RSWDT);						// kick the secondary watchdog
@@ -1264,7 +1264,7 @@ void RepRap::Tick() noexcept
 	// Kicking the watchdog before it has been initialised may trigger it!
 	if (active)
 	{
-		watchdogReset();							// kick the watchdog
+		WatchdogReset();							// kick the watchdog
 #if SAM4E || SAME70
 		rswdt_restart(RSWDT);						// kick the secondary watchdog
 #endif
@@ -2866,7 +2866,7 @@ void RepRap::StartIap() noexcept
 	IoPort::WriteDigital(DiagPin, !DiagOnPolarity);	// turn the DIAG LED off
 #endif
 
-	watchdogReset();								// kick the watchdog one last time
+	WatchdogReset();								// kick the watchdog one last time
 
 #if SAM4E || SAME70
 	rswdt_restart(RSWDT);							// kick the secondary watchdog
