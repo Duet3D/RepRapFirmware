@@ -53,6 +53,7 @@ Bug fixes:
 - Changes to Z probe parameters made by G31, M558 and M851 were not reported to DCS or DWC
 - Duet 3 with SBC: G29 (optionally with S1 parameter) rewrote the old height map to the virtual SD card instead of writing the new one
 - Duet 3 with SBC: certain commands completed in the wrong order
+- G92 commands did not updated seqs.move
 
 RepRapFirmware 3.1.0
 ====================
