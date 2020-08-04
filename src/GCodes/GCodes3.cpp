@@ -116,6 +116,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 #endif
 	}
 
+	reprap.MoveUpdated();
 	return GCodeResult::ok;
 }
 
@@ -1160,7 +1161,6 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 	const uint8_t drive = id.localDriver;
 	if (gb.GetCommandFraction() > 0)
 	{
-#ifdef DUET3
 		// Main board drivers do not support closed loop modes
 		if (gb.Seen('S'))
 		{
@@ -1173,9 +1173,6 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 		}
 		reply.copy("Driver %u mode is open loop", drive);
 		return GCodeResult::ok;
-#else
-		return GCodeResult::errorNotSupported;
-#endif
 	}
 
 	if (drive < platform.GetNumActualDirectDrivers())

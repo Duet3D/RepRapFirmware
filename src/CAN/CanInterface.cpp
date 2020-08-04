@@ -28,6 +28,8 @@
 
 #include <memory>
 
+static constexpr uint8_t dlc2len[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
+
 const unsigned int NumCanBuffers = 2 * MaxCanBoards + 10;
 
 constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
@@ -314,6 +316,10 @@ static status_code mcan_fd_send_ext_message_no_wait(uint32_t id_value, const uin
 						| MCAN_TX_ELEMENT_T1_FDF;
 
 	memcpy(tx_element.data, data, dataLength);
+
+	// Set any extra data we will be sending to zero
+	const size_t roundedUpLength = dlc2len[dlc];
+	memset(tx_element.data + dataLength, 0, roundedUpLength - dataLength);
 
 	status_code rc = mcan_set_tx_buffer_element(&mcan_instance, &tx_element, whichTxBuffer);
 	if (rc == STATUS_OK)
@@ -785,7 +791,6 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 				{
 					// Copy the message and accompanying data to a buffer
 					buf->id.SetReceivedId(elem.R0.bit.ID);
-					static constexpr uint8_t dlc2len[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
 					buf->dataLength = dlc2len[elem.R1.bit.DLC];
 					memcpy(buf->msg.raw, elem.data, buf->dataLength);
 
