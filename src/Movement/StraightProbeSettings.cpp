@@ -23,14 +23,6 @@ void StraightProbeSettings::Reset() noexcept
 	}
 }
 
-void StraightProbeSettings::SetTarget(const float coords[MaxAxes]) noexcept
-{
-	for (size_t axis = 0; axis < MaxAxes; ++axis)
-	{
-		target[axis] = coords[axis];
-	}
-}
-
 void StraightProbeSettings::SetCoordsToTarget(float coords[MaxAxes]) const noexcept
 {
 	for (size_t axis = 0; axis < MaxAxes; ++axis)

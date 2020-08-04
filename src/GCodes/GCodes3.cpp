@@ -687,9 +687,10 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		break;
 	}
 
-	// Get the target coordinates and check if we would move at all
-	float target[MaxAxes];
-	ToolOffsetTransform(currentUserPosition, target);
+	// Get the target coordinates (as user position) and check if we would move at all
+	float userPositionTarget[MaxAxes];
+	memcpy(userPositionTarget, currentUserPosition, numVisibleAxes * sizeof(currentUserPosition[0]));
+
 	bool seen = false;
 	bool doesMove = false;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
@@ -697,12 +698,17 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		if (gb.Seen(axisLetters[axis]))
 		{
 			seen = true;
-			const float axisTarget = gb.GetFValue();
-			if (axisTarget != target[axis])
+
+			// Get the user provided target coordinate
+			// - If prefixed by G53 add the ToolOffset that will be subtracted below in ToolOffsetTransform as we ignore any offsets when G53 is active
+			// - otherwise add current workplace offsets so we go where the user expects to go
+			// comparable to hoe DoStraightMove/DoArcMove does it
+			const float axisTarget = gb.GetDistance() + (gb.MachineState().g53Active ? GetCurrentToolOffset(axis) : GetWorkplaceOffset(axis));
+			if (axisTarget != userPositionTarget[axis])
 			{
 				doesMove = true;
 			}
-			target[axis] = axisTarget;
+			userPositionTarget[axis] = axisTarget;
 			sps.AddMovingAxis(axis);
 		}
 	}
@@ -730,7 +736,8 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 		return GCodeResult::ok;
 	}
-	sps.SetTarget(target);
+	// Convert target user position to machine coordinates and save them in StraightProbeSettings
+	ToolOffsetTransform(userPositionTarget, sps.GetTarget());
 
 	// See whether we are using a user-defined Z probe or just current one
 	const size_t probeToUse = gb.Seen('P') ? gb.GetUIValue() : 0;
