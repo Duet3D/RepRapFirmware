@@ -27,8 +27,10 @@ void Lcd7567::HardwareInit() noexcept
 {
 	pinMode(a0Pin, OUTPUT_LOW);				// set DC/A0 pin to be an output with initial LOW state so as to be in command mode (command: 0, data: 1)
 
-	device.Select();
-	delayMicroseconds(1);
+	// Post-reset wait of 6ms
+	delay(6);
+
+	SelectDevice();
 
 	SendByte(SystemReset);					// 11100010 System reset
 	SendByte(DisplayOff);
@@ -40,17 +42,22 @@ void Lcd7567::HardwareInit() noexcept
 	SendByte(SetPowerControl | 0x07);		// 00101111 Set power control to enable XV0, V0 and VG charge pumps
 	SendByte(SetBoosterFirst);				// 11111000 Set booster ratio (2-byte command) to 4x
 	SendByte(0x00);
+
+	// @David: Does this need to be 0x06 or can it be 0x03 for your display as well?
 	SendByte(SetResistorRatio | 0x06);		// 00100011 Set Vlcd resistor ratio 1+Rb/Ra to 6.5 for the voltage regulator (contrast)
+
+	// Set display contrast
+	uint8_t contrast = min<uint8_t>((64.0f * displayContrastRatio) / 100, 0b111111);
 	SendByte(SetVolumeFirst);				// 10000001 Set electronic volume (2-byte command) 6-bit contrast value
-	SendByte(0x18);							// contrast value, EA default: 0x016
+	SendByte(contrast);						// contrast value, EA default: 0x016
+
 	SendByte(SetStaticOff);					// 10101100 Set static indicator off
 
 	// Enable display
 	SendByte(PixelOff);						// 10100100 Set all pixel off
 	SendByte(DisplayOn);					// 10101111 Set display enable to on
 
-	delayMicroseconds(1);
-	device.Deselect();
+	DeselectDevice();
 }
 
 // Flush just some data, returning true if this needs to be called again
@@ -67,9 +74,7 @@ bool Lcd7567::FlushSome() noexcept
 		}
 
 		// Flush that row (which is 8 pixels high)
-		device.Select();
-		delayMicroseconds(1);
-
+		SelectDevice();
 		SetGraphicsAddress(nextFlushRow, startCol);
 		StartDataTransaction();
 
@@ -91,8 +96,7 @@ bool Lcd7567::FlushSome() noexcept
 		}
 
 		EndDataTransaction();
-		delayMicroseconds(1);
-		device.Deselect();
+		DeselectDevice();
 
 		// Check if there is still area to flush
 		if (startRow < endRow)
@@ -126,6 +130,28 @@ inline void Lcd7567::StartDataTransaction() noexcept
 inline void Lcd7567::EndDataTransaction() noexcept
 {
 	digitalWrite(a0Pin, false);
+}
+
+void Lcd7567::SelectDevice() noexcept
+{
+	if(gatePin != NoPin) {
+		digitalWrite(gatePin, gatePinPolarity);
+		delayMicroseconds(1);
+	}
+
+	device.Select();
+	delayMicroseconds(1);
+}
+
+void Lcd7567::DeselectDevice() noexcept
+{
+	delayMicroseconds(1);
+	device.Deselect();
+
+	if(gatePin != NoPin) {
+		digitalWrite(gatePin, !gatePinPolarity);
+		delayMicroseconds(1);
+	}
 }
 
 void Lcd7567::SendByte(uint8_t byteToSend) noexcept

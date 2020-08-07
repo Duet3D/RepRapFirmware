@@ -49,6 +49,8 @@ private:
 	void StartDataTransaction() noexcept;
 	void EndDataTransaction() noexcept;
 	bool FlushRow() noexcept;
+	void SelectDevice() noexcept;
+	void DeselectDevice() noexcept;
 
 	constexpr static uint8_t SystemReset = 0xE2;				// 11100010 System reset
 	constexpr static uint8_t DisplayOff = 0xAE;					// 10101110 Set display enable to off

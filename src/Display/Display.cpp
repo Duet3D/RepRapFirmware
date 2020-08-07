@@ -148,9 +148,13 @@ void Display::ErrorBeep() noexcept
 
 void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, bool defaultCsPolarity) THROWS(GCodeException)
 {
-	newLcd->Init(LcdCSPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency);
-	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
-	newLcd->SetFont(SmallFontNumber);
+#ifdef SRC_DUETM_PINS_DUETM_H_
+	// Only for the Duet 2 Maestro since the LCD_CS gates the SPI0_SCK and SPI0_MOSI.
+	// Note that https://github.com/SchmartMaker/RepRapFirmware/tree/ST7565/src/Display did a level higher by using different display IDs
+	newLcd->Init(LcdCSAltPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio, LcdCSPin, true);
+#else
+	newLcd->Init(LcdCSPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio);
+#endif
 	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
 	newLcd->SetFont(SmallFontNumber);
 

@@ -187,6 +187,7 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 constexpr uint32_t LcdSpiClockFrequency = 2000000;		// 2.0MHz
 constexpr Pin LcdCSPin = PortCPin(9);
 constexpr Pin LcdA0Pin = PortAPin(21);
+constexpr Pin LcdCSAltPin = PortAPin(22);
 constexpr Pin LcdBeepPin = PortAPin(15);
 constexpr Pin EncoderPinA = PortBPin(5);
 constexpr Pin EncoderPinB = PortCPin(3);
