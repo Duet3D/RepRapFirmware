@@ -55,7 +55,7 @@ public:
 	bool Free() noexcept;
 	void Prepare(uint8_t simMode, float extrusionPending[]) noexcept __attribute__ ((hot));	// Calculate all the values and freeze this DDA
 	bool HasStepError() const noexcept;
-	bool CanPauseAfter() const noexcept { return flags.canPauseAfter; }
+	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
 	bool IsCheckingEndstops() const noexcept { return flags.checkEndstops; }
@@ -339,6 +339,16 @@ inline __attribute__((always_inline)) bool DDA::ScheduleNextStepInterrupt(StepTi
 		return timer.ScheduleCallbackFromIsr(whenDue);
 	}
 	return false;
+}
+
+inline bool DDA::CanPauseAfter() const noexcept
+{
+	return flags.canPauseAfter
+#if SUPPORT_CAN_EXPANSION
+		// We can't easily cancel moves that have already been sent to CAN expansion boards
+		&& next->state != DDAState::frozen
+#endif
+		;
 }
 
 #if SUPPORT_CAN_EXPANSION

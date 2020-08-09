@@ -1955,15 +1955,21 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	lowestV12 = highestV12 = currentV12;
 #endif
 
-#if HAS_SMART_DRIVERS
-	// Show the motor stall status
-	for (size_t drive = 0; drive < numSmartDrivers; ++drive)
+	// Show the motor position and stall status
+	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 	{
 		String<StringLength256> driverStatus;
-		SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
-		MessageF(mtype, "Driver %u:%s\n", drive, driverStatus.c_str());
-	}
+		driverStatus.printf("Driver %u: position %" PRIi32, drive, reprap.GetMove().GetEndPoint(drive));
+#if HAS_SMART_DRIVERS
+		if (drive < numSmartDrivers)
+		{
+			driverStatus.cat(", ");
+			SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
+		}
 #endif
+		driverStatus.cat('\n');
+		Message(mtype, driverStatus.c_str());
+	}
 
 	// Show current RTC time
 	Message(mtype, "Date/time: ");

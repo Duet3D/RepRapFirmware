@@ -126,6 +126,7 @@ static TaskHandle taskWaitingOnFifo0 = nullptr;
 static TaskHandle taskWaitingOnFifo1 = nullptr;
 
 static uint32_t messagesSent = 0;
+static uint32_t numTxTimeouts = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
@@ -292,6 +293,7 @@ static void WaitForTxBufferFree(uint32_t whichTxBuffer, uint32_t maxWait) noexce
 		} while (millis() - startTime < maxWait);
 
 		// The last message still hasn't been sent, so cancel it
+		++numTxTimeouts;
 		mcan_instance.hw->MCAN_TXBCR = trigMask;
 		while ((mcan_instance.hw->MCAN_TXBRP & trigMask) != 0)
 		{
@@ -300,7 +302,7 @@ static void WaitForTxBufferFree(uint32_t whichTxBuffer, uint32_t maxWait) noexce
 	}
 }
 
-// Send extended CAN message in fd mode. The Tx buffer must alrrady be free.
+// Send extended CAN message in fd mode. The Tx buffer must already be free.
 static status_code mcan_fd_send_ext_message_no_wait(uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer) noexcept
 {
 	const uint32_t dlc = (dataLength <= 8) ? dataLength
@@ -329,7 +331,7 @@ static status_code mcan_fd_send_ext_message_no_wait(uint32_t id_value, const uin
 	return rc;
 }
 
-// Send extended CAN message in fd mode
+// Send extended CAN message in FD mode
 static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, uint32_t maxWait) noexcept
 {
 	WaitForTxBufferFree(whichTxBuffer, maxWait);
@@ -439,8 +441,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 				buf->msg.move.DebugPrint();
 #endif
 				// Send the message
-				mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength,
-											TxBufferIndexMotion, MaxMotionSendWait);
+				mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion, MaxMotionSendWait);
 
 #ifdef CAN_DEBUG
 				// Display a debug message too
@@ -650,17 +651,20 @@ static bool SetRemoteDriverStates(const CanDriversList& drivers, const StringRef
 void CanInterface::SendMotion(CanMessageBuffer *buf) noexcept
 {
 	buf->next = nullptr;
-	TaskCriticalSectionLocker lock;
+	{
+		TaskCriticalSectionLocker lock;
 
-	if (pendingBuffers == nullptr)
-	{
-		pendingBuffers = buf;
+		if (pendingBuffers == nullptr)
+		{
+			pendingBuffers = buf;
+		}
+		else
+		{
+			lastBuffer->next = buf;
+		}
+		lastBuffer = buf;
 	}
-	else
-	{
-		lastBuffer->next = buf;
-	}
-	lastBuffer = buf;
+
 	canSenderTask.Give();
 }
 
@@ -1054,9 +1058,9 @@ GCodeResult CanInterface::ChangeHandleResponseTime(CanAddress boardAddress, Remo
 
 void CanInterface::Diagnostics(MessageType mtype) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "=== CAN ===\nMessages sent %" PRIu32 ", longest wait %" PRIu32 "ms for type %u\n",
-									messagesSent, longestWaitTime, longestWaitMessageType);
-	messagesSent = 0;
+	reprap.GetPlatform().MessageF(mtype, "=== CAN ===\nMessages sent %" PRIu32 ", send timeouts %" PRIu32 ", longest wait %" PRIu32 "ms for type %u, free CAN buffers %u\n",
+									messagesSent, numTxTimeouts, longestWaitTime, longestWaitMessageType, CanMessageBuffer::FreeBuffers());
+	messagesSent = numTxTimeouts = 0;
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;
 }
