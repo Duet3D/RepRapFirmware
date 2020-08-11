@@ -116,7 +116,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 #endif
 	}
 
-	reprap.MoveUpdated();
+	reprap.MoveUpdated();		// I'm not sure this is necessary because the position and homed fields in the OM are flagged 'frequent'; but we may have changed zDatumSetByProbing
 	return GCodeResult::ok;
 }
 

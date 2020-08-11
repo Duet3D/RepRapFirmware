@@ -34,6 +34,7 @@ enum class KinematicsType : uint8_t
 	rotaryDelta,
 	markForged,
 	collinearTriperon,	// reserved for @oliof, see https://forum.duet3d.com/topic/11646/kinematics-type-number-allocation-for-colinear-tripteron
+	robot5axis,			// reserved for @joergS5, see https://forum.duet3d.com/post/172204
 
 	unknown				// this one must be last!
 };
