@@ -2743,7 +2743,13 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 
 	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
 	uint32_t firstDword;
-	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
+	bool ok =
+#if SAME5x
+		// We use UF2 file format, so look inside the payload
+		firmwareFile->Seek(32) &&
+#endif
+
+		firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
 #if SAME5x
