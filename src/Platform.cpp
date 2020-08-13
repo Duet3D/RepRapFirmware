@@ -4288,7 +4288,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
 		{
 			IterateDrivers(axis,
-							[&drivers](uint8_t driver){ drivers.SetBit(driver); }
+							[&drivers](uint8_t localDriver){ drivers.SetBit(localDriver); }
 #if SUPPORT_CAN_EXPANSION
 						  , [&canDrivers](DriverId driver){ canDrivers.AddEntry(driver); }
 #endif
@@ -4344,7 +4344,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 	if (gb.Seen('T'))
 	{
 		seen = true;
-		const uint16_t coolStepConfig = (uint16_t)gb.GetUIValue();
+		const uint32_t coolStepConfig = gb.GetUIValue();
 		drivers.Iterate([coolStepConfig](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
 	}
 	if (gb.Seen('R'))
@@ -4415,7 +4415,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 				reply.Clear();										// we use 'reply' as a temporary buffer
 				SmartDrivers::AppendStallConfig(drive, reply);
 				buf->cat(reply.c_str());
-				buf->catf(", action: %s",
+				buf->catf(", action on stall: %s",
 							(rehomeOnStallDrivers.IsBitSet(drive)) ? "rehome"
 								: (pauseOnStallDrivers.IsBitSet(drive)) ? "pause"
 									: (logOnStallDrivers.IsBitSet(drive)) ? "log"

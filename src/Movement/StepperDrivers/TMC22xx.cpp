@@ -1878,6 +1878,86 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 	return (driver < GetNumTmcDrivers()) ? driverStates[driver].GetRegister(reg) : 0;
 }
 
+#ifdef DUET_5LC
+
+uint32_t stallBits = 0;
+
+// Initialise the Diag pins multiplexer control. Only needs to be called once.
+void InitDiagMux() noexcept
+{
+	pinMode(DiagMuxPins[0], OUTPUT_LOW);
+	pinMode(DiagMuxPins[1], OUTPUT_LOW);
+	pinMode(DiagMuxPins[2], OUTPUT_LOW);
+}
+
+static inline void MuxDelay() noexcept
+{
+//	asm volatile ("nop");
+//	asm ("nop");
+//	asm ("nop");
+}
+
+// Read all the Diag pins. On entry and at exit, the multiplexer control inputs are all low.
+uint32_t ReadDiagOutputs() noexcept
+{
+	PortGroup * const group = &(PORT->Group[GPIO_PORT(DiagMuxOutPin)]);
+	constexpr unsigned int MuxOutBitNumber = GPIO_PIN(DiagMuxOutPin);
+	static_assert(MuxOutBitNumber < 32 - 8);			// the following code assumes we can shift the port bit left by 7 bits without losing it
+	constexpr uint32_t MuxOutMask = 1ul << MuxOutBitNumber;
+
+	// We read the drivers in Gray code order for speed, it avoids having to change more than one multiplexer control pin between them
+	uint32_t val = group->IN.reg & MuxOutMask;			// read driver 0
+	fastDigitalWriteHigh(DiagMuxPins[0]);
+	asm volatile ("nop");
+	asm volatile ("nop");
+	MuxDelay();
+
+	uint32_t reg = group->IN.reg;						// read driver 1
+	asm volatile("": : :"memory");
+	fastDigitalWriteHigh(DiagMuxPins[1]);
+	val |= (reg & MuxOutMask) << 1;
+	MuxDelay();
+
+	reg = group->IN.reg;								// read driver 3
+	asm volatile("": : :"memory");
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	val |= (reg & MuxOutMask) << 3;
+	MuxDelay();
+
+	reg = group->IN.reg;								// read driver 2
+	asm volatile("": : :"memory");
+	fastDigitalWriteHigh(DiagMuxPins[2]);
+	val |= (reg & MuxOutMask) << 2;
+	MuxDelay();
+
+	reg = group->IN.reg;								// read driver 6
+	asm volatile("": : :"memory");
+	fastDigitalWriteHigh(DiagMuxPins[0]);
+	val |= (reg & MuxOutMask) << 6;
+	MuxDelay();
+
+	reg = group->IN.reg;								// read driver 7
+	asm volatile("": : :"memory");
+	fastDigitalWriteLow(DiagMuxPins[1]);
+	val |= (reg & MuxOutMask) << 7;
+	MuxDelay();
+
+	reg = group->IN.reg;								// read driver 5
+	asm volatile("": : :"memory");
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	val |= (reg & MuxOutMask) << 5;
+
+	MuxDelay();
+	asm volatile("": : :"memory");
+	reg = group->IN.reg;								// read driver 4
+	fastDigitalWriteLow(DiagMuxPins[2]);				// back to all mux control pins low
+	val |= (reg & MuxOutMask) << 4;
+	stallBits = val >> MuxOutBitNumber;
+	return stallBits;
+}
+
+#endif
+
 #endif
 
 // End

@@ -1350,7 +1350,9 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 						reply.cat(", pos unknown");
 					}
 				}
-#elif SUPPORT_TMC22xx || SUPPORT_TMC51xx
+#endif
+
+#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 				{
 					const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 					const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
@@ -1368,6 +1370,19 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 					bool bdummy;
 					const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * platform.DriveStepsPerUnit(axis));
 					reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
+				}
+#endif
+
+#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+				if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
+				{
+					const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
+					const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
+					const unsigned int pwmScaleSum = pwmScale & 0xFF;
+					const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
+					const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
+					const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
+					reply.catf(", pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u", pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
 				}
 #endif
 			}

@@ -337,7 +337,7 @@ private:
 
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
-	static constexpr unsigned int NumReadRegisters = 4;		// the number of registers that we read from
+	static constexpr unsigned int NumReadRegisters = 5;		// the number of registers that we read from
 	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
 
 	// Read register numbers, in same order as ReadRegNumbers
@@ -345,12 +345,13 @@ private:
 	static constexpr unsigned int ReadDrvStat = 1;
 	static constexpr unsigned int ReadMsCnt = 2;
 	static constexpr unsigned int ReadPwmScale = 3;
+	static constexpr unsigned int ReadPwmAuto = 4;
 
 	static constexpr uint8_t NoRegIndex = 0xFF;				// this means no register updated, or no register requested
 
 	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
 	volatile uint32_t readRegisters[NumReadRegisters];		// the last values read from the TMC22xx readable registers
-	volatile uint32_t accumulatedReadRegisters[NumReadRegisters];
+	volatile uint32_t accumulatedDriveStatus;				// the accumulated drive status bits
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
@@ -396,7 +397,8 @@ const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_GSTAT,
 	REGNUM_DRV_STATUS,
 	REGNUM_MSCNT,
-	REGNUM_PWM_SCALE
+	REGNUM_PWM_SCALE,
+	REGNUM_PWM_AUTO
 };
 
 uint16_t TmcDriverState::numTimeouts = 0;								// how many times a transfer timed out
@@ -432,8 +434,9 @@ pre(!driversPowered)
 
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
-		accumulatedReadRegisters[i] = readRegisters[i] = 0;
+		readRegisters[i] = 0;
 	}
+	accumulatedDriveStatus = 0;
 
 	regIndexBeingUpdated = regIndexRequested = previousRegIndexRequested = NoRegIndex;
 	numReads = numWrites = 0;
@@ -503,7 +506,7 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 
 bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept
 {
-	switch(reg)
+	switch (reg)
 	{
 	case SmartDriverRegister::chopperControl:
 		return SetChopConf(regVal);
@@ -571,6 +574,9 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 
 	case SmartDriverRegister::pwmScale:
 		return readRegisters[ReadPwmScale];
+
+	case SmartDriverRegister::pwmAuto:
+		return readRegisters[ReadPwmAuto];
 
 	case SmartDriverRegister::hdec:
 	default:
@@ -712,8 +718,8 @@ uint32_t TmcDriverState::ReadLiveStatus() const noexcept
 uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 {
 	TaskCriticalSectionLocker lock;
-	const uint32_t status = accumulatedReadRegisters[ReadDrvStat];
-	accumulatedReadRegisters[ReadDrvStat] = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
+	const uint32_t status = accumulatedDriveStatus;
+	accumulatedDriveStatus = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
 	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
@@ -796,9 +802,12 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 		threshold -= 128;
 	}
 	const uint32_t fullstepsPerSecond = StepTimer::StepClockRate/maxStallStepInterval;
-	const float speed = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
-	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
-				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, writeRegisters[WriteCoolConf] & 0xFFFF);
+	const float speed1 = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	const uint32_t tcoolthrs = writeRegisters[WriteTcoolthrs] & ((1ul << 20) - 1u);
+	bool bdummy;
+	const float speed2 = (12000000.0 * GetMicrostepping(bdummy))/(256 * tcoolthrs * reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep threshold %" PRIu32 " (%.1f mm/sec)",
+				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed1, tcoolthrs, (double)speed2);
 }
 
 // In the following, only byte accesses to sendDataBlock are allowed, because accesses to non-cacheable memory must be aligned
@@ -881,12 +890,11 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 			const uint32_t oldDrvStat = readRegisters[ReadDrvStat];
 			readRegisters[ReadDrvStat] = regVal;
 			regVal &= oldDrvStat;
-			accumulatedReadRegisters[ReadDrvStat] |= regVal;
+			accumulatedDriveStatus |= regVal;
 		}
 		else
 		{
 			readRegisters[previousRegIndexRequested] = regVal;
-			accumulatedReadRegisters[previousRegIndexRequested] |= regVal;
 		}
 	}
 
@@ -897,7 +905,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	   )
 	{
 		readRegisters[ReadDrvStat] |= TMC_RR_SG;
-		accumulatedReadRegisters[ReadDrvStat] |= TMC_RR_SG;
+		accumulatedDriveStatus |= TMC_RR_SG;
 		EndstopOrZProbe::UpdateStalledDrivers(driverBit, true);
 	}
 	else

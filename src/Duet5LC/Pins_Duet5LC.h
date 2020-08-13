@@ -118,6 +118,10 @@ PortGroup * const StepPio = &(PORT->Group[2]);		// the PIO that all the step pin
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(31), PortCPin(16), PortCPin(30), PortCPin(18), PortCPin(19) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortAPin(27), PortBPin(29), PortBPin(28), PortBPin(3), PortBPin(0), PortDPin(21), PortDPin(20), PortCPin(17) };
 
+constexpr Pin DiagMuxPins[] = { PortAPin(23), PortDPin(11), PortBPin(10) };
+constexpr Pin DiagMuxOutPin = PortAPin(3);
+constexpr Pin DiagIrqPin = PortAPin(0);
+
 // UART interface to stepper drivers
 constexpr uint8_t TMC22xxSercomNumber = 1;
 Sercom * const SERCOM_TMC22xx = SERCOM1;
