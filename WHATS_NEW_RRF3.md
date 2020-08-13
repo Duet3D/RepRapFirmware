@@ -2,30 +2,33 @@ RepRapFirmware 3.2-beta1 (in preparation
 ========================
 
 Upgrade notes:
-- Numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
+- In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
 - [Duet 3] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
 
 New features/changed behaviour:
 - Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using separate firmware build
-- [in progress] Support for ST7567-based 12864 displays on Duet Maestro (external hardware needed)
-- [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
 - A default filename is no longer provided in the M559 and M560 commands, so the P parameter must always be used
 - Numeric literals in GCode meta commands and in expressions enclosed by { } can now be in hex (0x prefix) or binary (0b prefix)
 - The minimum value for the P parameter of M584 is reduced from 3 to 2 so that the Z axis can be hidden
 - M906, M913 and M918 commands now wait for movement to stop, except when they are used in the power fail script
 - G29 with no S parameter now runs file sys/mesh.g if it exists; otherwise it behaves like G29 S0 as before
-- [Duet 3] Default LED strip type is now Neopixel not DotStar
 - Drivers number of the form 0.# where # represents one or more decimal digits are now supported even on board that don't support CAN
 - The resurrect.g file now records which objects on the build plate have been cancelled
 - Duet 3 Mini 5+ WiFi and Ethernet prototype boards are now supported
+- [Duet 3] Default LED strip type is now Neopixel not DotStar
+- [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolstep threshold
+- [in progress] Support for ST7567-based 12864 displays on Duet Maestro
+- [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
 
 Bug fixes:
-- Fixed issue with G29 S1 on Duet 3 with attached SBC causing print to fail
+- Fixed issue with G29 S1 on Duet 3 with attached SBC causing the print to fail if any if the probe points had been unreachable when the height map was probed
 - Fixed a buffer overflow when the number of filaments reported by PrusaSlic3r exceeds the maximum number of supported extruders
 - Fixed bug in GetProportionDone that might have caused an incorrect extrusion amount for the first move after restarting a print following a power failure
 - The output from M207 without parameters was truncated when there were 4 or more tools
+- If a G31 command defined new values in terms of existing G31 values from the object model, then incorrect values could be set due to the new values being computed and stored multiple times
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
-- When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
+- [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
+- [Duet 3] M915 with just P and/or axis parameters did not report the coolstep threshold (T parameter) correctly
 
 RepRapFirmware 3.1.1
 ====================
