@@ -54,6 +54,7 @@ bool SX1509::begin(uint8_t address) noexcept
 	{
 		clock(DefaultOscDivider);
 		writeWord(REG_HIGH_INPUT_B, 0xFFFF);						// set all inputs to be 5V-tolerant
+		writeByte(REG_DEBOUNCE_CONFIG, 0);							// debounce time set to minimum (0.5ms)
 	}
 
 	return ok;
@@ -287,6 +288,7 @@ void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall) noexcept
 
 	writeDword(REG_SENSE_HIGH_B, pinMask);
 	clearBitsInWord(REG_INTERRUPT_MASK_B, pins);
+	setBitsInWord(REG_DEBOUNCE_ENABLE_B, pins);			// always use debouncing on pins with interrupts enabled, to avoid an excessive interrupt rate
 }
 
 uint16_t SX1509::interruptSource() noexcept
