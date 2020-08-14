@@ -4,6 +4,7 @@ RepRapFirmware 3.2-beta1 (in preparation
 Upgrade notes:
 - In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
 - [Duet 3] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
+- If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber - 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based.
 
 New features/changed behaviour:
 - Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using separate firmware build
@@ -15,6 +16,7 @@ New features/changed behaviour:
 - Drivers number of the form 0.# where # represents one or more decimal digits are now supported even on board that don't support CAN
 - The resurrect.g file now records which objects on the build plate have been cancelled
 - Duet 3 Mini 5+ WiFi and Ethernet prototype boards are now supported
+- Added move.workplaceNumber to the object model. This is intended to repace move.workspaceNumber, but is 0-based instead of 1-based.
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
 - [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolstep threshold
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
@@ -26,6 +28,7 @@ Bug fixes:
 - Fixed bug in GetProportionDone that might have caused an incorrect extrusion amount for the first move after restarting a print following a power failure
 - The output from M207 without parameters was truncated when there were 4 or more tools
 - If a G31 command defined new values in terms of existing G31 values from the object model, then incorrect values could be set due to the new values being computed and stored multiple times
+- The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
 - [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
 - [Duet 3] M915 with just P and/or axis parameters did not report the coolstep threshold (T parameter) correctly
