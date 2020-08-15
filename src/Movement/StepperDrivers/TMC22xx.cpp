@@ -1153,61 +1153,63 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 // Append the driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
+#ifdef DUET_5LC
+	if (!DriverAssumedPresent())
+	{
+		reply.cat("assumed not present");
+		return;
+	}
+#endif
+
 	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
 	if (lastReadStatus & TMC_RR_OT)
 	{
-		reply.cat(" temperature-shutdown!");
+		reply.cat("temperature-shutdown! ");
 	}
 	else if (lastReadStatus & TMC_RR_OTPW)
 	{
-		reply.cat(" temperature-warning");
+		reply.cat("temperature-warning, ");
 	}
 	if (lastReadStatus & TMC_RR_S2G)
 	{
-		reply.cat(" short-to-ground");
+		reply.cat("short-to-ground, ");
 	}
 	if (lastReadStatus & TMC_RR_OLA)
 	{
-		reply.cat(" open-load-A");
+		reply.cat("open-load-A, ");
 	}
 	if (lastReadStatus & TMC_RR_OLB)
 	{
-		reply.cat(" open-load-B");
+		reply.cat("open-load-B, ");
 	}
 	if (lastReadStatus & TMC_RR_STST)
 	{
-		reply.cat(" standstill");
+		reply.cat("standstill, ");
 	}
 	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
 	{
-		reply.cat(" ok");
+		reply.cat("ok, ");
 	}
 
 #if HAS_STALL_DETECT
 	if (minSgLoadRegister <= maxSgLoadRegister)
 	{
-		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		reply.catf("SG min/max %" PRIu32 "/%" PRIu32 ", ", minSgLoadRegister, maxSgLoadRegister);
 	}
 	else
 	{
-		reply.cat(", SG min/max not available");
+		reply.cat("SG min/max not available, ");
 	}
 	ResetLoadRegisters();
 #endif
 
-	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
+	reply.catf("read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
 					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors);
 	if (failedOp != 0xFF)
 	{
 		reply.catf(", failedOp 0x%02x", failedOp);
 		failedOp = 0xFF;
 	}
-#ifdef DUET_5LC
-	if (!DriverAssumedPresent())
-	{
-		reply.cat(", assumed not present");
-	}
-#endif
 	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
 }
 
@@ -1700,6 +1702,7 @@ void SmartDrivers::Exit() noexcept
 		NVIC_DisableIRQ(TMC22xxUartIRQns[drive]);
 	}
 #endif
+	tmcTask.TerminateAndUnlink();
 	driversState = DriversState::noPower;
 }
 

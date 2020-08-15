@@ -729,34 +729,34 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
 	if (lastReadStatus & TMC_RR_OT)
 	{
-		reply.cat(" temperature-shutdown!");
+		reply.cat("temperature-shutdown! ");
 	}
 	else if (lastReadStatus & TMC_RR_OTPW)
 	{
-		reply.cat(" temperature-warning");
+		reply.cat("temperature-warning, ");
 	}
 	if (lastReadStatus & TMC_RR_S2G)
 	{
-		reply.cat(" short-to-ground");
+		reply.cat("short-to-ground, ");
 	}
 	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
 	{
-		reply.cat(" open-load-A");
+		reply.cat("open-load-A, ");
 	}
 	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
 	{
-		reply.cat(" open-load-B");
+		reply.cat("open-load-B, ");
 	}
 	if (lastReadStatus & TMC_RR_STST)
 	{
-		reply.cat(" standstill");
+		reply.cat("standstill, ");
 	}
 	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
 	{
-		reply.cat(" ok");
+		reply.cat("ok, ");
 	}
 
-	reply.catf(", reads %u, writes %u timeouts %u", numReads, numWrites, numTimeouts);
+	reply.catf("reads %u, writes %u timeouts %u, ", numReads, numWrites, numTimeouts);
 	numReads = numWrites = 0;
 	if (clearGlobalStats)
 	{
@@ -765,11 +765,11 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 
 	if (minSgLoadRegister <= maxSgLoadRegister)
 	{
-		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		reply.catf("SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
 	}
 	else
 	{
-		reply.cat(", SG min/max not available");
+		reply.cat("SG min/max not available");
 	}
 	ResetLoadRegisters();
 }
