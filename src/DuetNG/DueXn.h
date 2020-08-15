@@ -23,6 +23,7 @@ enum class ExpansionBoardType : uint8_t
 namespace DuetExpansion
 {
 	ExpansionBoardType DueXnInit() noexcept;								// Look for a DueXn, initialise it and return which expansion board is attached
+	void Exit();															// Stop the expander polling task
 	void AdditionalOutputInit() noexcept;									// Look for an additional output pin expander
 	void DueXnTaskInit() noexcept;											// Create the DueXn task and enable the associated interrupt from the DueXn
 	const char* _ecv_array null GetExpansionBoardName() noexcept;			// Return the name of the expansion board, or nullptr if no expansion board
