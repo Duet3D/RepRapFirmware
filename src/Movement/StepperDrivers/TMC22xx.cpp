@@ -1890,70 +1890,106 @@ void InitDiagMux() noexcept
 	pinMode(DiagMuxPins[2], OUTPUT_LOW);
 }
 
-static inline void MuxDelay() noexcept
-{
-//	asm volatile ("nop");
-//	asm ("nop");
-//	asm ("nop");
-}
+constexpr uint32_t MuxDelayCycles = SystemCoreClockFreq/5000000;		// allow 200ns for mux output to settle
 
-// Read all the Diag pins. On entry and at exit, the multiplexer control inputs are all low.
+// Read all the Diag pins
+// We read the drivers in Gray code order for speed, it avoids having to change more than one multiplexer control pin between them
 uint32_t ReadDiagOutputs() noexcept
 {
+
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	uint32_t now = GetCurrentCycles();
+
 	PortGroup * const group = &(PORT->Group[GPIO_PORT(DiagMuxOutPin)]);
 	constexpr unsigned int MuxOutBitNumber = GPIO_PIN(DiagMuxOutPin);
 	static_assert(MuxOutBitNumber < 32 - 8);			// the following code assumes we can shift the port bit left by 7 bits without losing it
 	constexpr uint32_t MuxOutMask = 1ul << MuxOutBitNumber;
 
-	// We read the drivers in Gray code order for speed, it avoids having to change more than one multiplexer control pin between them
+	DelayCycles(now, MuxDelayCycles);
 	uint32_t val = group->IN.reg & MuxOutMask;			// read driver 0
 	fastDigitalWriteHigh(DiagMuxPins[0]);
-	asm volatile ("nop");
-	asm volatile ("nop");
-	MuxDelay();
+	now = GetCurrentCycles();
 
+	DelayCycles(now, MuxDelayCycles);
 	uint32_t reg = group->IN.reg;						// read driver 1
-	asm volatile("": : :"memory");
 	fastDigitalWriteHigh(DiagMuxPins[1]);
+	now = GetCurrentCycles();
 	val |= (reg & MuxOutMask) << 1;
-	MuxDelay();
 
+	DelayCycles(now, MuxDelayCycles);
 	reg = group->IN.reg;								// read driver 3
-	asm volatile("": : :"memory");
 	fastDigitalWriteLow(DiagMuxPins[0]);
+	now = GetCurrentCycles();
 	val |= (reg & MuxOutMask) << 3;
-	MuxDelay();
 
+	DelayCycles(now, MuxDelayCycles);
 	reg = group->IN.reg;								// read driver 2
-	asm volatile("": : :"memory");
 	fastDigitalWriteHigh(DiagMuxPins[2]);
+	now = GetCurrentCycles();
 	val |= (reg & MuxOutMask) << 2;
-	MuxDelay();
 
+	DelayCycles(now, MuxDelayCycles);
 	reg = group->IN.reg;								// read driver 6
-	asm volatile("": : :"memory");
 	fastDigitalWriteHigh(DiagMuxPins[0]);
+	now = GetCurrentCycles();
 	val |= (reg & MuxOutMask) << 6;
-	MuxDelay();
 
+	DelayCycles(now, MuxDelayCycles);
 	reg = group->IN.reg;								// read driver 7
-	asm volatile("": : :"memory");
 	fastDigitalWriteLow(DiagMuxPins[1]);
+	now = GetCurrentCycles();
 	val |= (reg & MuxOutMask) << 7;
-	MuxDelay();
 
+	DelayCycles(now, MuxDelayCycles);
 	reg = group->IN.reg;								// read driver 5
-	asm volatile("": : :"memory");
 	fastDigitalWriteLow(DiagMuxPins[0]);
+	now = GetCurrentCycles();
 	val |= (reg & MuxOutMask) << 5;
 
-	MuxDelay();
-	asm volatile("": : :"memory");
+	DelayCycles(now, MuxDelayCycles);
 	reg = group->IN.reg;								// read driver 4
-	fastDigitalWriteLow(DiagMuxPins[2]);				// back to all mux control pins low
 	val |= (reg & MuxOutMask) << 4;
+
 	stallBits = val >> MuxOutBitNumber;
 	return stallBits;
+}
+
+// Read just one DIAG output
+bool ReadOneDiagOutput(uint8_t driver) noexcept
+{
+	if (driver & 1)
+	{
+		fastDigitalWriteHigh(DiagMuxPins[0]);
+	}
+	else
+	{
+		fastDigitalWriteLow(DiagMuxPins[0]);
+	}
+
+	if (driver & 2)
+	{
+		fastDigitalWriteHigh(DiagMuxPins[1]);
+	}
+	else
+	{
+		fastDigitalWriteLow(DiagMuxPins[1]);
+	}
+
+	if (driver & 4)
+	{
+		fastDigitalWriteHigh(DiagMuxPins[2]);
+	}
+	else
+	{
+		fastDigitalWriteLow(DiagMuxPins[2]);
+	}
+
+	const uint32_t now = GetCurrentCycles();
+	DelayCycles(now, MuxDelayCycles);
+
+	return fastDigitalRead(DiagMuxOutPin);
 }
 
 #endif
