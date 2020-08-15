@@ -2323,7 +2323,8 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 					"\nHeat %08" PRIx32 "-%08" PRIx32
 					, reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1
 #if HAS_LINUX_INTERFACE
-					, reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()), reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) + sizeof(LinuxInterface) - 1
+					, reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface())
+					, (reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) == 0) ? 0 : reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) + sizeof(LinuxInterface)
 #endif
 					, reinterpret_cast<uint32_t>(&reprap.GetNetwork()), reinterpret_cast<uint32_t>(&reprap.GetNetwork()) + sizeof(Network) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
@@ -3349,7 +3350,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 		++numDestinations;
 	}
 #if HAS_LINUX_INTERFACE
-	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+	if (reprap.UsingLinuxInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
 	{
 		++numDestinations;
 	}
@@ -3399,7 +3400,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 		}
 
 #if HAS_LINUX_INTERFACE
-		if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+		if (reprap.UsingLinuxInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
 		{
 			reprap.GetLinuxInterface().HandleGCodeReply(type, buffer);
 		}
@@ -3411,7 +3412,7 @@ void Platform::MessageF(MessageType type, const char *fmt, va_list vargs) noexce
 {
 	String<FormatStringLength> formatString;
 #if HAS_LINUX_INTERFACE
-	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+	if (reprap.UsingLinuxInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
 	{
 		formatString.vprintf(fmt, vargs);
 		reprap.GetLinuxInterface().HandleGCodeReply(type, formatString.c_str());
@@ -3451,7 +3452,7 @@ void Platform::MessageF(MessageType type, const char *fmt, ...) noexcept
 void Platform::Message(MessageType type, const char *message) noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+	if (reprap.UsingLinuxInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
 	{
 		reprap.GetLinuxInterface().HandleGCodeReply(type, message);
 		if ((type & BinaryCodeReplyFlag) != 0)

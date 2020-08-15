@@ -25,6 +25,16 @@
 # include "DueXn.h"
 #endif
 
+#if SUPPORT_TMC2660
+# include "Movement/StepperDrivers/TMC2660.h"
+#endif
+#if SUPPORT_TMC22xx
+# include "Movement/StepperDrivers/TMC22xx.h"
+#endif
+#if SUPPORT_TMC51xx
+# include "Movement/StepperDrivers/TMC51xx.h"
+#endif
+
 #if SUPPORT_IOBITS
 # include "PortControl.h"
 #endif
@@ -39,9 +49,7 @@
 
 #if HAS_HIGH_SPEED_SD
 
-# if SAME5x
-//TODO
-# else
+# if !SAME5x	// if not using CoreN2G
 #  include "sam/drivers/hsmci/hsmci.h"
 #  include "conf_sd_mmc.h"
 # endif
@@ -68,7 +76,7 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
-#if !defined(__LPC17xx__) && !SAME5x	//TODO implement for SAME5x
+#if HAS_HIGH_SPEED_SD && !SAME5x										// SAME5x uses CoreN2G which makes its own RTOS calls
 
 static TaskHandle hsmciTask = nullptr;									// the task that is waiting for a HSMCI command to complete
 
@@ -127,7 +135,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 	}
 }
 
-#endif //end ifndef LPC
+#endif //end if HAS_HIGH_SPEED_SD && !SAME5x
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -393,7 +401,8 @@ RepRap::RepRap() noexcept
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
 	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
 #if HAS_LINUX_INTERFACE
-	  , usingLinuxInterface(true)
+	  , usingLinuxInterface(false)						// default to not using the SBC interface until we have checked for config.g on an SD card,
+														// because a disconnected SBC interface can generate noise which may trigger interrupts and DMA
 #endif
 {
 	// Don't call constructors for other objects here
@@ -404,7 +413,7 @@ void RepRap::Init() noexcept
 	OutputBuffer::Init();
 	platform = new Platform();
 #if HAS_LINUX_INTERFACE
-	linuxInterface = new LinuxInterface();				// needs to be allocated early so as to avoid the last 64K of RAM
+	linuxInterface = nullptr; //TEMP!!! new LinuxInterface();				// needs to be allocated early on Duet 2 so as to avoid using any of the last 64K of RAM
 #endif
 	network = new Network(*platform);
 	gCodes = new GCodes(*platform);
@@ -462,9 +471,7 @@ void RepRap::Init() noexcept
 #if SUPPORT_12864_LCD
 	display->Init();
 #endif
-#if HAS_LINUX_INTERFACE
-	linuxInterface->Init();
-#endif
+	// linuxInterface is not initialised until we know we are using it, to prevent a disconnected SBC interface generating interrupts and DMA
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
 #if SAME5x
@@ -482,17 +489,22 @@ void RepRap::Init() noexcept
 		const uint16_t timeout = 32768/128;											// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
 		wdt_init(WDT, WDT_MR_WDRSTEN | WDT_MR_WDDBGHLT, timeout, timeout);			// reset the processor on a watchdog fault, stop it when debugging
 
-#if SAM4E || SAME70
+# if SAM4E || SAME70
 		// The RSWDT must be initialised *after* the main WDT
 		const uint16_t rsTimeout = 16384/128;										// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
 		rswdt_init(RSWDT, RSWDT_MR_WDFIEN | RSWDT_MR_WDDBGHLT, rsTimeout, rsTimeout);	// generate an interrupt on a watchdog fault
 		NVIC_EnableIRQ(WDT_IRQn);													// enable the watchdog interrupt
-#endif
+# endif
 		delayMicroseconds(200);														// 200us is about 6 slow clocks
 	}
 #endif
 
 	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
+
+#if HAS_LINUX_INTERFACE && !HAS_MASS_STORAGE
+	linuxInterface->Init();
+	usingLinuxInterface = true;
+#endif
 
 	platform->MessageF(UsbMessage, "\n%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
@@ -511,17 +523,18 @@ void RepRap::Init() noexcept
 		if (rslt == GCodeResult::ok)
 		{
 			// Run the configuration file
-
-# if HAS_LINUX_INTERFACE
-			usingLinuxInterface = false;				// try to run config.g from the SD card
-# endif
 			if (RunStartupFile(GCodes::CONFIG_FILE) || RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
 			{
-				// Processed config.g so OK
+				// Processed config.g so OK. Leave usingLinuxInterface set to false.
+# if HAS_LINUX_INTERFACE
+				delete linuxInterface;					// free up the RAM for more tools etc.
+				linuxInterface = nullptr;
+# endif
 			}
 			else
 			{
 # if HAS_LINUX_INTERFACE
+				linuxInterface->Init();
 				usingLinuxInterface = true;				// we failed to open config.g or default.g so assume we have a SBC connected
 # else
 				platform->Message(UsbMessage, "Error, no configuration file found\n");
@@ -530,7 +543,10 @@ void RepRap::Init() noexcept
 		}
 		else
 		{
-# if !HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
+			linuxInterface->Init();
+			usingLinuxInterface = true;
+# else
 			delay(3000);								// Wait a few seconds so users have a chance to see this
 			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
 # endif
@@ -559,9 +575,9 @@ void RepRap::Init() noexcept
 		processingConfig = false;
 	}
 
-#if HAS_HIGH_SPEED_SD && !SAME5x		//TODO implement for SAMR5x
+#if HAS_HIGH_SPEED_SD && !SAME5x
 	hsmci_set_idle_func(hsmciIdle);
-	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
+	HSMCI->HSMCI_IDR = 0xFFFFFFFF;						// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
 #endif
 
@@ -658,9 +674,12 @@ void RepRap::Spin() noexcept
 #endif
 
 #if HAS_LINUX_INTERFACE
-	ticksInSpinState = 0;
-	spinningModule = moduleLinuxInterface;
-	linuxInterface->Spin();
+	if (usingLinuxInterface)
+	{
+		ticksInSpinState = 0;
+		spinningModule = moduleLinuxInterface;
+		linuxInterface->Spin();
+	}
 #endif
 
 	ticksInSpinState = 0;
@@ -793,7 +812,10 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	CanInterface::Diagnostics(mtype);
 #endif
 #if HAS_LINUX_INTERFACE
-	linuxInterface->Diagnostics(mtype);
+	if (usingLinuxInterface)
+	{
+		linuxInterface->Diagnostics(mtype);
+	}
 #endif
 	justSentDiagnostics = true;
 }
@@ -2798,7 +2820,7 @@ void RepRap::UpdateFirmware() noexcept
 void RepRap::PrepareToLoadIap() noexcept
 {
 #if SUPPORT_12864_LCD
-	display->UpdatingFirmware();			// put the firmware update message on the display
+	display->UpdatingFirmware();			// put the firmware update message on the display and stop polling the display
 #endif
 
 	// Send this message before we start using RAM that may contain message buffers
@@ -2813,6 +2835,12 @@ void RepRap::PrepareToLoadIap() noexcept
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
 	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
+
+	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
+
+#ifdef DUET_NG
+	DuetExpansion::Exit();					// stop the DueX polling task
+#endif
 
 	// Disable the cache because it interferes with flash memory access
 	Cache::Disable();

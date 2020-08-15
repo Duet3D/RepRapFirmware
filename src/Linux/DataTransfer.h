@@ -85,17 +85,27 @@ private:
 	unsigned int failedTransfers;
 
 	// Transfer buffers
-	// These must be in non-cached memory because we DMA to/from them, see http://ww1.microchip.com/downloads/en/DeviceDoc/Managing-Cache-Coherency-on-Cortex-M7-Based-MCUs-DS90003195A.pdf
+
+#if SAME70
+	// SAME70 has a write-back cache, so these must be in non-cached memory because we DMA to/from them.
+	// See http://ww1.microchip.com/downloads/en/DeviceDoc/Managing-Cache-Coherency-on-Cortex-M7-Based-MCUs-DS90003195A.pdf
 	// This in turn means that we must declare them static, so we can only have one DataTransfer instance
 	static __nocache TransferHeader rxHeader;
 	static __nocache TransferHeader txHeader;
 	static __nocache uint32_t rxResponse;
 	static __nocache uint32_t txResponse;
-	static __nocache uint32_t rxBuffer32[LinuxTransferBufferSize / 4];
-	static __nocache uint32_t txBuffer32[LinuxTransferBufferSize / 4];
-
-	static inline char * rxBuffer() { return reinterpret_cast<char *>(rxBuffer32); }
-	static inline char * txBuffer() { return reinterpret_cast<char *>(txBuffer32); }
+	alignas(4) static __nocache char rxBuffer[LinuxTransferBufferSize];
+	alignas(4) static __nocache char txBuffer[LinuxTransferBufferSize];
+#else
+	// The other processors we support have write-through cache
+	// Allocate the buffers in the object so that we can delete the object and recycle the memory if the SBC interface is not being used
+	TransferHeader rxHeader;
+	TransferHeader txHeader;
+	uint32_t rxResponse;
+	uint32_t txResponse;
+	alignas(4) char rxBuffer[LinuxTransferBufferSize];
+	alignas(4) char txBuffer[LinuxTransferBufferSize];
+#endif
 
 	size_t rxPointer, txPointer;
 

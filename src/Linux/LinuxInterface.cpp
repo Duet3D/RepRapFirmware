@@ -20,20 +20,27 @@
 #include "RepRapFirmware.h"
 #include <Cache.h>
 
-LinuxInterface::LinuxInterface() : wasConnected(false), numDisconnects(0),
+Mutex LinuxInterface::gcodeReplyMutex;
+
+LinuxInterface::LinuxInterface() noexcept : wasConnected(false), numDisconnects(0),
 	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),
 	iapWritePointer(IAP_IMAGE_START), gcodeReply(new OutputStack())
 {
 }
 
-void LinuxInterface::Init()
+LinuxInterface::~LinuxInterface()
+{
+	delete gcodeReply;
+}
+
+void LinuxInterface::Init() noexcept
 {
 	gcodeReplyMutex.Create("LinuxReply");
 	transfer.Init();
 	transfer.StartNextTransfer();
 }
 
-void LinuxInterface::Spin()
+void LinuxInterface::Spin() noexcept
 {
 	bool writingIap = false;
 	do
@@ -293,11 +300,13 @@ void LinuxInterface::Spin()
 					break;
 				}
 
+#if SUPPORT_CAN_EXPANSION
 				// Return a file chunk
 				case LinuxRequest::FileChunk:
 					transfer.ReadFileChunk(requestedFileChunk, requestedFileDataLength, requestedFileLength);
 					requestedFileSemaphore.Give();
 					break;
+#endif
 
 				// Evaluate an expression
 				case LinuxRequest::EvaluateExpression:
@@ -391,12 +400,14 @@ void LinuxInterface::Spin()
 
 			if (!writingIap)					// it's not safe to access GCodes once we have started writing the IAP
 			{
+#if SUPPORT_CAN_EXPANSION
 				// Get another chunk of the file being requested
 				if (!requestedFileName.IsEmpty() && !reprap.GetGCodes().IsFlashing() &&
 					transfer.WriteFileChunkRequest(requestedFileName.c_str(), requestedFileOffset, requestedFileLength))
 				{
 					requestedFileName.Clear();
 				}
+#endif
 
 				// Deal with code channel requests
 				bool reportMissing, fromCode;
@@ -476,11 +487,13 @@ void LinuxInterface::Spin()
 			sendBufferUpdate = true;
 			iapWritePointer = IAP_IMAGE_START;
 
+#if SUPPORT_CAN_EXPANSION
 			if (!requestedFileName.IsEmpty())
 			{
 				requestedFileDataLength = -1;
 				requestedFileSemaphore.Give();
 			}
+#endif
 
 			// Don't cache any messages if they cannot be sent
 			{
@@ -510,7 +523,7 @@ void LinuxInterface::Spin()
 	} while (writingIap);
 }
 
-void LinuxInterface::Diagnostics(MessageType mtype)
+void LinuxInterface::Diagnostics(MessageType mtype) noexcept
 {
 	reprap.GetPlatform().Message(mtype, "=== SBC interface ===\n");
 	transfer.Diagnostics(mtype);
@@ -518,12 +531,12 @@ void LinuxInterface::Diagnostics(MessageType mtype)
 	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d\n", (int)rxPointer, (int)txPointer, (int)txLength);
 }
 
-bool LinuxInterface::IsConnected() const
+bool LinuxInterface::IsConnected() const noexcept
 {
 	return transfer.IsConnected();
 }
 
-bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
+bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
 	if (gb.IsInvalidated() ||
 		gb.IsMacroRequested() || gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
@@ -583,9 +596,11 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
 	return false;
 }
 
+#if SUPPORT_CAN_EXPANSION
+
 // Read a file chunk from the SBC. When a response has been received, the current thread is woken up again.
 // If an error occurred, the number of bytes read is -1
-const char *LinuxInterface::GetFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, int32_t& dataLength, uint32_t& fileLength)
+const char *LinuxInterface::GetFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, int32_t& dataLength, uint32_t& fileLength) noexcept
 {
 	requestedFileName.copy(filename);
 	requestedFileLength = min<uint32_t>(maxLength, MaxFileChunkSize);
@@ -598,7 +613,9 @@ const char *LinuxInterface::GetFileChunk(const char *filename, uint32_t offset, 
 	return requestedFileChunk;
 }
 
-void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
+#endif
+
+void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept
 {
 	if (!transfer.IsConnected())
 	{
@@ -625,7 +642,7 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
 	}
 }
 
-void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer)
+void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noexcept
 {
 	if (!transfer.IsConnected())
 	{
@@ -637,7 +654,7 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer)
 	gcodeReply->Push(buffer, mt);
 }
 
-void LinuxInterface::InvalidateBufferChannel(GCodeChannel channel)
+void LinuxInterface::InvalidateBufferChannel(GCodeChannel channel) noexcept
 {
 	if (rxPointer != txPointer || txLength != 0)
 	{

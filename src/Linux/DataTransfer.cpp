@@ -363,12 +363,15 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 /*-----------------------------------------------------------------------------------*/
 
 // Static data. Note, the startup code we use doesn't make any provision for initialising non-cached memory, other than to zero. So don't specify initial value here
+
+#if SAME70
 __nocache TransferHeader DataTransfer::rxHeader;
 __nocache TransferHeader DataTransfer::txHeader;
 __nocache uint32_t DataTransfer::rxResponse;
 __nocache uint32_t DataTransfer::txResponse;
-__nocache uint32_t DataTransfer::rxBuffer32[LinuxTransferBufferSize / 4];
-__nocache uint32_t DataTransfer::txBuffer32[LinuxTransferBufferSize / 4];
+alignas(4) __nocache char DataTransfer::rxBuffer[LinuxTransferBufferSize];
+alignas(4) __nocache char DataTransfer::txBuffer[LinuxTransferBufferSize];
+#endif
 
 DataTransfer::DataTransfer() noexcept : state(SpiState::ExchangingData), lastTransferTime(0), lastTransferNumber(0), failedTransfers(0),
 	rxPointer(0), txPointer(0), packetId(0)
@@ -459,21 +462,21 @@ const PacketHeader *DataTransfer::ReadPacket() noexcept
 		return nullptr;
 	}
 
-	const PacketHeader *header = reinterpret_cast<const PacketHeader*>(rxBuffer() + rxPointer);
+	const PacketHeader *header = reinterpret_cast<const PacketHeader*>(rxBuffer + rxPointer);
 	rxPointer += sizeof(PacketHeader);
 	return header;
 }
 
 const char *DataTransfer::ReadData(size_t dataLength) noexcept
 {
-	const char *data = rxBuffer() + rxPointer;
+	const char *data = rxBuffer + rxPointer;
 	rxPointer += AddPadding(dataLength);
 	return data;
 }
 
 template<typename T> const T *DataTransfer::ReadDataHeader() noexcept
 {
-	const T *header = reinterpret_cast<const T*>(rxBuffer() + rxPointer);
+	const T *header = reinterpret_cast<const T*>(rxBuffer + rxPointer);
 	rxPointer += sizeof(T);
 	return header;
 }
@@ -644,7 +647,7 @@ void DataTransfer::ExchangeData() noexcept
 {
 	size_t bytesToExchange = max<size_t>(rxHeader.dataLength, txHeader.dataLength);
 	state = SpiState::ExchangingData;
-	setup_spi(rxBuffer(), txBuffer(), bytesToExchange);
+	setup_spi(rxBuffer, txBuffer, bytesToExchange);
 }
 
 void DataTransfer::ResetTransfer(bool ownRequest) noexcept
@@ -785,10 +788,10 @@ bool DataTransfer::IsReady() noexcept
 		case SpiState::ExchangingData:
 		{
 #if SAME5x
-			Cache::InvalidateAfterDMAReceive(&rxBuffer32, sizeof(rxBuffer32));
+			Cache::InvalidateAfterDMAReceive(&rxBuffer, sizeof(rxBuffer));
 #endif
 			// (3) Exchanged data
-			if (rxBuffer32[0] == TransferResponse::BadResponse)
+			if (*reinterpret_cast<uint32_t*>(rxBuffer) == TransferResponse::BadResponse)
 			{
 				if (reprap.Debug(moduleLinuxInterface))
 				{
@@ -798,7 +801,7 @@ bool DataTransfer::IsReady() noexcept
 				break;
 			}
 
-			const uint16_t checksum = CRC16(rxBuffer(), rxHeader.dataLength);
+			const uint16_t checksum = CRC16(rxBuffer, rxHeader.dataLength);
 			if (rxHeader.checksumData != checksum)
 			{
 				if (reprap.Debug(moduleLinuxInterface))
@@ -894,7 +897,7 @@ void DataTransfer::StartNextTransfer() noexcept
 	txHeader.numPackets = packetId;
 	txHeader.sequenceNumber++;
 	txHeader.dataLength = txPointer;
-	txHeader.checksumData = CRC16(txBuffer(), txPointer);
+	txHeader.checksumData = CRC16(txBuffer, txPointer);
 	txHeader.checksumHeader = CRC16(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint16_t));
 
 	// Begin SPI transfer
@@ -1086,7 +1089,7 @@ bool DataTransfer::WriteHeightMap() noexcept
 	// Write Z points
 	if (numPoints != 0)
 	{
-		float *zPoints = reinterpret_cast<float*>(txBuffer() + txPointer);
+		float *zPoints = reinterpret_cast<float*>(txBuffer + txPointer);
 		reprap.GetMove().SaveHeightMapToArray(zPoints);
 		txPointer += numPoints * sizeof(float);
 	}
@@ -1304,7 +1307,7 @@ PacketHeader *DataTransfer::WritePacketHeader(FirmwareRequest request, size_t da
 	txPointer = AddPadding(txPointer);
 
 	// Write the next packet data
-	PacketHeader *header = reinterpret_cast<PacketHeader*>(txBuffer() + txPointer);
+	PacketHeader *header = reinterpret_cast<PacketHeader*>(txBuffer + txPointer);
 	header->request = static_cast<uint16_t>(request);
 	header->id = packetId++;
 	header->length = dataLength;
@@ -1316,13 +1319,13 @@ PacketHeader *DataTransfer::WritePacketHeader(FirmwareRequest request, size_t da
 void DataTransfer::WriteData(const char *data, size_t length) noexcept
 {
 	// Strings can be concatenated here, don't add any padding yet
-	memcpy(txBuffer() + txPointer, data, length);
+	memcpy(txBuffer + txPointer, data, length);
 	txPointer += length;
 }
 
 template<typename T> T *DataTransfer::WriteDataHeader() noexcept
 {
-	T *header = reinterpret_cast<T*>(txBuffer() + txPointer);
+	T *header = reinterpret_cast<T*>(txBuffer + txPointer);
 	txPointer += sizeof(T);
 	return header;
 }

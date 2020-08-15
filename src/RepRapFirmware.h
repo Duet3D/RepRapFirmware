@@ -297,7 +297,7 @@ class ExpansionManager;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
-#if SAME70 || SAME5x
+#if SAME70
 typedef double floatc_t;						// type of matrix element used for calibration
 #else
 // We are more memory-constrained on the older processors
