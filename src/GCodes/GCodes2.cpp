@@ -2651,7 +2651,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 #if SUPPORT_OBJECT_MODEL
-		case 409: // Get status in JSON format
+		case 409: // Get object model values in JSON format
 			{
 				String<StringLength100> key;
 				String<StringLength20> flags;
@@ -2662,6 +2662,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (outBuf == nullptr)
 				{
 					result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
+				}
+				else
+				{
+					outBuf->cat('\n');
+					if (outBuf->HadOverflow())
+					{
+						OutputBuffer::ReleaseAll(outBuf);
+						// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
+						reply.copy("{\"err\":-1}\n");
+					}
 				}
 			}
 			break;
