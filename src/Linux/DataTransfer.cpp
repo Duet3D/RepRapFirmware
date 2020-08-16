@@ -31,7 +31,7 @@
 # define USE_DMAC_MANAGER	1		// use SAME5x DmacManager module
 constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 
-#define USE_32BIT_TRANSFERS		0
+#define USE_32BIT_TRANSFERS		1
 
 #else
 # error Unknown board
