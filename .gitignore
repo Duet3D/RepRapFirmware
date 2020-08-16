@@ -2,15 +2,13 @@
 /.settings/language.settings.xml
 
 # Output folders
-/Duet2_RTOS/
+/Duet2/
+/Duet2_SBC/
 /Duet3_V06/
 /Duet3_V06_CAN0/
 /Duet3_V06_Debug/
-/DuetM_RTOS/
+/DuetMaestro/
+/Duet3_Mini5plus/
+/Duet3_Mini5plus_Debug/
 /PCCB_10/
 /RADDS_RTOS/
-/SAME70XPLD/
-/Duet2_SBC_RTOS/
-/Duet_5LC/
-/Duet_5LC_Debug/
-/Duet_5LC_with_16K_bootloader/
