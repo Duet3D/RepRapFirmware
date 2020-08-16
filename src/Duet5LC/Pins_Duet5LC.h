@@ -454,7 +454,7 @@ constexpr DmaChannel DmacChanSbcTx = 8;
 constexpr DmaChannel DmacChanSbcRx = 9;
 constexpr DmaChannel DmacChanDotStarTx = 10;
 
-constexpr unsigned int NumDmaChannelsUsed = 11;			// must be at least the number of channels used, may be larger. Max 32 on the SAME5x.
+constexpr unsigned int NumDmaChannelsUsed = 11;
 
 constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 250kbps so this is not very critical

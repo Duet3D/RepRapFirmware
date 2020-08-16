@@ -413,7 +413,7 @@ void RepRap::Init() noexcept
 	OutputBuffer::Init();
 	platform = new Platform();
 #if HAS_LINUX_INTERFACE
-	linuxInterface = nullptr; //TEMP!!! new LinuxInterface();				// needs to be allocated early on Duet 2 so as to avoid using any of the last 64K of RAM
+	linuxInterface = new LinuxInterface();				// needs to be allocated early on Duet 2 so as to avoid using any of the last 64K of RAM
 #endif
 	network = new Network(*platform);
 	gCodes = new GCodes(*platform);
