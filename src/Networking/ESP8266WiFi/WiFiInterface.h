@@ -108,12 +108,28 @@ private:
 
 	void SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections) noexcept;
 	void GetNewStatus() noexcept;
-	static const char* TranslateWiFiResponse(int32_t response) noexcept;
+	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
+	static const char* TranslateWiFiResponse(int32_t response) noexcept;
 	static const char* TranslateEspResetReason(uint32_t reason) noexcept;
 
 	Platform& platform;
 	uint32_t lastTickMillis;
+
+	struct MessageBufferOut
+	{
+		MessageHeaderSamToEsp hdr;
+		uint8_t data[MaxDataLength];	// data to send
+	};
+
+	struct MessageBufferIn
+	{
+		MessageHeaderEspToSam hdr;
+		uint8_t data[MaxDataLength];	// data to send
+	};
+
+	MessageBufferOut *bufferOut;
+	MessageBufferIn *bufferIn;
 
 	WifiFirmwareUploader *uploader;
 	TaskHandle espWaitingTask;

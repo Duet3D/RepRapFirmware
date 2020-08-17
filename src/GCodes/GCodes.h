@@ -452,6 +452,8 @@ private:
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
+	bool CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;
+
 #ifdef SERIAL_AUX_DEVICE
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(UARTClass *p) noexcept;

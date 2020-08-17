@@ -178,34 +178,7 @@ void Network::Init() noexcept
 	HttpResponder::InitStatic();
 #endif
 
-#if SUPPORT_TELNET
-	TelnetResponder::InitStatic();
-
-	for (size_t i = 0; i < NumTelnetResponders; ++i)
-	{
-		responders = new TelnetResponder(responders);
-	}
-#endif
-
-#if SUPPORT_FTP
-	FtpResponder::InitStatic();
-
-	for (size_t i = 0; i < NumFtpResponders; ++i)
-	{
-		responders = new FtpResponder(responders);
-	}
-#endif
-
-#if SUPPORT_HTTP
-	for (size_t i = 0; i < NumHttpResponders; ++i)
-	{
-		responders = new HttpResponder(responders);
-	}
-#endif
-
 	SafeStrncpy(hostname, DEFAULT_HOSTNAME, ARRAY_SIZE(hostname));
-
-	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
 
 	for (NetworkInterface *iface : interfaces)
 	{
@@ -416,11 +389,15 @@ extern "C" [[noreturn]]void NetworkLoop(void *) noexcept
 }
 #endif
 
-// This is called at the end of config.g processing.
+// This is called at the end of config.g processing. It must only be called once.
 // Start the network if it was enabled
 void Network::Activate() noexcept
 {
 #if HAS_NETWORKING
+	// Allocate network buffers
+	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
+
+	// Activate the interfaces
 	for (NetworkInterface *iface : interfaces)
 	{
 		if (iface != nullptr)
@@ -429,6 +406,33 @@ void Network::Activate() noexcept
 		}
 	}
 
+	// Create the network responders
+# if SUPPORT_TELNET
+	TelnetResponder::InitStatic();
+
+	for (size_t i = 0; i < NumTelnetResponders; ++i)
+	{
+		responders = new TelnetResponder(responders);
+	}
+# endif
+
+# if SUPPORT_FTP
+	FtpResponder::InitStatic();
+
+	for (size_t i = 0; i < NumFtpResponders; ++i)
+	{
+		responders = new FtpResponder(responders);
+	}
+# endif
+
+# if SUPPORT_HTTP
+	for (size_t i = 0; i < NumHttpResponders; ++i)
+	{
+		responders = new HttpResponder(responders);
+	}
+# endif
+
+	// Finally, create the network task
 	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskPriority::SpinPriority);
 #endif
 }

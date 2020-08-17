@@ -559,7 +559,7 @@ void RepRap::Init() noexcept
 	{
 		processingConfig = false;
 		gCodes->RunConfigFile(GCodes::CONFIG_FILE);		// we didn't get config.g from SD card so request it from Linux
-		network->Activate();							// need to do this here, as the configuration GCodes may set IP address etc.
+		// As we are running the SBC, save RAM by not activating the network
 	}
 	else
 #endif

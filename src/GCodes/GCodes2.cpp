@@ -2919,7 +2919,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 		case 540: // Set/report MAC address
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 				if (gb.Seen('P'))
@@ -2972,7 +2972,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 552: // Enable/Disable network and/or Set/Get IP address
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				bool seen = false;
 				const unsigned int interface = (gb.Seen('I')) ? gb.GetUIValue() : 0;
@@ -3018,7 +3018,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 553: // Set/Get netmask
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				if (gb.Seen('P'))
 				{
@@ -3035,7 +3035,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 554: // Set/Get gateway
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				if (gb.Seen('P'))
 				{
@@ -3486,6 +3486,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 586: // Configure network protocols
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 
@@ -3519,7 +3520,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 587:	// Add WiFi network or list remembered networks
 		case 588:	// Forget WiFi network
 		case 589:	// Configure access point
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				result = reprap.GetNetwork().HandleWiFiCode(code, gb, reply, outBuf);
 			}

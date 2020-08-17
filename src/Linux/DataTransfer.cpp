@@ -386,10 +386,14 @@ alignas(4) __nocache char DataTransfer::txBuffer[LinuxTransferBufferSize];
 #endif
 
 DataTransfer::DataTransfer() noexcept : state(SpiState::ExchangingData), lastTransferTime(0), lastTransferNumber(0), failedTransfers(0),
+#if SAME5x
+	rxBuffer(nullptr), txBuffer(nullptr),
+#endif
 	rxPointer(0), txPointer(0), packetId(0)
 {
 	rxResponse = TransferResponse::Success;
 	txResponse = TransferResponse::Success;
+
 	// Prepare RX header
 	rxHeader.sequenceNumber = 0;
 
@@ -405,8 +409,12 @@ void DataTransfer::Init() noexcept
 	// Initialise transfer ready pin
 	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
-	// Initialize SPI
 #if SAME5x
+	// Allocate buffers
+	rxBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
+	txBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
+
+	// Initialize SPI
 	for (Pin p : SbcSpiSercomPins)
 	{
 		SetPinFunction(p, SbcSpiSercomPinsMode);
@@ -424,6 +432,7 @@ void DataTransfer::Init() noexcept
 	hri_sercomspi_write_CTRLC_reg(SbcSpiSercom, 0);
 # endif
 #else
+	// Initialize SPI
 	ConfigurePin(APIN_SBC_SPI_MOSI);
 	ConfigurePin(APIN_SBC_SPI_MISO);
 	ConfigurePin(APIN_SBC_SPI_SCK);
@@ -804,7 +813,7 @@ bool DataTransfer::IsReady() noexcept
 		case SpiState::ExchangingData:
 		{
 #if SAME5x
-			Cache::InvalidateAfterDMAReceive(&rxBuffer, sizeof(rxBuffer));
+			Cache::InvalidateAfterDMAReceive(rxBuffer, LinuxTransferBufferSize);
 #endif
 			// (3) Exchanged data
 			if (*reinterpret_cast<uint32_t*>(rxBuffer) == TransferResponse::BadResponse)

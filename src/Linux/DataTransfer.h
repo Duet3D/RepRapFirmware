@@ -103,8 +103,8 @@ private:
 	TransferHeader txHeader;
 	uint32_t rxResponse;
 	uint32_t txResponse;
-	alignas(4) char rxBuffer[LinuxTransferBufferSize];
-	alignas(4) char txBuffer[LinuxTransferBufferSize];
+	char *rxBuffer;				// not allocated until we know we need it
+	char *txBuffer;				// not allocated until we know we need it
 #endif
 
 	size_t rxPointer, txPointer;

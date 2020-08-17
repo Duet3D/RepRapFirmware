@@ -132,18 +132,6 @@ static void spi_dma_disable() noexcept;
 static bool spi_dma_check_rx_complete() noexcept;
 #endif
 
-struct MessageBufferOut
-{
-	MessageHeaderSamToEsp hdr;
-	uint8_t data[MaxDataLength];	// data to send
-};
-
-struct MessageBufferIn
-{
-	MessageHeaderEspToSam hdr;
-	uint8_t data[MaxDataLength];	// data to send
-};
-
 #ifdef DUET_5LC
 
 Uart *SerialWiFiDevice;
@@ -170,8 +158,6 @@ void SERIAL_WIFI_ISR3() noexcept
 
 #endif
 
-static MessageBufferOut bufferOut;
-static MessageBufferIn bufferIn;
 static volatile bool transferPending = false;
 static WiFiInterface *wifiInterface;
 
@@ -223,9 +209,11 @@ static inline void DisableEspInterrupt() noexcept
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullptr), espWaitingTask(nullptr), ftpDataPort(0), closeDataPort(false),
-		requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
-		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
+WiFiInterface::WiFiInterface(Platform& p) noexcept
+	: platform(p), bufferOut(nullptr), bufferIn(nullptr), uploader(nullptr), espWaitingTask(nullptr),
+	  ftpDataPort(0), closeDataPort(false),
+	  requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
+	  espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
 	wifiInterface = this;
 
@@ -294,7 +282,6 @@ void WiFiInterface::Init() noexcept
 		sockets[i]->Init(i);
 	}
 
-	uploader = new WifiFirmwareUploader(SERIAL_WIFI_DEVICE, *this);
 	currentSocket = 0;
 }
 
@@ -454,6 +441,11 @@ void WiFiInterface::Activate() noexcept
 	if (!activated)
 	{
 		activated = true;
+
+		bufferOut = new MessageBufferOut;
+		bufferIn = new MessageBufferIn;
+		uploader = new WifiFirmwareUploader(SERIAL_WIFI_DEVICE, *this);
+
 		if (requestedMode != WiFiState::disabled)
 		{
 			Start();
@@ -1607,7 +1599,7 @@ static void spi_rx_dma_setup(void *buf, uint32_t transferLength) noexcept
 /**
  * \brief Set SPI slave transfer.
  */
-static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept
+void WiFiInterface::spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept
 {
 #if USE_PDC
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
@@ -1618,8 +1610,8 @@ static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexc
 #if USE_DMAC || USE_XDMAC || USE_DMAC_MANAGER
 	spi_dma_disable();					// if we don't do this we get strange crashes on the Duet 3 Mini
 	DisableSpi();
-	spi_rx_dma_setup(&bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
-	spi_tx_dma_setup(&bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
+	spi_rx_dma_setup(bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
+	spi_tx_dma_setup(bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
 #endif
 
 	spi_dma_enable();
@@ -1746,18 +1738,18 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		}
 	}
 
-	bufferOut.hdr.formatVersion = MyFormatVersion;
-	bufferOut.hdr.command = cmd;
-	bufferOut.hdr.socketNumber = socketNum;
-	bufferOut.hdr.flags = flags;
-	bufferOut.hdr.param32 = param32;
-	bufferOut.hdr.dataLength = (uint16_t)dataOutLength;
-	bufferOut.hdr.dataBufferAvailable = (uint16_t)dataInLength;
+	bufferOut->hdr.formatVersion = MyFormatVersion;
+	bufferOut->hdr.command = cmd;
+	bufferOut->hdr.socketNumber = socketNum;
+	bufferOut->hdr.flags = flags;
+	bufferOut->hdr.param32 = param32;
+	bufferOut->hdr.dataLength = (uint16_t)dataOutLength;
+	bufferOut->hdr.dataBufferAvailable = (uint16_t)dataInLength;
 	if (dataOut != nullptr)
 	{
-		memcpy(bufferOut.data, dataOut, dataOutLength);
+		memcpy(bufferOut->data, dataOut, dataOutLength);
 	}
-	bufferIn.hdr.formatVersion = InvalidFormatVersion;
+	bufferIn->hdr.formatVersion = InvalidFormatVersion;
 	espWaitingTask = TaskBase::GetCallerTaskHandle();
 	transferPending = true;
 
@@ -1834,27 +1826,27 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	Cache::InvalidateAfterDMAReceive(&bufferIn, sizeof(bufferIn));
 
 	// Look at the response
-	if (bufferIn.hdr.formatVersion != MyFormatVersion)
+	if (bufferIn->hdr.formatVersion != MyFormatVersion)
 	{
 		if (reprap.Debug(moduleNetwork))
 		{
-			debugPrintf("bad format version %02x\n", bufferIn.hdr.formatVersion);
+			debugPrintf("bad format version %02x\n", bufferIn->hdr.formatVersion);
 		}
 		return ResponseBadReplyFormatVersion;
 	}
 
-	if (   (bufferIn.hdr.state == WiFiState::autoReconnecting || bufferIn.hdr.state == WiFiState::reconnecting)
+	if (   (bufferIn->hdr.state == WiFiState::autoReconnecting || bufferIn->hdr.state == WiFiState::reconnecting)
 		&& currentMode != WiFiState::autoReconnecting && currentMode != WiFiState::reconnecting
 	   )
 	{
 		++reconnectCount;
 	}
 
-	currentMode = bufferIn.hdr.state;
-	const int32_t response = bufferIn.hdr.response;
+	currentMode = bufferIn->hdr.state;
+	const int32_t response = bufferIn->hdr.response;
 	if (response > 0 && dataIn != nullptr)
 	{
-		memcpy(dataIn, bufferIn.data, min<size_t>(dataInLength, (size_t)response));
+		memcpy(dataIn, bufferIn->data, min<size_t>(dataInLength, (size_t)response));
 	}
 
 	if (response < 0 && reprap.Debug(moduleNetwork))

@@ -4607,6 +4607,29 @@ void GCodes::ActivateHeightmap(bool activate) noexcept
 	}
 }
 
+// Check that we are allowed to perform network-related commands
+// Return true if we are; else return false and set 'reply' and 'result' appropriately
+// On entry, 'reply' is empty and 'result' is GCodeResult::ok
+bool GCodes::CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept
+{
+	if (gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+	{
+		return false;							// just ignore the command but report success
+	}
+
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		// Networking is disabled when using the SBC interface, to save RAM
+		reply.copy("Network-related commands are not supported when using an attached Single Board Computer");
+		result = GCodeResult::error;
+		return false;
+	}
+#endif
+
+	return true;
+}
+
 #if HAS_MASS_STORAGE
 
 // Start timing SD card file writing
