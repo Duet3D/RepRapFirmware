@@ -486,7 +486,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		buf->EncodeString(val.sVal, true);
 		break;
 
-#ifdef DUET3
+#if SUPPORT_CAN_EXPANSION
 	case TypeCode::CanExpansionBoardDetails:
 		ReportExpansionBoardDetail(buf, val);
 		break;
@@ -984,7 +984,7 @@ void ObjectModel::ReportBitmap64Long(OutputBuffer *buf, const ExpressionValue& v
 	buf->cat(']');
 }
 
-#ifdef DUET3
+#if SUPPORT_CAN_EXPANSION
 
 // Separate functions to avoid the string being allocated on the stack frame of a recursive function
 void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, const ExpressionValue& val) noexcept

@@ -40,7 +40,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
 
-#define SUPPORT_CAN_EXPANSION	0
+#define SUPPORT_CAN_EXPANSION	1
 #define SUPPORT_DOTSTAR_LED		1
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
@@ -64,6 +64,11 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 
 constexpr size_t NumDirectDrivers = 8;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 8;				// The maximum number of smart drivers
+
+#if SUPPORT_CAN_EXPANSION
+constexpr size_t MaxCanDrivers = 7;
+constexpr unsigned int MaxCanBoards = 4;
+#endif
 
 constexpr size_t MaxSensors = 32;
 

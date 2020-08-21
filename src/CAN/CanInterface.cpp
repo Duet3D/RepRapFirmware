@@ -20,7 +20,9 @@
 #include <TaskPriorities.h>
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
-#include <Hardware/CanDriver.h>
+
+#define SUPPORT_CAN		1			// needed by the SAME5x version of CanDriver.h
+#include <CanDriver.h>
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
@@ -53,18 +55,36 @@ constexpr float DefaultJumpWidth = 0.25;
 
 //#define CAN_DEBUG
 
-#ifdef USE_CAN0
+#if SAME70
+# ifdef USE_CAN0
 
 Mcan* const MCAN_MODULE = MCAN0;
 constexpr IRQn MCanIRQn = MCAN0_INT0_IRQn;
 #define MCAN_INT0_Handler	MCAN0_INT0_Handler
 
-#else
+# else
 
 Mcan* const MCAN_MODULE = MCAN1;
 constexpr IRQn MCanIRQn = MCAN1_INT0_IRQn;
 #define MCAN_INT0_Handler	MCAN1_INT0_Handler
 
+# endif
+#elif SAME5x
+# ifdef USE_CAN0
+
+Can* const MCAN_MODULE = CAN0;
+constexpr IRQn MCanIRQn = CAN0_INT0_IRQn;
+#define MCAN_INT0_Handler	CAN0_INT0_Handler
+
+# else
+
+Can* const MCAN_MODULE = CAN1;
+constexpr IRQn MCanIRQn = CAN1_INT0_IRQn;
+#define MCAN_INT0_Handler	CAN1_INT0_Handler
+
+# endif
+#else
+# error Unsupported MCU
 #endif
 
 static mcan_module mcan_instance;
@@ -227,14 +247,21 @@ void CanInterface::Init() noexcept
 	CanMessageBuffer::Init(NumCanBuffers);
 	pendingBuffers = nullptr;
 
-#ifdef USE_CAN0
+#if SAME70
+# ifdef USE_CAN0
 	ConfigurePin(APIN_CAN0_TX);
 	ConfigurePin(APIN_CAN0_RX);
-#else
+# else
 	ConfigurePin(APIN_CAN1_TX);
 	ConfigurePin(APIN_CAN1_RX);
-#endif
+# endif
 	pmc_enable_upll_clock();			// configure_mcan sets up PCLK5 to be the UPLL divided by something, so make sure the UPLL is running
+#elif SAME5x
+	qq;
+#else
+# erorr Unsupported MCU
+#endif
+
 	configure_mcan();
 
 	CanMotion::Init();

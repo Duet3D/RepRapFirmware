@@ -258,7 +258,7 @@ private:
 	__attribute__ ((noinline)) static void ReportBitmap1632Long(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportBitmap64Long(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 
-#ifdef DUET3
+#if SUPPORT_CAN_EXPANSION
 	__attribute__ ((noinline)) static void ReportExpansionBoardDetail(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static ExpressionValue GetExpansionBoardDetailLength(const ExpressionValue& val) noexcept;
 #endif
