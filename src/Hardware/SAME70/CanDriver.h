@@ -634,7 +634,7 @@ struct mcan_config {
  * \param[out] config  Pointer to configuration struct to initialize to
  *                     default values
  */
-static inline void mcan_get_config_defaults(struct mcan_config *const config)
+static inline void mcan_get_config_defaults(struct mcan_config *const config) noexcept
 {
 	/* Sanity check arguments */
 	Assert(config);
@@ -670,20 +670,27 @@ static inline void mcan_get_config_defaults(struct mcan_config *const config)
 	config->tx_event_fifo_watermark = 0;
 }
 
-void mcan_init(struct mcan_module *const module_inst, Mcan *hw, struct mcan_config *config);
-void mcan_start(struct mcan_module *const module_inst);
-void mcan_stop(struct mcan_module *const module_inst);
-void mcan_enable_fd_mode(struct mcan_module *const module_inst);
-void mcan_disable_fd_mode(struct mcan_module *const module_inst);
-void mcan_enable_restricted_operation_mode(struct mcan_module *const module_inst);
-void mcan_disable_restricted_operation_mode(struct mcan_module *const module_inst);
+void mcan_init(mcan_module *const module_inst, Mcan *hw, mcan_config *config) noexcept;
+void mcan_start(mcan_module *const module_inst) noexcept;
+void mcan_stop(mcan_module *const module_inst) noexcept;
+void mcan_enable_fd_mode(mcan_module *const module_inst) noexcept;
+void mcan_disable_fd_mode(mcan_module *const module_inst) noexcept;
+void mcan_enable_restricted_operation_mode(mcan_module *const module_inst) noexcept;
+void mcan_disable_restricted_operation_mode(mcan_module *const module_inst) noexcept;
 
-void mcan_enable_bus_monitor_mode(struct mcan_module *const module_inst);
-void mcan_disable_bus_monitor_mode(struct mcan_module *const module_inst);
-void mcan_enable_sleep_mode(struct mcan_module *const module_inst);
-void mcan_disable_sleep_mode(struct mcan_module *const module_inst);
-void mcan_enable_test_mode(struct mcan_module *const module_inst);
-void mcan_disable_test_mode(struct mcan_module *const module_inst);
+void mcan_enable_bus_monitor_mode(mcan_module *const module_inst) noexcept;
+void mcan_disable_bus_monitor_mode(mcan_module *const module_inst) noexcept;
+void mcan_enable_sleep_mode(mcan_module *const module_inst) noexcept;
+void mcan_disable_sleep_mode(mcan_module *const module_inst) noexcept;
+void mcan_enable_test_mode(mcan_module *const module_inst) noexcept;
+void mcan_disable_test_mode(mcan_module *const module_inst) noexcept;
+
+// Send extended CAN message in FD mode using a dedicated transmit buffer. The transmit buffer must already be free.
+status_code mcan_fd_send_ext_message_no_wait(mcan_module *const module_inst, uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, bool bitRateSwitch) noexcept;
+
+// Wait for a specified buffer to become free. If it's still not free after the timeout, cancel the pending transmission.
+// Return true if we cancelled the pending transmission.
+bool WaitForTxBufferFree(mcan_module *const module_inst, uint32_t whichTxBuffer, uint32_t maxWait) noexcept;
 
 /**
  * \brief Can read timestamp count value.
@@ -692,7 +699,7 @@ void mcan_disable_test_mode(struct mcan_module *const module_inst);
  *
  * \return Timestamp count value.
  */
-static inline uint16_t mcan_read_timestamp_count_value(struct mcan_module *const module_inst)
+static inline uint16_t mcan_read_timestamp_count_value(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_TSCV;
 }
@@ -704,7 +711,7 @@ static inline uint16_t mcan_read_timestamp_count_value(struct mcan_module *const
  *
  * \return Timeout count value.
  */
-static inline uint16_t mcan_read_timeout_count_value(struct mcan_module *const module_inst)
+static inline uint16_t mcan_read_timeout_count_value(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_TOCV;
 }
@@ -716,7 +723,7 @@ static inline uint16_t mcan_read_timeout_count_value(struct mcan_module *const m
  *
  * \return Error count value.
  */
-static inline uint32_t mcan_read_error_count(struct mcan_module *const module_inst)
+static inline uint32_t mcan_read_error_count(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_ECR;
 }
@@ -728,7 +735,7 @@ static inline uint32_t mcan_read_error_count(struct mcan_module *const module_in
  *
  * \return protocol status value.
  */
-static inline uint32_t mcan_read_protocal_status(struct mcan_module *const module_inst)
+static inline uint32_t mcan_read_protocal_status(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_PSR;
 }
@@ -747,7 +754,7 @@ static inline uint32_t mcan_read_protocal_status(struct mcan_module *const modul
  *
  * \return High priority message status value.
  */
-static inline uint32_t mcan_read_high_priority_message_status(struct mcan_module *const module_inst)
+static inline uint32_t mcan_read_high_priority_message_status(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_HPMS;
 }
@@ -763,7 +770,7 @@ static inline uint32_t mcan_read_high_priority_message_status(struct mcan_module
  *  \retval true Rx Buffer updated from new message.
  *  \retval false Rx Buffer not updated.
  */
-static inline bool mcan_rx_get_buffer_status(struct mcan_module *const module_inst, uint32_t index)
+static inline bool mcan_rx_get_buffer_status(mcan_module *const module_inst, uint32_t index) noexcept
 {
 	if (index < 32) {
 		if (module_inst->hw->MCAN_NDAT1 & (1 << index)) {
@@ -788,7 +795,7 @@ static inline bool mcan_rx_get_buffer_status(struct mcan_module *const module_in
  * \param[in] index  Index offset in Rx buffer
  *
  */
-static inline void mcan_rx_clear_buffer_status(struct mcan_module *const module_inst, uint32_t index)
+static inline void mcan_rx_clear_buffer_status(mcan_module *const module_inst, uint32_t index) noexcept
 {
 	if (index < 32) {
 		module_inst->hw->MCAN_NDAT1 = (1 << index);
@@ -806,7 +813,7 @@ static inline void mcan_rx_clear_buffer_status(struct mcan_module *const module_
  *
  * \return Rx FIFO status value.
  */
-static inline uint32_t mcan_rx_get_fifo_status(struct mcan_module *const module_inst, bool fifo_number)
+static inline uint32_t mcan_rx_get_fifo_status(mcan_module *const module_inst, bool fifo_number) noexcept
 {
 	if (!fifo_number) {
 		return module_inst->hw->MCAN_RXF0S;
@@ -822,7 +829,7 @@ static inline uint32_t mcan_rx_get_fifo_status(struct mcan_module *const module_
  * \param[in] fifo_number  Rx FIFO 0 or 1
  * \param[in] index  Index offset in FIFO
  */
-static inline void mcan_rx_fifo_acknowledge(struct mcan_module *const module_inst, bool fifo_number, uint32_t index)
+static inline void mcan_rx_fifo_acknowledge(mcan_module *const module_inst, bool fifo_number, uint32_t index) noexcept
 {
 	if (!fifo_number) {
 		module_inst->hw->MCAN_RXF0A = MCAN_RXF0A_F0AI(index);
@@ -842,7 +849,7 @@ static inline void mcan_rx_fifo_acknowledge(struct mcan_module *const module_ins
  *
  * \param[out] sd_filter  Pointer to standard filter element struct to initialize to default values
  */
-static inline void mcan_get_standard_message_filter_element_default(struct mcan_standard_message_filter_element *sd_filter)
+static inline void mcan_get_standard_message_filter_element_default(mcan_standard_message_filter_element *sd_filter) noexcept
 {
 	sd_filter->S0.reg = MCAN_STANDARD_MESSAGE_FILTER_ELEMENT_S0_SFID2_Msk |
 			MCAN_STANDARD_MESSAGE_FILTER_ELEMENT_S0_SFID1(0) |
@@ -851,7 +858,7 @@ static inline void mcan_get_standard_message_filter_element_default(struct mcan_
 			MCAN_STANDARD_MESSAGE_FILTER_ELEMENT_S0_SFT_CLASSIC;
 }
 
-enum status_code mcan_set_rx_standard_filter(struct mcan_module *const module_inst, struct mcan_standard_message_filter_element *sd_filter, uint32_t index);
+status_code mcan_set_rx_standard_filter(mcan_module *const module_inst, mcan_standard_message_filter_element *sd_filter, uint32_t index) noexcept;
 
 /**
  * \brief Get the extended message filter default value.
@@ -864,7 +871,7 @@ enum status_code mcan_set_rx_standard_filter(struct mcan_module *const module_in
  *
  * \param[out] et_filter  Pointer to extended filter element struct to initialize to default values
  */
-static inline void mcan_get_extended_message_filter_element_default(struct mcan_extended_message_filter_element *et_filter)
+static inline void mcan_get_extended_message_filter_element_default(mcan_extended_message_filter_element *et_filter) noexcept
 {
 	et_filter->F0.reg = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFID1(0) |
 			MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC(
@@ -873,13 +880,13 @@ static inline void mcan_get_extended_message_filter_element_default(struct mcan_
 			MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F1_EFT_CLASSIC;
 }
 
-enum status_code mcan_set_rx_extended_filter(struct mcan_module *const module_inst, struct mcan_extended_message_filter_element *et_filter, uint32_t index);
+status_code mcan_set_rx_extended_filter(mcan_module *const module_inst, struct mcan_extended_message_filter_element *et_filter, uint32_t index) noexcept;
 
-enum status_code mcan_get_rx_buffer_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index);
+status_code mcan_get_rx_buffer_element(mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index) noexcept;
 
-enum status_code mcan_get_rx_fifo_0_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index);
+status_code mcan_get_rx_fifo_0_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index) noexcept;
 
-enum status_code mcan_get_rx_fifo_1_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index);
+status_code mcan_get_rx_fifo_1_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index) noexcept;
 
 /**
  * \brief Get Tx FIFO/Queue status.
@@ -888,7 +895,7 @@ enum status_code mcan_get_rx_fifo_1_element(struct mcan_module *const module_ins
  *
  * \return Tx FIFO/Queue status value.
  */
-static inline uint32_t mcan_tx_get_fifo_queue_status(struct mcan_module *const module_inst)
+static inline uint32_t mcan_tx_get_fifo_queue_status(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_TXFQS;
 }
@@ -900,7 +907,7 @@ static inline uint32_t mcan_tx_get_fifo_queue_status(struct mcan_module *const m
  *
  * \return Bit mask of Tx buffer request pending status value.
  */
-static inline uint32_t mcan_tx_get_pending_status(struct mcan_module *const module_inst)
+static inline uint32_t mcan_tx_get_pending_status(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_TXBRP;
 }
@@ -916,7 +923,7 @@ static inline uint32_t mcan_tx_get_pending_status(struct mcan_module *const modu
  *  \retval STATUS_OK   Set the transfer request.
  *  \retval STATUS_ERR_BUSY The module is in configuration.
  */
-static inline enum status_code mcan_tx_transfer_request(struct mcan_module *const module_inst, uint32_t trig_mask)
+static inline enum status_code mcan_tx_transfer_request(mcan_module *const module_inst, uint32_t trig_mask) noexcept
 {
 	if (module_inst->hw->MCAN_CCCR & MCAN_CCCR_CCE) {
 		return ERR_BUSY;
@@ -936,7 +943,7 @@ static inline enum status_code mcan_tx_transfer_request(struct mcan_module *cons
  *  \retval STATUS_OK   Set the transfer request.
  *  \retval STATUS_BUSY The module is in configuration.
  */
-static inline enum status_code mcan_tx_cancel_request(struct mcan_module *const module_inst, uint32_t trig_mask)
+static inline enum status_code mcan_tx_cancel_request(mcan_module *const module_inst, uint32_t trig_mask) noexcept
 {
 	if (module_inst->hw->MCAN_CCCR & MCAN_CCCR_CCE) {
 		return STATUS_ERR_BUSY;
@@ -952,7 +959,7 @@ static inline enum status_code mcan_tx_cancel_request(struct mcan_module *const 
  *
  * \return Bit mask of Tx transmission status value.
  */
-static inline uint32_t mcan_tx_get_transmission_status(struct mcan_module *const module_inst)
+static inline uint32_t mcan_tx_get_transmission_status(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_TXBTO;
 }
@@ -964,7 +971,7 @@ static inline uint32_t mcan_tx_get_transmission_status(struct mcan_module *const
  *
  * \return Bit mask of Tx cancellation status value.
  */
-static inline uint32_t mcan_tx_get_cancellation_status(struct mcan_module *const module_inst)
+static inline uint32_t mcan_tx_get_cancellation_status(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_TXBCF;
 }
@@ -976,7 +983,7 @@ static inline uint32_t mcan_tx_get_cancellation_status(struct mcan_module *const
  *
  * \return Tx event FIFO status value.
  */
-static inline uint32_t mcan_tx_get_event_fifo_status(struct mcan_module *const module_inst)
+static inline uint32_t mcan_tx_get_event_fifo_status(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_TXEFS;
 }
@@ -987,7 +994,7 @@ static inline uint32_t mcan_tx_get_event_fifo_status(struct mcan_module *const m
  * \param[in] module_inst  Pointer to the MCAN software instance struct
  * \param[in] index  Index for the transfer FIFO
  */
-static inline void mcan_tx_event_fifo_acknowledge(struct mcan_module *const module_inst, uint32_t index)
+static inline void mcan_tx_event_fifo_acknowledge(mcan_module *const module_inst, uint32_t index) noexcept
 {
 	module_inst->hw->MCAN_TXEFA = MCAN_TXEFA_EFAI(index);
 }
@@ -1005,20 +1012,16 @@ static inline void mcan_tx_event_fifo_acknowledge(struct mcan_module *const modu
  *
  * \param[out] tx_element  Pointer to transfer element struct to initialize to default values
  */
-static inline void mcan_get_tx_buffer_element_defaults(struct mcan_tx_element *tx_element)
+static inline void mcan_get_tx_buffer_element_defaults(mcan_tx_element *tx_element) noexcept
 {
 	tx_element->T0.reg = 0;
 	tx_element->T1.reg = MCAN_TX_ELEMENT_T1_EFC |
 			MCAN_TX_ELEMENT_T1_DLC(MCAN_TX_ELEMENT_T1_DLC_DATA8_Val);
 }
 
-enum status_code mcan_set_tx_buffer_element(
-		struct mcan_module *const module_inst,
-		struct mcan_tx_element *tx_element, uint32_t index);
+status_code mcan_set_tx_buffer_element(mcan_module *const module_inst, mcan_tx_element *tx_element, uint32_t index) noexcept;
 
-enum status_code mcan_get_tx_event_fifo_element(
-		struct mcan_module *const module_inst,
-		struct mcan_tx_event_element *tx_event_element, uint32_t index);
+status_code mcan_get_tx_event_fifo_element(mcan_module *const module_inst, mcan_tx_event_element *tx_event_element, uint32_t index) noexcept;
 
 /**
  * \brief Can module interrupt source.
@@ -1094,7 +1097,7 @@ enum mcan_interrupt_source {
  * \param[in] module_inst  Pointer to the MCAN software instance struct
  * \param[in] source  Interrupt source type
  */
-static inline void mcan_enable_interrupt(struct mcan_module *const module_inst, const enum mcan_interrupt_source source)
+static inline void mcan_enable_interrupt(mcan_module *const module_inst, const mcan_interrupt_source source) noexcept
 {
 	module_inst->hw->MCAN_IE |= source;
 }
@@ -1105,7 +1108,7 @@ static inline void mcan_enable_interrupt(struct mcan_module *const module_inst, 
  * \param[in] module_inst  Pointer to the MCAN software instance struct
  * \param[in] source  Interrupt source type
  */
-static inline void mcan_disable_interrupt(struct mcan_module *const module_inst, const enum mcan_interrupt_source source)
+static inline void mcan_disable_interrupt(mcan_module *const module_inst, const mcan_interrupt_source source) noexcept
 {
 	module_inst->hw->MCAN_IE &= ~source;
 }
@@ -1115,7 +1118,7 @@ static inline void mcan_disable_interrupt(struct mcan_module *const module_inst,
  *
  * \param[in] module_inst  Pointer to the MCAN software instance struct
  */
-static inline uint32_t mcan_read_interrupt_status(struct mcan_module *const module_inst)
+static inline uint32_t mcan_read_interrupt_status(mcan_module *const module_inst) noexcept
 {
 	return module_inst->hw->MCAN_IR;
 }
@@ -1128,7 +1131,7 @@ static inline uint32_t mcan_read_interrupt_status(struct mcan_module *const modu
  *
  * \return Bit mask of interrupt status value.
  */
-static inline void mcan_clear_interrupt_status(struct mcan_module *const module_inst, const enum mcan_interrupt_source source)
+static inline void mcan_clear_interrupt_status(mcan_module *const module_inst, const mcan_interrupt_source source) noexcept
 {
 	module_inst->hw->MCAN_IR = source;
 }
