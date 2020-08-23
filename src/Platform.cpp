@@ -1929,7 +1929,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	}
 
 	// Show the current error codes
-	MessageF(mtype, "Error status: %" PRIx32 "\n", errorCodeBits);
+	MessageF(mtype, "Error status: 0x%" PRIx32 "\n", errorCodeBits);
 
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
