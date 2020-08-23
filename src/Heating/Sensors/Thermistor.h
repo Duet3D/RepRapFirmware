@@ -39,6 +39,7 @@ private:
 	static constexpr unsigned int AdcOversampleBits = 2;							// we use 2-bit oversampling
 
 	void CalcDerivedParameters() noexcept;											// calculate shA and shB
+	int32_t GetRawReading(bool& valid) const noexcept;								// get the ADC reading
 
 	// The following are configurable parameters
 	float r25, beta, shC, seriesR;													// parameters declared in the M305 command

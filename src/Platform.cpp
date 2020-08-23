@@ -2218,6 +2218,26 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #endif
 		break;
 
+	case (unsigned int)DiagnosticTestType::AccessMemory:
+		{
+			gb.MustSee('A');
+			const uint32_t address = gb.GetUIValue();
+			uint32_t val;
+			bool dummy;
+			deliberateError = true;								// in case the memory access causes a fault
+			if (gb.TryGetUIValue('V', val, dummy))
+			{
+				*reinterpret_cast<uint32_t*>(address) = val;
+				delayMicroseconds(10);							// allow some time for a fault to be raised
+			}
+			else
+			{
+				reply.printf("Address %08" PRIx32 " value %08" PRIx32, address, *reinterpret_cast<const uint32_t*>(address));
+			}
+			deliberateError = false;
+		}
+		break;
+
 	case (unsigned int)DiagnosticTestType::PrintMoves:
 		DDA::PrintMoves();
 		break;

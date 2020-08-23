@@ -182,7 +182,8 @@ enum class DiagnosticTestType : unsigned int
 	TestSerialBlock = 1003,			// test what happens when we write a blocking message via debugPrintf()
 	DivideByZero = 1004,			// do an integer divide by zero to test exception handling
 	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
-	BusFault = 1006					// generate a bus fault
+	BusFault = 1006,				// generate a bus fault
+	AccessMemory = 1007				// read or write  memory
 };
 
 /***************************************************************************************************************/

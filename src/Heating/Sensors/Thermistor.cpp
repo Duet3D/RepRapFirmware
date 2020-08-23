@@ -30,6 +30,22 @@ Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept
 	CalcDerivedParameters();
 }
 
+// Get the ADC reading
+int32_t Thermistor::GetRawReading(bool& valid) const noexcept
+{
+	if (adcFilterChannel >= 0)
+	{
+		// Filtered ADC channel
+		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
+		valid = tempFilter.IsValid();
+		return tempFilter.GetSum()/(tempFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
+	}
+
+	// Raw ADC channel
+	valid = true;
+	return (uint32_t)port.ReadAnalog() << Thermistor::AdcOversampleBits;
+}
+
 // Configure the temperature sensor
 GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
@@ -59,12 +75,78 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 #if !HAS_VREF_MONITOR || defined(DUET3)
 	if (gb.Seen('L'))
 	{
-		adcLowOffset = (int8_t)constrain<int>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		const int lVal = gb.GetIValue();
+# if HAS_VREF_MONITOR
+		if (lVal == 999)
+		{
+			bool valid;
+			const int32_t val = GetRawReading(valid);
+			if (valid)
+			{
+				const int32_t computedCorrection =
+								(val - (int32_t)(reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum()/(ThermistorAveragingFilter::NumAveraged() >> Thermistor::AdcOversampleBits)))
+									/(1 << (AdcBits + Thermistor::AdcOversampleBits - 13));
+				if (computedCorrection >= -127 && computedCorrection <= 127)
+				{
+					adcLowOffset = (int8_t)computedCorrection;
+					reply.copy("Measured L correction for port \"");
+					port.AppendPinName(reply);
+					reply.catf("\" is %d", adcLowOffset);
+					// TODO store the value in NVM
+				}
+				else
+				{
+					reply.copy("Computed correction is not valid. Check that you have placed a jumper across the thermistor input.");
+				}
+			}
+			else
+			{
+				reply.copy("Temperature reading is not valid");
+			}
+		}
+		else
+# endif
+		{
+			adcLowOffset = (int8_t)constrain<int>(lVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		}
 		changed = true;
 	}
 	if (gb.Seen('H'))
 	{
-		adcHighOffset = (int8_t)constrain<int>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		const int hVal = gb.GetIValue();
+# if HAS_VREF_MONITOR
+		if (hVal == 999)
+		{
+			bool valid;
+			const int32_t val = GetRawReading(valid);
+			if (valid)
+			{
+				const int32_t computedCorrection =
+								(val - (int32_t)(reprap.GetPlatform().GetAdcFilter(VrefFilterIndex).GetSum()/(ThermistorAveragingFilter::NumAveraged() >> Thermistor::AdcOversampleBits)))
+									/(1 << (AdcBits + Thermistor::AdcOversampleBits - 13));
+				if (computedCorrection >= -127 && computedCorrection <= 127)
+				{
+					adcHighOffset = (int8_t)computedCorrection;
+					reply.copy("Measured H correction for port \"");
+					port.AppendPinName(reply);
+					reply.catf("\" is %d", adcHighOffset);
+					// TODO store the value in NVM
+				}
+				else
+				{
+					reply.copy("Computed correction is not valid. Check that you have disconnected the thermistor.");
+				}
+			}
+			else
+			{
+				reply.copy("Temperature reading is not valid");
+			}
+		}
+		else
+# endif
+		{
+			adcHighOffset = (int8_t)constrain<int>(hVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		}
 		changed = true;
 	}
 #endif
@@ -94,6 +176,13 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 #if !HAS_VREF_MONITOR || defined(DUET3)
 		reply.catf(" L:%d H:%d", adcLowOffset, adcHighOffset);
 #endif
+		if (reprap.Debug(moduleHeat) && adcFilterChannel >= 0)
+		{
+			reply.catf(", Vref %" PRIu32 " Vssa %" PRIu32 " Th %" PRIu32,
+				reprap.GetPlatform().GetAdcFilter(VrefFilterIndex).GetSum(),
+				reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum(),
+				reprap.GetPlatform().GetAdcFilter(adcFilterChannel).GetSum());
+		}
 	}
 
 	return GCodeResult::ok;
@@ -102,19 +191,8 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 // Get the temperature
 void Thermistor::Poll() noexcept
 {
-	int32_t averagedTempReading;
 	bool tempFilterValid;
-	if (adcFilterChannel >= 0)
-	{
-		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
-		averagedTempReading = tempFilter.GetSum()/(tempFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		tempFilterValid = tempFilter.IsValid();
-	}
-	else
-	{
-		averagedTempReading = (uint32_t)port.ReadAnalog() << Thermistor::AdcOversampleBits;
-		tempFilterValid = true;
-	}
+	const int32_t averagedTempReading = GetRawReading(tempFilterValid);
 
 #if HAS_VREF_MONITOR
 	// Use the actual VSSA and VREF values read by the ADC
@@ -128,11 +206,11 @@ void Thermistor::Poll() noexcept
 		// Version 1.01 and later boards have the series resistors connected to VrefMon.
 		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits - 12 + Thermistor::AdcOversampleBits - 1)));
+		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
 		const int32_t averagedVrefReading = ((reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
 											? ((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0)) + rawAveragedVssaReading
 												: rawAveragedVrefReading
-											) + (adcHighOffset * (1 << (AdcBits - 12 + Thermistor::AdcOversampleBits - 1)));
+											) + (adcHighOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
 # else
 		const int32_t averagedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t averagedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
