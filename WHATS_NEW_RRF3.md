@@ -19,16 +19,18 @@ New features/changed behaviour:
 - Added move.workplaceNumber to the object model. This is intended to repace move.workspaceNumber, but is 0-based instead of 1-based.
 - Added L (calibration factor) parameter to laser filament monitor configuration
 - Increased the number of stack words displayed in the software reset data. The number of wear-levelling slots stored is reduced from 4 to 3.
+- Added M584 R parameter to indicate whether newly created axes are continuous rotation axes or not
 - [Duet 3] Added M999 S# H999 for open-circuit thermistor input calibration, and M999 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory.
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
 - [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolstep threshold
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
 - [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
 
-Object model and expresison evaluation changes:
+Object model and expression evaluation changes:
 - Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Changed to 1 decimal place.
 - Support comparing a DateTime with a string
 - Support DateTime - DateTime, dateTime + int, DateTime - int
+- Support T{expression} commands
 - Added random(nn) function
 
 Bug fixes:
