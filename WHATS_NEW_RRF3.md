@@ -25,6 +25,12 @@ New features/changed behaviour:
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
 - [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
 
+Object model and expresison evaluation changes:
+- Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Changed to 1 decimal place.
+- Support comparing a DateTime with a string
+- Support DateTime - DateTime, dateTime + int, DateTime - int
+- Added random(nn) function
+
 Bug fixes:
 - Fixed issue with G29 S1 on Duet 3 with attached SBC causing the print to fail if any if the probe points had been unreachable when the height map was probed
 - Fixed a buffer overflow when the number of filaments reported by PrusaSlic3r exceeds the maximum number of supported extruders
@@ -35,7 +41,6 @@ Bug fixes:
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
 - [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
 - [Duet 3] M915 with just P and/or axis parameters did not report the coolstep threshold (T parameter) correctly
-- Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Changed to 1 decimal place.
 
 RepRapFirmware 3.1.1
 ====================
