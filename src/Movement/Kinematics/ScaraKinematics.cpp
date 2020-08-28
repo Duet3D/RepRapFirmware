@@ -482,7 +482,7 @@ void ScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 // Return true if the specified axis is a continuous rotation axis
 bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 {
-	return axis < 2 && supportsContinuousRotation[axis];
+	return (axis < 2 && supportsContinuousRotation[axis]) || Kinematics::IsContinuousRotationAxis(axis);
 }
 
 // Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.

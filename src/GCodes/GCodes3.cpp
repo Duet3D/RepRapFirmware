@@ -533,6 +533,8 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	const size_t originalVisibleAxes = numVisibleAxes;
 	const char *lettersToTry = AllowedAxisLetters;
 	char c;
+
+	const bool newAxesAreContinuousRotation = (gb.Seen('R') && gb.GetIValue() > 0);
 	while ((c = *lettersToTry) != 0)
 	{
 		if (gb.Seen(c))
@@ -555,6 +557,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 				{
 					// We are creating a new axis
 					axisLetters[drive] = c;								// assign the drive to this drive letter
+					if (newAxesAreContinuousRotation)
+					{
+						continuousRotationAxes.SetBit(drive);
+					}
 					++numTotalAxes;
 					if (numTotalAxes + numExtruders > MaxAxesPlusExtruders)
 					{
@@ -620,6 +626,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		{
 			reply.cat(' ');
 			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
+			if (reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
+			{
+				reply.cat('r');
+			}
 			char c = axisLetters[drive];
 			for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 			{

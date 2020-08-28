@@ -4422,6 +4422,12 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 		seen = true;
 		toolNum = gb.GetCommandNumber();
 	}
+	else if (gb.Seen('T'))
+	{
+		// We handle "T{expression}" as if it's "T "{expression}, also DSF may pass a T{expression} command in this way
+		seen = true;
+		toolNum = gb.GetIValue();
+	}
 	else if (gb.Seen('R'))
 	{
 		const unsigned int rpNumber = gb.GetIValue();

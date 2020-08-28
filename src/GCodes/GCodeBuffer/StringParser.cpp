@@ -705,36 +705,46 @@ void StringParser::DecodeCommand() noexcept
 		commandLetter = cl;
 		hasCommandNumber = false;
 		commandNumber = -1;
-		parameterStart = commandStart + 1;
-		const bool negative = (gb.buffer[parameterStart] == '-');
-		if (negative)
+		if (cl == 'T' && gb.buffer[commandStart + 1] == '{')
 		{
-			++parameterStart;
+			// It's a T command with an expression for the tool number. This will be treated as if it's "T T{...}.
+			commandLetter = cl;
+			hasCommandNumber = false;
+			parameterStart = commandStart; 			// so that 'Seen('T')' will return true
 		}
-		if (isdigit(gb.buffer[parameterStart]))
+		else
 		{
-			hasCommandNumber = true;
-			// Read the number after the command letter
-			commandNumber = 0;
-			do
-			{
-				commandNumber = (10 * commandNumber) + (gb.buffer[parameterStart] - '0');
-				++parameterStart;
-			}
-			while (isdigit(gb.buffer[parameterStart]));
+			parameterStart = commandStart + 1;
+			const bool negative = (gb.buffer[parameterStart] == '-');
 			if (negative)
 			{
-				commandNumber = -commandNumber;
-			}
-
-			// Read the fractional digit, if any
-			if (gb.buffer[parameterStart] == '.')
-			{
 				++parameterStart;
-				if (isdigit(gb.buffer[parameterStart]))
+			}
+			if (isdigit(gb.buffer[parameterStart]))
+			{
+				hasCommandNumber = true;
+				// Read the number after the command letter
+				commandNumber = 0;
+				do
 				{
-					commandFraction = gb.buffer[parameterStart] - '0';
+					commandNumber = (10 * commandNumber) + (gb.buffer[parameterStart] - '0');
 					++parameterStart;
+				}
+				while (isdigit(gb.buffer[parameterStart]));
+				if (negative)
+				{
+					commandNumber = -commandNumber;
+				}
+
+				// Read the fractional digit, if any
+				if (gb.buffer[parameterStart] == '.')
+				{
+					++parameterStart;
+					if (isdigit(gb.buffer[parameterStart]))
+					{
+						commandFraction = gb.buffer[parameterStart] - '0';
+						++parameterStart;
+					}
 				}
 			}
 		}

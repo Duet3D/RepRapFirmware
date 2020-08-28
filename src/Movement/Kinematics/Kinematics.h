@@ -183,7 +183,7 @@ public:
 	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept = 0;
 
 	// Return true if the specified axis is a continuous rotation axis
-	virtual bool IsContinuousRotationAxis(size_t axis) const noexcept { return false; }
+	virtual bool IsContinuousRotationAxis(size_t axis) const noexcept;
 
 	// Return a bitmap of the motors that cause movement of a particular axis or tower.
 	// This is used to determine which motors we need to enable to move a particular axis, and which motors to monitor for stall detect homing.
