@@ -74,6 +74,7 @@ private:
 	float MeasuredSensitivity() const noexcept;
 
 	// Configuration parameters
+	float calibrationFactor;
 	float minMovementAllowed, maxMovementAllowed;
 	float minimumExtrusionCheckLength;
 	bool comparisonEnabled;

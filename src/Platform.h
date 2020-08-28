@@ -62,6 +62,7 @@ constexpr bool FORWARDS = true;
 constexpr bool BACKWARDS = !FORWARDS;
 
 // Define the number of ADC filters and the indices of the extra ones
+// Note, the thermistor code assumes that the first N filters are used by the TEMP0 to TEMP(N-1) thermistor inputs, where N = NumThermistorInputs
 #if HAS_VREF_MONITOR
 constexpr size_t VrefFilterIndex = NumThermistorInputs;
 constexpr size_t VssaFilterIndex = NumThermistorInputs + 1;

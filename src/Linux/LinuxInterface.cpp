@@ -18,6 +18,8 @@
 #include "Tools/Filament.h"
 #include "RepRap.h"
 #include "RepRapFirmware.h"
+#include <Hardware/SoftwareReset.h>
+#include <Hardware/ExceptionHandlers.h>
 #include <Cache.h>
 
 Mutex LinuxInterface::gcodeReplyMutex;
@@ -76,7 +78,7 @@ void LinuxInterface::Spin() noexcept
 
 				// Reset the controller
 				case LinuxRequest::Reset:
-					reprap.SoftwareReset((uint16_t)SoftwareResetReason::user);
+					SoftwareReset((uint16_t)SoftwareResetReason::user);
 					return;
 
 				// Perform a G/M/T-code

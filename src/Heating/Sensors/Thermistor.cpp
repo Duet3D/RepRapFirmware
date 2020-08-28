@@ -11,6 +11,11 @@
 #include "RepRap.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#ifdef DUET3
+# include <GCodes/GCodes.h>
+# include <Hardware/NonVolatileMemory.h>
+#endif
+
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3
 //
@@ -54,6 +59,22 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 		return GCodeResult::error;
 	}
 
+	if (changed)
+	{
+		// We changed the port, so set up the ADC filter
+		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
+		if (adcFilterChannel >= 0)
+		{
+			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
+#ifdef DUET3
+			// Default the H and L parameters to the values from nonvolatile memory
+			NonVolatileMemory mem;
+			adcLowOffset = mem.GetThermistorLowCalibration(adcFilterChannel);
+			adcHighOffset = mem.GetThermistorHighCalibration(adcFilterChannel);
+#endif
+		}
+	}
+
 	gb.TryGetFValue('R', seriesR, changed);
 	if (!isPT1000)
 	{
@@ -92,16 +113,25 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 					reply.copy("Measured L correction for port \"");
 					port.AppendPinName(reply);
 					reply.catf("\" is %d", adcLowOffset);
-					// TODO store the value in NVM
+
+					// Store the value in NVM
+					if (!reprap.GetGCodes().IsRunningConfigFile())
+					{
+						NonVolatileMemory mem;
+						mem.SetThermistorLowCalibration(adcFilterChannel, adcLowOffset);
+						mem.EnsureWritten();
+					}
 				}
 				else
 				{
 					reply.copy("Computed correction is not valid. Check that you have placed a jumper across the thermistor input.");
+					return GCodeResult::error;
 				}
 			}
 			else
 			{
 				reply.copy("Temperature reading is not valid");
+				return GCodeResult::error;
 			}
 		}
 		else
@@ -130,16 +160,25 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 					reply.copy("Measured H correction for port \"");
 					port.AppendPinName(reply);
 					reply.catf("\" is %d", adcHighOffset);
-					// TODO store the value in NVM
+
+					// Store the value in NVM
+					if (!reprap.GetGCodes().IsRunningConfigFile())
+					{
+						NonVolatileMemory mem;
+						mem.SetThermistorHighCalibration(adcFilterChannel, adcHighOffset);
+						mem.EnsureWritten();
+					}
 				}
 				else
 				{
 					reply.copy("Computed correction is not valid. Check that you have disconnected the thermistor.");
+					return GCodeResult::error;
 				}
 			}
 			else
 			{
 				reply.copy("Temperature reading is not valid");
+				return GCodeResult::error;
 			}
 		}
 		else
@@ -153,15 +192,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 
 	TryConfigureSensorName(gb, changed);
 
-	if (changed)
-	{
-		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
-		if (adcFilterChannel >= 0)
-		{
-			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
-		}
-	}
-	else
+	if (!changed)
 	{
 		CopyBasicDetails(reply);
 		if (isPT1000)
@@ -178,10 +209,14 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 #endif
 		if (reprap.Debug(moduleHeat) && adcFilterChannel >= 0)
 		{
+#if HAS_VREF_MONITOR
 			reply.catf(", Vref %" PRIu32 " Vssa %" PRIu32 " Th %" PRIu32,
 				reprap.GetPlatform().GetAdcFilter(VrefFilterIndex).GetSum(),
 				reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum(),
 				reprap.GetPlatform().GetAdcFilter(adcFilterChannel).GetSum());
+#else
+			reply.catf(", Th %" PRIu32, reprap.GetPlatform().GetAdcFilter(adcFilterChannel).GetSum());
+#endif
 		}
 	}
 

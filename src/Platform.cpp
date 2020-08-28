@@ -39,6 +39,7 @@
 #include "Hardware/SharedSpi/SharedSpiDevice.h"
 #include "Math/Isqrt.h"
 #include "Hardware/I2C.h"
+#include <Hardware/NonVolatileMemory.h>
 
 #if SAME70
 # include <DmacManager.h>
@@ -1805,7 +1806,20 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		resetString.cat('\n');
 		Message(mtype, resetString.c_str());
 	}
-#elif !defined(__LPC17xx__)
+#elif defined(__LPC17xx__)
+	// Reset Reason
+	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: ",
+			 (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
+
+	if (LPC_SYSCTL->RSID & RSID_POR) { MessageF(mtype, "[power up]"); }
+	if (LPC_SYSCTL->RSID & RSID_EXTR) { MessageF(mtype, "[reset button]"); }
+	if (LPC_SYSCTL->RSID & RSID_WDTR) { MessageF(mtype, "[watchdog]"); }
+	if (LPC_SYSCTL->RSID & RSID_BODR) { MessageF(mtype, "[brownout]"); }
+	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { MessageF(mtype, "[software]"); }
+	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { MessageF(mtype, "[lockup]"); }
+
+	MessageF(mtype, "\n");
+#else
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
 # ifdef DUET_NG
 	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
@@ -1818,77 +1832,24 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n",
 			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
-#endif //end ifndef __LPC17xx__
+#endif
 
 	// Show the reset code stored at the last software reset
 	{
-#if defined(__LPC17xx__)
-		// Reset Reason
-		MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: ",
-				 (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
-
-		if (LPC_SYSCTL->RSID & RSID_POR) { MessageF(mtype, "[power up]"); }
-		if (LPC_SYSCTL->RSID & RSID_EXTR) { MessageF(mtype, "[reset button]"); }
-		if (LPC_SYSCTL->RSID & RSID_WDTR) { MessageF(mtype, "[watchdog]"); }
-		if (LPC_SYSCTL->RSID & RSID_BODR) { MessageF(mtype, "[brownout]"); }
-		if (LPC_SYSCTL->RSID & RSID_SYSRESET) { MessageF(mtype, "[software]"); }
-		if (LPC_SYSCTL->RSID & RSID_LOCKUP) { MessageF(mtype, "[lockup]"); }
-
-        MessageF(mtype, "\n");
-		SoftwareResetData srdBuf[1];
-		int slot = -1;
-
-		for (int s = SoftwareResetData::numberOfSlots - 1; s >= 0; s--)
+		NonVolatileMemory mem;
+		unsigned int slot;
+		const SoftwareResetData * const srd = mem.GetLastWrittenResetData(slot);
+		if (srd == nullptr)
 		{
-			SoftwareResetData *sptr = reinterpret_cast<SoftwareResetData *>(LPC_GetSoftwareResetDataSlotPtr(s));
-			if (sptr->magic != 0xFFFF)
-			{
-				//slot = s;
-				MessageF(mtype, "LPC Flash Slot[%d]: \n", s);
-				slot = 0;	// we only have 1 slot in the array, set this to zero to be compatible with existing code below
-				//copy the data into srdBuff
-				LPC_ReadSoftwareResetDataSlot(s, &srdBuf[0], sizeof(srdBuf[0]));
-				break;
-			}
+			Message(mtype, "Last software reset details not available\n");
 		}
-#else
-		SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
-		memset(srdBuf, 0, sizeof(srdBuf));
-		int slot = -1;
-
-#if SAME5x
-		memcpy(srdBuf, reinterpret_cast<const void *>(SEEPROM_ADDR), sizeof(srdBuf));
-#elif SAM4E || SAM4S || SAME70
-		// Work around bug in ASF flash library: flash_read_user_signature calls a RAMFUNC without disabling interrupts first.
-		// This caused a crash (watchdog timeout) sometimes if we run M122 while a print is in progress
-		const irqflags_t flags = cpu_irq_save();
-		Cache::Disable();
-		const uint32_t rc = flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t));
-		Cache::Enable();
-		cpu_irq_restore(flags);
-
-		if (rc == FLASH_RC_OK)
-# else
-		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
-# endif
+		else
 		{
-			// Find the last slot written
-			slot = SoftwareResetData::numberOfSlots;
-			do
-			{
-				--slot;
-			}
-			while (slot >= 0 && srdBuf[slot].magic == 0xFFFF);
-		}
-#endif
-
-		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
-		{
-			const char* const reasonText = SoftwareResetData::ReasonText[(srdBuf[slot].resetReason >> 5) & 0x0F];
+			const char* const reasonText = SoftwareResetData::ReasonText[(srd->resetReason >> 5) & 0x0F];
 			String<StringLength100> scratchString;
-			if (srdBuf[slot].when != 0)
+			if (srd->when != 0)
 			{
-				const time_t when = (time_t)srdBuf[slot].when;
+				const time_t when = (time_t)srd->when;
 				tm timeInfo;
 				gmtime_r(&when, &timeInfo);
 				scratchString.printf("at %04u-%02u-%02u %02u:%02u",
@@ -1901,30 +1862,26 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 			MessageF(mtype, "Last software reset %s, reason: %s%s, spinning module %s, available RAM %" PRIu32 " bytes (slot %d)\n",
 								scratchString.c_str(),
-								(srdBuf[slot].resetReason & (uint32_t)SoftwareResetReason::deliberate) ? "deliberate " : "",
+								(srd->resetReason & (uint32_t)SoftwareResetReason::deliberate) ? "deliberate " : "",
 								reasonText,
-								GetModuleName(srdBuf[slot].resetReason & 0x1F), srdBuf[slot].neverUsedRam, slot);
+								GetModuleName(srd->resetReason & 0x1F), srd->neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
 			// The task name may include nulls at the end, so print it as a string
-			const uint32_t taskName[2] = { srdBuf[slot].taskName, 0 };
+			const uint32_t taskName[2] = { srd->taskName, 0 };
 			MessageF(mtype,
 					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task %s\n",
-					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp, (const char *)&taskName
+					srd->resetReason, srd->hfsr, srd->cfsr, srd->icsr, srd->bfar, srd->sp, (const char *)&taskName
 				);
-			if (srdBuf[slot].sp != 0xFFFFFFFF)
+			if (srd->sp != 0xFFFFFFFF)
 			{
 				// We saved a stack dump, so print it
 				scratchString.Clear();
-				for (uint32_t stval : srdBuf[slot].stack)
+				for (uint32_t stval : srd->stack)
 				{
 					scratchString.catf(" %08" PRIx32, stval);
 				}
 				MessageF(mtype, "Stack:%s\n", scratchString.c_str());
 			}
-		}
-		else
-		{
-			Message(mtype, "Last software reset details not available\n");
 		}
 	}
 
@@ -2228,7 +2185,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			if (gb.TryGetUIValue('V', val, dummy))
 			{
 				*reinterpret_cast<uint32_t*>(address) = val;
-				delayMicroseconds(10);							// allow some time for a fault to be raised
+				__DSB();										// allow the write to complete in case it raises a fault
 			}
 			else
 			{
@@ -2433,7 +2390,8 @@ void Platform::DriverCoolingFansOnOff(DriverChannelsBitmap driverChannelsMonitor
 
 #endif
 
-// Get the index of the averaging filter for an analog port
+// Get the index of the averaging filter for an analog port.
+// Note, the Thermistor code assumes that this is also the thermistor input number
 int Platform::GetAveragingFilterIndex(const IoPort& port) const noexcept
 {
 	for (size_t i = 0; i < NumAdcFilters; ++i)

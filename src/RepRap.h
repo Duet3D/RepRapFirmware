@@ -31,7 +31,6 @@ Licence: GPL
 # include <CAN/ExpansionManager.h>
 #endif
 
-#include "SoftwareReset.h"
 #include <functional>
 
 enum class ResponseSource
@@ -174,7 +173,6 @@ public:
 	[[noreturn]] void StartIap() noexcept;
 
 	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error
-	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) noexcept;
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
 	static void GenerateBusFault() noexcept;							// helper function for diagnostic tests

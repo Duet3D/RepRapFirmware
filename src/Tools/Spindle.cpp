@@ -21,10 +21,10 @@ constexpr ObjectModelTableEntry Spindle::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Spindle members
-	{ "active",			OBJECT_MODEL_FUNC(self->configuredRpm),			ObjectModelEntryFlags::none },
-	{ "current",		OBJECT_MODEL_FUNC(self->currentRpm),			ObjectModelEntryFlags::live },
+	{ "active",			OBJECT_MODEL_FUNC(self->configuredRpm, 1),		ObjectModelEntryFlags::none },
+	{ "current",		OBJECT_MODEL_FUNC(self->currentRpm, 1),			ObjectModelEntryFlags::live },
 	{ "frequency",		OBJECT_MODEL_FUNC((int32_t)self->frequency),	ObjectModelEntryFlags::verbose },
-	{ "max",			OBJECT_MODEL_FUNC(self->maxRpm),				ObjectModelEntryFlags::verbose },
+	{ "max",			OBJECT_MODEL_FUNC(self->maxRpm, 1),				ObjectModelEntryFlags::verbose },
 	{ "tool",			OBJECT_MODEL_FUNC((int32_t)self->toolNumber),	ObjectModelEntryFlags::verbose },
 };
 

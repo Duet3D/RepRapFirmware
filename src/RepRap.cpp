@@ -19,6 +19,8 @@
 #include "Tasks.h"
 #include <Cache.h>
 #include "Fans/FansManager.h"
+#include <Hardware/SoftwareReset.h>
+#include <Hardware/ExceptionHandlers.h>
 #include "Version.h"
 
 #ifdef DUET_NG
@@ -856,134 +858,6 @@ void RepRap::EmergencyStop() noexcept
 
 	gCodes->EmergencyStop();
 	platform->StopLogging();
-}
-
-// Perform a software reset. 'stk' points to the program counter on the stack if the cause is an exception, otherwise it is nullptr.
-void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
-{
-	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
-	WatchdogReset();							// kick the watchdog
-
-#if SAM4E || SAME70
-	rswdt_restart(RSWDT);						// kick the secondary watchdog
-#endif
-
-	Cache::Disable();
-
-#if USE_MPU
-	//TODO set the flash memory to strongly-ordered or device instead
-	ARM_MPU_Disable();							// disable the MPU
-#endif
-
-	if (reason == (uint16_t)SoftwareResetReason::erase)
-	{
-#if SAME5x
-		//TODO invalidate flash so the USB bootloader runs
-#else
-		EraseAndReset();
-#endif
- 	}
-	else
-	{
-		if (reason != (uint16_t)SoftwareResetReason::user)
-		{
-			if (SERIAL_MAIN_DEVICE.canWrite() == 0)
-			{
-				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
-			}
-
-#ifdef SERIAL_AUX_DEVICE
-			if (SERIAL_AUX_DEVICE.canWrite() == 0
-# ifdef SERIAL_AUX2_DEVICE
-				|| SERIAL_AUX2_DEVICE.canWrite() == 0
-# endif
-			   )
-			{
-				reason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
-			}
-#endif
-		}
-		reason |= (uint8_t)reprap.GetSpinningModule();
-		if (platform->WasDeliberateError())
-		{
-			reason |= (uint16_t)SoftwareResetReason::deliberate;
-		}
-
-		// Record the reason for the software reset
-		// First find a free slot (wear levelling)
-		size_t slot = SoftwareResetData::numberOfSlots;
-#if defined(__LPC17xx__)
-        SoftwareResetData srdBuf[1];
-#else
-        SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
-#endif
-
-#if SAME5x
-        memcpy(srdBuf, reinterpret_cast<const void*>(SEEPROM_ADDR), sizeof(srdBuf));
-#elif SAM4E || SAM4S || SAME70
-		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
-#elif SAM3XA
-		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
-#elif defined(__LPC17xx__)
-		// nothing here
-#else
-# error
-#endif
-		{
-#if defined(__LPC17xx__)
-            while (slot != 0 && LPC_IsSoftwareResetDataSlotVacant(slot - 1))
-#else
-            while (slot != 0 && srdBuf[slot - 1].isVacant())
-#endif
-			{
-				--slot;
-			}
-		}
-
-		if (slot == SoftwareResetData::numberOfSlots)
-		{
-			// No free slots, so erase the area
-#if SAME5x
-			memset(reinterpret_cast<void*>(SEEPROM_ADDR), 0xFF, sizeof(srdBuf));
-#elif SAM4E || SAM4S || SAME70
-			flash_erase_user_signature();
-#elif defined(__LPC17xx__)
-			LPC_EraseSoftwareResetDataSlots();	// erase the last flash sector
-#endif
-			memset(srdBuf, 0xFF, sizeof(srdBuf));
-			slot = 0;
-		}
-
-#if defined(__LPC17xx__)
-        srdBuf[0].Populate(reason, (uint32_t)realTime, stk);
-#else
-        srdBuf[slot].Populate(reason, (uint32_t)platform->GetDateTime(), stk);
-#endif
-
-		// Save diagnostics data to Flash
-#if SAME5x
-        while (NVMCTRL->SEESTAT.bit.BUSY) { }
-        memcpy(reinterpret_cast<uint8_t*>(SEEPROM_ADDR) + (slot * sizeof(SoftwareResetData)), &srdBuf[slot], sizeof(SoftwareResetData));
-#elif SAM4E || SAM4S || SAME70
-		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
-#elif defined(__LPC17xx__)
-		LPC_WriteSoftwareResetData(slot, srdBuf, sizeof(srdBuf));
-#else
-		DueFlashStorage::write(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
-#endif
-	}
-
-#if defined(__LPC17xx__)
-    LPC_SYSCTL->RSID = 0x3F;					// Clear bits in reset reasons stored in RSID
-#elif !SAME5x
-# ifndef RSTC_MR_KEY_PASSWD
-// Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
-#  define RSTC_MR_KEY_PASSWD (0xA5u << 24)
-# endif
-	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
-#endif
-	Reset();
-	for(;;) {}
 }
 
 void RepRap::SetDebug(Module m, bool enable) noexcept

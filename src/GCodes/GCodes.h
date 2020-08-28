@@ -144,6 +144,7 @@ public:
 	bool IsSimulating() const noexcept { return simulationMode != 0; }
 	bool IsDoingToolChange() const noexcept { return doingToolChange; }
 	bool IsHeatingUp() const noexcept;											// Return true if the SD card print is waiting for a heater to reach temperature
+	bool IsRunningConfigFile() const noexcept { return runningConfigFile; }
 
 	uint32_t GetLastDuration() const noexcept { return lastDuration; }			// The most recent print time or simulated time
 	float GetSimulationTime() const noexcept { return simulationTime; }
@@ -471,7 +472,7 @@ private:
 	GCodeBuffer*& httpGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)];
 	GCodeBuffer*& telnetGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)];
 	GCodeBuffer*& fileGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)];
-	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USBchan)];
+	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)];
 	GCodeBuffer*& auxGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)];					// This one is for the PanelDue on the async serial interface
 	GCodeBuffer*& triggerGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)];			// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)];

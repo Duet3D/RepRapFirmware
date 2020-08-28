@@ -318,19 +318,16 @@ void mcan_init(mcan_module *const module_inst, Mcan *hw, struct mcan_config *con
 
 	/* Associate the software module instance with the hardware module */
 	module_inst->hw = hw;
+	module_inst->taskWaitingOnFifo[0] = module_inst->taskWaitingOnFifo[1] = nullptr;
 
 	pmc_disable_pck(PMC_PCK_5);
 
-#if 1	// dc42 use UPLL not PLLA as recommended in the documentation, so the MCAN clock is independent of the CPU clock frequency
+	// Use UPLL so the MCAN clock is independent of the CPU clock frequency
 	pmc_switch_pck_to_upllck(PMC_PCK_5, PMC_PCK_PRES(9));		// run PCLK5 at 48MHz
-#else
-	pmc_switch_pck_to_pllack(PMC_PCK_5, PMC_PCK_PRES(9));
-#endif
 	pmc_enable_pck(PMC_PCK_5);
 
 	/* Enable peripheral clock */
 	_mcan_enable_peripheral_clock(module_inst);
-
 
 	/* Configuration Change Enable. */
 	hw->MCAN_CCCR |= MCAN_CCCR_CCE;
@@ -738,6 +735,90 @@ bool WaitForTxBufferFree(mcan_module *const module_inst, uint32_t whichTxBuffer,
 	}
 	return true;
 }
+
+// Get a message from a FIFO with timeout. Return true if successful, false if we timed out
+bool GetMessageFromFifo(mcan_module *const module_inst, CanMessageBuffer *buf, unsigned int fifoNumber, uint32_t timeout) noexcept
+{
+	volatile uint32_t* const fifoRegisters = &(module_inst->hw->MCAN_RXF0S) + (4 * fifoNumber);	// pointer to FIFO status register followed by FIFO acknowledge register
+	module_inst->taskWaitingOnFifo[fifoNumber] = TaskBase::GetCallerTaskHandle();
+	while (true)
+	{
+		const uint32_t status = fifoRegisters[0];									// get FIFO status
+		if ((status & MCAN_RXF0S_F0FL_Msk) != 0)									// if there are any messages
+		{
+			const uint32_t getIndex = (status & MCAN_RXF0S_F0GI_Msk) >> MCAN_RXF0S_F0GI_Pos;
+			mcan_rx_element elem;
+			if (fifoNumber == 1)
+			{
+				mcan_get_rx_fifo_1_element(module_inst, &elem, getIndex);		// copy the data (TODO use our own driver, avoid double copying)
+			}
+			else
+			{
+				mcan_get_rx_fifo_0_element(module_inst, &elem, getIndex);		// copy the data (TODO use our own driver, avoid double copying)
+			}
+			fifoRegisters[1] = getIndex;											// acknowledge it, release the FIFO entry
+
+			if (elem.R0.bit.XTD == 1 && elem.R0.bit.RTR != 1)						// if extended address and not a remote frame
+			{
+				// Copy the message and accompanying data to our buffer
+				buf->id.SetReceivedId(elem.R0.bit.ID);
+				buf->dataLength = dlc2len[elem.R1.bit.DLC];
+				memcpy(buf->msg.raw, elem.data, buf->dataLength);
+				module_inst->taskWaitingOnFifo[fifoNumber] = nullptr;
+				return true;
+			}
+		}
+		else if (!TaskBase::Take(timeout))
+		{
+			module_inst->taskWaitingOnFifo[fifoNumber] = nullptr;
+			return false;
+		}
+	}
+}
+
+void GetLocalCanTiming(mcan_module *const module_inst, CanTiming& timing) noexcept
+{
+	const uint32_t nbtp = module_inst->hw->MCAN_NBTP;
+	const uint32_t tseg1 = (nbtp & MCAN_NBTP_NTSEG1_Msk) >> MCAN_NBTP_NTSEG1_Pos;
+	const uint32_t tseg2 = (nbtp & MCAN_NBTP_NTSEG2_Msk) >> MCAN_NBTP_NTSEG2_Pos;
+	const uint32_t jw = (nbtp & MCAN_NBTP_NSJW_Msk) >> MCAN_NBTP_NSJW_Pos;
+	const uint32_t brp = (nbtp & MCAN_NBTP_NBRP_Msk) >> MCAN_NBTP_NBRP_Pos;
+	timing.period = (tseg1 + tseg2 + 3) * (brp + 1);
+	timing.tseg1 = (tseg1 + 1) * (brp + 1);
+	timing.jumpWidth = (jw + 1) * (brp + 1);
+}
+
+void ChangeLocalCanTiming(mcan_module *const module_inst, const CanTiming& timing) noexcept
+{
+	// Sort out the bit timing
+	uint32_t period = timing.period;
+	uint32_t tseg1 = timing.tseg1;
+	uint32_t jumpWidth = timing.jumpWidth;
+	uint32_t prescaler = 1;						// 48MHz main clock
+	uint32_t tseg2;
+
+	for (;;)
+	{
+		tseg2 = period - tseg1 - 1;
+		if (tseg1 <= 32 && tseg2 <= 16 && jumpWidth <= 16)
+		{
+			break;
+		}
+		prescaler <<= 1;
+		period >>= 1;
+		tseg1 >>= 1;
+		jumpWidth >>= 1;
+	}
+
+	//TODO stop transmissions in an orderly fashion, or postpone initialising CAN until we have the timing data
+	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_CCE | MCAN_CCCR_INIT;
+	module_inst->hw->MCAN_NBTP =  ((tseg1 - 1) << MCAN_NBTP_NTSEG1_Pos)
+							| ((tseg2 - 1) << MCAN_NBTP_NTSEG2_Pos)
+							| ((jumpWidth - 1) << MCAN_NBTP_NSJW_Pos)
+							| ((prescaler - 1) << MCAN_NBTP_NBRP_Pos);
+	module_inst->hw->MCAN_CCCR &= ~MCAN_CCCR_CCE;
+}
+
 
 #endif	// SUPPORT_CAN_EXPANSION
 

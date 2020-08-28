@@ -42,7 +42,9 @@
 
 #if SUPPORT_CAN_EXPANSION
 
-#include <compiler.h>
+#include <CanSettings.h>
+#include <CanMessageBuffer.h>
+#include <RTOSIface/RTOSIface.h>
 #include <status_codes.h>
 
 /** The value should be 8/12/16/20/24/32/48/64. */
@@ -529,8 +531,10 @@ enum mcan_nonmatching_frames_action {
  * \note The fields of this structure should not be altered by the user
  *       application; they are reserved for module-internal use only.
  */
-struct mcan_module {
+struct mcan_module
+{
 	Mcan *hw;
+	TaskHandle taskWaitingOnFifo[2];
 };
 
 /**
@@ -691,6 +695,12 @@ status_code mcan_fd_send_ext_message_no_wait(mcan_module *const module_inst, uin
 // Wait for a specified buffer to become free. If it's still not free after the timeout, cancel the pending transmission.
 // Return true if we cancelled the pending transmission.
 bool WaitForTxBufferFree(mcan_module *const module_inst, uint32_t whichTxBuffer, uint32_t maxWait) noexcept;
+
+// Get a message from a FIFO with timeout. Return true if successful, false if we timed out
+bool GetMessageFromFifo(mcan_module *const module_inst, CanMessageBuffer *buf, unsigned int fifoNumber, uint32_t timeout) noexcept;
+
+void GetLocalCanTiming(mcan_module *const module_inst, CanTiming& timing) noexcept;
+void ChangeLocalCanTiming(mcan_module *const module_inst, const CanTiming& timing) noexcept;
 
 /**
  * \brief Can read timestamp count value.

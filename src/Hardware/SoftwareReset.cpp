@@ -34,7 +34,7 @@ const char *const SoftwareResetData::ReasonText[] =
 uint8_t SoftwareResetData::extraDebugInfo;			// extra info for debugging
 
 // Return true if this struct can be written without erasing it first
-bool SoftwareResetData::isVacant() const noexcept
+bool SoftwareResetData::IsVacant() const noexcept
 {
 	const uint32_t *p = reinterpret_cast<const uint32_t*>(this);
 	for (size_t i = 0; i < sizeof(*this)/sizeof(uint32_t); ++i)
@@ -46,6 +46,11 @@ bool SoftwareResetData::isVacant() const noexcept
 		++p;
 	}
 	return true;
+}
+
+void SoftwareResetData::Clear() noexcept
+{
+	memset(this, 0xFF, sizeof(SoftwareResetData));
 }
 
 // Populate this reset data from the parameters passed and the CPU state

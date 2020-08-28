@@ -68,38 +68,18 @@ struct SoftwareResetData
 	uint32_t sp;								// stack pointer
 	uint32_t when;								// value of the RTC when the software reset occurred
 	uint32_t taskName;							// first 4 bytes of the task name
-	uint32_t stack[23];							// stack when the exception occurred, with the program counter at the bottom
+	uint32_t stack[29];							// stack when the exception occurred, with the link register and program counter at the bottom
 
-	bool isVacant() const noexcept;				// return true if this struct can be written without erasing it first
+	bool IsVacant() const noexcept;				// return true if this struct can be written without erasing it first
+	bool IsValid() const noexcept { return magic == magicValue; }
+	void Clear() noexcept;
 	void Populate(uint16_t reason, uint32_t time, const uint32_t *stk) noexcept;
 
-	static const uint16_t versionValue = 8;		// increment this whenever this struct changes
+	static const uint16_t versionValue = 9;		// increment this whenever this struct changes
 	static const uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written
-
-#ifdef __LPC17xx__
-	// Software Reset Data is stored in Flash. Since the LPC1768/9 doesn't have the page erase IAP command,
-	// so we have to use the whole sector (last sector of flash is used)
-	// The last sector size is 32k. IAP requires us to write at least 256 bytes and the destination address needs to be on a 256 byte boundary.
-	// Therefore can have 32k/256=128 slots and we will fill the entire sector before erasing it
-	static const size_t numberOfSlots = 128;    // number of storage slots used to implement wear levelling
-#else
-    static const size_t numberOfSlots = 4;		// number of storage slots used to implement wear levelling - must fit in 512 bytes
-#endif
-
-#if SAM3XA
-	static const uint32_t nvAddress = 0;		// must be 4-byte aligned
-#endif
 
 	static const char *const ReasonText[];
 	static uint8_t extraDebugInfo;				// extra info for debugging can be stored here
 };
-
-#if SAM4E || SAM4S || SAME70
-static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in user signature area");
-#elif SAME5x
-// TODO
-#else
-static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
-#endif
 
 #endif /* SRC_SOFTWARERESET_H_ */
