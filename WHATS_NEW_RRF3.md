@@ -17,6 +17,9 @@ New features/changed behaviour:
 - The resurrect.g file now records which objects on the build plate have been cancelled
 - Duet 3 Mini 5+ WiFi and Ethernet prototype boards are now supported
 - Added move.workplaceNumber to the object model. This is intended to repace move.workspaceNumber, but is 0-based instead of 1-based.
+- Added L (calibration factor) parameter to laser filament monitor configuration
+- Increased the number of stack words displayed in the software reset data. The number of wear-levelling slots stored is reduced from 4 to 3.
+- [Duet 3] Added M999 S# H999 for open-circuit thermistor input calibration, and M999 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory.
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
 - [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolstep threshold
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
