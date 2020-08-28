@@ -28,7 +28,7 @@ New features/changed behaviour:
 
 Object model and expression evaluation changes:
 - Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Changed to 1 decimal place.
-- Support comparing a DateTime with a string
+- Support comparing a value of any type that has no literals (DateTime, IPAddress, MAC address, DriverID) with a string
 - Support DateTime - DateTime, dateTime + int, DateTime - int
 - Support T{expression} commands
 - Added random(nn) function
