@@ -47,6 +47,7 @@ private:
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException);
 	void EnsureNumeric(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
+	static bool TypeHasNoLiterals(TypeCode t) noexcept;
 
 	const char *GetAndFix() THROWS(GCodeException);
 	int GetColumn() const noexcept;

@@ -526,10 +526,19 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 	}
 }
 
+/*static*/ bool ExpressionParser::TypeHasNoLiterals(TypeCode t) noexcept
+{
+	return t == TypeCode::DateTime || t == TypeCode::IPAddress || t == TypeCode::MacAddress || t == TypeCode::DriverId;
+}
+
 // Balance types for a comparison operator
 void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException)
 {
-	if (val1.GetType() == TypeCode::Float)
+	if (val1.GetType() == val2.GetType())			// handle the common case first
+	{
+		// nothing to do
+	}
+	else if (val1.GetType() == TypeCode::Float)
 	{
 		ConvertToFloat(val2, evaluate);
 	}
@@ -537,15 +546,15 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 	{
 		ConvertToFloat(val1, evaluate);
 	}
-	else if (val1.GetType() == TypeCode::DateTime && val2.GetType() == TypeCode::CString)
+	else if (val2.GetType() == TypeCode::CString && TypeHasNoLiterals(val1.GetType()))
 	{
 		ConvertToString(val1, evaluate);
 	}
-	else if (val1.GetType() == TypeCode::CString && val2.GetType() == TypeCode::DateTime)
+	else if (val1.GetType() == TypeCode::CString && TypeHasNoLiterals(val2.GetType()))
 	{
 		ConvertToString(val2, evaluate);
 	}
-	else if (val1.GetType() != val2.GetType())
+	else
 	{
 		if (evaluate)
 		{
