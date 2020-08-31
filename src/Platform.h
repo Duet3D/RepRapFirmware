@@ -774,15 +774,16 @@ private:
 #ifdef SERIAL_AUX_DEVICE
 	volatile OutputStack auxOutput;
 	Mutex auxMutex;
-#endif
-
 	uint32_t auxSeq;							// Sequence number for AUX devices
 	bool auxEnabled;							// Do we have an AUX device?
 	bool auxRaw;								// true if aux device is in raw mode
+#endif
 
 #ifdef SERIAL_AUX2_DEVICE
     volatile OutputStack aux2Output;
 	Mutex aux2Mutex;
+	bool aux2Enabled;							// Do we have an AUX device?
+	bool aux2Raw;								// true if aux device is in raw mode
 #endif
 
 	volatile OutputStack usbOutput;

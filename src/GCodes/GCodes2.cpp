@@ -1682,6 +1682,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					case 4:		// Telnet
 						type = TelnetMessage;
 						break;
+#ifdef SERIAL_AUX2_DEVICE
+					case 5:		// AUX2
+						type = Aux2Message;
+						break;
+#endif
 					default:
 						reply.printf("Invalid message type: %" PRIi32, param);
 						result = GCodeResult::error;

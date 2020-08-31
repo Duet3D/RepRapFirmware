@@ -464,7 +464,7 @@ void Platform::Init() noexcept
 	baudRates[2] = AUX2_BAUD_RATE;
 	commsParams[2] = 0;
 	aux2Mutex.Create("Aux2");
-	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
+	aux2Enabled = aux2Raw = false;
 #endif
 
 	// Initialise the IO port subsystem
@@ -3234,7 +3234,7 @@ void Platform::RawMessage(MessageType type, const char *message) noexcept
 		reprap.GetNetwork().HandleTelnetGCodeReply(message);
 	}
 
-	if ((type & AuxMessage) != 0)
+	if ((type & Aux2Message) != 0)
 	{
 #ifdef SERIAL_AUX2_DEVICE
 		MutexLocker lock(aux2Mutex);
@@ -3246,7 +3246,7 @@ void Platform::RawMessage(MessageType type, const char *message) noexcept
 		}
 		else
 		{
-			// Send short strings immediately through the aux channel. There is no flow control on this port, so it can't block for long
+			// Send short strings immediately through the aux2 channel. There is no flow control on this port, so it can't block for long
 			SERIAL_AUX2_DEVICE.write(message);
 			SERIAL_AUX2_DEVICE.flush();
 		}
