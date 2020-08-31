@@ -107,9 +107,11 @@ constexpr float DefaultHotEndHeaterDeadTime = 5.5;
 constexpr unsigned int FirstExtraHeaterProtection = 100;	// Index of the first extra heater protection item
 
 // Default thermistor parameters
-constexpr float DefaultR25 = 100000.0;
-constexpr float DefaultBeta = 4388.0;
-constexpr float DefaultShc = 0.0;
+#ifndef DUET3		// for Duet 3 these are defined in Duet3Common.h in project CANLib
+constexpr float DefaultThermistorR25 = 100000.0;
+constexpr float DefaultThermistorBeta = 4388.0;
+constexpr float DefaultThermistorC = 0.0;
+#endif
 
 // These parameters are about right for a typical PCB bed heater that maxes out at 110C
 constexpr float DefaultBedHeaterGain = 90.0;
@@ -135,8 +137,10 @@ constexpr PwmFrequency DefaultPinWritePwmFreq = 500;	// default PWM frequency fo
 constexpr PwmFrequency ServoRefreshFrequency = 50;
 
 // Fan defaults
+#ifndef DUET3		// for Duet 3 these are defined in Duet3Common.h in project CANLib
 constexpr float DefaultMinFanPwm = 0.1;					// minimum fan PWM
 constexpr uint32_t DefaultFanBlipTime = 100;			// fan blip time in milliseconds
+#endif
 
 // Conditional GCode support
 constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduced a new block.

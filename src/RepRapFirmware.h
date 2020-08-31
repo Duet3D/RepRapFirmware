@@ -75,7 +75,6 @@ static inline void WatchdogReset() noexcept { return watchdogReset(); }
 
 #endif
 
-
 // API level definition.
 // ApiLevel 1 is the first level that supports rr_model.
 constexpr unsigned int ApiLevel = 1;
@@ -115,8 +114,8 @@ enum class PinUsedBy : uint8_t
 	sensor
 };
 
-#include "Configuration.h"
 #include "Pins.h"
+#include "Configuration.h"
 
 static_assert(MinVisibleAxes <= MinAxes);
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
