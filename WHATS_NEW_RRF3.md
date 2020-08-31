@@ -5,6 +5,7 @@ Upgrade notes:
 - In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
 - [Duet 3] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
 - If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber - 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based.
+- Default thermistor parameters for all builds of RRF3 are now: T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old default, which had B4388 C0. In the unlikely event that your M308 line had a C parameter but no B parameter, you will need to add B4388 to get the prevous behaviour.
 
 New features/changed behaviour:
 - Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using separate firmware build
@@ -21,7 +22,9 @@ New features/changed behaviour:
 - Increased the number of stack words displayed in the software reset data. The number of wear-levelling slots stored is reduced from 4 to 3.
 - Added M584 R parameter to indicate whether newly created axes are continuous rotation axes or not
 - M486 now confirms when an object is cancelled or resumed
-- [Duet 3] Added M999 S# H999 for open-circuit thermistor input calibration, and M999 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory.
+- Default thermistor parameters for all builds of RRF3 are now T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old defaults.
+- [Duet 3] Added support for second UART (using the IO_1 pins) on Duet 3 MB6HC. New message type (P5) added to M118 command.
+- [Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory.
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
 - [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolstep threshold
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
