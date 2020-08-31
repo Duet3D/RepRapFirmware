@@ -109,8 +109,8 @@ constexpr unsigned int FirstExtraHeaterProtection = 100;	// Index of the first e
 // Default thermistor parameters
 #ifndef DUET3		// for Duet 3 these are defined in Duet3Common.h in project CANLib
 constexpr float DefaultThermistorR25 = 100000.0;
-constexpr float DefaultThermistorBeta = 4388.0;
-constexpr float DefaultThermistorC = 0.0;
+constexpr float DefaultThermistorBeta = 4725.0;
+constexpr float DefaultThermistorC = 7.06e-8;
 #endif
 
 // These parameters are about right for a typical PCB bed heater that maxes out at 110C
