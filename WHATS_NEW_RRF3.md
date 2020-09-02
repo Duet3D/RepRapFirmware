@@ -44,6 +44,7 @@ Bug fixes:
 - The output from M207 without parameters was truncated when there were 4 or more tools
 - If a G31 command defined new values in terms of existing G31 values from the object model, then incorrect values could be set due to the new values being computed and stored multiple times
 - The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
+- Object model variable seqs.spindles was not updated when the configuredRpm of a spindle was changed
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
 - [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
 - [Duet 3] M915 with just P and/or axis parameters did not report the coolstep threshold (T parameter) correctly
