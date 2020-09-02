@@ -6,6 +6,7 @@
  */
 
 #include "Spindle.h"
+#include <RepRap.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -62,7 +63,12 @@ void Spindle::SetRpm(float rpm) noexcept
 		spindleReversePort.WriteAnalog(pwm);
 		spindleForwardPort.WriteAnalog(0.0);
 	}
-	currentRpm = configuredRpm = rpm;
+	currentRpm = rpm;					// current rpm is flagged live, so no need to change seqs.spindles
+	if (configuredRpm != rpm)
+	{
+		configuredRpm = rpm;
+		reprap.SpindlesUpdated();		// configuredRpm is not flagged live
+	}
 }
 
 void Spindle::TurnOff() noexcept
