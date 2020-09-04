@@ -1244,7 +1244,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 
 	// Output notifications
 	{
-		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled()) && beepDuration != 0 && beepFrequency != 0);
+		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled(0) || platform->IsAuxRaw(0)) && beepDuration != 0 && beepFrequency != 0);
 		const bool sendMessage = !message.IsEmpty();
 
 		float timeLeft = 0.0;
@@ -2353,9 +2353,9 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	}
 #endif
 
-	if (platform->IsAuxEnabled())
+	if (platform->IsAuxEnabled(0) && !platform->IsAuxRaw(0))
 	{
-		platform->Beep(freq, ms);
+		platform->PanelDueBeep(freq, ms);
 		bleeped = true;
 	}
 
@@ -2377,9 +2377,9 @@ void RepRap::SetMessage(const char *msg) noexcept
 #endif
 	StateUpdated();
 
-	if (platform->IsAuxEnabled())
+	if (platform->IsAuxEnabled(0) && !platform->IsAuxRaw(0))
 	{
-		platform->SendAuxMessage(msg);
+		platform->SendPanelDueMessage(0, msg);
 	}
 }
 
@@ -2709,11 +2709,13 @@ void RepRap::PrepareToLoadIap() noexcept
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
 	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
-
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
 
 #ifdef DUET_NG
 	DuetExpansion::Exit();					// stop the DueX polling task
+#endif
+#if SAME5x
+	StopAnalogTask();
 #endif
 
 	// Disable the cache because it interferes with flash memory access

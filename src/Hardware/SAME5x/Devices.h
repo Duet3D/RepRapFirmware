@@ -19,7 +19,8 @@ extern Uart serialUart0;
 
 extern SerialCDC serialUSB;
 
-void DeviceInit();
+void DeviceInit() noexcept;
+void StopAnalogTask() noexcept;
 
 // GCLK numbers not defined in the core
 static const unsigned int GclkNum25MHz = 2;		// for Ethernet PHY

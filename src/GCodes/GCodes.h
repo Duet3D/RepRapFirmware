@@ -456,7 +456,7 @@ private:
 
 	bool CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;
 
-#ifdef SERIAL_AUX_DEVICE
+#if HAS_AUX_DEVICES
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(UARTClass *p) noexcept;
 #endif

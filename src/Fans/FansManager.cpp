@@ -217,7 +217,11 @@ void FansManager::Init() noexcept
 	for (size_t i = 0; i < ARRAY_SIZE(DefaultFanPinNames); ++i)
 	{
 		String<1> dummy;
-		fans[i] = CreateLocalFan(i, DefaultFanPinNames[i], i < ARRAY_SIZE(DefaultFanPwmFrequencies) ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq, dummy.GetRef());
+		fans[i] = CreateLocalFan(i,
+									DefaultFanPinNames[i],
+									i < ARRAY_SIZE(DefaultFanPwmFrequencies) && DefaultFanPwmFrequencies[i] != 0 ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq,
+									dummy.GetRef()
+								);
 	}
 
 # if defined(PCCB)

@@ -44,7 +44,7 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
-#ifdef SERIAL_AUX_DEVICE
+#if HAS_AUX_DEVICES
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
 
@@ -94,7 +94,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	usbGCode = nullptr;
 #endif
 
-#if defined(SERIAL_AUX_DEVICE)
+#if HAS_AUX_DEVICES
 	StreamGCodeInput * const auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
 	auxGCode = new GCodeBuffer(GCodeChannel::Aux, auxInput, fileInput, AuxMessage);
 #elif HAS_LINUX_INTERFACE
@@ -184,7 +184,7 @@ void GCodes::Init() noexcept
 	DotStarLed::Init();
 #endif
 
-#if defined(SERIAL_AUX_DEVICE) && !defined(__LPC17xx__)
+#if HAS_AUX_DEVICES && !defined(__LPC17xx__)
 	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
 #endif
 }
@@ -405,7 +405,7 @@ void GCodes::Spin() noexcept
 		return;
 	}
 
-#ifdef SERIAL_AUX_DEVICE
+#if HAS_AUX_DEVICES
 	if (emergencyStopCommanded)
 	{
 		DoEmergencyStop();
@@ -3416,7 +3416,10 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	// Also check that this response was triggered by a gcode
 	if (   reply[0] == 0
 		&& (   (gb.MachineState().doingFileMacro && !gb.MachineState().waitingForAcknowledgement)			// we must acknowledge M292
-			|| &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || (&gb == auxGCode && !platform.IsAuxRaw())
+			|| &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode
+#if HAS_AUX_DEVICES
+			|| (&gb == auxGCode && !platform.IsAuxRaw(0))
+#endif
 		   )
 	   )
 	{
@@ -3493,12 +3496,14 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	}
 #endif
 
+#if HAS_AUX_DEVICES
 	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
-	if (&gb == auxGCode && !platform.IsAuxRaw())
+	if (&gb == auxGCode && !platform.IsAuxRaw(0))
 	{
-		platform.AppendAuxReply(reply, (*reply)[0] == '{');
+		platform.AppendAuxReply(0, reply, (*reply)[0] == '{');
 		return;
 	}
+#endif
 
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
@@ -4331,7 +4336,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			OutputBuffer * const statusBuf = GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);
 			if (statusBuf != nullptr)
 			{
-				platform.AppendAuxReply(statusBuf, true);
+				platform.AppendAuxReply(0, statusBuf, true);
 			}
 		}
 		gb.StartTimer();

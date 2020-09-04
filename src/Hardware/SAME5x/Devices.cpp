@@ -111,14 +111,14 @@ static void SdhcInit() noexcept
 }
 
 // Serial interface
-static void SerialInit()
+static void SerialInit() noexcept
 {
 	SetPinFunction(Serial0TxPin, Serial0PinFunction);
 	SetPinFunction(Serial0RxPin, Serial0PinFunction);
 	// We don't make the init call here, that's done by the GCodes module
 }
 
-void DeviceInit()
+void DeviceInit() noexcept
 {
 	// Ensure the Ethernet PHY or WiFi module is held reset
 	pinMode(EthernetPhyResetPin, OUTPUT_LOW);
@@ -130,6 +130,11 @@ void DeviceInit()
 	AnalogIn::Init(FirstAdcDmaChannel, DmacPrioAdcTx, DmacPrioAdcRx);
 	AnalogOut::Init();
 	analogInTask.Create(AnalogIn::TaskLoop, "AIN", nullptr, TaskPriority::AinPriority);
+}
+
+void StopAnalogTask() noexcept
+{
+	analogInTask.TerminateAndUnlink();
 }
 
 // End

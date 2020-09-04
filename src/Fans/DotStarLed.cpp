@@ -26,7 +26,11 @@
 # endif
 #endif
 
-#define USE_16BIT_SPI	1		// set to use 16-bit SPI transfers instead of 8-bit
+#if SAME70
+# define USE_16BIT_SPI	1		// set to use 16-bit SPI transfers instead of 8-bit
+#else
+# define USE_16BIT_SPI	0		// set to use 16-bit SPI transfers instead of 8-bit
+#endif
 
 #if USE_16BIT_SPI && DOTSTAR_USES_USART
 # error Invalid combination

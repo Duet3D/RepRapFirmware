@@ -3347,54 +3347,57 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 575: // Set communications parameters
 			{
-				const size_t chan = gb.GetLimitedUIValue('P', NUM_SERIAL_CHANNELS);
+				const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
 				bool seen = false;
 				if (gb.Seen('B'))
 				{
 					platform.SetBaudRate(chan, gb.GetIValue());
 					seen = true;
 				}
+
 				if (gb.Seen('S'))
 				{
 					const uint32_t val = gb.GetIValue();
 					platform.SetCommsProperties(chan, val);
-					switch (chan)
+					if (chan == 0)
 					{
-					case 0:
 						usbGCode->SetCommsProperties(val);
-						break;
-					case 1:
-						if (auxGCode != nullptr)
+					}
+#if HAS_AUX_DEVICES
+					else if (chan < NumSerialChannels)
+					{
+						GCodeBuffer *& gbp = (chan == 1) ? auxGCode : aux2GCode;
+						if (gbp != nullptr)
 						{
 							auxGCode->SetCommsProperties(val);
 							const bool rawMode = (val & 2u) != 0;
-							platform.SetAuxRaw(rawMode);
-							if (rawMode && !platform.IsAuxEnabled())			// if enabling aux for the first time and in raw mode, set Marlin compatibility
+							platform.SetAuxRaw(chan - 1, rawMode);
+							if (rawMode && !platform.IsAuxEnabled(chan - 1))			// if enabling aux for the first time and in raw mode, set Marlin compatibility
 							{
-								auxGCode->MachineState().compatibility = Compatibility::Marlin;
+								gbp->MachineState().compatibility = Compatibility::Marlin;
 							}
 						}
-						break;
-					default:
-						break;
 					}
+#endif
 					seen = true;
 				}
 
 				if (seen)
 				{
-					if (chan == 1 && !platform.IsAuxEnabled())
+#if HAS_AUX_DEVICES
+					if (chan != 0 && !platform.IsAuxEnabled(chan - 1))
 					{
-						platform.EnableAux();
+						platform.EnableAux(chan - 1);
 					}
 					else
 					{
 						platform.ResetChannel(chan);
 					}
 				}
-				else if (chan == 1 && !platform.IsAuxEnabled())
+				else if (chan != 0 && !platform.IsAuxEnabled(chan - 1))
 				{
-					reply.copy("Channel 1 is disabled");
+					reply.printf("Channel %u is disabled", chan);
+#endif
 				}
 				else
 				{
@@ -3404,11 +3407,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						reply.cat(", connected");
 					}
-					else if (chan == 1 && platform.IsAuxRaw())
+#if HAS_AUX_DEVICES
+					else if (chan != 0 && platform.IsAuxRaw(chan - 1))
 					{
 						reply.cat(", raw mode");
 					}
-					//TODO handle aux2 here
+#endif
 				}
 			}
 			break;
