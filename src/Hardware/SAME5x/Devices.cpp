@@ -134,6 +134,7 @@ void DeviceInit() noexcept
 
 void StopAnalogTask() noexcept
 {
+	AnalogIn::Exit();								// make sure that the ISR doesn't try to wake the analog task after we terminate it
 	analogInTask.TerminateAndUnlink();
 }
 
