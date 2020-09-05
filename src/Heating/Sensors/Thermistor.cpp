@@ -61,7 +61,10 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 
 	if (changed)
 	{
-		// We changed the port, so set up the ADC filter
+		// We changed the port, so clear the ADC corrections and set up the ADC filter if there is one
+#if !HAS_VREF_MONITOR || defined(DUET3)
+		adcLowOffset = adcHighOffset = 0;
+#endif
 		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
 		if (adcFilterChannel >= 0)
 		{

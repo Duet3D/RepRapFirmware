@@ -850,12 +850,12 @@ void Platform::ReadUniqueId()
 	}
 # else
 	memset(uniqueId, 0, sizeof(uniqueId));
-
-	Cache::Disable();
-	cpu_irq_disable();
+	const bool cacheWasEnabled = Cache::Disable();
 	const uint32_t rc = flash_read_unique_id(uniqueId, 4);
-	cpu_irq_enable();
-	Cache::Enable();
+	if (cacheWasEnabled)
+	{
+		Cache::Enable();
+	}
 
 	if (rc == 0)
 	{
@@ -1756,48 +1756,12 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		}
 		else
 		{
-			const char* const reasonText = SoftwareResetData::ReasonText[(srd->resetReason >> 5) & 0x0F];
-			String<StringLength100> scratchString;
-			if (srd->when != 0)
-			{
-				const time_t when = (time_t)srd->when;
-				tm timeInfo;
-				gmtime_r(&when, &timeInfo);
-				scratchString.printf("at %04u-%02u-%02u %02u:%02u",
-								timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min);
-			}
-			else
-			{
-				scratchString.copy("time unknown");
-			}
-
-			MessageF(mtype, "Last software reset %s, reason: %s%s, spinning module %s, available RAM %" PRIu32 " bytes (slot %d)\n",
-								scratchString.c_str(),
-								(srd->resetReason & (uint32_t)SoftwareResetReason::deliberate) ? "deliberate " : "",
-								reasonText,
-								GetModuleName(srd->resetReason & 0x1F), srd->neverUsedRam, slot);
-			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
-			// The task name may include nulls at the end, so print it as a string
-			const uint32_t taskName[2] = { srd->taskName, 0 };
-			MessageF(mtype,
-					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task %s\n",
-					srd->resetReason, srd->hfsr, srd->cfsr, srd->icsr, srd->bfar, srd->sp, (const char *)&taskName
-				);
-			if (srd->sp != 0xFFFFFFFF)
-			{
-				// We saved a stack dump, so print it
-				scratchString.Clear();
-				for (uint32_t stval : srd->stack)
-				{
-					scratchString.catf(" %08" PRIx32, stval);
-				}
-				MessageF(mtype, "Stack:%s\n", scratchString.c_str());
-			}
+			srd->Print(mtype, slot);
 		}
 	}
 
 	// Show the current error codes
-	MessageF(mtype, "Error status: 0x%" PRIx32 "\n", errorCodeBits);
+	MessageF(mtype, "Error status: 0x02%" PRIx32 "\n", errorCodeBits);		// we only use the bottom 5 bits at present, so print just 2 bytes
 
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures

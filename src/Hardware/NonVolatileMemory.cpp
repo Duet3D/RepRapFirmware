@@ -23,20 +23,20 @@ void NonVolatileMemory::EnsureRead() noexcept
 #if SAME5x
 		memcpy(&buffer, reinterpret_cast<const void *>(SEEPROM_ADDR), sizeof(buffer));
 #elif defined(__LPC17xx__)
-		qq;	//TODO
+# error		//TODO
 #elif SAM4E || SAM4S || SAME70
-		// Work around bug in ASF flash library: flash_read_user_signature calls a RAMFUNC without disabling interrupts first.
-		// This caused a crash (watchdog timeout) sometimes if we run M122 while a print is in progress
-		const irqflags_t flags = cpu_irq_save();
-		Cache::Disable();
+		const bool cacheEnabled = Cache::Disable();
 		flash_read_user_signature(reinterpret_cast<uint32_t*>(&buffer), sizeof(buffer)/sizeof(uint32_t));
-		Cache::Enable();
-		cpu_irq_restore(flags);
+		if (cacheEnabled)
+		{
+			Cache::Enable();
+		}
 #else
 # error Unsupported processor
 #endif
 		if (buffer.magic != NVM::MagicValue)
 		{
+//			debugPrintf("Invalid user area\n");
 			memset(&buffer, 0xFF, sizeof(buffer));
 			buffer.magic = NVM::MagicValue;
 			state = NvmState::eraseAndWriteNeeded;
@@ -44,6 +44,7 @@ void NonVolatileMemory::EnsureRead() noexcept
 		else
 		{
 			state = NvmState::clean;
+//			debugPrintf("user area valid\n");
 		}
 	}
 }
@@ -56,6 +57,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
         while (NVMCTRL->SEESTAT.bit.BUSY) { }
         memcpy(reinterpret_cast<uint8_t*>(SEEPROM_ADDR), &buffer, sizeof(buffer));
 		state = NvmState::clean;
+        while (NVMCTRL->SEESTAT.bit.BUSY) { }
 	}
 #else
 	if (state == NvmState::eraseAndWriteNeeded)

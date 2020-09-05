@@ -11,7 +11,7 @@
 #include <Hardware/NonVolatileMemory.h>
 #include <Cache.h>
 
-// Perform a software reset. 'stk' points to the program counter on the stack if the cause is an exception, otherwise it is nullptr.
+// Perform a software reset. 'stk' points to the exception stack (r0 r1 r2 r3 r12 lr pc xPSR) if the cause is an exception, otherwise it is nullptr.
 void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 {
 	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
@@ -65,12 +65,7 @@ void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 		// Record the reason for the software reset
 		NonVolatileMemory mem;
 		SoftwareResetData * const srd = mem.AllocateResetDataSlot();
-
-#if defined(__LPC17xx__)
-        srd->Populate(reason, (uint32_t)realTime, stk);
-#else
-        srd->Populate(reason, (uint32_t)reprap.GetPlatform().GetDateTime(), stk);
-#endif
+        srd->Populate(reason, stk);
         mem.EnsureWritten();
 	}
 
@@ -88,7 +83,7 @@ void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 // so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
 extern "C" [[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
+	SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress);
 }
 
 // The fault handler implementation calls a function called hardFaultDispatcher()
@@ -111,7 +106,7 @@ void HardFault_Handler() noexcept
 
 extern "C" [[noreturn]] void memManageDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::memFault, pulFaultStackAddress + 5);
+	SoftwareReset((uint16_t)SoftwareResetReason::memFault, pulFaultStackAddress);
 }
 
 // The fault handler implementation calls a function called memManageDispatcher()
@@ -134,7 +129,7 @@ void MemManage_Handler() noexcept
 
 extern "C" [[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
+	SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress);
 }
 
 #ifdef __LPC17xx__
@@ -161,7 +156,7 @@ void WDT_Handler() noexcept
 
 extern "C" [[noreturn]] void otherFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress + 5);
+	SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress);
 }
 
 // 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
