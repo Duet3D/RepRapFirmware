@@ -2714,17 +2714,29 @@ void RepRap::PrepareToLoadIap() noexcept
 #ifdef DUET_NG
 	DuetExpansion::Exit();					// stop the DueX polling task
 #endif
-#if SAME5x
+#if SAME5x	// CoreNG uses a separate analog input task, so stop that
 	StopAnalogTask();
 #endif
 
-	// Disable the cache because it interferes with flash memory access
-	Cache::Disable();
+	Cache::Disable();						// disable the cache because it interferes with flash memory access
 
 #if USE_MPU
-	//TODO consider setting flash memory to strongly-ordered instead
-	ARM_MPU_Disable();
+	ARM_MPU_Disable();						// make sure we can execute from RAM
 #endif
+
+#if 0
+	// Debug
+	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 60 * 1024);
+	delay(2000);
+	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (60 * 1024)); ++p)
+	{
+		if (*p != 0x7E)
+		{
+			debugPrintf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
+		}
+	}
+	debugPrintf("Scan complete\n");
+	#endif
 }
 
 void RepRap::StartIap() noexcept

@@ -2742,52 +2742,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+
+			// M453 may be repeated to set up multiple spindles, so only print the message on the initial switch
+			if (machineType != MachineType::cnc)
 			{
-				const MachineType oldMachineType = machineType;
-				machineType = MachineType::cnc;								// switch to CNC mode even if the spindle parameter is bad
-				const uint32_t slot = gb.Seen('S') ? gb.GetLimitedUIValue('S', MaxSpindles) : 0;
+				machineType = MachineType::cnc;						// switch to CNC mode even if the spindle parameter is bad
+				reprap.StateUpdated();
+				reply.copy("CNC mode selected");
+			}
 
-				Spindle& spindle = platform.AccessSpindle(slot);
-				bool seenSpindle = false;
-				if (gb.Seen('C'))
-				{
-					seenSpindle = true;
-					if (!spindle.AllocatePins(gb, reply))
-					{
-						result = GCodeResult::error;
-						break;
-					}
-				}
-				if (result == GCodeResult::ok)
-				{
-					if (gb.Seen('F'))
-					{
-						seenSpindle = true;
-						spindle.SetFrequency(gb.GetPwmFrequency());
-					}
-					if (gb.Seen('R'))
-					{
-						seenSpindle = true;
-						spindle.SetMaxRpm(max<float>(1.0, gb.GetFValue()));
-					}
-					if (gb.Seen('T'))
-					{
-						seenSpindle = true;
-						spindle.SetToolNumber(gb.GetIValue());
-					}
-				}
-
-				// M453 may be repeated to set up multiple spindles, so only print the message on the initial switch
-				if (oldMachineType != MachineType::cnc)
-				{
-					reprap.StateUpdated();
-					reply.copy("CNC mode selected");
-				}
-
-				if (seenSpindle)
-				{
-					reprap.SpindlesUpdated();
-				}
+			{
+				const uint32_t slot = gb.Seen('S') ? gb.GetLimitedUIValue('S', MaxSpindles) : 0;		// may throw
+				result = platform.AccessSpindle(slot).Configure(gb, reply);								// may throw
 			}
 			break;
 

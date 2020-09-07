@@ -8,9 +8,10 @@
 #ifndef SPINDLE_H
 #define SPINDLE_H
 
-#include "RepRapFirmware.h"
-#include "Hardware/IoPorts.h"
-#include "ObjectModel/ObjectModel.h"
+#include <RepRapFirmware.h>
+#include <Hardware/IoPorts.h>
+#include <ObjectModel/ObjectModel.h>
+#include <GCodes/GCodeResult.h>
 
 class Spindle INHERIT_OBJECT_MODEL
 {
@@ -24,21 +25,14 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 public:
-	Spindle() noexcept : currentRpm(0.0), configuredRpm(0.0), maxRpm(DefaultMaxSpindleRpm), frequency(0), toolNumber(-1) { }
+	Spindle() noexcept;
 
-	bool AllocatePins(GCodeBuffer& gb, const StringRef& reply) noexcept;			// Allocate the pins returning true if successful
-
-	void SetFrequency(PwmFrequency freq) noexcept;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	int GetToolNumber() const noexcept { return toolNumber; }
-	void SetToolNumber(int tool) noexcept { toolNumber = tool; }
-
-	void SetMaxRpm(float max) noexcept { maxRpm = max; }
-
 	float GetCurrentRpm() const noexcept { return currentRpm; }
 	float GetRpm() const noexcept { return configuredRpm; }
 	void SetRpm(float rpm) noexcept;
-
 	void TurnOff() noexcept;
 };
 
