@@ -139,17 +139,18 @@ void SoftwareResetData::Print(MessageType mtype, unsigned int slot) const noexce
 		if (cfsr & (1u << 0)) { scratchString.cat(" iaccViol"); }
 	}
 #endif
-	reprap.GetPlatform().MessageF(mtype, "%s, %s spinning, available RAM %" PRIu32 ", slot %d\n",
+	reprap.GetPlatform().MessageF(mtype, "%s, %s spinning, available RAM %" PRIu32 ", slot %u\n",
 						scratchString.c_str(),
 						GetModuleName(resetReason & 0x1F),
-						neverUsedRam, slot);
+						neverUsedRam,
+						slot);
 
 	// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
 	// The task name may include nulls at the end, so print it as a string
-	const uint32_t taskNameWord[2] = { taskName, 0 };
+	const uint32_t taskNameWords[2] = { taskName, 0u };
 	reprap.GetPlatform().MessageF(mtype,
 			"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task %s\n",
-			resetReason, hfsr, cfsr, icsr, bfar, sp, (const char *)&taskNameWord
+			resetReason, hfsr, cfsr, icsr, bfar, sp, (const char *)taskNameWords
 		);
 	if (sp != 0xFFFFFFFF)
 	{

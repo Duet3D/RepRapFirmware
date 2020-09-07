@@ -62,8 +62,9 @@ struct SoftwareResetData
 	uint32_t sp;								// stack pointer
 	uint32_t when;								// value of the RTC when the software reset occurred
 	uint32_t taskName;							// first 4 bytes of the task name
-	uint32_t spare;								// unused at present
-	uint32_t stack[28];							// stack when the exception occurred, with the link register and program counter at the bottom
+	uint32_t spare[2];							// unused at present
+	// The stack length is set to 27 words because that is the most we can print in a single message using our 256-byte format buffer
+	uint32_t stack[27];							// stack when the exception occurred, with the link register and program counter at the bottom
 
 	bool IsVacant() const noexcept;				// return true if this struct can be written without erasing it first
 	bool IsValid() const noexcept { return magic == magicValue; }

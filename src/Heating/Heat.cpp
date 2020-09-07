@@ -26,6 +26,7 @@ Licence: GPL
 #include "Sensors/TemperatureSensor.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include <TaskPriorities.h>
+#include <General/Portability.h>
 
 #if SUPPORT_DHT_SENSOR
 # include "Sensors/DhtSensor.h"
@@ -336,7 +337,7 @@ void Heat::Exit() noexcept
 					msg->whichSensors |= (uint64_t)1u << sn;
 					float temperature;
 					msg->temperatureReports[sensorsFound].errorCode = (uint8_t)sensor->GetLatestTemperature(temperature);
-					msg->temperatureReports[sensorsFound].temperature = temperature;
+					msg->temperatureReports[sensorsFound].SetTemperature(temperature);
 					++sensorsFound;
 				}
 				currentSensorNumber = (unsigned int)sn + 1u;

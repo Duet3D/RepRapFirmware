@@ -11,6 +11,7 @@
 
 #include "CAN/CanMessageGenericConstructor.h"
 #include "CanMessageBuffer.h"
+#include <General/Portability.h>
 
 constexpr uint32_t RemoteTemperatureTimeoutMillis = 1000;
 
@@ -47,7 +48,7 @@ void RemoteSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorReport
 {
 	if (src == boardAddress)
 	{
-		SetResult(report.temperature, (TemperatureError)report.errorCode);
+		SetResult(report.GetTemperature(), (TemperatureError)report.errorCode);
 	}
 }
 

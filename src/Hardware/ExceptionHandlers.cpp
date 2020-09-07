@@ -23,11 +23,6 @@ void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 
 	Cache::Disable();
 
-#if USE_MPU
-	//TODO set the flash memory to strongly-ordered or device instead
-	ARM_MPU_Disable();							// disable the MPU
-#endif
-
 	if (reason == (uint16_t)SoftwareResetReason::erase)
 	{
 #if SAME5x
@@ -98,6 +93,7 @@ void HardFault_Handler() noexcept
 		" mrsne r0, psp                                             \n"
 		" ldr r2, handler_hf_address_const                          \n"
 		" bx r2                                                     \n"
+		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
 		" handler_hf_address_const: .word hardFaultDispatcher       \n"
 	);
 }
@@ -121,6 +117,7 @@ void MemManage_Handler() noexcept
 		" mrsne r0, psp                                             \n"
 		" ldr r2, handler_mf_address_const                          \n"
 		" bx r2                                                     \n"
+		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
 		" handler_mf_address_const: .word memManageDispatcher       \n"
 	);
 }
@@ -150,6 +147,7 @@ void WDT_Handler() noexcept
 		" mrsne r0, psp                                             \n"
 		" ldr r2, handler_wdt_address_const                         \n"
 		" bx r2                                                     \n"
+		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
 		" handler_wdt_address_const: .word wdtFaultDispatcher       \n"
 	);
 }
@@ -172,6 +170,7 @@ void OtherFault_Handler() noexcept
 		" mrsne r0, psp                                             \n"
 		" ldr r2, handler_oflt_address_const                        \n"
 		" bx r2                                                     \n"
+		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
 		" handler_oflt_address_const: .word otherFaultDispatcher    \n"
 	);
 }
@@ -199,6 +198,7 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexce
 		" mov r0, sp												\n"
 		" ldr r2, handler_sovf_address_const                        \n"
 		" bx r2                                                     \n"
+		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
 		" handler_sovf_address_const: .word stackOverflowDispatcher \n"
 	);
 }
@@ -221,6 +221,7 @@ void vAssertCalled(uint32_t line, const char *file) noexcept
 		" mov r0, sp												\n"
 		" ldr r2, handler_asrt_address_const                        \n"
 		" bx r2                                                     \n"
+		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
 		" handler_asrt_address_const: .word assertCalledDispatcher  \n"
 	);
 }
@@ -240,6 +241,7 @@ void vApplicationMallocFailedHook() noexcept
 		" mov r0, sp												\n"
 		" ldr r2, handler_amf_address_const							\n"
 		" bx r2														\n"
+		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
 		" handler_amf_address_const: .word applicationMallocFailedCalledDispatcher  \n"
 	 );
 }

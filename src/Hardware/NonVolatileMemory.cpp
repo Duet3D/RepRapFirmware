@@ -54,6 +54,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 #if SAME5x
 	if (state >= NvmState::writeNeeded)
 	{
+		// No need to erase on the SAME5x because the EEPROM emulation manages it
         while (NVMCTRL->SEESTAT.bit.BUSY) { }
         memcpy(reinterpret_cast<uint8_t*>(SEEPROM_ADDR), &buffer, sizeof(buffer));
 		state = NvmState::clean;
@@ -107,7 +108,10 @@ SoftwareResetData* NonVolatileMemory::AllocateResetDataSlot() noexcept
 	{
 		if (buffer.resetData[i].IsVacant())
 		{
-			state = NvmState::writeNeeded;		// assume the caller will write to the allocated slot
+			if (state == NvmState::clean)			// need this test because state may already be EraseAndWriteNeeded after EnsureRead
+			{
+				state = NvmState::writeNeeded;		// assume the caller will write to the allocated slot
+			}
 			return &buffer.resetData[i];
 		}
 	}

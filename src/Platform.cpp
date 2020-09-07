@@ -2014,26 +2014,46 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #endif
 
 	case (unsigned int)DiagnosticTestType::TestWatchdog:
+		if (!gb.DoDwellTime(1000))								// wait a second to allow the response to be sent back to the web server, otherwise it may retry
+		{
+			return GCodeResult::notFinished;
+		}
 		deliberateError = true;
 		SysTick->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);			// disable the system tick interrupt so that we get a watchdog timeout reset
 		break;
 
 	case (unsigned int)DiagnosticTestType::TestSpinLockup:
+		if (!gb.DoDwellTime(1000))								// wait a second to allow the response to be sent back to the web server, otherwise it may retry
+		{
+			return GCodeResult::notFinished;
+		}
 		deliberateError = true;
 		debugCode = d;											// tell the Spin function to loop
 		break;
 
 	case (unsigned int)DiagnosticTestType::TestSerialBlock:		// write an arbitrary message via debugPrintf()
+		if (!gb.DoDwellTime(1000))								// wait a second to allow the response to be sent back to the web server, otherwise it may retry
+		{
+			return GCodeResult::notFinished;
+		}
 		deliberateError = true;
 		debugPrintf("Diagnostic Test\n");
 		break;
 
 	case (unsigned int)DiagnosticTestType::DivideByZero:		// do an integer divide by zero to test exception handling
+		if (!gb.DoDwellTime(1000))								// wait a second to allow the response to be sent back to the web server, otherwise it may retry
+		{
+			return GCodeResult::notFinished;
+		}
 		deliberateError = true;
 		(void)RepRap::DoDivide(1, 0);							// call function in another module so it can't be optimised away
 		break;
 
 	case (unsigned int)DiagnosticTestType::UnalignedMemoryAccess: // do an unaligned memory access to test exception handling
+		if (!gb.DoDwellTime(1000))								// wait a second to allow the response to be sent back to the web server, otherwise it may retry
+		{
+			return GCodeResult::notFinished;
+		}
 		deliberateError = true;
 		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;					// by default, unaligned memory accesses are allowed, so change that
 		__DSB();												// make sure that instruction completes
@@ -2045,6 +2065,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #if SAME70 && !USE_MPU
 		Message(WarningMessage, "There is no abort area on the SAME70 with MPU disabled");
 #else
+		if (!gb.DoDwellTime(1000))								// wait a second to allow the response to be sent back to the web server, otherwise it may retry
+		{
+			return GCodeResult::notFinished;
+		}
 		deliberateError = true;
 		RepRap::GenerateBusFault();
 #endif
