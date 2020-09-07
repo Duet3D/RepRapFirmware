@@ -786,6 +786,8 @@ void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept
 // This is called when we shut down
 void ethernetif_terminate() noexcept
 {
+	gmac_enable_transmit(GMAC, false);
+	gmac_enable_receive(GMAC, false);
 	NVIC_DisableIRQ(GMAC_IRQn);
 	ethernetTask.TerminateAndUnlink();
 }
