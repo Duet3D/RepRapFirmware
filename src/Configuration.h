@@ -306,7 +306,8 @@ constexpr float FILAMENT_WIDTH = 1.75;					// Millimetres
 constexpr unsigned int MaxStackDepth = 7;				// Maximum depth of stack (was 5 in 3.01-RC2, increased to 7 for 3.01-RC3)
 
 // CNC and laser support
-constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
+constexpr int32_t DefaultMinSpindleRpm = 60;			// Default minimum available spindle RPM
+constexpr int32_t DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration
 

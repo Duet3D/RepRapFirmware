@@ -1488,7 +1488,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				}
 
 				const Spindle& spindle = platform->AccessSpindle(i);
-				response->catf("{\"current\":%.1f,\"active\":%.1f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
+				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32, spindle.GetCurrentRpm(), spindle.GetRpm());
 				if (type == 2)
 				{
 					response->catf(",\"tool\":%d}", spindle.GetToolNumber());

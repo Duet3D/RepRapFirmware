@@ -146,37 +146,37 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Network)
 void Network::Init() noexcept
 {
 #if HAS_NETWORKING
-#if SUPPORT_HTTP
+# if SUPPORT_HTTP
 	httpMutex.Create("HTTP");
-#endif
-#if SUPPORT_TELNET
-	telnetMutex.Create("Telnet");
-#endif
-
-#if defined(DUET_NG) && HAS_NETWORKING
-# if HAS_WIFI_NETWORKING && HAS_W5500_NETWORKING
-	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));
-# elif HAS_WIFI_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
-# elif HAS_W5500_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>(new W5500Interface(platform));
-# endif
-#endif
-
-#if defined(DUET_5LC) && HAS_NETWORKING
-# if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING
-	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
-# elif HAS_WIFI_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
-# elif HAS_LWIP_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>new LwipEthernetInterface(platform);
-# endif
-#endif
-
-#if SUPPORT_HTTP
-	// Create the responders
 	HttpResponder::InitStatic();
-#endif
+# endif
+# if SUPPORT_FTP
+	FtpResponder::InitStatic();
+# endif
+# if SUPPORT_TELNET
+	telnetMutex.Create("Telnet");
+	TelnetResponder::InitStatic();
+# endif
+
+# if defined(DUET_NG)
+#  if HAS_WIFI_NETWORKING && HAS_W5500_NETWORKING
+	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));
+#  elif HAS_WIFI_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
+#  elif HAS_W5500_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>(new W5500Interface(platform));
+#  endif
+# endif
+
+# if defined(DUET_5LC)
+#  if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING
+	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
+#  elif HAS_WIFI_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
+#  elif HAS_LWIP_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>new LwipEthernetInterface(platform);
+#  endif
+# endif
 
 	SafeStrncpy(hostname, DEFAULT_HOSTNAME, ARRAY_SIZE(hostname));
 
@@ -408,8 +408,6 @@ void Network::Activate() noexcept
 
 	// Create the network responders
 # if SUPPORT_TELNET
-	TelnetResponder::InitStatic();
-
 	for (size_t i = 0; i < NumTelnetResponders; ++i)
 	{
 		responders = new TelnetResponder(responders);
@@ -417,8 +415,6 @@ void Network::Activate() noexcept
 # endif
 
 # if SUPPORT_FTP
-	FtpResponder::InitStatic();
-
 	for (size_t i = 0; i < NumFtpResponders; ++i)
 	{
 		responders = new FtpResponder(responders);

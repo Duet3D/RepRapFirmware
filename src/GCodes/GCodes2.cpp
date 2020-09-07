@@ -522,7 +522,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					switch (machineType)
 					{
 					case MachineType::cnc:
-						platform.AccessSpindle(slot).SetRpm(gb.GetFValue());
+						platform.AccessSpindle(slot).SetRpm(gb.GetIValue());
 						break;
 
 #if SUPPORT_LASER
@@ -568,10 +568,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 4: // Spin spindle counter clockwise
 			if (machineType == MachineType::cnc)
 			{
-				gb.MustSee('S');
-				const float rpm = gb.GetFValue();
 				const uint32_t slot = (gb.Seen('P')) ? gb.GetLimitedUIValue('P', MaxSpindles) : 0;
-				platform.AccessSpindle(slot).SetRpm(-rpm);
+				gb.MustSee('S');
+				platform.AccessSpindle(slot).SetRpm(-gb.GetIValue());
 			}
 			else
 			{
