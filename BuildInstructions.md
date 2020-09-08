@@ -129,6 +129,7 @@ pre-compiled binaries for Windows, Linux and MacOS x86-64.
     |**Duet3 Mini** (Wifi and Ethernet)||
     ||CoreN2G| SAME5X_RTOS|
     ||FreeRTOS | SAME51|
+    ||RRFLibraries|SAME51_RTOS|
     ||RepRapFirmware|Duet_5LC|
     |**Duet3**||
     ||CANlib|SAME70_RTOS|
@@ -140,16 +141,15 @@ pre-compiled binaries for Windows, Linux and MacOS x86-64.
     ||CoreNG|SAM4E8E|
     ||FreeRTOS|SAM4E|
     ||RRFLibraries|SAM4E_RTOS|
-    ||RepRapFirmware|Duet2_RTOS|
+    ||RepRapFirmware|Duet2_RTOS (or just Duet2 in version 3.2 and later)|
     |**Duet Maestro**||
     ||CoreNG|SAM4S|
     ||FreeRTOS|SAM4S|
     ||RRFLibraries|SAM4S_RTOS|
-    ||RepRapFirmware|Duet2_RTOS|
+    ||RepRapFirmware|DuetMaestro|
     |**Duet085** (Duet0.85 and Duet0.6)|**Note:** _Needs v1.20 tags_||
     ||CoreNG|SAM3X8E|
-    ||FreeRTOS|SAM3X|
-    ||RRFLibraries|SAM3X_RTOS|
+    ||RRFLibraries|SAM3X|
     ||RepRapFirmware|Duet085| 
 
 16. Build order:  
