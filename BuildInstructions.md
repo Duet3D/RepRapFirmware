@@ -108,20 +108,19 @@ pre-compiled binaries for Windows, Linux and MacOS x86-64.
 14. Build dependencies:
     - Duet3 Mini builds depend on [CoreN2G](https://github.com/Duet3D/CoreN2G),
       [FreeRTOS](https://github.com/Duet3D/FreeRTOS), and
-      [RRFLibraries](https://github.com/Duet3D/RRFLibraries). The WiFi version
-      requires [DuetWifiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer),
+      [RRFLibraries](https://github.com/Duet3D/RRFLibraries). They also
+      require [DuetWifiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer),
       as outlined above.
     - Duet3 builds depend on [CANlib](https://github.com/Duet3D/CANlib), 
       [CoreNG](https://github.com/Duet3D/CoreNG), [FreeRTOS](https://github.com/Duet3D/FreeRTOS),
       and [RRFLibraries](https://github.com/Duet3D/RRFLibraries).
-    - Duet2 Builds depend on [CoreNG](https://github.com/Duet3D/CoreNG),
+    - Duet2 builds depend on [CoreNG](https://github.com/Duet3D/CoreNG),
       [FreeRTOS](https://github.com/Duet3D/FreeRTOS), and [RRFLibraries](https://github.com/Duet3D/RRFLibraries).
-      Duet2 Wifi requires [DuetWifiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer),
+      They also require [DuetWifiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer),
       as outlined above.
     - Duet Maestro builds depend on [CoreNG](https://github.com/Duet3D/CoreNG),
       [FreeRTOS](https://github.com/Duet3D/FreeRTOS), and [RRFLibraries](https://github.com/Duet3D/RRFLibraries).
-    - Duet085 builds (also running on Duet06) depend on [CoreNG](https://github.com/Duet3D/CoreNG),
-      [FreeRTOS](https://github.com/Duet3D/FreeRTOS), and [RRFLibraries](https://github.com/Duet3D/RRFLibraries). **Note:** Duet085 does not run RepRapFirmware 2 or later, the last official build is v1.26.
+    - Duet085 builds (also running on Duet06) depend on [CoreNG](https://github.com/Duet3D/CoreNG) and [RRFLibraries](https://github.com/Duet3D/RRFLibraries). **Note:** Duet085 does not run RepRapFirmware 2 or later, the last official build is v1.26.
 
 15. Build configurations  
     | Board | Project | Build Configuation|  
