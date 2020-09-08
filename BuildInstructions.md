@@ -4,19 +4,32 @@ Instructions for building dc42 fork of RepRapFirmware
 **Important!**
 
 RepRapFirmware is built from several Github projects. You need to use
-compatible branches of these projects. Since RepRapFirmware v3.1.0, releases are tagged in github. I.e., to build RepRapFirmware v3.1.1 for Duet2Wifi, use the following tags:
+compatible branches of these projects. Since RepRapFirmware v3.1.0, stable releases are tagged in github.
+
+To build RepRapFirmware v3.1.1, use the following tags:
 
 | project | tag | notes | 
 | :-- | --: | --- |
 |[RepRapFirmware](https://github.com/Duet3D/RepRapFirmware)| 3.1.1||
-|[CANlib](https://github.com/Duet3D/CANlib)| 3.1.0 | _only needed for Duet3 CAN support_ |
+|[CANlib](https://github.com/Duet3D/CANlib)| 3.1.0 | _only needed for Duet 3_ |
 |[CoreNG](https://github.com/Duet3D/CoreNG)| 3.1.0||
 |[FreeRTOS](https://github.com/Duet3D/FreeRTOS)| 3.1.0||
 |[RRFLibraries](https://github.com/Duet3D/RRFLibraries)| 3.1.0||
 | [DuetWiFiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer)|| _not tagged, use master branch_|
 
-
  >**Note**: CoreNG, FreeRTOS, RRFLibraries do not have v3.1.1 tags because the  3.1.0 tagged releases are the base for v3.1.1 (no changes in the dependencies, only in RepRapFirmware) 
+
+To build RepRapFirmware from the latest development sources, use the following branches:
+
+| project | branch | notes | 
+| :-- | --: | --- |
+|[RepRapFirmware](https://github.com/Duet3D/RepRapFirmware)| v3.02-dev||
+|[CANlib](https://github.com/Duet3D/CANlib)| master | _only needed for Duet 3_ |
+|[CoreNG](https://github.com/Duet3D/CoreNG)| dev | _not needed for Duet 3 Mini5+_ |
+|[CoreN2G](https://github.com/Duet3D/CoreN2G)| master | _only needed for Duet 3 Mini5+_ |
+|[FreeRTOS](https://github.com/Duet3D/FreeRTOS)| dev ||
+|[RRFLibraries](https://github.com/Duet3D/RRFLibraries)| dev ||
+|[DuetWiFiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer)| dev ||
 
 ## Additional Tools
 
