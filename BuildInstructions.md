@@ -1,5 +1,5 @@
-Instructions for building dc42 fork of RepRapFirmware
-=====================================================
+Instructions for building RepRapFirmware
+========================================
 
 **Important!**
 
