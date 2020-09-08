@@ -17,7 +17,7 @@ New features/changed behaviour:
 - G29 with no S parameter now runs file sys/mesh.g if it exists; otherwise it behaves like G29 S0 as before
 - Drivers number of the form 0.# where # represents one or more decimal digits are now supported even on board that don't support CAN
 - The resurrect.g file now records which objects on the build plate have been cancelled
-- Duet 3 Mini 5+ WiFi and Ethernet prototype boards are now supported
+- Duet 3 Mini 5+ WiFi and Ethernet prototype boards v0.2 are now supported
 - Added move.workplaceNumber to the object model. This is intended to repace move.workspaceNumber, but is 0-based instead of 1-based.
 - Added L (calibration factor) parameter to laser filament monitor configuration
 - Increased the number of stack words displayed in the software reset data. The number of wear-levelling slots stored is reduced from 4 to 3.
@@ -25,19 +25,19 @@ New features/changed behaviour:
 - M486 now confirms when an object is cancelled or resumed
 - Default thermistor parameters for all builds of RRF3 are now T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old defaults.
 - The parameters for M453 have changed. The frequency parameter is now Q (to match M950) instead of F. You can configure up to 3 ports to control each spindle. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M453_in_RepRapFirmware_3_2_and_later.
-- Object model variable spindled[].minRpm has been added
-- Object model spindle RPM values are now integers instead of floating point values
+- [Duet Maestro] M308 L and H parameters are now supported.
+- [Duet Maestro and Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory. See https://duet3d.dozuki.com/Wiki/Calibrating_thermistor_and_PT1000_readings.
 - [Duet 3] Added support for second UART (using the IO_1 pins) on Duet 3 MB6HC. New message type (P5) added to M118 command.
-- [Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory.
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
 - [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolstep threshold
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
 - [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
 
 Object model and expression evaluation changes:
-- Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Changed to 1 decimal place.
+- Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Now they are reported as integers.
+- Added object model variable spindles[].minRpm 
 - Support comparing a value of any type that has no literals (DateTime, IPAddress, MAC address, DriverID) with a string
-- Support DateTime - DateTime, dateTime + int, DateTime - int
+- Support DateTime - DateTime, DateTime + int, DateTime - int
 - Support T{expression} commands
 - Added random(nn) function
 
