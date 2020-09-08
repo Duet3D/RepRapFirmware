@@ -3,8 +3,9 @@ RepRapFirmware 3.2-beta1 (in preparation
 
 Upgrade notes:
 - In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
+- If you are using the M453 command to configure spindle motors and switch the firmware into CNC mode, you will need to change this command because the parameters have changed.
 - [Duet 3] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
-- If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber - 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based.
+- If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber - 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based. We plan to remove workspaceNumber in a future release.
 - Default thermistor parameters for all builds of RRF3 are now: T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old default, which had B4388 C0. In the unlikely event that your M308 line had a C parameter but no B parameter, you will need to add B4388 to get the prevous behaviour.
 
 New features/changed behaviour:
@@ -23,6 +24,9 @@ New features/changed behaviour:
 - Added M584 R parameter to indicate whether newly created axes are continuous rotation axes or not
 - M486 now confirms when an object is cancelled or resumed
 - Default thermistor parameters for all builds of RRF3 are now T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old defaults.
+- The parameters for M453 have changed. The frequency parameter is now Q (to match M950) instead of F. You can configure up to 3 ports to control each spindle. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M453_in_RepRapFirmware_3_2_and_later.
+- Object model variable spindled[].minRpm has been added
+- Object model spindle RPM values are now integers instead of floating point values
 - [Duet 3] Added support for second UART (using the IO_1 pins) on Duet 3 MB6HC. New message type (P5) added to M118 command.
 - [Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory.
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
@@ -45,6 +49,7 @@ Bug fixes:
 - If a G31 command defined new values in terms of existing G31 values from the object model, then incorrect values could be set due to the new values being computed and stored multiple times
 - The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
 - Object model variable seqs.spindles was not updated when the configuredRpm of a spindle was changed
+- [Duet 3 with attached SBC] When an array parameter (e.g. M92 E value) had more than one element but less than the maximum number, the last element was replicated to fill the array. This was inconsistent with non-SBC behaviour, which only pads the array when a single element is privided.
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
 - [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
 - [Duet 3] M915 with just P and/or axis parameters did not report the coolstep threshold (T parameter) correctly
