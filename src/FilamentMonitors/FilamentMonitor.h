@@ -63,6 +63,9 @@ public:
 	// Poll the filament sensors
 	static void Spin() noexcept;
 
+	// Close down the filament monitors, in particular stop them generating interrupts. Called when we are about to update firmware.
+	static void DisableAll() noexcept;
+
 	// Handle M591
 	static GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder) THROWS(GCodeException)
 	pre(extruder < MaxExtruders);

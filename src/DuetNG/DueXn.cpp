@@ -353,7 +353,10 @@ uint16_t DuetExpansion::DiagnosticRead() noexcept
 void DuetExpansion::Exit()
 {
 	detachInterrupt(DueX_INT);
-	dueXTask->TerminateAndUnlink();
+	if (dueXTask != nullptr)
+	{
+		dueXTask->TerminateAndUnlink();
+	}
 }
 
 // End

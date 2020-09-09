@@ -2710,6 +2710,7 @@ void RepRap::PrepareToLoadIap() noexcept
 	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
+	FilamentMonitor::DisableAll();			// stop the filament monitors generating interrupts, we may be about to overwrite them
 
 #ifdef DUET_NG
 	DuetExpansion::Exit();					// stop the DueX polling task
