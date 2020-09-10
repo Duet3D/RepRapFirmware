@@ -217,7 +217,7 @@ enum class LinuxRequest : uint16_t
 	WriteIap = 12,								// Write another chunk of the IAP binary
 	StartIap = 13,								// Launch the IAP binary
 	AssignFilament = 14,						// Assign filament to an extruder
-	FileChunk = 15,								// Response to a file chunk request
+	FileChunk = 15,								// Response to a file chunk request from a CAN-connected board
 	EvaluateExpression = 16,					// Evaluate an arbitrary expression
 	Message = 17,								// Send an arbitrary message
 

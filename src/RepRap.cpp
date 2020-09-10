@@ -17,12 +17,24 @@
 #include "Tools/Filament.h"
 #include "Endstops/ZProbe.h"
 #include "Tasks.h"
-#include "Hardware/Cache.h"
+#include <Cache.h>
 #include "Fans/FansManager.h"
+#include <Hardware/SoftwareReset.h>
+#include <Hardware/ExceptionHandlers.h>
 #include "Version.h"
 
 #ifdef DUET_NG
 # include "DueXn.h"
+#endif
+
+#if SUPPORT_TMC2660
+# include "Movement/StepperDrivers/TMC2660.h"
+#endif
+#if SUPPORT_TMC22xx
+# include "Movement/StepperDrivers/TMC22xx.h"
+#endif
+#if SUPPORT_TMC51xx
+# include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
 #if SUPPORT_IOBITS
@@ -39,9 +51,7 @@
 
 #if HAS_HIGH_SPEED_SD
 
-# if SAME5x
-//TODO
-# else
+# if !SAME5x	// if not using CoreN2G
 #  include "sam/drivers/hsmci/hsmci.h"
 #  include "conf_sd_mmc.h"
 # endif
@@ -68,7 +78,7 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
-#if !defined(__LPC17xx__) && !SAME5x	//TODO implement for SAME5x
+#if HAS_HIGH_SPEED_SD && !SAME5x										// SAME5x uses CoreN2G which makes its own RTOS calls
 
 static TaskHandle hsmciTask = nullptr;									// the task that is waiting for a HSMCI command to complete
 
@@ -127,7 +137,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 	}
 }
 
-#endif //end ifndef LPC
+#endif //end if HAS_HIGH_SPEED_SD && !SAME5x
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -393,7 +403,8 @@ RepRap::RepRap() noexcept
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
 	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
 #if HAS_LINUX_INTERFACE
-	  , usingLinuxInterface(true)
+	  , usingLinuxInterface(false)						// default to not using the SBC interface until we have checked for config.g on an SD card,
+														// because a disconnected SBC interface can generate noise which may trigger interrupts and DMA
 #endif
 {
 	// Don't call constructors for other objects here
@@ -404,7 +415,7 @@ void RepRap::Init() noexcept
 	OutputBuffer::Init();
 	platform = new Platform();
 #if HAS_LINUX_INTERFACE
-	linuxInterface = new LinuxInterface();				// needs to be allocated early so as to avoid the last 64K of RAM
+	linuxInterface = new LinuxInterface();				// needs to be allocated early on Duet 2 so as to avoid using any of the last 64K of RAM
 #endif
 	network = new Network(*platform);
 	gCodes = new GCodes(*platform);
@@ -462,9 +473,7 @@ void RepRap::Init() noexcept
 #if SUPPORT_12864_LCD
 	display->Init();
 #endif
-#if HAS_LINUX_INTERFACE
-	linuxInterface->Init();
-#endif
+	// linuxInterface is not initialised until we know we are using it, to prevent a disconnected SBC interface generating interrupts and DMA
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
 #if SAME5x
@@ -482,17 +491,22 @@ void RepRap::Init() noexcept
 		const uint16_t timeout = 32768/128;											// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
 		wdt_init(WDT, WDT_MR_WDRSTEN | WDT_MR_WDDBGHLT, timeout, timeout);			// reset the processor on a watchdog fault, stop it when debugging
 
-#if SAM4E || SAME70
+# if SAM4E || SAME70
 		// The RSWDT must be initialised *after* the main WDT
 		const uint16_t rsTimeout = 16384/128;										// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
 		rswdt_init(RSWDT, RSWDT_MR_WDFIEN | RSWDT_MR_WDDBGHLT, rsTimeout, rsTimeout);	// generate an interrupt on a watchdog fault
 		NVIC_EnableIRQ(WDT_IRQn);													// enable the watchdog interrupt
-#endif
+# endif
 		delayMicroseconds(200);														// 200us is about 6 slow clocks
 	}
 #endif
 
 	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
+
+#if HAS_LINUX_INTERFACE && !HAS_MASS_STORAGE
+	linuxInterface->Init();
+	usingLinuxInterface = true;
+#endif
 
 	platform->MessageF(UsbMessage, "\n%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
@@ -511,17 +525,18 @@ void RepRap::Init() noexcept
 		if (rslt == GCodeResult::ok)
 		{
 			// Run the configuration file
-
-# if HAS_LINUX_INTERFACE
-			usingLinuxInterface = false;				// try to run config.g from the SD card
-# endif
 			if (RunStartupFile(GCodes::CONFIG_FILE) || RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
 			{
-				// Processed config.g so OK
+				// Processed config.g so OK. Leave usingLinuxInterface set to false.
+# if HAS_LINUX_INTERFACE
+				delete linuxInterface;					// free up the RAM for more tools etc.
+				linuxInterface = nullptr;
+# endif
 			}
 			else
 			{
 # if HAS_LINUX_INTERFACE
+				linuxInterface->Init();
 				usingLinuxInterface = true;				// we failed to open config.g or default.g so assume we have a SBC connected
 # else
 				platform->Message(UsbMessage, "Error, no configuration file found\n");
@@ -530,7 +545,10 @@ void RepRap::Init() noexcept
 		}
 		else
 		{
-# if !HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
+			linuxInterface->Init();
+			usingLinuxInterface = true;
+# else
 			delay(3000);								// Wait a few seconds so users have a chance to see this
 			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
 # endif
@@ -538,13 +556,12 @@ void RepRap::Init() noexcept
 	}
 #endif
 
-
 #if HAS_LINUX_INTERFACE
 	if (usingLinuxInterface)
 	{
 		processingConfig = false;
 		gCodes->RunConfigFile(GCodes::CONFIG_FILE);		// we didn't get config.g from SD card so request it from Linux
-		network->Activate();							// need to do this here, as the configuration GCodes may set IP address etc.
+		// As we are running the SBC, save RAM by not activating the network
 	}
 	else
 #endif
@@ -560,9 +577,9 @@ void RepRap::Init() noexcept
 		processingConfig = false;
 	}
 
-#if HAS_HIGH_SPEED_SD && !SAME5x		//TODO implement for SAMR5x
+#if HAS_HIGH_SPEED_SD && !SAME5x
 	hsmci_set_idle_func(hsmciIdle);
-	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
+	HSMCI->HSMCI_IDR = 0xFFFFFFFF;						// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
 #endif
 
@@ -659,9 +676,12 @@ void RepRap::Spin() noexcept
 #endif
 
 #if HAS_LINUX_INTERFACE
-	ticksInSpinState = 0;
-	spinningModule = moduleLinuxInterface;
-	linuxInterface->Spin();
+	if (usingLinuxInterface)
+	{
+		ticksInSpinState = 0;
+		spinningModule = moduleLinuxInterface;
+		linuxInterface->Spin();
+	}
 #endif
 
 	ticksInSpinState = 0;
@@ -794,7 +814,10 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	CanInterface::Diagnostics(mtype);
 #endif
 #if HAS_LINUX_INTERFACE
-	linuxInterface->Diagnostics(mtype);
+	if (usingLinuxInterface)
+	{
+		linuxInterface->Diagnostics(mtype);
+	}
 #endif
 	justSentDiagnostics = true;
 }
@@ -835,132 +858,6 @@ void RepRap::EmergencyStop() noexcept
 
 	gCodes->EmergencyStop();
 	platform->StopLogging();
-}
-
-// Perform a software reset. 'stk' points to the program counter on the stack if the cause is an exception, otherwise it is nullptr.
-void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
-{
-	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
-	watchdogReset();							// kick the watchdog
-
-#if SAM4E || SAME70
-	rswdt_restart(RSWDT);						// kick the secondary watchdog
-#endif
-
-	Cache::Disable();
-
-#if USE_MPU
-	//TODO set the flash memory to strongly-ordered or device instead
-	ARM_MPU_Disable();							// disable the MPU
-#endif
-
-	if (reason == (uint16_t)SoftwareResetReason::erase)
-	{
-#if SAME5x
-		//TODO invalidate flash so the USB bootloader runs
-#else
-		EraseAndReset();
-#endif
- 	}
-	else
-	{
-		if (reason != (uint16_t)SoftwareResetReason::user)
-		{
-			if (SERIAL_MAIN_DEVICE.canWrite() == 0)
-			{
-				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
-			}
-
-#ifdef SERIAL_AUX_DEVICE
-			if (SERIAL_AUX_DEVICE.canWrite() == 0
-# ifdef SERIAL_AUX2_DEVICE
-				|| SERIAL_AUX2_DEVICE.canWrite() == 0
-# endif
-			   )
-			{
-				reason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
-			}
-#endif
-		}
-		reason |= (uint8_t)reprap.GetSpinningModule();
-		if (platform->WasDeliberateError())
-		{
-			reason |= (uint16_t)SoftwareResetReason::deliberate;
-		}
-
-		// Record the reason for the software reset
-		// First find a free slot (wear levelling)
-		size_t slot = SoftwareResetData::numberOfSlots;
-#if defined(__LPC17xx__)
-        SoftwareResetData srdBuf[1];
-#else
-        SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
-#endif
-
-#if SAME5x
-        //TODO
-        memset(srdBuf, 0xFF, sizeof(srdBuf));
-#elif SAM4E || SAM4S || SAME70
-		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
-#elif SAM3XA
-		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
-#elif defined(__LPC17xx__)
-		// nothing here
-#else
-# error
-#endif
-		{
-#if defined(__LPC17xx__)
-            while (slot != 0 && LPC_IsSoftwareResetDataSlotVacant(slot - 1))
-#else
-            while (slot != 0 && srdBuf[slot - 1].isVacant())
-#endif
-			{
-				--slot;
-			}
-		}
-
-		if (slot == SoftwareResetData::numberOfSlots)
-		{
-			// No free slots, so erase the area
-#if SAM4E || SAM4S || SAME70
-			flash_erase_user_signature();
-#elif defined(__LPC17xx__)
-			LPC_EraseSoftwareResetDataSlots(); // erase the last flash sector
-#endif
-			memset(srdBuf, 0xFF, sizeof(srdBuf));
-			slot = 0;
-		}
-
-#if defined(__LPC17xx__)
-        srdBuf[0].Populate(reason, (uint32_t)realTime, stk);
-#else
-        srdBuf[slot].Populate(reason, (uint32_t)platform->GetDateTime(), stk);
-#endif
-
-		// Save diagnostics data to Flash
-#if SAME5x
-        // TODO write to EEPROM
-#elif SAM4E || SAM4S || SAME70
-		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
-#elif defined(__LPC17xx__)
-		LPC_WriteSoftwareResetData(slot, srdBuf, sizeof(srdBuf));
-#else
-		DueFlashStorage::write(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
-#endif
-	}
-
-#if defined(__LPC17xx__)
-    LPC_SYSCTL->RSID = 0x3F;					// Clear bits in reset reasons stored in RSID
-#elif !SAME5x
-# ifndef RSTC_MR_KEY_PASSWD
-// Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
-#  define RSTC_MR_KEY_PASSWD (0xA5u << 24)
-# endif
-	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
-#endif
-	Reset();
-	for(;;) {}
 }
 
 void RepRap::SetDebug(Module m, bool enable) noexcept
@@ -1263,7 +1160,7 @@ void RepRap::Tick() noexcept
 	// Kicking the watchdog before it has been initialised may trigger it!
 	if (active)
 	{
-		watchdogReset();							// kick the watchdog
+		WatchdogReset();							// kick the watchdog
 #if SAM4E || SAME70
 		rswdt_restart(RSWDT);						// kick the secondary watchdog
 #endif
@@ -1347,7 +1244,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 
 	// Output notifications
 	{
-		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled()) && beepDuration != 0 && beepFrequency != 0);
+		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled(0) || platform->IsAuxRaw(0)) && beepDuration != 0 && beepFrequency != 0);
 		const bool sendMessage = !message.IsEmpty();
 
 		float timeLeft = 0.0;
@@ -1591,7 +1488,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				}
 
 				const Spindle& spindle = platform->AccessSpindle(i);
-				response->catf("{\"current\":%.1f,\"active\":%.1f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
+				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32, spindle.GetCurrentRpm(), spindle.GetRpm());
 				if (type == 2)
 				{
 					response->catf(",\"tool\":%d}", spindle.GetToolNumber());
@@ -2456,9 +2353,9 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	}
 #endif
 
-	if (platform->IsAuxEnabled())
+	if (platform->IsAuxEnabled(0) && !platform->IsAuxRaw(0))
 	{
-		platform->Beep(freq, ms);
+		platform->PanelDueBeep(freq, ms);
 		bleeped = true;
 	}
 
@@ -2480,9 +2377,9 @@ void RepRap::SetMessage(const char *msg) noexcept
 #endif
 	StateUpdated();
 
-	if (platform->IsAuxEnabled())
+	if (platform->IsAuxEnabled(0) && !platform->IsAuxRaw(0))
 	{
-		platform->SendAuxMessage(msg);
+		platform->SendPanelDueMessage(0, msg);
 	}
 }
 
@@ -2742,7 +2639,13 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 
 	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
 	uint32_t firstDword;
-	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
+	bool ok =
+#if SAME5x
+		// We use UF2 file format, so look inside the payload
+		firmwareFile->Seek(32) &&
+#endif
+
+		firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
 #if SAME5x
@@ -2791,7 +2694,7 @@ void RepRap::UpdateFirmware() noexcept
 void RepRap::PrepareToLoadIap() noexcept
 {
 #if SUPPORT_12864_LCD
-	display->UpdatingFirmware();			// put the firmware update message on the display
+	display->UpdatingFirmware();			// put the firmware update message on the display and stop polling the display
 #endif
 
 	// Send this message before we start using RAM that may contain message buffers
@@ -2806,14 +2709,36 @@ void RepRap::PrepareToLoadIap() noexcept
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
 	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
+	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
+	FilamentMonitor::Exit();				// stop the filament monitors generating interrupts, we may be about to overwrite them
+	fansManager->Exit();					// stop the fan tachos generating interrupts, we may be about to overwrite them
 
-	// Disable the cache because it interferes with flash memory access
-	Cache::Disable();
+#ifdef DUET_NG
+	DuetExpansion::Exit();					// stop the DueX polling task
+#endif
+#if SAME5x	// CoreNG uses a separate analog input task, so stop that
+	StopAnalogTask();
+#endif
+
+	Cache::Disable();						// disable the cache because it interferes with flash memory access
 
 #if USE_MPU
-	//TODO consider setting flash memory to strongly-ordered instead
-	ARM_MPU_Disable();
+	ARM_MPU_Disable();						// make sure we can execute from RAM
 #endif
+
+#if 0
+	// Debug
+	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 60 * 1024);
+	delay(2000);
+	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (60 * 1024)); ++p)
+	{
+		if (*p != 0x7E)
+		{
+			debugPrintf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
+		}
+	}
+	debugPrintf("Scan complete\n");
+	#endif
 }
 
 void RepRap::StartIap() noexcept
@@ -2865,7 +2790,7 @@ void RepRap::StartIap() noexcept
 	IoPort::WriteDigital(DiagPin, !DiagOnPolarity);	// turn the DIAG LED off
 #endif
 
-	watchdogReset();								// kick the watchdog one last time
+	WatchdogReset();								// kick the watchdog one last time
 
 #if SAM4E || SAME70
 	rswdt_restart(RSWDT);							// kick the secondary watchdog
@@ -2901,6 +2826,25 @@ void RepRap::StartIap() noexcept
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b) noexcept
 {
 	return a/b;
+}
+
+// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate bus fault or memory protection error
+/*static*/ void RepRap::GenerateBusFault() noexcept
+{
+#if SAME5x
+	(void)*(reinterpret_cast<const volatile char*>(0x30000000));
+#elif SAME70
+	(void)*(reinterpret_cast<const volatile char*>(0x30000000));
+#elif SAM4E || SAM4S
+	(void)*(reinterpret_cast<const volatile char*>(0x20800000));
+#elif SAM3XA
+	(void)*(reinterpret_cast<const volatile char*>(0x20200000));
+#elif defined(__LPC17xx__)
+	// The LPC176x/5x generates Bus Fault exception when accessing a reserved memory address
+	(void)*(reinterpret_cast<const volatile char*>(0x00080000));
+#else
+# error Unsupported processor
+#endif
 }
 
 // Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine

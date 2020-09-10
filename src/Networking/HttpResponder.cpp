@@ -735,15 +735,23 @@ bool HttpResponder::RemoveAuthentication() noexcept
 				return false;
 			}
 
-			for (size_t k = i + 1; k < numSessions; ++k)
-			{
-				sessions[k - 1] = sessions[k];
-			}
-			numSessions--;
+			RemoveSession(i);
 			return true;
 		}
 	}
 	return false;
+}
+
+/*static*/ void HttpResponder::RemoveSession(size_t sessionToRemove) noexcept
+{
+	if (sessionToRemove < numSessions)
+	{
+		--numSessions;
+		for (size_t k = sessionToRemove; k < numSessions; ++k)
+		{
+			sessions[k] = sessions[k + 1];
+		}
+	}
 }
 
 void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile) noexcept
@@ -1443,13 +1451,9 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 	for (size_t i = numSessions; i != 0; )
 	{
 		--i;
-		if ((now - sessions[i].lastQueryTime) > HttpSessionTimeout)
+		if (now - sessions[i].lastQueryTime > HttpSessionTimeout)
 		{
-			for (size_t k = i + 1; k < numSessions; k++)
-			{
-				sessions[k - 1] = sessions[k];
-			}
-			numSessions--;
+			RemoveSession(i);
 			clientsTimedOut++;
 		}
 	}

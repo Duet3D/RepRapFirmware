@@ -146,66 +146,39 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Network)
 void Network::Init() noexcept
 {
 #if HAS_NETWORKING
-#if SUPPORT_HTTP
+# if SUPPORT_HTTP
 	httpMutex.Create("HTTP");
-#endif
-#if SUPPORT_TELNET
-	telnetMutex.Create("Telnet");
-#endif
-
-#if defined(DUET_NG) && HAS_NETWORKING
-# if HAS_WIFI_NETWORKING && HAS_W5500_NETWORKING
-	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));
-# elif HAS_WIFI_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
-# elif HAS_W5500_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>(new W5500Interface(platform));
-# endif
-#endif
-
-#if defined(DUET_5LC) && HAS_NETWORKING
-# if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING
-	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
-# elif HAS_WIFI_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
-# elif HAS_LWIP_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>new LwipEthernetInterface(platform);
-# endif
-#endif
-
-#if SUPPORT_HTTP
-	// Create the responders
 	HttpResponder::InitStatic();
-#endif
-
-#if SUPPORT_TELNET
-	TelnetResponder::InitStatic();
-
-	for (size_t i = 0; i < NumTelnetResponders; ++i)
-	{
-		responders = new TelnetResponder(responders);
-	}
-#endif
-
-#if SUPPORT_FTP
+# endif
+# if SUPPORT_FTP
 	FtpResponder::InitStatic();
+# endif
+# if SUPPORT_TELNET
+	telnetMutex.Create("Telnet");
+	TelnetResponder::InitStatic();
+# endif
 
-	for (size_t i = 0; i < NumFtpResponders; ++i)
-	{
-		responders = new FtpResponder(responders);
-	}
-#endif
+# if defined(DUET_NG)
+#  if HAS_WIFI_NETWORKING && HAS_W5500_NETWORKING
+	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));
+#  elif HAS_WIFI_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
+#  elif HAS_W5500_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>(new W5500Interface(platform));
+#  endif
+# endif
 
-#if SUPPORT_HTTP
-	for (size_t i = 0; i < NumHttpResponders; ++i)
-	{
-		responders = new HttpResponder(responders);
-	}
-#endif
+# if defined(DUET_5LC)
+#  if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING
+	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
+#  elif HAS_WIFI_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
+#  elif HAS_LWIP_NETWORKING
+	interfaces[0] = static_cast<NetworkInterface*>new LwipEthernetInterface(platform);
+#  endif
+# endif
 
 	SafeStrncpy(hostname, DEFAULT_HOSTNAME, ARRAY_SIZE(hostname));
-
-	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
 
 	for (NetworkInterface *iface : interfaces)
 	{
@@ -416,11 +389,15 @@ extern "C" [[noreturn]]void NetworkLoop(void *) noexcept
 }
 #endif
 
-// This is called at the end of config.g processing.
+// This is called at the end of config.g processing. It must only be called once.
 // Start the network if it was enabled
 void Network::Activate() noexcept
 {
 #if HAS_NETWORKING
+	// Allocate network buffers
+	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
+
+	// Activate the interfaces
 	for (NetworkInterface *iface : interfaces)
 	{
 		if (iface != nullptr)
@@ -429,6 +406,29 @@ void Network::Activate() noexcept
 		}
 	}
 
+	// Create the network responders
+# if SUPPORT_TELNET
+	for (size_t i = 0; i < NumTelnetResponders; ++i)
+	{
+		responders = new TelnetResponder(responders);
+	}
+# endif
+
+# if SUPPORT_FTP
+	for (size_t i = 0; i < NumFtpResponders; ++i)
+	{
+		responders = new FtpResponder(responders);
+	}
+# endif
+
+# if SUPPORT_HTTP
+	for (size_t i = 0; i < NumHttpResponders; ++i)
+	{
+		responders = new HttpResponder(responders);
+	}
+# endif
+
+	// Finally, create the network task
 	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskPriority::SpinPriority);
 #endif
 }

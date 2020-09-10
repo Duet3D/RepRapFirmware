@@ -34,7 +34,7 @@
 #include <TaskPriorities.h>
 #include <Movement/Move.h>
 #include <Movement/StepTimer.h>
-#include <Hardware/Cache.h>
+#include <Cache.h>
 
 #if SAME5x
 # include <Hardware/IoPorts.h>
@@ -1153,61 +1153,63 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 // Append the driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
+#ifdef DUET_5LC
+	if (!DriverAssumedPresent())
+	{
+		reply.cat("assumed not present");
+		return;
+	}
+#endif
+
 	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
 	if (lastReadStatus & TMC_RR_OT)
 	{
-		reply.cat(" temperature-shutdown!");
+		reply.cat("temperature-shutdown! ");
 	}
 	else if (lastReadStatus & TMC_RR_OTPW)
 	{
-		reply.cat(" temperature-warning");
+		reply.cat("temperature-warning, ");
 	}
 	if (lastReadStatus & TMC_RR_S2G)
 	{
-		reply.cat(" short-to-ground");
+		reply.cat("short-to-ground, ");
 	}
 	if (lastReadStatus & TMC_RR_OLA)
 	{
-		reply.cat(" open-load-A");
+		reply.cat("open-load-A, ");
 	}
 	if (lastReadStatus & TMC_RR_OLB)
 	{
-		reply.cat(" open-load-B");
+		reply.cat("open-load-B, ");
 	}
 	if (lastReadStatus & TMC_RR_STST)
 	{
-		reply.cat(" standstill");
+		reply.cat("standstill, ");
 	}
 	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
 	{
-		reply.cat(" ok");
+		reply.cat("ok, ");
 	}
 
 #if HAS_STALL_DETECT
 	if (minSgLoadRegister <= maxSgLoadRegister)
 	{
-		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		reply.catf("SG min/max %" PRIu32 "/%" PRIu32 ", ", minSgLoadRegister, maxSgLoadRegister);
 	}
 	else
 	{
-		reply.cat(", SG min/max not available");
+		reply.cat("SG min/max not available, ");
 	}
 	ResetLoadRegisters();
 #endif
 
-	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
+	reply.catf("read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
 					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors);
 	if (failedOp != 0xFF)
 	{
 		reply.catf(", failedOp 0x%02x", failedOp);
 		failedOp = 0xFF;
 	}
-#ifdef DUET_5LC
-	if (!DriverAssumedPresent())
-	{
-		reply.cat(", assumed not present");
-	}
-#endif
 	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
 }
 
@@ -1700,6 +1702,7 @@ void SmartDrivers::Exit() noexcept
 		NVIC_DisableIRQ(TMC22xxUartIRQns[drive]);
 	}
 #endif
+	tmcTask.TerminateAndUnlink();
 	driversState = DriversState::noPower;
 }
 
@@ -1877,6 +1880,122 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 {
 	return (driver < GetNumTmcDrivers()) ? driverStates[driver].GetRegister(reg) : 0;
 }
+
+#ifdef DUET_5LC
+
+uint32_t stallBits = 0;
+
+// Initialise the Diag pins multiplexer control. Only needs to be called once.
+void InitDiagMux() noexcept
+{
+	pinMode(DiagMuxPins[0], OUTPUT_LOW);
+	pinMode(DiagMuxPins[1], OUTPUT_LOW);
+	pinMode(DiagMuxPins[2], OUTPUT_LOW);
+}
+
+constexpr uint32_t MuxDelayCycles = SystemCoreClockFreq/5000000;		// allow 200ns for mux output to settle
+
+// Read all the Diag pins
+// We read the drivers in Gray code order for speed, it avoids having to change more than one multiplexer control pin between them
+uint32_t ReadDiagOutputs() noexcept
+{
+
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	uint32_t now = GetCurrentCycles();
+
+	PortGroup * const group = &(PORT->Group[GPIO_PORT(DiagMuxOutPin)]);
+	constexpr unsigned int MuxOutBitNumber = GPIO_PIN(DiagMuxOutPin);
+	static_assert(MuxOutBitNumber < 32 - 8);			// the following code assumes we can shift the port bit left by 7 bits without losing it
+	constexpr uint32_t MuxOutMask = 1ul << MuxOutBitNumber;
+
+	DelayCycles(now, MuxDelayCycles);
+	uint32_t val = group->IN.reg & MuxOutMask;			// read driver 0
+	fastDigitalWriteHigh(DiagMuxPins[0]);
+	now = GetCurrentCycles();
+
+	DelayCycles(now, MuxDelayCycles);
+	uint32_t reg = group->IN.reg;						// read driver 1
+	fastDigitalWriteHigh(DiagMuxPins[1]);
+	now = GetCurrentCycles();
+	val |= (reg & MuxOutMask) << 1;
+
+	DelayCycles(now, MuxDelayCycles);
+	reg = group->IN.reg;								// read driver 3
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	now = GetCurrentCycles();
+	val |= (reg & MuxOutMask) << 3;
+
+	DelayCycles(now, MuxDelayCycles);
+	reg = group->IN.reg;								// read driver 2
+	fastDigitalWriteHigh(DiagMuxPins[2]);
+	now = GetCurrentCycles();
+	val |= (reg & MuxOutMask) << 2;
+
+	DelayCycles(now, MuxDelayCycles);
+	reg = group->IN.reg;								// read driver 6
+	fastDigitalWriteHigh(DiagMuxPins[0]);
+	now = GetCurrentCycles();
+	val |= (reg & MuxOutMask) << 6;
+
+	DelayCycles(now, MuxDelayCycles);
+	reg = group->IN.reg;								// read driver 7
+	fastDigitalWriteLow(DiagMuxPins[1]);
+	now = GetCurrentCycles();
+	val |= (reg & MuxOutMask) << 7;
+
+	DelayCycles(now, MuxDelayCycles);
+	reg = group->IN.reg;								// read driver 5
+	fastDigitalWriteLow(DiagMuxPins[0]);
+	now = GetCurrentCycles();
+	val |= (reg & MuxOutMask) << 5;
+
+	DelayCycles(now, MuxDelayCycles);
+	reg = group->IN.reg;								// read driver 4
+	val |= (reg & MuxOutMask) << 4;
+
+	stallBits = val >> MuxOutBitNumber;
+	return stallBits;
+}
+
+// Read just one DIAG output
+bool ReadOneDiagOutput(uint8_t driver) noexcept
+{
+	if (driver & 1)
+	{
+		fastDigitalWriteHigh(DiagMuxPins[0]);
+	}
+	else
+	{
+		fastDigitalWriteLow(DiagMuxPins[0]);
+	}
+
+	if (driver & 2)
+	{
+		fastDigitalWriteHigh(DiagMuxPins[1]);
+	}
+	else
+	{
+		fastDigitalWriteLow(DiagMuxPins[1]);
+	}
+
+	if (driver & 4)
+	{
+		fastDigitalWriteHigh(DiagMuxPins[2]);
+	}
+	else
+	{
+		fastDigitalWriteLow(DiagMuxPins[2]);
+	}
+
+	const uint32_t now = GetCurrentCycles();
+	DelayCycles(now, MuxDelayCycles);
+
+	return fastDigitalRead(DiagMuxOutPin);
+}
+
+#endif
 
 #endif
 

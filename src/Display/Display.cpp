@@ -34,67 +34,64 @@ Display::Display() noexcept
 {
 }
 
+// Keep the display and encoder refreshed. Don't touch the display if we are updating the firmware because the associated RAM may be overwritten by the IAP.
 void Display::Spin() noexcept
 {
-	if (lcd != nullptr)
+	if (lcd != nullptr && !updatingFirmware)
 	{
 		encoder->Poll();
-
-		if (!updatingFirmware)
+		// Check encoder and update display
+		const int ch = encoder->GetChange();
+		bool forceRefresh = false;
+		if (ch != 0)
 		{
-			// Check encoder and update display
-			const int ch = encoder->GetChange();
-			bool forceRefresh = false;
-			if (ch != 0)
-			{
-				menu->EncoderAction(ch);
-				forceRefresh = true;
-			}
-			else if (encoder->GetButtonPress())
-			{
-				menu->EncoderAction(0);
-				forceRefresh = true;
-			}
+			menu->EncoderAction(ch);
+			forceRefresh = true;
+		}
+		else if (encoder->GetButtonPress())
+		{
+			menu->EncoderAction(0);
+			forceRefresh = true;
+		}
 
-			const MessageBox& mbox = reprap.GetMessageBox();
-			if (mbox.active)
+		const MessageBox& mbox = reprap.GetMessageBox();
+		if (mbox.active)
+		{
+			if (!mboxActive || mboxSeq != mbox.seq)
 			{
-				if (!mboxActive || mboxSeq != mbox.seq)
+				// New message box to display
+				if (!mboxActive)
 				{
-					// New message box to display
-					if (!mboxActive)
-					{
-						menu->ClearHighlighting();					// cancel highlighting and adjustment
-						menu->Refresh();
-					}
-					mboxActive = true;
-					mboxSeq = mbox.seq;
-					menu->DisplayMessageBox(mbox);
-					forceRefresh = true;
+					menu->ClearHighlighting();					// cancel highlighting and adjustment
+					menu->Refresh();
 				}
-			}
-			else if (mboxActive)
-			{
-				// Message box has been cancelled from this or another input channel
-				menu->ClearMessageBox();
-				mboxActive = false;
+				mboxActive = true;
+				mboxSeq = mbox.seq;
+				menu->DisplayMessageBox(mbox);
 				forceRefresh = true;
 			}
+		}
+		else if (mboxActive)
+		{
+			// Message box has been cancelled from this or another input channel
+			menu->ClearMessageBox();
+			mboxActive = false;
+			forceRefresh = true;
+		}
 
-			const uint32_t now = millis();
-			if (forceRefresh)
-			{
-				menu->Refresh();
-				// To avoid a noticeable delay in updating the coordinates and babystepping offset when live adjusting them and we stop rotating the encoder,
-				// we force another update 50ms after any encoder actions
-				lastRefreshMillis = now - (NormalRefreshMillis - FastRefreshMillis);
-			}
-			else if (now - lastRefreshMillis >= NormalRefreshMillis)
-			{
-				menu->Refresh();
-				// When the encoder is inactive, we update at most 5 times per second, to avoid rapidly-changing values flickering on the display
-				lastRefreshMillis = now;
-			}
+		const uint32_t now = millis();
+		if (forceRefresh)
+		{
+			menu->Refresh();
+			// To avoid a noticeable delay in updating the coordinates and babystepping offset when live adjusting them and we stop rotating the encoder,
+			// we force another update 50ms after any encoder actions
+			lastRefreshMillis = now - (NormalRefreshMillis - FastRefreshMillis);
+		}
+		else if (now - lastRefreshMillis >= NormalRefreshMillis)
+		{
+			menu->Refresh();
+			// When the encoder is inactive, we update at most 5 times per second, to avoid rapidly-changing values flickering on the display
+			lastRefreshMillis = now;
 		}
 		lcd->FlushSome();
 

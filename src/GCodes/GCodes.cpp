@@ -44,7 +44,7 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
-#ifdef SERIAL_AUX_DEVICE
+#if HAS_AUX_DEVICES
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
 
@@ -87,14 +87,14 @@ GCodes::GCodes(Platform& p) noexcept :
 
 #if defined(SERIAL_MAIN_DEVICE)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-	usbGCode = new GCodeBuffer(GCodeChannel::USBchan, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
+	usbGCode = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_LINUX_INTERFACE
-	usbGCode = new GCodeBuffer(GCodeChannel::USBchan, nullptr, fileInput, UsbMessage, Compatbility::marlin);
+	usbGCode = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatbility::marlin);
 #else
 	usbGCode = nullptr;
 #endif
 
-#if defined(SERIAL_AUX_DEVICE)
+#if HAS_AUX_DEVICES
 	StreamGCodeInput * const auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
 	auxGCode = new GCodeBuffer(GCodeChannel::Aux, auxInput, fileInput, AuxMessage);
 #elif HAS_LINUX_INTERFACE
@@ -184,7 +184,7 @@ void GCodes::Init() noexcept
 	DotStarLed::Init();
 #endif
 
-#if defined(SERIAL_AUX_DEVICE) && !defined(__LPC17xx__)
+#if HAS_AUX_DEVICES && !defined(__LPC17xx__)
 	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
 #endif
 }
@@ -405,7 +405,7 @@ void GCodes::Spin() noexcept
 		return;
 	}
 
-#ifdef SERIAL_AUX_DEVICE
+#if HAS_AUX_DEVICES
 	if (emergencyStopCommanded)
 	{
 		DoEmergencyStop();
@@ -2324,11 +2324,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	}
 
 	// Compute how many segments to use
-	// For the arc to deviate up to MaxArcDeviation from the ideal, the segment length should be sqrt(8 * arcRadius * MaxArcDeviation + fsquare(MaxArcDeviation))
+	// For the arc to deviate up to MaxArcDeviation from the ideal, the segment length should be sqrtf(8 * arcRadius * MaxArcDeviation + fsquare(MaxArcDeviation))
 	// We leave out the square term because it is very small
 	// In CNC applications even very small deviations can be visible, so we use a smaller segment length at low speeds
 	const float arcSegmentLength = constrain<float>
-									(	min<float>(sqrt(8 * arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
+									(	min<float>(sqrtf(8 * arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
 										MinArcSegmentLength,
 										MaxArcSegmentLength
 									);
@@ -3416,7 +3416,10 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	// Also check that this response was triggered by a gcode
 	if (   reply[0] == 0
 		&& (   (gb.MachineState().doingFileMacro && !gb.MachineState().waitingForAcknowledgement)			// we must acknowledge M292
-			|| &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || (&gb == auxGCode && !platform.IsAuxRaw())
+			|| &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode
+#if HAS_AUX_DEVICES
+			|| (&gb == auxGCode && !platform.IsAuxRaw(0))
+#endif
 		   )
 	   )
 	{
@@ -3493,12 +3496,14 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	}
 #endif
 
+#if HAS_AUX_DEVICES
 	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
-	if (&gb == auxGCode && !platform.IsAuxRaw())
+	if (&gb == auxGCode && !platform.IsAuxRaw(0))
 	{
-		platform.AppendAuxReply(reply, (*reply)[0] == '{');
+		platform.AppendAuxReply(0, reply, (*reply)[0] == '{');
 		return;
 	}
+#endif
 
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
@@ -4331,7 +4336,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			OutputBuffer * const statusBuf = GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);
 			if (statusBuf != nullptr)
 			{
-				platform.AppendAuxReply(statusBuf, true);
+				platform.AppendAuxReply(0, statusBuf, true);
 			}
 		}
 		gb.StartTimer();
@@ -4605,6 +4610,29 @@ void GCodes::ActivateHeightmap(bool activate) noexcept
 		}
 #endif
 	}
+}
+
+// Check that we are allowed to perform network-related commands
+// Return true if we are; else return false and set 'reply' and 'result' appropriately
+// On entry, 'reply' is empty and 'result' is GCodeResult::ok
+bool GCodes::CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept
+{
+	if (gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+	{
+		return false;							// just ignore the command but report success
+	}
+
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		// Networking is disabled when using the SBC interface, to save RAM
+		reply.copy("Network-related commands are not supported when using an attached Single Board Computer");
+		result = GCodeResult::error;
+		return false;
+	}
+#endif
+
+	return true;
 }
 
 #if HAS_MASS_STORAGE

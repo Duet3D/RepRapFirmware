@@ -78,6 +78,8 @@
 # define SUPPORT_DOTSTAR_LED	0
 #endif
 
+#define HAS_AUX_DEVICES			(defined(SERIAL_AUX_DEVICE))		// if SERIAL_AUX_DEVICE is defined then we have one or more aux devices
+
 #ifndef USE_CACHE
 # define USE_CACHE				0
 #endif

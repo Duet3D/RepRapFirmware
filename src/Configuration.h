@@ -107,9 +107,11 @@ constexpr float DefaultHotEndHeaterDeadTime = 5.5;
 constexpr unsigned int FirstExtraHeaterProtection = 100;	// Index of the first extra heater protection item
 
 // Default thermistor parameters
-constexpr float DefaultR25 = 100000.0;
-constexpr float DefaultBeta = 4388.0;
-constexpr float DefaultShc = 0.0;
+#ifndef DUET3		// for Duet 3 these are defined in Duet3Common.h in project CANLib
+constexpr float DefaultThermistorR25 = 100000.0;
+constexpr float DefaultThermistorBeta = 4725.0;
+constexpr float DefaultThermistorC = 7.06e-8;
+#endif
 
 // These parameters are about right for a typical PCB bed heater that maxes out at 110C
 constexpr float DefaultBedHeaterGain = 90.0;
@@ -128,15 +130,17 @@ static_assert(DefaultMaxTempExcursion > TEMPERATURE_CLOSE_ENOUGH, "DefaultMaxTem
 
 // PWM frequencies
 constexpr PwmFrequency SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
-constexpr PwmFrequency NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
+constexpr PwmFrequency DefaultHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
 constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater PWM frequency, to avoid overheating the mosfets
 constexpr PwmFrequency DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
 constexpr PwmFrequency DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes and extrusion ancillary PWM
 constexpr PwmFrequency ServoRefreshFrequency = 50;
 
 // Fan defaults
+#ifndef DUET3		// for Duet 3 these are defined in Duet3Common.h in project CANLib
 constexpr float DefaultMinFanPwm = 0.1;					// minimum fan PWM
 constexpr uint32_t DefaultFanBlipTime = 100;			// fan blip time in milliseconds
+#endif
 
 // Conditional GCode support
 constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduced a new block.
@@ -302,7 +306,8 @@ constexpr float FILAMENT_WIDTH = 1.75;					// Millimetres
 constexpr unsigned int MaxStackDepth = 7;				// Maximum depth of stack (was 5 in 3.01-RC2, increased to 7 for 3.01-RC3)
 
 // CNC and laser support
-constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
+constexpr int32_t DefaultMinSpindleRpm = 60;			// Default minimum available spindle RPM
+constexpr int32_t DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration
 

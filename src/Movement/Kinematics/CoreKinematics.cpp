@@ -179,7 +179,7 @@ inline bool CoreKinematics::HasSharedMotor(size_t axis) const noexcept
 
 CoreKinematics::CoreKinematics(KinematicsType k) noexcept : ZLeadscrewKinematics(k), modified(false)
 {
-	// Start by assuming 1:1 mapping of axes to motors by setting diagonal elements to 1 and other element to zero
+	// Start by assuming 1:1 mapping of axes to motors by setting diagonal elements to 1 and other elements to zero
 	inverseMatrix.Fill(0.0);
 	for (size_t i = 0; i < MaxAxes; ++i)
 	{

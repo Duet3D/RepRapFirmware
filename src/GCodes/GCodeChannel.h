@@ -11,7 +11,11 @@
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
 
-NamedEnum(GCodeChannel, uint8_t, HTTP, Telnet, File, USBchan, Aux, Trigger, Queue, LCD, SBC, Daemon, Aux2, Autopause);
+// The Microchip device library for SAME5x defines USB as the USB peripheral.
+// We can't change the channel name to something else because it breaks compatibility with DSF, so #undef it here
+#undef USB
+
+NamedEnum(GCodeChannel, uint8_t, HTTP, Telnet, File, USB, Aux, Trigger, Queue, LCD, SBC, Daemon, Aux2, Autopause);
 
 constexpr size_t NumGCodeChannels = GCodeChannel::NumValues;
 

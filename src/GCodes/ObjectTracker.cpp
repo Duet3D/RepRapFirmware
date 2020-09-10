@@ -148,19 +148,21 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, O
 		ChangeToObject(gb, num);
 	}
 
-	if (gb.Seen('P'))
+	const bool seenC = gb.Seen('C');
+	if (seenC || gb.Seen('P'))
 	{
 		// Cancel an object
 		seen = true;
-		const int objectToCancel = gb.GetIValue();
-		if (objectToCancel >= 0 && objectToCancel < (int)objectsCancelled.MaxBits())
+		const int objectToCancel = (seenC) ? currentObjectNumber : gb.GetIValue();
+		if (objectToCancel >= 0 && objectToCancel < (int)objectsCancelled.MaxBits() && !objectsCancelled.IsBitSet(objectToCancel))
 		{
 			objectsCancelled.SetBit(objectToCancel);
-			if (objectToCancel == currentObjectNumber && !currentObjectCancelled)
+			if (objectToCancel == currentObjectNumber)
 			{
 				StopPrinting(gb);
 			}
 			reprap.JobUpdated();
+			reply.printf("Object %d cancelled", objectToCancel);
 		}
 	}
 
@@ -169,27 +171,16 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, O
 		// Resume an object
 		seen = true;
 		const int objectToResume = gb.GetIValue();
-		if (objectToResume >= 0 && objectToResume < (int)objectsCancelled.MaxBits())
+		if (objectToResume >= 0 && objectToResume < (int)objectsCancelled.MaxBits() && objectsCancelled.IsBitSet(objectToResume))
 		{
 			objectsCancelled.ClearBit(objectToResume);
-			if (objectToResume == currentObjectNumber && currentObjectCancelled)
+			if (objectToResume == currentObjectNumber)
 			{
 				ResumePrinting(gb);
 			}
 			reprap.JobUpdated();
+			reply.printf("Object %d resumed", objectToResume);
 		}
-	}
-
-	if (gb.Seen('C') && currentObjectNumber >= 0 && currentObjectNumber < (int)objectsCancelled.MaxBits())
-	{
-		// Cancel current object
-		seen = true;
-		objectsCancelled.SetBit(currentObjectNumber);
-		if (!currentObjectCancelled)
-		{
-			StopPrinting(gb);
-		}
-		reprap.JobUpdated();
 	}
 
 	if (!seen)

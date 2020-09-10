@@ -99,255 +99,264 @@ namespace DuetExpansion
 			}
 		}
 	}
+}
 
-	// Identify which expansion board (if any) is attached and initialise it
-	ExpansionBoardType DueXnInit() noexcept
+// Identify which expansion board (if any) is attached and initialise it
+ExpansionBoardType DuetExpansion::DueXnInit() noexcept
+{
+	I2C::Init();										// initialise I2C
+	delay(200);											// the SX1509B has an independent power on reset, so give it some time
+
+	// DC 2018-07-12: occasionally the SX1509B isn't found after doing a software reset, so try a few more attempts
+	bool ret;
+	unsigned int attempts = 0;
+	do
 	{
-		I2C::Init();										// initialise I2C
-		delay(200);											// the SX1509B has an independent power on reset, so give it some time
+		++attempts;
+		delay(50);
+		ret = dueXnExpander.begin(DueXnAddress);
+	} while (!ret && attempts < 5);
+	(void)I2C_IFACE.GetErrorCounts(true);				// clear the error counts in case there wasn't a device there or we didn't find it first time
 
-		// DC 2018-07-12: occasionally the SX1509B isn't found after doing a software reset, so try a few more attempts
-		bool ret;
-		unsigned int attempts = 0;
-		do
-		{
-			++attempts;
-			delay(50);
-			ret = dueXnExpander.begin(DueXnAddress);
-		} while (!ret && attempts < 5);
-		(void)I2C_IFACE.GetErrorCounts(true);				// clear the error counts in case there wasn't a device there or we didn't find it first time
-
-		if (ret)
-		{
-			dueXnExpander.pinModeMultiple(BoardTypePins, INPUT_PULLUP);
-			const uint16_t data = dueXnExpander.digitalReadAll();
-			dueXnBoardType = boardTypes[(data & BoardTypePins) >> BoardTypeShift];
-		}
-		else
-		{
-			dueXnBoardType = ExpansionBoardType::none;		// no device found at that address, or a serious error
-		}
-
-		if (dueXnBoardType != ExpansionBoardType::none)
-		{
-			pinMode(DueX_INT, INPUT_PULLUP);
-			pinMode(DueX_SG, INPUT_PULLUP);
-
-			dueXnExpander.pinModeMultiple(AllFanBits, OUTPUT_PWM_LOW);		// Initialise the PWM pins
-			const uint16_t stopBits = (dueXnBoardType == ExpansionBoardType::DueX5) ? AllStopBitsX5 : AllStopBitsX2;	// I am assuming that the X0 has 2 endstop inputs
-			dueXnExpander.pinModeMultiple(stopBits | AllGpioBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
-			dueXnInputMask = stopBits | AllGpioBits;
-			dueXnExpander.enableInterruptMultiple(dueXnInputMask, INTERRUPT_MODE_CHANGE);
-		}
-
-		return dueXnBoardType;
+	if (ret)
+	{
+		dueXnExpander.pinModeMultiple(BoardTypePins, INPUT_PULLUP);
+		const uint16_t data = dueXnExpander.digitalReadAll();
+		dueXnBoardType = boardTypes[(data & BoardTypePins) >> BoardTypeShift];
+	}
+	else
+	{
+		dueXnBoardType = ExpansionBoardType::none;		// no device found at that address, or a serious error
 	}
 
-	// Create the DueXn task and enable the associated interrupt from the DueXn.
-	// This must be called after interrupt priorities have been configured, to comply with FreeRTOS constraints.
-	void DueXnTaskInit() noexcept
+	if (dueXnBoardType != ExpansionBoardType::none)
 	{
-		if (dueXnBoardType != ExpansionBoardType::none)
-		{
-			// Set up the interrupt on any input change
-			attachInterrupt(DueX_INT, DueXIrq, InterruptMode::INTERRUPT_MODE_FALLING, nullptr);
+		pinMode(DueX_INT, INPUT_PULLUP);
+		pinMode(DueX_SG, INPUT_PULLUP);
 
-			// Clear any initial interrupts
-			(void)dueXnExpander.interruptSourceAndClear();
-
-			dueXTask = new Task<DueXTaskStackWords>();
-			dueXTask->Create(DueXTask, "DUEX", nullptr, TaskPriority::DueXPriority);
-		}
+		dueXnExpander.pinModeMultiple(AllFanBits, OUTPUT_PWM_LOW);		// Initialise the PWM pins
+		const uint16_t stopBits = (dueXnBoardType == ExpansionBoardType::DueX5) ? AllStopBitsX5 : AllStopBitsX2;	// I am assuming that the X0 has 2 endstop inputs
+		dueXnExpander.pinModeMultiple(stopBits | AllGpioBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
+		dueXnInputMask = stopBits | AllGpioBits;
+		dueXnExpander.enableInterruptMultiple(dueXnInputMask, INTERRUPT_MODE_CHANGE);
 	}
 
-	// Look for an additional output pin expander
-	void AdditionalOutputInit() noexcept
+	return dueXnBoardType;
+}
+
+// Create the DueXn task and enable the associated interrupt from the DueXn.
+// This must be called after interrupt priorities have been configured, to comply with FreeRTOS constraints.
+void DuetExpansion::DueXnTaskInit() noexcept
+{
+	if (dueXnBoardType != ExpansionBoardType::none)
 	{
-		I2C::Init();										// initialise I2C
+		// Set up the interrupt on any input change
+		attachInterrupt(DueX_INT, DueXIrq, InterruptMode::INTERRUPT_MODE_FALLING, nullptr);
 
-		bool ret;
-		unsigned int attempts = 0;
-		do
-		{
-			++attempts;
-			delay(50);
-			ret = additionalIoExpander.begin(AdditionalIoExpanderAddress);
-		} while (!ret && attempts < 5);
-		(void)I2C_IFACE.GetErrorCounts(true);				// clear the error counts in case there wasn't a device there or we didn't find it first time
+		// Clear any initial interrupts
+		(void)dueXnExpander.interruptSourceAndClear();
 
-		if (ret)
-		{
-			additionalIoExpander.pinModeMultiple((1u << 16) - 1, INPUT_PULLDOWN);
-			additionalIoInputBits = additionalIoExpander.digitalReadAll();
-			additionalIoExpanderPresent = true;
-		}
+		dueXTask = new Task<DueXTaskStackWords>();
+		dueXTask->Create(DueXTask, "DUEX", nullptr, TaskPriority::DueXPriority);
 	}
+}
 
-	// Return the name of the expansion board, or nullptr if no expansion board
-	const char* _ecv_array null GetExpansionBoardName() noexcept
+// Look for an additional output pin expander
+void DuetExpansion::AdditionalOutputInit() noexcept
+{
+	I2C::Init();										// initialise I2C
+
+	bool ret;
+	unsigned int attempts = 0;
+	do
 	{
-		switch(dueXnBoardType)
-		{
-		case ExpansionBoardType::DueX5:
-			return "DueX5";
-		case ExpansionBoardType::DueX2:
-			return "DueX2";
-		case ExpansionBoardType::DueX0:
-			return "DueX0";
-		default:
-			return nullptr;
-		}
-	}
+		++attempts;
+		delay(50);
+		ret = additionalIoExpander.begin(AdditionalIoExpanderAddress);
+	} while (!ret && attempts < 5);
+	(void)I2C_IFACE.GetErrorCounts(true);				// clear the error counts in case there wasn't a device there or we didn't find it first time
 
-	// Return the name of the additional expansion board, or nullptr if no expansion board
-	const char* _ecv_array null GetAdditionalExpansionBoardName() noexcept
+	if (ret)
 	{
-		return (additionalIoExpanderPresent) ? "SX1509B expander" : nullptr;
+		additionalIoExpander.pinModeMultiple((1u << 16) - 1, INPUT_PULLDOWN);
+		additionalIoInputBits = additionalIoExpander.digitalReadAll();
+		additionalIoExpanderPresent = true;
 	}
+}
 
-	// Set the I/O mode of a pin
-	void SetPinMode(Pin pin, PinMode mode) noexcept
+// Return the name of the expansion board, or nullptr if no expansion board
+const char* _ecv_array null DuetExpansion::GetExpansionBoardName() noexcept
+{
+	switch(dueXnBoardType)
 	{
-		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
-		{
-			if (dueXnBoardType != ExpansionBoardType::none)
-			{
-				pin -= DueXnExpansionStart;
-				if (((1u << pin) & AllGpioBits) != 0)
-				{
-					// The GPIO pins have pullup resistors to +5V, therefore we need to configure them as open drain outputs
-					switch(mode)
-					{
-					case OUTPUT_LOW:
-						mode = OUTPUT_LOW_OPEN_DRAIN;
-						break;
-					case OUTPUT_HIGH:
-						mode = OUTPUT_HIGH_OPEN_DRAIN;
-						break;
-					case OUTPUT_PWM_LOW:
-					case OUTPUT_PWM_HIGH:
-						mode = OUTPUT_PWM_OPEN_DRAIN;
-						break;
-					case INPUT_PULLUP:
-					case INPUT_PULLDOWN:
-						mode = INPUT;			// we are using 5V-tolerant input with external pullup resistors, so don't enable internal pullup/pulldown resistors
-						break;
-					default:
-						break;
-					}
-				}
-				dueXnExpander.pinMode(pin, mode);
-			}
-		}
-		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
-		{
-			if (additionalIoExpanderPresent)
-			{
-				additionalIoExpander.pinMode(pin - AdditionalIoExpansionStart, mode);
-			}
-		}
+	case ExpansionBoardType::DueX5:
+		return "DueX5";
+	case ExpansionBoardType::DueX2:
+		return "DueX2";
+	case ExpansionBoardType::DueX0:
+		return "DueX0";
+	default:
+		return nullptr;
 	}
+}
 
-	// Read a pin
-	// We need to use the SX1509 interrupt to read the data register using interrupts, and just retrieve that value here.
-	bool DigitalRead(Pin pin) noexcept
-	{
-		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
-		{
-			if (dueXnBoardType != ExpansionBoardType::none)
-			{
-				if (!digitalRead(DueX_INT) && !inInterrupt() && __get_BASEPRI() == 0)	// we must not call expander.digitalRead() from within an ISR or if the tick interrupt is disabled
-				{
-					// Interrupt is active, so input data may have changed
-					dueXnInputBits = dueXnExpander.digitalReadAll();
-				}
+// Return the name of the additional expansion board, or nullptr if no expansion board
+const char* _ecv_array null DuetExpansion::GetAdditionalExpansionBoardName() noexcept
+{
+	return (additionalIoExpanderPresent) ? "SX1509B expander" : nullptr;
+}
 
-				return (dueXnInputBits & (1u << (pin - DueXnExpansionStart))) != 0;
-			}
-		}
-		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
-		{
-			if (additionalIoExpanderPresent)
-			{
-				// We don't have an interrupt from the additional I/O expander, so always read fresh data.
-				// If this is called from inside an ISR, we will get stale data.
-				if (!inInterrupt() && __get_BASEPRI() == 0)								// we must not call expander.digitalRead() from within an ISR
-				{
-					additionalIoInputBits = additionalIoExpander.digitalReadAll();
-				}
-
-				return (additionalIoInputBits & (1u << (pin - AdditionalIoExpansionStart))) != 0;
-			}
-		}
-
-		return false;
-	}
-
-	// Write a pin
-	void DigitalWrite(Pin pin, bool high) noexcept
-	{
-		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
-		{
-			if (dueXnBoardType != ExpansionBoardType::none)
-			{
-				dueXnExpander.digitalWrite(pin - DueXnExpansionStart, high);
-			}
-		}
-		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
-		{
-			if (additionalIoExpanderPresent)
-			{
-				additionalIoExpander.digitalWrite(pin - AdditionalIoExpansionStart, high);
-			}
-		}
-	}
-
-	// Set the PWM value on this pin
-	void AnalogOut(Pin pin, float pwm) noexcept
-	{
-		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
-		{
-			if (dueXnBoardType != ExpansionBoardType::none)
-			{
-				dueXnExpander.analogWrite(pin - DueXnExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
-			}
-		}
-		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
-		{
-			if (additionalIoExpanderPresent)
-			{
-				additionalIoExpander.analogWrite(pin - AdditionalIoExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
-			}
-		}
-	}
-
-	// Print diagnostic data. I2C error counts are now reported by Platform.
-	void Diagnostics(MessageType mtype) noexcept
+// Set the I/O mode of a pin
+void DuetExpansion::SetPinMode(Pin pin, PinMode mode) noexcept
+{
+	if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 	{
 		if (dueXnBoardType != ExpansionBoardType::none)
 		{
-			const uint32_t now = millis();
-			const uint32_t readCount = dueXnReadCount;
-			dueXnReadCount = 0;
+			pin -= DueXnExpansionStart;
+			if (((1u << pin) & AllGpioBits) != 0)
+			{
+				// The GPIO pins have pullup resistors to +5V, therefore we need to configure them as open drain outputs
+				switch(mode)
+				{
+				case OUTPUT_LOW:
+					mode = OUTPUT_LOW_OPEN_DRAIN;
+					break;
+				case OUTPUT_HIGH:
+					mode = OUTPUT_HIGH_OPEN_DRAIN;
+					break;
+				case OUTPUT_PWM_LOW:
+				case OUTPUT_PWM_HIGH:
+					mode = OUTPUT_PWM_OPEN_DRAIN;
+					break;
+				case INPUT_PULLUP:
+				case INPUT_PULLDOWN:
+					mode = INPUT;			// we are using 5V-tolerant input with external pullup resistors, so don't enable internal pullup/pulldown resistors
+					break;
+				default:
+					break;
+				}
+			}
+			dueXnExpander.pinMode(pin, mode);
+		}
+	}
+	else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
+	{
+		if (additionalIoExpanderPresent)
+		{
+			additionalIoExpander.pinMode(pin - AdditionalIoExpansionStart, mode);
+		}
+	}
+}
 
-			reprap.GetPlatform().MessageF(mtype,
-											"=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min\n",
-											readCount,
-											(double)(((float)readCount * (SecondsToMillis * MinutesToSeconds))/(now - dueXnReadCountResetMillis))
-										 );
-			dueXnReadCountResetMillis = now;
+// Read a pin
+// We need to use the SX1509 interrupt to read the data register using interrupts, and just retrieve that value here.
+bool DuetExpansion::DigitalRead(Pin pin) noexcept
+{
+	if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
+	{
+		if (dueXnBoardType != ExpansionBoardType::none)
+		{
+			if (!digitalRead(DueX_INT) && !inInterrupt() && __get_BASEPRI() == 0)	// we must not call expander.digitalRead() from within an ISR or if the tick interrupt is disabled
+			{
+				// Interrupt is active, so input data may have changed
+				dueXnInputBits = dueXnExpander.digitalReadAll();
+			}
+
+			return (dueXnInputBits & (1u << (pin - DueXnExpansionStart))) != 0;
+		}
+	}
+	else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
+	{
+		if (additionalIoExpanderPresent)
+		{
+			// We don't have an interrupt from the additional I/O expander, so always read fresh data.
+			// If this is called from inside an ISR, we will get stale data.
+			if (!inInterrupt() && __get_BASEPRI() == 0)								// we must not call expander.digitalRead() from within an ISR
+			{
+				additionalIoInputBits = additionalIoExpander.digitalReadAll();
+			}
+
+			return (additionalIoInputBits & (1u << (pin - AdditionalIoExpansionStart))) != 0;
 		}
 	}
 
-	// Diagnose the SX1509 by setting all pins as inputs and reading them
-	uint16_t DiagnosticRead() noexcept
+	return false;
+}
+
+// Write a pin
+void DuetExpansion::DigitalWrite(Pin pin, bool high) noexcept
+{
+	if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 	{
-		dueXnExpander.pinModeMultiple(AllStopBitsX5 | AllGpioBits | AllFanBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
-		delay(1);
-		const uint16_t retval = dueXnExpander.digitalReadAll();		// read all inputs with pullup resistors on fans
-		DueXnInit();												// back to normal
-		return retval;
+		if (dueXnBoardType != ExpansionBoardType::none)
+		{
+			dueXnExpander.digitalWrite(pin - DueXnExpansionStart, high);
+		}
 	}
-}			// end namespace
+	else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
+	{
+		if (additionalIoExpanderPresent)
+		{
+			additionalIoExpander.digitalWrite(pin - AdditionalIoExpansionStart, high);
+		}
+	}
+}
+
+// Set the PWM value on this pin
+void DuetExpansion::AnalogOut(Pin pin, float pwm) noexcept
+{
+	if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
+	{
+		if (dueXnBoardType != ExpansionBoardType::none)
+		{
+			dueXnExpander.analogWrite(pin - DueXnExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
+		}
+	}
+	else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
+	{
+		if (additionalIoExpanderPresent)
+		{
+			additionalIoExpander.analogWrite(pin - AdditionalIoExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
+		}
+	}
+}
+
+// Print diagnostic data. I2C error counts are now reported by Platform.
+void DuetExpansion::Diagnostics(MessageType mtype) noexcept
+{
+	if (dueXnBoardType != ExpansionBoardType::none)
+	{
+		const uint32_t now = millis();
+		const uint32_t readCount = dueXnReadCount;
+		dueXnReadCount = 0;
+
+		reprap.GetPlatform().MessageF(mtype,
+										"=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min\n",
+										readCount,
+										(double)(((float)readCount * (SecondsToMillis * MinutesToSeconds))/(now - dueXnReadCountResetMillis))
+									 );
+		dueXnReadCountResetMillis = now;
+	}
+}
+
+// Diagnose the SX1509 by setting all pins as inputs and reading them
+uint16_t DuetExpansion::DiagnosticRead() noexcept
+{
+	dueXnExpander.pinModeMultiple(AllStopBitsX5 | AllGpioBits | AllFanBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
+	delay(1);
+	const uint16_t retval = dueXnExpander.digitalReadAll();		// read all inputs with pullup resistors on fans
+	DueXnInit();												// back to normal
+	return retval;
+}
+
+void DuetExpansion::Exit()
+{
+	detachInterrupt(DueX_INT);
+	if (dueXTask != nullptr)
+	{
+		dueXTask->TerminateAndUnlink();
+	}
+}
 
 // End

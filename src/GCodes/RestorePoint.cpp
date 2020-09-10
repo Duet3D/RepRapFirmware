@@ -32,7 +32,7 @@ constexpr ObjectModelArrayDescriptor RestorePoint::spindleSpeedsArrayDescriptor 
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxSpindles; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																			{ return ExpressionValue(((const RestorePoint*)self)->spindleSpeeds[context.GetLastIndex()], 1); }
+																			{ return ExpressionValue(((const RestorePoint*)self)->spindleSpeeds[context.GetLastIndex()]); }
 };
 
 constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
@@ -81,7 +81,7 @@ void RestorePoint::Init() noexcept
 
 	for (size_t i = 0; i < MaxSpindles; ++i)
 	{
-		spindleSpeeds[i] = 0.0;
+		spindleSpeeds[i] = 0;
 	}
 
 #if SUPPORT_LASER || SUPPORT_IOBITS

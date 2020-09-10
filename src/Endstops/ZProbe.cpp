@@ -232,34 +232,41 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	GCodeResult err = GCodeResult::ok;
 	bool seen = false;
 
+	// Warning - don't change any values until we know that we are not going to return notFinished!
+	// This because users may use the existing values when calculating the new ones (e.g. "make babystepping permanent" macro)
+
 	// Do the temperature coefficient first because it may return notFinished
+	int8_t newSensor;
 	if (gb.Seen('H'))
 	{
 		seen = true;
-		sensor = gb.GetIValue();
+		newSensor = gb.GetIValue();
+	}
+	else
+	{
+		newSensor = sensor;
 	}
 
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		temperatureCoefficient = gb.GetFValue();
-		calibTemperature = DefaultZProbeTemperature;
+		float newTemperatureCoefficient = gb.GetFValue();
+		float newCalibTemperature = DefaultZProbeTemperature;
 
 		TemperatureError terr;
-		const float currentTemperature = reprap.GetHeat().GetSensorTemperature(sensor, terr);
+		const float currentTemperature = reprap.GetHeat().GetSensorTemperature(newSensor, terr);
 		if (terr == TemperatureError::unknownSensor)
 		{
-			reply.copy("Cannot set a temperature coefficient without a valid sensor number");
-			temperatureCoefficient = 0.0;
-			err = GCodeResult::error;
+			reply.printf("Cannot set a temperature coefficient with invalid sensor number %d", newSensor);
+			return GCodeResult::error;
 		}
 		else if (gb.Seen('S'))
 		{
-			calibTemperature = gb.GetFValue();
+			newCalibTemperature = gb.GetFValue();
 		}
 		else if (terr == TemperatureError::success)
 		{
-			calibTemperature = currentTemperature;
+			newCalibTemperature = currentTemperature;
 		}
 		else if (!gb.IsTimerRunning())				// the sensor may have only just been configured, so give it 500ms to produce a reading
 		{
@@ -273,16 +280,20 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		else
 		{
 			gb.StopTimer();
-			reply.printf("Sensor %d did not provide a valid temperature reading", sensor);
-			err = GCodeResult::warning;
+			reply.printf("Sensor %d did not provide a valid temperature reading", newSensor);
+			err = GCodeResult::error;
 		}
+		gb.StopTimer();
+		temperatureCoefficient = newTemperatureCoefficient;
+		calibTemperature = newCalibTemperature;
 	}
 
+	// After this we don't return notFinished, so it is safe to amend values directly
 	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
-
 	gb.TryGetFValue(axisLetters[X_AXIS], xOffset, seen);
 	gb.TryGetFValue(axisLetters[Y_AXIS], yOffset, seen);
 	gb.TryGetFValue(axisLetters[Z_AXIS], triggerHeight, seen);
+
 	if (gb.Seen('P'))
 	{
 		seen = true;
@@ -291,11 +302,8 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	if (seen)
 	{
+		sensor = newSensor;
 		reprap.SensorsUpdated();
-		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
-		{
-			return GCodeResult::notFinished;
-		}
 		if (gb.MachineState().runningM501)
 		{
 			misc.parts.saveToConfigOverride = true;		// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g

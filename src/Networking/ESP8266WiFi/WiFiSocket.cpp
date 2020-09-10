@@ -29,7 +29,7 @@ void WiFiSocket::Close() noexcept
 {
 	if (state == SocketState::connected || state == SocketState::clientDisconnecting)
 	{
-		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connClose, socketNum, 0, nullptr, 0, nullptr, 0);
+		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connClose, socketNum, 0, 0, nullptr, 0, nullptr, 0);
 		if (reply == ResponseEmpty)
 		{
 			state = (state == SocketState::connected) ? SocketState::closing : SocketState::inactive;
@@ -50,7 +50,7 @@ void WiFiSocket::Terminate() noexcept
 {
 	if (state != SocketState::inactive)
 	{
-		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connAbort, socketNum, 0, nullptr, 0, nullptr, 0);
+		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connAbort, socketNum, 0, 0, nullptr, 0, nullptr, 0);
 		state = (reply != 0) ? SocketState::broken : SocketState::inactive;
 	}
 	DiscardReceivedData();
@@ -252,7 +252,7 @@ void WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 		{
 			// Read data into the existing buffer
 			const size_t maxToRead = min<size_t>(lastBuffer->SpaceLeft(), MaxDataLength);
-			const int32_t ret = GetInterface()->SendCommand(NetworkCommand::connRead, socketNum, 0, nullptr, 0, lastBuffer->UnwrittenData(), maxToRead);
+			const int32_t ret = GetInterface()->SendCommand(NetworkCommand::connRead, socketNum, 0, 0, nullptr, 0, lastBuffer->UnwrittenData(), maxToRead);
 			if (ret > 0 && (size_t)ret <= maxToRead)
 			{
 				lastBuffer->dataLength += (size_t)ret;
@@ -268,7 +268,7 @@ void WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 			if (buf != nullptr)
 			{
 				const size_t maxToRead = min<size_t>(NetworkBuffer::bufferSize, MaxDataLength);
-				const int32_t ret = GetInterface()->SendCommand(NetworkCommand::connRead, socketNum, 0, nullptr, 0, buf->Data(), maxToRead);
+				const int32_t ret = GetInterface()->SendCommand(NetworkCommand::connRead, socketNum, 0, 0, nullptr, 0, buf->Data(), maxToRead);
 				if (ret > 0 && (size_t)ret <= maxToRead)
 				{
 					buf->dataLength = (size_t)ret;
@@ -303,7 +303,7 @@ size_t WiFiSocket::Send(const uint8_t *data, size_t length) noexcept
 	if (state == SocketState::connected && txBufferSpace != 0)
 	{
 		const size_t lengthToSend = min<size_t>(length, min<size_t>(txBufferSpace, MaxDataLength));
-		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connWrite, socketNum, 0, data, lengthToSend, nullptr, 0);
+		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connWrite, socketNum, 0, 0, data, lengthToSend, nullptr, 0);
 		if (reply >= 0 && (size_t)reply <= lengthToSend)
 		{
 			txBufferSpace -= (size_t)reply;
@@ -323,7 +323,7 @@ void WiFiSocket::Send() noexcept
 {
 	if (state == SocketState::connected)
 	{
-		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connWrite, socketNum, MessageHeaderSamToEsp::FlagPush, nullptr, 0, nullptr, 0);
+		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connWrite, socketNum, MessageHeaderSamToEsp::FlagPush, 0, nullptr, 0, nullptr, 0);
 		if (reply < 0)
 		{
 			if (reprap.Debug(moduleNetwork))

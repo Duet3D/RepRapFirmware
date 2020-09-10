@@ -31,7 +31,7 @@ const size_t NumFtpResponders = 0;		// the number of concurrent FTP sessions we 
 const size_t NumTelnetResponders = 0;	// the number of concurrent Telnet sessions we support
 #else
 
-# if SAME70 || SAME5x
+# if SAME70
 const size_t NumHttpResponders = 6;		// the number of concurrent HTTP requests we can process
 const size_t NumTelnetResponders = 2;	// the number of concurrent Telnet sessions we support
 # else

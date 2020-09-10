@@ -14,7 +14,7 @@
 #include "Movement/Move.h"
 #include "Movement/StepTimer.h"
 #include "Endstops/Endstop.h"
-#include "Hardware/Cache.h"
+#include <Cache.h>
 
 # if SAME70
 #  include "sam/drivers/xdmac/xdmac.h"
@@ -323,16 +323,16 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 		6.9. Set XDMAC_CCx.SWREQ to use a software request (only relevant for a peripheral
 		synchronized transfer).
 		7. Clear the following five registers:
-		– XDMAC Channel x Next Descriptor Control Register (XDMAC_CNDCx)
-		– XDMAC Channel x Block Control Register (XDMAC_CBCx)
-		– XDMAC Channel x Data Stride Memory Set Pattern Register (XDMAC_CDS_MSPx)
-		– XDMAC Channel x Source Microblock Stride Register (XDMAC_CSUSx)
-		– XDMAC Channel x Destination Microblock Stride Register (XDMAC_CDUSx)
+		ï¿½ XDMAC Channel x Next Descriptor Control Register (XDMAC_CNDCx)
+		ï¿½ XDMAC Channel x Block Control Register (XDMAC_CBCx)
+		ï¿½ XDMAC Channel x Data Stride Memory Set Pattern Register (XDMAC_CDS_MSPx)
+		ï¿½ XDMAC Channel x Source Microblock Stride Register (XDMAC_CSUSx)
+		ï¿½ XDMAC Channel x Destination Microblock Stride Register (XDMAC_CDUSx)
 		This indicates that the linked list is disabled, there is only one block and striding is disabled.
-		8. Enable the Microblock interrupt by writing a ‘1’ to bit BIE in the XDMAC Channel x Interrupt Enable
-		Register (XDMAC_CIEx). Enable the Channel x Interrupt Enable bit by writing a ‘1’ to bit IEx in the
+		8. Enable the Microblock interrupt by writing a ï¿½1ï¿½ to bit BIE in the XDMAC Channel x Interrupt Enable
+		Register (XDMAC_CIEx). Enable the Channel x Interrupt Enable bit by writing a ï¿½1ï¿½ to bit IEx in the
 		XDMAC Global Interrupt Enable Register (XDMAC_GIE).
-		9. Enable channel x by writing a ‘1’ to bit ENx in the XDMAC Global Channel Enable Register
+		9. Enable channel x by writing a ï¿½1ï¿½ to bit ENx in the XDMAC Global Channel Enable Register
 		(XDMAC_GE). XDMAC_GS.STx (XDMAC Channel x Status bit) is set by hardware.
 		10. Once completed, the DMA channel sets XDMAC_CISx.BIS (End of Block Interrupt Status bit) and
 		generates an interrupt. XDMAC_GS.STx is cleared by hardware. The software can either wait for
@@ -686,40 +686,40 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
 	if (lastReadStatus & TMC_RR_OT)
 	{
-		reply.cat(" temperature-shutdown!");
+		reply.cat("temperature-shutdown! ");
 	}
 	else if (lastReadStatus & TMC_RR_OTPW)
 	{
-		reply.cat(" temperature-warning");
+		reply.cat("temperature-warning, ");
 	}
 	if (lastReadStatus & TMC_RR_S2G)
 	{
-		reply.cat(" short-to-ground");
+		reply.cat("short-to-ground, ");
 	}
 	if (lastReadStatus & TMC_RR_OLA)
 	{
-		reply.cat(" open-load-A");
+		reply.cat("open-load-A, ");
 	}
 	if (lastReadStatus & TMC_RR_OLB)
 	{
-		reply.cat(" open-load-B");
+		reply.cat("open-load-B, ");
 	}
 	if (lastReadStatus & TMC_RR_STST)
 	{
-		reply.cat(" standstill");
+		reply.cat("standstill, ");
 	}
 	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
 	{
-		reply.cat(" ok");
+		reply.cat("ok, ");
 	}
 
 	if (minSgLoadRegister <= maxSgLoadRegister)
 	{
-		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		reply.catf("SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
 	}
 	else
 	{
-		reply.cat(", SG min/max not available");
+		reply.cat("SG min/max not available");
 	}
 	ResetLoadRegisters();
 }

@@ -588,7 +588,7 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 	// 1. There is no currently executing move and no moves in the queue, and GCodes does not have a move for us.
 	//    Pause immediately. Resume from the current file position.
 	// 2. There is no currently executing move and no moves in the queue, and GCodes has a move for us but that move has not been started.
-	//    Pause immediately. Discard the move that GCodes gas for us, and resume from the start file position of that move.
+	//    Pause immediately. Discard the move that GCodes has for us, and resume from the start file position of that move.
 	// 3. There is no currently executing move and no moves in the queue, and GCodes has a move for that has not been started.
 	//    We must complete that move and then pause
 	// 5. There is no currently-executing move but there are moves in the queue. Unlikely, but possible.
@@ -624,12 +624,12 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 		dda = dda->GetNext();
 	}
 
-	while (dda != savedDdaRingAddPointer)
+	while (dda != savedDdaRingAddPointer)				// while there are queued moves
 	{
-		if (pauseOkHere)
+		if (pauseOkHere)								// if we can pause before executing the move that dda refers to
 		{
-			// We can pause before executing this move
 			addPointer = dda;
+			dda->Free();								// set the move status to empty so that when we re-enable interrupts the ISR doesn't start executing it
 			break;
 		}
 		pauseOkHere = dda->CanPauseAfter();

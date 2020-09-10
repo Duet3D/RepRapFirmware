@@ -3,6 +3,21 @@
  *
  *  Created on: 20 Jul 2017
  *      Author: David
+ *
+ * This is the base class for the Duet3D laser and magnetic filament monitors. Both of these report filament position at intervals.
+ * RepRapFirmware uses the difference between position reports to calculate the amount and direction of filament movement.
+ * The position reports are sent as 10-bit values in a 16-bit word.
+ *
+ * This module is responsible for receiving the 16-bit word. It does this by using an interrupt to detect each edge of the input
+ * from the filament monitor and recording the times of these edges in a ring buffer (see function Interrupt). If the state machine
+ * indicates that we are waiting for the start bit of a new 16-bit word then Interrupt() returns true, causing the calling function
+ * in FilamentMonitor.cpp to record the extrusion commanded.
+ *
+ * The RRF main polling loop calls FilamentMonitor::Spin, which calls the Check() function of each active filament monitor.
+ *
+ * The Check function in LaserFilamentMonitor or RotatingMagnetFilamenMonitor calls PollReceiveBuffer at intervals via, which decodes
+ * the data in the ring buffer, and passes back the 16-bit word when it is complete. The Check function decodes the 16-bit word, and
+ * if it is a measurement, retrieves the extrusion amount that was saved when the start bit was seen.
  */
 
 #include "Duet3DFilamentMonitor.h"
@@ -25,7 +40,7 @@ void Duet3DFilamentMonitor::InitReceiveBuffer() noexcept
 	state = RxdState::waitingForStartBit;
 }
 
-// ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
+// ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched and stored because we have seen a potential start bit.
 bool Duet3DFilamentMonitor::Interrupt() noexcept
 {
 	uint32_t now = StepTimer::GetTimerTicks();

@@ -607,11 +607,11 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		return;
 	}
 
-	if (doPad && lastIndex >= 0)
+	if (doPad && lastIndex == 0)
 	{
-		for (size_t i = lastIndex + 1; i < length; i++)
+		for (size_t i = 1; i < length; i++)
 		{
-			arr[i] = arr[lastIndex];
+			arr[i] = arr[0];
 		}
 	}
 	else

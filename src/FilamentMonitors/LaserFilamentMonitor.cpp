@@ -43,12 +43,13 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 												ObjectModelEntryFlags::none },
 
 	// 2. LaserFilamentMonitor.configured members
+	{ "calibrationFactor",	OBJECT_MODEL_FUNC(self->calibrationFactor, 3), 														ObjectModelEntryFlags::none },
 	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 										ObjectModelEntryFlags::none },
 	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 										ObjectModelEntryFlags::none },
-	{ "sampleDistance",	 	OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 												ObjectModelEntryFlags::none },
+	{ "sampleDistance",	 	OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 											ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] = { 3, 5, 4, 3 };
+constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] = { 3, 5, 4, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LaserFilamentMonitor)
 
@@ -56,6 +57,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LaserFilamentMonitor)
 
 LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: Duet3DFilamentMonitor(extruder, type),
+	  calibrationFactor(1.0),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)
 {
@@ -103,6 +105,7 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 		return true;
 	}
 
+	gb.TryGetFValue('L', calibrationFactor, seen);
 	gb.TryGetFValue('E', minimumExtrusionCheckLength, seen);
 
 	if (gb.Seen('R'))
@@ -142,11 +145,12 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 	{
 		reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 		GetPort().AppendPinName(reply);
-		reply.catf(", %s, allow %ld%% to %ld%%, check every %.1fmm, ",
+		reply.catf(", %s, allow %ld%% to %ld%%, check every %.1fmm, calibration factor %.3f, ",
 					(comparisonEnabled) ? "enabled" : "disabled",
 					ConvertToPercent(minMovementAllowed),
 					ConvertToPercent(maxMovementAllowed),
-					(double)minimumExtrusionCheckLength);
+					(double)minimumExtrusionCheckLength,
+					(double)calibrationFactor);
 
 		if (!dataReceived)
 		{
@@ -360,18 +364,19 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 	}
 
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
+	float extrusionMeasured = amountMeasured * calibrationFactor;
 
 	switch (laserMonitorState)
 	{
 	case LaserMonitorState::idle:
 		laserMonitorState = LaserMonitorState::calibrating;
 		totalExtrusionCommanded = amountCommanded;
-		totalMovementMeasured = amountMeasured;
+		totalMovementMeasured = extrusionMeasured;
 		break;
 
 	case LaserMonitorState::calibrating:
 		totalExtrusionCommanded += amountCommanded;
-		totalMovementMeasured += amountMeasured;
+		totalMovementMeasured += extrusionMeasured;
 		if (totalExtrusionCommanded >= 10.0)
 		{
 			backwards = (totalMovementMeasured < 0.0);
@@ -400,10 +405,10 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 			totalExtrusionCommanded += amountCommanded;
 			if (backwards)
 			{
-				amountMeasured = -amountMeasured;
+				extrusionMeasured = -extrusionMeasured;
 			}
-			totalMovementMeasured += amountMeasured;
-			const float ratio = amountMeasured/amountCommanded;
+			totalMovementMeasured += extrusionMeasured;
+			const float ratio = extrusionMeasured/amountCommanded;
 			if (ratio > maxMovementRatio)
 			{
 				maxMovementRatio = ratio;

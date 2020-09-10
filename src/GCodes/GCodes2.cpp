@@ -26,6 +26,8 @@
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "General/IP4String.h"
 #include "Movement/StepperDrivers/DriverMode.h"
+#include <Hardware/SoftwareReset.h>
+#include <Hardware/ExceptionHandlers.h>
 #include "Version.h"
 
 #if SUPPORT_IOBITS
@@ -520,7 +522,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					switch (machineType)
 					{
 					case MachineType::cnc:
-						platform.AccessSpindle(slot).SetRpm(gb.GetFValue());
+						platform.AccessSpindle(slot).SetRpm(gb.GetIValue());
 						break;
 
 #if SUPPORT_LASER
@@ -566,10 +568,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 4: // Spin spindle counter clockwise
 			if (machineType == MachineType::cnc)
 			{
-				gb.MustSee('S');
-				const float rpm = gb.GetFValue();
 				const uint32_t slot = (gb.Seen('P')) ? gb.GetLimitedUIValue('P', MaxSpindles) : 0;
-				platform.AccessSpindle(slot).SetRpm(-rpm);
+				gb.MustSee('S');
+				platform.AccessSpindle(slot).SetRpm(-gb.GetIValue());
 			}
 			else
 			{
@@ -1462,7 +1463,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			break;
 
-		case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
+		case 110: // Set line numbers
+			//TODO
 			break;
 
 		case 111: // Debug level
@@ -1679,6 +1681,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					case 4:		// Telnet
 						type = TelnetMessage;
 						break;
+#ifdef SERIAL_AUX2_DEVICE
+					case 5:		// AUX2
+						type = Aux2Message;
+						break;
+#endif
 					default:
 						reply.printf("Invalid message type: %" PRIi32, param);
 						result = GCodeResult::error;
@@ -2650,7 +2657,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 #if SUPPORT_OBJECT_MODEL
-		case 409: // Get status in JSON format
+		case 409: // Get object model values in JSON format
 			{
 				String<StringLength100> key;
 				String<StringLength20> flags;
@@ -2661,6 +2668,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (outBuf == nullptr)
 				{
 					result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
+				}
+				else
+				{
+					outBuf->cat('\n');
+					if (outBuf->HadOverflow())
+					{
+						OutputBuffer::ReleaseAll(outBuf);
+						// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
+						reply.copy("{\"err\":-1}\n");
+					}
 				}
 			}
 			break;
@@ -2700,7 +2717,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = GCodeResult::error;
 				}
 			}
-			if (gb.Seen('F'))
+			if (gb.Seen('F') || gb.Seen('Q'))
 			{
 				platform.SetLaserPwmFrequency(gb.GetPwmFrequency());
 			}
@@ -2724,52 +2741,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+
+			// M453 may be repeated to set up multiple spindles, so only print the message on the initial switch
+			if (machineType != MachineType::cnc)
 			{
-				const MachineType oldMachineType = machineType;
-				machineType = MachineType::cnc;								// switch to CNC mode even if the spindle parameter is bad
-				const uint32_t slot = gb.Seen('S') ? gb.GetLimitedUIValue('S', MaxSpindles) : 0;
+				machineType = MachineType::cnc;						// switch to CNC mode even if the spindle parameter is bad
+				reprap.StateUpdated();
+				reply.copy("CNC mode selected");
+			}
 
-				Spindle& spindle = platform.AccessSpindle(slot);
-				bool seenSpindle = false;
-				if (gb.Seen('C'))
-				{
-					seenSpindle = true;
-					if (!spindle.AllocatePins(gb, reply))
-					{
-						result = GCodeResult::error;
-						break;
-					}
-				}
-				if (result == GCodeResult::ok)
-				{
-					if (gb.Seen('F'))
-					{
-						seenSpindle = true;
-						spindle.SetFrequency(gb.GetPwmFrequency());
-					}
-					if (gb.Seen('R'))
-					{
-						seenSpindle = true;
-						spindle.SetMaxRpm(max<float>(1.0, gb.GetFValue()));
-					}
-					if (gb.Seen('T'))
-					{
-						seenSpindle = true;
-						spindle.SetToolNumber(gb.GetIValue());
-					}
-				}
-
-				// M453 may be repeated to set up multiple spindles, so only print the message on the initial switch
-				if (oldMachineType != MachineType::cnc)
-				{
-					reprap.StateUpdated();
-					reply.copy("CNC mode selected");
-				}
-
-				if (seenSpindle)
-				{
-					reprap.SpindlesUpdated();
-				}
+			{
+				const uint32_t slot = gb.Seen('S') ? gb.GetLimitedUIValue('S', MaxSpindles) : 0;		// may throw
+				result = platform.AccessSpindle(slot).Configure(gb, reply);								// may throw
 			}
 			break;
 
@@ -2908,7 +2891,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 		case 540: // Set/report MAC address
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 				if (gb.Seen('P'))
@@ -2961,7 +2944,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 552: // Enable/Disable network and/or Set/Get IP address
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				bool seen = false;
 				const unsigned int interface = (gb.Seen('I')) ? gb.GetUIValue() : 0;
@@ -3007,7 +2990,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 553: // Set/Get netmask
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				if (gb.Seen('P'))
 				{
@@ -3024,7 +3007,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 554: // Set/Get gateway
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				if (gb.Seen('P'))
 				{
@@ -3329,54 +3312,57 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 575: // Set communications parameters
 			{
-				const size_t chan = gb.GetLimitedUIValue('P', NUM_SERIAL_CHANNELS);
+				const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
 				bool seen = false;
 				if (gb.Seen('B'))
 				{
 					platform.SetBaudRate(chan, gb.GetIValue());
 					seen = true;
 				}
+
 				if (gb.Seen('S'))
 				{
 					const uint32_t val = gb.GetIValue();
 					platform.SetCommsProperties(chan, val);
-					switch (chan)
+					if (chan == 0)
 					{
-					case 0:
 						usbGCode->SetCommsProperties(val);
-						break;
-					case 1:
-						if (auxGCode != nullptr)
+					}
+#if HAS_AUX_DEVICES
+					else if (chan < NumSerialChannels)
+					{
+						GCodeBuffer *& gbp = (chan == 1) ? auxGCode : aux2GCode;
+						if (gbp != nullptr)
 						{
 							auxGCode->SetCommsProperties(val);
 							const bool rawMode = (val & 2u) != 0;
-							platform.SetAuxRaw(rawMode);
-							if (rawMode && !platform.IsAuxEnabled())			// if enabling aux for the first time and in raw mode, set Marlin compatibility
+							platform.SetAuxRaw(chan - 1, rawMode);
+							if (rawMode && !platform.IsAuxEnabled(chan - 1))			// if enabling aux for the first time and in raw mode, set Marlin compatibility
 							{
-								auxGCode->MachineState().compatibility = Compatibility::Marlin;
+								gbp->MachineState().compatibility = Compatibility::Marlin;
 							}
 						}
-						break;
-					default:
-						break;
 					}
+#endif
 					seen = true;
 				}
 
 				if (seen)
 				{
-					if (chan == 1 && !platform.IsAuxEnabled())
+#if HAS_AUX_DEVICES
+					if (chan != 0 && !platform.IsAuxEnabled(chan - 1))
 					{
-						platform.EnableAux();
+						platform.EnableAux(chan - 1);
 					}
 					else
 					{
 						platform.ResetChannel(chan);
 					}
 				}
-				else if (chan == 1 && !platform.IsAuxEnabled())
+				else if (chan != 0 && !platform.IsAuxEnabled(chan - 1))
 				{
-					reply.copy("Channel 1 is disabled");
+					reply.printf("Channel %u is disabled", chan);
+#endif
 				}
 				else
 				{
@@ -3386,11 +3372,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						reply.cat(", connected");
 					}
-					else if (chan == 1 && platform.IsAuxRaw())
+#if HAS_AUX_DEVICES
+					else if (chan != 0 && platform.IsAuxRaw(chan - 1))
 					{
 						reply.cat(", raw mode");
 					}
-					//TODO handle aux2 here
+#endif
 				}
 			}
 			break;
@@ -3475,6 +3462,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 586: // Configure network protocols
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 
@@ -3508,7 +3496,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 587:	// Add WiFi network or list remembered networks
 		case 588:	// Forget WiFi network
 		case 589:	// Configure access point
-			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
+			if (CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				result = reprap.GetNetwork().HandleWiFiCode(code, gb, reply, outBuf);
 			}
@@ -4360,7 +4348,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reason = (uint16_t)SoftwareResetReason::erase;
 					}
 				}
-				reprap.SoftwareReset(reason);			// doesn't return
+				SoftwareReset(reason);			// doesn't return
 			}
 			break;
 
@@ -4407,6 +4395,12 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 	{
 		seen = true;
 		toolNum = gb.GetCommandNumber();
+	}
+	else if (gb.Seen('T'))
+	{
+		// We handle "T{expression}" as if it's "T "{expression}, also DSF may pass a T{expression} command in this way
+		seen = true;
+		toolNum = gb.GetIValue();
 	}
 	else if (gb.Seen('R'))
 	{

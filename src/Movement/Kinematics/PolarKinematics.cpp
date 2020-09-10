@@ -307,7 +307,7 @@ void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 // Return true if the specified axis is a continuous rotation axis
 bool PolarKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 {
-	return axis == 1;
+	return axis == Y_AXIS || Kinematics::IsContinuousRotationAxis(axis);
 }
 
 // Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.

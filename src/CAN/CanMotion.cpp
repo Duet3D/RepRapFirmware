@@ -23,6 +23,7 @@ static size_t indexOfNextDriverToStop = 0;
 static volatile bool stopAllFlag = false;
 static bool doingStopAll = false;
 static LargeBitmap<CanId::MaxCanAddress + 1> boardsActiveInLastMove;
+static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
 
 void CanMotion::Init() noexcept
 {
@@ -64,6 +65,7 @@ void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId c
 		buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
+			reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
 			return;		//TODO error handling
 		}
 
@@ -91,10 +93,10 @@ void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId c
 		move->finalY = params.finalY;
 		move->zMovement = params.zMovement;
 
-		// Clear out the per-drive fields
+		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
 		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
 		{
-			move->perDrive[drive].steps = 0;
+			move->perDrive[drive].Init();
 		}
 	}
 
@@ -112,9 +114,12 @@ void CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 	CanMessageBuffer *buf;
 	while ((buf = movementBufferList) != nullptr)
 	{
-		boardsActiveInLastMove.SetBit(buf->id.Dst());	//TODO should we set this if there were no steps for drives on the board, just drives to be enabled?
 		movementBufferList = buf->next;
+		boardsActiveInLastMove.SetBit(buf->id.Dst());	//TODO should we set this if there were no steps for drives on the board, just drives to be enabled?
 		buf->msg.move.whenToExecute = moveStartTime;
+		uint8_t& seq = nextSeq[buf->id.Dst()];
+		buf->msg.move.seq = seq;
+		seq = (seq + 1) & 7;
 		CanInterface::SendMotion(buf);				// queues the buffer for sending and frees it when done
 	}
 }

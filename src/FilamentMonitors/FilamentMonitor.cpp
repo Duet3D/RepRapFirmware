@@ -127,25 +127,25 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // Factory function
-/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int type) noexcept
+/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType) noexcept
 {
-	switch (type)
+	switch (monitorType)
 	{
 	case 1:		// active high switch
 	case 2:		// active low switch
-		return new SimpleFilamentMonitor(extruder, type);
+		return new SimpleFilamentMonitor(extruder, monitorType);
 		break;
 
 	case 3:		// duet3d rotating magnet, no switch
 	case 4:		// duet3d rotating magnet + switch
-		return new RotatingMagnetFilamentMonitor(extruder, type);
+		return new RotatingMagnetFilamentMonitor(extruder, monitorType);
 
 	case 5:		// duet3d laser, no switch
 	case 6:		// duet3d laser + switch
-		return new LaserFilamentMonitor(extruder, type);
+		return new LaserFilamentMonitor(extruder, monitorType);
 
 	case 7:		// simple pulse output sensor
-		return new PulsedFilamentMonitor(extruder, type);
+		return new PulsedFilamentMonitor(extruder, monitorType);
 		break;
 
 	default:	// no sensor, or unknown sensor
@@ -183,7 +183,6 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 {
 	ReadLocker lock(filamentMonitorsLock);
 
-	// Filament sensors
 	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
 	{
 		if (filamentSensors[extruder] != nullptr)
@@ -193,13 +192,13 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 			bool isPrinting;
 			bool fromIsr;
 			int32_t extruderStepsCommanded;
-			uint32_t isrMillis;
+			uint32_t locIsrMillis;
 			cpu_irq_disable();
 			if (fs.haveIsrStepsCommanded)
 			{
 				extruderStepsCommanded = fs.isrExtruderStepsCommanded;
 				isPrinting = fs.isrWasPrinting;
-				isrMillis = fs.isrMillis;
+				locIsrMillis = fs.isrMillis;
 				fs.haveIsrStepsCommanded = false;
 				cpu_irq_enable();
 				fromIsr = true;
@@ -209,12 +208,12 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 				cpu_irq_enable();
 				extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(extruder, isPrinting);		// get and clear the net extrusion commanded
 				fromIsr = false;
-				isrMillis = 0;
+				locIsrMillis = 0;
 			}
 			if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
 			{
 				const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(ExtruderToLogicalDrive(extruder));
-				const FilamentSensorStatus fstat = fs.Check(isPrinting, fromIsr, isrMillis, extrusionCommanded);
+				const FilamentSensorStatus fstat = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
 				if (fstat != FilamentSensorStatus::ok)
 				{
 					if (reprap.Debug(moduleFilamentSensors))
@@ -232,6 +231,19 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 				fs.Clear();
 			}
 		}
+	}
+}
+
+// Close down the filament monitors, in particular stop them generating interrupts. Called when we are about to update firmware.
+/*static*/ void FilamentMonitor::Exit() noexcept
+{
+	WriteLocker lock(filamentMonitorsLock);
+
+	for (FilamentMonitor *&f : filamentSensors)
+	{
+		FilamentMonitor *temp;
+		std::swap(temp, f);
+		delete temp;
 	}
 }
 

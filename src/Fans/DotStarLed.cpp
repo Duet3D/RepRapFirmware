@@ -11,6 +11,8 @@
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
+#include <RepRap.h>
+#include <GCodes/GCodes.h>
 
 #if DOTSTAR_USES_USART
 # include <sam/drivers/pdc/pdc.h>
@@ -24,7 +26,11 @@
 # endif
 #endif
 
-#define USE_16BIT_SPI	1		// set to use 16-bit SPI transfers instead of 8-bit
+#if SAME70
+# define USE_16BIT_SPI	1		// set to use 16-bit SPI transfers instead of 8-bit
+#else
+# define USE_16BIT_SPI	0		// set to use 16-bit SPI transfers instead of 8-bit
+#endif
 
 #if USE_16BIT_SPI && DOTSTAR_USES_USART
 # error Invalid combination
@@ -427,6 +433,15 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 				return GCodeResult::notFinished;
 			}
 #endif
+		}
+	}
+
+	if (ledType == 2)
+	{
+		// Interrupts are disabled while bit-banging the data, so make sure movement has stopped
+		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
 		}
 	}
 

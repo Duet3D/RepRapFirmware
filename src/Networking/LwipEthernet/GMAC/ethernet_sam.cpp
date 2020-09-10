@@ -93,7 +93,7 @@ static timers_info_t gs_timers_table[] = {
 	{0, ARP_TMR_INTERVAL, etharp_tmr},
 	/* LWIP_DHCP */
 #if LWIP_DHCP
-	{0, DHCP_COARSE_TIMER_SECS, dhcp_coarse_tmr},
+	{0, DHCP_COARSE_TIMER_SECS * 1000, dhcp_coarse_tmr},
 	{0, DHCP_FINE_TIMER_MSECS, dhcp_fine_tmr},
 #endif
 };

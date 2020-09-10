@@ -99,21 +99,37 @@ private:
 
 	void SetupSpi() noexcept;
 
-	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept;
+	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept;
 
 	template<class T> int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, Receiver<T>& recvr) noexcept
 	{
-		return SendCommand(cmd, socket, flags, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
+		return SendCommand(cmd, socket, flags, 0, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
 	}
 
 	void SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections) noexcept;
 	void GetNewStatus() noexcept;
-	static const char* TranslateWiFiResponse(int32_t response) noexcept;
+	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
+	static const char* TranslateWiFiResponse(int32_t response) noexcept;
 	static const char* TranslateEspResetReason(uint32_t reason) noexcept;
 
 	Platform& platform;
 	uint32_t lastTickMillis;
+
+	struct MessageBufferOut
+	{
+		MessageHeaderSamToEsp hdr;
+		uint8_t data[MaxDataLength];	// data to send
+	};
+
+	struct MessageBufferIn
+	{
+		MessageHeaderEspToSam hdr;
+		uint8_t data[MaxDataLength];	// data to send
+	};
+
+	MessageBufferOut *bufferOut;
+	MessageBufferIn *bufferIn;
 
 	WifiFirmwareUploader *uploader;
 	TaskHandle espWaitingTask;

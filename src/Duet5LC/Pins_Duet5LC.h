@@ -40,7 +40,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
 
-#define SUPPORT_CAN_EXPANSION	0
+#define SUPPORT_CAN_EXPANSION	0		//TEMP! should be 1
 #define SUPPORT_DOTSTAR_LED		1
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
@@ -57,13 +57,18 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
 
-#define USE_CACHE				0					// set nonzero to enable the cache
+#define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
 
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 8;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 8;				// The maximum number of smart drivers
+
+#if SUPPORT_CAN_EXPANSION
+constexpr size_t MaxCanDrivers = 7;
+constexpr unsigned int MaxCanBoards = 4;
+#endif
 
 constexpr size_t MaxSensors = 32;
 
@@ -100,7 +105,7 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
-constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
+constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
 
@@ -117,6 +122,10 @@ constexpr Pin GlobalTmc22xxEnablePin = PortAPin(1);	// The pin that drives ENN o
 PortGroup * const StepPio = &(PORT->Group[2]);		// the PIO that all the step pins are on (port C)
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(31), PortCPin(16), PortCPin(30), PortCPin(18), PortCPin(19) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortAPin(27), PortBPin(29), PortBPin(28), PortBPin(3), PortBPin(0), PortDPin(21), PortDPin(20), PortCPin(17) };
+
+constexpr Pin DiagMuxPins[] = { PortAPin(23), PortDPin(11), PortBPin(10) };
+constexpr Pin DiagMuxOutPin = PortAPin(3);
+constexpr Pin DiagIrqPin = PortAPin(0);
 
 // UART interface to stepper drivers
 constexpr uint8_t TMC22xxSercomNumber = 1;
@@ -300,7 +309,6 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noe
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
 // Table of pin functions that we are allowed to use
-constexpr uint8_t Nx = 0xFF;	// this means no EXINT usable
 
 constexpr PinDescription PinTable[] =
 {
@@ -451,7 +459,7 @@ constexpr DmaChannel DmacChanSbcTx = 8;
 constexpr DmaChannel DmacChanSbcRx = 9;
 constexpr DmaChannel DmacChanDotStarTx = 10;
 
-constexpr unsigned int NumDmaChannelsUsed = 11;			// must be at least the number of channels used, may be larger. Max 32 on the SAME5x.
+constexpr unsigned int NumDmaChannelsUsed = 11;
 
 constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 250kbps so this is not very critical

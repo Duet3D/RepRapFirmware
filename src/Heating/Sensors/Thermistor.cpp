@@ -11,6 +11,11 @@
 #include "RepRap.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#if HAS_VREF_MONITOR
+# include <GCodes/GCodes.h>
+# include <Hardware/NonVolatileMemory.h>
+#endif
+
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3
 //
@@ -22,12 +27,26 @@
 // Create an instance with default values
 Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept
 	: SensorWithPort(sensorNum, (p_isPT1000) ? "PT1000" : "Thermistor"),
-	  r25(DefaultR25), beta(DefaultBeta), shC(DefaultShc), seriesR(DefaultThermistorSeriesR), adcFilterChannel(-1), isPT1000(p_isPT1000)
-#if !HAS_VREF_MONITOR || defined(DUET3)
-	  , adcLowOffset(0), adcHighOffset(0)
-#endif
+	  r25(DefaultThermistorR25), beta(DefaultThermistorBeta), shC(DefaultThermistorC), seriesR(DefaultThermistorSeriesR), adcFilterChannel(-1),
+	  isPT1000(p_isPT1000), adcLowOffset(0), adcHighOffset(0)
 {
 	CalcDerivedParameters();
+}
+
+// Get the ADC reading
+int32_t Thermistor::GetRawReading(bool& valid) const noexcept
+{
+	if (adcFilterChannel >= 0)
+	{
+		// Filtered ADC channel
+		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
+		valid = tempFilter.IsValid();
+		return tempFilter.GetSum()/(tempFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
+	}
+
+	// Raw ADC channel
+	valid = true;
+	return (uint32_t)port.ReadAnalog() << Thermistor::AdcOversampleBits;
 }
 
 // Configure the temperature sensor
@@ -36,6 +55,23 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, changed))
 	{
 		return GCodeResult::error;
+	}
+
+	if (changed)
+	{
+		// We changed the port, so clear the ADC corrections and set up the ADC filter if there is one
+		adcLowOffset = adcHighOffset = 0;
+		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
+		if (adcFilterChannel >= 0)
+		{
+			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
+#if HAS_VREF_MONITOR
+			// Default the H and L parameters to the values from nonvolatile memory
+			NonVolatileMemory mem;
+			adcLowOffset = mem.GetThermistorLowCalibration(adcFilterChannel);
+			adcHighOffset = mem.GetThermistorHighCalibration(adcFilterChannel);
+#endif
+		}
 	}
 
 	gb.TryGetFValue('R', seriesR, changed);
@@ -56,30 +92,114 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 		}
 	}
 
-#if !HAS_VREF_MONITOR || defined(DUET3)
 	if (gb.Seen('L'))
 	{
-		adcLowOffset = (int8_t)constrain<int>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		const int lVal = gb.GetIValue();
+#if HAS_VREF_MONITOR
+		if (lVal == 999)
+		{
+			bool valid;
+			const int32_t val = GetRawReading(valid);
+			if (valid)
+			{
+				const int32_t computedCorrection =
+								(val - (int32_t)(reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum()/(ThermistorAveragingFilter::NumAveraged() >> Thermistor::AdcOversampleBits)))
+									/(1 << (AdcBits + Thermistor::AdcOversampleBits - 13));
+				if (computedCorrection >= -127 && computedCorrection <= 127)
+				{
+					adcLowOffset = (int8_t)computedCorrection;
+					reply.copy("Measured L correction for port \"");
+					port.AppendPinName(reply);
+					reply.catf("\" is %d", adcLowOffset);
+
+					// Store the value in NVM
+					if (!reprap.GetGCodes().IsRunningConfigFile())
+					{
+						NonVolatileMemory mem;
+						mem.SetThermistorLowCalibration(adcFilterChannel, adcLowOffset);
+						mem.EnsureWritten();
+					}
+				}
+				else
+				{
+					reply.copy("Computed correction is not valid. Check that you have placed a jumper across the thermistor input.");
+					return GCodeResult::error;
+				}
+			}
+			else
+			{
+				reply.copy("Temperature reading is not valid");
+				return GCodeResult::error;
+			}
+		}
+		else
+#endif
+		{
+			adcLowOffset = (int8_t)constrain<int>(lVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		}
 		changed = true;
 	}
 	if (gb.Seen('H'))
 	{
-		adcHighOffset = (int8_t)constrain<int>(gb.GetIValue(), std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		const int hVal = gb.GetIValue();
+#if HAS_VREF_MONITOR
+		if (hVal == 999)
+		{
+			bool valid;
+			const int32_t val = GetRawReading(valid);
+			if (valid)
+			{
+				int32_t vrefReading = reprap.GetPlatform().GetAdcFilter(VrefFilterIndex).GetSum();
+#ifdef DUET3
+				// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon, so extrapolate the VrefMon reading to estimate VrefP.
+				// Version 1.01 and later boards have the series resistors connected to VrefMon.
+				if (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
+				{
+					const int32_t vssaReading = reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum();
+					vrefReading = vssaReading + lrintf((vrefReading - vssaReading) * (4715.0/4700.0));
+				}
+#endif
+				const int32_t computedCorrection =
+								(val - (int32_t)(vrefReading/(ThermistorAveragingFilter::NumAveraged() >> Thermistor::AdcOversampleBits)))
+									/(1 << (AdcBits + Thermistor::AdcOversampleBits - 13));
+				if (computedCorrection >= -127 && computedCorrection <= 127)
+				{
+					adcHighOffset = (int8_t)computedCorrection;
+					reply.copy("Measured H correction for port \"");
+					port.AppendPinName(reply);
+					reply.catf("\" is %d", adcHighOffset);
+
+					// Store the value in NVM
+					if (!reprap.GetGCodes().IsRunningConfigFile())
+					{
+						NonVolatileMemory mem;
+						mem.SetThermistorHighCalibration(adcFilterChannel, adcHighOffset);
+						mem.EnsureWritten();
+					}
+				}
+				else
+				{
+					reply.copy("Computed correction is not valid. Check that you have disconnected the thermistor.");
+					return GCodeResult::error;
+				}
+			}
+			else
+			{
+				reply.copy("Temperature reading is not valid");
+				return GCodeResult::error;
+			}
+		}
+		else
+#endif
+		{
+			adcHighOffset = (int8_t)constrain<int>(hVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+		}
 		changed = true;
 	}
-#endif
 
 	TryConfigureSensorName(gb, changed);
 
-	if (changed)
-	{
-		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
-		if (adcFilterChannel >= 0)
-		{
-			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
-		}
-	}
-	else
+	if (!changed)
 	{
 		CopyBasicDetails(reply);
 		if (isPT1000)
@@ -91,9 +211,19 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 		{
 			reply.catf(", T:%.1f B:%.1f C:%.2e R:%.1f", (double)r25, (double)beta, (double)shC, (double)seriesR);
 		}
-#if !HAS_VREF_MONITOR || defined(DUET3)
 		reply.catf(" L:%d H:%d", adcLowOffset, adcHighOffset);
+
+		if (reprap.Debug(moduleHeat) && adcFilterChannel >= 0)
+		{
+#if HAS_VREF_MONITOR
+			reply.catf(", Vref %" PRIu32 " Vssa %" PRIu32 " Th %" PRIu32,
+				reprap.GetPlatform().GetAdcFilter(VrefFilterIndex).GetSum(),
+				reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum(),
+				reprap.GetPlatform().GetAdcFilter(adcFilterChannel).GetSum());
+#else
+			reply.catf(", Th %" PRIu32, reprap.GetPlatform().GetAdcFilter(adcFilterChannel).GetSum());
 #endif
+		}
 	}
 
 	return GCodeResult::ok;
@@ -102,19 +232,8 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 // Get the temperature
 void Thermistor::Poll() noexcept
 {
-	int32_t averagedTempReading;
 	bool tempFilterValid;
-	if (adcFilterChannel >= 0)
-	{
-		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
-		averagedTempReading = tempFilter.GetSum()/(tempFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		tempFilterValid = tempFilter.IsValid();
-	}
-	else
-	{
-		averagedTempReading = (uint32_t)port.ReadAnalog() << Thermistor::AdcOversampleBits;
-		tempFilterValid = true;
-	}
+	const int32_t averagedTempReading = GetRawReading(tempFilterValid);
 
 #if HAS_VREF_MONITOR
 	// Use the actual VSSA and VREF values read by the ADC
@@ -122,20 +241,18 @@ void Thermistor::Poll() noexcept
 	const volatile ThermistorAveragingFilter& vssaFilter = reprap.GetPlatform().GetAdcFilter(VssaFilterIndex);
 	if (tempFilterValid && vrefFilter.IsValid() && vssaFilter.IsValid())
 	{
-# ifdef DUET3
-		// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon.
-		// So Extrapolate the reading for VrefP. We also allow offsets to be added.
-		// Version 1.01 and later boards have the series resistors connected to VrefMon.
 		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits - 12 + Thermistor::AdcOversampleBits - 1)));
-		const int32_t averagedVrefReading = ((reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
-											? ((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0)) + rawAveragedVssaReading
-												: rawAveragedVrefReading
-											) + (adcHighOffset * (1 << (AdcBits - 12 + Thermistor::AdcOversampleBits - 1)));
+		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
+# ifdef DUET3
+		// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon, so extrapolate the VrefMon reading to estimate VrefP.
+		// Version 1.01 and later boards have the series resistors connected to VrefMon.
+		const int32_t correctedVrefReading = (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
+											? rawAveragedVssaReading + lrintf((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0))
+											: rawAveragedVrefReading;
+		const int32_t averagedVrefReading = correctedVrefReading + (adcHighOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
 # else
-		const int32_t averagedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		const int32_t averagedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
+		const int32_t averagedVrefReading = rawAveragedVrefReading + (adcHighOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
 # endif
 
 		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor.
@@ -157,10 +274,10 @@ void Thermistor::Poll() noexcept
 	if (tempFilterValid)
 	{
 		{
+			const int32_t averagedVrefReading = OversampledAdcRange + (adcHighOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
+			const int32_t averagedVssaReading = adcLowOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13));
 #endif
-
 			// Calculate the resistance
-#if HAS_VREF_MONITOR
 			if (averagedVrefReading <= averagedTempReading)
 			{
 				SetResult((isPT1000) ? BadErrorTemperature : ABS_ZERO, TemperatureError::openCircuit);
@@ -171,22 +288,10 @@ void Thermistor::Poll() noexcept
 			}
 			else
 			{
-				const float resistance = seriesR * (float)(averagedTempReading - averagedVssaReading)/(float)(averagedVrefReading - averagedTempReading);
-#else
-			const int32_t averagedVrefReading = OversampledAdcRange + 2 * adcHighOffset;	// double the offset because we increased AdcOversampleBits from 1 to 2
-			if (averagedVrefReading <= averagedTempReading)
-			{
-				SetResult((isPT1000) ? BadErrorTemperature : ABS_ZERO, TemperatureError::openCircuit);
-			}
-			else
-			{
-				const float denom = (float)(averagedVrefReading - averagedTempReading) - 0.5;
-				const int32_t averagedVssaReading = 2 * adcLowOffset;					// double the offset because we increased AdcOversampleBits from 1 to 2
-				float resistance = seriesR * ((float)(averagedTempReading - averagedVssaReading) + 0.5)/denom;
-# ifdef DUET_NG
+				float resistance = seriesR * (float)(averagedTempReading - averagedVssaReading)/(float)(averagedVrefReading - averagedTempReading);
+#ifdef DUET_NG
 				// The VSSA PTC fuse on the later Duets has a resistance of a few ohms. I measured 1.0 ohms on two revision 1.04 Duet WiFi boards.
 				resistance -= 1.0;														// assume 1.0 ohms and only one PT1000 sensor
-# endif
 #endif
 				if (isPT1000)
 				{

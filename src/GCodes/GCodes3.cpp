@@ -116,6 +116,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 #endif
 	}
 
+	reprap.MoveUpdated();		// I'm not sure this is necessary because the position and homed fields in the OM are flagged 'frequent'; but we may have changed zDatumSetByProbing
 	return GCodeResult::ok;
 }
 
@@ -532,6 +533,8 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	const size_t originalVisibleAxes = numVisibleAxes;
 	const char *lettersToTry = AllowedAxisLetters;
 	char c;
+
+	const bool newAxesAreContinuousRotation = (gb.Seen('R') && gb.GetIValue() > 0);
 	while ((c = *lettersToTry) != 0)
 	{
 		if (gb.Seen(c))
@@ -554,6 +557,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 				{
 					// We are creating a new axis
 					axisLetters[drive] = c;								// assign the drive to this drive letter
+					if (newAxesAreContinuousRotation)
+					{
+						continuousRotationAxes.SetBit(drive);
+					}
 					++numTotalAxes;
 					if (numTotalAxes + numExtruders > MaxAxesPlusExtruders)
 					{
@@ -619,6 +626,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		{
 			reply.cat(' ');
 			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
+			if (reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
+			{
+				reply.cat('r');
+			}
 			char c = axisLetters[drive];
 			for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 			{
@@ -686,9 +697,10 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		break;
 	}
 
-	// Get the target coordinates and check if we would move at all
-	float target[MaxAxes];
-	ToolOffsetTransform(currentUserPosition, target);
+	// Get the target coordinates (as user position) and check if we would move at all
+	float userPositionTarget[MaxAxes];
+	memcpy(userPositionTarget, currentUserPosition, numVisibleAxes * sizeof(currentUserPosition[0]));
+
 	bool seen = false;
 	bool doesMove = false;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
@@ -696,12 +708,17 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		if (gb.Seen(axisLetters[axis]))
 		{
 			seen = true;
-			const float axisTarget = gb.GetFValue();
-			if (axisTarget != target[axis])
+
+			// Get the user provided target coordinate
+			// - If prefixed by G53 add the ToolOffset that will be subtracted below in ToolOffsetTransform as we ignore any offsets when G53 is active
+			// - otherwise add current workplace offsets so we go where the user expects to go
+			// comparable to hoe DoStraightMove/DoArcMove does it
+			const float axisTarget = gb.GetDistance() + (gb.MachineState().g53Active ? GetCurrentToolOffset(axis) : GetWorkplaceOffset(axis));
+			if (axisTarget != userPositionTarget[axis])
 			{
 				doesMove = true;
 			}
-			target[axis] = axisTarget;
+			userPositionTarget[axis] = axisTarget;
 			sps.AddMovingAxis(axis);
 		}
 	}
@@ -729,7 +746,8 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 		return GCodeResult::ok;
 	}
-	sps.SetTarget(target);
+	// Convert target user position to machine coordinates and save them in StraightProbeSettings
+	ToolOffsetTransform(userPositionTarget, sps.GetTarget());
 
 	// See whether we are using a user-defined Z probe or just current one
 	const size_t probeToUse = gb.Seen('P') ? gb.GetUIValue() : 0;
@@ -1160,7 +1178,6 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 	const uint8_t drive = id.localDriver;
 	if (gb.GetCommandFraction() > 0)
 	{
-#ifdef DUET3
 		// Main board drivers do not support closed loop modes
 		if (gb.Seen('S'))
 		{
@@ -1173,9 +1190,6 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 		}
 		reply.copy("Driver %u mode is open loop", drive);
 		return GCodeResult::ok;
-#else
-		return GCodeResult::errorNotSupported;
-#endif
 	}
 
 	if (drive < platform.GetNumActualDirectDrivers())
@@ -1346,7 +1360,9 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 						reply.cat(", pos unknown");
 					}
 				}
-#elif SUPPORT_TMC22xx || SUPPORT_TMC51xx
+#endif
+
+#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 				{
 					const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 					const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
@@ -1364,6 +1380,19 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 					bool bdummy;
 					const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * platform.DriveStepsPerUnit(axis));
 					reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
+				}
+#endif
+
+#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+				if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
+				{
+					const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
+					const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
+					const unsigned int pwmScaleSum = pwmScale & 0xFF;
+					const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
+					const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
+					const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
+					reply.catf(", pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u", pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
 				}
 #endif
 			}

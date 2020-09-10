@@ -49,7 +49,7 @@ uint16_t RemoteZProbe::GetRawReading() const noexcept
 	return (state) ? 1000 : 0;
 }
 
-void RemoteZProbe::SetProbing(bool isProbing) noexcept
+bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 {
 	String<StringLength100> reply;
 	const GCodeResult rslt = CanInterface::ChangeHandleResponseTime(boardAddress, handle, (isProbing) ? ActiveProbeReportInterval : InactiveProbeReportInterval, state, reply.GetRef());
@@ -58,6 +58,7 @@ void RemoteZProbe::SetProbing(bool isProbing) noexcept
 		reply.cat('\n');
 		reprap.GetPlatform().Message(GetGenericMessageType(rslt), reply.c_str());
 	}
+	return rslt == GCodeResult::ok;
 }
 
 // Create a remote Z probe

@@ -142,6 +142,12 @@ AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const noexcept
 	return AxesBitmap::MakeFromBits(axis);
 }
 
+// Return true if the specified axis is a continuous rotation axis. This default implementation is overridden in some classes e.g. polar.
+bool Kinematics::IsContinuousRotationAxis(size_t axis) const noexcept
+{
+	return reprap.GetGCodes().GetContinuousRotationAxes().IsBitSet(axis);
+}
+
 /*static*/ Kinematics *Kinematics::Create(KinematicsType k) noexcept
 {
 	switch (k)

@@ -38,6 +38,7 @@ Licence: GPL
 #include "Endstops/EndstopsManager.h"
 #include <GPIO/GpInPort.h>
 #include <GPIO/GpOutPort.h>
+#include <Comms/AuxDevice.h>
 #include <General/IPAddress.h>
 
 #if defined(DUET_NG)
@@ -62,6 +63,7 @@ constexpr bool FORWARDS = true;
 constexpr bool BACKWARDS = !FORWARDS;
 
 // Define the number of ADC filters and the indices of the extra ones
+// Note, the thermistor code assumes that the first N filters are used by the TEMP0 to TEMP(N-1) thermistor inputs, where N = NumThermistorInputs
 #if HAS_VREF_MONITOR
 constexpr size_t VrefFilterIndex = NumThermistorInputs;
 constexpr size_t VssaFilterIndex = NumThermistorInputs + 1;
@@ -182,7 +184,8 @@ enum class DiagnosticTestType : unsigned int
 	TestSerialBlock = 1003,			// test what happens when we write a blocking message via debugPrintf()
 	DivideByZero = 1004,			// do an integer divide by zero to test exception handling
 	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
-	BusFault = 1006					// generate a bus fault
+	BusFault = 1006,				// generate a bus fault
+	AccessMemory = 1007				// read or write  memory
 };
 
 /***************************************************************************************************************/
@@ -351,14 +354,14 @@ public:
 
   	// Communications and data storage
 	void AppendUsbReply(OutputBuffer *buffer) noexcept;
-	void AppendAuxReply(OutputBuffer *buf, bool rawMessage) noexcept;
-	void AppendAuxReply(const char *msg, bool rawMessage) noexcept;
+	void AppendAuxReply(size_t auxNumber, OutputBuffer *buf, bool rawMessage) noexcept;
+	void AppendAuxReply(size_t auxNumber, const char *msg, bool rawMessage) noexcept;
 
-    bool IsAuxEnabled() const noexcept { return auxEnabled; }		// Any device on the AUX line?
-    void EnableAux() noexcept;
-    bool IsAuxRaw() const noexcept { return auxRaw; }
-	void SetAuxRaw(bool raw) noexcept { auxRaw = raw; }
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
+    bool IsAuxEnabled(size_t auxNumber) const noexcept;				// Any device on the AUX line?
+    void EnableAux(size_t auxNumber) noexcept;
+    bool IsAuxRaw(size_t auxNumber) const noexcept;
+	void SetAuxRaw(size_t auxNumber, bool raw) noexcept;
 
 	void SetIPAddress(IPAddress ip) noexcept;
 	IPAddress GetIPAddress() const noexcept;
@@ -402,7 +405,6 @@ public:
 	void Message(MessageType type, OutputBuffer *buffer) noexcept;
 	void MessageF(MessageType type, const char *fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));
 	void MessageF(MessageType type, const char *fmt, va_list vargs) noexcept;
-	bool FlushAuxMessages() noexcept;
 	bool FlushMessages() noexcept;							// Flush messages to USB and aux, returning true if there is more to send
 	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls) noexcept;
 	void StopLogging() noexcept;
@@ -426,8 +428,7 @@ public:
 	bool SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
 	float GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
-	float GetIdleCurrentFactor() const noexcept
-		{ return idleCurrentFactor; }
+	float GetIdleCurrentFactor() const noexcept { return idleCurrentFactor; }
 	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode) noexcept;
 	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept;
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept;
@@ -505,8 +506,8 @@ public:
 	void UpdateConfiguredHeaters() noexcept;
 
 	// AUX device
-	void Beep(int freq, int ms) noexcept;
-	void SendAuxMessage(const char* msg) noexcept;
+	void PanelDueBeep(int freq, int ms) noexcept;
+	void SendPanelDueMessage(size_t auxNumber, const char* msg) noexcept;
 
 	// Hotend configuration
 	float GetFilamentWidth() const noexcept;
@@ -766,25 +767,15 @@ private:
 	uint32_t lastFanCheckTime;
 
   	// Serial/USB
-	uint32_t baudRates[NUM_SERIAL_CHANNELS];
-	uint8_t commsParams[NUM_SERIAL_CHANNELS];
-
-#ifdef SERIAL_AUX_DEVICE
-	volatile OutputStack auxOutput;
-	Mutex auxMutex;
-#endif
-
-	uint32_t auxSeq;							// Sequence number for AUX devices
-	bool auxEnabled;							// Do we have an AUX device?
-	bool auxRaw;								// true if aux device is in raw mode
-
-#ifdef SERIAL_AUX2_DEVICE
-    volatile OutputStack aux2Output;
-	Mutex aux2Mutex;
-#endif
+	uint32_t baudRates[NumSerialChannels];
+	uint8_t commsParams[NumSerialChannels];
 
 	volatile OutputStack usbOutput;
 	Mutex usbMutex;
+
+#if HAS_AUX_DEVICES
+	AuxDevice auxDevices[NumSerialChannels - 1];
+#endif
 
 	// Files
 #if HAS_MASS_STORAGE

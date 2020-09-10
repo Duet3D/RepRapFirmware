@@ -144,6 +144,7 @@ public:
 	bool IsSimulating() const noexcept { return simulationMode != 0; }
 	bool IsDoingToolChange() const noexcept { return doingToolChange; }
 	bool IsHeatingUp() const noexcept;											// Return true if the SD card print is waiting for a heater to reach temperature
+	bool IsRunningConfigFile() const noexcept { return runningConfigFile; }
 
 	uint32_t GetLastDuration() const noexcept { return lastDuration; }			// The most recent print time or simulated time
 	float GetSimulationTime() const noexcept { return simulationTime; }
@@ -157,6 +158,7 @@ public:
 	size_t GetTotalAxes() const noexcept { return numTotalAxes; }
 	size_t GetVisibleAxes() const noexcept { return numVisibleAxes; }
 	size_t GetNumExtruders() const noexcept { return numExtruders; }
+	AxesBitmap GetContinuousRotationAxes() const noexcept { return continuousRotationAxes; }
 
 	const char* GetMachineModeString() const noexcept;							// Get the name of the current machine mode
 
@@ -452,7 +454,9 @@ private:
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
-#ifdef SERIAL_AUX_DEVICE
+	bool CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;
+
+#if HAS_AUX_DEVICES
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(UARTClass *p) noexcept;
 #endif
@@ -469,7 +473,7 @@ private:
 	GCodeBuffer*& httpGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)];
 	GCodeBuffer*& telnetGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)];
 	GCodeBuffer*& fileGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)];
-	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USBchan)];
+	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)];
 	GCodeBuffer*& auxGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)];					// This one is for the PanelDue on the async serial interface
 	GCodeBuffer*& triggerGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)];			// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)];
@@ -568,6 +572,7 @@ private:
 
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
+	AxesBitmap continuousRotationAxes;			// Axes declared as continuous rotation axes in M584
 
 	float pausedFanSpeeds[MaxFans];				// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number

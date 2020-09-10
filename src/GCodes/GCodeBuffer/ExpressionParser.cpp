@@ -16,7 +16,7 @@
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, floor, isnan, max, min, mod, radians, sin, sqrt, tan);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
 
 ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column) noexcept
 	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column), stringBuffer(stringBufferStorage, ARRAY_SIZE(stringBufferStorage))
@@ -247,28 +247,70 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 				switch(opChar)
 				{
 				case '+':
-					BalanceNumericTypes(val, val2, evaluate);
-					if (val.GetType() == TypeCode::Float)
+					if (val.GetType() == TypeCode::DateTime)
 					{
-						val.fVal += val2.fVal;
-						val.param = max(val.param, val2.param);
+						if (val2.GetType() == TypeCode::Uint32)
+						{
+							val.Set56BitValue(val.Get56BitValue() + val2.uVal);
+						}
+						else if (val2.GetType() == TypeCode::Int32)
+						{
+							val.Set56BitValue((int64_t)val.Get56BitValue() + val2.iVal);
+						}
+						else
+						{
+							throw ConstructParseException("invalid operand types");
+						}
 					}
 					else
 					{
-						val.iVal += val2.iVal;
+						BalanceNumericTypes(val, val2, evaluate);
+						if (val.GetType() == TypeCode::Float)
+						{
+							val.fVal += val2.fVal;
+							val.param = max(val.param, val2.param);
+						}
+						else
+						{
+							val.iVal += val2.iVal;
+						}
 					}
 					break;
 
 				case '-':
-					BalanceNumericTypes(val, val2, evaluate);
-					if (val.GetType() == TypeCode::Float)
+					if (val.GetType() == TypeCode::DateTime)
 					{
-						val.fVal -= val2.fVal;
-						val.param = max(val.param, val2.param);
+						if (val2.GetType() == TypeCode::DateTime)
+						{
+							// Difference of two data/times
+							val.SetType(TypeCode::Int32);
+							val.iVal = (int32_t)(val.Get56BitValue() - val2.Get56BitValue());
+						}
+						if (val2.GetType() == TypeCode::Uint32)
+						{
+							val.Set56BitValue(val.Get56BitValue() - val2.uVal);
+						}
+						else if (val2.GetType() == TypeCode::Int32)
+						{
+							val.Set56BitValue((int64_t)val.Get56BitValue() - val2.iVal);
+						}
+						else
+						{
+							throw ConstructParseException("invalid operand types");
+						}
 					}
 					else
 					{
-						val.iVal -= val2.iVal;
+						BalanceNumericTypes(val, val2, evaluate);
+						if (val.GetType() == TypeCode::Float)
+						{
+							val.fVal -= val2.fVal;
+							val.param = max(val.param, val2.param);
+						}
+						else
+						{
+							val.iVal -= val2.iVal;
+						}
 					}
 					break;
 
@@ -484,9 +526,19 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 	}
 }
 
-void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
+/*static*/ bool ExpressionParser::TypeHasNoLiterals(TypeCode t) noexcept
 {
-	if (val1.GetType() == TypeCode::Float)
+	return t == TypeCode::DateTime || t == TypeCode::IPAddress || t == TypeCode::MacAddress || t == TypeCode::DriverId;
+}
+
+// Balance types for a comparison operator
+void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException)
+{
+	if (val1.GetType() == val2.GetType())			// handle the common case first
+	{
+		// nothing to do
+	}
+	else if (val1.GetType() == TypeCode::Float)
 	{
 		ConvertToFloat(val2, evaluate);
 	}
@@ -494,7 +546,15 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 	{
 		ConvertToFloat(val1, evaluate);
 	}
-	else if (val1.GetType() != val2.GetType())
+	else if (val2.GetType() == TypeCode::CString && TypeHasNoLiterals(val1.GetType()))
+	{
+		ConvertToString(val1, evaluate);
+	}
+	else if (val1.GetType() == TypeCode::CString && TypeHasNoLiterals(val2.GetType()))
+	{
+		ConvertToString(val2, evaluate);
+	}
+	else
 	{
 		if (evaluate)
 		{
@@ -913,6 +973,16 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 				{
 					rslt.iVal = min<int32_t>(rslt.iVal, nextOperand.iVal);
 				}
+			}
+			break;
+
+		case Function::random:
+			{
+				const uint32_t limit = (rslt.GetType() == TypeCode::Uint32) ? rslt.uVal
+										: (rslt.GetType() == TypeCode::Int32 && rslt.iVal > 0) ? rslt.iVal
+											: throw ConstructParseException("expected positive integer");
+				rslt.SetType(TypeCode::Int32);
+				rslt.iVal = random(limit);
 			}
 			break;
 

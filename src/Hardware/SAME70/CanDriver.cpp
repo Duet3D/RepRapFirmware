@@ -135,13 +135,15 @@ alignas(4) __nocache static struct mcan_tx_event_element mcan1_tx_event_fifo[CON
 alignas(4) __nocache static struct mcan_standard_message_filter_element mcan1_rx_standard_filter[CONF_MCAN1_RX_STANDARD_ID_FILTER_NUM];
 alignas(4) __nocache static struct mcan_extended_message_filter_element mcan1_rx_extended_filter[CONF_MCAN1_RX_EXTENDED_ID_FILTER_NUM];
 
+static constexpr uint8_t dlc2len[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
+
 /**
  * \brief initialize MCAN memory .
  *
  * \param hw  Base address of the MCAN
  *
  */
-static void _mcan_message_memory_init(Mcan *hw)
+static void _mcan_message_memory_init(Mcan *hw) noexcept
 {
 	if (hw == MCAN0) {
 		hw->MCAN_SIDFC = ((uint32_t)mcan0_rx_standard_filter & BIT_2_TO_15_MASK) |
@@ -200,7 +202,7 @@ static void _mcan_message_memory_init(Mcan *hw)
  * \param hw  Base address of the MCAN
  * \param config  default configuration parameters.
  */
-static void _mcan_set_configuration(Mcan *hw, struct mcan_config *config)
+static void _mcan_set_configuration(Mcan *hw, mcan_config *config) noexcept
 {
 #if (SAMV71B || SAME70B || SAMV70B)
 	/* Timing setting for Rev B */
@@ -289,7 +291,7 @@ static void _mcan_set_configuration(Mcan *hw, struct mcan_config *config)
  * \param module_inst  MCAN instance
  *
  */
-static void _mcan_enable_peripheral_clock(struct mcan_module *const module_inst)
+static void _mcan_enable_peripheral_clock(mcan_module *const module_inst) noexcept
 {
 	if (module_inst->hw == MCAN0) {
 		/* Turn on the digital interface clock. */
@@ -307,7 +309,7 @@ static void _mcan_enable_peripheral_clock(struct mcan_module *const module_inst)
  * \param hw  Base address of MCAN.
  * \param config default configuration .
  */
-void mcan_init(struct mcan_module *const module_inst, Mcan *hw, struct mcan_config *config)
+void mcan_init(mcan_module *const module_inst, Mcan *hw, struct mcan_config *config) noexcept
 {
 	/* Sanity check arguments */
 	Assert(module_inst);
@@ -316,19 +318,16 @@ void mcan_init(struct mcan_module *const module_inst, Mcan *hw, struct mcan_conf
 
 	/* Associate the software module instance with the hardware module */
 	module_inst->hw = hw;
+	module_inst->taskWaitingOnFifo[0] = module_inst->taskWaitingOnFifo[1] = nullptr;
 
 	pmc_disable_pck(PMC_PCK_5);
 
-#if 1	// dc42 use UPLL not PLLA as recommended in the documentation, so the MCAN clock is independent of the CPU clock frequency
+	// Use UPLL so the MCAN clock is independent of the CPU clock frequency
 	pmc_switch_pck_to_upllck(PMC_PCK_5, PMC_PCK_PRES(9));		// run PCLK5 at 48MHz
-#else
-	pmc_switch_pck_to_pllack(PMC_PCK_5, PMC_PCK_PRES(9));
-#endif
 	pmc_enable_pck(PMC_PCK_5);
 
 	/* Enable peripheral clock */
 	_mcan_enable_peripheral_clock(module_inst);
-
 
 	/* Configuration Change Enable. */
 	hw->MCAN_CCCR |= MCAN_CCCR_CCE;
@@ -351,7 +350,7 @@ void mcan_init(struct mcan_module *const module_inst, Mcan *hw, struct mcan_conf
  * \param module_inst  MCAN instance
  *
  */
-void mcan_start(struct mcan_module *const module_inst)
+void mcan_start(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR &= ~MCAN_CCCR_INIT;
 	/* Wait for the sync. */
@@ -364,7 +363,7 @@ void mcan_start(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_stop(struct mcan_module *const module_inst)
+void mcan_stop(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_INIT;
 	/* Wait for the sync. */
@@ -377,7 +376,7 @@ void mcan_stop(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_enable_fd_mode(struct mcan_module *const module_inst)
+void mcan_enable_fd_mode(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_INIT;
 	/* Wait for the sync. */
@@ -389,7 +388,6 @@ void mcan_enable_fd_mode(struct mcan_module *const module_inst)
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_CME(2);
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_CMR(2);
 #endif
-
 }
 
 /**
@@ -398,7 +396,7 @@ void mcan_enable_fd_mode(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_disable_fd_mode(struct mcan_module *const module_inst)
+void mcan_disable_fd_mode(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_INIT;
 	/* Wait for the sync. */
@@ -417,7 +415,7 @@ void mcan_disable_fd_mode(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_enable_restricted_operation_mode(struct mcan_module *const module_inst)
+void mcan_enable_restricted_operation_mode(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_INIT;
 	/* Wait for the sync. */
@@ -433,7 +431,7 @@ void mcan_enable_restricted_operation_mode(struct mcan_module *const module_inst
  * \param module_inst  MCAN instance
  *
  */
-void mcan_disable_restricted_operation_mode(struct mcan_module *const module_inst)
+void mcan_disable_restricted_operation_mode(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR &= ~MCAN_CCCR_ASM;
 }
@@ -444,7 +442,7 @@ void mcan_disable_restricted_operation_mode(struct mcan_module *const module_ins
  * \param module_inst  MCAN instance
  *
  */
-void mcan_enable_bus_monitor_mode(struct mcan_module *const module_inst)
+void mcan_enable_bus_monitor_mode(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_INIT;
 	/* Wait for the sync. */
@@ -460,7 +458,7 @@ void mcan_enable_bus_monitor_mode(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_disable_bus_monitor_mode(struct mcan_module *const module_inst)
+void mcan_disable_bus_monitor_mode(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR &= ~MCAN_CCCR_MON;
 }
@@ -471,7 +469,7 @@ void mcan_disable_bus_monitor_mode(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_enable_sleep_mode(struct mcan_module *const module_inst)
+void mcan_enable_sleep_mode(mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_CSR;
 	/* Wait for the sync. */
@@ -486,7 +484,7 @@ void mcan_enable_sleep_mode(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_disable_sleep_mode(struct mcan_module *const module_inst)
+void mcan_disable_sleep_mode(struct mcan_module *const module_inst) noexcept
 {
 	/* Enable peripheral clock */
 	_mcan_enable_peripheral_clock(module_inst);
@@ -501,7 +499,7 @@ void mcan_disable_sleep_mode(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_enable_test_mode(struct mcan_module *const module_inst)
+void mcan_enable_test_mode(struct mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_INIT;
 	/* Wait for the sync. */
@@ -518,7 +516,7 @@ void mcan_enable_test_mode(struct mcan_module *const module_inst)
  * \param module_inst  MCAN instance
  *
  */
-void mcan_disable_test_mode(struct mcan_module *const module_inst)
+void mcan_disable_test_mode(struct mcan_module *const module_inst) noexcept
 {
 	module_inst->hw->MCAN_CCCR &= ~MCAN_CCCR_TEST;
 }
@@ -532,7 +530,7 @@ void mcan_disable_test_mode(struct mcan_module *const module_inst)
  *
  * \return status code.
  */
-enum status_code mcan_set_rx_standard_filter(struct mcan_module *const module_inst, struct mcan_standard_message_filter_element *sd_filter, uint32_t index)
+status_code mcan_set_rx_standard_filter(struct mcan_module *const module_inst, struct mcan_standard_message_filter_element *sd_filter, uint32_t index) noexcept
 {
 	if (module_inst->hw == MCAN0) {
 		mcan0_rx_standard_filter[index].S0.reg = sd_filter->S0.reg;
@@ -553,7 +551,7 @@ enum status_code mcan_set_rx_standard_filter(struct mcan_module *const module_in
  *
  * \return status code.
  */
-enum status_code mcan_set_rx_extended_filter(struct mcan_module *const module_inst, struct mcan_extended_message_filter_element *et_filter, uint32_t index)
+status_code mcan_set_rx_extended_filter(struct mcan_module *const module_inst, struct mcan_extended_message_filter_element *et_filter, uint32_t index) noexcept
 {
 	if (module_inst->hw == MCAN0) {
 		mcan0_rx_extended_filter[index].F0.reg = et_filter->F0.reg;
@@ -576,7 +574,7 @@ enum status_code mcan_set_rx_extended_filter(struct mcan_module *const module_in
  *
  * \return status code.
  */
-enum status_code mcan_get_rx_buffer_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index)
+status_code mcan_get_rx_buffer_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index) noexcept
 {
 	if (module_inst->hw == MCAN0) {
 		*rx_element = mcan0_rx_buffer[index];
@@ -597,7 +595,7 @@ enum status_code mcan_get_rx_buffer_element(struct mcan_module *const module_ins
  *
  * \return status code.
  */
-enum status_code mcan_get_rx_fifo_0_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index)
+status_code mcan_get_rx_fifo_0_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index) noexcept
 {
 	if (module_inst->hw == MCAN0) {
 		*rx_element = mcan0_rx_fifo_0[index];
@@ -618,7 +616,7 @@ enum status_code mcan_get_rx_fifo_0_element(struct mcan_module *const module_ins
  *
  * \return status code.
  */
-enum status_code mcan_get_rx_fifo_1_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index)
+status_code mcan_get_rx_fifo_1_element(struct mcan_module *const module_inst, struct mcan_rx_element *rx_element, uint32_t index) noexcept
 {
 	if (module_inst->hw == MCAN0) {
 		*rx_element = mcan0_rx_fifo_1[index];
@@ -639,7 +637,7 @@ enum status_code mcan_get_rx_fifo_1_element(struct mcan_module *const module_ins
  *
  * \return status code.
  */
-enum status_code mcan_set_tx_buffer_element(struct mcan_module *const module_inst, struct mcan_tx_element *tx_element, uint32_t index)
+status_code mcan_set_tx_buffer_element(struct mcan_module *const module_inst, struct mcan_tx_element *tx_element, uint32_t index) noexcept
 {
 	uint32_t i;
 	if (module_inst->hw == MCAN0) {
@@ -669,7 +667,7 @@ enum status_code mcan_set_tx_buffer_element(struct mcan_module *const module_ins
  *
  * \return status code.
  */
-enum status_code mcan_get_tx_event_fifo_element(struct mcan_module *const module_inst, struct mcan_tx_event_element *tx_event_element, uint32_t index)
+status_code mcan_get_tx_event_fifo_element(struct mcan_module *const module_inst, struct mcan_tx_event_element *tx_event_element, uint32_t index) noexcept
 {
 	if (module_inst->hw == MCAN0) {
 		tx_event_element->E0.reg = mcan0_tx_event_fifo[index].E0.reg;
@@ -682,6 +680,145 @@ enum status_code mcan_get_tx_event_fifo_element(struct mcan_module *const module
 	}
 	return ERR_INVALID_ARG;
 }
+
+// Send extended CAN message in FD mode using a dedicated transmit buffer. The transmit buffer must already be free.
+status_code mcan_fd_send_ext_message_no_wait(mcan_module *const module_inst, uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, bool bitRateSwitch) noexcept
+{
+	const uint32_t dlc = (dataLength <= 8) ? dataLength
+							: (dataLength <= 24) ? ((dataLength + 3) >> 2) + 6
+								: ((dataLength + 15) >> 4) + 11;
+	mcan_tx_element tx_element;
+	tx_element.T0.reg = MCAN_TX_ELEMENT_T0_EXTENDED_ID(id_value) | MCAN_TX_ELEMENT_T0_XTD;
+	tx_element.T1.reg = MCAN_TX_ELEMENT_T1_DLC(dlc)
+						| MCAN_TX_ELEMENT_T1_EFC
+						| MCAN_TX_ELEMENT_T1_FDF
+						| ((bitRateSwitch) ? MCAN_TX_ELEMENT_T1_BRS : 0);
+
+	memcpy(tx_element.data, data, dataLength);
+
+	// Set any extra data we will be sending to zero
+	const size_t roundedUpLength = dlc2len[dlc];
+	memset(tx_element.data + dataLength, 0, roundedUpLength - dataLength);
+
+	status_code rc = mcan_set_tx_buffer_element(module_inst, &tx_element, whichTxBuffer);
+	if (rc == STATUS_OK)
+	{
+		rc = mcan_tx_transfer_request(module_inst, (uint32_t)1 << whichTxBuffer);
+	}
+	return rc;
+}
+
+// Wait for a specified buffer to become free. If it's still not free after the timeout, cancel the pending transmission.
+// Return true if we cancelled the pending transmission.
+bool WaitForTxBufferFree(mcan_module *const module_inst, uint32_t whichTxBuffer, uint32_t maxWait) noexcept
+{
+	const uint32_t trigMask = (uint32_t)1 << whichTxBuffer;
+	if ((module_inst->hw->MCAN_TXBRP & trigMask) != 0)
+	{
+		// Wait for the timeout period for the message to be sent
+		const uint32_t startTime = millis();
+		do
+		{
+			delay(1);
+			if ((module_inst->hw->MCAN_TXBRP & trigMask) == 0)
+			{
+				return false;
+			}
+		} while (millis() - startTime < maxWait);
+
+		// The last message still hasn't been sent, so cancel it
+		module_inst->hw->MCAN_TXBCR = trigMask;
+		while ((module_inst->hw->MCAN_TXBRP & trigMask) != 0)
+		{
+			delay(1);
+		}
+	}
+	return true;
+}
+
+// Get a message from a FIFO with timeout. Return true if successful, false if we timed out
+bool GetMessageFromFifo(mcan_module *const module_inst, CanMessageBuffer *buf, unsigned int fifoNumber, uint32_t timeout) noexcept
+{
+	volatile uint32_t* const fifoRegisters = &(module_inst->hw->MCAN_RXF0S) + (4 * fifoNumber);	// pointer to FIFO status register followed by FIFO acknowledge register
+	module_inst->taskWaitingOnFifo[fifoNumber] = TaskBase::GetCallerTaskHandle();
+	while (true)
+	{
+		const uint32_t status = fifoRegisters[0];									// get FIFO status
+		if ((status & MCAN_RXF0S_F0FL_Msk) != 0)									// if there are any messages
+		{
+			const uint32_t getIndex = (status & MCAN_RXF0S_F0GI_Msk) >> MCAN_RXF0S_F0GI_Pos;
+			mcan_rx_element elem;
+			if (fifoNumber == 1)
+			{
+				mcan_get_rx_fifo_1_element(module_inst, &elem, getIndex);		// copy the data (TODO use our own driver, avoid double copying)
+			}
+			else
+			{
+				mcan_get_rx_fifo_0_element(module_inst, &elem, getIndex);		// copy the data (TODO use our own driver, avoid double copying)
+			}
+			fifoRegisters[1] = getIndex;											// acknowledge it, release the FIFO entry
+
+			if (elem.R0.bit.XTD == 1 && elem.R0.bit.RTR != 1)						// if extended address and not a remote frame
+			{
+				// Copy the message and accompanying data to our buffer
+				buf->id.SetReceivedId(elem.R0.bit.ID);
+				buf->dataLength = dlc2len[elem.R1.bit.DLC];
+				memcpy(buf->msg.raw, elem.data, buf->dataLength);
+				module_inst->taskWaitingOnFifo[fifoNumber] = nullptr;
+				return true;
+			}
+		}
+		else if (!TaskBase::Take(timeout))
+		{
+			module_inst->taskWaitingOnFifo[fifoNumber] = nullptr;
+			return false;
+		}
+	}
+}
+
+void GetLocalCanTiming(mcan_module *const module_inst, CanTiming& timing) noexcept
+{
+	const uint32_t nbtp = module_inst->hw->MCAN_NBTP;
+	const uint32_t tseg1 = (nbtp & MCAN_NBTP_NTSEG1_Msk) >> MCAN_NBTP_NTSEG1_Pos;
+	const uint32_t tseg2 = (nbtp & MCAN_NBTP_NTSEG2_Msk) >> MCAN_NBTP_NTSEG2_Pos;
+	const uint32_t jw = (nbtp & MCAN_NBTP_NSJW_Msk) >> MCAN_NBTP_NSJW_Pos;
+	const uint32_t brp = (nbtp & MCAN_NBTP_NBRP_Msk) >> MCAN_NBTP_NBRP_Pos;
+	timing.period = (tseg1 + tseg2 + 3) * (brp + 1);
+	timing.tseg1 = (tseg1 + 1) * (brp + 1);
+	timing.jumpWidth = (jw + 1) * (brp + 1);
+}
+
+void ChangeLocalCanTiming(mcan_module *const module_inst, const CanTiming& timing) noexcept
+{
+	// Sort out the bit timing
+	uint32_t period = timing.period;
+	uint32_t tseg1 = timing.tseg1;
+	uint32_t jumpWidth = timing.jumpWidth;
+	uint32_t prescaler = 1;						// 48MHz main clock
+	uint32_t tseg2;
+
+	for (;;)
+	{
+		tseg2 = period - tseg1 - 1;
+		if (tseg1 <= 32 && tseg2 <= 16 && jumpWidth <= 16)
+		{
+			break;
+		}
+		prescaler <<= 1;
+		period >>= 1;
+		tseg1 >>= 1;
+		jumpWidth >>= 1;
+	}
+
+	//TODO stop transmissions in an orderly fashion, or postpone initialising CAN until we have the timing data
+	module_inst->hw->MCAN_CCCR |= MCAN_CCCR_CCE | MCAN_CCCR_INIT;
+	module_inst->hw->MCAN_NBTP =  ((tseg1 - 1) << MCAN_NBTP_NTSEG1_Pos)
+							| ((tseg2 - 1) << MCAN_NBTP_NTSEG2_Pos)
+							| ((jumpWidth - 1) << MCAN_NBTP_NSJW_Pos)
+							| ((prescaler - 1) << MCAN_NBTP_NBRP_Pos);
+	module_inst->hw->MCAN_CCCR &= ~MCAN_CCCR_CCE;
+}
+
 
 #endif	// SUPPORT_CAN_EXPANSION
 

@@ -113,7 +113,7 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
-constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels (USB only)
+constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE SerialUSB
 
 // SerialUSB
@@ -351,10 +351,10 @@ constexpr const char *DefaultGpioPinNames[] = { "led", "leddim" };
 
 #if defined(PCCB_10)
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "fan3", "fan4", "!fan5+fan5a.tach", "nil+fan5b.tach" };
-constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, 25000 };
+constexpr PwmFrequency DefaultFanPwmFrequencies[] = { 0, 0, 0, 0, 0, 25000 };
 #else
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "!fan3+fan3a.tach", "nil+fan3btach" };
-constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, 25000 };
+constexpr PwmFrequency DefaultFanPwmFrequencies[] = { 0, 0, 0, 25000 };
 #endif
 
 #endif
