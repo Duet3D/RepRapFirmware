@@ -28,6 +28,7 @@ public:
 	FansManager(const FansManager&) = delete;
 
 	void Init() noexcept;
+	void Exit() noexcept;
 	bool CheckFans(bool checkSensors) noexcept;
 	GCodeResult ConfigureFanPort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException);

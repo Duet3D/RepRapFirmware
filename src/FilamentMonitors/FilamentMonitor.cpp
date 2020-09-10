@@ -235,16 +235,15 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // Close down the filament monitors, in particular stop them generating interrupts. Called when we are about to update firmware.
-/*static*/ void FilamentMonitor::DisableAll() noexcept
+/*static*/ void FilamentMonitor::Exit() noexcept
 {
-	ReadLocker lock(filamentMonitorsLock);
+	WriteLocker lock(filamentMonitorsLock);
 
-	for (FilamentMonitor *f : filamentSensors)
+	for (FilamentMonitor *&f : filamentSensors)
 	{
-		if (f != nullptr)
-		{
-			f->Disable();
-		}
+		FilamentMonitor *temp;
+		std::swap(temp, f);
+		delete temp;
 	}
 }
 

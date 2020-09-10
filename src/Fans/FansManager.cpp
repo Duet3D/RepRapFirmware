@@ -103,7 +103,7 @@ GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& repl
 		WriteLocker lock(fansLock);
 
 		Fan *oldFan = nullptr;
-		std::swap<Fan*>(oldFan, fans[fanNum]);
+		std::swap(oldFan, fans[fanNum]);
 		delete oldFan;
 
 		const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
@@ -233,6 +233,19 @@ void FansManager::Init() noexcept
 	}
 # endif
 #endif
+}
+
+// Shut down the fans system, in particular stop any interrupts into Fan objects. Called before loading IAP into the last 64K of RAM.
+// The simplest way is to delete all the fans.
+void FansManager::Exit() noexcept
+{
+	WriteLocker lock(fansLock);
+	for (Fan*& fan : fans)
+	{
+		Fan *f;
+		std::swap(f, fan);
+		delete f;
+	}
 }
 
 #if SUPPORT_CAN_EXPANSION
