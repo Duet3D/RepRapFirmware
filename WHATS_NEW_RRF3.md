@@ -30,6 +30,7 @@ New features/changed behaviour:
 - [Duet 3] Added support for second UART (using the IO_1 pins) on Duet 3 MB6HC. New message type (P5) added to M118 command.
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
 - [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolstep threshold
+- [Duet 3] Z probing is now abandoned if the probe is remote and cannot be contacted
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
 - [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
 
@@ -49,6 +50,7 @@ Bug fixes:
 - If a G31 command defined new values in terms of existing G31 values from the object model, then incorrect values could be set due to the new values being computed and stored multiple times
 - The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
 - Object model variable seqs.spindles was not updated when the configuredRpm of a spindle was changed
+- Loading IAP during a firmware upgrade might fail on Duet 2 if a filament monitor or fan tacho was active
 - [Duet 3 with attached SBC] When an array parameter (e.g. M92 E value) had more than one element but less than the maximum number, the last element was replicated to fill the array. This was inconsistent with non-SBC behaviour, which only pads the array when a single element is privided.
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
 - [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
