@@ -51,10 +51,12 @@ Bug fixes:
 - The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
 - Object model variable seqs.spindles was not updated when the configuredRpm of a spindle was changed
 - Loading IAP during a firmware upgrade might fail on Duet 2 if a filament monitor or fan tacho was active
+- The PWM frequency for heaters was supposed to be limited to 1KHz but this check was no longer being performed
 - [Duet 3 with attached SBC] When an array parameter (e.g. M92 E value) had more than one element but less than the maximum number, the last element was replicated to fill the array. This was inconsistent with non-SBC behaviour, which only pads the array when a single element is privided.
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
 - [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
 - [Duet 3] M915 with just P and/or axis parameters did not report the coolstep threshold (T parameter) correctly
+- [Duet 3] DHCP requests were being made made much too often when the DHCP lease time was long e.g. 1 hour or more
 
 RepRapFirmware 3.1.1
 ====================
