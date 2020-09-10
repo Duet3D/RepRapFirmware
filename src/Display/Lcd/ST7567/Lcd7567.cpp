@@ -43,10 +43,11 @@ void Lcd7567::HardwareInit() noexcept
 	SendByte(SetBoosterFirst);				// 11111000 Set booster ratio (2-byte command) to 4x
 	SendByte(0x00);
 
-	// @David: Does this need to be 0x06 or can it be 0x03 for your display as well?
+	// David uses 0x06 for the resistor ratio, my display uses 0x03
 	SendByte(SetResistorRatio | 0x06);		// 00100011 Set Vlcd resistor ratio 1+Rb/Ra to 6.5 for the voltage regulator (contrast)
 
 	// Set display contrast
+	// NOTE: boundary checking is not implemented for the contrast parameter yet
 	uint8_t contrast = min<uint8_t>((64.0f * displayContrastRatio) / 100, 0b111111);
 	SendByte(SetVolumeFirst);				// 10000001 Set electronic volume (2-byte command) 6-bit contrast value
 	SendByte(contrast);						// contrast value, EA default: 0x016

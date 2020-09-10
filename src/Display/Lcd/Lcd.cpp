@@ -26,7 +26,7 @@ Lcd::~Lcd()
 void Lcd::Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t displayContrastRatio, Pin gatePin, bool gatePinPolarity) noexcept
 {
 	// All this is SPI-display specific hardware initialisation, which prohibits I2C-display or UART-display support.
-	// Note that https://github.com/SchmartMaker/RepRapFirmware/tree/ST7565/src/Display did contain this abstraction
+	// NOTE: https://github.com/SchmartMaker/RepRapFirmware/tree/ST7565/src/Display did contain this abstraction
 	a0Pin = p_a0Pin;
 	this->gatePin = gatePin;
 	this->gatePinPolarity = gatePinPolarity;
