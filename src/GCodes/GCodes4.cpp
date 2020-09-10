@@ -570,14 +570,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					zProbeTriggered = false;
 					SetMoveBufferDefaults();
-					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber))
+					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 					{
 						gb.MachineState().SetError("Failed to enable Z probe");
 						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb, 29);
 						break;
 					}
-					zp->SetProbing(true);
 					moveBuffer.checkEndstops = true;
 					moveBuffer.reduceAcceleration = true;
 					moveBuffer.coords[Z_AXIS] = -zp->GetDiveHeight() + zp->GetActualTriggerHeight();
@@ -856,7 +855,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					zProbeTriggered = false;
 					SetMoveBufferDefaults();
-					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber))
+					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 					{
 						gb.MachineState().SetError("Failed to enable Z probe");
 						gb.SetState(GCodeState::checkError);
@@ -864,7 +863,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						break;
 					}
 
-					zp->SetProbing(true);
 					moveBuffer.checkEndstops = true;
 					moveBuffer.reduceAcceleration = true;
 					moveBuffer.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
@@ -1142,7 +1140,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					{
 						zProbeTriggered = false;
 						SetMoveBufferDefaults();
-						if (!platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway))
+						if (!platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway) || !zp->SetProbing(true))
 						{
 							gb.MachineState().SetError("Failed to enable Z probe");
 							gb.SetState(GCodeState::checkError);
@@ -1150,7 +1148,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 							break;
 						}
 
-						zp->SetProbing(true);
 						moveBuffer.checkEndstops = true;
 						moveBuffer.reduceAcceleration = true;
 						sps.SetCoordsToTarget(moveBuffer.coords);
