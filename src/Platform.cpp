@@ -432,7 +432,6 @@ void Platform::Init() noexcept
 	ReadUniqueId();
 #endif
 
-
 	// Real-time clock
 	realTime = 0;
 
@@ -991,16 +990,6 @@ void Platform::SetNetMask(IPAddress nm) noexcept
 {
 	netMask = nm;
 	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
-}
-
-// Flush messages to aux, returning true if there is more to send
-bool Platform::FlushAuxMessages(size_t auxNumber) noexcept
-{
-#if HAS_AUX_DEVICES
-	return auxDevices[auxNumber].Flush();
-#else
-	return false;
-#endif
 }
 
 // Flush messages to USB and aux, returning true if there is more to send

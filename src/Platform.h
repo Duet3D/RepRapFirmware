@@ -405,7 +405,6 @@ public:
 	void Message(MessageType type, OutputBuffer *buffer) noexcept;
 	void MessageF(MessageType type, const char *fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));
 	void MessageF(MessageType type, const char *fmt, va_list vargs) noexcept;
-	bool FlushAuxMessages(size_t auxNumber) noexcept;
 	bool FlushMessages() noexcept;							// Flush messages to USB and aux, returning true if there is more to send
 	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls) noexcept;
 	void StopLogging() noexcept;
@@ -429,8 +428,7 @@ public:
 	bool SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
 	float GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
-	float GetIdleCurrentFactor() const noexcept
-		{ return idleCurrentFactor; }
+	float GetIdleCurrentFactor() const noexcept { return idleCurrentFactor; }
 	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode) noexcept;
 	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept;
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept;
