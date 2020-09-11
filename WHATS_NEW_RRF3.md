@@ -5,7 +5,7 @@ Upgrade notes:
 - In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
 - If you are using the M453 command to configure spindle motors and switch the firmware into CNC mode, you will need to change this command because the parameters have changed.
 - [Duet 3] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
-- If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber - 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based. We plan to remove workspaceNumber in a future release.
+- If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber + 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based. We plan to remove workspaceNumber in a future release.
 - Default thermistor parameters for all builds of RRF3 are now: T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old default, which had B4388 C0. In the unlikely event that your M308 line had a C parameter but no B parameter, you will need to add B4388 to get the prevous behaviour.
 
 New features/changed behaviour:
