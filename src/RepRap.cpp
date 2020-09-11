@@ -1577,7 +1577,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		// Machine mode,
 		const char *machineMode = gCodes->GetMachineModeString();
 		response->cat(",\"mode\":");
-		response->EncodeString(machineMode, strlen(machineMode), false);
+		response->EncodeString(machineMode, false);
 
 		// Machine name
 		response->cat(",\"name\":");

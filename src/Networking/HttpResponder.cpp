@@ -1442,7 +1442,6 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 	}
 }
 
-
 // Check for timed out sessions and old reply buffers
 /*static*/ void HttpResponder::CheckSessions() noexcept
 {
