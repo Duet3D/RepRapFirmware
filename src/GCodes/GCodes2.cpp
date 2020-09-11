@@ -3334,7 +3334,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						GCodeBuffer *& gbp = (chan == 1) ? auxGCode : aux2GCode;
 						if (gbp != nullptr)
 						{
-							auxGCode->SetCommsProperties(val);
+							gbp->SetCommsProperties(val);
 							const bool rawMode = (val & 2u) != 0;
 							platform.SetAuxRaw(chan - 1, rawMode);
 							if (rawMode && !platform.IsAuxEnabled(chan - 1))			// if enabling aux for the first time and in raw mode, set Marlin compatibility
