@@ -25,6 +25,7 @@ New features/changed behaviour:
 - M486 now confirms when an object is cancelled or resumed
 - Default thermistor parameters for all builds of RRF3 are now T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old defaults.
 - The parameters for M453 have changed. The frequency parameter is now Q (to match M950) instead of F. You can configure up to 3 ports to control each spindle. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M453_in_RepRapFirmware_3_2_and_later.
+- In the M122 report, unused stack for each task is now reported in dwords, not bytes
 - [Duet Maestro] M308 L and H parameters are now supported.
 - [Duet Maestro and Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory. See https://duet3d.dozuki.com/Wiki/Calibrating_thermistor_and_PT1000_readings.
 - [Duet 3] Added support for second UART (using the IO_1 pins) on Duet 3 MB6HC. New message type (P5) added to M118 command.
@@ -48,7 +49,7 @@ Bug fixes:
 - Fixed bug in GetProportionDone that might have caused an incorrect extrusion amount for the first move after restarting a print following a power failure
 - The output from M207 without parameters was truncated when there were 4 or more tools
 - If a G31 command defined new values in terms of existing G31 values from the object model, then incorrect values could be set due to the new values being computed and stored multiple times
-- The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
+- The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":-1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
 - Object model variable seqs.spindles was not updated when the configuredRpm of a spindle was changed
 - Loading IAP during a firmware upgrade might fail on Duet 2 if a filament monitor or fan tacho was active
 - The PWM frequency for heaters was supposed to be limited to 1KHz but this check was no longer being performed
