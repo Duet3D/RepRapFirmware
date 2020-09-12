@@ -34,6 +34,9 @@ New features/changed behaviour:
 - [Duet 3] Z probing is now abandoned if the probe is remote and cannot be contacted
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
 - [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
+- [Duet 3 expansion and tool boards] Increased performance, in particular the maximum step rate is higher than before
+- [Duet 3 expansion and tool boards] Software reset data is now stored in NVRAM and reported by M122
+- [Duet 3 expansion and tool boards] Added M122 P102, P1005 and P1006 functions
 
 Object model and expression evaluation changes:
 - Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Now they are reported as integers.
