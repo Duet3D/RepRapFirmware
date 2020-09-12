@@ -88,6 +88,7 @@ constexpr IRQn MCanIRQn = CAN1_INT0_IRQn;
 static mcan_module mcan_instance;
 
 static volatile uint32_t canStatus = 0;
+static uint32_t lastTimeSent = 0;
 
 enum class CanStatusBits : uint32_t
 {
@@ -394,8 +395,10 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		if (buf != nullptr)
 		{
 			CanMessageTimeSync * const msg = buf->SetupBroadcastMessage<CanMessageTimeSync>(CanId::MasterAddress);
-			WaitForTxBufferFree(&mcan_instance, TxBufferIndexTimeSync, MaxTimeSyncSendWait);			// make sure we can send immediately
-			msg->timeSent = StepTimer::GetTimerTicks();
+			WaitForTxBufferFree(&mcan_instance, TxBufferIndexTimeSync, MaxTimeSyncSendWait);		// make sure we can send immediately
+			msg->lastTimeSent = msg->lastTimeAcknowledged = lastTimeSent;							// TODO set lastTimeAcknowledged correctly
+			msg->timeSent = lastTimeSent = StepTimer::GetTimerTicks();
+			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
 			mcan_fd_send_ext_message_no_wait(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexTimeSync, false);
 			CanMessageBuffer::Free(buf);
 		}
@@ -809,18 +812,20 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 		GCodeResult res;
 		do
 		{
-			res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0 + currentPart, boardAddress, type, gb, reply, &lastPart);
+			// The standard reply buffer is only 256 bytes long. We need a bigger one to receive the software reset data.
+			String<StringLength500> infoBuffer;
+			res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0 + currentPart, boardAddress, type, gb, infoBuffer.GetRef(), &lastPart);
 			if (res != GCodeResult::ok)
 			{
+				reply.copy(infoBuffer.c_str());
 				return res;
 			}
 			if (type == 0 && currentPart == 0)
 			{
 				p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
 			}
-			reply.cat('\n');
-			p.Message(mt, reply.c_str());
-			reply.Clear();
+			infoBuffer.cat('\n');						// don't use MessageF, the format buffer is too small
+			p.Message(mt, infoBuffer.c_str());
 			++currentPart;
 		} while (currentPart <= lastPart);
 		return res;
