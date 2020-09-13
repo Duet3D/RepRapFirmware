@@ -1,12 +1,14 @@
-RepRapFirmware 3.2-beta1 (in preparation
+RepRapFirmware 3.2-beta1
 ========================
 
 Upgrade notes:
 - In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
 - If you are using the M453 command to configure spindle motors and switch the firmware into CNC mode, you will need to change this command because the parameters have changed.
-- [Duet 3] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
 - If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber + 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based. We plan to remove workspaceNumber in a future release.
-- Default thermistor parameters for all builds of RRF3 are now: T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old default, which had B4388 C0. In the unlikely event that your M308 line had a C parameter but no B parameter, you will need to add B4388 to get the prevous behaviour.
+- If you are using object model field sensors.zprobes[].temperatureCoefficient in conditional GCode, you should preferably replace it by temperatureCoefficients[0]. We plan to remove temperatureCoefficient in a future release.
+- Default thermistor parameters for all builds of RRF3 are now: T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old default, which had B4388 C0. In the unlikely event that your M308 line had a C parameter but no B parameter, you will need to add B4388 to get the previous behaviour.
+- If you configure a Z probe using multiple M558 commands instead of a single one, you must make sure that oonly the first one has a P parameter. This is because M558 with a P parameter now sets default values before processing the other parameters of the M558 command.
+- [Duet 3] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
 
 New features/changed behaviour:
 - Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using separate firmware build
@@ -18,7 +20,6 @@ New features/changed behaviour:
 - Drivers number of the form 0.# where # represents one or more decimal digits are now supported even on board that don't support CAN
 - The resurrect.g file now records which objects on the build plate have been cancelled
 - Duet 3 Mini 5+ WiFi and Ethernet prototype boards v0.2 are now supported
-- Added move.workplaceNumber to the object model. This is intended to repace move.workspaceNumber, but is 0-based instead of 1-based.
 - Added L (calibration factor) parameter to laser filament monitor configuration
 - Increased the number of stack words displayed in the software reset data. The number of wear-levelling slots stored is reduced from 4 to 3.
 - Added M584 R parameter to indicate whether newly created axes are continuous rotation axes or not
@@ -26,11 +27,14 @@ New features/changed behaviour:
 - Default thermistor parameters for all builds of RRF3 are now T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old defaults.
 - The parameters for M453 have changed. The frequency parameter is now Q (to match M950) instead of F. You can configure up to 3 ports to control each spindle. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M453_in_RepRapFirmware_3_2_and_later.
 - In the M122 report, unused stack for each task is now reported in dwords, not bytes
+- Z probe trigger height second order temperature compensation is now supported. To use it, specify a 2-element array as the temperature coefficient, e.g. "M558 ... C0.01:0.0005".
+- M558 with a P parameter now always creates a new Z probe object, which means that all the other M558 values are set to default values before processing the other M558 parameters
+- M581 trigger condition parameter now supports a new value R2 which means trigger only if not printing from SD card
 - [Duet Maestro] M308 L and H parameters are now supported.
 - [Duet Maestro and Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory. See https://duet3d.dozuki.com/Wiki/Calibrating_thermistor_and_PT1000_readings.
 - [Duet 3] Added support for second UART (using the IO_1 pins) on Duet 3 MB6HC. New message type (P5) added to M118 command.
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
-- [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolstep threshold
+- [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolStep threshold
 - [Duet 3] Z probing is now abandoned if the probe is remote and cannot be contacted
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
 - [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
@@ -39,8 +43,12 @@ New features/changed behaviour:
 - [Duet 3 expansion and tool boards] Added M122 P102, P1005 and P1006 functions
 
 Object model and expression evaluation changes:
+- Added move.workplaceNumber to the object model. This is intended to repace move.workspaceNumber, but is 0-based instead of 1-based.
+- Added temperatureCoefficients array to the Z probe object model. For backwards compatibility, temperatureCoefficient is still supported for the time being and is equivalent to temperatureCoefficients[0].
+- Added minRpm to the spindle object model
 - Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Now they are reported as integers.
-- Added object model variable spindles[].minRpm 
+- Added lastStopHeight to the Z probe object model
+- Added calibrationFactor to the laser filament monitor object model
 - Support comparing a value of any type that has no literals (DateTime, IPAddress, MAC address, DriverID) with a string
 - Support DateTime - DateTime, DateTime + int, DateTime - int
 - Support T{expression} commands
@@ -56,10 +64,10 @@ Bug fixes:
 - Object model variable seqs.spindles was not updated when the configuredRpm of a spindle was changed
 - Loading IAP during a firmware upgrade might fail on Duet 2 if a filament monitor or fan tacho was active
 - The PWM frequency for heaters was supposed to be limited to 1KHz but this check was no longer being performed
-- [Duet 3 with attached SBC] When an array parameter (e.g. M92 E value) had more than one element but less than the maximum number, the last element was replicated to fill the array. This was inconsistent with non-SBC behaviour, which only pads the array when a single element is privided.
+- [Duet 3 with attached SBC] When an array parameter (e.g. M92 E value) had more than one element but less than the maximum number, the last element was replicated to fill the array. This was inconsistent with non-SBC behaviour, which only pads the array when a single element is provided.
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
 - [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
-- [Duet 3] M915 with just P and/or axis parameters did not report the coolstep threshold (T parameter) correctly
+- [Duet 3] M915 with just P and/or axis parameters did not report the coolStep threshold (T parameter) correctly
 - [Duet 3] DHCP requests were being made made much too often when the DHCP lease time was long e.g. 1 hour or more
 
 RepRapFirmware 3.1.1
