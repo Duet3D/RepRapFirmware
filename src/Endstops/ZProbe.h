@@ -59,7 +59,7 @@ public:
 	void SetTriggerHeight(float height) noexcept { triggerHeight = height; }
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
-	void SetLastStoppedHeight(float h) noexcept { lastStopHeight = h; }
+	void SetLastStoppedHeight(float h) noexcept;
 
 #if HAS_MASS_STORAGE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;

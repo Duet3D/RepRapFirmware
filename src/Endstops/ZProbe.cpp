@@ -403,4 +403,10 @@ GCodeResult ZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, cons
 	return GCodeResult::error;
 }
 
+void ZProbe::SetLastStoppedHeight(float h) noexcept
+{
+	lastStopHeight = h;
+	reprap.SensorsUpdated();
+}
+
 // End
