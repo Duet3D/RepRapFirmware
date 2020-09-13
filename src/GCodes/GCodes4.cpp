@@ -889,7 +889,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (zp->GetProbeType() == ZProbeType::none)
 			{
 				// No Z probe, so we are doing manual mesh levelling. Take the current Z height as the height error.
-				g30zStoppedHeight = g30zHeightError = moveBuffer.coords[Z_AXIS];
+				g30zHeightError = moveBuffer.coords[Z_AXIS];
+				zp->SetLastStoppedHeight(g30zHeightError);
 			}
 			else
 			{
@@ -905,7 +906,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					// Successful probing
 					float m[MaxAxes];
 					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
-					g30zStoppedHeight = m[Z_AXIS] - g30HValue;					// save for later
+					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;					// save for later
+					zp->SetLastStoppedHeight(g30zStoppedHeight);
 					g30zHeightError = g30zStoppedHeight - zp->GetActualTriggerHeight();
 					g30zHeightErrorSum += g30zHeightError;
 				}
@@ -1057,8 +1059,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (g30SValue == -3)
 		{
 			// Adjust the Z probe trigger height to the stop height
-			platform.GetZProbeOrDefault(currentZProbeNumber)->SetTriggerHeight(g30zStoppedHeight);
-			reply.printf("Z probe trigger height set to %.3f mm", (double)g30zStoppedHeight);
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			zp->SetTriggerHeight(zp->GetLastStoppedHeight());
+			reply.printf("Z probe trigger height set to %.3f mm", (double)zp->GetLastStoppedHeight());
 		}
 		else if (g30SValue == -2)
 		{
@@ -1077,7 +1080,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		else
 		{
 			// Just print the stop height
-			reply.printf("Stopped at height %.3f mm", (double)g30zStoppedHeight);
+			reply.printf("Stopped at height %.3f mm", (double)platform.GetZProbeOrDefault(currentZProbeNumber)->GetLastStoppedHeight());
 		}
 		gb.SetState(GCodeState::normal);
 		break;

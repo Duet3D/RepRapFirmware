@@ -45,6 +45,7 @@ public:
 	float GetTravelSpeed() const noexcept { return travelSpeed; }
 	float GetRecoveryTime() const noexcept { return recoveryTime; }
 	float GetTolerance() const noexcept { return tolerance; }
+	float GetLastStoppedHeight() const noexcept { return lastStopHeight; }
 	bool GetTurnHeatersOff() const noexcept { return misc.parts.turnHeatersOff; }
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
 	int GetAdcValue() const noexcept { return adcValue; }
@@ -58,6 +59,7 @@ public:
 	void SetTriggerHeight(float height) noexcept { triggerHeight = height; }
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
+	void SetLastStoppedHeight(float h) noexcept { lastStopHeight = h; }
 
 #if HAS_MASS_STORAGE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;
@@ -69,6 +71,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(offsets)
 	OBJECT_MODEL_ARRAY(value)
+	OBJECT_MODEL_ARRAY(temperatureCoefficients)
 
 	uint8_t number;
 	ZProbeType type;
@@ -85,17 +88,18 @@ protected:
 		} parts;
 		uint16_t all;
 	} misc;
-	float xOffset, yOffset;			// the offset of the probe relative to the print head
-	float triggerHeight;			// the nozzle height at which the target ADC value is returned
-	float calibTemperature;			// the temperature at which we did the calibration
-	float temperatureCoefficient;	// the variation of height with bed temperature
-	float diveHeight;				// the dive height we use when probing
-	float probeSpeed;				// the initial speed of probing
-	float travelSpeed;				// the speed at which we travel to the probe point
-	float recoveryTime;				// Z probe recovery time
-	float tolerance;				// maximum difference between probe heights when doing >1 taps
+	float xOffset, yOffset;				// the offset of the probe relative to the print head
+	float triggerHeight;				// the nozzle height at which the target ADC value is returned
+	float calibTemperature;				// the temperature at which we did the calibration
+	float temperatureCoefficients[2];	// the variation of height with bed temperature and with the square of temperature
+	float diveHeight;					// the dive height we use when probing
+	float probeSpeed;					// the initial speed of probing
+	float travelSpeed;					// the speed at which we travel to the probe point
+	float recoveryTime;					// Z probe recovery time
+	float tolerance;					// maximum difference between probe heights when doing >1 taps
+	float lastStopHeight;				// the height at which the last G30 probe move stopped
 
-	bool isDeployedByUser;			// true if the user has used the M401 command to deploy this probe and not sent M402 to retract it
+	bool isDeployedByUser;				// true if the user has used the M401 command to deploy this probe and not sent M402 to retract it
 };
 
 // MotorStall Z probes have no port, also in a CAN environment the local and remote proxy versions are the same

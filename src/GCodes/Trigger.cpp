@@ -92,7 +92,11 @@ bool Trigger::Check() noexcept
 					}
 				);
 
-	return triggered && (condition == 0 || (condition > 0 && reprap.GetPrintMonitor().IsPrinting()));
+	return triggered &&
+			(condition == 0
+				|| (condition == 1 && reprap.GetPrintMonitor().IsPrinting())
+				|| (condition == 2 && !reprap.GetPrintMonitor().IsPrinting())
+			);
 }
 
 // Handle M581 for this trigger
@@ -173,9 +177,13 @@ GCodeResult Trigger::Configure(unsigned int number, GCodeBuffer &gb, const Strin
 			{
 				reply.cat("if enabled would fire on a");
 			}
-			else if (condition > 0)
+			else if (condition == 1)
 			{
 				reply.cat("fires only when printing on a");
+			}
+			else if (condition == 2)
+			{
+				reply.cat("fires only when not printing on a");
 			}
 			else
 			{

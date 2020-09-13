@@ -587,7 +587,6 @@ private:
 	int32_t g30ProbePointIndex;					// the index of the point we are probing (G30 P parameter), or -1 if none
 	int g30SValue;								// S parameter in the G30 command, or -2 if there wasn't one
 	float g30HValue;							// H parameter in the G30 command, or 0.0 if there wasn't on
-	float g30zStoppedHeight;					// the height to report after running G30 S-1
 	float g30zHeightError;						// the height error last time we probed
 	float g30PrevHeightError;					// the height error the previous time we probed
 	float g30zHeightErrorSum;					// the sum of the height errors for the current probe point
