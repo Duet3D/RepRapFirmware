@@ -89,13 +89,6 @@ void GCodeMachineState::SetFileExecuting() noexcept
 	isFileFinished = fileError = false;
 }
 
-// Mark the currently executing file as finished
-void GCodeMachineState::SetFileFinished(bool error) noexcept
-{
-	isFileFinished = true;
-	fileError = error;
-}
-
 #endif
 
 // Return true if we are reading GCode commands from a file or macro

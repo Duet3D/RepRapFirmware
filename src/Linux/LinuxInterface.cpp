@@ -199,7 +199,7 @@ void LinuxInterface::Spin() noexcept
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-						gb->MachineState().SetFileFinished(error);
+						gb->SetFileFinished(error);
 
 						if (reprap.Debug(moduleLinuxInterface))
 						{

@@ -1347,8 +1347,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 
 #if HAS_LINUX_INTERFACE
-	case GCodeState::doingUserMacro:			// finished a macro from M98 which has been cancelled by M99 or M291 P1 (we only reach this state if using the SBC interface)
-	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next (we only reach this state if using the SBC interface)
+	case GCodeState::doingUserMacro:			// finished a macro from M98 which has been cancelled by M99 or M291 P1 (only in SBC mode)
+		gb.SetState(GCodeState::normal);
+		break;
+
+	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next
+		SendSbcEvent(gb);
+		gb.FinishedBinaryMode();
 		gb.SetState(GCodeState::normal);
 		break;
 #endif

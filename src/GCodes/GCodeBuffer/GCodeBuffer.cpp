@@ -744,6 +744,27 @@ bool GCodeBuffer::IsFileFinished() const noexcept
 	return machineState->isFileFinished;
 }
 
+void GCodeBuffer::SetFileFinished(bool error) noexcept
+{
+	uint32_t lastFileId = 0;
+	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+	{
+		if (ms->fileId != 0)
+		{
+			if (lastFileId == 0)
+			{
+				lastFileId = ms->fileId;
+			}
+			else if (ms->fileId != lastFileId)
+			{
+				break;
+			}
+			ms->isFileFinished = true;
+			ms->fileError = error;
+		}
+	}
+}
+
 void GCodeBuffer::SetPrintFinished() noexcept
 {
 	const uint32_t fileId = OriginalMachineState().fileId;
@@ -751,7 +772,8 @@ void GCodeBuffer::SetPrintFinished() noexcept
 	{
 		if (ms->fileId == fileId)
 		{
-			ms->SetFileFinished(false);
+			ms->isFileFinished = true;
+			ms->fileError = false;
 		}
 	}
 }

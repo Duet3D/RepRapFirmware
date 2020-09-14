@@ -137,8 +137,9 @@ public:
 	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
 	void FinishedBinaryMode() noexcept { isBinaryBuffer = false; }
 
-	void SetPrintFinished() noexcept;							// Mark the print file as finished
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
+	void SetFileFinished(bool error) noexcept;					// Mark the last file as finished
+	void SetPrintFinished() noexcept;							// Mark the print file as finished
 
 	bool IsMacroRequested() const noexcept { return macroRequested; }	// Indicates if a macro file is being requested
 	void RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept;	// Request execution of a file macro
