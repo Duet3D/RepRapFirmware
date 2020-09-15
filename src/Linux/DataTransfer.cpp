@@ -409,11 +409,13 @@ void DataTransfer::Init() noexcept
 	// Initialise transfer ready pin
 	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
-#if SAME5x
+#if !SAME70
 	// Allocate buffers
 	rxBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
 	txBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
+#endif
 
+#if SAME5x
 	// Initialize SPI
 	for (Pin p : SbcSpiSercomPins)
 	{
