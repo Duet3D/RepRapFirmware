@@ -12,6 +12,8 @@
 constexpr unsigned int TILE_WIDTH = 1;
 constexpr unsigned int TILE_HEIGHT = 8;
 
+#define KEEP_GATE_OPEN
+
 Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
 	: Lcd(64, 128, fnts, nFonts, SpiMode::mode3)
 {
@@ -29,6 +31,13 @@ void Lcd7567::HardwareInit() noexcept
 
 	// Post-reset wait of 6ms
 	delay(6);
+
+#ifdef KEEP_GATE_OPEN
+	if(gatePin != NoPin) {
+		digitalWrite(gatePin, gatePinPolarity);
+		delayMicroseconds(1);
+	}
+#endif
 
 	SelectDevice();
 
@@ -135,10 +144,12 @@ inline void Lcd7567::EndDataTransaction() noexcept
 
 void Lcd7567::SelectDevice() noexcept
 {
+#ifndef KEEP_GATE_OPEN
 	if(gatePin != NoPin) {
 		digitalWrite(gatePin, gatePinPolarity);
 		delayMicroseconds(1);
 	}
+#endif
 
 	device.Select();
 	delayMicroseconds(1);
@@ -149,10 +160,12 @@ void Lcd7567::DeselectDevice() noexcept
 	delayMicroseconds(1);
 	device.Deselect();
 
+#ifndef KEEP_GATE_OPEN
 	if(gatePin != NoPin) {
 		digitalWrite(gatePin, !gatePinPolarity);
 		delayMicroseconds(1);
 	}
+#endif
 }
 
 void Lcd7567::SendByte(uint8_t byteToSend) noexcept
