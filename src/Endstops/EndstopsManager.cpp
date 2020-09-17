@@ -614,21 +614,11 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 	}
 
 	const bool seenPort = gb.Seen('C');
-	const bool needNewProbe =  (existingProbe == nullptr)
-							|| (   seenType
-								&& probeType != (uint32_t)existingProbe->GetProbeType()
-								&& (   probeType == (uint32_t)ZProbeType::zMotorStall
-									|| probeType == (uint32_t)ZProbeType::none
-									|| existingProbe->GetProbeType() == ZProbeType::zMotorStall
-									|| existingProbe->GetProbeType() == ZProbeType::none
-								   )
-								)
-							|| (seenPort && existingProbe->GetProbeType() != ZProbeType::zMotorStall && existingProbe->GetProbeType() != ZProbeType::none);
-
 	bool seen = seenType || seenPort;
-	if (needNewProbe)
+
+	if (seen)									// we need a new probe if we have seen either P or C
 	{
-		if (!seenType)
+		if (!seenType)							// if a port is specified then the type must be specified too
 		{
 			reply.copy("Missing Z probe type number");
 			return GCodeResult::error;
@@ -688,7 +678,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		return rslt;
 	}
 
-	// If we get get then there is an existing probe and we just need to change its configuration
+	// If we get here then there is an existing probe of the correct type and we just need to change its configuration
 	return zProbes[probeNumber]->Configure(gb, reply, seen);
 }
 

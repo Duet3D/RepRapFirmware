@@ -290,9 +290,6 @@ constexpr Pin SamCsPin = PortAPin(14);
 // SBC interface
 constexpr unsigned int SbcSpiSercomNumber = 0;
 Sercom * const SbcSpiSercom = SERCOM0;
-//constexpr Pin SbcMosiPin = PortAPin(7);
-//constexpr Pin SbcMisoPin = PortAPin(4);
-//constexpr Pin SbcSclkPin = PortAPin(5);
 constexpr Pin SbcSSPin = PortAPin(6);
 constexpr Pin SbcTfrReadyPin = PortBPin(7);
 constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), PortAPin(7) };

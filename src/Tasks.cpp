@@ -277,8 +277,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 											: (taskDetails.eCurrentState == eBlocked) ? "blocked"
 												: (taskDetails.eCurrentState == eSuspended) ? "suspended"
 													: "invalid";
-		p.MessageF(mtype, " %s(%s,%u)",
-			taskDetails.pcTaskName, stateText, (unsigned int)(taskDetails.usStackHighWaterMark * sizeof(StackType_t)));
+		p.MessageF(mtype, " %s(%s,%u)", taskDetails.pcTaskName, stateText, (unsigned int)taskDetails.usStackHighWaterMark);
 	}
 	p.Message(mtype, "\nOwned mutexes:");
 

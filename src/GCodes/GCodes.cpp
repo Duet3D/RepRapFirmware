@@ -451,8 +451,8 @@ void GCodes::Spin() noexcept
 #if HAS_LINUX_INTERFACE
 			if (reprap.UsingLinuxInterface())
 			{
-				// Send an empty response to DCS in order to let it pop its internal stack
-				HandleReplyPreserveResult(gb, GCodeResult::ok, "");
+				// Send an empty response to DCS so it can pop its internal stack
+				SendSbcEvent(gb);
 			}
 #endif
 
@@ -630,7 +630,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
 					{
 						// Need to send a final response to the SBC if the request came from a code so it can pop its stack
-						HandleReplyPreserveResult(gb, (gb.GetState() == GCodeState::normal) ? rslt : GCodeResult::ok, reply.c_str());
+						SendSbcEvent(gb);
 						gb.FinishedBinaryMode();
 					}
 
@@ -651,7 +651,19 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		else
 		{
-			reprap.GetLinuxInterface().FillBuffer(gb);
+			bool gotCommand = false;
+			if (gb.MachineState().waitingForAcknowledgement && gb.GetNormalInput() != nullptr)
+			{
+				gotCommand = gb.GetNormalInput()->FillBuffer(&gb);
+				if (gotCommand)
+				{
+					gb.DecodeCommand();
+				}
+			}
+			if (!gotCommand)
+			{
+				reprap.GetLinuxInterface().FillBuffer(gb);
+			}
 		}
 	}
 	else
@@ -3573,6 +3585,17 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	// If we get here then we didn't handle the message, so release the buffer(s)
 	OutputBuffer::ReleaseAll(reply);
 }
+
+#if HAS_LINUX_INTERFACE
+
+// Send a channel-related event to the SBC (message prompt or end of file acknowledged)
+void GCodes::SendSbcEvent(GCodeBuffer& gb)
+{
+	MessageType type = (MessageType)((1u << gb.GetChannel().ToBaseType()) | BinaryCodeReplyFlag);
+	platform.Message(type, "");
+}
+
+#endif
 
 void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException)
 {

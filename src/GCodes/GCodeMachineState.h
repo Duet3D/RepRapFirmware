@@ -218,7 +218,6 @@ public:
 
 #if HAS_LINUX_INTERFACE
 	void SetFileExecuting() noexcept;
-	void SetFileFinished(bool error) noexcept;
 #endif
 
 	bool UsingMachineCoordinates() const noexcept { return g53Active || runningSystemMacro; }

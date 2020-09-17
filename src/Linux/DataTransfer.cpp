@@ -409,11 +409,13 @@ void DataTransfer::Init() noexcept
 	// Initialise transfer ready pin
 	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
-#if SAME5x
+#if !SAME70
 	// Allocate buffers
 	rxBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
 	txBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
+#endif
 
+#if SAME5x
 	// Initialize SPI
 	for (Pin p : SbcSpiSercomPins)
 	{
@@ -1163,7 +1165,9 @@ bool DataTransfer::WriteFileChunkRequest(const char *filename, uint32_t offset, 
 bool DataTransfer::WriteEvaluationResult(const char *expression, const ExpressionValue& value) noexcept
 {
 	// Calculate payload length
-	size_t expressionLength = strlen(expression), payloadLength;
+	const size_t expressionLength = strlen(expression);
+	size_t payloadLength;
+	String<StringLength50> rslt;
 	switch (value.GetType())
 	{
 	// FIXME Add support for arrays
@@ -1178,13 +1182,15 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		payloadLength = expressionLength + strlen(value.sVal);
 		break;
 	case TypeCode::IPAddress:
-		payloadLength = expressionLength + 15;
-		break;
 	case TypeCode::MacAddress:
-		payloadLength = expressionLength + 17;
+	case TypeCode::DateTime:
+		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
+		value.AppendAsString(rslt.GetRef());
+		payloadLength = expressionLength + rslt.strlen();
 		break;
 	default:
-		payloadLength = expressionLength + StringLength50;
+		rslt.printf("unsupported type code %d", (int)value.type);
+		payloadLength = expressionLength + rslt.strlen();
 		break;
 	}
 
@@ -1228,39 +1234,19 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		header->dataType = DataType::Float;
 		header->floatValue = value.fVal;
 		break;
-	case TypeCode::IPAddress:
-	{
-		const char *ipAddress = IP4String(value.uVal).c_str();
-		header->dataType = DataType::String;
-		header->intValue = strlen(ipAddress);
-		WriteData(ipAddress, header->intValue);
-		break;
-	}
 	case TypeCode::Int32:
 		header->dataType = DataType::Int;
 		header->intValue = value.iVal;
 		break;
+	case TypeCode::DateTime:
 	case TypeCode::MacAddress:
-	{
-		String<StringLength20> macAddress;
-		macAddress.printf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
-					(unsigned int)(value.uVal & 0xFF), (unsigned int)((value.uVal >> 8) & 0xFF),
-					(unsigned int)((value.uVal >> 16) & 0xFF), (unsigned int)((value.uVal >> 24) & 0xFF),
-					(unsigned int)(value.param & 0xFF), (unsigned int)((value.param >> 8) & 0xFF));
-		header->dataType = DataType::String;
-		header->intValue = macAddress.strlen();
-		WriteData(macAddress.c_str(), macAddress.strlen());
-		break;
-	}
+	case TypeCode::IPAddress:
 	default:
-	{
-		String<StringLength50> errorMessage;
-		errorMessage.printf("unsupported type code %d", (int)value.type);
-		header->dataType = DataType::Expression;
-		header->intValue = errorMessage.strlen();
-		WriteData(errorMessage.c_str(), errorMessage.strlen());
+		// We have already converted the value to a string in 'rslt'
+		header->dataType = DataType::String;
+		header->intValue = rslt.strlen();
+		WriteData(rslt.c_str(), rslt.strlen());
 		break;
-	}
 	}
 	return true;
 }
