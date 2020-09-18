@@ -3592,7 +3592,6 @@ void Platform::SetBoardType(BoardType bt) noexcept
 #elif defined(DUET3MINI_V04)
 		// Test whether this is a WiFi or an Ethernet board by testing for a poulldown resistor
 		//TODO
-		const uint16_t deviceId = DSU->DID.reg >> 16;
 		board = (qq)						// if SAME54P20A
 				? BoardType::Duet3Mini_Ethernet
 				: (qq)						// SAMD51P20A rev D

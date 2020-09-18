@@ -1501,7 +1501,10 @@ extern "C" void TmcLoop(void *) noexcept
 			}
 			static constexpr TmcDriverState *drivers[] =
 			{
-				&driverStates[0], &driverStates[4], &driverStates[1], &driverStates[5], &driverStates[2], &driverStates[6], &driverStates[3], &driverStates[7]
+				&driverStates[0], &driverStates[4], &driverStates[1], &driverStates[5], &driverStates[2], &driverStates[6], &driverStates[3],
+# ifdef DUET3MINI_V02
+				&driverStates[7]
+# endif
 			};
 			static_assert(ARRAY_SIZE(drivers) == MaxSmartDrivers);
 			currentDriver = drivers[currentDriverNumber];
@@ -1881,7 +1884,7 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 	return (driver < GetNumTmcDrivers()) ? driverStates[driver].GetRegister(reg) : 0;
 }
 
-#ifdef DUET3MINI
+#ifdef DUET3MINI_V02
 
 uint32_t stallBits = 0;
 

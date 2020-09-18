@@ -49,7 +49,12 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
 
-#define SUPPORT_CAN_EXPANSION	0		//TEMP! should be 1
+#ifdef DUET3MINI_V04
+#define SUPPORT_CAN_EXPANSION	1
+#else
+#define SUPPORT_CAN_EXPANSION	0
+#endif
+
 #define SUPPORT_DOTSTAR_LED		1
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
@@ -81,7 +86,7 @@ constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives suppor
 constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of smart drivers
 
 #if SUPPORT_CAN_EXPANSION
-constexpr size_t MaxCanDrivers = 7;
+constexpr size_t MaxCanDrivers = 7;					// enough to support another Mini5+ as an expansion board
 constexpr unsigned int MaxCanBoards = 4;
 #endif
 
@@ -133,8 +138,30 @@ constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB po
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
+#ifdef DUET3MINI_V04
+constexpr Pin GlobalTmc22xxEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
+PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pins are on (port C)
+
+constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(19), PortCPin(16), PortCPin(30), PortCPin(18) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortBPin(29), PortBPin(28), PortDPin(20), PortDPin(21), PortBPin(0), PortAPin(27) };
+constexpr Pin DiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortAPin(22), PortAPin(23), PortCPin(21), PortBPin(10), PortCPin(27) };
+
+// UART interface to stepper drivers
+constexpr uint8_t TMC22xxSercomNumber = 1;
+Sercom * const SERCOM_TMC22xx = SERCOM1;
+constexpr IRQn TMC22xx_SERCOM_IRQn = SERCOM1_0_IRQn;
+constexpr Pin TMC22xxSercomTxPin = PortAPin(0);
+constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMC22xxSercomRxPin = PortAPin(1);
+constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::C;
+constexpr uint8_t TMC22xxSercomRxPad = 1;
+constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
+#endif
+
+#ifdef DUET3MINI_V02
 constexpr Pin GlobalTmc22xxEnablePin = PortAPin(1);	// The pin that drives ENN of all drivers
-PortGroup * const StepPio = &(PORT->Group[2]);		// the PIO that all the step pins are on (port C)
+PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pins are on (port C)
+
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(31), PortCPin(16), PortCPin(30), PortCPin(18), PortCPin(19) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortAPin(27), PortBPin(29), PortBPin(28), PortBPin(3), PortBPin(0), PortDPin(21), PortDPin(20), PortCPin(17) };
 
@@ -152,6 +179,7 @@ constexpr Pin TMC22xxSercomRxPin = PortCPin(28);
 constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::C;
 constexpr uint8_t TMC22xxSercomRxPad = 1;
 constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
+#endif
 
 #define TMC22xx_HAS_ENABLE_PINS			0
 #define TMC22xx_HAS_MUX					1
