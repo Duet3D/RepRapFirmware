@@ -226,7 +226,10 @@ void LinuxInterface::Spin() noexcept
 
 				// Set heightmap via G29 S1
 				case LinuxRequest::SetHeightMap:
-					transfer.ReadHeightMap();
+					if (!transfer.ReadHeightMap())
+					{
+						reprap.GetPlatform().Message(ErrorMessage, "Failed to set height map - bad data?\n");
+					}
 					break;
 
 				// Lock movement and wait for standstill

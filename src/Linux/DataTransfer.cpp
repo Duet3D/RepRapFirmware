@@ -24,7 +24,7 @@
 # define USE_XDMAC			1		// use XDMA controller
 # define USE_DMAC_MANAGER	0		// use SAME5x DmacManager module
 
-#elif defined(DUET_5LC)
+#elif defined(DUET3MINI)
 
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			0		// use XDMA controller
@@ -564,42 +564,45 @@ GCodeChannel DataTransfer::ReadMacroCompleteInfo(bool &error) noexcept
 	return GCodeChannel(header->channel);
 }
 
-void DataTransfer::ReadHeightMap() noexcept
+bool DataTransfer::ReadHeightMap() noexcept
 {
-	// Read heightmap header
+	// Read height map header
 	const HeightMapHeader * const header = ReadDataHeader<HeightMapHeader>();
 	float xRange[2] = { header->xMin, header->xMax };
 	float yRange[2] = { header->yMin, header->yMax };
 	float spacing[2] = { header->xSpacing, header->ySpacing };
-	reprap.GetGCodes().AssignGrid(xRange, yRange, header->radius, spacing);
-
-	// Read Z coordinates
-	const size_t numPoints = header->numX * header->numY;
-	const float *points = reinterpret_cast<const float *>(ReadData(sizeof(float) * numPoints));
-
-	HeightMap& map = reprap.GetMove().AccessHeightMap();
-	map.ClearGridHeights();
-	for (size_t i = 0; i < numPoints; i++)
+	const bool ok = reprap.GetGCodes().AssignGrid(xRange, yRange, header->radius, spacing);
+	if (ok)
 	{
-		if (!std::isnan(points[i]))
+		// Read Z coordinates
+		const size_t numPoints = header->numX * header->numY;
+		const float *points = reinterpret_cast<const float *>(ReadData(sizeof(float) * numPoints));
+
+		HeightMap& map = reprap.GetMove().AccessHeightMap();
+		map.ClearGridHeights();
+		for (size_t i = 0; i < numPoints; i++)
 		{
-			map.SetGridHeight(i, points[i]);
+			if (!std::isnan(points[i]))
+			{
+				map.SetGridHeight(i, points[i]);
+			}
+		}
+
+		map.ExtrapolateMissing();
+
+		// Activate it
+		reprap.GetGCodes().ActivateHeightmap(true);
+
+		// Recalculate the deviations
+		float minError, maxError;
+		Deviation deviation;
+		const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(deviation, minError, maxError);
+		if (numPointsProbed >= 4)
+		{
+			reprap.GetMove().SetLatestMeshDeviation(deviation);
 		}
 	}
-
-	map.ExtrapolateMissing();
-
-	// Activate it
-	reprap.GetGCodes().ActivateHeightmap(true);
-
-	// Recalculate the deviations
-	float minError, maxError;
-	Deviation deviation;
-	const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(deviation, minError, maxError);
-	if (numPointsProbed >= 4)
-	{
-		reprap.GetMove().SetLatestMeshDeviation(deviation);
-	}
+	return ok;
 }
 
 GCodeChannel DataTransfer::ReadCodeChannel() noexcept

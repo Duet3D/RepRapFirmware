@@ -3167,11 +3167,11 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply) 
 			settingTemps = true;
 			if (simulationMode == 0)
 			{
-				float active[MaxHeaters];
-				gb.GetFloatArray(active, hCount, true);
+				float activeTemps[MaxHeaters];
+				gb.GetFloatArray(activeTemps, hCount, true);
 				for (size_t h = 0; h < hCount; ++h)
 				{
-					tool->SetToolHeaterActiveTemperature(h, active[h]);		// may throw
+					tool->SetToolHeaterActiveTemperature(h, activeTemps[h]);		// may throw
 				}
 			}
 		}
@@ -4356,7 +4356,10 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 		if (lastAuxStatusReportType >= 0)
 		{
 			// Send a standard status response for PanelDue
-			OutputBuffer * const statusBuf = GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);
+			OutputBuffer * const statusBuf =
+									(lastAuxStatusReportType == ObjectModelAuxStatusReportType)		// PanelDueFirmware v3.2 or later, using M409 to retrieve object model
+										? reprap.GetModelResponse("", "f")
+										: GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
 			if (statusBuf != nullptr)
 			{
 				platform.AppendAuxReply(0, statusBuf, true);
@@ -4608,11 +4611,15 @@ bool GCodes::GetLastPrintingHeight(float& height) const noexcept
 	return false;
 }
 
-// Assign the heightmap using the given parameters
-void GCodes::AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]) noexcept
+// Assign the heightmap using the given parameters, returning true if they were valid
+bool GCodes::AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]) noexcept
 {
-	defaultGrid.Set(xRange, yRange, radius, spacing);
-	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
+	const bool ok = defaultGrid.Set(xRange, yRange, radius, spacing);
+	if (ok)
+	{
+		reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
+	}
+	return ok;
 }
 
 void GCodes::ActivateHeightmap(bool activate) noexcept
