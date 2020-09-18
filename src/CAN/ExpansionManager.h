@@ -27,6 +27,7 @@ struct ExpansionBoardData
 	const char *typeName;
 	MinMaxCurrent mcuTemp, vin, v12;
 	BoardState state;
+	uint8_t numDrivers;
 };
 
 class ExpansionManager INHERIT_OBJECT_MODEL
@@ -36,6 +37,7 @@ public:
 
 	unsigned int GetNumExpansionBoards() const noexcept { return numExpansionBoards; }
 	void ProcessAnnouncement(CanMessageBuffer *buf) noexcept;
+	const ExpansionBoardData *GetBoardDetails(uint8_t address) const noexcept;
 
 	// Firmware update and related functions
 	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);

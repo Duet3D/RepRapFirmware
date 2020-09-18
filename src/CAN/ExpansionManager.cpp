@@ -13,7 +13,7 @@
 #include <RepRap.h>
 #include <Platform.h>
 
-ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(BoardState::unknown)
+ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(BoardState::unknown), numDrivers(0)
 {
 	mcuTemp.min = mcuTemp.max = mcuTemp.current = vin.max = vin.min = vin.current = v12.max = v12.min = v12.current = 0.0;
 }
@@ -33,7 +33,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "canAddress",			OBJECT_MODEL_FUNC((int32_t)(&(self->FindIndexedBoard(context.GetLastIndex())) - self->boards)),					ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareFileName),	ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
-	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),															ObjectModelEntryFlags::verbose },
+	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::verbose },
 	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																						ObjectModelEntryFlags::live },
 	{ "shortName",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::shortName),			ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).state.ToString()),								ObjectModelEntryFlags::none },
@@ -72,6 +72,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
 ExpansionManager::ExpansionManager() noexcept : numExpansionBoards(0), numBoardsFlashing(0), lastIndexSearched(0), lastAddressFound(0)
 {
 	// the boards table array is initialised by its constructor
+	boards[0].numDrivers = NumDirectDrivers;
 }
 
 // Update the state of a board
@@ -135,11 +136,18 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 				newTypeName = temp;
 			}
 			board.typeName = newTypeName;
+			board.numDrivers = buf->msg.announce.numDrivers;
 		}
 		UpdateBoardState(src, BoardState::running);
 	}
 	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanId::MasterAddress, src);
 	CanInterface::SendResponse(buf);
+}
+
+// Return a pointer to the expansion board, if it is present
+const ExpansionBoardData *ExpansionManager::GetBoardDetails(uint8_t address) const noexcept
+{
+	return (address < ARRAY_SIZE(boards) && boards[address].state == BoardState::running) ? &boards[address] : nullptr;
 }
 
 // Tell an expansion board to update
