@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_DUET5LC_PINS_DUET5LC_H_
-#define SRC_DUET5LC_PINS_DUET5LC_H_
+#ifndef SRC_DUET3MINI_PINS_DUET3MINI_H_
+#define SRC_DUET3MINI_PINS_DUET3MINI_H_
 
 #include <PinDescription.h>
 
@@ -62,8 +62,14 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 
 // The physical capabilities of the machine
 
+#ifdef DUET3MINI_V02
 constexpr size_t NumDirectDrivers = 8;				// The maximum number of drives supported by the electronics
-constexpr size_t MaxSmartDrivers = 8;				// The maximum number of smart drivers
+#endif
+#ifdef DUET3MINI_V04
+constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
+#endif
+
+constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of smart drivers
 
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxCanDrivers = 7;
@@ -155,7 +161,12 @@ constexpr uint32_t DriversBaudRate = 250000;
 constexpr uint32_t TransferTimeout = 2;										// any transfer should complete within 2 ticks @ 1ms/tick
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
+#ifdef DUET3MINI_V02
 constexpr float DriverSenseResistor = 0.05 + 0.02;							// in ohms
+#endif
+#ifdef DUET3MINI_V04
+constexpr float DriverSenseResistor = 0.056 + 0.02;							// in ohms
+#endif
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
@@ -501,4 +512,4 @@ namespace StepPins
 	}
 }
 
-#endif /* SRC_DUET5LC_PINS_DUET5LC_H_ */
+#endif /* SRC_DUET3MINI_PINS_DUET3MINI_H_ */

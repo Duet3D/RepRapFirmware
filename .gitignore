@@ -1,3 +1,7 @@
+# Object and intermediate files
+*.o
+*.d
+
 # Misc
 /.settings/language.settings.xml
 
@@ -8,7 +12,6 @@
 /Duet3_V06_CAN0/
 /Duet3_V06_Debug/
 /DuetMaestro/
-/Duet3_Mini5plus/
-/Duet3_Mini5plus_Debug/
+/Duet3_Mini5plus_v02/
+/Duet3_Mini5plus_v02_Debug/
 /PCCB_10/
-/RADDS_RTOS/
