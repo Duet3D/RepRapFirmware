@@ -87,7 +87,7 @@ Network::Network(Platform& p) noexcept : platform(p)
 	interfaces[1] = new WiFiInterface(p);
 #elif defined(SAME70XPLD) || defined(DUET3_V05) || defined(DUET3_V06)
 	interfaces[0] = new LwipEthernetInterface(p);
-#elif defined(DUET_NG) || defined(DUET_5LC)
+#elif defined(DUET_NG) || defined(DUET3MINI)
 	interfaces[0] = nullptr;			// we set this up in Init()
 #elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
@@ -168,7 +168,7 @@ void Network::Init() noexcept
 #  endif
 # endif
 
-# if defined(DUET_5LC)
+# if defined(DUET3MINI)
 #  if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING
 	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
 #  elif HAS_WIFI_NETWORKING

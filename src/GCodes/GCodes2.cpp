@@ -2664,6 +2664,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				bool dummy;
 				gb.TryGetQuotedString('K', key.GetRef(), dummy);
 				gb.TryGetQuotedString('F', flags.GetRef(), dummy);
+				if (&gb == auxGCode)
+				{
+					lastAuxStatusReportType = ObjectModelAuxStatusReportType;
+				}
 				outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
 				if (outBuf == nullptr)
 				{

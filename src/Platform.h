@@ -119,10 +119,10 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(DUET_5LC)
-	Duet5LC_Unknown,
-	Duet5LC_WiFi,
-	Duet5LC_Ethernet,
+#if defined(DUET3MINI)			// we use the same values for both v0.2 and v0.4
+	Duet3Mini_Unknown,
+	Duet3Mini_WiFi,
+	Duet3Mini_Ethernet,
 #elif defined(DUET3)
 	Duet3_v06_100 = 1,
 	Duet3_v101 = 2,
@@ -147,7 +147,7 @@ enum class BoardType : uint8_t
 	PCCB_v10 = 1
 #elif defined(PCCB_08) || defined(PCCB_08_X5)
 	PCCB_v08 = 1
-#elif defined(DUET_5LC)
+#elif defined(DUET3MINI)
 	Duet_5LC = 1
 #elif defined(__LPC17xx__)
 	Lpc = 1
@@ -330,7 +330,7 @@ public:
 	size_t GetNumGpOutputsToReport() const noexcept;
 #endif
 
-#if defined(DUET_NG) || defined(DUET_5LC)
+#if defined(DUET_NG) || defined(DUET3MINI)
 	bool IsDuetWiFi() const noexcept;
 #endif
 
@@ -543,7 +543,7 @@ public:
 #endif
 
 #if HAS_SMART_DRIVERS
-	float GetTmcDriversTemperature(unsigned int board) const noexcept;
+	float GetTmcDriversTemperature(unsigned int boardNumber) const noexcept;
 	void DriverCoolingFansOnOff(DriverChannelsBitmap driverChannelsMonitored, bool on) noexcept;
 	unsigned int GetNumSmartDrivers() const noexcept { return numSmartDrivers; }
 #endif

@@ -56,7 +56,7 @@ constexpr bool DefaultInterpolation = true;					// interpolation enabled
 constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
 constexpr size_t TmcTaskStackWords = 100;
 
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 constexpr uint16_t DriverNotPresentTimeouts = 20;
 #endif
 
@@ -86,7 +86,7 @@ enum class DriversState : uint8_t
 
 static DriversState driversState = DriversState::noPower;
 
-#if TMC22xx_USE_SLAVEADDR && !defined(DUET_5LC)
+#if TMC22xx_USE_SLAVEADDR && !defined(DUET3MINI)
 static bool currentMuxState;
 #endif
 
@@ -410,7 +410,7 @@ public:
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 	bool DriverAssumedPresent() const noexcept { return numWrites != 0 || numTimeouts < DriverNotPresentTimeouts; }
 #endif
 
@@ -418,7 +418,7 @@ public:
 	void StartTransfer() noexcept __attribute__ ((hot));	// called to start a transfer
 	void TransferTimedOut() noexcept
 	{
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 		if (DriverAssumedPresent())
 		{
 			++numTimeouts;
@@ -1153,7 +1153,7 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 // Append the driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 	if (!DriverAssumedPresent())
 	{
 		reply.cat("assumed not present");
@@ -1310,7 +1310,7 @@ void TmcDriverState::AbortTransfer() noexcept
 inline void TmcDriverState::SetUartMux() noexcept
 {
 #if TMC22xx_USE_SLAVEADDR
-# if defined(DUET_5LC)
+# if defined(DUET3MINI)
 	// Duet 5LC has a 1-bit mux to select between 2 banks of 4 drivers. High selects the first bank.
 	// We have changed TmcLoop to address drivers in alternate banks, so we don't need to insert any delays here
 	digitalWrite(TMC22xxMuxPins[0], (driverNumber & 0x04) == 0);
@@ -1464,7 +1464,7 @@ void UART_TMC_DRV1_Handler() noexcept
 extern "C" void TmcLoop(void *) noexcept
 {
 	TmcDriverState * currentDriver = nullptr;
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 	size_t currentDriverNumber;
 #endif
 	for (;;)
@@ -1488,7 +1488,7 @@ extern "C" void TmcLoop(void *) noexcept
 			// Do a transaction
 #if TMC22xx_SINGLE_DRIVER
 			currentDriver = driverStates;
-#elif defined(DUET_5LC)
+#elif defined(DUET3MINI)
 			// To avoid having to insert delays between addressing drivers on the same multiplexer channel,
 			// address drivers on alternate multiplexer channels, i.e in the order 04152637
 			if (currentDriver == nullptr || currentDriverNumber == GetNumTmcDrivers() - 1)
@@ -1552,14 +1552,14 @@ extern "C" void TmcLoop(void *) noexcept
 						if (driverStates[i].UpdatePending())
 #endif
 						{
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 							// Drivers 5-7 are on the expansion board, which may not be present. So if they consistently time out, ignore them.
 							if (i < 5 || driverStates[i].DriverAssumedPresent())
 							{
 #endif
 								allInitialised = false;
 								break;
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 							}
 #endif
 						}
@@ -1640,7 +1640,7 @@ void SmartDrivers::Init() noexcept
 	}
 #endif
 
-#if TMC22xx_USE_SLAVEADDR && !defined(DUET_5LC)
+#if TMC22xx_USE_SLAVEADDR && !defined(DUET3MINI)
 	currentMuxState = false;
 #endif
 
@@ -1881,7 +1881,7 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 	return (driver < GetNumTmcDrivers()) ? driverStates[driver].GetRegister(reg) : 0;
 }
 
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 
 uint32_t stallBits = 0;
 

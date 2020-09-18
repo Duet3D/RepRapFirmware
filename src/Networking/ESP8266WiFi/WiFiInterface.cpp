@@ -132,7 +132,7 @@ static void spi_dma_disable() noexcept;
 static bool spi_dma_check_rx_complete() noexcept;
 #endif
 
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 
 Uart *SerialWiFiDevice;
 # define SERIAL_WIFI_DEVICE	(*SerialWiFiDevice)
@@ -232,7 +232,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	strcpy(actualSsid, "(unknown)");
 	strcpy(wiFiServerVersion, "(unknown)");
 
-#ifdef DUET_5LC
+#ifdef DUET3MINI
 	SerialWiFiDevice = new Uart(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512);
 	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
 #else
@@ -505,7 +505,7 @@ void WiFiInterface::Start() noexcept
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
-#if defined(DUET_NG) || defined(DUET_5LC)
+#if defined(DUET_NG) || defined(DUET3MINI)
 	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
 
@@ -558,7 +558,7 @@ void WiFiInterface::Stop() noexcept
 
 		digitalWrite(SamTfrReadyPin, false);		// tell the ESP we can't receive
 		digitalWrite(EspResetPin, false);			// put the ESP back into reset
-#if defined(DUET_NG) || defined(DUET_5LC)
+#if defined(DUET_NG) || defined(DUET3MINI)
 		digitalWrite(EspEnablePin, false);
 #endif
 		DisableEspInterrupt();						// ignore IRQs from the transfer request pin
@@ -1985,7 +1985,7 @@ void WiFiInterface::StartWiFi() noexcept
 {
 	digitalWrite(EspResetPin, true);
 
-#if defined(DUET_NG) || defined(DUET_5LC)
+#if defined(DUET_NG) || defined(DUET3MINI)
 	delayMicroseconds(150);										// ESP8266 datasheet specifies minimum 100us from releasing reset to power up
 	digitalWrite(EspEnablePin, true);
 #endif
@@ -2009,11 +2009,11 @@ void WiFiInterface::ResetWiFi() noexcept
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
 
-#if defined(DUET_NG) || defined(DUET_5LC)
+#if defined(DUET_NG) || defined(DUET3MINI)
 	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
 
-#if defined(DUET_5LC)
+#if defined(DUET3MINI)
 	for (Pin p : WiFiUartSercomPins)
 	{
 		pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
@@ -2048,7 +2048,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
-#if defined(DUET_NG) || defined(DUET_5LC)
+#if defined(DUET_NG) || defined(DUET3MINI)
 	// Power down the ESP8266
 	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
@@ -2070,7 +2070,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 
 	if (external)
 	{
-#if defined(DUET_5LC)
+#if defined(DUET3MINI)
 		for (Pin p : WiFiUartSercomPins)
 		{
 			pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
@@ -2082,7 +2082,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	}
 	else
 	{
-#if defined(DUET_5LC)
+#if defined(DUET3MINI)
 		for (Pin p : WiFiUartSercomPins)
 		{
 			SetPinFunction(p, WiFiUartSercomPinsMode);
@@ -2095,7 +2095,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	// Release the reset on the ESP8266
 	digitalWrite(EspResetPin, true);
 
-#if defined(DUET_NG) || defined(DUET_5LC)
+#if defined(DUET_NG) || defined(DUET3MINI)
 	// Take the ESP8266 out of power down
 	delayMicroseconds(150);											// ESP8266 datasheet specifies minimum 100us from releasing reset to power up
 	digitalWrite(EspEnablePin, true);

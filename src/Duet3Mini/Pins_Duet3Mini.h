@@ -11,9 +11,18 @@
 #include <PinDescription.h>
 
 #define BOARD_SHORT_NAME		"Mini5plus"
-#define BOARD_NAME				"Duet 3 Mini 5+"
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+"
-#define DEFAULT_BOARD_TYPE		 BoardType::Duet5LC_Unknown
+#define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini_Unknown
+
+#ifdef DUET3MINI_V02
+#define BOARD_NAME				"Duet 3 Mini 5+ prototype v0.2"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+ prototype v0.2"
+#endif
+
+#ifdef DUET3MINI_V04
+#define BOARD_NAME				"Duet 3 Mini 5+ prototype v0.4"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+ prototype v0.4"
+#endif
+
 constexpr size_t NumFirmwareUpdateModules = 2;		// main module and WiFi module
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".uf2"
