@@ -40,7 +40,7 @@ public:
 	uint32_t GetSpiFrequency() const noexcept { return device.GetFrequency(); }
 
 	// Initialize the display
-	void Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq) noexcept;
+	void Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t displayContrastRatio, Pin gatePin = NoPin, bool gatePinPolarity = false) noexcept;
 
 	// Select the font to use for subsequent calls to write() in graphics mode
 	void SetFont(size_t newFont) noexcept;
@@ -152,6 +152,9 @@ protected:
 	SharedSpiClient device;
 	const PixelNumber numRows, numCols;
 	Pin a0Pin;
+	Pin gatePin;
+	uint8_t displayContrastRatio;
+	bool gatePinPolarity;
 	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
 	PixelNumber nextFlushRow;						// which row we need to flush next
 

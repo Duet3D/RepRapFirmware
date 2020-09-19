@@ -32,6 +32,8 @@ public:
 	bool IsPresent() const noexcept { return lcd != nullptr; }
 	void UpdatingFirmware() noexcept;
 
+	constexpr static uint8_t DefaultDisplayContrastRatio = 50;
+
 private:
 	void InitDisplay(GCodeBuffer& gb, Lcd *newLcd, bool defaultCsPolarity);
 

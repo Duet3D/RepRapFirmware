@@ -37,6 +37,7 @@ private:
 	constexpr PixelNumber GetTileWidth() const noexcept { return 1; };
 	constexpr PixelNumber GetTileHeight() const noexcept { return 8; };
 #else
+	// NOTE: these are remnants of a more efficient flush routine, not sure this will return
 	constexpr PixelNumber GetTileWidth() const noexcept { return 8; };
 	constexpr PixelNumber GetTileHeight() const noexcept { return 8; };
 #endif
@@ -49,6 +50,8 @@ private:
 	void StartDataTransaction() noexcept;
 	void EndDataTransaction() noexcept;
 	bool FlushRow() noexcept;
+	void SelectDevice() noexcept;
+	void DeselectDevice() noexcept;
 
 	constexpr static uint8_t SystemReset = 0xE2;				// 11100010 System reset
 	constexpr static uint8_t DisplayOff = 0xAE;					// 10101110 Set display enable to off

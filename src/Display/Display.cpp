@@ -145,9 +145,14 @@ void Display::ErrorBeep() noexcept
 
 void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, bool defaultCsPolarity) THROWS(GCodeException)
 {
-	newLcd->Init(LcdCSPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency);
-	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
-	newLcd->SetFont(SmallFontNumber);
+#ifdef SRC_DUETM_PINS_DUETM_H_
+	// Only for the Duet 2 Maestro since the LCD_CS gates the SPI0_SCK and SPI0_MOSI.
+	// NOTE: https://github.com/SchmartMaker/RepRapFirmware/tree/ST7565/src/Display did this on a higher level by using different display IDs
+	// NOTE: boundary checking is not implemented for the contrast (C) parameter yet
+	newLcd->Init(LcdCSAltPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio, LcdCSPin, true);
+#else
+	newLcd->Init(LcdCSPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio);
+#endif
 	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
 	newLcd->SetFont(SmallFontNumber);
 
@@ -163,6 +168,8 @@ void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, bool defaultCsPolarity) 
 
 GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	// BUG: calling M918 a number of times in succession seems to crash the firmware on the Maestro.
+	// This could be unreleased memory or something else.
 	bool seen = false;
 
 	if (gb.Seen('P'))
