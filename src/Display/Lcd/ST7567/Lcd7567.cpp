@@ -12,8 +12,6 @@
 constexpr unsigned int TILE_WIDTH = 1;
 constexpr unsigned int TILE_HEIGHT = 8;
 
-#define KEEP_GATE_OPEN
-
 Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
 	: Lcd(64, 128, fnts, nFonts, SpiMode::mode3)
 {
@@ -32,13 +30,6 @@ void Lcd7567::HardwareInit() noexcept
 	// Post-reset wait of 6ms
 	delay(6);
 
-#ifdef KEEP_GATE_OPEN
-	if(gatePin != NoPin) {
-		digitalWrite(gatePin, gatePinPolarity);
-		delayMicroseconds(1);
-	}
-#endif
-
 	SelectDevice();
 
 	SendByte(SystemReset);					// 11100010 System reset
@@ -52,12 +43,10 @@ void Lcd7567::HardwareInit() noexcept
 	SendByte(SetBoosterFirst);				// 11111000 Set booster ratio (2-byte command) to 4x
 	SendByte(0x00);
 
-	// David uses 0x06 for the resistor ratio, my display uses 0x03
-	SendByte(SetResistorRatio | 0x06);		// 00100011 Set Vlcd resistor ratio 1+Rb/Ra to 6.5 for the voltage regulator (contrast)
+	SendByte(SetResistorRatio | constrain<uint8_t>(resistorRatio, 1, 7));	// 00100011 Set Vlcd resistor ratio 1+Rb/Ra for the voltage regulator (contrast)
 
-	// Set display contrast
-	// NOTE: boundary checking is not implemented for the contrast parameter yet
-	uint8_t contrast = min<uint8_t>((64.0f * displayContrastRatio) / 100, 0b111111);
+	// Set display contrast. Convert the input value (which should be in the range 0 to 100, but hasn't been range-checked) to 0 to 63.
+	uint8_t contrast = min<uint8_t>((64 * (uint32_t)contrastRatio) / 100, 0b111111);
 	SendByte(SetVolumeFirst);				// 10000001 Set electronic volume (2-byte command) 6-bit contrast value
 	SendByte(contrast);						// contrast value, EA default: 0x016
 
@@ -144,13 +133,6 @@ inline void Lcd7567::EndDataTransaction() noexcept
 
 void Lcd7567::SelectDevice() noexcept
 {
-#ifndef KEEP_GATE_OPEN
-	if(gatePin != NoPin) {
-		digitalWrite(gatePin, gatePinPolarity);
-		delayMicroseconds(1);
-	}
-#endif
-
 	device.Select();
 	delayMicroseconds(1);
 }
@@ -159,13 +141,6 @@ void Lcd7567::DeselectDevice() noexcept
 {
 	delayMicroseconds(1);
 	device.Deselect();
-
-#ifndef KEEP_GATE_OPEN
-	if(gatePin != NoPin) {
-		digitalWrite(gatePin, !gatePinPolarity);
-		delayMicroseconds(1);
-	}
-#endif
 }
 
 void Lcd7567::SendByte(uint8_t byteToSend) noexcept

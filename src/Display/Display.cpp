@@ -143,16 +143,13 @@ void Display::ErrorBeep() noexcept
 	Beep(500, 1000);
 }
 
-void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, bool defaultCsPolarity) THROWS(GCodeException)
+void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException)
 {
-#ifdef SRC_DUETM_PINS_DUETM_H_
-	// Only for the Duet 2 Maestro since the LCD_CS gates the SPI0_SCK and SPI0_MOSI.
-	// NOTE: https://github.com/SchmartMaker/RepRapFirmware/tree/ST7565/src/Display did this on a higher level by using different display IDs
-	// NOTE: boundary checking is not implemented for the contrast (C) parameter yet
-	newLcd->Init(LcdCSAltPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio, LcdCSPin, true);
-#else
-	newLcd->Init(LcdCSPin, LcdA0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio);
-#endif
+	// ST7567-based displays need a resistor ration setting and a contrast setting
+	// For now we always pass these as parameters toLcd::Init(). If we get any more, consider passing the GCodeBuffer and letting the display pick the parameters instead.
+	const uint32_t contrast = (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio;
+	const uint32_t resistorRatio = (gb.Seen('R')) ? gb.GetUIValue() : DefaultDisplayResistorRatio;
+	newLcd->Init(csPin, a0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, contrast, resistorRatio);
 	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
 	newLcd->SetFont(SmallFontNumber);
 
@@ -184,11 +181,18 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		switch (gb.GetUIValue())
 		{
 		case 1:		// 12864 display, ST7920 controller
-			InitDisplay(gb, new Lcd7920(fonts, ARRAY_SIZE(fonts)), true);
+			InitDisplay(gb, new Lcd7920(fonts, ARRAY_SIZE(fonts)), LcdCSPin, NoPin, true);
 			break;
 
 		case 2:		// 12864 display, ST7567 controller
-			InitDisplay(gb, new Lcd7567(fonts, ARRAY_SIZE(fonts)), false);
+#ifdef DUET_M
+			// On the Duet Maestro only, the CS pin is active high and gates the clock signal.
+			// The ST7567 needs an active low CS signal, so we must use a different CS pin and set the original one high to let the clock through.
+			pinMode(LcdCSPin, OUTPUT_HIGH);
+			InitDisplay(gb, new Lcd7567(fonts, ARRAY_SIZE(fonts)), LcdCSAltPin, LcdA0Pin, false);
+#else
+			InitDisplay(gb, new Lcd7567(fonts, ARRAY_SIZE(fonts)), LcdCSPin, LcdA0Pin, false);
+#endif
 			break;
 
 		default:

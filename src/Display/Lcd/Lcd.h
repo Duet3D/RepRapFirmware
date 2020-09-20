@@ -40,7 +40,7 @@ public:
 	uint32_t GetSpiFrequency() const noexcept { return device.GetFrequency(); }
 
 	// Initialize the display
-	void Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t displayContrastRatio, Pin gatePin = NoPin, bool gatePinPolarity = false) noexcept;
+	void Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t p_contrastRatio, uint8_t p_resistorRatio) noexcept;
 
 	// Select the font to use for subsequent calls to write() in graphics mode
 	void SetFont(size_t newFont) noexcept;
@@ -123,7 +123,7 @@ public:
 	//  y0 = y-coordinate of the centre, measured down from the top of the display
 	//  radius = radius of the circle in pixels
 	//  mode = whether we want to set, clear or invert each pixel
-	void Circle(PixelNumber row, PixelNumber col, PixelNumber radius, PixelMode mode) noexcept;
+	void Circle(PixelNumber p_row, PixelNumber col, PixelNumber radius, PixelMode mode) noexcept;
 
 	// Draw a bitmap
 	//  x0 = x-coordinate of the top left, measured from left hand edge of the display. Currently, must be a multiple of 8.
@@ -152,9 +152,8 @@ protected:
 	SharedSpiClient device;
 	const PixelNumber numRows, numCols;
 	Pin a0Pin;
-	Pin gatePin;
-	uint8_t displayContrastRatio;
-	bool gatePinPolarity;
+	uint8_t contrastRatio;
+	uint8_t resistorRatio;
 	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
 	PixelNumber nextFlushRow;						// which row we need to flush next
 
