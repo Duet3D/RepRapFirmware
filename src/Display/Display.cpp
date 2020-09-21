@@ -165,8 +165,6 @@ void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bo
 
 GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// BUG: calling M918 a number of times in succession seems to crash the firmware on the Maestro.
-	// This could be unreleased memory or something else.
 	bool seen = false;
 
 	if (gb.Seen('P'))

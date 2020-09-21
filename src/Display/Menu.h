@@ -22,6 +22,8 @@ class Menu
 {
 public:
 	Menu(Lcd& refLcd) noexcept;
+	~Menu();
+
 	void Load(const char* filename) noexcept;							// load a menu file
 	void Pop() noexcept;
 	void EncoderAction(int action) noexcept;

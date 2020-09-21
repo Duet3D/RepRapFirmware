@@ -90,6 +90,11 @@ Menu::Menu(Lcd& refLcd) noexcept
 {
 }
 
+Menu::~Menu()
+{
+	ResetCache();				// this releases the memory used by the menu items
+}
+
 void Menu::Load(const char* filename) noexcept
 {
 	if (numNestedMenus < MaxMenuNesting)
