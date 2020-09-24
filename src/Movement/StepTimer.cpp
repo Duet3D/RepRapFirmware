@@ -11,6 +11,7 @@
 
 #if SAME5x
 # include <CoreIO.h>
+# include <hri_tc_e54.h>
 #elif !defined(__LPC17xx__)
 # include <sam/drivers/tc/tc.h>
 #endif

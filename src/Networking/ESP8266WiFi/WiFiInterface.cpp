@@ -98,7 +98,8 @@ const unsigned int MaxHttpConnections = 4;
 static inline void DisableSpi() noexcept
 {
 #if SAME5x
-	hri_sercomspi_clear_CTRLA_ENABLE_bit(WiFiSpiSercom);
+	WiFiSpiSercom->SPI.CTRLA.reg &= ~SERCOM_SPI_CTRLA_ENABLE;
+	while (WiFiSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
 #else
 	spi_disable(ESP_SPI);
 #endif
@@ -107,7 +108,8 @@ static inline void DisableSpi() noexcept
 static inline void EnableSpi()
 {
 #if SAME5x
-	hri_sercomspi_set_CTRLA_ENABLE_bit(WiFiSpiSercom);
+	WiFiSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_ENABLE;
+	while (WiFiSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
 #else
 	spi_enable(ESP_SPI);
 #endif
@@ -117,10 +119,12 @@ static inline void EnableSpi()
 static inline void ResetSpi()
 {
 #if SAME5x
-	hri_sercomspi_set_CTRLA_SWRST_bit(WiFiSpiSercom);
+	WiFiSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_SWRST;
+	while (WiFiSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_SWRST) { };
 	WiFiSpiSercom->SPI.CTRLA.reg = SERCOM_SPI_CTRLA_CPHA | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_MODE(2);
-	hri_sercomspi_write_CTRLB_reg(WiFiSpiSercom, SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN);
-	hri_sercomspi_write_CTRLC_reg(WiFiSpiSercom, SERCOM_SPI_CTRLC_DATA32B);
+	WiFiSpiSercom->SPI.CTRLB.reg = SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN;
+	while (WiFiSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_MASK) { };
+	WiFiSpiSercom->SPI.CTRLC.reg = SERCOM_SPI_CTRLC_DATA32B;
 #else
 	spi_reset(ESP_SPI);				// this clears the transmit and receive registers and puts the SPI into slave mode
 #endif

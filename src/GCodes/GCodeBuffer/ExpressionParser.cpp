@@ -688,7 +688,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	}
 
 	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context("v", applyLengthOperator, 99, gb.MachineState().lineNumber, GetColumn());
+	ObjectExplorationContext context(applyLengthOperator, gb.MachineState().lineNumber, GetColumn());
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.

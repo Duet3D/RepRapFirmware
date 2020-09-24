@@ -9,6 +9,8 @@
 #include <Cache.h>
 #include "GmacInterface.h"
 #include "gmac.h"
+#include <hri_mclk_e54.h>
+#include <hri_gmac_e54.h>
 
 extern "C" {
 #include "ksz8081rna/ethernet_phy.h"

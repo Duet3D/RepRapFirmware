@@ -21,6 +21,7 @@
 # include <DmacManager.h>
 # if SAME5x
 #  include <Hardware/IoPorts.h>
+#  include <hri_mclk_e54.h>
 # elif SAME70
 #  include <sam/drivers/xdmac/xdmac.h>
 # endif

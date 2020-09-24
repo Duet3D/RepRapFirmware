@@ -1908,8 +1908,8 @@ uint32_t ReadDiagOutputs() noexcept
 	fastDigitalWriteLow(DiagMuxPins[0]);
 	uint32_t now = GetCurrentCycles();
 
-	PortGroup * const group = &(PORT->Group[GPIO_PORT(DiagMuxOutPin)]);
-	constexpr unsigned int MuxOutBitNumber = GPIO_PIN(DiagMuxOutPin);
+	PortGroup * const group = &(PORT->Group[GpioPortNumber(DiagMuxOutPin)]);
+	constexpr unsigned int MuxOutBitNumber = GpioPinNumber(DiagMuxOutPin);
 	static_assert(MuxOutBitNumber < 32 - 8);			// the following code assumes we can shift the port bit left by 7 bits without losing it
 	constexpr uint32_t MuxOutMask = 1ul << MuxOutBitNumber;
 

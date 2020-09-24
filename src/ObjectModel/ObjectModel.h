@@ -168,7 +168,11 @@ enum class ObjectModelEntryFlags : uint8_t
 class ObjectExplorationContext
 {
 public:
-	ObjectExplorationContext(const char *reportFlags, bool wal, unsigned int initialMaxDepth, int p_line = -1, int p_col = -1) noexcept;
+	// Constructor used when reporting the OM as JSON
+	ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth) noexcept;
+
+	// Constructor used when evaluating expressions
+	ObjectExplorationContext(bool wal, int p_line, int p_col) noexcept;
 
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
@@ -184,6 +188,7 @@ public:
 	bool ShouldReport(const ObjectModelEntryFlags f) const noexcept;
 	bool WantArrayLength() const noexcept { return wantArrayLength; }
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
+	uint64_t GetStartMillis() const { return startMillis; }
 
 	GCodeException ConstructParseException(const char *msg) const noexcept;
 	GCodeException ConstructParseException(const char *msg, const char *sparam) const noexcept;
@@ -191,6 +196,7 @@ public:
 private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
 
+	uint64_t startMillis;							// the milliseconds counter when we started exploring the OM. Stored so that upTime and msUpTime are consistent.
 	unsigned int maxDepth;
 	unsigned int currentDepth;
 	size_t numIndicesProvided;						// the number of indices provided, when we are doing a value lookup
@@ -198,11 +204,11 @@ private:
 	int32_t indices[MaxIndices];
 	int line;
 	int column;
-	bool shortForm;
-	bool onlyLive;
-	bool includeVerbose;
-	bool wantArrayLength;
-	bool includeNulls;
+	unsigned int shortForm : 1,
+				onlyLive : 1,
+				includeVerbose : 1,
+				wantArrayLength : 1,
+				includeNulls : 1;
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.
