@@ -16,6 +16,7 @@
 #include <GCodes/GCodeChannel.h>
 #include "LinuxMessageFormats.h"
 #include <MessageType.h>
+#include <RTOSIface/RTOSIface.h>
 
 class BinaryGCodeBuffer;
 class StringRef;
@@ -30,6 +31,7 @@ class DataTransfer
 public:
 	DataTransfer() noexcept;
 	void Init() noexcept;
+	void SetLinuxTask(TaskHandle handle) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 
 	bool IsConnected() const noexcept;														// Check if the connection to DCS is live
@@ -55,7 +57,7 @@ public:
 	bool WriteObjectModel(OutputBuffer *data) noexcept;
 	bool WriteCodeBufferUpdate(uint16_t bufferSpace) noexcept;
 	bool WriteCodeReply(MessageType type, OutputBuffer *&response) noexcept;
-	bool WriteMacroRequest(GCodeChannel channel, const char *filename, bool reportMissing, bool fromBinaryCode) noexcept;
+	bool WriteMacroRequest(GCodeChannel channel, const char *filename, bool fromCode) noexcept;
 	bool WriteAbortFileRequest(GCodeChannel channel, bool abortAll) noexcept;
 	bool WritePrintPaused(FilePosition position, PrintPausedReason reason) noexcept;
 	bool WriteHeightMap() noexcept;
@@ -65,8 +67,6 @@ public:
 	bool WriteEvaluationError(const char *expression, const char *errorMessage) noexcept;
 	bool WriteDoCode(GCodeChannel channel, const char *code, size_t length) noexcept;
 	bool WriteWaitForAcknowledgement(GCodeChannel channel) noexcept;
-
-	static void SpiInterrupt() noexcept;
 
 private:
 	enum class SpiState

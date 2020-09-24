@@ -111,6 +111,8 @@ private:
 	unsigned int lastLayerNumberNotified;
 	float lastLayerStartHeightNotified;
 
+	static ReadWriteLock printMonitorLock;
+
 	bool printingFileParsed;
 	GCodeFileInfo printingFileInfo;
 	String<MaxFilenameLength> filenameBeingPrinted;

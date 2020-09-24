@@ -11,6 +11,9 @@
 #if HAS_MASS_STORAGE
 # include <GCodes/GCodeInput.h>
 #endif
+#if HAS_LINUX_INTERFACE
+# include <Linux/LinuxInterface.h>
+#endif
 #include "BinaryParser.h"
 #include "StringParser.h"
 #include <GCodes/GCodeException.h>
@@ -97,6 +100,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 #endif
 	  timerRunning(false), motionCommanded(false)
 {
+	mutex.Create(((GCodeChannel)channel).ToString());
 	machineState->compatibility = c;
 	Reset();
 }
@@ -104,10 +108,19 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 // Reset it to its state after start-up
 void GCodeBuffer::Reset() noexcept
 {
+#if HAS_LINUX_INTERFACE
+	if (isWaitingForMacro)
+	{
+		macroError = true;
+		isWaitingForMacro = false;
+		macroSemaphore.Give();
+	}
+#endif
+
 	while (PopState(false)) { }
 #if HAS_LINUX_INTERFACE
 	requestedMacroFile.Clear();
-	reportMissingMacro = isMacroFromCode = macroRequested = abortFile = abortAllFiles = false;
+	isMacroFromCode = isWaitingForMacro = abortFile = abortAllFiles = invalidated = false;
 	isBinaryBuffer = false;
 #endif
 	Init();
@@ -778,10 +791,9 @@ void GCodeBuffer::SetPrintFinished() noexcept
 	}
 }
 
-// This is only called when using the Linux interface. 'filename' is sometimes null.
-void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept
+// This is only called when using the Linux interface and returns if the macro file could be opened
+bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 {
-	machineState->SetFileExecuting();
 	if (!fromCode)
 	{
 		// This suppresses unwanted replies in the USB console
@@ -789,19 +801,37 @@ void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, boo
 		memset(buffer, 0, sizeof(CodeHeader));
 	}
 
-	requestedMacroFile.copy(filename);
-	reportMissingMacro = reportMissing;
-	isMacroFromCode = fromCode;
-	macroRequested = true;
+	if (!reprap.IsProcessingConfig() && !reprap.GetLinuxInterface().IsConnected())
+	{
+		// Don't wait for a macro file if no SBC is connected
+		return false;
+	}
 
+	requestedMacroFile.copy(filename);
+	isMacroFromCode = fromCode;
 	abortFile = abortAllFiles = false;
+
+	isWaitingForMacro = true;
+	if (!macroSemaphore.Take(SpiConnectionTimeout))
+	{
+		isWaitingForMacro = false;
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to get macro response within %" PRIu32 "ms from SBC (channel %s)\n", SpiConnectionTimeout, GetChannel().ToString());
+		return false;
+	}
+	return !macroError;
 }
 
-const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCode) const noexcept
+const char *GCodeBuffer::GetRequestedMacroFile(bool& fromCode) const noexcept
 {
-	reportMissing = reportMissingMacro;
 	fromCode = isMacroFromCode;
 	return requestedMacroFile.c_str();
+}
+
+void GCodeBuffer::ResolveMacroRequest(bool hadError) noexcept
+{
+	isWaitingForMacro = false;
+	macroError = hadError;
+	macroSemaphore.Give();
 }
 
 #endif

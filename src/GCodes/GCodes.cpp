@@ -44,6 +44,8 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
+Mutex GCodes::resourceMutex;
+
 #if HAS_AUX_DEVICES
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -145,6 +147,7 @@ void GCodes::Init() noexcept
 	axisLetters[2] = 'Z';
 
 	numExtruders = NumDefaultExtruders;
+	resourceMutex.Create("GCodeResources");
 
 	Reset();
 
@@ -245,15 +248,15 @@ void GCodes::Reset() noexcept
 	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
 	lastPrintingMoveHeight = -1.0;
 	newToolNumber = -1;
+
 	moveBuffer.tool = nullptr;
 	moveBuffer.virtualExtruderPosition = 0.0;
-
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	moveBuffer.laserPwmOrIoBits.Clear();
 #endif
-
 	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 	ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+	updateUserPosition = false;
 
 	for (RestorePoint& rp : numberedRestorePoints)
 	{
@@ -441,41 +444,63 @@ void GCodes::Spin() noexcept
 
 	// Set up a buffer for the reply
 	String<GCodeReplyLength> reply;
-
-	if (gb.GetState() == GCodeState::normal)
 	{
-		if (gb.MachineState().messageAcknowledged)
+		MutexLocker gbLock(gb.mutex);
+		if (gb.GetState() == GCodeState::normal)
 		{
-			const bool wasCancelled = gb.MachineState().messageCancelled;
-			gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
-#if HAS_LINUX_INTERFACE
-			if (reprap.UsingLinuxInterface())
+			if (gb.MachineState().messageAcknowledged)
 			{
-				// Send an empty response to DCS so it can pop its internal stack
-				SendSbcEvent(gb);
-			}
+				const bool wasCancelled = gb.MachineState().messageCancelled;
+				gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+#if HAS_LINUX_INTERFACE
+				if (reprap.UsingLinuxInterface())
+				{
+					// Send an empty response to DCS so it can pop its internal stack
+					SendSbcEvent(gb);
+				}
 #endif
 
-			if (wasCancelled)
+				if (wasCancelled)
+				{
+					if (gb.MachineState().GetPrevious() == nullptr)
+					{
+						StopPrint(StopPrintReason::userCancelled);
+					}
+					else
+					{
+						FileMacroCyclesReturn(gb);
+					}
+				}
+			}
+			else
 			{
-				if (gb.MachineState().GetPrevious() == nullptr)
-				{
-					StopPrint(StopPrintReason::userCancelled);
-				}
-				else
-				{
-					FileMacroCyclesReturn(gb);
-				}
+				StartNextGCode(gb, reply.GetRef());
 			}
 		}
 		else
 		{
-			StartNextGCode(gb, reply.GetRef());
+			RunStateMachine(gb, reply.GetRef());                            // execute the state machine
 		}
 	}
-	else
+
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
 	{
-		RunStateMachine(gb, reply.GetRef());                            // execute the state machine
+		if (reprap.GetLinuxInterface().HasPrintStarted())
+		{
+			StartPrinting(true);
+		}
+		else if (reprap.GetLinuxInterface().HasPrintStopped())
+		{
+			StopPrint(reprap.GetLinuxInterface().GetPrintStopReason());
+		}
+	}
+#endif
+
+	if (updateUserPosition)
+	{
+		UpdateCurrentUserPosition();
+		updateUserPosition = false;
 	}
 
 	// Check if we need to display a warning
@@ -526,6 +551,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	}
 	else if (gb.IsExecuting())
 	{
+		// Some codes, in particular for CAN boards, may need a lot of time before they return. Don't block the GB so long
 		gb.SetFinished(ActOnCode(gb, reply));
 	}
 	else if (gb.IsDoingFile())
@@ -573,8 +599,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 		if (gb.IsFileFinished())
 		{
-			gb.Init();								// mark buffer as empty
-
+			gb.Init();                                                              // mark buffer as empty
 			if (gb.MachineState().GetPrevious() == nullptr)
 			{
 				// Finished printing SD card file.
@@ -599,26 +624,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 				// Prepare the response to the command that invoked the macro
 				GCodeResult rslt = GCodeResult::ok;
-				if (gb.GetState() == GCodeState::doingUnsupportedCode)
-				{
-					gb.SetState(GCodeState::normal);
-					UnlockAll(gb);
-
-					if (hadFileError)
-					{
-						gb.PrintCommand(reply);
-						reply.cat(": Command is not supported");
-						rslt = GCodeResult::warning;
-					}
-				}
-				else if (gb.GetState() == GCodeState::doingUserMacro)
-				{
-					// M98 needs its own state in SBC mode to make sure the code does not completed before
-					// the file has been requested. This will become obsolete in RRF 3.02.
-					gb.SetState(GCodeState::normal);
-					UnlockAll(gb);
-				}
-				else if (gb.GetState() == GCodeState::loadingFilament && hadFileError)
+				if (gb.GetState() == GCodeState::loadingFilament && hadFileError)
 				{
 					// Don't perform final filament assignment if the load macro could not be processed
 					gb.SetState(GCodeState::normal);
@@ -1516,8 +1522,16 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 
 	gb.MotionStopped();								// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
-	// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
-	UpdateCurrentUserPosition();
+	if (TaskBase::GetCallerTaskHandle() == reprap.GetMainTaskHandle())
+	{
+		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
+		UpdateCurrentUserPosition();
+	}
+	else
+	{
+		// Cannot update the user position from external tasks. Do it later
+		updateUserPosition = true;
+	}
 	return true;
 }
 
@@ -2562,18 +2576,28 @@ void GCodes::EmergencyStop() noexcept
 // 502 = running M502
 // 98 = running a macro explicitly via M98
 // otherwise it is either the G- or M-code being executed, or 0 for a tool change file, or -1 for another system file
-// FIXME: sort this out, in particular when the call to RequestMacroFile needs the fromCode parameter to be true
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{
-		if (!Push(gb, false))
+		if (!gb.RequestMacroFile(fileName, gb.IsBinary() && codeRunning >= 0))
 		{
-			return true;
+			if (reportMissing)
+			{
+				platform.MessageF(WarningMessage, "Macro file %s not found\n", fileName);
+				return true;
+			}
+			return false;
 		}
 
-		gb.RequestMacroFile(fileName, reportMissing, gb.IsBinary() && codeRunning >= 0);
+		if (!Push(gb, false))
+		{
+			gb.AbortFile(false, true);
+			return true;
+		}
+		gb.MachineState().SetFileExecuting();
+		gb.StartNewFile();
 	}
 	else
 #endif
@@ -3399,7 +3423,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	if (gb.IsBinary())
 	{
 		MessageType type = gb.GetResponseMessageType();
-		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested() ||
+		if (rslt == GCodeResult::notFinished || gb.IsWaitingForMacro() ||
 			(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 		{
 			if (reply[0] == 0)
@@ -4425,6 +4449,7 @@ void GCodes::SetMoveBufferDefaults() noexcept
 // Locking the same resource more than once only locks it once, there is no lock count held.
 bool GCodes::LockResource(const GCodeBuffer& gb, Resource r) noexcept
 {
+	MutexLocker locker(resourceMutex);
 	if (resourceOwners[r] == &gb)
 	{
 		return true;
@@ -4439,9 +4464,9 @@ bool GCodes::LockResource(const GCodeBuffer& gb, Resource r) noexcept
 }
 
 // Grab the movement lock even if another GCode source has it
-// CAUTION: this will be unsafe when we move to RTOS
 void GCodes::GrabResource(const GCodeBuffer& gb, Resource r) noexcept
 {
+	MutexLocker locker(resourceMutex);
 	if (resourceOwners[r] != &gb)
 	{
 		if (resourceOwners[r] != nullptr)
@@ -4483,6 +4508,7 @@ void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 // Unlock the resource if we own it
 void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 {
+	MutexLocker locker(resourceMutex);
 	if (resourceOwners[r] == &gb)
 	{
 		GCodeMachineState * mc = &gb.MachineState();
@@ -4498,6 +4524,7 @@ void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 // Release all locks, except those that were owned when the current macro was started
 void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 {
+	MutexLocker locker(resourceMutex);
 	const GCodeMachineState * const mc = gb.MachineState().GetPrevious();
 	const GCodeMachineState::ResourceBitmap resourcesToKeep = (mc == nullptr) ? GCodeMachineState::ResourceBitmap() : mc->lockedResources;
 	for (size_t i = 0; i < NumResources; ++i)

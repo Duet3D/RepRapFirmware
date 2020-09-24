@@ -396,17 +396,17 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
-#if HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
 		updateFileWhenSimulationComplete = updateFile && !reprap.UsingLinuxInterface();
-#else
+# else
 		updateFileWhenSimulationComplete = updateFile;
-#endif
+# endif
 		simulationMode = 1;
 		reprap.GetMove().Simulate(simulationMode);
 		reprap.GetPrintMonitor().StartingPrint(file.c_str());
-#if HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
 		if (!reprap.UsingLinuxInterface())
-#endif
+# endif
 		{
 			// If using a SBC, this is already called when the print file info is set
 			StartPrinting(true);

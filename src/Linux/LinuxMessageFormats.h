@@ -15,10 +15,11 @@
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 
-constexpr uint8_t LinuxFormatCode = 0x5F;
+constexpr uint8_t LinuxFormatCode = 0x5F;			// standard format code for RRF SPI protocol
+constexpr uint8_t LiunxFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode
 constexpr uint8_t InvalidFormatCode = 0xC9;			// must be different from any other format code
 
-constexpr uint16_t LinuxProtocolVersion = 2;
+constexpr uint16_t LinuxProtocolVersion = 3;
 
 constexpr size_t LinuxTransferBufferSize = 8192;	// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
 static_assert(LinuxTransferBufferSize % sizeof(uint32_t) == 0, "LinuxTransferBufferSize must be a whole number of dwords");
@@ -149,7 +150,7 @@ struct EvaluationResultHeader
 struct ExecuteMacroHeader
 {
 	uint8_t channel;
-	bool reportMissing;
+	uint8_t dummy;
 	bool fromCode;
 	uint8_t length;
 };

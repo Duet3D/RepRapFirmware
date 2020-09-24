@@ -559,8 +559,19 @@ void RepRap::Init() noexcept
 #if HAS_LINUX_INTERFACE
 	if (usingLinuxInterface)
 	{
-		processingConfig = false;
-		gCodes->RunConfigFile(GCodes::CONFIG_FILE);		// we didn't get config.g from SD card so request it from Linux
+		// Keep spinning until the SBC connects
+		while (!linuxInterface->IsConnected())
+		{
+			Spin();
+		}
+
+		// Run config.g or config.g.bak
+		if (!RunStartupFile(GCodes::CONFIG_FILE))
+		{
+			RunStartupFile(GCodes::CONFIG_BACKUP_FILE);
+		}
+
+		// runonce.g is executed by the SBC as soon as processingConfig is set to false.
 		// As we are running the SBC, save RAM by not activating the network
 	}
 	else
@@ -574,8 +585,8 @@ void RepRap::Init() noexcept
 			platform->DeleteSysFile(GCodes::RUNONCE_G);
 		}
 #endif
-		processingConfig = false;
 	}
+	processingConfig = false;
 
 #if HAS_HIGH_SPEED_SD && !SAME5x
 	hsmci_set_idle_func(hsmciIdle);
@@ -673,15 +684,6 @@ void RepRap::Spin() noexcept
 	ticksInSpinState = 0;
 	spinningModule = moduleDisplay;
 	display->Spin();
-#endif
-
-#if HAS_LINUX_INTERFACE
-	if (usingLinuxInterface)
-	{
-		ticksInSpinState = 0;
-		spinningModule = moduleLinuxInterface;
-		linuxInterface->Spin();
-	}
 #endif
 
 	ticksInSpinState = 0;
@@ -805,7 +807,12 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	move->Diagnostics(mtype);
 	heat->Diagnostics(mtype);
 	gCodes->Diagnostics(mtype);
-	network->Diagnostics(mtype);
+#if HAS_LINUX_INTERFACE
+	if (!usingLinuxInterface)
+#endif
+	{
+		network->Diagnostics(mtype);
+	}
 	FilamentMonitor::Diagnostics(mtype);
 #ifdef DUET_NG
 	DuetExpansion::Diagnostics(mtype);

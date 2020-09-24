@@ -29,12 +29,14 @@ Filament::Filament(int extr) noexcept : extruder(extr)
 
 void Filament::Load(const char *filamentName) noexcept
 {
+	TaskCriticalSectionLocker locker;
 	SafeStrncpy(name, filamentName, ARRAY_SIZE(name));
 	Filament::SaveAssignments();
 }
 
 void Filament::Unload() noexcept
 {
+	TaskCriticalSectionLocker locker;
 	strcpy(name, "");
 	Filament::SaveAssignments();
 }

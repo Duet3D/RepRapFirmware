@@ -25,6 +25,8 @@ Licence: GPL
 #include "Platform.h"
 #include "RepRap.h"
 
+ReadWriteLock PrintMonitor::printMonitorLock;
+
 #if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
@@ -37,7 +39,7 @@ Licence: GPL
 
 const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
 {
-	nullptr,					// no lock needed
+	&printMonitorLock,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
 			{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
@@ -124,9 +126,14 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
 
 void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info) noexcept
 {
-	filenameBeingPrinted.copy(filename);
-	printingFileInfo = info;
-	printingFileParsed = true;
+	{
+		WriteLocker locker(printMonitorLock);
+		filenameBeingPrinted.copy(filename);
+		printingFileInfo = info;
+		printingFileParsed = true;
+	}
+
+	TaskCriticalSectionLocker taskLock;
 	reprap.JobUpdated();
 }
 
@@ -147,6 +154,7 @@ void PrintMonitor::Spin() noexcept
 		// File information about the file being printed must be available before layer estimations can be made
 		if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 		{
+			WriteLocker locker(printMonitorLock);
 			printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
 			if (!printingFileParsed)
 			{
@@ -209,6 +217,7 @@ void PrintMonitor::Spin() noexcept
 					currentLayer = 1;
 
 					// See if we need to determine the first layer height (usually smaller than the nozzle diameter)
+					WriteLocker locker(printMonitorLock);
 					if (printingFileInfo.firstLayerHeight == 0.0 && currentZ < platform.GetNozzleDiameter() * 1.5)
 					{
 						printingFileInfo.firstLayerHeight = currentZ;
@@ -220,6 +229,7 @@ void PrintMonitor::Spin() noexcept
 					if (currentLayer == 1)
 					{
 						// Check if we've finished the first layer
+						ReadLocker locker(printMonitorLock);
 						if (currentZ > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
 						{
 							FirstLayerComplete();
@@ -233,6 +243,7 @@ void PrintMonitor::Spin() noexcept
 					// Else check for following layer changes
 					else if (currentZ > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
 					{
+						ReadLocker locker(printMonitorLock);
 						LayerComplete();
 						currentLayer++;
 
@@ -266,14 +277,25 @@ float PrintMonitor::GetWarmUpDuration() const noexcept
 void PrintMonitor::StartingPrint(const char* filename) noexcept
 {
 #if HAS_MASS_STORAGE
+	WriteLocker locker(printMonitorLock);
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
-	printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+# if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		printingFileParsed = false;
+	}
+	else
+# endif
+	{
+		printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+	}
 	reprap.JobUpdated();
 #endif
 }
 
 void PrintMonitor::Reset() noexcept
 {
+	WriteLocker locker(printMonitorLock);
 	currentLayer = numLayerSamples = 0;
 	pauseStartTime = totalPauseTime = 0;
 	firstLayerDuration = firstLayerFilament = firstLayerProgress = 0.0;
@@ -394,6 +416,8 @@ void PrintMonitor::LayerComplete() noexcept
 
 float PrintMonitor::FractionOfFilePrinted() const noexcept
 {
+	ReadLocker locker(printMonitorLock);
+
 	if (!printingFileInfo.isValid || printingFileInfo.fileSize == 0)
 	{
 		return -1.0;
@@ -404,6 +428,8 @@ float PrintMonitor::FractionOfFilePrinted() const noexcept
 // Estimate the print time left in seconds on a preset estimation method
 float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcept
 {
+	ReadLocker locker(printMonitorLock);
+
 	// We can't provide an estimation if we don't have any information about the file
 	if (!printingFileParsed)
 	{

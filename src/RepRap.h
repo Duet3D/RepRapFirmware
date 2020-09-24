@@ -73,6 +73,7 @@ public:
 	void ClearDebug() noexcept;
 	void PrintDebug(MessageType mt) noexcept;
 	Module GetSpinningModule() const noexcept;
+	TaskHandle GetMainTaskHandle() const noexcept;
 
 	const char *GetName() const noexcept;
 	void SetName(const char* nm) noexcept;
@@ -291,6 +292,7 @@ private:
 
 	// State flags
 	Module spinningModule;
+	TaskHandle mainTaskHandle;
 	bool stopped;
 	bool active;
 	bool processingConfig;
@@ -304,6 +306,7 @@ extern RepRap reprap;
 
 inline bool RepRap::Debug(Module m) const noexcept { return debug & (1u << m); }
 inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
+inline TaskHandle RepRap::GetMainTaskHandle() const noexcept { return mainTaskHandle; }
 
 inline Tool* RepRap::GetCurrentTool() const noexcept { return currentTool; }
 inline uint16_t RepRap::GetExtrudersInUse() const noexcept { return activeExtruders; }

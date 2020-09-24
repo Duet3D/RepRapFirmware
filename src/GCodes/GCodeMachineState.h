@@ -104,8 +104,6 @@ enum class GCodeState : uint8_t
 #endif
 
 #if HAS_LINUX_INTERFACE
-	doingUnsupportedCode,
-	doingUserMacro,
 	waitingForAcknowledgement,
 #endif
 
