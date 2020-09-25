@@ -46,9 +46,17 @@
 # include <sam/drivers/uart/uart.h>
 #endif
 
+#if HAS_STALL_DETECT
+static void InitStallDetectionLogic() noexcept;				// forward declaration
+#endif
+
+#ifdef DUET3MINI_V02
+static bool ReadOneDiagOutput(uint8_t driver) noexcept;		// forward declaration
+#endif
+
 // Important note:
-// The TMC2224 does handle a write request immediately followed by a read request.
-// The TMC2224 does _not_ handle back-to-back read requests, it needs a short delay between them.
+// The TMC22xx does handle a write request immediately followed by a read request.
+// The TMC22xx does _not_ handle back-to-back read requests to different drivers, it needs a short delay between them.
 
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
@@ -86,7 +94,7 @@ enum class DriversState : uint8_t
 
 static DriversState driversState = DriversState::noPower;
 
-#if TMC22xx_USE_SLAVEADDR && !defined(DUET3MINI)
+#if TMC22xx_USE_SLAVEADDR
 static bool currentMuxState;
 #endif
 
@@ -284,9 +292,10 @@ constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 // Bytes 3-6 32-bit data, MSB first
 // Byte 7 8-bit CRC
 
+//TODO use FastCrcAddByte and Reflect instead of CrcAddByte
 #if 1
 
-// Fast table-driven CRC-8. Unfortunately, the result needs ot be reflected.
+// Fast table-driven CRC-8. Unfortunately, the result needs to be reflected.
 static constexpr uint8_t crc_table[256] =
 {
 	0x00, 0x91, 0xE3, 0x72, 0x07, 0x96, 0xE4, 0x75, 0x0E, 0x9F, 0xED, 0x7C, 0x09, 0x98, 0xEA, 0x7B,
@@ -379,7 +388,7 @@ public:
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT && !defined(DUET3MINI_V02)
 							, Pin p_diagPin
 #endif
 			 ) noexcept;
@@ -447,7 +456,6 @@ private:
 	void UpdateCurrent() noexcept;
 	void UpdateMaxOpenLoadStepInterval() noexcept;
 #if HAS_STALL_DETECT
-	bool IsTmc2209() const noexcept { return (readRegisters[ReadIoIn] & IOIN_VERSION_MASK) == (IOIN_VERSION_2209 << IOIN_VERSION_SHIFT); }
 	void ResetLoadRegisters() noexcept
 	{
 		minSgLoadRegister = 1023;
@@ -468,7 +476,6 @@ private:
 
 #if HAS_STALL_DETECT
 	static constexpr unsigned int NumWriteRegisters = 9;		// the number of registers that we write to on a TMC2209
-	static constexpr unsigned int NumWriteRegistersNon09 = 6;	// the number of registers that we write to on a TMC2208/2224
 #else
 	static constexpr unsigned int NumWriteRegisters = 6;		// the number of registers that we write to on a TMC2208/2224
 #endif
@@ -651,11 +658,7 @@ static TmcDriverState driverStates[MaxSmartDrivers];
 
 inline bool TmcDriverState::UpdatePending() const noexcept
 {
-	return registersToUpdate != 0
-#if HAS_STALL_DETECT
-		&& (IsTmc2209() || LowestSetBit(registersToUpdate) < NumWriteRegistersNon09)
-#endif
-		;
+	return registersToUpdate != 0;
 }
 
 // Set up the PDC or DMAC to send a register
@@ -838,7 +841,7 @@ void TmcDriverState::Init(uint32_t p_driverNumber
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT && !defined(DUET3MINI_V02)
 							, Pin p_diagPin
 #endif
 ) noexcept
@@ -851,9 +854,11 @@ pre(!driversPowered)
 	IoPort::SetPinMode(p_enablePin, OUTPUT_HIGH);
 #endif
 
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT && !defined(DUET3MINI_V02)
 	diagPin = p_diagPin;
-	IoPort::SetPinMode(p_diagPin, INPUT_PULLUP);
+# if !defined(DUET3MINI_V04)											// on 3 Mini v0.4 we have already done this and switched the pin to be a CCL input
+	IoPort::SetPinMode(p_diagPin, INPUT_PULLDOWN);						// pull down not up so that missing drivers don't signal stalls
+# endif
 #endif
 
 #if !(TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER)
@@ -1123,10 +1128,17 @@ uint32_t TmcDriverState::ReadLiveStatus() const noexcept
 		ret &= ~(TMC_RR_OLA | TMC_RR_OLB);
 	}
 #if HAS_STALL_DETECT
+# ifdef DUET3MINI_V02
+	if (ReadOneDiagOutput(driverNumber))
+	{
+		ret |= TMC_RR_SG;
+	}
+# else
 	if (IoPort::ReadPin(diagPin))
 	{
 		ret |= TMC_RR_SG;
 	}
+# endif
 #endif
 	return ret;
 }
@@ -1271,11 +1283,7 @@ inline void TmcDriverState::TransferDone() noexcept
 			accumulatedReadRegisters[registerToRead] |= regVal;
 
 			++registerToRead;
-			if (   registerToRead >= NumReadRegisters
-#if HAS_STALL_DETECT
-				|| (registerToRead >= NumReadRegistersNon09 && !IsTmc2209())
-#endif
-			   )
+			if (registerToRead >= NumReadRegisters)
 			{
 				registerToRead = 0;
 			}
@@ -1310,17 +1318,11 @@ void TmcDriverState::AbortTransfer() noexcept
 inline void TmcDriverState::SetUartMux() noexcept
 {
 #if TMC22xx_USE_SLAVEADDR
-# if defined(DUET3MINI)
-	// Duet 5LC has a 1-bit mux to select between 2 banks of 4 drivers. High selects the first bank.
-	// We have changed TmcLoop to address drivers in alternate banks, so we don't need to insert any delays here
-	digitalWrite(TMC22xxMuxPins[0], (driverNumber & 0x04) == 0);
-# else
 	const bool newMuxState = ((driverNumber & 0x04) != 0);
 	if (newMuxState == currentMuxState)
 	{
 		// A TMC2209 turns off its transmitter 4 bit times after the end of the last byte.
-		// So if we didn't change the mux, we need a delay here.
-		// In fact, even 8 bit times isn't enough delay.
+		// So if we didn't change the mux, we need a delay here. // In fact, even 8 bit times isn't enough delay.
 		delay(2);
 	}
 	else
@@ -1328,7 +1330,6 @@ inline void TmcDriverState::SetUartMux() noexcept
 		digitalWrite(TMC22xxMuxPins[0], newMuxState);
 	}
 	currentMuxState = newMuxState;
-# endif
 #else
 	digitalWrite(TMC22xxMuxPins[0], (driverNumber & 0x01) != 0);
 	digitalWrite(TMC22xxMuxPins[1], (driverNumber & 0x02) != 0);
@@ -1346,16 +1347,9 @@ inline void TmcDriverState::StartTransfer() noexcept
 #endif
 
 	// Find which register to send. The common case is when no registers need to be updated.
-#if HAS_STALL_DETECT
-	size_t regNum;
-	if (registersToUpdate != 0 && ((regNum = LowestSetBit(registersToUpdate)) < NumWriteRegistersNon09 || IsTmc2209()))
-	{
-		// Write a register
-#else
 	if (registersToUpdate != 0)
 	{
 		const size_t regNum = LowestSetBit(registersToUpdate);
-#endif
 
 		// Kick off a transfer for the register to write
 		const irqflags_t flags = cpu_irq_save();		// avoid race condition
@@ -1461,10 +1455,11 @@ void UART_TMC_DRV1_Handler() noexcept
 
 #endif
 
-extern "C" void TmcLoop(void *) noexcept
+// This is the loop that the TMC task runs
+extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 {
 	TmcDriverState * currentDriver = nullptr;
-#ifdef DUET3MINI
+#if TMC22xx_USE_SLAVEADDR
 	size_t currentDriverNumber;
 #endif
 	for (;;)
@@ -1488,7 +1483,7 @@ extern "C" void TmcLoop(void *) noexcept
 			// Do a transaction
 #if TMC22xx_SINGLE_DRIVER
 			currentDriver = driverStates;
-#elif defined(DUET3MINI)
+#elif TMC22xx_USE_SLAVEADDR
 			// To avoid having to insert delays between addressing drivers on the same multiplexer channel,
 			// address drivers on alternate multiplexer channels, i.e in the order 04152637
 			if (currentDriver == nullptr || currentDriverNumber == GetNumTmcDrivers() - 1)
@@ -1499,15 +1494,8 @@ extern "C" void TmcLoop(void *) noexcept
 			{
 				++currentDriverNumber;
 			}
-			static constexpr TmcDriverState *drivers[] =
-			{
-				&driverStates[0], &driverStates[4], &driverStates[1], &driverStates[5], &driverStates[2], &driverStates[6], &driverStates[3],
-# ifdef DUET3MINI_V02
-				&driverStates[7]
-# endif
-			};
-			static_assert(ARRAY_SIZE(drivers) == MaxSmartDrivers);
-			currentDriver = drivers[currentDriverNumber];
+			const size_t mappedDriverNumber = ((currentDriverNumber & 1u) << 2) | (currentDriverNumber >> 1);	// this assumes we have between 5 and 8 drivers
+			currentDriver = &driverStates[mappedDriverNumber];
 #else
 			currentDriver = (currentDriver == nullptr || currentDriver + 1 == driverStates + GetNumTmcDrivers())
 								? driverStates
@@ -1558,13 +1546,11 @@ extern "C" void TmcLoop(void *) noexcept
 #ifdef DUET3MINI
 							// Drivers 5-7 are on the expansion board, which may not be present. So if they consistently time out, ignore them.
 							if (i < 5 || driverStates[i].DriverAssumedPresent())
-							{
 #endif
+							{
 								allInitialised = false;
 								break;
-#ifdef DUET3MINI
 							}
-#endif
 						}
 					}
 
@@ -1583,9 +1569,9 @@ extern "C" void TmcLoop(void *) noexcept
 			{
 				// DMA error, or DMA complete and DMA error
 				currentDriver->DmaError();
-# if TMC22xx_SINGLE_DRIVER
+#if TMC22xx_SINGLE_DRIVER
 				delay(2);						// TMC22xx can't handle back-to-back reads, so we need a short delay
-# endif
+#endif
 			}
 #endif
 		}
@@ -1643,10 +1629,9 @@ void SmartDrivers::Init() noexcept
 	}
 #endif
 
-#if TMC22xx_USE_SLAVEADDR && !defined(DUET3MINI)
+#if TMC22xx_USE_SLAVEADDR
 	currentMuxState = false;
 #endif
-
 	driversState = DriversState::noPower;
 	for (size_t drive = 0; drive < GetNumTmcDrivers(); ++drive)
 	{
@@ -1680,11 +1665,15 @@ void SmartDrivers::Init() noexcept
 #if TMC22xx_HAS_ENABLE_PINS
 								, ENABLE_PINS[drive]
 #endif
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT && !defined(DUET3MINI_V02)
 								, DriverDiagPins[drive]
 #endif
 								);
 	}
+
+#if HAS_STALL_DETECT
+	InitStallDetectionLogic();
+#endif
 
 	tmcTask.Create(TmcLoop, "TMC", nullptr, TaskPriority::TmcPriority);
 }
@@ -1884,25 +1873,103 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 	return (driver < GetNumTmcDrivers()) ? driverStates[driver].GetRegister(reg) : 0;
 }
 
+#ifdef DUET3MINI_V04
+
+// Stall detection for Duet 3 Mini prototype v0.4
+// Each TMC2209 DIAG output is routed to its own MCU pin, however we don't have enough EXINTs on the SAME54 to give each one its own interrupt.
+// So we route them all to CCL input pins instead, which lets us selectively OR them together in 3 groups and generate an interrupt from the resulting events
+
+// Set up to generate interrupts on the specified drivers stalling
+void EnableStallInterrupt(DriversBitmap drivers) noexcept
+{
+	// Disable all the Diag event interrupts
+	for (unsigned int i = 1; i < 3; ++i)
+	{
+		CCL->LUTCTRL[i].reg &= ~CCL_LUTCTRL_ENABLE;
+		EVSYS->Channel[CclLut0Event + i].CHINTENCLR.reg = EVSYS_CHINTENCLR_EVD | EVSYS_CHINTENCLR_OVR;
+		EVSYS->Channel[CclLut0Event + i].CHINTFLAG.reg = EVSYS_CHINTFLAG_EVD | EVSYS_CHINTENCLR_OVR;
+	}
+
+	if (!drivers.IsEmpty())
+	{
+		// Calculate the new LUT control values
+		constexpr uint32_t lutDefault = CCL_LUTCTRL_TRUTH(0xFE) | CCL_LUTCTRL_LUTEO;		// OR function, disabled, event output enabled
+		uint32_t lutInputControls[4] = { lutDefault, lutDefault, lutDefault, lutDefault };
+		drivers.IterateWhile([&lutInputControls](unsigned int driver, unsigned int count) -> bool
+			{ 	if (driver < GetNumTmcDrivers())
+				{
+					const uint32_t cclInput = CclDiagInputs[driver];
+					lutInputControls[cclInput & 3] |= cclInput & 0x000000FFFFFF0000;
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			} );
+
+		// Now set up the CCL with those inputs. We only use CCL 1-3 so leave 0 alone for possible other applications.
+		for (unsigned int i = 1; i < 4; ++i)
+		{
+			if (lutInputControls[i] & 0x000000FFFFFF0000)				// if any inputs are enabled
+			{
+				CCL->LUTCTRL[i].reg = lutInputControls[i];
+				CCL->LUTCTRL[i].reg = lutInputControls[i] | CCL_LUTCTRL_ENABLE;
+				EVSYS->Channel[CclLut0Event + i].CHINTENSET.reg = EVSYS_CHINTENCLR_EVD;
+			}
+		}
+	}
+}
+
+// Initialise the stall detection logic that is external to the drivers. Only needs to be called once.
+static void InitStallDetectionLogic() noexcept
+{
+	// Set up the DIAG inputs as CCL inputs
+	for (Pin p : DriverDiagPins)
+	{
+		pinMode(p, INPUT_PULLDOWN);								// enable pulldown in case of missing drivers
+		SetPinFunction(p, GpioPinFunction::N);
+	}
+
+	// Set up the event channels for CCL LUTs 1 to 3. We only use CCL 1-3 so leave 0 alone for possible other applications.
+	for (unsigned int i = 1; i < 4; ++i)
+	{
+		GCLK->PCHCTRL[EVSYS_GCLK_ID_0 + i].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;	// enable the GCLK, needed to use the resynchronised path
+		EVSYS->Channel[CclLut0Event + i].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0x74 + i) | EVSYS_CHANNEL_PATH_RESYNCHRONIZED;
+																// LUT output events on the SAME5x are event generator numbers 0x74 to 0x77. Resynchronised path allows interrupts.
+		EVSYS->Channel[CclLut0Event + i].CHINTENCLR.reg = EVSYS_CHINTENCLR_EVD | EVSYS_CHINTENCLR_OVR;	// disable interrupts for now
+		NVIC_SetPriority((IRQn)(EVSYS_0_IRQn + i), NvicPriorityDriverDiag);
+		NVIC_EnableIRQ((IRQn)(EVSYS_0_IRQn + i));				// enable the interrupt for this event channel in the NVIC
+	}
+
+	CCL->CTRL.reg = CCL_CTRL_ENABLE;							// enable the CCL
+}
+
+#endif
+
 #ifdef DUET3MINI_V02
 
-uint32_t stallBits = 0;
+// Stall detection for Duet 3 Mini prototype v0.2. This code isn't complete, and won't be completed because prototype v0.4 uses a different mechanism.
 
-// Initialise the Diag pins multiplexer control. Only needs to be called once.
-void InitDiagMux() noexcept
+// Initialise the stall detection logic that is external to the drivers. Only needs to be called once.
+static void InitStallDetectionLogic() noexcept
 {
 	pinMode(DiagMuxPins[0], OUTPUT_LOW);
 	pinMode(DiagMuxPins[1], OUTPUT_LOW);
 	pinMode(DiagMuxPins[2], OUTPUT_LOW);
+	pinMode(DiagMuxOutPin, INPUT);
 }
 
 constexpr uint32_t MuxDelayCycles = SystemCoreClockFreq/5000000;		// allow 200ns for mux output to settle
 
+#if 0	// the following is unused
+
+static uint32_t stallBits = 0;
+
 // Read all the Diag pins
 // We read the drivers in Gray code order for speed, it avoids having to change more than one multiplexer control pin between them
-uint32_t ReadDiagOutputs() noexcept
+static uint32_t ReadDiagOutputs() noexcept
 {
-
 	fastDigitalWriteLow(DiagMuxPins[0]);
 	fastDigitalWriteLow(DiagMuxPins[0]);
 	fastDigitalWriteLow(DiagMuxPins[0]);
@@ -1962,8 +2029,10 @@ uint32_t ReadDiagOutputs() noexcept
 	return stallBits;
 }
 
+#endif
+
 // Read just one DIAG output
-bool ReadOneDiagOutput(uint8_t driver) noexcept
+static bool ReadOneDiagOutput(uint8_t driver) noexcept
 {
 	if (driver & 1)
 	{

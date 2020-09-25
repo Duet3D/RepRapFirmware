@@ -44,6 +44,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 
 #define SUPPORT_TMC22xx			1
 #define TMC22xx_HAS_MUX			1
+#define HAS_STALL_DETECT		1
 
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
@@ -145,7 +146,18 @@ PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pin
 
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(19), PortCPin(16), PortCPin(30), PortCPin(18) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortBPin(29), PortBPin(28), PortDPin(20), PortDPin(21), PortBPin(0), PortAPin(27) };
-constexpr Pin DiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortAPin(22), PortAPin(23), PortCPin(21), PortBPin(10), PortCPin(27) };
+constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortAPin(22), PortAPin(23), PortCPin(21), PortBPin(10), PortCPin(27) };
+// CCL inputs that the DIAG inputs use. Bits 0-1 are the CCL LUT number. Bits 8-19 are the value to OR in to the control register for that LUT.
+constexpr uint32_t CclDiagInputs[NumDirectDrivers] =
+{
+	0x01 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[5] = 1.2
+	0x02 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[8]	= 2.2
+	0x02 | CCL_LUTCTRL_INSEL0(0x04),		// CCLIN[6] = 2.0
+	0x02 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[7] = 2.1
+	0x03 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[10] = 3.1
+	0x03 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[11] = 3.2
+	0x01 | CCL_LUTCTRL_INSEL1(0x04)			// CCLIN[4] = 1.1
+};
 
 // UART interface to stepper drivers
 constexpr uint8_t TMC22xxSercomNumber = 1;
@@ -702,6 +714,14 @@ constexpr IRQn StepTcIRQn = TC2_IRQn;
 constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
+// SAME5x event channel allocation, max 32 channels. Only the first 12 provide a synchronous or resynchronised path and can generate interrupts.
+
+#ifdef DUET3MINI_V04
+constexpr EventNumber CclLut0Event = 0;					// this uses up 4 channels
+constexpr EventNumber NextFreeEvent = CclLut0Event + 4;
+#endif
+
+// Step pulse generation
 namespace StepPins
 {
 	// *** These next three functions must use the same bit assignments in the drivers bitmap ***
