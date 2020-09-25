@@ -4345,7 +4345,7 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 		{
 			return GCodeResult::error;
 		}
-		const PwmFrequency freq = (gb.Seen('F')) ? gb.GetPwmFrequency() : DefaultPinWritePwmFreq;
+		const PwmFrequency freq = (gb.Seen('Q') || gb.Seen('F')) ? gb.GetPwmFrequency() : DefaultPinWritePwmFreq;
 		extrusionAncilliaryPwmPort.SetFrequency(freq);
 	}
 	if (gb.Seen('S'))
