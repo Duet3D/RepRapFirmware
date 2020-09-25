@@ -2048,6 +2048,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 		else if (reprap.GetMove().IsUsingMesh() && (moveBuffer.isCoordinated || machineType == MachineType::fff))
 		{
+			ReadLocker locker(reprap.GetMove().heightMapLock);
 			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
 			totalSegments = max<unsigned int>(1, heightMap.GetMinimumSegments(currentUserPosition[X_AXIS] - initialXY[0], currentUserPosition[Y_AXIS] - initialXY[1]));
 		}
@@ -2829,14 +2830,18 @@ void GCodes::DoManualBedProbe(GCodeBuffer& gb)
 // Prior to calling this the movement system must be locked.
 GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 {
+	reprap.GetMove().heightMapLock.LockForWriting();
+
 	if (!defaultGrid.IsValid())
 	{
+		reprap.GetMove().heightMapLock.ReleaseWriter();
 		reply.copy("No valid grid defined for bed probing");
 		return GCodeResult::error;
 	}
 
 	if (!AllAxesAreHomed())
 	{
+		reprap.GetMove().heightMapLock.ReleaseWriter();
 		reply.copy("Must home printer before bed probing");
 		return GCodeResult::error;
 	}
@@ -2886,8 +2891,9 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 		reply.printf("Height map file %s not found", fullName.c_str());
 		return GCodeResult::error;
 	}
-
 	reply.printf("Failed to load height map from file %s: ", fullName.c_str());	// set up error message to append to
+
+	WriteLocker locker(reprap.GetMove().heightMapLock);
 	const bool err = reprap.GetMove().LoadHeightMapFromFile(f, fullName.c_str(), reply);
 	f->Close();
 
@@ -2948,6 +2954,8 @@ bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) cons
 // Save the height map to the file specified by P parameter
 GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 {
+	ReadLocker locker(reprap.GetMove().heightMapLock);
+
 	// No need to check if we're using the Linux interface here, because TrySaveHeightMap does that
 	if (gb.Seen('P'))
 	{

@@ -560,6 +560,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else if (zp->Stopped() == EndStopHit::atStop)
 				{
+					reprap.GetMove().heightMapLock.ReleaseWriter();
 					reprap.GetHeat().SuspendHeaters(false);
 					gb.MachineState().SetError("Z probe already triggered before probing move started");
 					gb.SetState(GCodeState::checkError);
@@ -572,6 +573,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					SetMoveBufferDefaults();
 					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 					{
+						reprap.GetMove().heightMapLock.ReleaseWriter();
 						gb.MachineState().SetError("Failed to enable Z probe");
 						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb, 29);
@@ -605,6 +607,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->SetProbing(false);
 				if (!zProbeTriggered)
 				{
+					reprap.GetMove().heightMapLock.ReleaseWriter();
 					gb.MachineState().SetError("Z probe was not triggered during probing move");
 					gb.SetState(GCodeState::checkError);
 					RetractZProbe(gb, 29);
@@ -677,6 +680,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			else
 			{
+				reprap.GetMove().heightMapLock.ReleaseWriter();
 				gb.MachineState().SetError("Z probe readings not consistent");
 				gb.SetState(GCodeState::checkError);
 				RetractZProbe(gb, 29);
@@ -759,6 +763,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				gb.MachineState().SetError("Too few points probed");
 			}
+			reprap.GetMove().heightMapLock.ReleaseWriter();
 		}
 		if (stateMachineResult == GCodeResult::ok)
 		{
