@@ -21,9 +21,32 @@ constexpr size_t AnalogInTaskStackWords = 300;
 static Task<AnalogInTaskStackWords> analogInTask;
 
 // Serial device support
-Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512);
-Uart serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512);
-SerialCDC serialUSB(UsbVBusPin, 512, 512);
+void Serial0PortInit(Uart *) noexcept
+{
+	SetPinFunction(Serial0TxPin, Serial0PinFunction);
+	SetPinFunction(Serial0RxPin, Serial0PinFunction);
+}
+
+void Serial0PortDeinit(Uart *) noexcept
+{
+	pinMode(Serial0TxPin, INPUT_PULLUP);
+	pinMode(Serial0RxPin, INPUT_PULLUP);
+}
+
+void Serial1PortInit(Uart *) noexcept
+{
+	SetPinFunction(Serial1TxPin, Serial1PinFunction);
+	SetPinFunction(Serial1RxPin, Serial1PinFunction);
+}
+
+void Serial1PortDeinit(Uart *) noexcept
+{
+	pinMode(Serial1TxPin, INPUT_PULLUP);
+	pinMode(Serial1RxPin, INPUT_PULLUP);
+}
+
+Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
+Uart serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
 
 # if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
 #  error SERIAL0_ISRn not defined
@@ -62,6 +85,8 @@ void SERIAL1_ISR3() noexcept
 {
 	serialUart1.Interrupt3();
 }
+
+SerialCDC serialUSB(UsbVBusPin, 512, 512);
 
 static void UsbInit() noexcept
 {
@@ -131,23 +156,12 @@ static void SdhcInit() noexcept
 #endif
 }
 
-// Serial interface
-static void SerialInit() noexcept
-{
-	SetPinFunction(Serial0TxPin, Serial0PinFunction);
-	SetPinFunction(Serial0RxPin, Serial0PinFunction);
-	SetPinFunction(Serial1TxPin, Serial1PinFunction);
-	SetPinFunction(Serial1RxPin, Serial1PinFunction);
-	// We don't make the init calls here, that's done by the GCodes module
-}
-
 void DeviceInit() noexcept
 {
 	// Ensure the Ethernet PHY or WiFi module is held reset
 	pinMode(EthernetPhyResetPin, OUTPUT_LOW);
 
 	UsbInit();
-	SerialInit();
 	SdhcInit();
 
 	AnalogIn::Init(FirstAdcDmaChannel, DmacPrioAdcTx, DmacPrioAdcRx);

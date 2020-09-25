@@ -94,7 +94,27 @@ const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
 
-// Forward declarations of static functions
+#if SAME5x
+
+void SerialWiFiPortInit(Uart*) noexcept
+{
+	for (Pin p : WiFiUartSercomPins)
+	{
+		SetPinFunction(p, WiFiUartSercomPinsMode);
+	}
+}
+
+void SerialWiFiPortDeinit(Uart*) noexcept
+{
+	for (Pin p : WiFiUartSercomPins)
+	{
+		pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
+	}
+}
+
+#endif
+
+// Static functions
 static inline void DisableSpi() noexcept
 {
 #if SAME5x
@@ -237,7 +257,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	strcpy(wiFiServerVersion, "(unknown)");
 
 #ifdef DUET3MINI
-	SerialWiFiDevice = new Uart(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512);
+	SerialWiFiDevice = new Uart(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
 	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
 #else
 	SERIAL_WIFI_DEVICE.setInterruptPriority(NvicPriorityWiFiUart);
@@ -1994,12 +2014,7 @@ void WiFiInterface::StartWiFi() noexcept
 	digitalWrite(EspEnablePin, true);
 #endif
 
-#if SAME5x
-	for (Pin p : WiFiUartSercomPins)
-	{
-		SetPinFunction(p, WiFiUartSercomPinsMode);
-	}
-#elif !defined(__LPC17xx__)
+#if !SAME5x && !defined(__LPC17xx__)
 	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
 #endif
 	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
@@ -2017,12 +2032,7 @@ void WiFiInterface::ResetWiFi() noexcept
 	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
 
-#if defined(DUET3MINI)
-	for (Pin p : WiFiUartSercomPins)
-	{
-		pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
-	}
-#else
+#if !defined(SAME5x)
 	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
 	pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 #endif
@@ -2074,24 +2084,14 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 
 	if (external)
 	{
-#if defined(DUET3MINI)
-		for (Pin p : WiFiUartSercomPins)
-		{
-			pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
-		}
-#else
+#if !defined(DUET3MINI)
 		pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
 		pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 #endif
 	}
 	else
 	{
-#if defined(DUET3MINI)
-		for (Pin p : WiFiUartSercomPins)
-		{
-			SetPinFunction(p, WiFiUartSercomPinsMode);
-		}
-#elif !defined(__LPC17xx__)
+#if !SAME5x && !defined(__LPC17xx__)
 		ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to the UART
 #endif
 	}
