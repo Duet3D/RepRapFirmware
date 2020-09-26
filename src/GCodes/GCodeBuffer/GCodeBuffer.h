@@ -135,7 +135,6 @@ public:
 
 #if HAS_LINUX_INTERFACE
 	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
-	void FinishedBinaryMode() noexcept { isBinaryBuffer = false; }
 
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 	void SetFileFinished(bool error) noexcept;					// Mark the last file as finished
@@ -143,9 +142,10 @@ public:
 
 	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
 	bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
-	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }	// Indicates if a macro file is being requested
-	const char *GetRequestedMacroFile(bool &fromCode) const noexcept;		// Return requested macro file or nullptr if none
-	void MacroRequestSent() noexcept { requestedMacroFile.Clear(); }		// Called when a macro file request has been sent
+	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }		// Indicates if a macro file is being requested
+	const char *GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
+	bool IsMacroFromCode() const noexcept { return machineState->isMacroFromCode; }	// Returns if the macro was requested from a code
+	void MacroRequestSent() noexcept { requestedMacroFile.Clear(); }	// Called when a macro file request has been sent
 	void ResolveMacroRequest(bool hadError) noexcept;			// Resolve the call waiting for a macro to be executed
 
 	bool IsAbortRequested() const noexcept;						// Is the cancellation of the current file requested?
@@ -251,7 +251,6 @@ private:
 #if HAS_LINUX_INTERFACE
 	String<MaxFilenameLength> requestedMacroFile;
 	uint8_t
-		isMacroFromCode : 1,		// Is the macro request from a code or generic event?
 		isWaitingForMacro : 1,		// Is this GB waiting in DoFileMacro?
 		macroError : 1,				// Whether the macro file could be opened or if an error occurred
 		abortFile : 1,				// Whether to abort the last file on the stack
@@ -297,7 +296,7 @@ inline bool GCodeBuffer::IsDoingFile() const noexcept
 inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 {
 #if HAS_LINUX_INTERFACE
-	return !IsBinary() && IsDoingFile();
+	return !isBinaryBuffer && IsDoingFile();
 #else
 	return IsDoingFile();
 #endif

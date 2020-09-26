@@ -527,7 +527,6 @@ void LinuxInterface::Init() noexcept
 #endif
 
 				// Deal with code channel requests
-				bool fromCode;
 				for (size_t i = 0; i < NumGCodeChannels; i++)
 				{
 					const GCodeChannel channel(i);
@@ -538,7 +537,8 @@ void LinuxInterface::Init() noexcept
 					{
 						if (gb->IsMacroRequestPending())
 						{
-							const char * const requestedMacroFile = gb->GetRequestedMacroFile(fromCode);
+							const char * const requestedMacroFile = gb->GetRequestedMacroFile();
+							bool fromCode = gb->IsMacroFromCode();
 							if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
 							{
 								if (reprap.Debug(moduleLinuxInterface))
@@ -648,16 +648,6 @@ void LinuxInterface::Init() noexcept
 			// Stop the print (if applicable)
 			printStopReason = StopPrintReason::abort;
 			printStopped = true;
-
-			// Invalidate the G-code buffers holding binary data (if applicable)
-			for (size_t i = 0; i < NumGCodeChannels; i++)
-			{
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(i));
-				if (gb->IsBinary() && gb->IsCompletelyIdle())
-				{
-					gb->Reset();
-				}
-			}
 
 			// Turn off all the heaters
 			reprap.GetHeat().SwitchOffAll(true);

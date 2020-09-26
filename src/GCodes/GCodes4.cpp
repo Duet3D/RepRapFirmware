@@ -1353,8 +1353,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 #if HAS_LINUX_INTERFACE
 	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next
-		SendSbcEvent(gb);
-		gb.FinishedBinaryMode();
+		if (!gb.MachineState().lastCodeFromSbc)
+		{
+			SendSbcEvent(gb);
+		}
 		gb.SetState(GCodeState::normal);
 		break;
 #endif

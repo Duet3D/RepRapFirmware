@@ -599,7 +599,6 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 		if (gb.IsFileFinished())
 		{
-			gb.Init();                                                              // mark buffer as empty
 			if (gb.MachineState().GetPrevious() == nullptr)
 			{
 				// Finished printing SD card file.
@@ -618,42 +617,19 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// Finished a macro or finished processing config.g
 				gb.MachineState().CloseFile();
 				CheckFinishedRunningConfigFile(gb);
-				const bool hadFileError = gb.MachineState().fileError;
+
+				// Pop the stack and notify the SBC that we have closed the file
 				Pop(gb, false);
 				gb.Init();
+				SendSbcEvent(gb);
 
-				// Prepare the response to the command that invoked the macro
-				GCodeResult rslt = GCodeResult::ok;
-				if (gb.GetState() == GCodeState::loadingFilament && hadFileError)
-				{
-					// Don't perform final filament assignment if the load macro could not be processed
-					gb.SetState(GCodeState::normal);
-				}
-
-				// Reset the GCodeBuffer to non-binary input if necessary, so that if we are in Marlin mode we will send an OK response
 				if (gb.GetState() == GCodeState::normal)
 				{
-					if (!gb.IsDoingFileMacro() && gb.GetNormalInput() != nullptr)
-					{
-						// Need to send a final response to the SBC if the request came from a code so it can pop its stack
-						SendSbcEvent(gb);
-						gb.FinishedBinaryMode();
-					}
-
 					UnlockAll(gb);
-					HandleReply(gb, rslt, reply.c_str());
+					HandleReply(gb, GCodeResult::ok, "");
+					CheckForDeferredPause(gb);
 				}
 			}
-		}
-		else if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-		{
-			gb.PutAndDecode("M600");
-			filamentChangePausePending = false;
-		}
-		else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-		{
-			gb.PutAndDecode("M226");
-			pausePending = false;
 		}
 		else
 		{
