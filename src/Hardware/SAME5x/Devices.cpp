@@ -12,6 +12,7 @@
 #include <AnalogOut.h>
 #include <TaskPriorities.h>
 
+#include <hal_gpio.h>
 #include <hal_usb_device.h>
 #include <peripheral_clk_config.h>
 
@@ -20,8 +21,32 @@ constexpr size_t AnalogInTaskStackWords = 300;
 static Task<AnalogInTaskStackWords> analogInTask;
 
 // Serial device support
-Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512);
-SerialCDC serialUSB(UsbVBusPin, 512, 512);
+void Serial0PortInit(Uart *) noexcept
+{
+	SetPinFunction(Serial0TxPin, Serial0PinFunction);
+	SetPinFunction(Serial0RxPin, Serial0PinFunction);
+}
+
+void Serial0PortDeinit(Uart *) noexcept
+{
+	pinMode(Serial0TxPin, INPUT_PULLUP);
+	pinMode(Serial0RxPin, INPUT_PULLUP);
+}
+
+void Serial1PortInit(Uart *) noexcept
+{
+	SetPinFunction(Serial1TxPin, Serial1PinFunction);
+	SetPinFunction(Serial1RxPin, Serial1PinFunction);
+}
+
+void Serial1PortDeinit(Uart *) noexcept
+{
+	pinMode(Serial1TxPin, INPUT_PULLUP);
+	pinMode(Serial1RxPin, INPUT_PULLUP);
+}
+
+Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
+Uart serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
 
 # if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
 #  error SERIAL0_ISRn not defined
@@ -41,6 +66,27 @@ void SERIAL0_ISR3() noexcept
 {
 	serialUart0.Interrupt3();
 }
+
+# if !defined(SERIAL1_ISR0) || !defined(SERIAL1_ISR2) || !defined(SERIAL1_ISR3)
+#  error SERIAL1_ISRn not defined
+# endif
+
+void SERIAL1_ISR0() noexcept
+{
+	serialUart1.Interrupt0();
+}
+
+void SERIAL1_ISR2() noexcept
+{
+	serialUart1.Interrupt2();
+}
+
+void SERIAL1_ISR3() noexcept
+{
+	serialUart1.Interrupt3();
+}
+
+SerialCDC serialUSB(UsbVBusPin, 512, 512);
 
 static void UsbInit() noexcept
 {
@@ -110,21 +156,12 @@ static void SdhcInit() noexcept
 #endif
 }
 
-// Serial interface
-static void SerialInit() noexcept
-{
-	SetPinFunction(Serial0TxPin, Serial0PinFunction);
-	SetPinFunction(Serial0RxPin, Serial0PinFunction);
-	// We don't make the init call here, that's done by the GCodes module
-}
-
 void DeviceInit() noexcept
 {
 	// Ensure the Ethernet PHY or WiFi module is held reset
 	pinMode(EthernetPhyResetPin, OUTPUT_LOW);
 
 	UsbInit();
-	SerialInit();
 	SdhcInit();
 
 	AnalogIn::Init(FirstAdcDmaChannel, DmacPrioAdcTx, DmacPrioAdcRx);

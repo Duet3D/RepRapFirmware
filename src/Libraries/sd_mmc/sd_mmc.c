@@ -53,10 +53,6 @@
 #include "sd_mmc.h"
 #include "conf_sd_mmc.h"
 
-#if defined(SAME5x) && SAME5x
-# include <peripheral_clk_config.h>
-#endif
-
 /**
  * \ingroup sd_mmc_stack
  * \defgroup sd_mmc_stack_internal Implementation of SD/MMC/SDIO Stack
@@ -105,7 +101,7 @@ struct DriverInterface
 
 #if (SD_MMC_HSMCI_MEM_CNT != 0)
 
-# ifdef __SAME54P20A__
+# if SAME5x
 
 #  include <Sdhc.h>
 

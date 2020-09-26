@@ -1746,7 +1746,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	}
 
 	// Show the current error codes
-	MessageF(mtype, "Error status: 0x02%" PRIx32 "\n", errorCodeBits);		// we only use the bottom 5 bits at present, so print just 2 bytes
+	MessageF(mtype, "Error status: 0x%02" PRIx32 "\n", errorCodeBits);		// we only use the bottom 5 bits at present, so print just 2 bytes
 
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
@@ -3577,6 +3577,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 #endif
 }
 
+// Set the board type. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
 void Platform::SetBoardType(BoardType bt) noexcept
 {
 	if (bt == BoardType::Auto)
@@ -3584,23 +3585,22 @@ void Platform::SetBoardType(BoardType bt) noexcept
 #if defined(DUET3MINI_V02)
 		// Test whether this is a WiFi or an Ethernet board. Currently we do this based on the processor type.
 		const uint16_t deviceId = DSU->DID.reg >> 16;
-		board = (deviceId == 0x6184)						// if SAME54P20A
+		board = (deviceId == 0x6184)							// if SAME54P20A
 				? BoardType::Duet3Mini_Ethernet
-				: (deviceId == 0x6006)						// SAMD51P20A rev D
+				: (deviceId == 0x6006)							// SAMD51P20A rev D
 				  ? BoardType::Duet3Mini_WiFi
 					: BoardType::Duet3Mini_Unknown;
 #elif defined(DUET3MINI_V04)
-		// Test whether this is a WiFi or an Ethernet board by testing for a poulldown resistor
-		//TODO
-		board = (qq)						// if SAME54P20A
-				? BoardType::Duet3Mini_Ethernet
-				: (qq)						// SAMD51P20A rev D
-				  ? BoardType::Duet3Mini_WiFi
-					: BoardType::Duet3Mini_Unknown;
+		// Test whether this is a WiFi or an Ethernet board by testing for a pulldown resistor on Dir1
+		pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
+		delayMicroseconds(20);									// give the pullup resistor time to work
+		board = (digitalRead(DIRECTION_PINS[1]))				// if SAME54P20A
+					? BoardType::Duet3Mini_WiFi
+						: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3)
 		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but won't on v1.01 boards
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
-		delayMicroseconds(20);										// give the pullup resistor time to work
+		delayMicroseconds(20);									// give the pullup resistor time to work
 		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_v101 : BoardType::Duet3_v06_100;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
@@ -4345,7 +4345,7 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 		{
 			return GCodeResult::error;
 		}
-		const PwmFrequency freq = (gb.Seen('F')) ? gb.GetPwmFrequency() : DefaultPinWritePwmFreq;
+		const PwmFrequency freq = (gb.Seen('Q') || gb.Seen('F')) ? gb.GetPwmFrequency() : DefaultPinWritePwmFreq;
 		extrusionAncilliaryPwmPort.SetFrequency(freq);
 	}
 	if (gb.Seen('S'))

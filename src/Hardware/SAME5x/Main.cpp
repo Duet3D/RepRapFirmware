@@ -1,4 +1,6 @@
 #include <CoreIO.h>
+#include <hri_oscctrl_e54.h>
+#include <hri_gclk_e54.h>
 
 void AppInit() noexcept
 {

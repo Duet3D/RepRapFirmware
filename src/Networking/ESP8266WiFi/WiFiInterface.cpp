@@ -94,11 +94,32 @@ const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
 
-// Forward declarations of static functions
+#if SAME5x
+
+void SerialWiFiPortInit(Uart*) noexcept
+{
+	for (Pin p : WiFiUartSercomPins)
+	{
+		SetPinFunction(p, WiFiUartSercomPinsMode);
+	}
+}
+
+void SerialWiFiPortDeinit(Uart*) noexcept
+{
+	for (Pin p : WiFiUartSercomPins)
+	{
+		pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
+	}
+}
+
+#endif
+
+// Static functions
 static inline void DisableSpi() noexcept
 {
 #if SAME5x
-	hri_sercomspi_clear_CTRLA_ENABLE_bit(WiFiSpiSercom);
+	WiFiSpiSercom->SPI.CTRLA.reg &= ~SERCOM_SPI_CTRLA_ENABLE;
+	while (WiFiSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
 #else
 	spi_disable(ESP_SPI);
 #endif
@@ -107,7 +128,8 @@ static inline void DisableSpi() noexcept
 static inline void EnableSpi()
 {
 #if SAME5x
-	hri_sercomspi_set_CTRLA_ENABLE_bit(WiFiSpiSercom);
+	WiFiSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_ENABLE;
+	while (WiFiSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
 #else
 	spi_enable(ESP_SPI);
 #endif
@@ -117,10 +139,12 @@ static inline void EnableSpi()
 static inline void ResetSpi()
 {
 #if SAME5x
-	hri_sercomspi_set_CTRLA_SWRST_bit(WiFiSpiSercom);
+	WiFiSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_SWRST;
+	while (WiFiSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_SWRST) { };
 	WiFiSpiSercom->SPI.CTRLA.reg = SERCOM_SPI_CTRLA_CPHA | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_MODE(2);
-	hri_sercomspi_write_CTRLB_reg(WiFiSpiSercom, SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN);
-	hri_sercomspi_write_CTRLC_reg(WiFiSpiSercom, SERCOM_SPI_CTRLC_DATA32B);
+	WiFiSpiSercom->SPI.CTRLB.reg = SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN;
+	while (WiFiSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_MASK) { };
+	WiFiSpiSercom->SPI.CTRLC.reg = SERCOM_SPI_CTRLC_DATA32B;
 #else
 	spi_reset(ESP_SPI);				// this clears the transmit and receive registers and puts the SPI into slave mode
 #endif
@@ -233,7 +257,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	strcpy(wiFiServerVersion, "(unknown)");
 
 #ifdef DUET3MINI
-	SerialWiFiDevice = new Uart(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512);
+	SerialWiFiDevice = new Uart(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
 	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
 #else
 	SERIAL_WIFI_DEVICE.setInterruptPriority(NvicPriorityWiFiUart);
@@ -1990,12 +2014,7 @@ void WiFiInterface::StartWiFi() noexcept
 	digitalWrite(EspEnablePin, true);
 #endif
 
-#if SAME5x
-	for (Pin p : WiFiUartSercomPins)
-	{
-		SetPinFunction(p, WiFiUartSercomPinsMode);
-	}
-#elif !defined(__LPC17xx__)
+#if !SAME5x && !defined(__LPC17xx__)
 	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
 #endif
 	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
@@ -2013,12 +2032,7 @@ void WiFiInterface::ResetWiFi() noexcept
 	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
 
-#if defined(DUET3MINI)
-	for (Pin p : WiFiUartSercomPins)
-	{
-		pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
-	}
-#else
+#if !defined(SAME5x)
 	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
 	pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 #endif
@@ -2070,24 +2084,14 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 
 	if (external)
 	{
-#if defined(DUET3MINI)
-		for (Pin p : WiFiUartSercomPins)
-		{
-			pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
-		}
-#else
+#if !defined(DUET3MINI)
 		pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
 		pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 #endif
 	}
 	else
 	{
-#if defined(DUET3MINI)
-		for (Pin p : WiFiUartSercomPins)
-		{
-			SetPinFunction(p, WiFiUartSercomPinsMode);
-		}
-#elif !defined(__LPC17xx__)
+#if !SAME5x && !defined(__LPC17xx__)
 		ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to the UART
 #endif
 	}

@@ -307,7 +307,8 @@ static void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTrans
 #if SAME5x
 	SbcSpiSercom->SPI.INTFLAG.reg = 0xFF;			// clear any pending interrupts
 	SbcSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_SSL;	// enable the start of transfer (SS low) interrupt
-	hri_sercomspi_set_CTRLA_ENABLE_bit(SbcSpiSercom);
+	SbcSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_ENABLE;
+	while (SbcSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
 #else
 	spi_enable(SBC_SPI);
 
@@ -330,7 +331,8 @@ void disable_spi() noexcept
 
 	// Disable SPI
 #if SAME5x
-	hri_sercomspi_clear_CTRLA_ENABLE_bit(SbcSpiSercom);
+	SbcSpiSercom->SPI.CTRLA.reg &= ~SERCOM_SPI_CTRLA_ENABLE;
+	while (SbcSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
 #else
 	spi_disable(SBC_SPI);
 #endif
@@ -432,11 +434,13 @@ void DataTransfer::Init() noexcept
 	Serial::EnableSercomClock(SbcSpiSercomNumber);
 	spi_dma_disable();
 
-	hri_sercomspi_set_CTRLA_SWRST_bit(SbcSpiSercom);
+	SbcSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_SWRST;
+	while (SbcSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_SWRST) { };
 	SbcSpiSercom->SPI.CTRLA.reg = SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_MODE(2);
-	hri_sercomspi_write_CTRLB_reg(SbcSpiSercom, SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN);
+	SbcSpiSercom->SPI.CTRLB.reg = SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN;
+	while (SbcSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_MASK) { };
 # if USE_32BIT_TRANSFERS
-	hri_sercomspi_write_CTRLC_reg(SbcSpiSercom, SERCOM_SPI_CTRLC_DATA32B);
+	SbcSpiSercom->SPI.CTRLC.reg = SERCOM_SPI_CTRLC_DATA32B;
 # else
 	hri_sercomspi_write_CTRLC_reg(SbcSpiSercom, 0);
 # endif

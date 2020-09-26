@@ -317,6 +317,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #endif
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::none },
+	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetNewToolNumber()),			ObjectModelEntryFlags::live },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
@@ -325,7 +326,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF(&restorePointsArrayDescriptor),				ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
-	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((millis64()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
+	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((context.GetStartMillis()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 
 	// 4. MachineModel.state.beep
 	{ "duration",				OBJECT_MODEL_FUNC((int32_t)self->beepDuration),							ObjectModelEntryFlags::none },
@@ -376,7 +377,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																		// directories
 #endif
 	25,																		// limits
-	14 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
+	15 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
 	2,																		// state.beep
 	6,																		// state.messageBox
 	10 + 2 * HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE		// seqs

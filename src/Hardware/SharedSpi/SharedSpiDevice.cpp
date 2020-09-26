@@ -13,6 +13,7 @@
 # include <DmacManager.h>
 # include <Serial.h>
 # include <peripheral_clk_config.h>
+# include <hri_sercom_e54.h>
 #elif USART_SPI
 # include <usart/usart.h>
 #else
