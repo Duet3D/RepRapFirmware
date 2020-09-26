@@ -229,7 +229,7 @@ constexpr Pin VssaSensePin = PortBPin(4);
 constexpr Pin VrefSensePin = PortBPin(5);
 
 constexpr float DefaultThermistorSeriesR = 2200.0;							// Thermistor series resistor value in ohms
-constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / ARRAY_SIZE(TEMP_SENSE_PINS)) * 4700.0/((DefaultThermistorSeriesR / ARRAY_SIZE(TEMP_SENSE_PINS)) + 4700.0);
+constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
 																			// there are 3 temperature sensing channels and a 4K7 load resistor
 #if defined(DUET3MINI_V04)
 constexpr float VrefSeriesR = 27.0;
