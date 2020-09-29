@@ -188,17 +188,8 @@ constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] =
 	PortCPin(29), PortCPin(30), PortCPin(31), PortCPin(27), PortAPin(18)	// DueX5
 };
 
-// Default thermistor parameters
-constexpr float BED_R25 = 100000.0;
-constexpr float BED_BETA = 3988.0;
-constexpr float BED_SHC = 0.0;
-constexpr float EXT_R25 = 100000.0;
-constexpr float EXT_BETA = 4388.0;
-constexpr float EXT_SHC = 0.0;
-
 // Thermistor series resistor value in Ohms
 constexpr float DefaultThermistorSeriesR = 4700.0;
-constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 8;		// there are 8 temperature sensing channels
 
 // Digital pins the 31855s have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] =

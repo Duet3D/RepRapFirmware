@@ -188,17 +188,11 @@ constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortAPin(20), PortCPin(13
 constexpr Pin VssaSensePin = PortAPin(19);
 constexpr Pin VrefSensePin = PortBPin(1);
 
-// Default thermistor parameters - on PCCB we default both thermistors to the same parameters
-constexpr float BED_R25 = 100000.0;
-constexpr float BED_BETA = 4388.0;
-constexpr float BED_SHC = 0.0;
-constexpr float EXT_R25 = 100000.0;
-constexpr float EXT_BETA = 4388.0;
-constexpr float EXT_SHC = 0.0;
-
 // Thermistor series resistor value in Ohms
 constexpr float DefaultThermistorSeriesR = 2200.0;
-constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 2;		// there are 2 temperature sensing channels
+constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
+																			// there are 2 temperature sensing channels and a 4K7 load resistor
+constexpr float VrefSeriesR = 15.0;
 
 // Number of SPI temperature sensors to support
 constexpr size_t MaxSpiTempSensors = 1;		//TODO which SPI channels does PCCB route to the DueX?
