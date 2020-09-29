@@ -1,3 +1,27 @@
+RepRapFirmware 3.2-beta2 (in preparation)
+========================
+
+Upgrade notes: none since 3.2-beta1
+
+New features/changed behaviour:
+- M571 command accepts Q as an alternative to F for the PWM frequency
+- Any attempt to use G28 within a homing file now results in a specific error message
+- Supports Duet 3 Mini version 0.4 prototypes. There are separate builds for version 0.2 and version 0.4 prototypes.
+- Supports ST7567-based 12864 displays on Duet Maestro and Duet WiFi (thanks to SchmartMaker for writing the ST7567 driver code)
+- Supports PanelDue 3.2 better, in particular updating of displayed data while waiting for heating etc.
+- Object model variable boards[n] for expansion boards now includes the maxMotors value
+- M584 commands are now checked for out-of-range driver numbers
+
+Object model changes:
+- Added state.msUpTime. This is the milliseconds part of upTime. When using the HTTP rr_model call or the M409 command, if the response includes both state.upTime and state.msUpTime then these two values both relate to the same instant when the command started searching the object model.
+
+Bug fixes:
+- G2 and G3 commands with R parameter always drew the longer of the two possible arcs. Now they draw the shorter one if the R parameter is positive, or the longer one if it is negative.
+- Duet 3 Mini only: certain types of error accessing the SD card would cause the firmware to reset due to "Stuck in spin loop".
+- The Error Status word was incorrectly prefixed by 0x02 in beta1 instead of just 0x
+- If M918 was run multiple times, available RAM was lost because of a memory leak
+- [Duet 2 or 3 with attached SBC only] The height map parameters passed by the SBC were not range-checked
+
 RepRapFirmware 3.2-beta1
 ========================
 
