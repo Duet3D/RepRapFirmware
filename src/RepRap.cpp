@@ -607,12 +607,12 @@ bool RepRap::RunStartupFile(const char *filename) noexcept
 	bool rslt = gCodes->RunConfigFile(filename);
 	if (rslt)
 	{
-		platform->MessageF(UsbMessage, "Executing %s...", filename);
+		platform->MessageF(UsbMessage, "Executing %s... ", filename);
 		do
 		{
 			// GCodes::Spin will process the macro file and ensure IsDaemonBusy returns false when it's done
 			Spin();
-		} while (gCodes->IsDaemonBusy());
+		} while (gCodes->IsTriggerBusy());
 		platform->Message(UsbMessage, "Done!\n");
 	}
 	return rslt;

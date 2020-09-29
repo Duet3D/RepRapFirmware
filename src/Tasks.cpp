@@ -292,6 +292,11 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 	p.MessageF(mtype, "\n");
 }
 
+TaskHandle Tasks::GetMainTaskHandle() noexcept
+{
+	return mainTask.GetHandle();
+}
+
 const Mutex *Tasks::GetI2CMutex() noexcept
 {
 	return &i2cMutex;

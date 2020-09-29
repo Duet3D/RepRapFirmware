@@ -296,7 +296,7 @@ inline bool GCodeBuffer::IsDoingFile() const noexcept
 inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 {
 #if HAS_LINUX_INTERFACE
-	return !isBinaryBuffer && IsDoingFile();
+	return !IsBinary() && IsDoingFile();
 #else
 	return IsDoingFile();
 #endif

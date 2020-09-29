@@ -33,6 +33,7 @@
 #include "Scanner.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"
+#include "Tasks.h"
 #include "Tools/Tool.h"
 #include "Endstops/ZProbe.h"
 
@@ -367,8 +368,8 @@ bool GCodes::RunConfigFile(const char* fileName) noexcept
 	return runningConfigFile;
 }
 
-// Return true if the daemon is busy running config.g or a trigger file
-bool GCodes::IsDaemonBusy() const noexcept
+// Return true if the trigger G-code buffer is busy running config.g or a trigger file
+bool GCodes::IsTriggerBusy() const noexcept
 {
 	return triggerGCode->IsDoingFile();
 }
@@ -417,6 +418,12 @@ void GCodes::Spin() noexcept
 		return;
 	}
 #endif
+
+	if (updateUserPosition)
+	{
+		UpdateCurrentUserPosition();
+		updateUserPosition = false;
+	}
 
 	CheckTriggers();
 	CheckHeaterFault();
@@ -497,12 +504,6 @@ void GCodes::Spin() noexcept
 	}
 #endif
 
-	if (updateUserPosition)
-	{
-		UpdateCurrentUserPosition();
-		updateUserPosition = false;
-	}
-
 	// Check if we need to display a warning
 	const uint32_t now = millis();
 	if (now - lastWarningMillis >= MinimumWarningInterval)
@@ -551,7 +552,6 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	}
 	else if (gb.IsExecuting())
 	{
-		// Some codes, in particular for CAN boards, may need a lot of time before they return. Don't block the GB so long
 		gb.SetFinished(ActOnCode(gb, reply));
 	}
 	else if (gb.IsDoingFile())
@@ -791,7 +791,7 @@ void GCodes::CheckTriggers() noexcept
 			triggersPending.ClearBit(lowestTriggerPending);			// clear the trigger
 			DoEmergencyStop();
 		}
-		else if (!IsDaemonBusy() && triggerGCode->GetState() == GCodeState::normal)	// if we are not already executing a trigger or config.g
+		else if (!IsTriggerBusy() && triggerGCode->GetState() == GCodeState::normal)	// if we are not already executing a trigger or config.g
 		{
 			if (lowestTriggerPending == 1)
 			{
@@ -1498,7 +1498,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 
 	gb.MotionStopped();								// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
-	if (TaskBase::GetCallerTaskHandle() == reprap.GetMainTaskHandle())
+	if (TaskBase::GetCallerTaskHandle() == Tasks::GetMainTaskHandle())
 	{
 		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
 		UpdateCurrentUserPosition();

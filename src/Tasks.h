@@ -15,6 +15,7 @@
 namespace Tasks
 {
 	void Diagnostics(MessageType mtype) noexcept;
+	TaskHandle GetMainTaskHandle() noexcept;
 	uint32_t GetNeverUsedRam() noexcept;
 	const Mutex *GetI2CMutex() noexcept;
 	const Mutex *GetSysDirMutex() noexcept;

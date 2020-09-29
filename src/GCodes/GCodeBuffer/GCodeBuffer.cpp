@@ -21,7 +21,6 @@
 #include <Platform.h>
 
 // Macros to reduce the amount of explicit conditional compilation in this file
-
 #if HAS_LINUX_INTERFACE
 
 # define PARSER_OPERATION(_x)	((isBinaryBuffer) ? (binaryParser._x) : (stringParser._x))
@@ -96,7 +95,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()),
 #if HAS_LINUX_INTERFACE
-	  isBinaryBuffer(false),
+	  isWaitingForMacro(false), isBinaryBuffer(false),
 #endif
 	  timerRunning(false), motionCommanded(false)
 {
@@ -118,9 +117,11 @@ void GCodeBuffer::Reset() noexcept
 #endif
 
 	while (PopState(false)) { }
+
 #if HAS_LINUX_INTERFACE
 	requestedMacroFile.Clear();
-	isBinaryBuffer = isWaitingForMacro = abortFile = abortAllFiles = invalidated = false;
+	isWaitingForMacro = abortFile = abortAllFiles = invalidated = false;
+	isBinaryBuffer = false;
 	machineState->lastCodeFromSbc = machineState->isMacroFromCode = false;
 #endif
 	Init();
@@ -215,7 +216,8 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 bool GCodeBuffer::Put(char c) noexcept
 {
 #if HAS_LINUX_INTERFACE
-	isBinaryBuffer = machineState->lastCodeFromSbc = true;
+	machineState->lastCodeFromSbc = true;
+	isBinaryBuffer = true;
 #endif
 	return stringParser.Put(c);
 }
@@ -237,7 +239,8 @@ bool GCodeBuffer::CheckMetaCommand(const StringRef& reply)
 
 void GCodeBuffer::PutAndDecode(const char *str, size_t len, bool isBinary) noexcept
 {
-	isBinaryBuffer = machineState->lastCodeFromSbc = isBinary;
+	machineState->lastCodeFromSbc = isBinary;
+	isBinaryBuffer = isBinary;
 	if (isBinary)
 	{
 		binaryParser.Put(str, len);
@@ -261,7 +264,8 @@ void GCodeBuffer::PutAndDecode(const char *str, size_t len) noexcept
 void GCodeBuffer::PutAndDecode(const char *str) noexcept
 {
 #if HAS_LINUX_INTERFACE
-	isBinaryBuffer = machineState->lastCodeFromSbc = false;
+	machineState->lastCodeFromSbc = false;
+	isBinaryBuffer = false;
 #endif
 	stringParser.PutAndDecode(str);
 }
@@ -794,7 +798,7 @@ void GCodeBuffer::SetPrintFinished() noexcept
 // This is only called when using the Linux interface and returns if the macro file could be opened
 bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 {
-	if (!reprap.IsProcessingConfig() && !reprap.GetLinuxInterface().IsConnected())
+	if (!reprap.GetLinuxInterface().IsConnected())
 	{
 		// Don't wait for a macro file if no SBC is connected
 		return false;
@@ -805,7 +809,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	abortFile = abortAllFiles = false;
 
 	isWaitingForMacro = true;
-	if (!macroSemaphore.Take(reprap.IsProcessingConfig() ? Mutex::TimeoutUnlimited : SpiConnectionTimeout))
+	if (!macroSemaphore.Take(SpiConnectionTimeout))
 	{
 		isWaitingForMacro = false;
 		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to get macro response within %" PRIu32 "ms from SBC (channel %s)\n", SpiConnectionTimeout, GetChannel().ToString());
