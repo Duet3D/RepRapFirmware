@@ -197,6 +197,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					reply.printf("Homing file %s not found", nextHomingFileName.c_str());
 					stateMachineResult = GCodeResult::error;
+					toBeHomed.Clear();
 					gb.SetState(GCodeState::normal);
 				}
 			}
@@ -211,6 +212,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				reply.copy("Homing failed");
 				stateMachineResult = GCodeResult::error;
+				toBeHomed.Clear();
 				gb.SetState(GCodeState::normal);
 			}
 			else

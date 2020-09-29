@@ -2133,7 +2133,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		}
 
 		float hDivD = sqrtf(hSquared/dSquared);
-		if (clockwise)
+
+		// There are two possible positions for the arc centre, giving a short arc (less than 180deg) or a long arc (more than 180deg).
+		// According to https://www.cnccookbook.com/cnc-g-code-arc-circle-g02-g03/ we should choose the shorter arc if the radius is positive, the longer one if it is negative.
+		// If the arc is clockwise then a positive value of h/d gives the smaller arc. If the arc is anticlockwise then it's the other way round.
+		if ((clockwise && rParam < 0.0) || (!clockwise && rParam > 0.0))
 		{
 			hDivD = -hDivD;
 		}
@@ -2670,6 +2674,13 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCode
 		return rolHome;
 	}
 #endif
+
+	// We have the movement lock so we have exclusive access to the homing flags
+	if (toBeHomed.IsNonEmpty())
+	{
+		reply.copy("G28 may not be used within a homing file");
+		return GCodeResult::error;
+	}
 
 	// Find out which axes we have been asked to home
 	toBeHomed.Clear();
