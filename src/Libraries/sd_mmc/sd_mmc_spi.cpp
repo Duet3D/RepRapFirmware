@@ -349,7 +349,7 @@ void sd_mmc_spi_init(const Pin csPins[SD_MMC_SPI_MEM_CNT]) noexcept
 
 // Note, every call to sd_mmc_spi_select_device must be matched to a call to sd_mmc_spi_deselect_device so that the SPI mutex gets released!
 // Unfortunately, sd_mmc.c calls this more than one without deselecting it in between. So check whether it is already selected.
-void sd_mmc_spi_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept
+bool sd_mmc_spi_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept
 {
 	UNUSED(bus_width);
 	UNUSED(high_speed);
@@ -367,6 +367,7 @@ void sd_mmc_spi_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, b
 		currentSpiClient->Select();
 		delayMicroseconds(1);
 	}
+	return true;
 }
 
 void sd_mmc_spi_deselect_device(uint8_t slot) noexcept

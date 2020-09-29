@@ -163,9 +163,9 @@ constexpr uint8_t TMC22xxSercomNumber = 1;
 Sercom * const SERCOM_TMC22xx = SERCOM1;
 constexpr IRQn TMC22xx_SERCOM_IRQn = SERCOM1_0_IRQn;
 constexpr Pin TMC22xxSercomTxPin = PortAPin(0);
-constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::C;
+constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMC22xxSercomRxPin = PortAPin(1);
-constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::C;
+constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::D;
 constexpr uint8_t TMC22xxSercomRxPad = 1;
 constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 #endif

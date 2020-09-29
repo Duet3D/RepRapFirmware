@@ -78,7 +78,7 @@ typedef void (*driverIdleFunc_t)(uint32_t, uint32_t);
 
 struct DriverInterface
 {
-	void (*select_device)(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed);
+	bool (*select_device)(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed);
 	void (*deselect_device)(uint8_t slot);
 	uint8_t (*get_bus_width)(uint8_t slot);
 	bool (*is_high_speed_capable)(void);
@@ -115,15 +115,25 @@ driverIdleFunc_t hsmci_set_idle_func(driverIdleFunc_t func) noexcept
 
 #  include <hsmci/hsmci.h>
 
-bool hsmci_adtc_start_glue(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr) noexcept
+static bool hsmci_adtc_start_glue(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void *dmaAddr) noexcept
 {
 	return hsmci_adtc_start(cmd, arg, block_size, nb_block, dmaAddr != NULL);
+}
+
+static bool hsmci_select_device_glue(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept
+{
+	hsmci_select_device(slot, clock, bus_width, high_speed);
+	return true;
 }
 
 # endif
 
 static const struct DriverInterface hsmciInterface = {
+# ifdef __SAME54P20A__
 	.select_device = hsmci_select_device,
+#else
+	.select_device = hsmci_select_device_glue,
+#endif
 	.deselect_device = hsmci_deselect_device,
 	.get_bus_width = hsmci_get_bus_width,
 	.is_high_speed_capable = hsmci_is_high_speed_capable,
@@ -271,7 +281,7 @@ static bool sd_acmd51(void);
 //! \name Internal function to process the initialization and install
 //! @{
 static sd_mmc_err_t sd_mmc_select_slot(uint8_t slot);
-static void sd_mmc_configure_slot(void);
+static bool sd_mmc_configure_slot(void);
 static void sd_mmc_deselect_slot(void);
 static bool sd_mmc_spi_card_init(void);
 static bool sd_mmc_mci_card_init(void);
@@ -1324,9 +1334,9 @@ static sd_mmc_err_t sd_mmc_select_slot(uint8_t slot)
 /**
  * \brief Configures the driver with the selected card configuration
  */
-static void sd_mmc_configure_slot(void)
+static __attribute__((warn_unused_result)) bool sd_mmc_configure_slot(void)
 {
-	sd_mmc_card->iface->select_device(sd_mmc_card->slot, sd_mmc_card->clock, sd_mmc_card->bus_width, sd_mmc_card->high_speed);
+	return sd_mmc_card->iface->select_device(sd_mmc_card->slot, sd_mmc_card->clock, sd_mmc_card->bus_width, sd_mmc_card->high_speed);
 }
 
 /**
@@ -1425,8 +1435,7 @@ static bool sd_mmc_spi_card_init(void)
 		}
 	}
 	// Re-initialize the slot with the new speed
-	sd_mmc_configure_slot();
-	return true;
+	return sd_mmc_configure_slot();
 }
 
 /**
@@ -1453,20 +1462,25 @@ static bool sd_mmc_mci_card_init(void)
 	sd_mmc_card->iface->send_clock();
 
 	// CMD0 - Reset all cards to idle state.
-	if (!sd_mmc_card->iface->send_cmd(SDMMC_MCI_CMD0_GO_IDLE_STATE, 0)) {
+	if (!sd_mmc_card->iface->send_cmd(SDMMC_MCI_CMD0_GO_IDLE_STATE, 0))
+	{
 		return false;
 	}
-	if (!sd_cmd8(&v2)) {
+	if (!sd_cmd8(&v2))
+	{
 		return false;
 	}
 	// Try to get the SDIO card's operating condition
-	if (!sdio_op_cond()) {
+	if (!sdio_op_cond())
+	{
 		return false;
 	}
 
-	if (sd_mmc_card->type & CARD_TYPE_SD) {
+	if (sd_mmc_card->type & CARD_TYPE_SD)
+	{
 		// Try to get the SD card's operating condition
-		if (!sd_mci_op_cond(v2)) {
+		if (!sd_mci_op_cond(v2))
+		{
 			// It is not a SD card
 			sd_mmc_debug("Start MMC Install\n\r");
 			sd_mmc_card->type = CARD_TYPE_MMC;
@@ -1474,77 +1488,103 @@ static bool sd_mmc_mci_card_init(void)
 		}
 	}
 
-	if (sd_mmc_card->type & CARD_TYPE_SD) {
+	if (sd_mmc_card->type & CARD_TYPE_SD)
+	{
 		// SD MEMORY, Put the Card in Identify Mode
 		// Note: The CID is not used in this stack
-		if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD2_ALL_SEND_CID, 0)) {
+		if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD2_ALL_SEND_CID, 0))
+		{
 			return false;
 		}
 	}
 	// Ask the card to publish a new relative address (RCA).
-	if (!sd_mmc_card->iface->send_cmd(SD_CMD3_SEND_RELATIVE_ADDR, 0)) {
+	if (!sd_mmc_card->iface->send_cmd(SD_CMD3_SEND_RELATIVE_ADDR, 0))
+	{
 		return false;
 	}
 	sd_mmc_card->rca = (sd_mmc_card->iface->get_response() >> 16) & 0xFFFF;
 
 	// SD MEMORY, Get the Card-Specific Data
-	if (sd_mmc_card->type & CARD_TYPE_SD) {
-		if (!sd_mmc_cmd9_mci()) {
+	if (sd_mmc_card->type & CARD_TYPE_SD)
+	{
+		if (!sd_mmc_cmd9_mci())
+		{
 			return false;
 		}
 		sd_decode_csd();
 	}
 	// Select the and put it into Transfer Mode
-	if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD7_SELECT_CARD_CMD,
-			(uint32_t)sd_mmc_card->rca << 16)) {
+	if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD7_SELECT_CARD_CMD, (uint32_t)sd_mmc_card->rca << 16))
+	{
 		return false;
 	}
 	// SD MEMORY, Read the SCR to get card version
-	if (sd_mmc_card->type & CARD_TYPE_SD) {
-		if (!sd_acmd51()) {
+	if (sd_mmc_card->type & CARD_TYPE_SD)
+	{
+		if (!sd_acmd51())
+		{
 			return false;
 		}
 	}
-	if (IS_SDIO()) {
-		if (!sdio_get_max_speed()) {
+	if (IS_SDIO())
+	{
+		if (!sdio_get_max_speed())
+		{
 			return false;
 		}
 	}
 	if ((4 <= sd_mmc_card->iface->get_bus_width(sd_mmc_card->slot))) {
 		// TRY to enable 4-bit mode
-		if (IS_SDIO()) {
+		if (IS_SDIO())
+		{
 			if (!sdio_cmd52_set_bus_width()) {
 				return false;
 			}
 		}
-		if (sd_mmc_card->type & CARD_TYPE_SD) {
-			if (!sd_acmd6()) {
+		if (sd_mmc_card->type & CARD_TYPE_SD)
+		{
+			if (!sd_acmd6())
+			{
 				return false;
 			}
 		}
 		// Switch to selected bus mode
-		sd_mmc_configure_slot();
+		if (!sd_mmc_configure_slot())
+		{
+			return false;
+		}
 	}
-	if (sd_mmc_card->iface->is_high_speed_capable()) {
+	if (sd_mmc_card->iface->is_high_speed_capable())
+	{
 		// TRY to enable High-Speed Mode
-		if (IS_SDIO()) {
-			if (!sdio_cmd52_set_high_speed()) {
+		if (IS_SDIO())
+		{
+			if (!sdio_cmd52_set_high_speed())
+			{
 				return false;
 			}
 		}
-		if (sd_mmc_card->type & CARD_TYPE_SD) {
-			if (sd_mmc_card->version > CARD_VER_SD_1_0) {
-				if (!sd_cm6_set_high_speed()) {
+		if (sd_mmc_card->type & CARD_TYPE_SD)
+		{
+			if (sd_mmc_card->version > CARD_VER_SD_1_0)
+			{
+				if (!sd_cm6_set_high_speed())
+				{
 					return false;
 				}
 			}
 		}
 		// Valid new configuration
-		sd_mmc_configure_slot();
+		if (!sd_mmc_configure_slot())
+		{
+			return false;
+		}
 	}
 	// SD MEMORY, Set default block size
-	if (sd_mmc_card->type & CARD_TYPE_SD) {
-		if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD16_SET_BLOCKLEN, SD_MMC_BLOCK_SIZE)) {
+	if (sd_mmc_card->type & CARD_TYPE_SD)
+	{
+		if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD16_SET_BLOCKLEN, SD_MMC_BLOCK_SIZE))
+		{
 			return false;
 		}
 	}
@@ -1599,8 +1639,7 @@ static bool sd_mmc_spi_install_mmc(void)
 		return false;
 	}
 	// Re-initialize the slot with the new speed
-	sd_mmc_configure_slot();
-	return true;
+	return sd_mmc_configure_slot();
 }
 
 
@@ -1619,68 +1658,93 @@ static bool sd_mmc_mci_install_mmc(void)
 	uint8_t b_authorize_high_speed;
 
 	// CMD0 - Reset all cards to idle state.
-	if (!sd_mmc_card->iface->send_cmd(SDMMC_MCI_CMD0_GO_IDLE_STATE, 0)) {
+	if (!sd_mmc_card->iface->send_cmd(SDMMC_MCI_CMD0_GO_IDLE_STATE, 0))
+	{
 		return false;
 	}
 
-	if (!mmc_mci_op_cond()) {
+	if (!mmc_mci_op_cond())
+	{
 		return false;
 	}
 
 	// Put the Card in Identify Mode
 	// Note: The CID is not used in this stack
-	if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD2_ALL_SEND_CID, 0)) {
+	if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD2_ALL_SEND_CID, 0))
+	{
 		return false;
 	}
 	// Assign relative address to the card.
 	sd_mmc_card->rca = 1;
-	if (!sd_mmc_card->iface->send_cmd(MMC_CMD3_SET_RELATIVE_ADDR, (uint32_t)sd_mmc_card->rca << 16)) {
+	if (!sd_mmc_card->iface->send_cmd(MMC_CMD3_SET_RELATIVE_ADDR, (uint32_t)sd_mmc_card->rca << 16))
+	{
 		return false;
 	}
 	// Get the Card-Specific Data
-	if (!sd_mmc_cmd9_mci()) {
+	if (!sd_mmc_cmd9_mci())
+	{
 		return false;
 	}
 	mmc_decode_csd();
 	// Select the and put it into Transfer Mode
-	if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD7_SELECT_CARD_CMD, (uint32_t)sd_mmc_card->rca << 16)) {
+	if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD7_SELECT_CARD_CMD, (uint32_t)sd_mmc_card->rca << 16))
+	{
 		return false;
 	}
-	if (sd_mmc_card->version >= CARD_VER_MMC_4) {
+	if (sd_mmc_card->version >= CARD_VER_MMC_4)
+	{
 		// For MMC 4.0 Higher version
 		// Get EXT_CSD
-		if (!mmc_cmd8(&b_authorize_high_speed)) {
+		if (!mmc_cmd8(&b_authorize_high_speed))
+		{
 			return false;
 		}
-		if (4 <= sd_mmc_card->iface->get_bus_width(sd_mmc_card->slot)) {
+		if (4 <= sd_mmc_card->iface->get_bus_width(sd_mmc_card->slot))
+		{
 			// Enable more bus width
-			if (!mmc_cmd6_set_bus_width(sd_mmc_card->iface->get_bus_width(sd_mmc_card->slot))) {
+			if (!mmc_cmd6_set_bus_width(sd_mmc_card->iface->get_bus_width(sd_mmc_card->slot)))
+			{
 				return false;
 			}
 			// Re-initialize the slot with the bus width
-			sd_mmc_configure_slot();
+			if (!sd_mmc_configure_slot())
+			{
+				return false;
+			}
 		}
-		if (sd_mmc_card->iface->is_high_speed_capable() && b_authorize_high_speed) {
+		if (sd_mmc_card->iface->is_high_speed_capable() && b_authorize_high_speed)
+		{
 			// Enable HS
-			if (!mmc_cmd6_set_high_speed()) {
+			if (!mmc_cmd6_set_high_speed())
+			{
 				return false;
 			}
 			// Re-initialize the slot with the new speed
-			sd_mmc_configure_slot();
+			if (!sd_mmc_configure_slot())
+			{
+				return false;
+			}
 		}
-	} else {
+	}
+	else
+	{
 		// Re-initialize the slot with the new speed
-		sd_mmc_configure_slot();
+		if (!sd_mmc_configure_slot())
+		{
+			return false;
+		}
 	}
 
 	uint8_t retry = 10;
-	while (retry--) {
+	while (retry--)
+	{
 		// Retry is a WORKAROUND for no compliance card (Atmel Internal ref. MMC19):
-		// These cards seem not ready immediatly
+		// These cards seem not ready immediately
 		// after the end of busy of mmc_cmd6_set_high_speed()
 
 		// Set default block size
-		if (sd_mmc_card->iface->send_cmd(SDMMC_CMD16_SET_BLOCKLEN, SD_MMC_BLOCK_SIZE)) {
+		if (sd_mmc_card->iface->send_cmd(SDMMC_CMD16_SET_BLOCKLEN, SD_MMC_BLOCK_SIZE))
+		{
 			return true;
 		}
 	}

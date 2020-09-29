@@ -413,16 +413,15 @@ void Platform::Init() noexcept
 	// Deal with power first (we assume this doesn't depend on identifying the board type)
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
 
-	SetBoardType(BoardType::Auto);
-
+	// Make sure the on-board drivers are disabled
 #if defined(DUET_NG) || defined(PCCB_10) || defined(PCCB_08_X5)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
-#endif
-
-#if defined(DUET_M) || defined(PCCB_08) || defined(PCCB_08_X5) || defined(DUET3MINI)
-	// Make sure the on-board TMC22xx drivers are disabled
+#elif defined(DUET_M) || defined(PCCB_08) || defined(PCCB_08_X5) || defined(DUET3MINI)
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #endif
+
+	// Sort out which board we are running on (some firmware builds support more than one board variant)
+	SetBoardType(BoardType::Auto);
 
 #if SAME70
 	DmacManager::Init();

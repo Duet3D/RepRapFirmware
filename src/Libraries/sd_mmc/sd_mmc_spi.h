@@ -121,7 +121,7 @@ static __inline__ bool sd_mmc_spi_is_high_speed_capable(void) noexcept
  * \param bus_width  Bus width to use (1, 4 or 8)
  * \param high_speed true, to enable high speed mode
  */
-void sd_mmc_spi_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept;
+bool sd_mmc_spi_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept;
 
 /**
  * \brief Deselect a slot
