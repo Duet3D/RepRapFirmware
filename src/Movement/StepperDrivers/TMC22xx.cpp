@@ -1318,7 +1318,7 @@ void TmcDriverState::AbortTransfer() noexcept
 inline void TmcDriverState::SetUartMux() noexcept
 {
 #if TMC22xx_USE_SLAVEADDR
-	const bool newMuxState = ((driverNumber & 0x04) != 0);
+	const bool newMuxState = ((driverNumber & 0x04) == 0);		// Duet 3 Mini has the mux outputs swapped, so use == instead of !=
 	if (newMuxState == currentMuxState)
 	{
 		// A TMC2209 turns off its transmitter 4 bit times after the end of the last byte.
