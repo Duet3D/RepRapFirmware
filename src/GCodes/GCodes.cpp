@@ -623,10 +623,14 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.Init();
 				SendSbcEvent(gb);
 
+				// Send a final code response
 				if (gb.GetState() == GCodeState::normal)
 				{
 					UnlockAll(gb);
-					HandleReply(gb, GCodeResult::ok, "");
+					if (!gb.MachineState().lastCodeFromSbc || gb.MachineState().isMacroFromCode)
+					{
+						HandleReply(gb, GCodeResult::ok, "");
+					}
 					CheckForDeferredPause(gb);
 				}
 			}
@@ -1498,7 +1502,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 
 	gb.MotionStopped();								// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
-	if (TaskBase::GetCallerTaskHandle() == Tasks::GetMainTaskHandle())
+	if (RTOSIface::GetCurrentTask() == Tasks::GetMainTask())
 	{
 		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
 		UpdateCurrentUserPosition();
@@ -2579,6 +2583,10 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 		}
 		gb.MachineState().SetFileExecuting();
 		gb.StartNewFile();
+		if (gb.IsMacroEmpty())
+		{
+			gb.SetFileFinished(false);
+		}
 	}
 	else
 #endif
@@ -3418,7 +3426,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	if (gb.IsBinary())
 	{
 		MessageType type = gb.GetResponseMessageType();
-		if (rslt == GCodeResult::notFinished || gb.IsWaitingForMacro() ||
+		if (rslt == GCodeResult::notFinished || gb.HasStartedMacro() ||
 			(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 		{
 			if (reply[0] == 0)
@@ -3466,7 +3474,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	{
 	case Compatibility::Default:
 	case Compatibility::RepRapFirmware:
-		// DWC 2 expects a reply from every command even if it is just a newline, so don't suppress empty responses
+		// DWC expects a reply from every code, so append a newline if it is empty to prevent it from being suppressed
 		platform.MessageF(mt, "%s\n", reply);
 		break;
 

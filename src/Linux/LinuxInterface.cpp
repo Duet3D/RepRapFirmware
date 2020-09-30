@@ -120,7 +120,16 @@ void LinuxInterface::Init() noexcept
 				{
 					MutexLocker lock(codesMutex);
 
-					// Check if the code overlaps. If so, restart from the beginning
+					// Read the next code and check if the GB is waiting for a macro file
+					const CodeHeader *code = reinterpret_cast<const CodeHeader*>(transfer.ReadData(packet->length));
+					const GCodeChannel channel(code->channel);
+					GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+					if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
+					{
+						gb->ResolveMacroRequest(false, false);
+					}
+
+					// Check if the next code overlaps. If yes, restart from the beginning
 					if (txPointer + sizeof(BufferedCodeHeader) + packet->length > SpiCodeBufferSize)
 					{
 						if (rxPointer == txPointer)
@@ -138,17 +147,9 @@ void LinuxInterface::Init() noexcept
 					bufHeader->length = packet->length;
 					txPointer += sizeof(BufferedCodeHeader);
 
-					// Store the code content
-					memcpy(codeBuffer + txPointer, transfer.ReadData(packet->length), packet->length);
-					const CodeHeader *header = reinterpret_cast<const CodeHeader*>(codeBuffer + txPointer);
+					// Store the corresponding code
+					memcpy(codeBuffer + txPointer, code, packet->length);
 					txPointer += packet->length;
-
-					// Check if the GB is waiting for a macro file
-					GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(header->channel));
-					if (gb->IsWaitingForMacro())
-					{
-						gb->ResolveMacroRequest(false);
-					}
 					break;
 				}
 
@@ -253,7 +254,7 @@ void LinuxInterface::Init() noexcept
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 						if (gb->IsWaitingForMacro())
 						{
-							gb->ResolveMacroRequest(error);
+							gb->ResolveMacroRequest(error, true);
 
 							if (reprap.Debug(moduleLinuxInterface))
 							{
@@ -546,7 +547,7 @@ void LinuxInterface::Init() noexcept
 									reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 								}
 								gb->MacroRequestSent();
-								InvalidateBufferChannel(gb->GetChannel());
+								InvalidateBufferChannel(channel);
 							}
 						}
 						continue;
@@ -637,7 +638,7 @@ void LinuxInterface::Init() noexcept
 				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(i));
 				if (gb->IsWaitingForMacro())
 				{
-					gb->ResolveMacroRequest(true);
+					gb->ResolveMacroRequest(true, true);
 				}
 
 				MutexLocker locker(gb->mutex);
@@ -679,7 +680,7 @@ bool LinuxInterface::IsConnected() const noexcept
 bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
 	if (gb.IsInvalidated() ||
-		gb.IsWaitingForMacro() || gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
+		gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
 		(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 	{
 		// Don't process codes that are supposed to be suspended...

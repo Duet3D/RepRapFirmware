@@ -95,9 +95,12 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()),
 #if HAS_LINUX_INTERFACE
-	  isWaitingForMacro(false), isBinaryBuffer(false),
+	  isBinaryBuffer(false),
 #endif
 	  timerRunning(false), motionCommanded(false)
+#if HAS_LINUX_INTERFACE
+	  , isWaitingForMacro(false)
+#endif
 {
 	mutex.Create(((GCodeChannel)channel).ToString());
 	machineState->compatibility = c;
@@ -111,7 +114,6 @@ void GCodeBuffer::Reset() noexcept
 	if (isWaitingForMacro)
 	{
 		macroError = true;
-		isWaitingForMacro = false;
 		macroSemaphore.Give();
 	}
 #endif
@@ -120,7 +122,7 @@ void GCodeBuffer::Reset() noexcept
 
 #if HAS_LINUX_INTERFACE
 	requestedMacroFile.Clear();
-	isWaitingForMacro = abortFile = abortAllFiles = invalidated = false;
+	isWaitingForMacro = hasStartedMacro = abortFile = abortAllFiles = invalidated = false;
 	isBinaryBuffer = false;
 	machineState->lastCodeFromSbc = machineState->isMacroFromCode = false;
 #endif
@@ -216,8 +218,8 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 bool GCodeBuffer::Put(char c) noexcept
 {
 #if HAS_LINUX_INTERFACE
-	machineState->lastCodeFromSbc = true;
-	isBinaryBuffer = true;
+	machineState->lastCodeFromSbc = false;
+	isBinaryBuffer = false;
 #endif
 	return stringParser.Put(c);
 }
@@ -244,6 +246,7 @@ void GCodeBuffer::PutAndDecode(const char *str, size_t len, bool isBinary) noexc
 	if (isBinary)
 	{
 		binaryParser.Put(str, len);
+		hasStartedMacro = false;
 	}
 	else
 	{
@@ -804,24 +807,33 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 		return false;
 	}
 
+	// Request the macro file from the SBC
 	requestedMacroFile.copy(filename);
 	machineState->isMacroFromCode = fromCode;
-	abortFile = abortAllFiles = false;
-
+	hasStartedMacro = macroError = macroEmpty = false;
 	isWaitingForMacro = true;
+
+	// Wait for a response (but not forever)
 	if (!macroSemaphore.Take(SpiConnectionTimeout))
 	{
 		isWaitingForMacro = false;
 		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to get macro response within %" PRIu32 "ms from SBC (channel %s)\n", SpiConnectionTimeout, GetChannel().ToString());
 		return false;
 	}
-	return !macroError;
+
+	if (!macroError)
+	{
+		hasStartedMacro = true;
+		return true;
+	}
+	return false;
 }
 
-void GCodeBuffer::ResolveMacroRequest(bool hadError) noexcept
+void GCodeBuffer::ResolveMacroRequest(bool hadError, bool isEmpty) noexcept
 {
 	isWaitingForMacro = false;
 	macroError = hadError;
+	macroEmpty = isEmpty;
 	macroSemaphore.Give();
 }
 

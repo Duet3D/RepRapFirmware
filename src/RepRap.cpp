@@ -2720,6 +2720,10 @@ void RepRap::PrepareToLoadIap() noexcept
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
 	FilamentMonitor::Exit();				// stop the filament monitors generating interrupts, we may be about to overwrite them
 	fansManager->Exit();					// stop the fan tachos generating interrupts, we may be about to overwrite them
+	if (RTOSIface::GetCurrentTask() != Tasks::GetMainTask())
+	{
+		Tasks::TerminateMainTask();			// stop the main task if IAP is being written from another task
+	}
 
 #ifdef DUET_NG
 	DuetExpansion::Exit();					// stop the DueX polling task

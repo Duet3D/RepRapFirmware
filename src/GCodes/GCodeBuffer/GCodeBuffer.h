@@ -142,11 +142,13 @@ public:
 
 	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
 	bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
+	bool HasStartedMacro() const noexcept { return hasStartedMacro; }		// Has this GB just started a new macro file?
 	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }		// Indicates if a macro file is being requested
 	const char *GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
 	bool IsMacroFromCode() const noexcept { return machineState->isMacroFromCode; }	// Returns if the macro was requested from a code
 	void MacroRequestSent() noexcept { requestedMacroFile.Clear(); }	// Called when a macro file request has been sent
-	void ResolveMacroRequest(bool hadError) noexcept;			// Resolve the call waiting for a macro to be executed
+	void ResolveMacroRequest(bool hadError, bool isEmpty) noexcept;		// Resolve the call waiting for a macro to be executed
+	bool IsMacroEmpty() const noexcept { return macroEmpty; }			// Returns if the last opened macro file is empty
 
 	bool IsAbortRequested() const noexcept;						// Is the cancellation of the current file requested?
 	bool IsAbortAllRequested() const noexcept;					// Is the cancellation of all files being executed on this channel requested?
@@ -252,6 +254,8 @@ private:
 	String<MaxFilenameLength> requestedMacroFile;
 	uint8_t
 		isWaitingForMacro : 1,		// Is this GB waiting in DoFileMacro?
+		hasStartedMacro : 1,		// Whether the GB has just started a macro file
+		macroEmpty : 1,				// May be true if the macro file could be opened but it is empty
 		macroError : 1,				// Whether the macro file could be opened or if an error occurred
 		abortFile : 1,				// Whether to abort the last file on the stack
 		abortAllFiles : 1,			// Whether to abort all opened files
