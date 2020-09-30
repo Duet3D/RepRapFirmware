@@ -145,6 +145,7 @@ public:
 	bool IsDoingToolChange() const noexcept { return doingToolChange; }
 	bool IsHeatingUp() const noexcept;											// Return true if the SD card print is waiting for a heater to reach temperature
 	bool IsRunningConfigFile() const noexcept { return runningConfigFile; }
+	bool SawM501InConfigFile() const noexcept { return m501SeenInConfigFile; }
 
 	uint32_t GetLastDuration() const noexcept { return lastDuration; }			// The most recent print time or simulated time
 	float GetSimulationTime() const noexcept { return simulationTime; }
