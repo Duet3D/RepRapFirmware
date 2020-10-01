@@ -266,6 +266,8 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 
 	if (!seenX && !seenY && !seenR && !seenS && !seenP)
 	{
+		ReadLocker locker(reprap.GetMove().heightMapLock);
+
 		// Just print the existing grid parameters
 		if (defaultGrid.IsValid())
 		{
@@ -353,6 +355,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 		}
 	}
 
+	WriteLocker locker(reprap.GetMove().heightMapLock);
 	const bool ok = defaultGrid.Set(xValues, yValues, radius, spacings);
 	reprap.MoveUpdated();
 	if (ok)
@@ -396,17 +399,17 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
-#if HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
 		updateFileWhenSimulationComplete = updateFile && !reprap.UsingLinuxInterface();
-#else
+# else
 		updateFileWhenSimulationComplete = updateFile;
-#endif
+# endif
 		simulationMode = 1;
 		reprap.GetMove().Simulate(simulationMode);
 		reprap.GetPrintMonitor().StartingPrint(file.c_str());
-#if HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
 		if (!reprap.UsingLinuxInterface())
-#endif
+# endif
 		{
 			// If using a SBC, this is already called when the print file info is set
 			StartPrinting(true);

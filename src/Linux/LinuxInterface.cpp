@@ -12,7 +12,8 @@
 
 #include "GCodes/GCodeBuffer/ExpressionParser.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "GCodes/GCodes.h"
+#include "Heating/Heat.h"
+#include "Movement/Move.h"
 #include "Platform.h"
 #include "PrintMonitor.h"
 #include "Tools/Filament.h"
@@ -21,11 +22,29 @@
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Cache.h>
+#include <TaskPriorities.h>
 
 Mutex LinuxInterface::gcodeReplyMutex;
+Mutex LinuxInterface::codesMutex;
+
+#ifdef __LPC17xx__
+constexpr size_t LinuxTaskStackWords = 375;
+#elif defined(DEBUG)
+constexpr size_t LinuxTaskStackWords = 1000;			// needs to be enough to support rr_model
+#else
+constexpr size_t LinuxTaskStackWords = 600;				// needs to be enough to support rr_model
+#endif
+
+static Task<LinuxTaskStackWords> linuxTask;
+
+extern "C" [[noreturn]] void LinuxTaskStart(void * pvParameters) noexcept
+{
+	reprap.GetLinuxInterface().Task();
+}
 
 LinuxInterface::LinuxInterface() noexcept : wasConnected(false), numDisconnects(0),
-	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),
+	reportPause(false), reportPauseWritten(false), printStarted(false), printStopped(false),
+	rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),
 	iapWritePointer(IAP_IMAGE_START), gcodeReply(new OutputStack())
 {
 }
@@ -38,6 +57,7 @@ LinuxInterface::~LinuxInterface()
 void LinuxInterface::Init() noexcept
 {
 	gcodeReplyMutex.Create("LinuxReply");
+	codesMutex.Create("LinuxCodes");
 
 #if defined(DUET_NG)
 	// Make sure that the Wifi module if present is disabled. The ESP Reset pin is already forced low in Platform::Init();
@@ -45,16 +65,24 @@ void LinuxInterface::Init() noexcept
 #endif
 
 	transfer.Init();
+	linuxTask.Create(LinuxTaskStart, "Linux", nullptr, TaskPriority::SpinPriority);
+	transfer.SetLinuxTask(linuxTask.GetHandle());
 	transfer.StartNextTransfer();
 }
 
-void LinuxInterface::Spin() noexcept
+[[noreturn]] void LinuxInterface::Task() noexcept
 {
 	bool writingIap = false;
-	do
+	for (;;)
 	{
 		if (transfer.IsReady())
 		{
+			// Check if the connection state has changed
+			if (!wasConnected && !writingIap)
+			{
+				reprap.GetPlatform().Message(NetworkInfoMessage, "Connection to Linux established!\n");
+			}
+
 			// Process incoming packets
 			for (size_t i = 0; i < transfer.PacketsToRead(); i++)
 			{
@@ -71,7 +99,7 @@ void LinuxInterface::Spin() noexcept
 				if (packet->request >= (uint16_t)LinuxRequest::InvalidRequest)
 				{
 					REPORT_INTERNAL_ERROR;
-					return;
+					break;
 				}
 
 				bool packetAcknowledged = true;
@@ -85,12 +113,23 @@ void LinuxInterface::Spin() noexcept
 				// Reset the controller
 				case LinuxRequest::Reset:
 					SoftwareReset((uint16_t)SoftwareResetReason::user);
-					return;
+					break;
 
 				// Perform a G/M/T-code
 				case LinuxRequest::Code:
 				{
-					// Check if the code overlaps. If so, restart from the beginning
+					MutexLocker lock(codesMutex);
+
+					// Read the next code and check if the GB is waiting for a macro file
+					const CodeHeader *code = reinterpret_cast<const CodeHeader*>(transfer.ReadData(packet->length));
+					const GCodeChannel channel(code->channel);
+					GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+					if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
+					{
+						gb->ResolveMacroRequest(false, false);
+					}
+
+					// Check if the next code overlaps. If yes, restart from the beginning
 					if (txPointer + sizeof(BufferedCodeHeader) + packet->length > SpiCodeBufferSize)
 					{
 						if (rxPointer == txPointer)
@@ -108,10 +147,9 @@ void LinuxInterface::Spin() noexcept
 					bufHeader->length = packet->length;
 					txPointer += sizeof(BufferedCodeHeader);
 
-					// Store the code content
-					size_t dataLength = packet->length;
-					memcpy(codeBuffer + txPointer, transfer.ReadData(packet->length), dataLength);
-					txPointer += dataLength;
+					// Store the corresponding code
+					memcpy(codeBuffer + txPointer, code, packet->length);
+					txPointer += packet->length;
 					break;
 				}
 
@@ -174,7 +212,7 @@ void LinuxInterface::Spin() noexcept
 					StringRef filenameRef = filename.GetRef();
 					transfer.ReadPrintStartedInfo(packet->length, filenameRef, fileInfo);
 					reprap.GetPrintMonitor().SetPrintingFileInfo(filename.c_str(), fileInfo);
-					reprap.GetGCodes().StartPrinting(true);
+					printStarted = true;
 					break;
 				}
 
@@ -186,12 +224,21 @@ void LinuxInterface::Spin() noexcept
 					{
 						// Just mark the print file as finished
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
-						gb->SetPrintFinished();
+						MutexLocker locker(gb->mutex, 10);
+						if (locker)
+						{
+							gb->SetPrintFinished();
+						}
+						else
+						{
+							packetAcknowledged = false;
+						}
 					}
 					else
 					{
 						// Stop the print with the given reason
-						reprap.GetGCodes().StopPrint((StopPrintReason)reason);
+						printStopReason = (StopPrintReason)reason;
+						printStopped = true;
 						InvalidateBufferChannel(GCodeChannel::File);
 					}
 					break;
@@ -205,11 +252,31 @@ void LinuxInterface::Spin() noexcept
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-						gb->SetFileFinished(error);
-
-						if (reprap.Debug(moduleLinuxInterface))
+						if (gb->IsWaitingForMacro())
 						{
-							reprap.GetPlatform().MessageF(DebugMessage, "Macro completed on channel %u\n", channel.ToBaseType());
+							gb->ResolveMacroRequest(error, true);
+
+							if (reprap.Debug(moduleLinuxInterface))
+							{
+								reprap.GetPlatform().MessageF(DebugMessage, "Macro completed on channel %u\n", channel.ToBaseType());
+							}
+						}
+						else
+						{
+							MutexLocker locker(gb->mutex, 10);
+							if (locker)
+							{
+								gb->SetFileFinished(error);
+
+								if (reprap.Debug(moduleLinuxInterface))
+								{
+									reprap.GetPlatform().MessageF(DebugMessage, "Macro completed on channel %u\n", channel.ToBaseType());
+								}
+							}
+							else
+							{
+								packetAcknowledged = false;
+							}
 						}
 					}
 					else
@@ -221,16 +288,36 @@ void LinuxInterface::Spin() noexcept
 
 				// Return heightmap as generated by G29 S0
 				case LinuxRequest::GetHeightMap:
-					packetAcknowledged = transfer.WriteHeightMap();
+				{
+					if (!reprap.GetMove().heightMapLock.IsLocked())
+					{
+						ReadLocker locker(reprap.GetMove().heightMapLock);
+						packetAcknowledged = transfer.WriteHeightMap();
+					}
+					else
+					{
+						packetAcknowledged = false;
+					}
 					break;
+				}
 
 				// Set heightmap via G29 S1
 				case LinuxRequest::SetHeightMap:
-					if (!transfer.ReadHeightMap())
+				{
+					if (!reprap.GetMove().heightMapLock.IsLocked())
 					{
-						reprap.GetPlatform().Message(ErrorMessage, "Failed to set height map - bad data?\n");
+						WriteLocker locker(reprap.GetMove().heightMapLock);
+						if (!transfer.ReadHeightMap())
+						{
+							reprap.GetPlatform().Message(ErrorMessage, "Failed to set height map - bad data?\n");
+						}
+					}
+					else
+					{
+						packetAcknowledged = false;
 					}
 					break;
+				}
 
 				// Lock movement and wait for standstill
 				case LinuxRequest::LockMovementAndWaitForStandstill:
@@ -239,13 +326,14 @@ void LinuxInterface::Spin() noexcept
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-						if (reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
+						MutexLocker locker(gb->mutex, 10);
+						if (locker && reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
 						{
 							transfer.WriteLocked(channel);
 						}
 						else
 						{
-							transfer.ResendPacket(packet);
+							packetAcknowledged = false;
 						}
 					}
 					else
@@ -262,7 +350,15 @@ void LinuxInterface::Spin() noexcept
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-						reprap.GetGCodes().UnlockAll(*gb);
+						MutexLocker locker(gb->mutex, 10);
+						if (locker)
+						{
+							reprap.GetGCodes().UnlockAll(*gb);
+						}
+						else
+						{
+							packetAcknowledged = false;
+						}
 					}
 					else
 					{
@@ -306,6 +402,8 @@ void LinuxInterface::Spin() noexcept
 						{
 							filament->Load(filamentName.c_str());
 						}
+
+						TaskCriticalSectionLocker locker;
 						reprap.MoveUpdated();
 					}
 					break;
@@ -331,9 +429,17 @@ void LinuxInterface::Spin() noexcept
 						{
 							// Evaluate the expression and send the result to DSF
 							const GCodeBuffer *gb = reprap.GetGCodes().GetInput(channel);
-							ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
-							const ExpressionValue val = parser.Parse();
-							packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+							MutexLocker lock(gb->mutex, 10);
+							if (lock)
+							{
+								ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
+								const ExpressionValue val = parser.Parse();
+								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+							}
+							else
+							{
+								packetAcknowledged = false;
+							}
 						}
 						catch (GCodeException& e)
 						{
@@ -394,7 +500,7 @@ void LinuxInterface::Spin() noexcept
 				{
 					const MessageType type = gcodeReply->GetFirstItemType();
 					OutputBuffer *buffer = gcodeReply->GetFirstItem();			// this may be null
-					if (!transfer.WriteCodeReply(type, buffer))				// this handles the null case too
+					if (!transfer.WriteCodeReply(type, buffer))					// this handles the null case too
 					{
 						break;
 					}
@@ -405,6 +511,7 @@ void LinuxInterface::Spin() noexcept
 			// Notify DSF about the available buffer space
 			if (sendBufferUpdate || transfer.LinuxHadReset())
 			{
+				MutexLocker lock(codesMutex);
 				const uint16_t bufferSpace = (txLength == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
 				sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
 			}
@@ -421,71 +528,86 @@ void LinuxInterface::Spin() noexcept
 #endif
 
 				// Deal with code channel requests
-				bool reportMissing, fromCode;
 				for (size_t i = 0; i < NumGCodeChannels; i++)
 				{
 					const GCodeChannel channel(i);
 					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 
-					// Invalidate buffered codes if required
-					if (gb->IsInvalidated())
+					// Handle macro start requests
+					if (gb->IsWaitingForMacro())
 					{
-						InvalidateBufferChannel(gb->GetChannel());
-						gb->Invalidate(false);
+						if (gb->IsMacroRequestPending())
+						{
+							const char * const requestedMacroFile = gb->GetRequestedMacroFile();
+							bool fromCode = gb->IsMacroFromCode();
+							if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
+							{
+								if (reprap.Debug(moduleLinuxInterface))
+								{
+									reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
+								}
+								gb->MacroRequestSent();
+
+								InvalidateBufferChannel(channel);
+								gb->Invalidate(false);
+							}
+						}
+						continue;
 					}
 
-					// Handle macro start requests
-					if (gb->IsMacroRequested())
+					// Deal with other requests
+					MutexLocker gbLock(gb->mutex, 10);
+					if (gbLock)
 					{
-						const char * const requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
-						if (transfer.WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
+						// Invalidate buffered codes if required
+						if (gb->IsInvalidated())
 						{
-							if (reprap.Debug(moduleLinuxInterface))
-							{
-								reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
-							}
-							gb->MacroRequestSent();
+							InvalidateBufferChannel(gb->GetChannel());
+							gb->Invalidate(false);
+						}
+
+						// Handle file abort requests
+						if (gb->IsAbortRequested() && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
+						{
+							gb->AcknowledgeAbort();
 							gb->Invalidate();
 						}
-					}
 
-					// Handle file abort requests
-					if (gb->IsAbortRequested() && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
-					{
-						gb->AcknowledgeAbort();
-						gb->Invalidate();
-					}
+						// Handle blocking messages
+						if (gb->MachineState().waitingForAcknowledgement && !gb->MachineState().waitingForAcknowledgementSent &&
+							transfer.WriteWaitForAcknowledgement(channel))
+						{
+							gb->MachineState().waitingForAcknowledgementSent = true;
+							gb->Invalidate();
+						}
 
-					// Handle blocking messages
-					if (gb->MachineState().waitingForAcknowledgement && !gb->MachineState().waitingForAcknowledgementSent &&
-						transfer.WriteWaitForAcknowledgement(channel))
-					{
-						gb->MachineState().waitingForAcknowledgementSent = true;
-						gb->Invalidate();
-					}
-
-					// Send pending firmware codes
-					if (gb->IsSendRequested() && transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
-					{
-						gb->SetFinished(true);
+						// Send pending firmware codes
+						if (gb->IsSendRequested() && transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
+						{
+							gb->SetFinished(true);
+						}
 					}
 				}
 
 				// Send pause notification on demand
-				if (reportPause && transfer.WritePrintPaused(pauseFilePosition, pauseReason))
+				if (reportPause)
 				{
-					reportPause = false;
-					reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File)->Invalidate();
+					GCodeBuffer *fileGCode = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
+					MutexLocker locker(fileGCode->mutex, 10);
+					if (locker && transfer.WritePrintPaused(pauseFilePosition, pauseReason))
+					{
+						fileGCode->Invalidate();
+						reportPause = false;
+					}
 				}
 			}
 
 			// Start the next transfer
 			transfer.StartNextTransfer();
-			if (!wasConnected && !writingIap)
-			{
-				reprap.GetPlatform().Message(NetworkInfoMessage, "Connection to Linux established!\n");
-			}
 			wasConnected = true;
+
+			// Wait for the next SPI transaction to complete or for a timeout to occur
+			TaskBase::Take(SpiConnectionTimeout);
 		}
 		else if (!transfer.IsConnected() && wasConnected && !writingIap)
 		{
@@ -515,23 +637,33 @@ void LinuxInterface::Spin() noexcept
 			// Close all open G-code files
 			for (size_t i = 0; i < NumGCodeChannels; i++)
 			{
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i);
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(i));
+				if (gb->IsWaitingForMacro())
+				{
+					gb->ResolveMacroRequest(true, true);
+				}
+
+				MutexLocker locker(gb->mutex);
 				gb->AbortFile(true, false);
 				gb->MessageAcknowledged(true);
 			}
-			reprap.GetGCodes().StopPrint(StopPrintReason::abort);
 
-			// Invalidate the G-code buffers holding binary data (if applicable)
-			for (size_t i = 0; i < NumGCodeChannels; i++)
-			{
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i);
-				if (gb->IsBinary() && gb->IsCompletelyIdle())
-				{
-					gb->Reset();
-				}
-			}
+			// Stop the print (if applicable)
+			printStopReason = StopPrintReason::abort;
+			printStopped = true;
+
+			// Turn off all the heaters
+			reprap.GetHeat().SwitchOffAll(true);
+
+			// Wait indefinitely for the next transfer
+			TaskBase::Take();
 		}
-	} while (writingIap);
+		else if (!writingIap)
+		{
+			// A transfer is being performed but it has not finished yet
+			RTOSIface::Yield();
+		}
+	}
 }
 
 void LinuxInterface::Diagnostics(MessageType mtype) noexcept
@@ -550,13 +682,14 @@ bool LinuxInterface::IsConnected() const noexcept
 bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
 	if (gb.IsInvalidated() ||
-		gb.IsMacroRequested() || gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
+		gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
 		(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 	{
 		// Don't process codes that are supposed to be suspended...
 		return false;
 	}
 
+	MutexLocker lock(codesMutex);
 	if (rxPointer != txPointer || txLength != 0)
 	{
 		bool updateRxPointer = true;
@@ -667,6 +800,7 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noex
 
 void LinuxInterface::InvalidateBufferChannel(GCodeChannel channel) noexcept
 {
+	MutexLocker lock(codesMutex);
 	if (rxPointer != txPointer || txLength != 0)
 	{
 		bool updateRxPointer = true;

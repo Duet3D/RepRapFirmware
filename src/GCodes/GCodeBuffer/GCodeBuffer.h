@@ -135,16 +135,20 @@ public:
 
 #if HAS_LINUX_INTERFACE
 	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
-	void FinishedBinaryMode() noexcept { isBinaryBuffer = false; }
 
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 	void SetFileFinished(bool error) noexcept;					// Mark the last file as finished
 	void SetPrintFinished() noexcept;							// Mark the print file as finished
 
-	bool IsMacroRequested() const noexcept { return macroRequested; }	// Indicates if a macro file is being requested
-	void RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept;	// Request execution of a file macro
-	const char *GetRequestedMacroFile(bool& reportMissing, bool &fromCode) const noexcept;		// Return requested macro file or nullptr if none
-	void MacroRequestSent() noexcept { macroRequested = false; }		// Called when a macro file request has been sent
+	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
+	bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
+	bool HasStartedMacro() const noexcept { return hasStartedMacro; }		// Has this GB just started a new macro file?
+	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }		// Indicates if a macro file is being requested
+	const char *GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
+	bool IsMacroFromCode() const noexcept { return machineState->isMacroFromCode; }	// Returns if the macro was requested from a code
+	void MacroRequestSent() noexcept { requestedMacroFile.Clear(); }	// Called when a macro file request has been sent
+	void ResolveMacroRequest(bool hadError, bool isEmpty) noexcept;		// Resolve the call waiting for a macro to be executed
+	bool IsMacroEmpty() const noexcept { return macroEmpty; }			// Returns if the last opened macro file is empty
 
 	bool IsAbortRequested() const noexcept;						// Is the cancellation of the current file requested?
 	bool IsAbortAllRequested() const noexcept;					// Is the cancellation of all files being executed on this channel requested?
@@ -201,6 +205,8 @@ public:
 	void MotionStopped() noexcept { motionCommanded = false; }
 	bool WasMotionCommanded() const noexcept { return motionCommanded; }
 
+	Mutex mutex;
+
 protected:
 	DECLARE_OBJECT_MODEL
 
@@ -247,13 +253,15 @@ private:
 #if HAS_LINUX_INTERFACE
 	String<MaxFilenameLength> requestedMacroFile;
 	uint8_t
-		reportMissingMacro : 1,
-		isMacroFromCode : 1,
-		macroRequested : 1,
-		abortFile : 1,
-		abortAllFiles : 1,
-		invalidated : 1,
-		sendToSbc : 1;
+		isWaitingForMacro : 1,		// Is this GB waiting in DoFileMacro?
+		hasStartedMacro : 1,		// Whether the GB has just started a macro file
+		macroEmpty : 1,				// May be true if the macro file could be opened but it is empty
+		macroError : 1,				// Whether the macro file could be opened or if an error occurred
+		abortFile : 1,				// Whether to abort the last file on the stack
+		abortAllFiles : 1,			// Whether to abort all opened files
+		invalidated : 1,			// Set to true if the GB content is not valid and about to be cleared
+		sendToSbc : 1;				// Indicates if the GB string content is supposed to be sent to the SBC
+	BinarySemaphore macroSemaphore;
 #endif
 };
 

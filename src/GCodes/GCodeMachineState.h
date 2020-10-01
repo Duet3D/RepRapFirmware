@@ -104,8 +104,6 @@ enum class GCodeState : uint8_t
 #endif
 
 #if HAS_LINUX_INTERFACE
-	doingUnsupportedCode,
-	doingUserMacro,
 	waitingForAcknowledgement,
 #endif
 
@@ -187,10 +185,12 @@ public:
 	uint32_t lineNumber;
 
 	Compatibility compatibility;
-	uint16_t
+	uint32_t
 		drivesRelative : 1,
 		axesRelative : 1,
 #if HAS_LINUX_INTERFACE
+		lastCodeFromSbc : 1,
+		isMacroFromCode : 1,
 		isFileFinished : 1,
 		fileError: 1,
 #endif

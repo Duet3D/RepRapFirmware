@@ -23,7 +23,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 	  lineNumber(0),
 	  compatibility(Compatibility::RepRapFirmware), drivesRelative(false), axesRelative(false),
 #if HAS_LINUX_INTERFACE
-	  isFileFinished(false), fileError(false),
+	  lastCodeFromSbc(false), isMacroFromCode(false), isFileFinished(false), fileError(false),
 #endif
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
@@ -47,7 +47,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
 	  compatibility(prev.compatibility), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 #if HAS_LINUX_INTERFACE
-	  isFileFinished(prev.isFileFinished), fileError(false),
+	  lastCodeFromSbc(prev.lastCodeFromSbc), isMacroFromCode(prev.isMacroFromCode), isFileFinished(prev.isFileFinished), fileError(false),
 #endif
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501),  runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),

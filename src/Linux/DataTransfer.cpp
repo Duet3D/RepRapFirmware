@@ -62,6 +62,8 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 
 #include <General/IP4String.h>
 
+static TaskHandle linuxTaskHandle = nullptr;
+
 #if USE_DMAC
 
 // Hardware IDs of the SPI transmit and receive DMA interfaces. See atsam datasheet.
@@ -350,7 +352,9 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 	{
 		SbcSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENSET_SSL;		// disable the interrupt
 		SbcSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTENSET_SSL;		// clear the status
+
 		dataReceived = true;
+		TaskBase::GiveFromISR(linuxTaskHandle);
 	}
 #else
 	const uint32_t status = SBC_SPI->SPI_SR;							// read status and clear interrupt
@@ -359,7 +363,6 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 	{
 		// Data has been transferred, disable transfer ready pin and XDMAC channels
 		disable_spi();
-		dataReceived = true;
 
 		// Check if any error occurred
 		if ((status & SPI_SR_OVRES) != 0)
@@ -370,6 +373,10 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 		{
 			++spiTxUnderruns;
 		}
+
+		// Wake up the Linux task
+		dataReceived = true;
+		TaskBase::GiveFromISR(linuxTaskHandle);
 	}
 #endif
 }
@@ -476,6 +483,11 @@ void DataTransfer::Init() noexcept
 	// A value of 8 seems to work. I haven't tried other values yet.
 	matrix_set_slave_slot_cycle(0, 8);
 #endif
+}
+
+void DataTransfer::SetLinuxTask(TaskHandle handle) noexcept
+{
+	linuxTaskHandle = handle;
 }
 
 void DataTransfer::Diagnostics(MessageType mtype) noexcept
@@ -1035,7 +1047,7 @@ bool DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *&response) noe
 	return true;
 }
 
-bool DataTransfer::WriteMacroRequest(GCodeChannel channel, const char *filename, bool reportMissing, bool fromCode) noexcept
+bool DataTransfer::WriteMacroRequest(GCodeChannel channel, const char *filename, bool fromCode) noexcept
 {
 	size_t filenameLength = strlen(filename);
 	if (!CanWritePacket(sizeof(ExecuteMacroHeader) + filenameLength))
@@ -1049,7 +1061,7 @@ bool DataTransfer::WriteMacroRequest(GCodeChannel channel, const char *filename,
 	// Write header
 	ExecuteMacroHeader *header = WriteDataHeader<ExecuteMacroHeader>();
 	header->channel = channel.RawValue();
-	header->reportMissing = reportMissing;
+	header->dummy = 0;
 	header->fromCode = fromCode;
 	header->length = filenameLength;
 
