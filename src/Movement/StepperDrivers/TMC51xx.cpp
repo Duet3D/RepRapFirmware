@@ -258,13 +258,14 @@ static constexpr size_t numTmc51xxDrivers = MaxSmartDrivers;
 
 enum class DriversState : uint8_t
 {
-	noPower = 0,			// no VIN power
+	shutDown = 0,
+	noPower,				// no VIN power
 	notInitialised,			// have VIN power but not started initialising drivers
 	initialising,			// in the process of initialising the drivers
 	ready					// drivers are initialised and ready
 };
 
-static DriversState driversState = DriversState::noPower;
+static DriversState driversState = DriversState::shutDown;
 
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
@@ -1334,16 +1335,17 @@ void SmartDrivers::Init() noexcept
 	xdmac_enable_interrupt(XDMAC, DmacChanTmcRx);
 #endif
 
+	driversState = DriversState::noPower;
 	tmcTask.Create(TmcLoop, "TMC", nullptr, TaskPriority::TmcPriority);
 }
 
-// Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
+// Shut down the drivers and stop any related interrupts
 void SmartDrivers::Exit() noexcept
 {
 	digitalWrite(GlobalTmc51xxEnablePin, HIGH);
 	NVIC_DisableIRQ(TMC51xx_SPI_IRQn);
 	tmcTask.TerminateAndUnlink();
-	driversState = DriversState::noPower;
+	driversState = DriversState::shutDown;						// prevent Spin() calls from doing anything
 }
 
 void SmartDrivers::SetAxisNumber(size_t driver, uint32_t axisNumber) noexcept
@@ -1429,7 +1431,6 @@ DriverMode SmartDrivers::GetDriverMode(size_t driver) noexcept
 }
 
 // Flag that the the drivers have been powered up or down
-// Before the first call to this function with 'powered' true, you must call Init()
 void SmartDrivers::Spin(bool powered) noexcept
 {
 	TaskCriticalSectionLocker lock;
@@ -1442,7 +1443,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 			tmcTask.Give();									// wake up the TMC task because the drivers need to be initialised
 		}
 	}
-	else
+	else if (driversState != DriversState::shutDown)
 	{
 		driversState = DriversState::noPower;				// flag that there is no power to the drivers
 		fastDigitalWriteHigh(GlobalTmc51xxEnablePin);		// disable the drivers
