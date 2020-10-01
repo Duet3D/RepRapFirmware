@@ -3424,7 +3424,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 {
 #if HAS_LINUX_INTERFACE
 	// Deal with replies to the Linux interface
-	if (gb.IsBinary())
+	if (gb.MachineState().lastCodeFromSbc)
 	{
 		MessageType type = gb.GetResponseMessageType();
 		if (rslt == GCodeResult::notFinished || gb.HasStartedMacro() ||

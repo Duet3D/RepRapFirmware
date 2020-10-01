@@ -547,7 +547,9 @@ void LinuxInterface::Init() noexcept
 									reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 								}
 								gb->MacroRequestSent();
+
 								InvalidateBufferChannel(channel);
+								gb->Invalidate(false);
 							}
 						}
 						continue;

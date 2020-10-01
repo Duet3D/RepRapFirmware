@@ -823,7 +823,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 
 	if (!macroError)
 	{
-		hasStartedMacro = true;
+		hasStartedMacro = !macroEmpty;
 		return true;
 	}
 	return false;
