@@ -20,7 +20,11 @@ Bug fixes:
 - Duet 3 Mini only: certain types of error accessing the SD card would cause the firmware to reset due to "Stuck in spin loop".
 - The Error Status word was incorrectly prefixed by 0x02 in beta1 instead of just 0x
 - If M918 was run multiple times, available RAM was lost because of a memory leak
+- When doing a simple G30 command the the probe type was BLTouch, the deploy and retract macro files were each run twice
 - [Duet 2 or 3 with attached SBC only] The height map parameters passed by the SBC were not range-checked
+
+Internal changes:
+- When using an attached SBC, a separate task is used to handle communication with the SBC
 
 RepRapFirmware 3.2-beta1
 ========================
