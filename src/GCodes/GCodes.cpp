@@ -2761,11 +2761,13 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 	{
 		// G30 without P parameter. This probes the current location starting from the current position.
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
-		(void)SetZProbeNumber(gb);								// may throw, so do this before changing the state
-
+		const auto zp = SetZProbeNumber(gb);					// may throw, so do this before changing the state
 		InitialiseTaps();
 		gb.SetState(GCodeState::probingAtPoint2a);
-		DeployZProbe(gb, 30);
+		if (zp->GetProbeType() != ZProbeType::blTouch)
+		{
+			DeployZProbe(gb, 30);
+		}
 	}
 	return GCodeResult::ok;
 }
