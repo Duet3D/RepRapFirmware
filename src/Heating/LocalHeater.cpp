@@ -85,7 +85,7 @@ void LocalHeater::ResetHeater() noexcept
 }
 
 // Configure the heater port and the sensor number
-GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sensorNumber, const StringRef& reply)
+GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
 {
 	if (!port.AssignPort(portName, reply, PinUsedBy::heater, PinAccess::pwm))
 	{
@@ -93,10 +93,10 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 	}
 
 	port.SetFrequency(freq);
-	SetSensorNumber(sensorNumber);
-	if (reprap.GetHeat().FindSensor(sensorNumber).IsNull())
+	SetSensorNumber(sn);
+	if (reprap.GetHeat().FindSensor(sn).IsNull())
 	{
-		reply.printf("Sensor number %u has not been defined", sensorNumber);
+		reply.printf("Sensor number %u has not been defined", sn);
 		return GCodeResult::warning;
 	}
 	return GCodeResult::ok;

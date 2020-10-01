@@ -2683,7 +2683,6 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCode
 	}
 
 	// Find out which axes we have been asked to home
-	toBeHomed.Clear();
 	for (size_t axis = 0; axis < numTotalAxes; ++axis)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -4481,11 +4480,13 @@ bool GCodes::LockMovement(const GCodeBuffer& gb) noexcept
 	return LockResource(gb, MoveResource);
 }
 
+// Grab the movement lock even if another channel owns it
 void GCodes::GrabMovement(const GCodeBuffer& gb) noexcept
 {
 	GrabResource(gb, MoveResource);
 }
 
+// Release the movement lock
 void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 {
 	UnlockResource(gb, MoveResource);
@@ -4515,6 +4516,11 @@ void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 	{
 		if (resourceOwners[i] == &gb && !resourcesToKeep.IsBitSet(i))
 		{
+			if (i == MoveResource)
+			{
+				// In case homing was aborted because of an exception, we need to clear toBeHomed when releasing the movement lock
+				toBeHomed.Clear();
+			}
 			resourceOwners[i] = nullptr;
 			gb.MachineState().lockedResources.ClearBit(i);
 		}
