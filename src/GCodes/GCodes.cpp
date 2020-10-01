@@ -2692,7 +2692,6 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCode
 	}
 
 	// Find out which axes we have been asked to home
-	toBeHomed.Clear();
 	for (size_t axis = 0; axis < numTotalAxes; ++axis)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -2771,11 +2770,13 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 	{
 		// G30 without P parameter. This probes the current location starting from the current position.
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
-		(void)SetZProbeNumber(gb);								// may throw, so do this before changing the state
-
+		const auto zp = SetZProbeNumber(gb);					// may throw, so do this before changing the state
 		InitialiseTaps();
 		gb.SetState(GCodeState::probingAtPoint2a);
-		DeployZProbe(gb, 30);
+		if (zp->GetProbeType() != ZProbeType::blTouch)
+		{
+			DeployZProbe(gb, 30);
+		}
 	}
 	return GCodeResult::ok;
 }
@@ -4498,11 +4499,13 @@ bool GCodes::LockMovement(const GCodeBuffer& gb) noexcept
 	return LockResource(gb, MoveResource);
 }
 
+// Grab the movement lock even if another channel owns it
 void GCodes::GrabMovement(const GCodeBuffer& gb) noexcept
 {
 	GrabResource(gb, MoveResource);
 }
 
+// Release the movement lock
 void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 {
 	UnlockResource(gb, MoveResource);
@@ -4534,6 +4537,11 @@ void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 	{
 		if (resourceOwners[i] == &gb && !resourcesToKeep.IsBitSet(i))
 		{
+			if (i == MoveResource)
+			{
+				// In case homing was aborted because of an exception, we need to clear toBeHomed when releasing the movement lock
+				toBeHomed.Clear();
+			}
 			resourceOwners[i] = nullptr;
 			gb.MachineState().lockedResources.ClearBit(i);
 		}

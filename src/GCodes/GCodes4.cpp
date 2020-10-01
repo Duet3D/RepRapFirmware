@@ -1030,12 +1030,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}
 			gb.AdvanceState();
-			RetractZProbe(gb, 30);
+			if (zp->GetProbeType() != ZProbeType::blTouch)			// if it's a BLTouch then we have already retracted it
+			{
+				RetractZProbe(gb, 30);
+			}
 		}
 		break;
 
 	case GCodeState::probingAtPoint6:
-		// Here when we have finished probing with a P parameter and have retracted the probe if necessary
+		// Here when we have finished probing and have retracted the probe if necessary
 		if (LockMovementAndWaitForStandstill(gb))		// retracting the Z probe
 		{
 			if (g30SValue == 1)
