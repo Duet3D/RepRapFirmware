@@ -51,7 +51,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 #define HAS_VREF_MONITOR		1
 
 #ifdef DUET3MINI_V04
-#define SUPPORT_CAN_EXPANSION	0	//****TEMP!
+#define SUPPORT_CAN_EXPANSION	1
 #else
 #define SUPPORT_CAN_EXPANSION	0
 #endif
@@ -406,6 +406,14 @@ constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), Port
 constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn SbcSpiSercomIRQn = SERCOM0_3_IRQn;			// this is the SS Low interrupt, the only one we use
 #define SBC_SPI_HANDLER		SERCOM0_3_Handler
+
+// CAN
+#ifdef DUET3MINI_V04
+constexpr unsigned int CanDeviceNumber = 1;					// we use CAN1
+constexpr Pin CanTxPin = PortBPin(14);
+constexpr Pin CanRxPin = PortBPin(15);
+constexpr GpioPinFunction CanPinsMode = GpioPinFunction::H;
+#endif
 
 // Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;

@@ -62,7 +62,7 @@ private:
 
 namespace CanInterface
 {
-	static constexpr uint32_t CanResponseTimeout = 1000;
+	constexpr uint32_t CanResponseTimeout = 1000;
 
 	// Low level functions
 	void Init() noexcept;
