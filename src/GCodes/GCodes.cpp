@@ -1567,7 +1567,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 	{
 		moveBuffer.coords[drive] = 0.0;
 	}
-	moveBuffer.hasExtrusion = false;
+	moveBuffer.hasPositiveExtrusion = false;
 	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
 	ExtrudersBitmap extrudersMoving;
 
@@ -1582,7 +1582,6 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 			return nullptr;
 		}
 
-		moveBuffer.hasExtrusion = true;
 		const size_t eMoveCount = tool->DriveCount();
 		if (eMoveCount != 0)
 		{
@@ -1604,6 +1603,11 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 				{
 					requestedExtrusionAmount = moveArg - virtualExtruderPosition;
 					virtualExtruderPosition = moveArg;
+				}
+
+				if (requestedExtrusionAmount > 0.0)
+				{
+					moveBuffer.hasPositiveExtrusion = true;
 				}
 
 				// rawExtruderTotal is used to calculate print progress, so it must be based on the requested extrusion from the slicer
@@ -1657,6 +1661,11 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 						float extrusionAmount = gb.ConvertDistance(eMovement[eDrive]);
 						if (extrusionAmount != 0.0)
 						{
+							if (extrusionAmount > 0.0)
+							{
+								moveBuffer.hasPositiveExtrusion = true;
+							}
+
 							if (gb.MachineState().volumetricExtrusion)
 							{
 								extrusionAmount *= volumetricExtrusionFactors[extruder];
@@ -1905,7 +1914,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		return true;
 	}
 
-	const bool isPrintingMove = moveBuffer.hasExtrusion && axesMentioned.IsNonEmpty();
+	const bool isPrintingMove = moveBuffer.hasPositiveExtrusion && axesMentioned.IsNonEmpty();
 	if (buildObjects.IsFirstMoveSincePrintingResumed())							// if this is the first move after skipping an object
 	{
 		if (isPrintingMove)
@@ -1945,7 +1954,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	}
 	else
 	{
-		if (&gb == fileGCode && !gb.IsDoingFileMacro() && moveBuffer.hasExtrusion && axesMentioned.Intersects(XyAxes))
+		if (&gb == fileGCode && !gb.IsDoingFileMacro() && moveBuffer.hasPositiveExtrusion && axesMentioned.Intersects(XyAxes))
 		{
 			lastPrintingMoveHeight = currentUserPosition[Z_AXIS];
 		}
@@ -1977,7 +1986,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 
 		case LimitPositionResult::intermediateUnreachable:
 			if (   moveBuffer.isCoordinated
-				&& (   (machineType == MachineType::fff && !moveBuffer.hasExtrusion)
+				&& (   (machineType == MachineType::fff && !moveBuffer.hasPositiveExtrusion)
 #if SUPPORT_LASER || SUPPORT_IOBITS
 					|| (machineType == MachineType::laser && moveBuffer.laserPwmOrIoBits.laserPwm == 0)
 #endif
@@ -2012,13 +2021,13 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		{
 			AxesBitmap axesMentionedExceptZ = axesMentioned;
 			axesMentionedExceptZ.ClearBit(Z_AXIS);
-			moveBuffer.usePressureAdvance = moveBuffer.hasExtrusion && axesMentionedExceptZ.IsNonEmpty();
+			moveBuffer.usePressureAdvance = moveBuffer.hasPositiveExtrusion && axesMentionedExceptZ.IsNonEmpty();
 		}
 
 		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
 		// Note for when we use RTOS: as soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
-		if (kin.UseSegmentation() && simulationMode != 1 && (moveBuffer.hasExtrusion || moveBuffer.isCoordinated || !kin.UseRawG0()))
+		if (kin.UseSegmentation() && simulationMode != 1 && (moveBuffer.hasPositiveExtrusion || moveBuffer.isCoordinated || !kin.UseRawG0()))
 		{
 			// This kinematics approximates linear motion by means of segmentation.
 			// We assume that the segments will be smaller than the mesh spacing.
@@ -2257,7 +2266,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 
 	if (buildObjects.IsFirstMoveSincePrintingResumed())
 	{
-		if (moveBuffer.hasExtrusion)							// check whether this is the first move after skipping an object and is extruding
+		if (moveBuffer.hasPositiveExtrusion)					// check whether this is the first move after skipping an object and is extruding
 		{
 			if (TravelToStartPoint(gb))							// don't start a printing move from the wrong point
 			{
@@ -2272,7 +2281,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	}
 
 #if TRACK_OBJECT_NAMES
-	if (moveBuffer.hasExtrusion)
+	if (moveBuffer.hasPositiveExtrusion)
 	{
 		//TODO ideally we should calculate the min and max X and Y coordinates of the entire arc here and call UpdateObjectCoordinates twice.
 		// But it is currently very rare to use G2/G3 with extrusion, so for now we don't bother.
@@ -2314,7 +2323,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	}
 #endif
 
-	moveBuffer.usePressureAdvance = moveBuffer.hasExtrusion;
+	moveBuffer.usePressureAdvance = moveBuffer.hasPositiveExtrusion;
 
 	arcRadius = sqrtf(iParam * iParam + jParam * jParam);
 	arcCurrentAngle = atan2(-jParam, -iParam);

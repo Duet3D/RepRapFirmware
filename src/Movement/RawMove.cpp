@@ -17,7 +17,7 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	usePressureAdvance = false;
 	checkEndstops = false;
 	reduceAcceleration = false;
-	hasExtrusion = false;
+	hasPositiveExtrusion = false;
 	filePos = noFilePosition;
 	tool = nullptr;
 	for (size_t drive = firstDriveToZero; drive < MaxAxesPlusExtruders; ++drive)
