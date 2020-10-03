@@ -71,7 +71,7 @@ static uint16_t longestWaitMessageType = 0;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,
-	.numTxBuffers = 2,
+	.numTxBuffers = 6,
 	.txFifoSize = 4,
 	.numRxBuffers =  0,
 	.rxFifo0Size = 16,
@@ -112,7 +112,37 @@ static CanDevice *can1dev = nullptr;
 
 #endif
 
+// Transmit buffer usage
+constexpr auto TxBufferIndexUrgent = CanDevice::TxBufferNumber::buffer0;
+constexpr auto TxBufferIndexTimeSync = CanDevice::TxBufferNumber::buffer1;
+constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer2;
+// We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
+constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer3;
+constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer4;
+constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer5;
+
+// Receive buffer/FIFO usage
+constexpr auto RxBufferIndexBroadcast = CanDevice::RxBufferNumber::fifo0;
+constexpr auto RxBufferIndexRequest = CanDevice::RxBufferNumber::fifo0;
+constexpr auto RxBufferIndexResponse = CanDevice::RxBufferNumber::fifo1;
+
 #else
+
+/* mcan_transfer_message_setting */
+constexpr uint32_t TxBufferIndexUrgent = 0;
+constexpr uint32_t TxBufferIndexTimeSync = 1;
+constexpr uint32_t TxBufferIndexMotion = 2;
+// We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
+constexpr uint32_t TxBufferIndexRequest = 3;
+constexpr uint32_t TxBufferIndexResponse = 4;
+constexpr uint32_t TxBufferIndexBroadcast = 5;
+
+/* mcan_receive_message_setting */
+constexpr uint32_t RxFifoIndexBroadcast = 0;
+constexpr uint32_t RxFifoIndexRequest = 0;
+constexpr uint32_t RxFifoIndexResponse = 1;
+
+static_assert(CONF_MCAN_ELEMENT_DATA_SIZE == sizeof(CanMessage), "Mismatched message sizes");
 
 # if SAME70
 #  ifdef USE_CAN0
@@ -235,25 +265,7 @@ extern "C" void MCAN_INT0_Handler() noexcept
 	}
 }
 
-// -------------------- End of code adapted from Atmel quick start example ----------------------------------
-
-static_assert(CONF_MCAN_ELEMENT_DATA_SIZE == sizeof(CanMessage), "Mismatched message sizes");
-
 #endif
-
-/* mcan_transfer_message_setting */
-constexpr uint32_t TxBufferIndexUrgent = 0;
-constexpr uint32_t TxBufferIndexTimeSync = 1;
-constexpr uint32_t TxBufferIndexMotion = 2;
-// We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
-constexpr uint32_t TxBufferIndexRequest = 3;
-constexpr uint32_t TxBufferIndexResponse = 4;
-constexpr uint32_t TxBufferBroadcast = 5;
-
-/* mcan_receive_message_setting */
-constexpr uint32_t RxFifoIndexBroadcast = 0;
-constexpr uint32_t RxFifoIndexRequest = 0;
-constexpr uint32_t RxFifoIndexResponse = 1;
 
 constexpr uint32_t CanClockIntervalMillis = 200;
 
@@ -290,7 +302,7 @@ static void configure_mcan() noexcept
 										CanId::BoardAddressMask << CanId::DstAddressShift);
 
 	// Set up a filter to receive response messages in FIFO 1
-	can0dev->SetExtendedFilterElement(2, CanDevice::RxBufferNumber::fifo1,
+	can0dev->SetExtendedFilterElement(2, RxBufferIndexResponse,
 										(CanId::MasterAddress << CanId::DstAddressShift) | CanId::ResponseBit,
 										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
 	can0dev->Enable();
@@ -412,7 +424,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 			if (urgentMessage != nullptr)
 			{
 #if USE_NEW_CAN_DRIVER
-				can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
+				can0dev->SendMessage(TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
 #else
 				mcan_fd_send_ext_message(&mcan_instance, urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength, TxBufferIndexUrgent, MaxUrgentSendWait, false);
 #endif
@@ -431,7 +443,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 #endif
 				// Send the message
 #if USE_NEW_CAN_DRIVER
-				can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexMotion, MaxMotionSendWait, buf);
+				can0dev->SendMessage(TxBufferIndexMotion, MaxMotionSendWait, buf);
 #else
 				mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion, MaxMotionSendWait, false);
 #endif
@@ -477,7 +489,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			msg->timeSent = lastTimeSent = StepTimer::GetTimerTicks();
 			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
 #if USE_NEW_CAN_DRIVER
-			can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, 0, buf);
+			can0dev->SendMessage(TxBufferIndexTimeSync, 0, buf);
 #else
 			mcan_fd_send_ext_message_no_wait(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexTimeSync, false);
 #endif
@@ -676,7 +688,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 {
 	const CanAddress dest = buf->id.Dst();
 #if USE_NEW_CAN_DRIVER
-	can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexRequest, MaxRequestSendWait, buf);
+	can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
 #else
 	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait, false);
 #endif
@@ -687,9 +699,9 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 	{
 		const uint32_t timeWaiting = millis() - whenStartedWaiting;
 #if USE_NEW_CAN_DRIVER
-		if (!can0dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo1, CanResponseTimeout - timeWaiting, buf))
+		if (!can0dev->ReceiveMessage(RxBufferIndexResponse, CanResponseTimeout - timeWaiting, buf))
 #else
-		if (!GetMessageFromFifo(&mcan_instance, buf, 1, CanResponseTimeout - timeWaiting))
+		if (!GetMessageFromFifo(&mcan_instance, buf, RxFifoIndexResponse, CanResponseTimeout - timeWaiting))
 #endif
 		{
 			break;
@@ -747,7 +759,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 void CanInterface::SendResponse(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
-	can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexResponse, MaxResponseSendWait, buf);
+	can0dev->SendMessage(TxBufferIndexResponse, MaxResponseSendWait, buf);
 #else
 	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexResponse, MaxResponseSendWait, false);
 #endif
@@ -758,9 +770,9 @@ void CanInterface::SendResponse(CanMessageBuffer *buf) noexcept
 void CanInterface::SendBroadcast(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
-	can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferBroadcast, MaxResponseSendWait, buf);
+	can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
 #else
-	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferBroadcast, MaxResponseSendWait, false);
+	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
 #endif
 	CanMessageBuffer::Free(buf);
 }
@@ -769,9 +781,9 @@ void CanInterface::SendBroadcast(CanMessageBuffer *buf) noexcept
 void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
-	can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferBroadcast, MaxResponseSendWait, buf);
+	can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
 #else
-	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferBroadcast, MaxResponseSendWait, false);
+	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
 #endif
 }
 
@@ -788,9 +800,9 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 		else
 		{
 #if USE_NEW_CAN_DRIVER
-			can0dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, TaskBase::TimeoutUnlimited, buf);
+			can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, buf);
 #else
-			GetMessageFromFifo(&mcan_instance, buf, 0, TaskBase::TimeoutUnlimited);
+			GetMessageFromFifo(&mcan_instance, buf, RxFifoIndexRequest, TaskBase::TimeoutUnlimited);
 #endif
 			if (reprap.Debug(moduleCan))
 			{
@@ -895,7 +907,7 @@ GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList
 	return GCodeResult::ok;
 }
 
-static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr) noexcept
+static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr) THROWS(GCodeException)
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
 
