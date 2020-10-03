@@ -199,6 +199,7 @@ static const char * const moduleName[] =
 	"WiFi",
 	"Display",
 	"LinuxInterface",
+	"CAN",
 	"none"
 };
 

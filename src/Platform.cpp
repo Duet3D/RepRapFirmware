@@ -1644,6 +1644,16 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(I2C1_IRQn, NvicPriorityTwi);
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+# if SAME5x
+	NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
+	NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
+# elif SAME70
+	NVIC_SetPriority(MCAN0_INT0_IRQn, NvicPriorityCan);		// we don't use INT1
+	NVIC_SetPriority(MCAN1_INT0_IRQn, NvicPriorityCan);		// we don't use INT1
+# endif
+#endif
+
 #if defined(__LPC17xx__)
 	// set rest of the Timer Interrupt priorities
 	// Timer 0 is used for step generation (set elsewhere)

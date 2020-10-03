@@ -84,15 +84,15 @@ constexpr CanDevice::Config Can0Config =
 static_assert(Can0Config.IsValid());
 
 // CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own segment
-alignas(4) static uint8_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
+static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
 
-static CanDevice *candev = nullptr;
+static CanDevice *can0dev = nullptr;
 
 #if SAME70
 
-constexpr CanDevice::Config config1 =
+constexpr CanDevice::Config Can1Config =
 {
-	.dataSize = 64,
+	.dataSize = 8,
 	.numTxBuffers = 2,
 	.txFifoSize = 4,
 	.numRxBuffers =  0,
@@ -103,7 +103,12 @@ constexpr CanDevice::Config config1 =
 	.txEventFifoSize = 2
 };
 
-static_assert(config1.IsValid());
+static_assert(Can1Config.IsValid());
+
+// CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own segment
+static uint32_t can1Memory[Can1Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
+
+static CanDevice *can1dev = nullptr;
 
 #endif
 
@@ -272,23 +277,23 @@ static void configure_mcan() noexcept
 #if USE_NEW_CAN_DRIVER
 	CanTiming timing;
 	timing.SetDefaults();
-	candev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing);
+	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing);
 
 	// Set up a filter to receive all request messages addressed to us in FIFO 0
-	candev->SetExtendedFilterElement(0, CanDevice::RxBufferNumber::fifo0,
+	can0dev->SetExtendedFilterElement(0, CanDevice::RxBufferNumber::fifo0,
 										CanId::MasterAddress << CanId::DstAddressShift,
 										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
 
 	// Set up a filter to receive all broadcast messages also in FIFO 0
-	candev->SetExtendedFilterElement(1, CanDevice::RxBufferNumber::fifo0,
+	can0dev->SetExtendedFilterElement(1, CanDevice::RxBufferNumber::fifo0,
 										CanId::BroadcastAddress << CanId::DstAddressShift,
-										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
+										CanId::BoardAddressMask << CanId::DstAddressShift);
 
 	// Set up a filter to receive response messages in FIFO 1
-	candev->SetExtendedFilterElement(2, CanDevice::RxBufferNumber::fifo1,
+	can0dev->SetExtendedFilterElement(2, CanDevice::RxBufferNumber::fifo1,
 										(CanId::MasterAddress << CanId::DstAddressShift) | CanId::ResponseBit,
 										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
-
+	can0dev->Enable();
 #else
 	mcan_config config_mcan;
 	mcan_get_config_defaults(&config_mcan);
@@ -323,7 +328,6 @@ static void configure_mcan() noexcept
 
 	mcan_enable_interrupt(&mcan_instance, (mcan_interrupt_source)(MCAN_FORMAT_ERROR | MCAN_ACKNOWLEDGE_ERROR | MCAN_BUS_OFF | MCAN_RX_FIFO_0_NEW_MESSAGE | MCAN_RX_FIFO_1_NEW_MESSAGE));
 	NVIC_ClearPendingIRQ(MCanIRQn);
-	NVIC_SetPriority(MCanIRQn, NvicPriorityMCan);
 	NVIC_EnableIRQ(MCanIRQn);
 
 	mcan_start(&mcan_instance);
@@ -408,7 +412,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 			if (urgentMessage != nullptr)
 			{
 #if USE_NEW_CAN_DRIVER
-				candev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
+				can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
 #else
 				mcan_fd_send_ext_message(&mcan_instance, urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength, TxBufferIndexUrgent, MaxUrgentSendWait, false);
 #endif
@@ -427,7 +431,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 #endif
 				// Send the message
 #if USE_NEW_CAN_DRIVER
-				candev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexMotion, MaxMotionSendWait, buf);
+				can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexMotion, MaxMotionSendWait, buf);
 #else
 				mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion, MaxMotionSendWait, false);
 #endif
@@ -465,7 +469,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		{
 			CanMessageTimeSync * const msg = buf->SetupBroadcastMessage<CanMessageTimeSync>(CanId::MasterAddress);
 #if USE_NEW_CAN_DRIVER
-			candev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);
+			can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);
 #else
 			WaitForTxBufferFree(&mcan_instance, TxBufferIndexTimeSync, MaxTimeSyncSendWait);		// make sure we can send immediately
 #endif
@@ -473,7 +477,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			msg->timeSent = lastTimeSent = StepTimer::GetTimerTicks();
 			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
 #if USE_NEW_CAN_DRIVER
-			candev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, 0, buf);
+			can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, 0, buf);
 #else
 			mcan_fd_send_ext_message_no_wait(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexTimeSync, false);
 #endif
@@ -672,7 +676,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 {
 	const CanAddress dest = buf->id.Dst();
 #if USE_NEW_CAN_DRIVER
-	candev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexRequest, MaxRequestSendWait, buf);
+	can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexRequest, MaxRequestSendWait, buf);
 #else
 	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait, false);
 #endif
@@ -683,12 +687,17 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 	{
 		const uint32_t timeWaiting = millis() - whenStartedWaiting;
 #if USE_NEW_CAN_DRIVER
-		if (!candev->ReceiveMessage(CanDevice::RxBufferNumber::fifo1, CanResponseTimeout - timeWaiting, buf))
+		if (!can0dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo1, CanResponseTimeout - timeWaiting, buf))
 #else
 		if (!GetMessageFromFifo(&mcan_instance, buf, 1, CanResponseTimeout - timeWaiting))
 #endif
 		{
 			break;
+		}
+
+		if (reprap.Debug(moduleCan))
+		{
+			buf->DebugPrint("Rx1:");
 		}
 
 		if (   buf->id.MsgType() == CanMessageType::standardReply
@@ -738,7 +747,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 void CanInterface::SendResponse(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
-	candev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexResponse, MaxResponseSendWait, buf);
+	can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferIndexResponse, MaxResponseSendWait, buf);
 #else
 	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexResponse, MaxResponseSendWait, false);
 #endif
@@ -749,7 +758,7 @@ void CanInterface::SendResponse(CanMessageBuffer *buf) noexcept
 void CanInterface::SendBroadcast(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
-	candev->SendMessage((CanDevice::TxBufferNumber)TxBufferBroadcast, MaxResponseSendWait, buf);
+	can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferBroadcast, MaxResponseSendWait, buf);
 #else
 	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferBroadcast, MaxResponseSendWait, false);
 #endif
@@ -760,7 +769,7 @@ void CanInterface::SendBroadcast(CanMessageBuffer *buf) noexcept
 void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
-	candev->SendMessage((CanDevice::TxBufferNumber)TxBufferBroadcast, MaxResponseSendWait, buf);
+	can0dev->SendMessage((CanDevice::TxBufferNumber)TxBufferBroadcast, MaxResponseSendWait, buf);
 #else
 	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferBroadcast, MaxResponseSendWait, false);
 #endif
@@ -779,10 +788,15 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 		else
 		{
 #if USE_NEW_CAN_DRIVER
-			candev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, TaskBase::TimeoutUnlimited, buf);
+			can0dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, TaskBase::TimeoutUnlimited, buf);
 #else
 			GetMessageFromFifo(&mcan_instance, buf, 0, TaskBase::TimeoutUnlimited);
 #endif
+			if (reprap.Debug(moduleCan))
+			{
+				buf->DebugPrint("Rx0:");
+			}
+
 			CommandProcessor::ProcessReceivedMessage(buf);
 		}
 	}
@@ -1096,7 +1110,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 		if (changeTiming)
 		{
 #if USE_NEW_CAN_DRIVER
-			candev->SetLocalCanTiming(timing);
+			can0dev->SetLocalCanTiming(timing);
 #else
 			ChangeLocalCanTiming(&mcan_instance, timing);
 #endif
@@ -1104,7 +1118,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 		else
 		{
 #if USE_NEW_CAN_DRIVER
-			candev->GetLocalCanTiming(timing);
+			can0dev->GetLocalCanTiming(timing);
 #else
 			GetLocalCanTiming(&mcan_instance, timing);
 #endif
