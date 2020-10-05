@@ -1,19 +1,25 @@
-RepRapFirmware 3.2-beta2 (in preparation)
+RepRapFirmware 3.2-beta2
 ========================
 
 Upgrade notes: none since 3.2-beta1
 
 New features/changed behaviour:
-- M571 command accepts Q as an alternative to F for the PWM frequency
-- Any attempt to use G28 within a homing file now results in a specific error message
-- Supports Duet 3 Mini version 0.4 prototypes. There are separate builds for version 0.2 and version 0.4 prototypes.
+- Supports Duet 3 Mini version 0.4 prototypes includnig CAN expansion. There are separate builds for version 0.2 and version 0.4 prototypes.
 - Supports ST7567-based 12864 displays on Duet Maestro and Duet WiFi (thanks to SchmartMaker for writing the ST7567 driver code)
 - Supports PanelDue 3.2 better, in particular updating of displayed data while waiting for heating etc.
-- Object model variable boards[n] for expansion boards now includes the maxMotors value
+- Any attempt to use G28 within a homing file now results in a specific error message
+- Improved the instructions displayed when M303 heater tuning finishes
+- M571 command accepts Q as an alternative to F for the PWM frequency
 - M584 commands are now checked for out-of-range driver numbers
+- M150 commands are now queued to sync them with movement commands
+- M111 supports CAN module debug
 
 Object model changes:
+- Variable boards[n] for expansion boards now includes the maxMotors value
 - Added state.msUpTime. This is the milliseconds part of upTime. When using the HTTP rr_model call or the M409 command, if the response includes both state.upTime and state.msUpTime then these two values both relate to the same instant when the command started searching the object model.
+
+Internal changes:
+- A separate task is used to communicate with an attached Single Board Computer. This is expected to resolve a number of issues.
 
 Bug fixes:
 - G2 and G3 commands with R parameter always drew the longer of the two possible arcs. Now they draw the shorter one if the R parameter is positive, or the longer one if it is negative.
@@ -21,10 +27,8 @@ Bug fixes:
 - The Error Status word was incorrectly prefixed by 0x02 in beta1 instead of just 0x
 - If M918 was run multiple times, available RAM was lost because of a memory leak
 - When doing a simple G30 command the the probe type was BLTouch, the deploy and retract macro files were each run twice
+- A layer change was detected incorrectly if a travel move at an unusual height included retraction
 - [Duet 2 or 3 with attached SBC only] The height map parameters passed by the SBC were not range-checked
-
-Internal changes:
-- When using an attached SBC, a separate task is used to handle communication with the SBC
 
 RepRapFirmware 3.2-beta1
 ========================
