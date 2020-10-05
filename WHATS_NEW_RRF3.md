@@ -4,7 +4,7 @@ RepRapFirmware 3.2-beta2
 Upgrade notes: none since 3.2-beta1
 
 New features/changed behaviour:
-- Supports Duet 3 Mini version 0.4 prototypes includnig CAN expansion. There are separate builds for version 0.2 and version 0.4 prototypes.
+- Supports Duet 3 Mini version 0.4 prototypes including CAN expansion. There are separate builds for version 0.2 and version 0.4 prototypes.
 - Supports ST7567-based 12864 displays on Duet Maestro and Duet WiFi (thanks to SchmartMaker for writing the ST7567 driver code)
 - Supports PanelDue 3.2 better, in particular updating of displayed data while waiting for heating etc.
 - Any attempt to use G28 within a homing file now results in a specific error message
