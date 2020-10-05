@@ -50,7 +50,7 @@ void StepTimer::Init() noexcept
 
 	hri_tc_set_CTRLA_ENABLE_bit(StepTc);
 
-	NVIC_DisableIRQ(StepTcIRQn);
+	NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);			    // Set the priority for this IRQ
 	NVIC_ClearPendingIRQ(StepTcIRQn);
 	NVIC_EnableIRQ(StepTcIRQn);
 #elif defined(__LPC17xx__)
