@@ -62,6 +62,7 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 				case 140:	// set bed temperature and return immediately
 				case 141:	// set chamber temperature and return immediately
 				case 144:	// bed standby
+				case 150:	// set LED colours
 				case 117:	// display message
 				case 280:	// set servo
 				case 300:	// beep
