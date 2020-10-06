@@ -99,7 +99,11 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 		axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
 		if (axesIncluded.IsBitSet(Z_AXIS))
 		{
-			zDatumSetByProbing -= false;
+			if (zDatumSetByProbing)
+			{
+				zDatumSetByProbing = false;
+				reprap.MoveUpdated();
+			}
 		}
 
 #if SUPPORT_ROLAND
@@ -116,7 +120,6 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 #endif
 	}
 
-	reprap.MoveUpdated();		// I'm not sure this is necessary because the position and homed fields in the OM are flagged 'frequent'; but we may have changed zDatumSetByProbing
 	return GCodeResult::ok;
 }
 
