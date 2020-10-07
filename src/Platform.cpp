@@ -41,6 +41,10 @@
 #include "Hardware/I2C.h"
 #include <Hardware/NonVolatileMemory.h>
 
+#if SAM4E || SAM4S || SAME70
+# include "sam/services/flash_efc/flash_efc.h"		// for flash_read_unique_id()
+#endif
+
 #if SAME70
 # include <DmacManager.h>
 static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA channels in CoreNG");

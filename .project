@@ -8,6 +8,7 @@
 		<project>RRFLibraries</project>
 		<project>CANlib</project>
 		<project>CoreN2G</project>
+		<project>Duet3ATE</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

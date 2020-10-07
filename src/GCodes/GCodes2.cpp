@@ -445,7 +445,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #ifdef DUET3_ATE
 	if (code >= 1000)
 	{
-		return AteMCodes::HandleAteMCode(code, gb, reply);
+		const GCodeResult rc = AteMCodes::HandleAteMCode(code, gb, reply);
+		HandleReply(gb, rc, reply.c_str());
+		return true;
 	}
 #endif
 
