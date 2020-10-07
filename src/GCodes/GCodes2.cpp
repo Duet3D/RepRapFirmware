@@ -52,7 +52,7 @@
 #endif
 
 #ifdef DUET3_ATE
-# include <AteMCodes.h>
+# include <Duet3Ate.h>
 #endif
 
 #include <utility>			// for std::swap
@@ -442,15 +442,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 {
 	const int code = gb.GetCommandNumber();
 
-#ifdef DUET3_ATE
-	if (code >= 1000)
-	{
-		const GCodeResult rc = AteMCodes::HandleAteMCode(code, gb, reply);
-		HandleReply(gb, rc, reply.c_str());
-		return true;
-	}
-#endif
-
 	if (   simulationMode != 0
 		&& (code < 20 || code > 37)
 		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
@@ -484,6 +475,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 	try
 	{
+#ifdef DUET3_ATE
+		if (code >= 1000)
+		{
+			const GCodeResult rc = Duet3Ate::HandleAteMCode(code, gb, reply);
+			return HandleResult(gb, rc, reply, outBuf);
+		}
+#endif
+
 		GCodeResult result = GCodeResult::ok;
 		switch (code)
 		{
