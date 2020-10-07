@@ -51,6 +51,10 @@
 # include <CAN/ExpansionManager.h>
 #endif
 
+#ifdef DUET3_ATE
+# include <AteMCodes.h>
+#endif
+
 #include <utility>			// for std::swap
 
 // If the code to act on is completed, this returns true, otherwise false.
@@ -437,6 +441,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const int code = gb.GetCommandNumber();
+
+#ifdef DUET3_ATE
+	if (code >= 1000)
+	{
+		return AteMCodes::HandleAteMCode(code, gb, reply);
+	}
+#endif
+
 	if (   simulationMode != 0
 		&& (code < 20 || code > 37)
 		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
@@ -452,7 +464,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		&& (   code == 0 || code == 1
 			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26 || code == 27 || code == 28 || code == 29
 			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
-			|| code == 112 /* || code == 122 */
+			|| code == 112
 			|| code == 374 || code == 375
 			|| code == 470 || code == 471
 			|| code == 500 || code == 503 || code == 505 || code == 550
