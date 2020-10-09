@@ -20,6 +20,7 @@ namespace Tasks
 	uint32_t GetNeverUsedRam() noexcept;
 	const Mutex *GetI2CMutex() noexcept;
 	const Mutex *GetSysDirMutex() noexcept;
+	const Mutex *GetFilamentsMutex() noexcept;
 }
 
 #endif /* SRC_TASKS_H_ */

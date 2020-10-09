@@ -80,6 +80,7 @@ extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuf
 static Mutex i2cMutex;
 static Mutex sysDirMutex;
 static Mutex mallocMutex;
+static Mutex filamentsMutex;
 
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
 extern "C" void __malloc_lock (struct _reent *_r) noexcept
@@ -204,6 +205,7 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 	mallocMutex.Create("Malloc");
 	i2cMutex.Create("I2C");
 	sysDirMutex.Create("SysDir");
+	filamentsMutex.Create("Filaments");
 
 	reprap.Init();
 	for (;;)
@@ -314,6 +316,11 @@ const Mutex *Tasks::GetI2CMutex() noexcept
 const Mutex *Tasks::GetSysDirMutex() noexcept
 {
 	return &sysDirMutex;
+}
+
+const Mutex *Tasks::GetFilamentsMutex() noexcept
+{
+	return &filamentsMutex;
 }
 
 // This intercepts the 1ms system tick

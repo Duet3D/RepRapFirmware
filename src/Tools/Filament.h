@@ -32,7 +32,7 @@ public:
 
 	static void SaveAssignments() noexcept;								// Rewrite the CSV file containing the extruder <-> filament assignments
 	static bool IsInUse(const char *filamentName) noexcept;				// Check if this material is already assigned to an extruder
-	static Filament *GetFilamentByExtruder(const int extruder) noexcept;	// Retrieve the Filament instance assigned to the given extruder drive
+	static Filament *GetFilamentByExtruder(const int extr) noexcept;	// Retrieve the Filament instance assigned to the given extruder drive
 
 private:
 	static const char * const FilamentAssignmentFile;			// In which file the extruder <-> filament assignments are stored
