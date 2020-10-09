@@ -3,7 +3,8 @@ RepRapFirmware 3.2-beta3 (in preparation)
 
 Upgrade notes: none since 3.2-beta2
 
-New features/changed behaviour: none yet
+New features/changed behaviour:
+- If a filament monitor is configured for some extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
 
 Bug fixes:
 - M701 and M702 commands crashed the firmware with an assertion failure (new bug in 3.2beta2)
