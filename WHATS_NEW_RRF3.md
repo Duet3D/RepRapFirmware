@@ -1,7 +1,8 @@
 RepRapFirmware 3.2-beta3 (in preparation)
 ========================
 
-Upgrade notes: none since 3.2-beta2
+Upgrade notes:
+- It is no longer permitted to create a filament monitor using M591 and subsequently to change the driver that the extruder is mapped to using M584
 
 New features/changed behaviour:
 - If a filament monitor is configured for some extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
