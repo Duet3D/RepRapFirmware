@@ -1,3 +1,15 @@
+RepRapFirmware 3.2-beta3 (in preparation)
+========================
+
+Upgrade notes: none since 3.2-beta2
+
+New features/changed behaviour: none yet
+
+Bug fixes:
+- M701 and M702 commands crashed the firmware with an assertion failure (new bug in 3.2beta2)
+- G92 commands incremented seqs.move when they didn't need to (old bug)
+- G92 Znn didn't clear zDatumSetByProbing (old bug)
+
 RepRapFirmware 3.2-beta2
 ========================
 
