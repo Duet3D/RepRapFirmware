@@ -535,7 +535,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		return GCodeResult::notFinished;
 	}
 
-	bool seen = false;
+	bool seen = false, seenExtrude = false;
+	GCodeResult rslt = GCodeResult::ok;
+
 	const size_t originalVisibleAxes = numVisibleAxes;
 	const char *lettersToTry = AllowedAxisLetters;
 	char c;
@@ -580,6 +582,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 #else
 					reply.lcatf("Driver %u does not exist", driver.localDriver);
 #endif
+					rslt = GCodeResult::error;
 					--numValues;
 					for (size_t j = i; j < numValues; ++j)
 					{
@@ -627,7 +630,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (gb.Seen(extrudeLetter))
 	{
-		seen = true;
+		seenExtrude = true;
 		size_t numValues = MaxExtruders;
 		DriverId drivers[MaxExtruders];
 		gb.GetDriverIdArray(drivers, numValues);
@@ -635,6 +638,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		for (size_t i = 0; i < numValues; ++i)
 		{
 			platform.SetExtruderDriver(i, drivers[i]);
+		}
+		if (FilamentMonitor::CheckDriveAssignments(reply) && rslt == GCodeResult::ok)
+		{
+			rslt = GCodeResult::warning;
 		}
 	}
 
@@ -648,12 +655,12 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		}
 		else
 		{
-			reply.copy("Invalid number of visible axes");
-			return GCodeResult::error;
+			reply.lcat("Invalid number of visible axes");
+			rslt = GCodeResult::error;
 		}
 	}
 
-	if (seen)
+	if (seen || seenExtrude)
 	{
 		reprap.MoveUpdated();
 		if (numVisibleAxes > originalVisibleAxes)
@@ -663,7 +670,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);	// ensure that the position of any new axes are updated in moveBuffer
 			reprap.GetMove().SetNewPosition(moveBuffer.coords, true);		// tell the Move system where the axes are
 		}
-		return (reply.IsEmpty()) ? GCodeResult::ok : GCodeResult::error;
+		return rslt;
 	}
 
 	reply.copy("Driver assignments:");

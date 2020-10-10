@@ -55,13 +55,13 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LaserFilamentMonitor)
 
 #endif
 
-LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
-	: Duet3DFilamentMonitor(extruder, type),
+LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept
+	: Duet3DFilamentMonitor(extruder, monitorType),
 	  calibrationFactor(1.0),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)
 {
-	switchOpenMask = (type == 6) ? TypeLaserSwitchOpenBitMask : 0;
+	switchOpenMask = (monitorType == 6) ? TypeLaserSwitchOpenBitMask : 0;
 	Init();
 }
 
@@ -98,99 +98,97 @@ float LaserFilamentMonitor::MeasuredSensitivity() const noexcept
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
-bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
+GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
 {
-	if (ConfigurePin(gb, reply, INTERRUPT_MODE_CHANGE, seen))
+	const GCodeResult rslt = CommonConfigure(gb, reply, INTERRUPT_MODE_CHANGE, seen);
+	if (rslt <= GCodeResult::warning)
 	{
-		return true;
-	}
+		gb.TryGetFValue('L', calibrationFactor, seen);
+		gb.TryGetFValue('E', minimumExtrusionCheckLength, seen);
 
-	gb.TryGetFValue('L', calibrationFactor, seen);
-	gb.TryGetFValue('E', minimumExtrusionCheckLength, seen);
-
-	if (gb.Seen('R'))
-	{
-		seen = true;
-		size_t numValues = 2;
-		uint32_t minMax[2];
-		gb.GetUnsignedArray(minMax, numValues, false);
-		if (numValues > 0)
+		if (gb.Seen('R'))
 		{
-			minMovementAllowed = (float)minMax[0] * 0.01;
+			seen = true;
+			size_t numValues = 2;
+			uint32_t minMax[2];
+			gb.GetUnsignedArray(minMax, numValues, false);
+			if (numValues > 0)
+			{
+				minMovementAllowed = (float)minMax[0] * 0.01;
+			}
+			if (numValues > 1)
+			{
+				maxMovementAllowed = (float)minMax[1] * 0.01;
+			}
 		}
-		if (numValues > 1)
+
+		if (gb.Seen('S'))
 		{
-			maxMovementAllowed = (float)minMax[1] * 0.01;
+			seen = true;
+			comparisonEnabled = (gb.GetIValue() > 0);
 		}
-	}
 
-	if (gb.Seen('S'))
-	{
-		seen = true;
-		comparisonEnabled = (gb.GetIValue() > 0);
-	}
-
-	if (gb.Seen('A'))
-	{
-		seen = true;
-		checkNonPrintingMoves = (gb.GetIValue() > 0);
-	}
-
-	if (seen)
-	{
-		Init();
-		reprap.SensorsUpdated();
-	}
-	else
-	{
-		reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
-		GetPort().AppendPinName(reply);
-		reply.catf(", %s, allow %ld%% to %ld%%, check every %.1fmm, calibration factor %.3f, ",
-					(comparisonEnabled) ? "enabled" : "disabled",
-					ConvertToPercent(minMovementAllowed),
-					ConvertToPercent(maxMovementAllowed),
-					(double)minimumExtrusionCheckLength,
-					(double)calibrationFactor);
-
-		if (!dataReceived)
+		if (gb.Seen('A'))
 		{
-			reply.cat("no data received");
+			seen = true;
+			checkNonPrintingMoves = (gb.GetIValue() > 0);
+		}
+
+		if (seen)
+		{
+			Init();
+			reprap.SensorsUpdated();
 		}
 		else
 		{
-			reply.catf("version %u, ", version);
-			if (imageQuality != 0)
+			reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
+			GetPort().AppendPinName(reply);
+			reply.catf(", %s, allow %ld%% to %ld%%, check every %.1fmm, calibration factor %.3f, ",
+						(comparisonEnabled) ? "enabled" : "disabled",
+						ConvertToPercent(minMovementAllowed),
+						ConvertToPercent(maxMovementAllowed),
+						(double)minimumExtrusionCheckLength,
+						(double)calibrationFactor);
+
+			if (!dataReceived)
 			{
-				reply.catf("quality %u, ", imageQuality);
-			}
-			if (version >= 2)
-			{
-				reply.catf("brightness %u, shutter %u, ", brightness, shutter);
-			}
-			if (sensorError)
-			{
-				reply.cat("error");
-				if (lastErrorCode != 0)
-				{
-					reply.catf(" %u", lastErrorCode);
-				}
-			}
-			else if (HaveCalibrationData())
-			{
-				reply.catf("measured min %ld%% avg %ld%% max %ld%% over %.1fmm",
-					ConvertToPercent(minMovementRatio),
-					ConvertToPercent(MeasuredSensitivity()),
-					ConvertToPercent(maxMovementRatio),
-					(double)totalExtrusionCommanded);
+				reply.cat("no data received");
 			}
 			else
 			{
-				reply.cat("no calibration data");
+				reply.catf("version %u, ", version);
+				if (imageQuality != 0)
+				{
+					reply.catf("quality %u, ", imageQuality);
+				}
+				if (version >= 2)
+				{
+					reply.catf("brightness %u, shutter %u, ", brightness, shutter);
+				}
+				if (sensorError)
+				{
+					reply.cat("error");
+					if (lastErrorCode != 0)
+					{
+						reply.catf(" %u", lastErrorCode);
+					}
+				}
+				else if (HaveCalibrationData())
+				{
+					reply.catf("measured min %ld%% avg %ld%% max %ld%% over %.1fmm",
+						ConvertToPercent(minMovementRatio),
+						ConvertToPercent(MeasuredSensitivity()),
+						ConvertToPercent(maxMovementRatio),
+						(double)totalExtrusionCommanded);
+				}
+				else
+				{
+					reply.cat("no calibration data");
+				}
 			}
 		}
 	}
-
-	return false;
+	return rslt;
 }
 
 // Return the current position

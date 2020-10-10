@@ -16,6 +16,10 @@
 #include "Movement/Move.h"
 #include "PrintMonitor.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include <CAN/CanInterface.h>
+#endif
+
 // Static data
 ReadWriteLock FilamentMonitor::filamentMonitorsLock;
 FilamentMonitor *FilamentMonitor::filamentSensors[MaxExtruders] = { 0 };
@@ -35,48 +39,76 @@ size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 
 #endif
 
+// Constructor
+FilamentMonitor::FilamentMonitor(unsigned int extruder, unsigned int t) noexcept
+	: extruderNumber(extruder), type(t)
+#if SUPPORT_CAN_EXPANSION
+	  , hasRemote(false)
+#endif
+{
+	driver = reprap.GetPlatform().GetExtruderDriver(extruder);
+}
+
 // Default destructor
 FilamentMonitor::~FilamentMonitor() noexcept
 {
+#if SUPPORT_CAN_EXPANSION
+	if (!IsLocal() && hasRemote)
+	{
+		// Delete the remote filament monitor, catching any exceptions
+		CanInterface::DeleteFilamentMonitor(driver);
+	}
+#endif
 }
 
-// Call this to disable the interrupt before deleting or re-configuring a filament monitor
+// Call this to disable the interrupt before deleting or re-configuring a local filament monitor
 void FilamentMonitor::Disable() noexcept
 {
 	port.Release();
 }
 
+// Do the configuration that is
 // Try to get the pin number from the GCode command in the buffer, setting Seen if a pin number was provided and returning true if error.
 // Also attaches the ISR.
-bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen)
+// For a remote filament monitor, this does the full configuration or query of the remote object instead, and we always return seen true because we don't need to report local status.
+GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) noexcept
 {
+#if SUPPORT_CAN_EXPANSION
+	if (!IsLocal())
+	{
+		seen = true;
+		return CanInterface::ConfigureFilamentMonitor(driver, gb, reply);
+	}
+#endif
+
 	if (gb.Seen('C'))
 	{
 		seen = true;
 		if (!port.AssignPort(gb, reply, PinUsedBy::filamentMonitor, PinAccess::read))
 		{
-			return true;
+			return GCodeResult::error;
 		}
 
 		haveIsrStepsCommanded = false;
 		if (interruptMode != INTERRUPT_MODE_NONE && !port.AttachInterrupt(InterruptEntry, interruptMode, this))
 		{
 			reply.copy("unsuitable pin");
-			return true;
+			return GCodeResult::error;
 		}
 	}
-	else if (seen)
-	{
-		// We already had a P parameter, therefore it is an error not to have a C parameter too
-		reply.copy("no pin name given");
-		return true;
-	}
-	return false;
+	return GCodeResult::ok;
+}
+
+// Check that the extruder referenced by this filament monitor is still valid
+bool FilamentMonitor::IsValid() const noexcept
+{
+	return extruderNumber < reprap.GetGCodes().GetNumExtruders() && reprap.GetPlatform().GetExtruderDriver(extruderNumber) == driver;
 }
 
 // Static initialisation
 /*static*/ void FilamentMonitor::InitStatic() noexcept
 {
+	// Nothing needed here yet
 }
 
 // Handle M591
@@ -91,66 +123,95 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 
 	if (seen)
 	{
-		// We are setting the filament monitor type, so see if it has changed
-		if (sensor != nullptr && newSensorType != sensor->GetType())
+		// Creating a filament monitor. First delete the old one for this extruder.
+		if (sensor != nullptr)
 		{
-			// We already have a sensor of a different type, so delete the old sensor
 			sensor->Disable();
-			delete sensor;
 			sensor = nullptr;
+			std::swap(sensor, filamentSensors[extruder]);
+			delete sensor;
 			reprap.SensorsUpdated();
 		}
 
+		gb.MustSee('C');														// make sure the port name parameter is present
+		sensor = Create(extruder, newSensorType, reply);						// create the new sensor
 		if (sensor == nullptr)
 		{
-			sensor = Create(extruder, newSensorType);					// create the new sensor type, if any
+			return GCodeResult::error;
+		}
+
+		try
+		{
+			const GCodeResult rslt = sensor->Configure(gb, reply, seen);		// configure the sensor (may throw)
+			if (rslt <= GCodeResult::warning)
+			{
+				filamentSensors[extruder] = sensor;
+			}
+			else
+			{
+				delete sensor;
+			}
+			return rslt;
+		}
+		catch (const GCodeException&)
+		{
+			delete sensor;
+			throw;
 		}
 	}
 
-	if (sensor != nullptr)
-	{
-		// Configure the sensor
-		const bool error = sensor->Configure(gb, reply, seen);
-		if (error)
-		{
-			sensor->Disable();
-			delete sensor;
-			sensor = nullptr;
-		}
-		return GetGCodeResultFromError(error);
-	}
-	else if (!seen)
+	// Here if configuring or reporting on an existing filament monitor
+	if (sensor == nullptr)
 	{
 		reply.printf("Extruder %u has no filament sensor", extruder);
+		return GCodeResult::ok;
 	}
-	return GCodeResult::ok;
+
+	return sensor->Configure(gb, reply, seen);									// configure or report on the existing sensor (may throw)
 }
 
-// Factory function
-/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType) noexcept
+// Factory function to create a filament monitor
+/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, const StringRef& reply) noexcept
 {
+	FilamentMonitor *fm;
 	switch (monitorType)
 	{
 	case 1:		// active high switch
 	case 2:		// active low switch
-		return new SimpleFilamentMonitor(extruder, monitorType);
+		fm = new SimpleFilamentMonitor(extruder, monitorType);
 		break;
 
 	case 3:		// duet3d rotating magnet, no switch
 	case 4:		// duet3d rotating magnet + switch
-		return new RotatingMagnetFilamentMonitor(extruder, monitorType);
+		fm = new RotatingMagnetFilamentMonitor(extruder, monitorType);
+		break;
 
 	case 5:		// duet3d laser, no switch
 	case 6:		// duet3d laser + switch
-		return new LaserFilamentMonitor(extruder, monitorType);
+		fm = new LaserFilamentMonitor(extruder, monitorType);
+		break;
 
 	case 7:		// simple pulse output sensor
-		return new PulsedFilamentMonitor(extruder, monitorType);
+		fm = new PulsedFilamentMonitor(extruder, monitorType);
 		break;
 
 	default:	// no sensor, or unknown sensor
+		reply.printf("Unknown filament monitor type %u", monitorType);
 		return nullptr;
 	}
+#if SUPPORT_CAN_EXPANSION
+	if (fm != nullptr && !fm->IsLocal())
+	{
+		// Create the remote filament monitor on the expansion board
+		if (CanInterface::CreateFilamentMonitor(fm->driver, monitorType, reply) != GCodeResult::ok)
+		{
+			delete fm;
+			return nullptr;
+		}
+		fm->hasRemote = true;
+	}
+#endif
+	return fm;
 }
 
 // Return an error message corresponding to a status code
@@ -175,7 +236,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 	{
 		fm->isrExtruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fm->extruderNumber, fm->isrWasPrinting);
 		fm->haveIsrStepsCommanded = true;
-		fm->isrMillis = millis();
+		fm->lastIsrMillis = millis();
 	}
 }
 
@@ -188,47 +249,52 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 		if (filamentSensors[extruder] != nullptr)
 		{
 			FilamentMonitor& fs = *filamentSensors[extruder];
-			GCodes& gCodes = reprap.GetGCodes();
-			bool isPrinting;
-			bool fromIsr;
-			int32_t extruderStepsCommanded;
-			uint32_t locIsrMillis;
-			cpu_irq_disable();
-			if (fs.haveIsrStepsCommanded)
+#if SUPPORT_CAN_EXPANSION
+			if (fs.IsLocal())
+#endif
 			{
-				extruderStepsCommanded = fs.isrExtruderStepsCommanded;
-				isPrinting = fs.isrWasPrinting;
-				locIsrMillis = fs.isrMillis;
-				fs.haveIsrStepsCommanded = false;
-				cpu_irq_enable();
-				fromIsr = true;
-			}
-			else
-			{
-				cpu_irq_enable();
-				extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(extruder, isPrinting);		// get and clear the net extrusion commanded
-				fromIsr = false;
-				locIsrMillis = 0;
-			}
-			if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
-			{
-				const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(ExtruderToLogicalDrive(extruder));
-				const FilamentSensorStatus fstat = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
-				if (fstat != FilamentSensorStatus::ok)
+				GCodes& gCodes = reprap.GetGCodes();
+				bool isPrinting;
+				bool fromIsr;
+				int32_t extruderStepsCommanded;
+				uint32_t locIsrMillis;
+				cpu_irq_disable();
+				if (fs.haveIsrStepsCommanded)
 				{
-					if (reprap.Debug(moduleFilamentSensors))
+					extruderStepsCommanded = fs.isrExtruderStepsCommanded;
+					isPrinting = fs.isrWasPrinting;
+					locIsrMillis = fs.lastIsrMillis;
+					fs.haveIsrStepsCommanded = false;
+					cpu_irq_enable();
+					fromIsr = true;
+				}
+				else
+				{
+					cpu_irq_enable();
+					extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(extruder, isPrinting);		// get and clear the net extrusion commanded
+					fromIsr = false;
+					locIsrMillis = 0;
+				}
+				if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
+				{
+					const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(ExtruderToLogicalDrive(extruder));
+					const FilamentSensorStatus fstat = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
+					if (fstat != FilamentSensorStatus::ok)
 					{
-						debugPrintf("Filament error: extruder %u reports %s\n", extruder, FilamentMonitor::GetErrorMessage(fstat));
-					}
-					else
-					{
-						gCodes.FilamentError(extruder, fstat);
+						if (reprap.Debug(moduleFilamentSensors))
+						{
+							debugPrintf("Filament error: extruder %u reports %s\n", extruder, FilamentMonitor::GetErrorMessage(fstat));
+						}
+						else
+						{
+							gCodes.FilamentError(extruder, fstat);
+						}
 					}
 				}
-			}
-			else
-			{
-				fs.Clear();
+				else
+				{
+					fs.Clear();
+				}
 			}
 		}
 	}
@@ -263,6 +329,27 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 			filamentSensors[i]->Diagnostics(mtype, i);
 		}
 	}
+}
+
+// Check whether the drivers that filament monitor are attached to are still valid. If any are invalid, delete them, append a warning to 'reply', and return true.
+// This is needed because when supporting CAN, we don't want to handle extruders that move from one driver to another.
+/*static*/ bool FilamentMonitor::CheckDriveAssignments(const StringRef &reply) noexcept
+{
+	bool warn = false;
+	WriteLocker lock(filamentMonitorsLock);
+
+	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
+	{
+		if (filamentSensors[extruder] != nullptr && !filamentSensors[extruder]->IsValid())
+		{
+			reply.lcatf("Filament monitor for extruder %u has been deleted due to configuration change", extruder);
+			warn = true;
+			FilamentMonitor *f = nullptr;
+			std::swap(f, filamentSensors[extruder]);
+			delete f;
+		}
+	}
+	return warn;
 }
 
 // End

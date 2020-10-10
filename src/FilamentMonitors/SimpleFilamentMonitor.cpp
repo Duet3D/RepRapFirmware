@@ -33,41 +33,39 @@ DEFINE_GET_OBJECT_MODEL_TABLE(SimpleFilamentMonitor)
 
 #endif
 
-SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
-	: FilamentMonitor(extruder, type), highWhenNoFilament(type == 2), filamentPresent(false), enabled(false)
+SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept
+	: FilamentMonitor(extruder, monitorType), highWhenNoFilament(monitorType == 2), filamentPresent(false), enabled(false)
 {
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
-bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
+GCodeResult SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
 {
-	if (ConfigurePin(gb, reply, INTERRUPT_MODE_NONE, seen))
+	const GCodeResult rslt = CommonConfigure(gb, reply, INTERRUPT_MODE_NONE, seen);
+	if (rslt <= GCodeResult::warning)
 	{
-		return true;
-	}
+		if (gb.Seen('S'))
+		{
+			seen = true;
+			enabled = (gb.GetIValue() > 0);
+		}
 
-	if (gb.Seen('S'))
-	{
-		seen = true;
-		enabled = (gb.GetIValue() > 0);
+		if (seen)
+		{
+			Check(false, false, 0, 0.0);
+			reprap.SensorsUpdated();
+		}
+		else
+		{
+			reply.copy("Simple filament sensor on pin ");
+			GetPort().AppendPinName(reply);
+			reply.catf(", %s, output %s when no filament, filament present: %s",
+						(enabled) ? "enabled" : "disabled",
+						(highWhenNoFilament) ? "high" : "low",
+						(filamentPresent) ? "yes" : "no");
+		}
 	}
-
-	if (seen)
-	{
-		Check(false, false, 0, 0.0);
-		reprap.SensorsUpdated();
-	}
-	else
-	{
-		reply.copy("Simple filament sensor on pin ");
-		GetPort().AppendPinName(reply);
-		reply.catf(", %s, output %s when no filament, filament present: %s",
-					(enabled) ? "enabled" : "disabled",
-					(highWhenNoFilament) ? "high" : "low",
-					(filamentPresent) ? "yes" : "no");
-	}
-
-	return false;
+	return rslt;
 }
 
 // ISR for when the pin state changes

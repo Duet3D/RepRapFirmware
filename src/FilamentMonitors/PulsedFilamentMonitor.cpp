@@ -54,8 +54,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(PulsedFilamentMonitor)
 
 #endif
 
-PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
-	: FilamentMonitor(extruder, type),
+PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept
+	: FilamentMonitor(extruder, monitorType),
 	  mmPerPulse(DefaultMmPerPulse),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false)
@@ -96,73 +96,71 @@ float PulsedFilamentMonitor::MeasuredSensitivity() const noexcept
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
-bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
+GCodeResult PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
 {
-	if (ConfigurePin(gb, reply, INTERRUPT_MODE_RISING, seen))
+	const GCodeResult rslt = CommonConfigure(gb, reply, INTERRUPT_MODE_RISING, seen);
+	if (rslt <= GCodeResult::warning)
 	{
-		return true;
-	}
+		gb.TryGetFValue('L', mmPerPulse, seen);
+		gb.TryGetFValue('E', minimumExtrusionCheckLength, seen);
 
-	gb.TryGetFValue('L', mmPerPulse, seen);
-	gb.TryGetFValue('E', minimumExtrusionCheckLength, seen);
-
-	if (gb.Seen('R'))
-	{
-		seen = true;
-		size_t numValues = 2;
-		uint32_t minMax[2];
-		gb.GetUnsignedArray(minMax, numValues, false);
-		if (numValues > 0)
+		if (gb.Seen('R'))
 		{
-			minMovementAllowed = (float)minMax[0] * 0.01;
+			seen = true;
+			size_t numValues = 2;
+			uint32_t minMax[2];
+			gb.GetUnsignedArray(minMax, numValues, false);
+			if (numValues > 0)
+			{
+				minMovementAllowed = (float)minMax[0] * 0.01;
+			}
+			if (numValues > 1)
+			{
+				maxMovementAllowed = (float)minMax[1] * 0.01;
+			}
 		}
-		if (numValues > 1)
+
+		if (gb.Seen('S'))
 		{
-			maxMovementAllowed = (float)minMax[1] * 0.01;
+			seen = true;
+			comparisonEnabled = (gb.GetIValue() > 0);
 		}
-	}
 
-	if (gb.Seen('S'))
-	{
-		seen = true;
-		comparisonEnabled = (gb.GetIValue() > 0);
-	}
-
-	if (seen)
-	{
-		Init();
-		reprap.SensorsUpdated();
-	}
-	else
-	{
-		reply.copy("Pulse-type filament monitor on pin ");
-		GetPort().AppendPinName(reply);
-		reply.catf(", %s, sensitivity %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
-					(comparisonEnabled) ? "enabled" : "disabled",
-					(double)mmPerPulse,
-					ConvertToPercent(minMovementAllowed),
-					ConvertToPercent(maxMovementAllowed),
-					(double)minimumExtrusionCheckLength);
-
-		if (!DataReceived())
+		if (seen)
 		{
-			reply.cat("no data received");
-		}
-		else if (HaveCalibrationData())
-		{
-			reply.catf("measured sensitivity %.3fmm/pulse, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
-				(double)MeasuredSensitivity(),
-				ConvertToPercent(minMovementRatio),
-				ConvertToPercent(maxMovementRatio),
-				(double)totalExtrusionCommanded);
+			Init();
+			reprap.SensorsUpdated();
 		}
 		else
 		{
-			reply.cat("no calibration data");
+			reply.copy("Pulse-type filament monitor on pin ");
+			GetPort().AppendPinName(reply);
+			reply.catf(", %s, sensitivity %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
+						(comparisonEnabled) ? "enabled" : "disabled",
+						(double)mmPerPulse,
+						ConvertToPercent(minMovementAllowed),
+						ConvertToPercent(maxMovementAllowed),
+						(double)minimumExtrusionCheckLength);
+
+			if (!DataReceived())
+			{
+				reply.cat("no data received");
+			}
+			else if (HaveCalibrationData())
+			{
+				reply.catf("measured sensitivity %.3fmm/pulse, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
+					(double)MeasuredSensitivity(),
+					ConvertToPercent(minMovementRatio),
+					ConvertToPercent(maxMovementRatio),
+					(double)totalExtrusionCommanded);
+			}
+			else
+			{
+				reply.cat("no calibration data");
+			}
 		}
 	}
-
-	return false;
+	return rslt;
 }
 
 // ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.

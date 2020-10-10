@@ -207,6 +207,16 @@ struct DriverId
 		localDriver = (uint8_t)driver;
 	}
 
+	bool operator==(const DriverId other) const noexcept
+	{
+		return localDriver == other.localDriver;
+	}
+
+	bool operator!=(const DriverId other) const noexcept
+	{
+		return localDriver != other.localDriver;
+	}
+
 	void Clear() noexcept { localDriver = 0; }
 
 	bool IsLocal() const noexcept { return true; }

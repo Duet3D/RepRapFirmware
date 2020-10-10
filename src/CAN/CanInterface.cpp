@@ -1170,6 +1170,21 @@ GCodeResult CanInterface::ChangeFastTiming(GCodeBuffer& gb, const StringRef& rep
 	return GCodeResult::errorNotSupported;
 }
 
+GCodeResult CanInterface::CreateFilamentMonitor(DriverId driver, uint8_t type, const StringRef &reply) THROWS(GCodeException)
+{
+	throw GCodeException(-1, -1, "CAN CreateFilamentMonitor not implemented yet");
+}
+
+GCodeResult CanInterface::ConfigureFilamentMonitor(DriverId driver, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
+{
+	throw GCodeException(-1, -1, "CAN ConfigureFilamentMonitor not implemented yet");
+}
+
+void CanInterface::DeleteFilamentMonitor(DriverId driver) noexcept
+{
+	//TODO
+}
+
 #endif
 
 // End

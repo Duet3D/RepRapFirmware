@@ -100,6 +100,11 @@ namespace CanInterface
 	GCodeResult EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool enable, bool& currentState, const StringRef& reply) noexcept;
 	GCodeResult ChangeHandleResponseTime(CanAddress boardAddress, RemoteInputHandle h, uint16_t responseMillis, bool &currentState, const StringRef &reply) noexcept;
 
+	// Filament monitor functions
+	GCodeResult CreateFilamentMonitor(DriverId driver, uint8_t type, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult ConfigureFilamentMonitor(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	void DeleteFilamentMonitor(DriverId driver) noexcept;				// called from a destructor, so must not throw
+
 	// Misc functions
 	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply)THROWS(GCodeException);
