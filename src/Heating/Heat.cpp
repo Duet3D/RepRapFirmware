@@ -276,6 +276,14 @@ void Heat::Exit() noexcept
 
 [[noreturn]] void Heat::HeaterTask() noexcept
 {
+#if SUPPORT_CAN_EXPANSION
+	CanMessageBuffer * buf;
+	while ((buf = CanMessageBuffer::Allocate()) == nullptr)
+	{
+		delay(1);
+	}
+#endif
+
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
@@ -317,44 +325,35 @@ void Heat::Exit() noexcept
 
 #if SUPPORT_CAN_EXPANSION
 		// Broadcast our sensor temperatures
-		CanMessageBuffer * buf = CanMessageBuffer::Allocate();
-		if (buf != nullptr)
+		CanMessageSensorTemperatures * const msg = buf->SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
+		msg->whichSensors = 0;
+		unsigned int sensorsFound = 0;
+		unsigned int currentSensorNumber = 0;
+		for (;;)
 		{
-			CanMessageSensorTemperatures * const msg = buf->SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
-			msg->whichSensors = 0;
-			unsigned int sensorsFound = 0;
-			unsigned int currentSensorNumber = 0;
-			for (;;)
+			const auto sensor = FindSensorAtOrAbove(currentSensorNumber);
+			if (sensor.IsNull())
 			{
-				const auto sensor = FindSensorAtOrAbove(currentSensorNumber);
-				if (sensor.IsNull())
-				{
-					break;
-				}
-				const unsigned int sn = sensor->GetSensorNumber();
-				if (sensor->GetBoardAddress() == CanInterface::GetCanAddress())
-				{
-					msg->whichSensors |= (uint64_t)1u << sn;
-					float temperature;
-					msg->temperatureReports[sensorsFound].errorCode = (uint8_t)sensor->GetLatestTemperature(temperature);
-					msg->temperatureReports[sensorsFound].SetTemperature(temperature);
-					++sensorsFound;
-				}
-				currentSensorNumber = (unsigned int)sn + 1u;
+				break;
 			}
-			if (sensorsFound == 0)
+			const unsigned int sn = sensor->GetSensorNumber();
+			if (sensor->GetBoardAddress() == CanInterface::GetCanAddress())
 			{
-				// Don't send an empty report
-				CanMessageBuffer::Free(buf);
+				msg->whichSensors |= (uint64_t)1u << sn;
+				float temperature;
+				msg->temperatureReports[sensorsFound].errorCode = (uint8_t)sensor->GetLatestTemperature(temperature);
+				msg->temperatureReports[sensorsFound].SetTemperature(temperature);
+				++sensorsFound;
 			}
-			else
-			{
-				buf->dataLength = msg->GetActualDataLength(sensorsFound);
-				CanInterface::SendBroadcast(buf);
-			}
+			currentSensorNumber = (unsigned int)sn + 1u;
+		}
+
+		if (sensorsFound != 0)							// don't send an empty report
+		{
+			buf->dataLength = msg->GetActualDataLength(sensorsFound);
+			CanInterface::SendBroadcastNoFree(buf);
 		}
 #endif
-
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
 	}

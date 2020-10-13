@@ -756,25 +756,23 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 }
 
 // Send a response to an expansion board and free the buffer
-void CanInterface::SendResponse(CanMessageBuffer *buf) noexcept
+void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
 	can0dev->SendMessage(TxBufferIndexResponse, MaxResponseSendWait, buf);
 #else
 	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexResponse, MaxResponseSendWait, false);
 #endif
-	CanMessageBuffer::Free(buf);
 }
 
 // Send a broadcast message and free the buffer
-void CanInterface::SendBroadcast(CanMessageBuffer *buf) noexcept
+void CanInterface::SendBroadcastNoFree(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
 	can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
 #else
 	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
 #endif
-	CanMessageBuffer::Free(buf);
 }
 
 // Send a request message with no reply expected, and don't free the buffer. Used to send emergency stop messages.
@@ -790,27 +788,25 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 // The CanReceiver task
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 {
+	CanMessageBuffer *buf;
+	while ((buf = CanMessageBuffer::Allocate()) == nullptr)
+	{
+		delay(2);
+	}
+
 	for (;;)
 	{
-		CanMessageBuffer *buf = CanMessageBuffer::Allocate();
-		if (buf == nullptr)
-		{
-			delay(2);
-		}
-		else
-		{
 #if USE_NEW_CAN_DRIVER
-			can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, buf);
+		can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, buf);
 #else
-			GetMessageFromFifo(&mcan_instance, buf, RxFifoIndexRequest, TaskBase::TimeoutUnlimited);
+		GetMessageFromFifo(&mcan_instance, buf, RxFifoIndexRequest, TaskBase::TimeoutUnlimited);
 #endif
-			if (reprap.Debug(moduleCan))
-			{
-				buf->DebugPrint("Rx0:");
-			}
-
-			CommandProcessor::ProcessReceivedMessage(buf);
+		if (reprap.Debug(moduleCan))
+		{
+			buf->DebugPrint("Rx0:");
 		}
+
+		CommandProcessor::ProcessReceivedMessage(buf);
 	}
 }
 

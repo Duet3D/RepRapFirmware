@@ -141,7 +141,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 		UpdateBoardState(src, BoardState::running);
 	}
 	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanId::MasterAddress, src);
-	CanInterface::SendResponse(buf);
+	CanInterface::SendResponseNoFree(buf);
 }
 
 // Return a pointer to the expansion board, if it is present
@@ -250,28 +250,27 @@ const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index)
 
 void ExpansionManager::EmergencyStop() noexcept
 {
-	for (unsigned int i = 0; i < 1000; ++i)
+	CanMessageBuffer *buf;
+	while ((buf = CanMessageBuffer::Allocate()) == nullptr)
 	{
-		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-		if (buf != nullptr)
-		{
-			// Send an individual message to each known expansion board
-			for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)
-			{
-				if (boards[addr].state == BoardState::running)
-				{
-					buf->SetupRequestMessage<CanMessageEmergencyStop>(0, CanId::MasterAddress, addr);
-					CanInterface::SendMessageNoReplyNoFree(buf);
-				}
-			}
-
-			// Finally, send a broadcast message in case we missed any, and free the buffer
-			buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanId::MasterAddress);
-			CanInterface::SendBroadcast(buf);
-			break;
-		}
-		delay(1);				// wait for a buffer to become available
+		delay(1);
 	}
+
+	// Send an individual message to each known expansion board
+	for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)
+	{
+		if (boards[addr].state == BoardState::running)
+		{
+			buf->SetupRequestMessage<CanMessageEmergencyStop>(0, CanId::MasterAddress, addr);
+			CanInterface::SendMessageNoReplyNoFree(buf);
+		}
+	}
+
+	// Finally, send a broadcast message in case we missed any, and free the buffer
+	buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanId::MasterAddress);
+	CanInterface::SendBroadcastNoFree(buf);
+
+	CanMessageBuffer::Free(buf);
 }
 
 #endif

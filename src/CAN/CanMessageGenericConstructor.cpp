@@ -158,8 +158,8 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 	}
 }
 
-//TODO factor out the common code in the following several routines
-void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v) THROWS(GCodeException)
+// Return the correct position in the data to insert a parameter. If successful, add the bit to the parameter map and pass back the expect5ed parameter type; else throw.
+unsigned int CanMessageGenericConstructor::FindInsertPoint(char c, ParamDescriptor::ParamType& t, size_t &sz) THROWS(GCodeException)
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
@@ -171,23 +171,11 @@ void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v) THROWS(GCodeE
 			if (present)
 			{
 				throw ConstructParseException("duplicate parameter");
-				return;
 			}
-			else
-			{
-				switch (d->type)
-				{
-				case ParamDescriptor::uint64:
-					break;
-
-				default:
-					throw ConstructParseException("uval wrong parameter type");
-				}
-
-				InsertValue(&v, d->ItemSize(), pos);
-				msg.paramMap |= paramBit;
-			}
-			return;
+			msg.paramMap |= paramBit;
+			t = d->type;
+			sz = d->ItemSize();
+			return pos;
 		}
 
 		if (present)
@@ -209,274 +197,124 @@ void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v) THROWS(GCodeE
 		paramBit <<= 1;
 	}
 	throw ConstructParseException("wrong parameter letter");
+}
+
+//TODO factor out the common code in the following several routines
+void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v) THROWS(GCodeException)
+{
+	ParamDescriptor::ParamType t;
+	size_t sz;
+	const unsigned int pos = FindInsertPoint(c, t, sz);
+	if (t != ParamDescriptor::uint64)
+	{
+		throw ConstructParseException("u64val wrong parameter type");
+	}
+	InsertValue(&v, sz, pos);
 }
 
 void CanMessageGenericConstructor::AddUParam(char c, uint32_t v) THROWS(GCodeException)
 {
-	unsigned int pos = 0;
-	uint32_t paramBit = 1;
-	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
+	ParamDescriptor::ParamType t;
+	size_t sz;
+	const unsigned int pos = FindInsertPoint(c, t, sz);
+	switch (t)
 	{
-		const bool present = (msg.paramMap & paramBit) != 0;
-		if (d->letter == c)
+	case ParamDescriptor::uint32:
+		break;
+
+	case ParamDescriptor::uint16:
+	case ParamDescriptor::pwmFreq:
+		if (v >= (1u << 16))
 		{
-			if (present)
-			{
-				throw ConstructParseException("duplicate parameter");
-			}
-			else
-			{
-				switch (d->type)
-				{
-				case ParamDescriptor::uint32:
-					break;
-
-				case ParamDescriptor::uint16:
-				case ParamDescriptor::pwmFreq:
-					if (v >= (1u << 16))
-					{
-						throw ConstructParseException("uval too large");
-					}
-					break;
-
-				case ParamDescriptor::uint8:
-					if (v >= (1u << 8))
-					{
-						throw ConstructParseException("uval too large");
-					}
-					break;
-
-				default:
-					throw ConstructParseException("uval wrong parameter type");
-				}
-
-				InsertValue(&v, d->ItemSize(), pos);
-				msg.paramMap |= paramBit;
-			}
-			return;
+			throw ConstructParseException("uval too large");
 		}
+		break;
 
-		if (present)
+	case ParamDescriptor::uint8:
+		if (v >= (1u << 8))
 		{
-			// This parameter is present, so skip it
-			const size_t size = d->ItemSize();
-			if (size != 0)
-			{
-				pos += size;
-			}
-			else
-			{
-				// The only item with size 0 is string, so skip up to and including the null terminator
-				do
-				{
-				} while (msg.data[pos++] != 0);
-			}
+			throw ConstructParseException("uval too large");
 		}
-		paramBit <<= 1;
+		break;
+
+	default:
+		throw ConstructParseException("uval wrong parameter type");
 	}
-	throw ConstructParseException("wrong parameter letter");
+
+	InsertValue(&v, sz, pos);
 }
 
 void CanMessageGenericConstructor::AddIParam(char c, int32_t v) THROWS(GCodeException)
 {
-	unsigned int pos = 0;
-	uint32_t paramBit = 1;
-	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
+	ParamDescriptor::ParamType t;
+	size_t sz;
+	const unsigned int pos = FindInsertPoint(c, t, sz);
+	switch (t)
 	{
-		const bool present = (msg.paramMap & paramBit) != 0;
-		if (d->letter == c)
+	case ParamDescriptor::int32:
+		break;
+
+	case ParamDescriptor::int16:
+		if (v >= (int32_t)(1u << 15) || v < -(int32_t)(1u << 15))
 		{
-			if (present)
-			{
-				throw ConstructParseException("duplicate parameter");
-			}
-			else
-			{
-				switch (d->type)
-				{
-				case ParamDescriptor::int32:
-					break;
-
-				case ParamDescriptor::int16:
-					if (v >= (int32_t)(1u << 15) || v < -(int32_t)(1u << 15))
-					{
-						throw ConstructParseException("ival too large");
-					}
-					break;
-
-				case ParamDescriptor::uint8:
-					if (v >= (int32_t)(1u << 7) || v < -(int32_t)(1u << 7))
-					{
-						throw ConstructParseException("ival too large");
-					}
-					break;
-
-				default:
-					throw ConstructParseException("ival wrong parameter type");
-					return;
-				}
-
-				InsertValue(&v, d->ItemSize(), pos);
-				msg.paramMap |= paramBit;
-			}
-			return;
+			throw ConstructParseException("ival too large");
 		}
+		break;
 
-		if (present)
+	case ParamDescriptor::uint8:
+		if (v >= (int32_t)(1u << 7) || v < -(int32_t)(1u << 7))
 		{
-			// This parameter is present, so skip it
-			const size_t size = d->ItemSize();
-			if (size != 0)
-			{
-				pos += size;
-			}
-			else
-			{
-				// The only item with size 0 is string, so skip up to and including the null terminator
-				do
-				{
-				} while (msg.data[pos++] != 0);
-			}
+			throw ConstructParseException("ival too large");
 		}
-		paramBit <<= 1;
+		break;
+
+	default:
+		throw ConstructParseException("ival wrong parameter type");
+		return;
 	}
-	throw ConstructParseException("wrong parameter letter");
+
+	InsertValue(&v, sz, pos);
 }
 
 void CanMessageGenericConstructor::AddFParam(char c, float v) THROWS(GCodeException)
 {
-	unsigned int pos = 0;
-	uint32_t paramBit = 1;
-	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
+	ParamDescriptor::ParamType t;
+	size_t sz;
+	const unsigned int pos = FindInsertPoint(c, t, sz);
+	if (t != ParamDescriptor::float_p)
 	{
-		const bool present = (msg.paramMap & paramBit) != 0;
-		if (d->letter == c)
-		{
-			if (present)
-			{
-				throw ConstructParseException("duplicate parameter");
-			}
-			else if (d->type != ParamDescriptor::float_p)
-			{
-				throw ConstructParseException("fval wrong parameter type");
-			}
-			InsertValue(&v, d->ItemSize(), pos);
-			msg.paramMap |= paramBit;
-			return;
-		}
-
-		if (present)
-		{
-			// This parameter is present, so skip it
-			const size_t size = d->ItemSize();
-			if (size != 0)
-			{
-				pos += size;
-			}
-			else
-			{
-				// The only item with size 0 is string, so skip up to and including the null terminator
-				do
-				{
-				} while (msg.data[pos++] != 0);
-			}
-		}
-		paramBit <<= 1;
+		throw ConstructParseException("fval wrong parameter type");
 	}
-	throw ConstructParseException("wrong parameter letter");
+	InsertValue(&v, sz, pos);
 }
 
 void CanMessageGenericConstructor::AddCharParam(char c, char v) THROWS(GCodeException)
 {
-	unsigned int pos = 0;
-	uint32_t paramBit = 1;
-	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
+	ParamDescriptor::ParamType t;
+	size_t sz;
+	const unsigned int pos = FindInsertPoint(c, t, sz);
+	if (t != ParamDescriptor::char_p)
 	{
-		const bool present = (msg.paramMap & paramBit) != 0;
-		if (d->letter == c)
-		{
-			if (present)
-			{
-				throw ConstructParseException("duplicate parameter");
-			}
-			else if (d->type != ParamDescriptor::char_p)
-			{
-				throw ConstructParseException("cval wrong parameter type");
-			}
-			InsertValue(&v, d->ItemSize(), pos);
-			msg.paramMap |= paramBit;
-			return;
-		}
-
-		if (present)
-		{
-			// This parameter is present, so skip it
-			const size_t size = d->ItemSize();
-			if (size != 0)
-			{
-				pos += size;
-			}
-			else
-			{
-				// The only item with size 0 is string, so skip up to and including the null terminator
-				do
-				{
-				} while (msg.data[pos++] != 0);
-			}
-		}
-		paramBit <<= 1;
+		throw ConstructParseException("cval wrong parameter type");
 	}
-	throw ConstructParseException("wrong parameter letter");
+	InsertValue(&v, sz, pos);
 }
 
 void CanMessageGenericConstructor::AddStringParam(char c, const char *v) THROWS(GCodeException)
 {
-	unsigned int pos = 0;
-	uint32_t paramBit = 1;
-	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
+	ParamDescriptor::ParamType t;
+	size_t sz;
+	const unsigned int pos = FindInsertPoint(c, t, sz);
+	switch (t)
 	{
-		const bool present = (msg.paramMap & paramBit) != 0;
-		if (d->letter == c)
-		{
-			if (present)
-			{
-				throw ConstructParseException("duplicate parameter");
-			}
-			else
-			{
-				switch (d->type)
-				{
-				case ParamDescriptor::string:
-				case ParamDescriptor::reducedString:			//TODO currently we don't reduce the string, but it should already be reduced
-					InsertValue(v, strlen(v) + 1, pos);
-					msg.paramMap |= paramBit;
-					return;
+	case ParamDescriptor::string:
+	case ParamDescriptor::reducedString:			//TODO currently we don't reduce the string, but it should already be reduced
+		InsertValue(v, strlen(v) + 1, pos);
+		break;
 
-				default:
-					throw ConstructParseException("sval wrong parameter type");
-				}
-			}
-		}
-
-		if (present)
-		{
-			// This parameter is present, so skip it
-			const size_t size = d->ItemSize();
-			if (size != 0)
-			{
-				pos += size;
-			}
-			else
-			{
-				// The only item with size 0 is string, so skip up to and including the null terminator
-				do
-				{
-				} while (msg.data[pos++] != 0);
-			}
-		}
-		paramBit <<= 1;
+	default:
+		throw ConstructParseException("sval wrong parameter type");
 	}
-	throw ConstructParseException("wrong parameter letter");
 }
 
 GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) noexcept

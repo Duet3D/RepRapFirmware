@@ -4395,7 +4395,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			// Send a standard status response for PanelDue
 			OutputBuffer * const statusBuf =
 									(lastAuxStatusReportType == ObjectModelAuxStatusReportType)		// PanelDueFirmware v3.2 or later, using M409 to retrieve object model
-										? reprap.GetModelResponse("", "f")
+										? reprap.GetModelResponse("", "d99f")
 										: GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
 			if (statusBuf != nullptr)
 			{

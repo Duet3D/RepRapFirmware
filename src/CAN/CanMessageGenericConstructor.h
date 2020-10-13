@@ -37,6 +37,9 @@ public:
 	GCodeResult SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) noexcept;
 
 private:
+	// Return the correct position in the data to insert a parameter. If successful, add the bit to the parameter map and pass back the expected parameter type and size; else throw.
+	unsigned int FindInsertPoint(char c, ParamDescriptor::ParamType& t, size_t &sz) THROWS(GCodeException);
+
 	// Append a value to the data, returning true if it wouldn't fit
 	void StoreValue(const void *vp, size_t sz) THROWS(GCodeException);
 
@@ -46,14 +49,14 @@ private:
 	// Insert a value in the data, returning true if it wouldn't fit
 	void InsertValue(const void *vp, size_t sz, size_t pos) THROWS(GCodeException);
 
-	static GCodeException ConstructParseException(const char *msg) noexcept
+	static GCodeException ConstructParseException(const char *errMsg) noexcept
 	{
-		return GCodeException(-1, -1, msg);
+		return GCodeException(-1, -1, errMsg);
 	}
 
-	static GCodeException ConstructParseException(const char *msg, uint32_t param) noexcept
+	static GCodeException ConstructParseException(const char *errMsg, uint32_t param) noexcept
 	{
-		return GCodeException(-1, -1, msg, param);
+		return GCodeException(-1, -1, errMsg, param);
 	}
 
 	const ParamDescriptor * const paramTable;

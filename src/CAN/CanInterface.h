@@ -69,8 +69,8 @@ namespace CanInterface
 	inline CanAddress GetCanAddress() noexcept { return CanId::MasterAddress; }
 	CanRequestId AllocateRequestId(CanAddress destination) noexcept;
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr) noexcept;
-	void SendResponse(CanMessageBuffer *buf) noexcept;
-	void SendBroadcast(CanMessageBuffer *buf) noexcept;
+	void SendResponseNoFree(CanMessageBuffer *buf) noexcept;
+	void SendBroadcastNoFree(CanMessageBuffer *buf) noexcept;
 	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 	CanMessageBuffer *AllocateBuffer(const GCodeBuffer& gb) THROWS(GCodeException);
