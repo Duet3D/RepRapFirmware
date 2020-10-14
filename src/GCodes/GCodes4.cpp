@@ -29,6 +29,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	// Perform the next operation of the state machine for this gcode source
 	GCodeResult stateMachineResult = GCodeResult::ok;
 
+	if (gb.GetState() != GCodeState::normal)
+	{
+		CheckReportDue(gb, reply);
+	}
+
 	switch (gb.GetState())
 	{
 	case GCodeState::waitingForSpecialMoveToComplete:
@@ -333,7 +338,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		else
 		{
-			CheckReportDue(gb, reply);
 			isWaiting = true;
 		}
 		break;
@@ -429,10 +433,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::flashing1:
 #if HAS_WIFI_NETWORKING
-		if (&gb == auxGCode)								// if M997 S1 is sent from USB, don't keep sending temperature reports
-		{
-			CheckReportDue(gb, reply);						// this is so that the ATE gets status reports and can tell when flashing is complete
-		}
+// wilriker: This probably can be removed
+//		if (&gb == auxGCode)								// if M997 S1 is sent from USB, don't keep sending temperature reports
+//		{
+//			CheckReportDue(gb, reply);						// this is so that the ATE gets status reports and can tell when flashing is complete
+//		}
 
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())
