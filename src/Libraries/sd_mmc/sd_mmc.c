@@ -131,9 +131,9 @@ static bool hsmci_select_device_glue(uint8_t slot, uint32_t clock, uint8_t bus_w
 static const struct DriverInterface hsmciInterface = {
 # ifdef __SAME54P20A__
 	.select_device = hsmci_select_device,
-#else
+# else
 	.select_device = hsmci_select_device_glue,
-#endif
+# endif
 	.deselect_device = hsmci_deselect_device,
 	.get_bus_width = hsmci_get_bus_width,
 	.is_high_speed_capable = hsmci_is_high_speed_capable,

@@ -960,8 +960,11 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 			{
 				p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
 			}
-			infoBuffer.cat('\n');						// don't use MessageF, the format buffer is too small
-			p.Message(mt, infoBuffer.c_str());
+			if (!infoBuffer.IsEmpty())						// driverless boards may return empty response parts
+			{
+				infoBuffer.cat('\n');						// don't use MessageF, the format buffer is too small
+				p.Message(mt, infoBuffer.c_str());
+			}
 			++currentPart;
 		} while (currentPart <= lastPart);
 		return res;
