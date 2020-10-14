@@ -16,8 +16,9 @@
 #include "Lcd/Lcd.h"
 #include "Menu.h"
 #include "GCodes/GCodeResult.h"
+#include "ObjectModel/ObjectModel.h"
 
-class Display
+class Display INHERIT_OBJECT_MODEL
 {
 public:
 	Display() noexcept;
@@ -34,6 +35,9 @@ public:
 
 	constexpr static uint8_t DefaultDisplayContrastRatio = 30;		// this works well for the Fysetc display
 	constexpr static uint8_t DefaultDisplayResistorRatio = 6;		// the recommended Fysetc display uses 6, some other displays use 3
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	void InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity);
