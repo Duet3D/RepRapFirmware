@@ -274,10 +274,10 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 	}	// end memory stats scope
 
 	p.Message(mtype, "Tasks:");
-	for (const TaskBase *t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
+	for (TaskBase *t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
 	{
 		TaskStatus_t taskDetails;
-		vTaskGetInfo(t->GetHandle(), &taskDetails, pdTRUE, eInvalid);
+		vTaskGetInfo(t->GetFreeRTOSHandle(), &taskDetails, pdTRUE, eInvalid);
 		const char* const stateText = (taskDetails.eCurrentState == eRunning) ? "running"
 										: (taskDetails.eCurrentState == eReady) ? "ready"
 											: (taskDetails.eCurrentState == eBlocked) ? "blocked"
@@ -292,7 +292,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		const TaskHandle holder = m->GetHolder();
 		if (holder != nullptr)
 		{
-			p.MessageF(mtype, " %s(%s)", m->GetName(), pcTaskGetName(holder));
+			p.MessageF(mtype, " %s(%s)", m->GetName(), pcTaskGetName(holder->GetFreeRTOSHandle()));
 		}
 	}
 	p.MessageF(mtype, "\n");
@@ -300,7 +300,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 
 TaskHandle Tasks::GetMainTask() noexcept
 {
-	return mainTask.GetHandle();
+	return &mainTask;
 }
 
 void Tasks::TerminateMainTask() noexcept

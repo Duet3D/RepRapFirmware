@@ -66,7 +66,7 @@ void LinuxInterface::Init() noexcept
 
 	transfer.Init();
 	linuxTask.Create(LinuxTaskStart, "Linux", nullptr, TaskPriority::SpinPriority);
-	transfer.SetLinuxTask(linuxTask.GetHandle());
+	transfer.SetLinuxTask(&linuxTask);
 	transfer.StartNextTransfer();
 }
 

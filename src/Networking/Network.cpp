@@ -454,7 +454,7 @@ void Network::Exit() noexcept
 	TelnetResponder::Disable();
 #endif
 
-	if (TaskBase::GetCallerTaskHandle() != networkTask.GetHandle())
+	if (TaskBase::GetCallerTaskHandle() != &networkTask)
 	{
 		// Terminate the network task. Not trivial because currently, the caller may be the network task.
 		networkTask.TerminateAndUnlink();
