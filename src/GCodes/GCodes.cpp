@@ -1688,7 +1688,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 		}
 	}
 
-	if (moveBuffer.moveType == 1)
+	if (moveBuffer.moveType == 1 || moveBuffer.moveType == 4)
 	{
 		if (!platform.GetEndstops().EnableExtruderEndstops(extrudersMoving))
 		{
@@ -1737,7 +1737,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	if (gb.Seen('H') || (machineType != MachineType::laser && gb.Seen('S')))
 	{
 		const int ival = gb.GetIValue();
-		if (ival >= 1 && ival <= 3)
+		if (ival >= 1 && ival <= 4)
 		{
 			if (!LockMovementAndWaitForStandstill(gb))
 			{
@@ -1892,6 +1892,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		axesToSenseLength = axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes);
 		// no break
 	case 1:
+	case 4:
 		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), moveBuffer.moveType == 1))
 		{
 			err = "Failed to enable endstops";
