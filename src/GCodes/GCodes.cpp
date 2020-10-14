@@ -45,8 +45,6 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
-Mutex GCodes::resourceMutex;
-
 #if HAS_AUX_DEVICES
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -148,7 +146,6 @@ void GCodes::Init() noexcept
 	axisLetters[2] = 'Z';
 
 	numExtruders = NumDefaultExtruders;
-	resourceMutex.Create("GCodeResources");
 
 	Reset();
 
@@ -4462,7 +4459,8 @@ void GCodes::SetMoveBufferDefaults() noexcept
 // Locking the same resource more than once only locks it once, there is no lock count held.
 bool GCodes::LockResource(const GCodeBuffer& gb, Resource r) noexcept
 {
-	MutexLocker locker(resourceMutex);
+	TaskCriticalSectionLocker lock;
+
 	if (resourceOwners[r] == &gb)
 	{
 		return true;
@@ -4479,7 +4477,8 @@ bool GCodes::LockResource(const GCodeBuffer& gb, Resource r) noexcept
 // Grab the movement lock even if another GCode source has it
 void GCodes::GrabResource(const GCodeBuffer& gb, Resource r) noexcept
 {
-	MutexLocker locker(resourceMutex);
+	TaskCriticalSectionLocker lock;
+
 	if (resourceOwners[r] != &gb)
 	{
 		if (resourceOwners[r] != nullptr)
@@ -4523,7 +4522,8 @@ void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 // Unlock the resource if we own it
 void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 {
-	MutexLocker locker(resourceMutex);
+	TaskCriticalSectionLocker lock;
+
 	if (resourceOwners[r] == &gb)
 	{
 		GCodeMachineState * mc = &gb.MachineState();
@@ -4539,7 +4539,8 @@ void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 // Release all locks, except those that were owned when the current macro was started
 void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 {
-	MutexLocker locker(resourceMutex);
+	TaskCriticalSectionLocker lock;
+
 	const GCodeMachineState * const mc = gb.MachineState().GetPrevious();
 	const GCodeMachineState::ResourceBitmap resourcesToKeep = (mc == nullptr) ? GCodeMachineState::ResourceBitmap() : mc->lockedResources;
 	for (size_t i = 0; i < NumResources; ++i)
