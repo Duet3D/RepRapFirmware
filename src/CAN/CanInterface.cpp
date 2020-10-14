@@ -197,10 +197,47 @@ static status_code mcan_fd_send_ext_message(mcan_module *const module_inst, uint
 	return mcan_fd_send_ext_message_no_wait(module_inst, id_value, data, dataLength, whichTxBuffer, bitRateSwitch);
 }
 
-static void configure_mcan() noexcept;			// forward declaration
+static void configure_mcan() noexcept
+{
+	mcan_config config_mcan;
+	mcan_get_config_defaults(&config_mcan);
+	mcan_init(&mcan_instance, MCAN_MODULE, &config_mcan);
+	mcan_enable_fd_mode(&mcan_instance);
+
+	mcan_extended_message_filter_element et_filter;
+
+	// Set up a filter to receive all request messages addressed to us in FIFO 0
+	mcan_get_extended_message_filter_element_default(&et_filter);
+	et_filter.F0.bit.EFID1 = (CanId::MasterAddress << CanId::DstAddressShift);
+	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF0M_Val;		// RxFifoIndexRequest
+	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit;
+	et_filter.F1.bit.EFT = 2;
+	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 0);
+
+	// Set up a filter to receive all broadcast messages also in FIFO 0
+	mcan_get_extended_message_filter_element_default(&et_filter);
+	et_filter.F0.bit.EFID1 = CanId::BroadcastAddress << CanId::DstAddressShift;
+	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF0M_Val;		// RxFifoIndexBroadcast
+	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift);
+	et_filter.F1.bit.EFT = 2;
+	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 1);
+
+	// Set up a filter to receive response messages in FIFO 1
+	mcan_get_extended_message_filter_element_default(&et_filter);
+	et_filter.F0.bit.EFID1 = (CanId::MasterAddress << CanId::DstAddressShift) | CanId::ResponseBit;
+	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF1M_Val;		// RxFifoIndexResponse
+	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit;
+	et_filter.F1.bit.EFT = 2;
+	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 2);
+
+	mcan_enable_interrupt(&mcan_instance, (mcan_interrupt_source)(MCAN_FORMAT_ERROR | MCAN_ACKNOWLEDGE_ERROR | MCAN_BUS_OFF | MCAN_RX_FIFO_0_NEW_MESSAGE | MCAN_RX_FIFO_1_NEW_MESSAGE));
+	NVIC_ClearPendingIRQ(MCanIRQn);
+	NVIC_EnableIRQ(MCanIRQn);
+
+	mcan_start(&mcan_instance);
+}
 
 // Interrupt handler for MCAN, including RX,TX,ERROR and so on processes
-//TODO move this to CanDriver
 extern "C" void MCAN_INT0_Handler() noexcept
 {
 	const uint32_t status = mcan_read_interrupt_status(&mcan_instance);
@@ -282,70 +319,6 @@ static Task<CanSenderTaskStackWords> canClockTask;
 static CanMessageBuffer * volatile pendingBuffers;
 static CanMessageBuffer * volatile lastBuffer;			// only valid when pendingBuffers != nullptr
 
-// MCAN module initialization.
-static void configure_mcan() noexcept
-{
-	// Initialise the CAN hardware
-#if USE_NEW_CAN_DRIVER
-	CanTiming timing;
-	timing.SetDefaults();
-	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing);
-
-	// Set up a filter to receive all request messages addressed to us in FIFO 0
-	can0dev->SetExtendedFilterElement(0, CanDevice::RxBufferNumber::fifo0,
-										CanId::MasterAddress << CanId::DstAddressShift,
-										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
-
-	// Set up a filter to receive all broadcast messages also in FIFO 0
-	can0dev->SetExtendedFilterElement(1, CanDevice::RxBufferNumber::fifo0,
-										CanId::BroadcastAddress << CanId::DstAddressShift,
-										CanId::BoardAddressMask << CanId::DstAddressShift);
-
-	// Set up a filter to receive response messages in FIFO 1
-	can0dev->SetExtendedFilterElement(2, RxBufferIndexResponse,
-										(CanId::MasterAddress << CanId::DstAddressShift) | CanId::ResponseBit,
-										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
-	can0dev->Enable();
-#else
-	mcan_config config_mcan;
-	mcan_get_config_defaults(&config_mcan);
-	mcan_init(&mcan_instance, MCAN_MODULE, &config_mcan);
-	mcan_enable_fd_mode(&mcan_instance);
-
-	mcan_extended_message_filter_element et_filter;
-
-	// Set up a filter to receive all request messages addressed to us in FIFO 0
-	mcan_get_extended_message_filter_element_default(&et_filter);
-	et_filter.F0.bit.EFID1 = (CanId::MasterAddress << CanId::DstAddressShift);
-	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF0M_Val;		// RxFifoIndexRequest
-	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit;
-	et_filter.F1.bit.EFT = 2;
-	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 0);
-
-	// Set up a filter to receive all broadcast messages also in FIFO 0
-	mcan_get_extended_message_filter_element_default(&et_filter);
-	et_filter.F0.bit.EFID1 = CanId::BroadcastAddress << CanId::DstAddressShift;
-	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF0M_Val;		// RxFifoIndexBroadcast
-	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift);
-	et_filter.F1.bit.EFT = 2;
-	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 1);
-
-	// Set up a filter to receive response messages in FIFO 1
-	mcan_get_extended_message_filter_element_default(&et_filter);
-	et_filter.F0.bit.EFID1 = (CanId::MasterAddress << CanId::DstAddressShift) | CanId::ResponseBit;
-	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF1M_Val;		// RxFifoIndexResponse
-	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit;
-	et_filter.F1.bit.EFT = 2;
-	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 2);
-
-	mcan_enable_interrupt(&mcan_instance, (mcan_interrupt_source)(MCAN_FORMAT_ERROR | MCAN_ACKNOWLEDGE_ERROR | MCAN_BUS_OFF | MCAN_RX_FIFO_0_NEW_MESSAGE | MCAN_RX_FIFO_1_NEW_MESSAGE));
-	NVIC_ClearPendingIRQ(MCanIRQn);
-	NVIC_EnableIRQ(MCanIRQn);
-
-	mcan_start(&mcan_instance);
-#endif
-}
-
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
@@ -371,7 +344,30 @@ void CanInterface::Init() noexcept
 # error Unsupported MCU
 #endif
 
+// Initialise the CAN hardware
+#if USE_NEW_CAN_DRIVER
+	CanTiming timing;
+	timing.SetDefaults();
+	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing);
+
+	// Set up a filter to receive all request messages addressed to us in FIFO 0
+	can0dev->SetExtendedFilterElement(0, CanDevice::RxBufferNumber::fifo0,
+										CanId::MasterAddress << CanId::DstAddressShift,
+										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
+
+	// Set up a filter to receive all broadcast messages also in FIFO 0
+	can0dev->SetExtendedFilterElement(1, CanDevice::RxBufferNumber::fifo0,
+										CanId::BroadcastAddress << CanId::DstAddressShift,
+										CanId::BoardAddressMask << CanId::DstAddressShift);
+
+	// Set up a filter to receive response messages in FIFO 1
+	can0dev->SetExtendedFilterElement(2, RxBufferIndexResponse,
+										(CanId::MasterAddress << CanId::DstAddressShift) | CanId::ResponseBit,
+										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
+	can0dev->Enable();
+#else
 	configure_mcan();
+#endif
 
 	CanMotion::Init();
 
@@ -379,6 +375,23 @@ void CanInterface::Init() noexcept
 	canClockTask.Create(CanClockLoop, "CanClock", nullptr, TaskPriority::CanClockPriority);
 	canSenderTask.Create(CanSenderLoop, "CanSender", nullptr, TaskPriority::CanSenderPriority);
 	canReceiverTask.Create(CanReceiverLoop, "CanReceiver", nullptr, TaskPriority::CanReceiverPriority);
+}
+
+void CanInterface::Shutdown() noexcept
+{
+	canClockTask.TerminateAndUnlink();
+	canSenderTask.TerminateAndUnlink();
+	canReceiverTask.TerminateAndUnlink();
+
+#if USE_NEW_CAN_DRIVER
+	if (can0dev != nullptr)
+	{
+		can0dev->DeInit();
+		can0dev = nullptr;
+	}
+#else
+	mcan_stop(&mcan_instance);
+#endif
 }
 
 // Allocate a CAN request ID

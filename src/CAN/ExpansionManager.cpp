@@ -256,6 +256,7 @@ void ExpansionManager::EmergencyStop() noexcept
 		delay(1);
 	}
 
+//	debugPrintf("Allocated buffer\n");
 	// Send an individual message to each known expansion board
 	for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)
 	{
@@ -265,12 +266,17 @@ void ExpansionManager::EmergencyStop() noexcept
 			CanInterface::SendMessageNoReplyNoFree(buf);
 		}
 	}
+//	debugPrintf("sent individual messages\n");
 
 	// Finally, send a broadcast message in case we missed any, and free the buffer
 	buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanId::MasterAddress);
 	CanInterface::SendBroadcastNoFree(buf);
 
 	CanMessageBuffer::Free(buf);
+//	debugPrintf("sent broadcast\n");
+
+	delay(10);							// allow time for the broadcast to be sent
+	CanInterface::Shutdown();
 }
 
 #endif

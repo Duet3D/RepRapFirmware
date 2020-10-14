@@ -66,6 +66,8 @@ namespace CanInterface
 
 	// Low level functions
 	void Init() noexcept;
+	void Shutdown() noexcept;
+
 	inline CanAddress GetCanAddress() noexcept { return CanId::MasterAddress; }
 	CanRequestId AllocateRequestId(CanAddress destination) noexcept;
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr) noexcept;
