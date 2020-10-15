@@ -136,9 +136,29 @@ void LinuxInterface::Init() noexcept
 						{
 							rxPointer = 0;
 						}
+						else
+						{
+							// Check to see if we will overwrite existing buffer contents.
+							if (rxPointer < sizeof(BufferedCodeHeader) + packet->length)
+							{
+								// debugPrintf("Buffer overwrite txPointer %d rxPointer %d packet len %d\n", txPointer, rxPointer, sizeof(BufferedCodeHeader) + packet->length);
+								// reject this packet so it will be resent later
+								packetAcknowledged = false;
+								break;
+							}
+						}
+
 						txLength = txPointer;
 						txPointer = 0;
 						sendBufferUpdate = true;
+					}
+					// Check to see if we are about to overwrite older packets.
+					if (txPointer < rxPointer && txPointer + sizeof(BufferedCodeHeader) + packet->length > rxPointer)
+					{
+						// debugPrintf("Buffer overwrite txPointer %d rxPointer %d packet len %d\n", txPointer, rxPointer, sizeof(BufferedCodeHeader) + packet->length);
+						// reject this packet so it will be resent later
+						packetAcknowledged = false;
+						break;
 					}
 
 					// Store the buffer header
