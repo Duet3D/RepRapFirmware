@@ -101,10 +101,8 @@ void HsmciDmaCallback(CallbackParameter cp) noexcept
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
 	if (hsmciTask != nullptr)
 	{
-		BaseType_t higherPriorityTaskWoken = pdFALSE;
-		vTaskNotifyGiveFromISR(hsmciTask, &higherPriorityTaskWoken);	// wake up the task
+		TaskBase::GiveFromISR(hsmciTask);
 		hsmciTask = nullptr;
-		portYIELD_FROM_ISR(higherPriorityTaskWoken);
 	}
 }
 
