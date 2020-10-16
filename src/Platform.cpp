@@ -1993,6 +1993,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (int)DiagnosticTestType::SetWriteBuffer:
 #if SAME70
+		//TODO set cache to write-back instead
 		reply.copy("Write buffer not supported on this processor");
 		return GCodeResult::error;
 #else

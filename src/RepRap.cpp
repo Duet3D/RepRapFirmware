@@ -78,6 +78,9 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
+// Builds that use CoreN2G now need a version string. Eventually, all builds of RRF3 will use CoreN2G.
+extern const char VersionText[] = FIRMWARE_NAME " version " VERSION;
+
 #if HAS_HIGH_SPEED_SD && !SAME5x										// SAME5x uses CoreN2G which makes its own RTOS calls
 
 static TaskHandle hsmciTask = nullptr;									// the task that is waiting for a HSMCI command to complete
@@ -507,7 +510,7 @@ void RepRap::Init() noexcept
 	usingLinuxInterface = true;
 #endif
 
-	platform->MessageF(UsbMessage, "\n%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
+	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
 #if HAS_MASS_STORAGE
 	// Try to mount the first SD card
