@@ -4344,14 +4344,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
 			{
-				uint16_t reason = (uint16_t)SoftwareResetReason::user;
+				SoftwareResetReason reason = SoftwareResetReason::user;
 				if (gb.Seen('P'))
 				{
 					String<StringLength20> eraseString;
 					gb.GetQuotedString(eraseString.GetRef());
 					if (eraseString.Equals("ERASE"))
 					{
-						reason = (uint16_t)SoftwareResetReason::erase;
+						reason = SoftwareResetReason::erase;
 					}
 				}
 				SoftwareReset(reason);			// doesn't return

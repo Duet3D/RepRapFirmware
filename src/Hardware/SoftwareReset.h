@@ -33,8 +33,9 @@ enum class SoftwareResetReason : uint16_t
 	heaterWatchdog = 10u << 5,		// the Heat task didn't kick the watchdog often enough
 	memFault = 11u << 5,			// the MPU raised a fault
 	terminateCalled = 12u << 5,		// std::terminate was called
-	pureVirtual = 13u << 5,
-	deletedVirtual = 14u << 5,
+	pureOrDeletedVirtual = 13u << 5,
+	outOfMemory = 14u << 5,
+	//unused = 15u << 5,
 
 	mainReasonMask = 0x0F << 5,		// mask to pick out the  main reason in a uint16_t
 

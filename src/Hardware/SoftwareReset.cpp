@@ -28,8 +28,8 @@ const char *const SoftwareResetData::ReasonText[] =
 	"HeatTaskStuck",
 	"MemoryProtectionFault",
 	"TerminateCalled",
-	"PureVirtualFunctionCalled",
-	"DeletedVirtualFunctionCalled",
+	"PureOrDeletedVirtualFunctionCalled",
+	"OutOfMemory",
 	"Unknown"
 };
 

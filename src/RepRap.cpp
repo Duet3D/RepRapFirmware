@@ -1190,7 +1190,7 @@ void RepRap::Tick() noexcept
 				__asm volatile("mrs r2, psp");
 				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
 				SoftwareReset(
-					(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
+					(heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin,
 					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
 			}
 		}
