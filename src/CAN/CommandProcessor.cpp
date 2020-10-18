@@ -23,14 +23,14 @@
 
 // Handle a firmware update request
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf)
-pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
+pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 {
 	const CanMessageFirmwareUpdateRequest& msg = buf->msg.firmwareUpdateRequest;
 	const CanAddress src = buf->id.Src();
-	if (msg.bootloaderVersion == CanMessageFirmwareUpdateRequest::BootloaderVersion0)		// we only understand bootloader version 0
+	if (msg.bootloaderVersion == CanMessageFirmwareUpdateRequest::BootloaderVersion0 && (msg.fileWanted == 0 || msg.fileWanted == 3))	// we only understand bootloader version 0 and files requests 0 and 3
 	{
 		String<MaxFilenameLength> fname;
-		fname.copy("Duet3Firmware_");
+		fname.copy((msg.fileWanted == 3) ? "Duet3Bootloader-" : "Duet3Firmware_");
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
 		fname.cat(".bin");
 
@@ -211,7 +211,8 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 	}
 	else
 	{
-		const uint32_t bootloaderVersion = msg.bootloaderVersion;
+		const unsigned int bootloaderVersion = msg.bootloaderVersion;
+		const unsigned int fileWanted = msg.fileWanted;
 		CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 		msgp->dataLength = 0;
 		msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
@@ -219,7 +220,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 		msgp->fileOffset = 0;
 		buf->dataLength = msgp->GetActualDataLength();
 		CanInterface::SendResponseNoFree(buf);
-		reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request from unknown bootloader version %" PRIu32 "\n", bootloaderVersion);
+		reprap.GetPlatform().MessageF(ErrorMessage, "Can't satisfy request for firmware file %u from bootloader version %u\n", fileWanted, bootloaderVersion);
 	}
 }
 
