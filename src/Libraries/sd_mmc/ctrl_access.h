@@ -60,6 +60,8 @@
 #ifndef _CTRL_ACCESS_H_
 #define _CTRL_ACCESS_H_
 
+#include <Core.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -72,8 +74,6 @@ extern "C" {
  *
  * \{
  */
-
-#include <Core.h>
 
 #ifndef SECTOR_SIZE
 # define SECTOR_SIZE  512
