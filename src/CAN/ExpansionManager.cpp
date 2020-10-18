@@ -157,7 +157,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	CanInterface::CheckCanAddress(boardAddress, gb);
 
 	const unsigned int moduleNumber = (gb.Seen('S')) ? gb.GetLimitedUIValue('S', 4) : 0;
-	if (moduleNumber != 0 && moduleNumber != 3)
+	if (moduleNumber != (unsigned int)FirmwareModule::main && moduleNumber != (unsigned int)FirmwareModule::bootloader)
 	{
 		reply.printf("Unknown module number %u", moduleNumber);
 		return GCodeResult::error;
@@ -168,7 +168,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	CanRequestId rid1 = CanInterface::AllocateRequestId(boardAddress);
 	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanId::MasterAddress, (CanAddress)boardAddress);
 
-	msg1->type = (moduleNumber == 3) ? CanMessageReturnInfo::typeBootloaderName : CanMessageReturnInfo::typeBoardName;
+	msg1->type = (moduleNumber == (unsigned int)FirmwareModule::bootloader) ? CanMessageReturnInfo::typeBootloaderName : CanMessageReturnInfo::typeBoardName;
 	{
 		const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply);
 		if (rslt != GCodeResult::ok)

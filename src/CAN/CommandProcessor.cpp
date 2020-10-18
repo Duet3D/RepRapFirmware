@@ -27,10 +27,12 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 {
 	const CanMessageFirmwareUpdateRequest& msg = buf->msg.firmwareUpdateRequest;
 	const CanAddress src = buf->id.Src();
-	if (msg.bootloaderVersion == CanMessageFirmwareUpdateRequest::BootloaderVersion0 && (msg.fileWanted == 0 || msg.fileWanted == 3))	// we only understand bootloader version 0 and files requests 0 and 3
+	if (   msg.bootloaderVersion == CanMessageFirmwareUpdateRequest::BootloaderVersion0
+		&& (msg.fileWanted == (unsigned int)FirmwareModule::main || msg.fileWanted == (unsigned int)FirmwareModule::bootloader)
+	   )																	// we only understand bootloader version 0 and files requests for main firmware and bootloader
 	{
 		String<MaxFilenameLength> fname;
-		fname.copy((msg.fileWanted == 3) ? "Duet3Bootloader-" : "Duet3Firmware_");
+		fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
 		fname.cat(".bin");
 

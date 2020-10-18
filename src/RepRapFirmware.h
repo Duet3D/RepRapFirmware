@@ -325,7 +325,7 @@ typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing 
 
 typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
 
-#if SUPPORT_CAN_EXPANSION
+#if defined(DUET3) || defined(DUET3MINI)
 typedef Bitmap<uint64_t> SensorsBitmap;
 #else
 typedef Bitmap<uint32_t> SensorsBitmap;
