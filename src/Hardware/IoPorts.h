@@ -35,7 +35,7 @@ public:
 	void SetInvert(bool pInvert) noexcept;
 	void ToggleInvert(bool pInvert) noexcept;
 
-	bool Read() const noexcept;
+	bool ReadDigital() const noexcept;
 	bool AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept;
 	void DetachInterrupt() const noexcept;
 

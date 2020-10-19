@@ -102,7 +102,7 @@ uint16_t LocalZProbe::GetRawReading() const noexcept
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
-		return (inputPort.Read()) ? MaxReading : 0;
+		return (inputPort.ReadDigital()) ? MaxReading : 0;
 
 	default:
 		return MaxReading;

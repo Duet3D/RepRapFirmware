@@ -45,9 +45,9 @@ private:
 	inline bool IsTriggered(size_t index) const noexcept
 	{
 #if SUPPORT_CAN_EXPANSION
-		return (boardNumbers[index] == CanId::MasterAddress) ? ports[index].Read() : states[index];
+		return (boardNumbers[index] == CanId::MasterAddress) ? ports[index].ReadDigital() : states[index];
 #else
-		return ports[index].Read();
+		return ports[index].ReadDigital();
 #endif
 	}
 

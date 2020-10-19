@@ -123,7 +123,7 @@ private:
 // Start the next move. Return true if laser or IO bits need to be active
 // Must be called with base priority greater than or equal to the step interrupt, to avoid a race with the step ISR.
 inline bool DDARing::StartNextMove(Platform& p, uint32_t startTime) noexcept
-pre(ddaRingGetPointer->GetState() == DDA::frozen)
+pre(getPointer->GetState() == DDA::frozen)
 {
 	DDA * const cdda = getPointer;			// capture volatile variable
 	if (cdda->IsNonPrintingExtruderMove())

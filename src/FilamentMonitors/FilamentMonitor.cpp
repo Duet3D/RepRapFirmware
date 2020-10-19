@@ -253,7 +253,6 @@ bool FilamentMonitor::IsValid() const noexcept
 			if (fs.IsLocal())
 #endif
 			{
-				GCodes& gCodes = reprap.GetGCodes();
 				bool isPrinting;
 				bool fromIsr;
 				int32_t extruderStepsCommanded;
@@ -275,6 +274,8 @@ bool FilamentMonitor::IsValid() const noexcept
 					fromIsr = false;
 					locIsrMillis = 0;
 				}
+
+				GCodes& gCodes = reprap.GetGCodes();
 				if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
 				{
 					const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(ExtruderToLogicalDrive(extruder));
