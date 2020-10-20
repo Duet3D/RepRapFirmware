@@ -425,7 +425,7 @@ public:
 	void DisableOneLocalDriver(size_t driver) noexcept;
 	void EmergencyDisableDrivers() noexcept;
 	void SetDriversIdle() noexcept;
-	bool SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
+	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
 	float GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
 	float GetIdleCurrentFactor() const noexcept { return idleCurrentFactor; }
@@ -594,6 +594,7 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
+	GCodeResult UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept;
 #endif
 
 #if VARIABLE_NUM_DRIVERS
@@ -614,7 +615,8 @@ private:
 
 #if SUPPORT_CAN_EXPANSION
 	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc, std::function<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId){}); }
+	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
+	void IterateRemoteDrivers(size_t axisOrExtruder, std::function<void(DriverId) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
 #else
 	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
 	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }

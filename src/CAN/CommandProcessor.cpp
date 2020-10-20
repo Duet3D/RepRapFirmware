@@ -293,7 +293,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			reprap.GetExpansion().ProcessAnnouncement(buf);
 			break;
 
-		case CanMessageType::statusReport:
+		case CanMessageType::driversStatusReport:
 		default:
 //			buf->DebugPrint("Rec: ");
 			break;

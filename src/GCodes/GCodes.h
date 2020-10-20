@@ -384,7 +384,7 @@ private:
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);			// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		// Unload the current filament from a tool
-	bool ChangeMicrostepping(size_t drive, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept; // Change microstepping on the specified drive
+	bool ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept; // Change microstepping on the specified drive
 	void CheckTriggers() noexcept;												// Check for and execute triggers
 	void CheckFilament() noexcept;												// Check for and respond to filament errors
 	void CheckHeaterFault() noexcept;											// Check for and respond to a heater fault, returning true if we should exit

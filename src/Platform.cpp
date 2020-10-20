@@ -2612,7 +2612,7 @@ void Platform::SetDriversIdle() noexcept
 }
 
 // Set the current for all drivers on an axis or extruder. Current is in mA.
-bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply) noexcept
+GCodeResult Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply) noexcept
 {
 	switch (code)
 	{
@@ -2631,11 +2631,11 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 #endif
 
 	default:
-		return false;
+		return GCodeResult::error;
 	}
 
 #if SUPPORT_CAN_EXPANSION
-	CanDriversData canDriversToUpdate;
+	CanDriversData<float> canDriversToUpdate;
 
 	IterateDrivers(axisOrExtruder,
 							[this, axisOrExtruder, code](uint8_t driver)
@@ -2655,11 +2655,11 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 							{
 								if (code == 917)
 								{
-									canDriversToUpdate.AddEntry(driver, (uint16_t)(standstillCurrentPercent[axisOrExtruder]));
+									canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
 								}
 								else
 								{
-									canDriversToUpdate.AddEntry(driver, (uint16_t)(motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]));
+									canDriversToUpdate.AddEntry(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
 								}
 							}
 						);
@@ -2687,7 +2687,7 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 								}
 							}
 	);
-	return true;
+	return GCodeResult::ok;
 #endif
 }
 
@@ -2790,7 +2790,7 @@ void Platform::SetIdleCurrentFactor(float f) noexcept
 	reprap.MoveUpdated();
 
 #if SUPPORT_CAN_EXPANSION
-	CanDriversData canDriversToUpdate;
+	CanDriversData<float> canDriversToUpdate;
 #endif
 	for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; ++axisOrExtruder)
 	{
@@ -2853,37 +2853,16 @@ bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, in
 	return false;
 }
 
-// Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
+// Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.
+// Caller must deal with remote drivers.
 bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
 {
 	//TODO check that it is a valid microstep setting
 	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
 	reprap.MoveUpdated();
 	bool ok = true;
-#if SUPPORT_CAN_EXPANSION
-	CanDriversData canDriversToUpdate;
-	IterateDrivers(axisOrExtruder,
-					[this, microsteps, interp, &ok, reply](uint8_t driver)
-					{
-						if (!SetDriverMicrostepping(driver, microsteps, interp))
-						{
-							reply.lcatf("Driver %u does not support x%u microstepping", driver, microsteps);
-							if (interp)
-							{
-								reply.cat(" with interpolation");
-							}
-							ok = false;
-						}
-					},
-					[microsteps, interp, &canDriversToUpdate](DriverId driver)
-					{
-						canDriversToUpdate.AddEntry(driver, (interp) ? microsteps | 0x8000 : microsteps);
-					}
-				  );
-	return CanInterface::SetRemoteDriverMicrostepping(canDriversToUpdate, reply) && ok;
-#else
-	IterateDrivers(axisOrExtruder,
-					[this, microsteps, interp, &ok, reply](uint8_t driver)
+	IterateLocalDrivers(axisOrExtruder,
+					[this, microsteps, interp, &ok, reply](uint8_t driver) noexcept
 					{
 						if (!SetDriverMicrostepping(driver, microsteps, interp))
 						{
@@ -2896,15 +2875,14 @@ bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool inte
 						}
 					}
 				  );
-#endif
 	return ok;
 }
 
 // Get the microstepping for an axis or extruder
-unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const noexcept
+unsigned int Platform::GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept
 {
-	interpolation = (microstepping[drive] & 0x8000) != 0;
-	return microstepping[drive] & 0x7FFF;
+	interpolation = (microstepping[axisOrExtruder] & 0x8000) != 0;
+	return microstepping[axisOrExtruder] & 0x7FFF;
 }
 
 void Platform::SetEnableValue(size_t driver, int8_t eVal) noexcept
@@ -3455,7 +3433,7 @@ GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const S
 	GCodeResult rslt = GCodeResult::ok;
 
 #if SUPPORT_CAN_EXPANSION
-	CanDriversData canDriversToUpdate;
+	CanDriversData<float> canDriversToUpdate;
 #endif
 
 	if (gb.Seen('D'))
@@ -3476,7 +3454,7 @@ GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const S
 #if SUPPORT_CAN_EXPANSION
 			if (extruderDrivers[extruder].IsRemote())
 			{
-				canDriversToUpdate.AddEntry(extruderDrivers[extruder], (uint16_t)(advance * 1000.0));
+				canDriversToUpdate.AddEntry(extruderDrivers[extruder], advance);
 			}
 #endif
 		}
@@ -3497,7 +3475,7 @@ GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const S
 										pressureAdvance[extruder] = advance;
 										if (extruderDrivers[extruder].IsRemote())
 										{
-											canDriversToUpdate.AddEntry(extruderDrivers[extruder], (uint16_t)(advance * 1000.0));
+											canDriversToUpdate.AddEntry(extruderDrivers[extruder], advance);
 										}
 									}
 								);
@@ -3512,8 +3490,7 @@ GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const S
 	}
 
 #if SUPPORT_CAN_EXPANSION
-	const bool remoteOk = CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply);
-	return (remoteOk) ? rslt : GCodeResult::error;
+	return max(rslt, CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply));
 #else
 	return rslt;
 #endif
@@ -4347,6 +4324,19 @@ void Platform::HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8
 	{
 		gpinPorts[handleMajor].SetState(src, state);
 	}
+}
+
+GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept
+{
+	CanDriversData<StepsPerUnitAndMicrostepping> data;
+	axesAndExtruders.Iterate([this, &data](unsigned int axisOrExtruder, unsigned int count) noexcept
+								{
+									this->IterateRemoteDrivers(axisOrExtruder, [this, axisOrExtruder, &data](DriverId driver) noexcept
+											{
+												data.AddEntry(driver, StepsPerUnitAndMicrostepping(this->driveStepsPerUnit[axisOrExtruder], this->microstepping[axisOrExtruder]));
+											});
+								});
+	return CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(data, reply);
 }
 
 #endif
