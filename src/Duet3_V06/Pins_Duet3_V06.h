@@ -1,5 +1,5 @@
-#ifndef PINS_SAME70_H__
-#define PINS_SAME70_H__
+#ifndef PINS_DUET3_V06_H__
+#define PINS_DUET3_V06_H__
 
 #define BOARD_SHORT_NAME		"MB6HC"
 #define BOARD_NAME				"Duet 3 MB6HC"

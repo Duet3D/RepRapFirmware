@@ -12,6 +12,7 @@
 #include <CAN/CanInterface.h>
 #include <RepRap.h>
 #include <Platform.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(BoardState::unknown), numDrivers(0)
 {
@@ -155,19 +156,29 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
 
+	const unsigned int moduleNumber = (gb.Seen('S')) ? gb.GetLimitedUIValue('S', 4) : 0;
+	if (moduleNumber != (unsigned int)FirmwareModule::main && moduleNumber != (unsigned int)FirmwareModule::bootloader)
+	{
+		reply.printf("Unknown module number %u", moduleNumber);
+		return GCodeResult::error;
+	}
+
 	// Ask the board for its type and check we have the firmware file for it
 	CanMessageBuffer * const buf1 = CanInterface::AllocateBuffer(gb);
 	CanRequestId rid1 = CanInterface::AllocateRequestId(boardAddress);
 	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanId::MasterAddress, (CanAddress)boardAddress);
-	msg1->type = CanMessageReturnInfo::typeBoardName;
-	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply);
-	if (rslt != GCodeResult::ok)
+
+	msg1->type = (moduleNumber == (unsigned int)FirmwareModule::bootloader) ? CanMessageReturnInfo::typeBootloaderName : CanMessageReturnInfo::typeBoardName;
 	{
-		return rslt;
+		const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply);
+		if (rslt != GCodeResult::ok)
+		{
+			return rslt;
+		}
 	}
 
 	String<StringLength50> firmwareFilename;
-	firmwareFilename.copy("Duet3Firmware_");
+	firmwareFilename.copy((moduleNumber == 3) ? "Duet3Bootloader-" : "Duet3Firmware_");
 	firmwareFilename.cat(reply.c_str());
 	reply.Clear();
 	firmwareFilename.cat(".bin");
@@ -193,8 +204,13 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	auto msg2 = buf2->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid2, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg2->boardId = (uint8_t)boardAddress;
 	msg2->invertedBoardId = (uint8_t)~boardAddress;
-	UpdateBoardState(boardAddress, BoardState::flashing);
-	return CanInterface::SendRequestAndGetStandardReply(buf2, rid2, reply);
+	msg2->module = moduleNumber;
+	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf2, rid2, reply);
+	if (rslt == GCodeResult::ok)
+	{
+		UpdateBoardState(boardAddress, BoardState::flashing);
+	}
+	return rslt;
 }
 
 void ExpansionManager::UpdateFinished(CanAddress address) noexcept

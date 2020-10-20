@@ -976,6 +976,20 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	auto const msg = buf->SetupRequestMessage<CanMessageDiagnosticTest>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg->testType = type;
 	msg->invertedTestType = ~type;
+	if (type == (uint16_t)DiagnosticTestType::AccessMemory)
+	{
+		gb.MustSee('A');
+		msg->param32[0] = gb.GetUIValue();
+		if (gb.Seen('V'))
+		{
+			msg->param32[1] = gb.GetUIValue();
+			msg->param16 = 1;
+		}
+		else
+		{
+			msg->param16 = 0;
+		}
+	}
 	return SendRequestAndGetStandardReply(buf, rid, reply);			// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
@@ -1182,9 +1196,10 @@ GCodeResult CanInterface::ChangeFastTiming(GCodeBuffer& gb, const StringRef& rep
 	return GCodeResult::errorNotSupported;
 }
 
-GCodeResult CanInterface::CreateFilamentMonitor(DriverId driver, uint8_t type, const StringRef &reply) THROWS(GCodeException)
+GCodeResult CanInterface::CreateFilamentMonitor(DriverId driver, uint8_t type, const StringRef &reply) noexcept
 {
-	throw GCodeException(-1, -1, "CAN CreateFilamentMonitor not implemented yet");
+	reply.copy("CAN CreateFilamentMonitor not implemented yet");
+	return GCodeResult::error;
 }
 
 GCodeResult CanInterface::ConfigureFilamentMonitor(DriverId driver, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)

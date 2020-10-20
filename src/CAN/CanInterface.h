@@ -103,7 +103,7 @@ namespace CanInterface
 	GCodeResult ChangeHandleResponseTime(CanAddress boardAddress, RemoteInputHandle h, uint16_t responseMillis, bool &currentState, const StringRef &reply) noexcept;
 
 	// Filament monitor functions
-	GCodeResult CreateFilamentMonitor(DriverId driver, uint8_t type, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult CreateFilamentMonitor(DriverId driver, uint8_t type, const StringRef& reply) noexcept;
 	GCodeResult ConfigureFilamentMonitor(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void DeleteFilamentMonitor(DriverId driver) noexcept;				// called from a destructor, so must not throw
 

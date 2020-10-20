@@ -77,6 +77,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20030000;
 
 // The physical capabilities of the machine
 
+# include <Duet3Common.h>
+
 #if defined(DUET3MINI_V04)
 constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
 #elif defined(DUET3MINI_V02)
@@ -90,11 +92,6 @@ constexpr size_t MaxCanDrivers = 7;					// enough to support another Mini5+ as a
 constexpr unsigned int MaxCanBoards = 4;
 #endif
 
-constexpr size_t MaxSensors = 32;
-
-constexpr size_t MaxHeaters = 6;					// The maximum number of heaters in the machine
-constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors per heater
-
 constexpr size_t MaxBedHeaters = 2;
 constexpr size_t MaxChamberHeaters = 2;
 constexpr int8_t DefaultBedHeater = 0;
@@ -102,10 +99,6 @@ constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder 
 
 constexpr size_t NumThermistorInputs = 3;
 constexpr size_t NumTmcDriversSenseChannels = 2;
-
-constexpr size_t MaxZProbes = 3;
-constexpr size_t MaxGpInPorts = 10;
-constexpr size_t MaxGpOutPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 8;						// The maximum number of movement axes in the machine
@@ -119,11 +112,7 @@ constexpr size_t MaxAxesPlusExtruders = 8;
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 5;
 
-constexpr size_t MaxFans = 6;
-
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
-
-constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
 constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE (serialUSB)

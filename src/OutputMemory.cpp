@@ -94,59 +94,68 @@ const char *OutputBuffer::Read(size_t len) noexcept
 	return data + offset;
 }
 
-size_t OutputBuffer::printf(const char *fmt, ...) noexcept
+// Empty this buffer
+void OutputBuffer::Clear() noexcept
 {
-	char formatBuffer[FormatStringLength];
-	va_list vargs;
-	va_start(vargs, fmt);
-	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
-	va_end(vargs);
-
-	return copy(formatBuffer);
-}
-
-size_t OutputBuffer::vprintf(const char *fmt, va_list vargs) noexcept
-{
-	char formatBuffer[FormatStringLength];
-	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
-
-	return cat(formatBuffer);
-}
-
-size_t OutputBuffer::catf(const char *fmt, ...) noexcept
-{
-	char formatBuffer[FormatStringLength];
-	va_list vargs;
-	va_start(vargs, fmt);
-	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
-	va_end(vargs);
-
-	formatBuffer[ARRAY_UPB(formatBuffer)] = 0;
-	return cat(formatBuffer);
-}
-
-size_t OutputBuffer::lcatf(const char *fmt, ...) noexcept
-{
-	char formatBuffer[FormatStringLength];
-	va_list vargs;
-	va_start(vargs, fmt);
-	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
-	va_end(vargs);
-
-	formatBuffer[ARRAY_UPB(formatBuffer)] = 0;
-	return lcat(formatBuffer);
-}
-
-size_t OutputBuffer::copy(const char c) noexcept
-{
-	// Unlink existing entries before starting the copy process
 	if (next != nullptr)
 	{
 		ReleaseAll(next);
 		last = this;
 	}
+	dataLength = 0;
+}
 
-	// Set the data
+size_t OutputBuffer::vprintf(const char *fmt, va_list vargs) noexcept
+{
+	Clear();
+	return vcatf(fmt, vargs);
+}
+
+size_t OutputBuffer::printf(const char *fmt, ...) noexcept
+{
+	va_list vargs;
+	va_start(vargs, fmt);
+	size_t ret = vprintf(fmt, vargs);
+	va_end(vargs);
+	return ret;
+}
+
+size_t OutputBuffer::vcatf(const char *fmt, va_list vargs) noexcept
+{
+	return vuprintf([this](char c) noexcept -> bool
+					{
+						return c != 0 && cat(c) != 0;
+					},
+					fmt, vargs);
+}
+
+size_t OutputBuffer::catf(const char *fmt, ...) noexcept
+{
+	va_list vargs;
+	va_start(vargs, fmt);
+	size_t ret = vcatf(fmt, vargs);
+	va_end(vargs);
+	return ret;
+}
+
+size_t OutputBuffer::lcatf(const char *fmt, ...) noexcept
+{
+	size_t extra = 0;
+	if (Length() != 0 && operator[](Length() - 1) != '\n')
+	{
+		extra = cat('\n');
+	}
+
+	va_list vargs;
+	va_start(vargs, fmt);
+	const size_t ret = vcatf(fmt, vargs);
+	va_end(vargs);
+	return ret + extra;
+}
+
+size_t OutputBuffer::copy(const char c) noexcept
+{
+	Clear();
 	data[0] = c;
 	dataLength = 1;
 	return 1;
@@ -159,14 +168,7 @@ size_t OutputBuffer::copy(const char *src) noexcept
 
 size_t OutputBuffer::copy(const char *src, size_t len) noexcept
 {
-	// Unlink existing entries before starting the copy process
-	if (next != nullptr)
-	{
-		ReleaseAll(next);
-		last = this;
-	}
-
-	dataLength = 0;
+	Clear();
 	return cat(src, len);
 }
 
@@ -411,16 +413,16 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 // Get the number of bytes left for continuous writing
 /*static*/ size_t OutputBuffer::GetBytesLeft(const OutputBuffer *writingBuffer) noexcept
 {
-	const size_t freeOutputBuffers = OUTPUT_BUFFER_COUNT - usedOutputBuffers;
+	const size_t freeBuffers = OUTPUT_BUFFER_COUNT - usedOutputBuffers;
 	const size_t bytesLeft = OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength();
 
-	if (freeOutputBuffers < RESERVED_OUTPUT_BUFFERS)
+	if (freeBuffers < RESERVED_OUTPUT_BUFFERS)
 	{
 		// Keep some space left to encapsulate the responses (e.g. via an HTTP header)
 		return bytesLeft;
 	}
 
-	return bytesLeft + (freeOutputBuffers - RESERVED_OUTPUT_BUFFERS) * OUTPUT_BUFFER_SIZE;
+	return bytesLeft + (freeBuffers - RESERVED_OUTPUT_BUFFERS) * OUTPUT_BUFFER_SIZE;
 }
 
 // Truncate an output buffer to free up more memory. Returns the number of released bytes.

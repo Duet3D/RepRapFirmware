@@ -12,7 +12,7 @@
 #include <Cache.h>
 
 // Perform a software reset. 'stk' points to the exception stack (r0 r1 r2 r3 r12 lr pc xPSR) if the cause is an exception, otherwise it is nullptr.
-void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
+[[noreturn]] void SoftwareReset(SoftwareResetReason initialReason, const uint32_t *stk) noexcept
 {
 	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
 	WatchdogReset();							// kick the watchdog
@@ -23,7 +23,8 @@ void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 
 	Cache::Disable();
 
-	if (reason == (uint16_t)SoftwareResetReason::erase)
+	uint16_t fullReason = (uint16_t)initialReason;
+	if (initialReason == SoftwareResetReason::erase)
 	{
 #if SAME5x
 		//TODO invalidate flash so the USB bootloader runs
@@ -33,11 +34,11 @@ void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
  	}
 	else
 	{
-		if (reason != (uint16_t)SoftwareResetReason::user)
+		if (initialReason != SoftwareResetReason::user)
 		{
 			if (SERIAL_MAIN_DEVICE.canWrite() == 0)
 			{
-				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
+				fullReason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
 
 #if HAS_AUX_DEVICES
@@ -47,20 +48,20 @@ void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 # endif
 			   )
 			{
-				reason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
+				fullReason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
 			}
 #endif
 		}
-		reason |= (uint8_t)reprap.GetSpinningModule();
+		fullReason |= (uint8_t)reprap.GetSpinningModule();
 		if (reprap.GetPlatform().WasDeliberateError())
 		{
-			reason |= (uint16_t)SoftwareResetReason::deliberate;
+			fullReason |= (uint16_t)SoftwareResetReason::deliberate;
 		}
 
 		// Record the reason for the software reset
 		NonVolatileMemory mem;
 		SoftwareResetData * const srd = mem.AllocateResetDataSlot();
-        srd->Populate(reason, stk);
+        srd->Populate(fullReason, stk);
         mem.EnsureWritten();
 	}
 
@@ -73,12 +74,18 @@ void SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 	for(;;) {}
 }
 
+[[noreturn]] void OutOfMemoryHandler() noexcept
+{
+	register const uint32_t * stack_ptr asm ("sp");
+	SoftwareReset(SoftwareResetReason::outOfMemory, stack_ptr);
+}
+
 // Exception handlers
 // By default the Usage Fault, Bus Fault and Memory Management fault handlers are not enabled,
 // so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
 extern "C" [[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress);
+	SoftwareReset(SoftwareResetReason::hardFault, pulFaultStackAddress);
 }
 
 // The fault handler implementation calls a function called hardFaultDispatcher()
@@ -102,7 +109,7 @@ void HardFault_Handler() noexcept
 
 extern "C" [[noreturn]] void memManageDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::memFault, pulFaultStackAddress);
+	SoftwareReset(SoftwareResetReason::memFault, pulFaultStackAddress);
 }
 
 // The fault handler implementation calls a function called memManageDispatcher()
@@ -126,7 +133,7 @@ void MemManage_Handler() noexcept
 
 extern "C" [[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress);
+	SoftwareReset(SoftwareResetReason::wdtFault, pulFaultStackAddress);
 }
 
 #ifdef __LPC17xx__
@@ -154,7 +161,7 @@ void WDT_Handler() noexcept
 
 extern "C" [[noreturn]] void otherFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress);
+	SoftwareReset(SoftwareResetReason::otherFault, pulFaultStackAddress);
 }
 
 // 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
@@ -177,15 +184,15 @@ void OtherFault_Handler() noexcept
 
 // We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
 // however these exceptions are unlikely to occur, so for now we just report the exception type.
-extern "C" [[noreturn]] void NMI_Handler        () noexcept { SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
-extern "C" [[noreturn]] void UsageFault_Handler () noexcept { SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
+extern "C" [[noreturn]] void NMI_Handler        () noexcept { SoftwareReset(SoftwareResetReason::NMI); }
+extern "C" [[noreturn]] void UsageFault_Handler () noexcept { SoftwareReset(SoftwareResetReason::usageFault); }
 
 extern "C" [[noreturn]] void DebugMon_Handler   () noexcept __attribute__ ((alias("OtherFault_Handler")));
 
 // FreeRTOS hooks that we need to provide
 extern "C" [[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
+	SoftwareReset(SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 }
 
 extern "C" [[noreturn]] void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept __attribute((naked));
@@ -205,7 +212,7 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexce
 
 extern "C" [[noreturn]] void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
+	SoftwareReset(SoftwareResetReason::assertCalled, pulFaultStackAddress);
 }
 
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute((naked));
@@ -229,7 +236,7 @@ void vAssertCalled(uint32_t line, const char *file) noexcept
 #ifdef __LPC17xx__
 [[noreturn]] void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
-	reprap.SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
+	reprap.SoftwareReset(SoftwareResetReason::assertCalled, pulFaultStackAddress);
 }
 
 [[noreturn]] extern "C" void vApplicationMallocFailedHook() noexcept __attribute((naked));
@@ -257,7 +264,7 @@ namespace std
 [[noreturn]] void Terminate() noexcept
 {
 	register const uint32_t * stack_ptr asm ("sp");
-	SoftwareReset((uint16_t)SoftwareResetReason::terminateCalled, stack_ptr);
+	SoftwareReset(SoftwareResetReason::terminateCalled, stack_ptr);
 }
 
 namespace __cxxabiv1
@@ -268,13 +275,13 @@ namespace __cxxabiv1
 extern "C" [[noreturn]] void __cxa_pure_virtual() noexcept
 {
 	register const uint32_t * stack_ptr asm ("sp");
-	SoftwareReset((uint16_t)SoftwareResetReason::pureVirtual, stack_ptr);
+	SoftwareReset(SoftwareResetReason::pureOrDeletedVirtual, stack_ptr);
 }
 
 extern "C" [[noreturn]] void __cxa_deleted_virtual() noexcept
 {
 	register const uint32_t * stack_ptr asm ("sp");
-	SoftwareReset((uint16_t)SoftwareResetReason::deletedVirtual, stack_ptr);
+	SoftwareReset(SoftwareResetReason::pureOrDeletedVirtual, stack_ptr);
 }
 
 // End
