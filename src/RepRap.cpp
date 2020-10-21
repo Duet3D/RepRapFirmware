@@ -78,6 +78,9 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
+// Builds that use CoreN2G now need a version string. Eventually, all builds of RRF3 will use CoreN2G.
+extern const char VersionText[] = FIRMWARE_NAME " version " VERSION;
+
 #if HAS_HIGH_SPEED_SD && !SAME5x										// SAME5x uses CoreN2G which makes its own RTOS calls
 
 static TaskHandle hsmciTask = nullptr;									// the task that is waiting for a HSMCI command to complete
@@ -101,10 +104,8 @@ void HsmciDmaCallback(CallbackParameter cp) noexcept
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
 	if (hsmciTask != nullptr)
 	{
-		BaseType_t higherPriorityTaskWoken = pdFALSE;
-		vTaskNotifyGiveFromISR(hsmciTask, &higherPriorityTaskWoken);	// wake up the task
+		TaskBase::GiveFromISR(hsmciTask);
 		hsmciTask = nullptr;
-		portYIELD_FROM_ISR(higherPriorityTaskWoken);
 	}
 }
 
@@ -509,7 +510,7 @@ void RepRap::Init() noexcept
 	usingLinuxInterface = true;
 #endif
 
-	platform->MessageF(UsbMessage, "\n%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
+	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
 #if HAS_MASS_STORAGE
 	// Try to mount the first SD card
@@ -1189,7 +1190,7 @@ void RepRap::Tick() noexcept
 				__asm volatile("mrs r2, psp");
 				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
 				SoftwareReset(
-					(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
+					(heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin,
 					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
 			}
 		}

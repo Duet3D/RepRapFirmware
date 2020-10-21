@@ -48,7 +48,7 @@ bool Duet3DFilamentMonitor::Interrupt() noexcept
 	const size_t writePointer = edgeCaptureWritePointer;			// capture volatile variable
 	if ((writePointer + 1) % EdgeCaptureBufferSize != edgeCaptureReadPointer)	// if buffer is not full
 	{
-		if (GetPort().Read())
+		if (GetPort().ReadDigital())
 		{
 			if ((writePointer & 1) == 0)							// low-to-high transitions should occur on odd indices
 			{

@@ -47,7 +47,7 @@ bool GpInputPort::GetState() const noexcept
 		return currentState;
 	}
 #endif
-	return port.Read();
+	return port.ReadDigital();
 }
 
 // Return true if the port is not configured
@@ -107,7 +107,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 		{
 			if (port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpin, PinAccess::read))
 			{
-				currentState = port.Read();
+				currentState = port.ReadDigital();
 				rslt = GCodeResult::ok;
 			}
 			else

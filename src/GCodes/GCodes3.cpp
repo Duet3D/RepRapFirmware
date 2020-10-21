@@ -542,6 +542,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	const char *lettersToTry = AllowedAxisLetters;
 	char c;
 
+#if SUPPORT_CAN_EXPANSION
+	AxesBitmap axesToUpdate;
+#endif
 	const bool newAxesAreContinuousRotation = (gb.Seen('R') && gb.GetIValue() > 0);
 	while ((c = *lettersToTry) != 0)
 	{
@@ -623,6 +626,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 					reprap.MoveUpdated();
 				}
 				platform.SetAxisDriversConfig(drive, numValues, drivers);
+#if SUPPORT_CAN_EXPANSION
+				axesToUpdate.SetBit(drive);
+#endif
 			}
 		}
 		++lettersToTry;
@@ -638,6 +644,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		for (size_t i = 0; i < numValues; ++i)
 		{
 			platform.SetExtruderDriver(i, drivers[i]);
+#if SUPPORT_CAN_EXPANSION
+			axesToUpdate.SetBit(ExtruderToLogicalDrive(i));
+#endif
 		}
 		if (FilamentMonitor::CheckDriveAssignments(reply) && rslt == GCodeResult::ok)
 		{
@@ -670,6 +679,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);	// ensure that the position of any new axes are updated in moveBuffer
 			reprap.GetMove().SetNewPosition(moveBuffer.coords, true);		// tell the Move system where the axes are
 		}
+#if SUPPORT_CAN_EXPANSION
+		rslt = max(rslt, platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
+#endif
 		return rslt;
 	}
 

@@ -55,8 +55,8 @@ FilamentMonitor::~FilamentMonitor() noexcept
 #if SUPPORT_CAN_EXPANSION
 	if (!IsLocal() && hasRemote)
 	{
-		// Delete the remote filament monitor, catching any exceptions
-		CanInterface::DeleteFilamentMonitor(driver);
+		String<1> dummy;
+		(void)CanInterface::DeleteFilamentMonitor(driver, nullptr, dummy.GetRef());
 	}
 #endif
 }
@@ -134,7 +134,7 @@ bool FilamentMonitor::IsValid() const noexcept
 		}
 
 		gb.MustSee('C');														// make sure the port name parameter is present
-		sensor = Create(extruder, newSensorType, reply);						// create the new sensor
+		sensor = Create(extruder, newSensorType, gb, reply);					// create the new sensor
 		if (sensor == nullptr)
 		{
 			return GCodeResult::error;
@@ -171,7 +171,7 @@ bool FilamentMonitor::IsValid() const noexcept
 }
 
 // Factory function to create a filament monitor
-/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, const StringRef& reply) noexcept
+/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	FilamentMonitor *fm;
 	switch (monitorType)
@@ -203,7 +203,7 @@ bool FilamentMonitor::IsValid() const noexcept
 	if (fm != nullptr && !fm->IsLocal())
 	{
 		// Create the remote filament monitor on the expansion board
-		if (CanInterface::CreateFilamentMonitor(fm->driver, monitorType, reply) != GCodeResult::ok)
+		if (CanInterface::CreateFilamentMonitor(fm->driver, monitorType, gb, reply) != GCodeResult::ok)
 		{
 			delete fm;
 			return nullptr;
@@ -253,7 +253,6 @@ bool FilamentMonitor::IsValid() const noexcept
 			if (fs.IsLocal())
 #endif
 			{
-				GCodes& gCodes = reprap.GetGCodes();
 				bool isPrinting;
 				bool fromIsr;
 				int32_t extruderStepsCommanded;
@@ -275,6 +274,8 @@ bool FilamentMonitor::IsValid() const noexcept
 					fromIsr = false;
 					locIsrMillis = 0;
 				}
+
+				GCodes& gCodes = reprap.GetGCodes();
 				if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
 				{
 					const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(ExtruderToLogicalDrive(extruder));

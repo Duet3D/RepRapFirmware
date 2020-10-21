@@ -406,12 +406,12 @@ CanRequestId CanInterface::AllocateRequestId(CanAddress destination) noexcept
 }
 
 // Allocate a CAN message buffer, throw if failed
-CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer& gb) THROWS(GCodeException)
+CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer* gb) THROWS(GCodeException)
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		throw GCodeException(gb.GetLineNumber(), -1, "no CAN buffer");
+		throw GCodeException((gb == nullptr) ? -1 : gb->GetLineNumber(), -1, "no CAN buffer");
 	}
 	return buf;
 }
@@ -513,47 +513,6 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 	}
 }
 
-// Members of template class CanDriversData
-CanDriversData::CanDriversData() noexcept
-{
-	numEntries = 0;
-}
-
-// Insert a new entry, keeping the list ordered
-void CanDriversData::AddEntry(DriverId driver, uint16_t val) noexcept
-{
-	if (numEntries < ARRAY_SIZE(data))
-	{
-		// We could do a binary search here but the number of CAN drivers supported isn't huge, so linear search instead
-		size_t insertPoint = 0;
-		while (insertPoint < numEntries && data[insertPoint].driver < driver)
-		{
-			++insertPoint;
-		}
-		memmove(data + (insertPoint + 1), data + insertPoint, (numEntries - insertPoint) * sizeof(data[0]));
-		data[insertPoint].driver = driver;
-		data[insertPoint].val = val;
-		++numEntries;
-	}
-}
-
-// Get the details of the drivers on the next board and advance startFrom beyond the entries for this board
-CanAddress CanDriversData::GetNextBoardDriverBitmap(size_t& startFrom, CanDriversBitmap& driversBitmap) const noexcept
-{
-	driversBitmap.Clear();
-	if (startFrom >= numEntries)
-	{
-		return CanId::NoAddress;
-	}
-	const CanAddress boardAddress = data[startFrom].driver.boardAddress;
-	do
-	{
-		driversBitmap.SetBit(data[startFrom].driver.localDriver);
-		++startFrom;
-	} while (startFrom < numEntries && data[startFrom].driver.boardAddress == boardAddress);
-	return boardAddress;
-}
-
 // Insert a new entry, keeping the list ordered
 void CanDriversList::AddEntry(DriverId driver) noexcept
 {
@@ -599,9 +558,9 @@ CanAddress CanDriversList::GetNextBoardDriverBitmap(size_t& startFrom, CanDriver
 
 // Members of namespace CanInterface, and associated local functions
 
-static bool SetRemoteDriverValues(const CanDriversData& data, const StringRef& reply, CanMessageType mt) noexcept
+template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<T>& data, const StringRef& reply, CanMessageType mt) noexcept
 {
-	bool ok = true;
+	GCodeResult rslt = GCodeResult::ok;
 	size_t start = 0;
 	for (;;)
 	{
@@ -616,10 +575,10 @@ static bool SetRemoteDriverValues(const CanDriversData& data, const StringRef& r
 		if (buf == nullptr)
 		{
 			reply.lcat("No CAN buffer available");
-			return false;
+			return GCodeResult::error;
 		}
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-		CanMessageMultipleDrivesRequest * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest>(rid, CanId::MasterAddress, boardAddress, mt);
+		CanMessageMultipleDrivesRequest<T> * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<T>>(rid, CanId::MasterAddress, boardAddress, mt);
 		msg->driversToUpdate = driverBits.GetRaw();
 		size_t numDrivers = 0;
 		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
@@ -629,17 +588,14 @@ static bool SetRemoteDriverValues(const CanDriversData& data, const StringRef& r
 			++numDrivers;
 		}
 		buf->dataLength = msg->GetActualDataLength(numDrivers);
-		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply) != GCodeResult::ok)
-		{
-			ok = false;
-		}
+		rslt = max(rslt, CanInterface::SendRequestAndGetStandardReply(buf, rid, reply));
 	}
-	return ok;
+	return rslt;
 }
 
-static bool SetRemoteDriverStates(const CanDriversList& drivers, const StringRef& reply, uint16_t state) noexcept
+static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const StringRef& reply, uint16_t state) noexcept
 {
-	bool ok = true;
+	GCodeResult rslt = GCodeResult::ok;
 	size_t start = 0;
 	for (;;)
 	{
@@ -654,10 +610,10 @@ static bool SetRemoteDriverStates(const CanDriversList& drivers, const StringRef
 		if (buf == nullptr)
 		{
 			reply.lcat("No CAN buffer available");
-			return false;
+			return GCodeResult::error;
 		}
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-		CanMessageMultipleDrivesRequest * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest>(rid, CanId::MasterAddress, boardAddress, CanMessageType::setDriverStates);
+		CanMessageMultipleDrivesRequest<uint16_t> * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<uint16_t>>(rid, CanId::MasterAddress, boardAddress, CanMessageType::setDriverStates);
 		msg->driversToUpdate = driverBits.GetRaw();
 		size_t numDrivers = 0;
 		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
@@ -667,12 +623,9 @@ static bool SetRemoteDriverStates(const CanDriversList& drivers, const StringRef
 			++numDrivers;
 		}
 		buf->dataLength = msg->GetActualDataLength(numDrivers);
-		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply) != GCodeResult::ok)
-		{
-			ok = false;
-		}
+		rslt = max(rslt, CanInterface::SendRequestAndGetStandardReply(buf, rid, reply));
 	}
-	return ok;
+	return rslt;
 }
 
 // Add a buffer to the end of the send queue
@@ -826,33 +779,32 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 void CanInterface::DisableRemoteDrivers(const CanDriversList& drivers) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), CanMessageMultipleDrivesRequest::driverDisabled);
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), CanMessageMultipleDrivesRequest<uint16_t>::driverDisabled);
 }
 
 void CanInterface::SetRemoteDriversIdle(const CanDriversList& drivers) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), CanMessageMultipleDrivesRequest::driverIdle);
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), CanMessageMultipleDrivesRequest<uint16_t>::driverIdle);
 }
 
-bool CanInterface::SetRemoteStandstillCurrentPercent(const CanDriversData& data, const StringRef& reply) noexcept
+GCodeResult CanInterface::SetRemoteStandstillCurrentPercent(const CanDriversData<float>& data, const StringRef& reply) noexcept
 {
 	return SetRemoteDriverValues(data, reply, CanMessageType::setStandstillCurrentFactor);
 }
 
-bool CanInterface::SetRemoteDriverCurrents(const CanDriversData& data, const StringRef& reply) noexcept
+GCodeResult CanInterface::SetRemoteDriverCurrents(const CanDriversData<float>& data, const StringRef& reply) noexcept
 {
 	return SetRemoteDriverValues(data, reply, CanMessageType::setMotorCurrents);
 }
 
-// Set the microstepping on remote drivers, returning true if successful
-bool CanInterface::SetRemoteDriverMicrostepping(const CanDriversData& data, const StringRef& reply) noexcept
+GCodeResult CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(const CanDriversData<StepsPerUnitAndMicrostepping>& data, const StringRef& reply) noexcept
 {
-	return SetRemoteDriverValues(data, reply, CanMessageType::setMicrostepping);
+	return SetRemoteDriverValues(data, reply, CanMessageType::setStepsPerMmAndMicrostepping);
 }
 
 // Set the pressure advance on remote drivers, returning true if successful
-bool CanInterface::SetRemotePressureAdvance(const CanDriversData& data, const StringRef& reply) noexcept
+GCodeResult CanInterface::SetRemotePressureAdvance(const CanDriversData<float>& data, const StringRef& reply) noexcept
 {
 	return SetRemoteDriverValues(data, reply, CanMessageType::setPressureAdvance);
 }
@@ -971,11 +923,25 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	}
 
 	// It's a diagnostic test
-	CanMessageBuffer * const buf = AllocateBuffer(gb);
+	CanMessageBuffer * const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 	auto const msg = buf->SetupRequestMessage<CanMessageDiagnosticTest>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg->testType = type;
 	msg->invertedTestType = ~type;
+	if (type == (uint16_t)DiagnosticTestType::AccessMemory)
+	{
+		gb.MustSee('A');
+		msg->param32[0] = gb.GetUIValue();
+		if (gb.Seen('V'))
+		{
+			msg->param32[1] = gb.GetUIValue();
+			msg->param16 = 1;
+		}
+		else
+		{
+			msg->param16 = 0;
+		}
+	}
 	return SendRequestAndGetStandardReply(buf, rid, reply);			// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
@@ -1082,7 +1048,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 
 GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-	CanMessageBuffer * const buf = AllocateBuffer(gb);
+	CanMessageBuffer * const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 	auto msg = buf->SetupRequestMessage<CanMessageWriteGpio>(rid, CanId::MasterAddress, boardAddress);
 	msg->portNumber = portNumber;
@@ -1154,7 +1120,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 		return GCodeResult::ok;
 	}
 
-	CanMessageBufferHandle buf(AllocateBuffer(gb));
+	CanMessageBufferHandle buf(AllocateBuffer(&gb));
 	const CanRequestId rid = CanInterface::AllocateRequestId((uint8_t)oldAddress);
 	auto msg = buf.Access()->SetupRequestMessage<CanMessageSetAddressAndNormalTiming>(rid, CanId::MasterAddress, (uint8_t)oldAddress);
 	msg->oldAddress = (uint8_t)oldAddress;
@@ -1182,19 +1148,50 @@ GCodeResult CanInterface::ChangeFastTiming(GCodeBuffer& gb, const StringRef& rep
 	return GCodeResult::errorNotSupported;
 }
 
-GCodeResult CanInterface::CreateFilamentMonitor(DriverId driver, uint8_t type, const StringRef &reply) THROWS(GCodeException)
+// Create a filament monitor but do not configure it
+GCodeResult CanInterface::CreateFilamentMonitor(DriverId driver, uint8_t type, const GCodeBuffer& gb, const StringRef &reply) noexcept
 {
-	throw GCodeException(-1, -1, "CAN CreateFilamentMonitor not implemented yet");
+	try
+	{
+		CanMessageBuffer* const buf = AllocateBuffer(&gb);
+		const CanRequestId rid = CanInterface::AllocateRequestId(driver.boardAddress);
+		auto msg = buf->SetupRequestMessage<CanMessageCreateFilamentMonitor>(rid, CanId::MasterAddress, driver.boardAddress);
+		msg->driver = driver.localDriver;
+		msg->type = type;
+		return SendRequestAndGetStandardReply(buf, rid, reply);
+	}
+	catch (const GCodeException& ex)
+	{
+		ex.GetMessage(reply, &gb);
+		return GCodeResult::warning;
+	}
 }
 
+// Configure a filament monitor
 GCodeResult CanInterface::ConfigureFilamentMonitor(DriverId driver, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
-	throw GCodeException(-1, -1, "CAN ConfigureFilamentMonitor not implemented yet");
+	CanMessageGenericConstructor cons(ConfigureFilamentMonitorParams);
+	cons.AddUParam('d', driver.localDriver);
+	cons.PopulateFromCommand(gb);
+	return cons.SendAndGetResponse(CanMessageType::configureFilamentMonitor, driver.boardAddress, reply);
 }
 
-void CanInterface::DeleteFilamentMonitor(DriverId driver) noexcept
+// Delete a filament monitor. XCalled from a destructor, so no exceptions or error return.
+GCodeResult CanInterface::DeleteFilamentMonitor(DriverId driver, GCodeBuffer* gb, const StringRef& reply) noexcept
 {
-	//TODO
+	try
+	{
+		CanMessageBuffer* const buf = AllocateBuffer(gb);
+		const CanRequestId rid = CanInterface::AllocateRequestId(driver.boardAddress);
+		auto msg = buf->SetupRequestMessage<CanMessageDeleteFilamentMonitor>(rid, CanId::MasterAddress, driver.boardAddress);
+		msg->driver = driver.localDriver;
+		return SendRequestAndGetStandardReply(buf, rid, reply);
+	}
+	catch (const GCodeException& ex)
+	{
+		ex.GetMessage(reply, gb);
+		return GCodeResult::warning;
+	}
 }
 
 #endif

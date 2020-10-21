@@ -79,7 +79,7 @@ bool SimpleFilamentMonitor::Interrupt() noexcept
 // Call the following regularly to keep the status up to date
 void SimpleFilamentMonitor::Poll() noexcept
 {
-	const bool b = GetPort().Read();
+	const bool b = GetPort().ReadDigital();
 	filamentPresent = (highWhenNoFilament) ? !b : b;
 }
 

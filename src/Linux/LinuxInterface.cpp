@@ -112,7 +112,7 @@ void LinuxInterface::Init() noexcept
 
 				// Reset the controller
 				case LinuxRequest::Reset:
-					SoftwareReset((uint16_t)SoftwareResetReason::user);
+					SoftwareReset(SoftwareResetReason::user);
 					break;
 
 				// Perform a G/M/T-code
