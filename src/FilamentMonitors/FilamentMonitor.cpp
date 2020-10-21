@@ -74,9 +74,21 @@ void FilamentMonitor::Disable() noexcept
 GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) noexcept
 {
 #if SUPPORT_CAN_EXPANSION
+	// Check that the port (if given) is on the same board as the extruder
+	String<StringLength20> portName;
+	if (gb.TryGetQuotedString('C', portName.GetRef(), seen))
+	{
+		const CanAddress portAddress = IoPort::RemoveBoardAddress(portName.GetRef());
+		if (portAddress != driver.boardAddress)
+		{
+			reply.copy("Filament monitor port must be on same board as extruder driver");
+			return GCodeResult::error;
+		}
+	}
+
 	if (!IsLocal())
 	{
-		seen = true;
+		seen = true;				// this tells the local filament monitor not to report anything
 		return CanInterface::ConfigureFilamentMonitor(driver, gb, reply);
 	}
 #endif
@@ -119,7 +131,7 @@ bool FilamentMonitor::IsValid() const noexcept
 	gb.TryGetUIValue('P', newSensorType, seen);
 
 	WriteLocker lock(filamentMonitorsLock);
-	FilamentMonitor*& sensor = filamentSensors[extruder];
+	FilamentMonitor* sensor = filamentSensors[extruder];
 
 	if (seen)
 	{
@@ -146,6 +158,7 @@ bool FilamentMonitor::IsValid() const noexcept
 			if (rslt <= GCodeResult::warning)
 			{
 				filamentSensors[extruder] = sensor;
+				reprap.SensorsUpdated();
 			}
 			else
 			{

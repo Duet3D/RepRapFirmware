@@ -379,16 +379,20 @@ inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationCo
 	}
 	else if (val.GetType() == TypeCode::ObjectModel)
 	{
-		if (*filter == '.')
+		if (  (*filter != '.' && *filter != 0)		// we should have reached the end of the filter or a '.', error if not
+			|| val.omVal == nullptr					// OM arrays may contain null entries, so we need to handle them here
+		   )
 		{
-			++filter;
+			buf->cat("null");
 		}
-		else if (*filter != 0)
+		else
 		{
-			buf->cat("null");						// error, should have reached the end of the filter or a '.'
-			return;
+			if (*filter == '.')
+			{
+				++filter;
+			}
+			val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
 		}
-		val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
 	}
 	else
 	{
