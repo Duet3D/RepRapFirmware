@@ -2512,7 +2512,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							return false;
 						}
 						seen = true;
+#if SUPPORT_CAN_EXPANSION
 						axesToUpdate.SetBit(axis);
+#endif
 						const unsigned int microsteps = gb.GetUIValue();
 						if (ChangeMicrostepping(axis, microsteps, interp, reply))
 						{

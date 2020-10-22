@@ -749,41 +749,33 @@ void StringParser::DecodeCommand() noexcept
 			}
 		}
 
-		// Find where the end of the command is. We assume that a G or M preceded by a space and not inside quotes or { } is the start of a new command.
+		// Find where the end of the command is. We assume that a G or M not inside quotes or { } is the start of a new command.
 		bool inQuotes = false;
-		unsigned int braceCount = 0;
-		bool primed = false;
+		unsigned int localBraceCount = 0;
 		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
 		{
 			const char c = gb.buffer[commandEnd];
 			if (c == '"')
 			{
 				inQuotes = !inQuotes;
-				primed = false;
 			}
 			else if (!inQuotes)
 			{
 				char c2;
 				if (c == '{')
 				{
-					++braceCount;
-					primed = false;
+					++localBraceCount;
 				}
-				else if (c == '}')
+				else if (localBraceCount != 0)
 				{
-					if (braceCount != 0)
+					if (c == '}')
 					{
-						--braceCount;
+						--localBraceCount;
 					}
-					primed = false;
 				}
-				else if (primed && ((c2 = toupper(c)) == 'G' || c2 == 'M'))
+				else if ((c2 = toupper(c)) == 'G' || c2 == 'M')
 				{
 					break;
-				}
-				else if (braceCount == 0)
-				{
-					primed = (c == ' ' || c == '\t');
 				}
 			}
 		}
