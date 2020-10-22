@@ -260,7 +260,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),																ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
 # endif
-	{ "supports12864",		OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),											ObjectModelEntryFlags::verbose },
+	{ "supportsDirectDisplay", OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),										ObjectModelEntryFlags::verbose },
 #if MCU_HAS_UNIQUE_ID
 	{ "uniqueId",			OBJECT_MODEL_FUNC(self->GetUniqueIdString()),														ObjectModelEntryFlags::none },
 #endif

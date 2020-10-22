@@ -19,6 +19,8 @@ class IoPort
 {
 public:
 	IoPort() noexcept;
+	~IoPort() { Release(); }
+
 	bool SetMode(PinAccess access) noexcept;
 	void Release() noexcept;
 	void AppendDetails(const StringRef& str) const noexcept;
