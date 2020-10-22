@@ -3369,15 +3369,15 @@ void GCodes::DisableDrives() noexcept
 	SetAllAxesNotHomed();
 }
 
-bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept
+bool GCodes::ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept
 {
 	bool dummy;
-	const unsigned int oldSteps = platform.GetMicrostepping(drive, dummy);
-	const bool success = platform.SetMicrostepping(drive, microsteps, interp, reply);
+	const unsigned int oldSteps = platform.GetMicrostepping(axisOrExtruder, dummy);
+	const bool success = platform.SetMicrostepping(axisOrExtruder, microsteps, interp, reply);
 	if (success)
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate
-		platform.SetDriveStepsPerUnit(drive, platform.DriveStepsPerUnit(drive), oldSteps);
+		platform.SetDriveStepsPerUnit(axisOrExtruder, platform.DriveStepsPerUnit(axisOrExtruder), oldSteps);
 	}
 	return success;
 }

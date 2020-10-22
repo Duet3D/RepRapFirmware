@@ -55,8 +55,8 @@ FilamentMonitor::~FilamentMonitor() noexcept
 #if SUPPORT_CAN_EXPANSION
 	if (!IsLocal() && hasRemote)
 	{
-		// Delete the remote filament monitor, catching any exceptions
-		CanInterface::DeleteFilamentMonitor(driver);
+		String<1> dummy;
+		(void)CanInterface::DeleteFilamentMonitor(driver, nullptr, dummy.GetRef());
 	}
 #endif
 }
@@ -74,9 +74,21 @@ void FilamentMonitor::Disable() noexcept
 GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) noexcept
 {
 #if SUPPORT_CAN_EXPANSION
+	// Check that the port (if given) is on the same board as the extruder
+	String<StringLength20> portName;
+	if (gb.TryGetQuotedString('C', portName.GetRef(), seen))
+	{
+		const CanAddress portAddress = IoPort::RemoveBoardAddress(portName.GetRef());
+		if (portAddress != driver.boardAddress)
+		{
+			reply.copy("Filament monitor port must be on same board as extruder driver");
+			return GCodeResult::error;
+		}
+	}
+
 	if (!IsLocal())
 	{
-		seen = true;
+		seen = true;				// this tells the local filament monitor not to report anything
 		return CanInterface::ConfigureFilamentMonitor(driver, gb, reply);
 	}
 #endif
@@ -119,7 +131,7 @@ bool FilamentMonitor::IsValid() const noexcept
 	gb.TryGetUIValue('P', newSensorType, seen);
 
 	WriteLocker lock(filamentMonitorsLock);
-	FilamentMonitor*& sensor = filamentSensors[extruder];
+	FilamentMonitor* sensor = filamentSensors[extruder];
 
 	if (seen)
 	{
@@ -134,7 +146,7 @@ bool FilamentMonitor::IsValid() const noexcept
 		}
 
 		gb.MustSee('C');														// make sure the port name parameter is present
-		sensor = Create(extruder, newSensorType, reply);						// create the new sensor
+		sensor = Create(extruder, newSensorType, gb, reply);					// create the new sensor
 		if (sensor == nullptr)
 		{
 			return GCodeResult::error;
@@ -146,6 +158,7 @@ bool FilamentMonitor::IsValid() const noexcept
 			if (rslt <= GCodeResult::warning)
 			{
 				filamentSensors[extruder] = sensor;
+				reprap.SensorsUpdated();
 			}
 			else
 			{
@@ -171,7 +184,7 @@ bool FilamentMonitor::IsValid() const noexcept
 }
 
 // Factory function to create a filament monitor
-/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, const StringRef& reply) noexcept
+/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	FilamentMonitor *fm;
 	switch (monitorType)
@@ -203,7 +216,7 @@ bool FilamentMonitor::IsValid() const noexcept
 	if (fm != nullptr && !fm->IsLocal())
 	{
 		// Create the remote filament monitor on the expansion board
-		if (CanInterface::CreateFilamentMonitor(fm->driver, monitorType, reply) != GCodeResult::ok)
+		if (CanInterface::CreateFilamentMonitor(fm->driver, monitorType, gb, reply) != GCodeResult::ok)
 		{
 			delete fm;
 			return nullptr;

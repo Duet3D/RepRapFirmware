@@ -317,6 +317,7 @@ void CanMessageGenericConstructor::AddStringParam(char c, const char *v) THROWS(
 	}
 }
 
+
 GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) noexcept
 {
 	CanMessageBuffer * buf = CanMessageBuffer::Allocate();

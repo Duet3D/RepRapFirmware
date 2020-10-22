@@ -15,14 +15,21 @@
 #include <ObjectModel/ObjectModel.h>
 #include "RTOSIface/RTOSIface.h"
 
+#if defined(DUET3) || defined(DUET3MINI)
+# include <Duet3Common.h>
+#else
+
 enum class FilamentSensorStatus : uint8_t
 {
+	notPresent = 0,
 	ok,
 	noFilament,
 	tooLittleMovement,
 	tooMuchMovement,
 	sensorError
 };
+
+#endif
 
 class FilamentMonitor INHERIT_OBJECT_MODEL
 {
@@ -113,7 +120,7 @@ private:
 #endif
 
 	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentMonitor *Create(unsigned int extruder, unsigned int monitorType, const StringRef& reply) noexcept;
+	static FilamentMonitor *Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) noexcept;
 	static void InterruptEntry(CallbackParameter param) noexcept;
 
 	static FilamentMonitor *filamentSensors[MaxExtruders];

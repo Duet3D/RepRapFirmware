@@ -1212,6 +1212,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				gb.TryGetUIValue('S', ustepMultiplier, seenUstepMultiplier);
 
 				bool seen = false;
+#if SUPPORT_CAN_EXPANSION
+				AxesBitmap axesToUpdate;
+#endif
 				for (size_t axis = 0; axis < numTotalAxes; axis++)
 				{
 					if (gb.Seen(axisLetters[axis]))
@@ -1221,6 +1224,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							return false;
 						}
 						platform.SetDriveStepsPerUnit(axis, gb.GetFValue(), ustepMultiplier);
+#if SUPPORT_CAN_EXPANSION
+						axesToUpdate.SetBit(axis);
+#endif
 						seen = true;
 					}
 				}
@@ -1239,7 +1245,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// The user may not have as many extruders as we allow for, so just set the ones for which a value is provided
 					for (size_t e = 0; e < eCount; e++)
 					{
-						platform.SetDriveStepsPerUnit(ExtruderToLogicalDrive(e), eVals[e], ustepMultiplier);
+						const size_t drive = ExtruderToLogicalDrive(e);
+#if SUPPORT_CAN_EXPANSION
+						axesToUpdate.SetBit(drive);
+#endif
+						platform.SetDriveStepsPerUnit(drive, eVals[e], ustepMultiplier);
 					}
 				}
 
@@ -1247,6 +1257,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
 					reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+#if SUPPORT_CAN_EXPANSION
+					result = platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
+#endif
 				}
 				else
 				{
@@ -2479,6 +2492,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 350: // Set/report microstepping
 			{
+#if SUPPORT_CAN_EXPANSION
+				AxesBitmap axesToUpdate;
+#endif
 				bool interp = (gb.Seen('I') && gb.GetIValue() > 0);
 				bool seen = false;
 				for (size_t axis = 0; axis < numTotalAxes; axis++)
@@ -2490,6 +2506,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							return false;
 						}
 						seen = true;
+#if SUPPORT_CAN_EXPANSION
+						axesToUpdate.SetBit(axis);
+#endif
 						const unsigned int microsteps = gb.GetUIValue();
 						if (ChangeMicrostepping(axis, microsteps, interp, reply))
 						{
@@ -2514,14 +2533,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.GetUnsignedArray(eVals, eCount, true);
 					for (size_t e = 0; e < eCount; e++)
 					{
-						if (!ChangeMicrostepping(ExtruderToLogicalDrive(e), eVals[e], interp, reply))
+						const size_t drive = ExtruderToLogicalDrive(e);
+#if SUPPORT_CAN_EXPANSION
+						axesToUpdate.SetBit(drive);
+#endif
+						if (!ChangeMicrostepping(drive, eVals[e], interp, reply))
 						{
 							result = GCodeResult::error;
 						}
 					}
 				}
 
-				if (!seen)
+				if (seen)
+				{
+#if SUPPORT_CAN_EXPANSION
+					result = max(result, platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
+#endif
+				}
+				else
 				{
 					reply.copy("Microstepping - ");
 					for (size_t axis = 0; axis < numTotalAxes; ++axis)
@@ -4088,10 +4117,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					if (gb.Seen(axisLetters[axis]))
 					{
-						if (!platform.SetMotorCurrent(axis, gb.GetFValue(), code, reply))
-						{
-							result = GCodeResult::error;
-						}
+						result = max(result, platform.SetMotorCurrent(axis, gb.GetFValue(), code, reply));
 						seen = true;
 					}
 				}
@@ -4104,10 +4130,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.GetFloatArray(eVals, eCount, true);
 					for (size_t e = 0; e < eCount; e++)
 					{
-						if (!platform.SetMotorCurrent(ExtruderToLogicalDrive(e), eVals[e], code, reply))
-						{
-							result = GCodeResult::error;
-						}
+						result = max(result, platform.SetMotorCurrent(ExtruderToLogicalDrive(e), eVals[e], code, reply));
 					}
 				}
 

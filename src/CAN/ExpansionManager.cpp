@@ -164,7 +164,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	}
 
 	// Ask the board for its type and check we have the firmware file for it
-	CanMessageBuffer * const buf1 = CanInterface::AllocateBuffer(gb);
+	CanMessageBuffer * const buf1 = CanInterface::AllocateBuffer(&gb);
 	CanRequestId rid1 = CanInterface::AllocateRequestId(boardAddress);
 	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanId::MasterAddress, (CanAddress)boardAddress);
 
@@ -199,7 +199,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	}
 #endif
 
-	CanMessageBuffer * const buf2 = CanInterface::AllocateBuffer(gb);
+	CanMessageBuffer * const buf2 = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid2 = CanInterface::AllocateRequestId(boardAddress);
 	auto msg2 = buf2->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid2, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg2->boardId = (uint8_t)boardAddress;
@@ -226,7 +226,7 @@ void ExpansionManager::UpdateFailed(CanAddress address) noexcept
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
-	CanMessageBuffer * const buf = CanInterface::AllocateBuffer(gb);
+	CanMessageBuffer * const buf = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 	buf->SetupRequestMessage<CanMessageReset>(rid, CanId::MasterAddress, (uint8_t)boardAddress);
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
