@@ -485,6 +485,10 @@ void GCodes::Spin() noexcept
 		{
 			RunStateMachine(gb, reply.GetRef());                            // execute the state machine
 		}
+		if (gb.IsExecuting())
+		{
+			CheckReportDue(gb, reply.GetRef());
+		}
 	}
 
 #if HAS_LINUX_INTERFACE
@@ -4381,7 +4385,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 {
 	if (gb.IsReportDue())
 	{
-		if (gb.MachineState().compatibility == Compatibility::Marlin)
+		if (&gb == usbGCode && gb.MachineState().compatibility == Compatibility::Marlin)
 		{
 			// In Marlin emulation mode we should return a standard temperature report every second
 			GenerateTemperatureReport(reply);
@@ -4389,7 +4393,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			platform.Message(UsbMessage, reply.c_str());
 			reply.Clear();
 		}
-		if (platform.IsAuxEnabled(0) && lastAuxStatusReportType >= 0)
+		if (&gb == auxGCode && platform.IsAuxEnabled(0) && lastAuxStatusReportType >= 0)
 		{
 			// Send a standard status response for PanelDue
 			OutputBuffer * const statusBuf =
