@@ -55,6 +55,10 @@
 # include <Duet3Ate.h>
 #endif
 
+#if HAS_MASS_STORAGE
+# include "Logger.h"
+#endif
+
 #include <utility>			// for std::swap
 
 // If the code to act on is completed, this returns true, otherwise false.
@@ -1669,8 +1673,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				gb.GetQuotedString(message.GetRef());
 
 				MessageType type = GenericMessage;
+#if 0 && HAS_MASS_STORAGE
+				// Send all M118 to debug log
+				type = AddLogDebug(type);
+#endif
+				bool seenP = false;
 				if (gb.Seen('P'))
 				{
+					seenP = true;
 					const int32_t param = gb.GetIValue();
 					switch (param)
 					{
@@ -1701,9 +1711,37 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 
+#if HAS_MASS_STORAGE
+				if (gb.Seen('L'))
+				{
+					// If we haven't seen a P parameter but seen the L parameter we are going to log
+					// only to log file so reset message type first
+					if (!seenP)
+					{
+						type = MessageType::NoDestinationMessage;
+					}
+					const LogLevel logLevel = (LogLevel) gb.GetLimitedUIValue('L', LogLevel::NumValues, LogLevel::OFF);
+					switch (logLevel.ToBaseType())
+					{
+					case LogLevel::OFF:
+						type = RemoveLogging(type);
+						break;
+					case LogLevel::WARN:
+						type = AddLogWarn(type);
+						break;
+					case LogLevel::INFO:
+						type = AddLogInfo(type);
+						break;
+					case LogLevel::DEBUG:
+						type = AddLogDebug(type);
+						break;
+					}
+				}
+#endif
+
 				if (result != GCodeResult::error)
 				{
-					if (type != HttpMessage)
+					if ((type & HttpMessage) == 0)
 					{
 						platform.Message((MessageType)(type | PushFlag), message.c_str());
 						platform.Message(type, "\n");
@@ -2405,6 +2443,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						targetGb->MessageAcknowledged(cancelled);
 					}
 				}
+				platform.MessageF(MessageType::LogInfo, "M292: cancelled: %s", (cancelled ? "true" : "false"));
 			}
 			break;
 

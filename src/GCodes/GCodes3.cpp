@@ -184,6 +184,9 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 		if (seen)
 		{
 			reprap.MoveUpdated();
+			String<GCODE_LENGTH> scratch;
+			gb.AppendFullCommand(scratch.GetRef());
+			platform.Message(MessageType::LogInfo, scratch.c_str());
 		}
 		else
 		{

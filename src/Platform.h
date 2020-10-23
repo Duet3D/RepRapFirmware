@@ -562,6 +562,7 @@ public:
 	// Logging support
 	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	const char *GetLogFileName() const noexcept;
+	const char *GetLogLevel() const noexcept;
 #endif
 
 	// Ancillary PWM

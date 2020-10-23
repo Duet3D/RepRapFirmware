@@ -827,7 +827,7 @@ void GCodes::CheckFilament() noexcept
 		DoPause(*autoPauseGCode, PauseReason::filamentError, filamentErrorString.c_str(), (uint16_t)lastFilamentErrorExtruder);
 		lastFilamentError = FilamentSensorStatus::ok;
 		filamentErrorString.cat('\n');
-		platform.Message(LogMessage, filamentErrorString.c_str());
+		platform.Message(LogWarn, filamentErrorString.c_str());
 	}
 }
 
@@ -1228,7 +1228,7 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers) noexcept
 	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
 	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.c_str());
 	stallErrorString.cat('\n');
-	platform.Message(LogMessage, stallErrorString.c_str());
+	platform.Message(LogWarn, stallErrorString.c_str());
 	return true;
 }
 
@@ -3079,7 +3079,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	lastFilamentError = FilamentSensorStatus::ok;
 	lastPrintingMoveHeight = -1.0;
 	reprap.GetPrintMonitor().StartedPrint();
-	platform.MessageF(LogMessage,
+	platform.MessageF(LogWarn,
 						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
 							reprap.GetPrintMonitor().GetPrintingFilename());
 	if (fromStart)
@@ -3227,6 +3227,12 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply) 
 				reply.catf(" %.1f/%.1f", (double)tool->GetToolHeaterActiveTemperature(heater), (double)tool->GetToolHeaterStandbyTemperature(heater));
 			}
 		}
+	}
+	else
+	{
+		String<GCODE_LENGTH> scratch;
+		gb.AppendFullCommand(scratch.GetRef());
+		platform.Message(MessageType::LogInfo, scratch.c_str());
 	}
 	return GCodeResult::ok;
 }
@@ -3446,11 +3452,11 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 
 		if (rslt == GCodeResult::warning)
 		{
-			type = (MessageType)(type | WarningMessageFlag | LogMessage);
+			type = AddWarning(type);
 		}
 		else if (rslt == GCodeResult::error)
 		{
-			type = (MessageType)(type | ErrorMessageFlag | LogMessage);
+			type = AddError(type);
 		}
 
 		platform.Message(type, reply);
@@ -3466,8 +3472,8 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	}
 
 	const MessageType initialMt = gb.GetResponseMessageType();
-	const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(initialMt | ErrorMessageFlag | LogMessage)
-							: (rslt == GCodeResult::warning) ? (MessageType)(initialMt | WarningMessageFlag | LogMessage)
+	const MessageType mt = (rslt == GCodeResult::error) ? AddError(initialMt)
+							: (rslt == GCodeResult::warning) ? AddWarning(initialMt)
 								: initialMt;
 
 	switch (gb.MachineState().compatibility.RawValue())

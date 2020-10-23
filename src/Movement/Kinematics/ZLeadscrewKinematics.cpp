@@ -408,7 +408,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 			}
 		}
 	}
-	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
+	reprap.GetPlatform().MessageF(LogWarn, "%s\n", reply.c_str());
 	return failed;
 }
 

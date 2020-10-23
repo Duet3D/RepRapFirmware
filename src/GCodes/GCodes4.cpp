@@ -391,7 +391,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				reply.catf(" %c%.1f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
 			}
-			platform.MessageF(LogMessage, "%s\n", reply.c_str());
+			platform.MessageF(LogWarn, "%s\n", reply.c_str());
 			gb.SetState(GCodeState::normal);
 		}
 		break;
@@ -441,7 +441,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			restartInitialUserY = pauseRestorePoint.initialUserY;
 			isPaused = false;
 			reply.copy("Printing resumed");
-			platform.Message(LogMessage, "Printing resumed\n");
+			platform.Message(LogWarn, "Printing resumed\n");
 			gb.SetState(GCodeState::normal);
 		}
 		break;
@@ -789,7 +789,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		if (stateMachineResult == GCodeResult::ok)
 		{
-			reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
+			reprap.GetPlatform().MessageF(LogWarn, "%s\n", reply.c_str());
 		}
 		gb.SetState(GCodeState::normal);
 		break;

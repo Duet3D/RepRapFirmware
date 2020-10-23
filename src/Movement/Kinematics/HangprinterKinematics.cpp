@@ -585,7 +585,7 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	{
 		String<StringLength256> scratchString;
 		scratchString.printf("%s\n", reply.c_str());
-		reprap.GetPlatform().Message(LogMessage, scratchString.c_str());
+		reprap.GetPlatform().Message(LogWarn, scratchString.c_str());
 	}
 
     doneAutoCalibration = true;

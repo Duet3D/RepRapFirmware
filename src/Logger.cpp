@@ -12,6 +12,7 @@
 #include "OutputMemory.h"
 #include "RepRap.h"
 #include "Platform.h"
+#include "Version.h"
 
 // Simple lock class that sets a variable true when it is created and makes sure it gets set false when it falls out of scope
 class Lock
@@ -24,13 +25,13 @@ private:
 	bool& b;
 };
 
-Logger::Logger() noexcept : logFile(), lastFlushTime(0), lastFlushFileSize(0), dirty(false), inLogger(false)
+Logger::Logger(LogLevel logLvl) noexcept : logFile(), lastFlushTime(0), lastFlushFileSize(0), dirty(false), inLogger(false), logLevel(logLvl)
 {
 }
 
 void Logger::Start(time_t time, const StringRef& filename) noexcept
 {
-	if (!inLogger)
+	if (!inLogger && logLevel > LogLevel::OFF)
 	{
 		Lock loggerLock(inLogger);
 		FileStore * const f = reprap.GetPlatform().OpenSysFile(filename.c_str(), OpenMode::append);
@@ -40,10 +41,35 @@ void Logger::Start(time_t time, const StringRef& filename) noexcept
 			lastFlushFileSize = logFile.Length();
 			logFile.Seek(lastFlushFileSize);
 			logFileName.copy(filename.c_str());
-			InternalLogMessage(time, "Event logging started\n");
+			String<40> startMessage;
+			startMessage.printf("Event logging started at level %s\n", logLevel.ToString());
+			InternalLogMessage(time, startMessage.c_str(), MessageLogLevel::INFO);
+			LogFirmwareInfo(time);
 			reprap.StateUpdated();
 		}
 	}
+}
+
+// TODO: Move this to a more sensible location
+void Logger::LogFirmwareInfo(time_t time) noexcept
+{
+	const size_t versionStringLength = 80
+#if 0 && SUPPORT_CAN_EXPANSION // TODO
+			+ reprap.GetExpansion().GetNumExpansionBoards() + 1 * 80
+#endif
+			;
+	char buffer[versionStringLength];
+	StringRef firmwareInfo(buffer, ARRAY_SIZE(buffer));// This is huge but should accomodate for around 20 boards
+	firmwareInfo.printf("Running: %s: %s (%s)", reprap.GetPlatform().GetElectronicsString(), VERSION, DATE);
+
+#if 0 && SUPPORT_CAN_EXPANSION // TODO
+	for (size_t i = 1; i < reprap.GetExpansion().GetNumExpansionBoards() + 1; ++i)
+	{
+		auto expansionBoardData = reprap.GetExpansion().FindIndexedBoard(i);
+		firmwareInfo.catf(" - %s", expansionBoardData.typeName);
+	}
+#endif
+	InternalLogMessage(time, firmwareInfo.c_str(), MessageLogLevel::INFO);
 }
 
 void Logger::Stop(time_t time) noexcept
@@ -51,27 +77,58 @@ void Logger::Stop(time_t time) noexcept
 	if (logFile.IsLive() && !inLogger)
 	{
 		Lock loggerLock(inLogger);
-		InternalLogMessage(time, "Event logging stopped\n");
+		InternalLogMessage(time, "Event logging stopped\n", MessageLogLevel::INFO);
 		logFile.Close();
 		reprap.StateUpdated();
 	}
 }
 
-void Logger::LogMessage(time_t time, const char *message) noexcept
+// This will not start the logger if it is currently stopped
+void Logger::SetLogLevel(LogLevel newLogLevel) noexcept
 {
-	if (logFile.IsLive() && !inLogger)
+	if (logLevel != newLogLevel)
 	{
-		Lock loggerLock(inLogger);
-		InternalLogMessage(time, message);
+		logLevel = newLogLevel;
+		reprap.StateUpdated();
 	}
 }
 
-void Logger::LogMessage(time_t time, OutputBuffer *buf) noexcept
+//bool Logger::IsLoggingEnabledFor(const MessageType mt) const noexcept
+//{
+//	const auto messageLogLevel = GetMessageLogLevel(mt);
+//	return IsLoggingEnabledFor(messageLogLevel);
+//}
+
+void Logger::LogMessage(time_t time, const char *message, MessageType type) noexcept
 {
-	if (logFile.IsLive() && !inLogger)
+
+	if (logFile.IsLive() && !inLogger && !IsEmptyMessage(message))
 	{
+		const auto messageLogLevel = GetMessageLogLevel(type);
+		if (!IsLoggingEnabledFor(messageLogLevel))
+		{
+			return;
+		}
+		Lock loggerLock(inLogger);
+		InternalLogMessage(time, message, messageLogLevel);
+	}
+}
+
+void Logger::LogMessage(time_t time, OutputBuffer *buf, MessageType type) noexcept
+{
+	if (logFile.IsLive() && !inLogger && !IsEmptyMessage(buf->Data()))
+	{
+		const auto messageLogLevel = GetMessageLogLevel(type);
+		if (!IsLoggingEnabledFor(messageLogLevel))
+		{
+			return;
+		}
 		Lock loggerLock(inLogger);
 		bool ok = WriteDateTime(time);
+		if (ok)
+		{
+			ok = WriteLogLevelPrefix(messageLogLevel);
+		}
 		if (ok)
 		{
 			ok = buf->WriteToFile(logFile);
@@ -90,9 +147,13 @@ void Logger::LogMessage(time_t time, OutputBuffer *buf) noexcept
 }
 
 // Version of LogMessage for when we already know we want to proceed and we have already set inLogger
-void Logger::InternalLogMessage(time_t time, const char *message) noexcept
+void Logger::InternalLogMessage(time_t time, const char *message, const MessageLogLevel messageLogLevel) noexcept
 {
 	bool ok = WriteDateTime(time);
+	if (ok)
+	{
+		ok = WriteLogLevelPrefix(messageLogLevel);
+	}
 	if (ok)
 	{
 		const size_t len = strlen(message);
@@ -158,6 +219,14 @@ bool Logger::WriteDateTime(time_t time) noexcept
 		buf.printf("%04u-%02u-%02u %02u:%02u:%02u ",
 						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 	}
+	return logFile.Write(buf.c_str());
+}
+
+bool Logger::WriteLogLevelPrefix(MessageLogLevel messageLogLevel) noexcept
+{
+	String<10> bufferSpace;
+	const StringRef buf = bufferSpace.GetRef();
+	buf.printf("[%s] ", messageLogLevel.ToString());
 	return logFile.Write(buf.c_str());
 }
 
