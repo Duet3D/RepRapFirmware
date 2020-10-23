@@ -29,7 +29,10 @@ const uint8_t memPattern = 0xA5;
 
 extern "C" char *sbrk(int i);
 extern char _end;						// defined in linker script
-extern uint32_t _estack;				// defined in linker script
+extern char _estack;					// defined in linker script
+
+// Define replacement standard library functions
+#include <syscalls.h>
 
 #ifndef DEBUG
 extern uint32_t _firmware_crc;			// defined in linker script
@@ -218,25 +221,26 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 	extern "C" size_t xPortGetTotalHeapSize( void );
 #endif
 
-static void GetHandlerStackUsage(uint32_t* maxStack, uint32_t* neverUsed) noexcept
+// Return the amount of free handler stack space. It may be negative if the stack has overflowed into the area reserved for the heap.
+static ptrdiff_t GetHandlerFreeStack() noexcept
 {
-	const char * const ramend = (const char *)&_estack;
-	const char * const heapend = sbrk(0);
-	const char * stack_lwm = heapend;
+	const char * const ramend = &_estack;
+	const char * stack_lwm = heapTop;
 	while (stack_lwm < ramend && *stack_lwm == memPattern)
 	{
 		++stack_lwm;
 	}
-	if (maxStack != nullptr) { *maxStack = ramend - stack_lwm; }
-	if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
+	return stack_lwm - heapLimit;
 }
 
-uint32_t Tasks::GetNeverUsedRam() noexcept
+ptrdiff_t Tasks::GetNeverUsedRam() noexcept
 {
-	uint32_t neverUsedRam;
+	return heapLimit - heapTop;
+}
 
-	GetHandlerStackUsage(nullptr, &neverUsedRam);
-	return neverUsedRam;
+const char* Tasks::GetHeapTop() noexcept
+{
+	return heapTop;
 }
 
 // Write data about the current task
@@ -266,10 +270,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		const struct mallinfo mi = mallinfo();
 		p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
 #endif
-		uint32_t maxStack, neverUsed;
-		GetHandlerStackUsage(&maxStack, &neverUsed);
-		p.MessageF(mtype, "Exception stack ram used: %" PRIu32 "\n", maxStack);
-		p.MessageF(mtype, "Never used ram: %" PRIu32 "\n", neverUsed);
+		p.MessageF(mtype, "Never used RAM %d, free system stack %d words\n", GetNeverUsedRam(), GetHandlerFreeStack()/4);
 
 	}	// end memory stats scope
 

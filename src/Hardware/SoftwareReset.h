@@ -55,7 +55,7 @@ struct SoftwareResetData
 {
 	uint16_t magic;								// the magic number, including the version
 	uint16_t resetReason;						// this records why we did a software reset, for diagnostic purposes
-	uint32_t neverUsedRam;						// the amount of never used RAM at the last abnormal software reset
+	int32_t neverUsedRam;						// the amount of never used RAM at the last abnormal software reset
 	uint32_t hfsr;								// hard fault status register
 	uint32_t cfsr;								// configurable fault status register
 	uint32_t icsr;								// interrupt control and state register
