@@ -188,11 +188,11 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
 	if (simulationMode != 0)
 	{
-		DDA * const cdda = currentDda;								// currentDda is declared volatile, so copy it in the next line
-		if (cdda != nullptr)
+		DDA * const cdda2 = currentDda;								// currentDda is declared volatile, so copy it in the next line
+		if (cdda2 != nullptr)
 		{
-			simulationTime += (float)cdda->GetClocksNeeded()/StepTimer::StepClockRate;
-			cdda->Complete();
+			simulationTime += (float)cdda2->GetClocksNeeded()/StepTimer::StepClockRate;
+			cdda2->Complete();
 			CurrentMoveCompleted();
 		}
 	}

@@ -84,7 +84,7 @@ const char *GCodeBuffer::GetStateText() const noexcept
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
-	: codeChannel(channel), normalInput(normalIn), whenReportDueTimerStarted(millis()),
+	: codeChannel(channel), normalInput(normalIn),
 #if HAS_MASS_STORAGE
 	  fileInput(fileIn),
 #endif
@@ -93,7 +93,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  binaryParser(*this),
 #endif
 	  stringParser(*this),
-	  machineState(new GCodeMachineState()),
+	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
 #if HAS_LINUX_INTERFACE
 	  isBinaryBuffer(false),
 #endif

@@ -42,7 +42,7 @@ float tuningVoltageAccumulator;				// sum of the voltage readings we take during
 
 LocalHeater::LocalHeater(unsigned int heaterNum) noexcept : Heater(heaterNum), mode(HeaterMode::off)
 {
-	ResetHeater();
+	LocalHeater::ResetHeater();
 	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
 
 	// Time the sensor was last sampled.  During startup, we use the current
@@ -52,7 +52,7 @@ LocalHeater::LocalHeater(unsigned int heaterNum) noexcept : Heater(heaterNum), m
 
 LocalHeater::~LocalHeater() noexcept
 {
-	SwitchOff();
+	LocalHeater::SwitchOff();
 	port.Release();
 }
 

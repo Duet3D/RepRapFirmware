@@ -240,15 +240,14 @@ private:
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 
 	uint32_t whenTimerStarted;							// When we started waiting
+	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
+	static constexpr uint32_t reportDueInterval = 1000;	// Interval in which we send in ms
 
 #if HAS_LINUX_INTERFACE
 	bool isBinaryBuffer;
 #endif
 	bool timerRunning;									// True if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
-
-	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
-	static constexpr uint32_t reportDueInterval = 1000;	// Interval in which we send in ms
 
 #if HAS_LINUX_INTERFACE
 	alignas(4) char buffer[MaxCodeBufferSize];			// must be aligned because we do dword fetches from it

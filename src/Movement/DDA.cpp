@@ -141,15 +141,15 @@ void DDA::ReleaseDMs() noexcept
 	// Normally there should be no active DMs, but release any that there may be
 	for (DriveMovement* dm = activeDMs; dm != nullptr; )
 	{
-		DriveMovement* const next = dm->nextDM;
+		DriveMovement* const dnext = dm->nextDM;
 		DriveMovement::Release(dm);
-		dm = next;
+		dm = dnext;
 	}
 	for (DriveMovement* dm = completedDMs; dm != nullptr; )
 	{
-		DriveMovement* const next = dm->nextDM;
+		DriveMovement* const dnext = dm->nextDM;
 		DriveMovement::Release(dm);
-		dm = next;
+		dm = dnext;
 	}
 	activeDMs = completedDMs = nullptr;
 }

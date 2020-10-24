@@ -269,7 +269,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 
 	if (!seenX && !seenY && !seenR && !seenS && !seenP)
 	{
-		ReadLocker locker(reprap.GetMove().heightMapLock);
+		ReadLocker rlocker(reprap.GetMove().heightMapLock);
 
 		// Just print the existing grid parameters
 		if (defaultGrid.IsValid())
