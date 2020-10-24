@@ -260,7 +260,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),																ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
 # endif
-	{ "supports12864",		OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),											ObjectModelEntryFlags::verbose },
+	{ "supportsDirectDisplay", OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),										ObjectModelEntryFlags::verbose },
 #if MCU_HAS_UNIQUE_ID
 	{ "uniqueId",			OBJECT_MODEL_FUNC(self->GetUniqueIdString()),														ObjectModelEntryFlags::none },
 #endif
@@ -389,6 +389,8 @@ size_t Platform::GetNumGpOutputsToReport() const noexcept
 
 #endif
 
+bool Platform::deliberateError = false;						// true if we deliberately caused an exception for testing purposes
+
 Platform::Platform() noexcept :
 #if HAS_MASS_STORAGE
 	logger(nullptr),
@@ -406,7 +408,7 @@ Platform::Platform() noexcept :
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
-	deferredPowerDown(false), deliberateError(false)
+	deferredPowerDown(false)
 {
 }
 

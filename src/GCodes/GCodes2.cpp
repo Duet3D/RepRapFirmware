@@ -1581,7 +1581,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// Wait for the heaters associated with the specified tool to be ready
 					if (!ToolHeatersAtSetTemperatures(reprap.GetTool(gb.GetIValue()).Ptr(), true, tolerance))
 					{
-						CheckReportDue(gb, reply);				// check whether we need to send a temperature or status report
 						isWaiting = true;
 						return false;
 					}
@@ -1599,7 +1598,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						if (!reprap.GetHeat().HeaterAtSetTemperature(heaters[i], true, tolerance))
 						{
-							CheckReportDue(gb, reply);			// check whether we need to send a temperature or status report
 							isWaiting = true;
 							return false;
 						}
@@ -1622,7 +1620,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							const int8_t heater = reprap.GetHeat().GetChamberHeater(i);
 							if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance))
 							{
-								CheckReportDue(gb, reply);		// check whether we need to send a temperature or status report
 								isWaiting = true;
 								return false;
 							}
@@ -1638,7 +1635,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
 								if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance))
 								{
-									CheckReportDue(gb, reply);	// check whether we need to send a temperature or status report
 									isWaiting = true;
 									return false;
 								}
@@ -1651,7 +1647,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				// Wait for all heaters except chamber(s) to be ready
 				if (!seen && !reprap.GetHeat().AllHeatersAtSetTemperatures(true, tolerance))
 				{
-					CheckReportDue(gb, reply);					// check whether we need to send a temperature or status report
 					isWaiting = true;
 					return false;
 				}
@@ -1925,7 +1920,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						break;
 					}
 
-					CheckReportDue(gb, reply);			// check whether we need to send a temperature or status report
 					isWaiting = true;
 					return false;
 				}
@@ -2702,17 +2696,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
 				if (outBuf == nullptr)
 				{
-					result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
+					OutputBuffer::ReleaseAll(outBuf);
+					// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
+					reply.copy("{\"err\":-1}\n");
 				}
-				else
+				if (&gb == auxGCode)
 				{
-					outBuf->cat('\n');
-					if (outBuf->HadOverflow())
-					{
-						OutputBuffer::ReleaseAll(outBuf);
-						// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
-						reply.copy("{\"err\":-1}\n");
-					}
+					gb.ResetReportDueTimer();
 				}
 			}
 			break;
@@ -4398,7 +4388,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		return HandleResult(gb, result, reply, outBuf);
 	}
-	catch (const GCodeException& e)
+	catch (...)
 	{
 		OutputBuffer::ReleaseAll(outBuf);
 		throw;

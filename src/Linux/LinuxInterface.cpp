@@ -19,10 +19,13 @@
 #include "Tools/Filament.h"
 #include "RepRap.h"
 #include "RepRapFirmware.h"
+#include <Tasks.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Cache.h>
 #include <TaskPriorities.h>
+
+extern char _end;		// defined by the linker
 
 Mutex LinuxInterface::gcodeReplyMutex;
 Mutex LinuxInterface::codesMutex;
@@ -35,11 +38,11 @@ constexpr size_t LinuxTaskStackWords = 1000;			// needs to be enough to support 
 constexpr size_t LinuxTaskStackWords = 600;				// needs to be enough to support rr_model
 #endif
 
-static Task<LinuxTaskStackWords> linuxTask;
+static Task<LinuxTaskStackWords> *linuxTask;
 
 extern "C" [[noreturn]] void LinuxTaskStart(void * pvParameters) noexcept
 {
-	reprap.GetLinuxInterface().Task();
+	reprap.GetLinuxInterface().TaskLoop();
 }
 
 LinuxInterface::LinuxInterface() noexcept : wasConnected(false), numDisconnects(0),
@@ -65,12 +68,14 @@ void LinuxInterface::Init() noexcept
 #endif
 
 	transfer.Init();
-	linuxTask.Create(LinuxTaskStart, "Linux", nullptr, TaskPriority::SpinPriority);
-	transfer.SetLinuxTask(&linuxTask);
+	linuxTask = new Task<LinuxTaskStackWords>;
+	linuxTask->Create(LinuxTaskStart, "Linux", nullptr, TaskPriority::SpinPriority);
+	transfer.SetLinuxTask(linuxTask);
 	transfer.StartNextTransfer();
+	iapRamAvailable = &_end - Tasks::GetHeapTop();
 }
 
-[[noreturn]] void LinuxInterface::Task() noexcept
+[[noreturn]] void LinuxInterface::TaskLoop() noexcept
 {
 	bool writingIap = false;
 	for (;;)
@@ -192,7 +197,7 @@ void LinuxInterface::Init() noexcept
 							OutputBuffer::ReleaseAll(outBuf);
 						}
 					}
-					catch (GCodeException& e)
+					catch (const GCodeException& e)
 					{
 						// Get the error message and send it back to DSF
 						OutputBuffer *buf;
@@ -461,7 +466,7 @@ void LinuxInterface::Init() noexcept
 								packetAcknowledged = false;
 							}
 						}
-						catch (GCodeException& e)
+						catch (const GCodeException& e)
 						{
 							// Get the error message and send it back to DSF
 							String<StringLength100> errorMessage;
@@ -690,7 +695,7 @@ void LinuxInterface::Diagnostics(MessageType mtype) noexcept
 {
 	reprap.GetPlatform().Message(mtype, "=== SBC interface ===\n");
 	transfer.Diagnostics(mtype);
-	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 "\n", numDisconnects);
+	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 ", boot RAM 0x%05" PRIx32 "\n", numDisconnects, iapRamAvailable);
 	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d\n", (int)rxPointer, (int)txPointer, (int)txLength);
 }
 

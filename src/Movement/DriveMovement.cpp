@@ -30,7 +30,7 @@ void DriveMovement::InitialAllocate(unsigned int num) noexcept
 	ResetMinFree();
 }
 
-DriveMovement *DriveMovement::Allocate(size_t drive, DMState st) noexcept
+DriveMovement *DriveMovement::Allocate(size_t p_drive, DMState st) noexcept
 {
 	DriveMovement * const dm = freeList;
 	if (dm != nullptr)
@@ -42,7 +42,7 @@ DriveMovement *DriveMovement::Allocate(size_t drive, DMState st) noexcept
 			minFree = numFree;
 		}
 		dm->nextDM = nullptr;
-		dm->drive = (uint8_t)drive;
+		dm->drive = (uint8_t)p_drive;
 		dm->state = st;
 	}
 	return dm;

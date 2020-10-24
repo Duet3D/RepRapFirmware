@@ -194,6 +194,9 @@ public:
 	void StopTimer() noexcept { timerRunning = false; }
 	bool DoDwellTime(uint32_t dwellMillis) noexcept;			// Execute a dwell returning true if it has finished
 
+	void ResetReportDueTimer() noexcept { whenReportDueTimerStarted = millis(); };
+	bool IsReportDue() noexcept;
+
 	void RestartFrom(FilePosition pos) noexcept;
 
 #if HAS_MASS_STORAGE
@@ -237,6 +240,8 @@ private:
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 
 	uint32_t whenTimerStarted;							// When we started waiting
+	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
+	static constexpr uint32_t reportDueInterval = 1000;	// Interval in which we send in ms
 
 #if HAS_LINUX_INTERFACE
 	bool isBinaryBuffer;

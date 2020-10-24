@@ -485,6 +485,10 @@ void GCodes::Spin() noexcept
 		{
 			RunStateMachine(gb, reply.GetRef());                            // execute the state machine
 		}
+		if (gb.IsExecuting())
+		{
+			CheckReportDue(gb, reply.GetRef());
+		}
 	}
 
 #if HAS_LINUX_INTERFACE
@@ -530,7 +534,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			done = gb.CheckMetaCommand(reply);
 		}
-		catch (GCodeException& e)
+		catch (const GCodeException& e)
 		{
 			e.GetMessage(reply, &gb);
 			HandleReplyPreserveResult(gb, GCodeResult::error, reply.c_str());
@@ -666,7 +670,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					done = gb.CheckMetaCommand(reply);
 				}
-				catch (GCodeException& e)
+				catch (const GCodeException& e)
 				{
 					e.GetMessage(reply, &gb);
 					HandleReplyPreserveResult(gb, GCodeResult::error, reply.c_str());
@@ -703,7 +707,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					done = gb.CheckMetaCommand(reply);
 				}
-				catch (GCodeException& e)
+				catch (const GCodeException& e)
 				{
 					e.GetMessage(reply, &gb);
 					HandleReply(gb, GCodeResult::error, reply.c_str());
@@ -3461,14 +3465,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 
 	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued
 	// Also check that this response was triggered by a gcode
-	if (   reply[0] == 0
-		&& (   (gb.MachineState().doingFileMacro && !gb.MachineState().waitingForAcknowledgement)			// we must acknowledge M292
-			|| &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode
-#if HAS_AUX_DEVICES
-			|| (&gb == auxGCode && !platform.IsAuxRaw(0))
-#endif
-		   )
-	   )
+	if (reply[0] == 0 && (&gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode))
 	{
 		return;
 	}
@@ -3482,11 +3479,18 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	{
 	case Compatibility::Default:
 	case Compatibility::RepRapFirmware:
-		// DWC expects a reply from every code, so append a newline if it is empty to prevent it from being suppressed
-		platform.MessageF(mt, "%s\n", reply);
+		// In RepRapFirmware compatibility mode we suppress empty responses in most cases
+		if (   reply[0] != 0
+			|| &gb == httpGCode					// DWC expects a reply from every code, so we must even send empty responses
+			|| &gb == spiGCode					// assume that DSF always expects a response too
+			|| (gb.MachineState().doingFileMacro && !gb.MachineState().waitingForAcknowledgement)			// we must always acknowledge M292
+		   )
+		{
+			platform.MessageF(mt, "%s\n", reply);
+		}
 		break;
 
-	case Compatibility::NanoDLP:		// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
+	case Compatibility::NanoDLP:				// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
 	case Compatibility::Marlin:
 		{
 			const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
@@ -4379,16 +4383,17 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const noexcept
 // 'reply' is a convenient buffer that is free for us to use.
 void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 {
-	if (gb.DoDwellTime(1000))
+	if (gb.IsReportDue())
 	{
-		if (gb.MachineState().compatibility == Compatibility::Marlin)
+		if (&gb == usbGCode && gb.MachineState().compatibility == Compatibility::Marlin)
 		{
 			// In Marlin emulation mode we should return a standard temperature report every second
 			GenerateTemperatureReport(reply);
 			reply.cat('\n');
 			platform.Message(UsbMessage, reply.c_str());
+			reply.Clear();
 		}
-		if (lastAuxStatusReportType >= 0)
+		if (&gb == auxGCode && platform.IsAuxEnabled(0) && lastAuxStatusReportType >= 0)
 		{
 			// Send a standard status response for PanelDue
 			OutputBuffer * const statusBuf =
@@ -4398,9 +4403,12 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			if (statusBuf != nullptr)
 			{
 				platform.AppendAuxReply(0, statusBuf, true);
+				if (reprap.Debug(moduleGcodes))
+				{
+					reprap.GetPlatform().MessageF(DebugMessage, "%s: Sent unsolicited status report\n", gb.GetChannel().ToString());
+				}
 			}
 		}
-		gb.StartTimer();
 	}
 }
 

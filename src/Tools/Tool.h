@@ -116,7 +116,7 @@ protected:
 	void Standby() noexcept;
 	void FlagTemperatureFault(int8_t dudHeater) noexcept;
 	void ClearTemperatureFault(int8_t wasDudHeater) noexcept;
-	void UpdateExtruderAndHeaterCount(uint16_t &extruders, uint16_t &heaters, uint16_t &numToolsToReport) const noexcept;
+	void UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters, uint16_t &numToolsToReport) const noexcept;
 	bool DisplayColdExtrudeWarning() noexcept;
 
 private:

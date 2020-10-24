@@ -93,7 +93,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  binaryParser(*this),
 #endif
 	  stringParser(*this),
-	  machineState(new GCodeMachineState()),
+	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
 #if HAS_LINUX_INTERFACE
 	  isBinaryBuffer(false),
 #endif
@@ -164,6 +164,20 @@ bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis) noexcept
 
 	// New dwell - set it up
 	StartTimer();
+	return false;
+}
+
+// Delay executing this GCodeBuffer for the specified time. Return true when the timer has expired.
+bool GCodeBuffer::IsReportDue() noexcept
+{
+	const uint32_t now = millis();
+
+	// Are we due?
+	if (now - whenReportDueTimerStarted >= reportDueInterval)
+	{
+		ResetReportDueTimer();
+		return true;
+	}
 	return false;
 }
 

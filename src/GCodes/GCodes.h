@@ -210,7 +210,7 @@ public:
 
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;		// Save position etc. to a restore point
 	void SaveSpindleSpeeds(RestorePoint& rp) const noexcept;						// Save spindle speeds to a restore point
-	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t toolChangeParam) noexcept;
+	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
 
 	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return currentCoordinateSystem + 1; }
 

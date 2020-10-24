@@ -42,14 +42,14 @@
 # define DEFINE_FREE
 # define DEFINE_CFREE
 # define DEFINE_CALLOC
-# define DEFINE_REALLOC
+//# define DEFINE_REALLOC
 # define DEFINE_MALLINFO
-# define DEFINE_MALLOPT
-# define DEFINE_MALLOC_STATS
-# define DEFINE_MALLOC_USABLE_SIZE
-# define DEFINE_MEMALIGN
-# define DEFINE_VALLOC
-# define DEFINE_PVALLOC
+//# define DEFINE_MALLOPT
+//# define DEFINE_MALLOC_STATS
+//# define DEFINE_MALLOC_USABLE_SIZE
+//# define DEFINE_MEMALIGN
+//# define DEFINE_VALLOC
+//# define DEFINE_PVALLOC
 #endif
 
 // DC #if DEBUG
@@ -57,6 +57,7 @@
 #include <assert.h>
 #else
 #define assert(x) ((void)0)
+extern void vAssertCalled(uint32_t line, const char *file) noexcept;
 #endif
 
 #ifndef MAX
@@ -64,8 +65,8 @@
 #endif
 
 #if 1	// DC
-extern char *sbrk(int i);
-#define _SBRK_R(X) sbrk(X)
+extern void *_sbrk(ptrdiff_t i);
+#define _SBRK_R(X) _sbrk(X)
 #else
 #define _SBRK_R(X) _sbrk_r(X)
 #endif
@@ -104,8 +105,19 @@ extern char *sbrk(int i);
 #define RONEARG
 #define RCALL
 #define RONECALL
+
+#if 1	//dc42
+
+extern void GetMallocMutex();
+extern void ReleaseMallocMutex();
+
+#define MALLOC_LOCK		GetMallocMutex()
+#define MALLOC_UNLOCK	ReleaseMallocMutex()
+#else
 #define MALLOC_LOCK
 #define MALLOC_UNLOCK
+#endif
+
 #define RERRNO errno
 
 #define nano_malloc		malloc
@@ -430,9 +442,13 @@ void nano_free (RARG void * free_p)
     else if ((char *)p + p->size > (char *)p_to_free)
     {
         /* Report double free fault */
+#if 1	// DC
+    	vAssertCalled(__LINE__, __FILE__);
+#else
         RERRNO = ENOMEM;
         MALLOC_UNLOCK;
         return;
+#endif
     }
 #endif
     else if ((char *)p_to_free + p_to_free->size == (char *) q)

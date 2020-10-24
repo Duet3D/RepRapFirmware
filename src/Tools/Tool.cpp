@@ -385,7 +385,7 @@ void Tool::Activate() noexcept
 			reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
 			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 		}
-		catch (GCodeException& exc)
+		catch (const GCodeException& exc)
 		{
 			String<StringLength100> message;
 			exc.GetMessage(message.GetRef(), nullptr);
@@ -410,7 +410,7 @@ void Tool::Standby() noexcept
 				reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 				reprap.GetHeat().Standby(heaters[heater], this);
 			}
-			catch (GCodeException& exc)
+			catch (const GCodeException& exc)
 			{
 				String<StringLength100> message;
 				exc.GetMessage(message.GetRef(), nullptr);

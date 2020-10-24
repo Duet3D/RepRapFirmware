@@ -156,7 +156,7 @@ public:
 	static int NumFree() noexcept { return numFree; }
 	static int MinFree() noexcept { return minFree; }
 	static void ResetMinFree() noexcept { minFree = numFree; }
-	static DriveMovement *Allocate(size_t drive, DMState st) noexcept;
+	static DriveMovement *Allocate(size_t p_drive, DMState st) noexcept;
 	static void Release(DriveMovement *item) noexcept;
 
 private:
@@ -173,8 +173,7 @@ private:
 
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
-	uint8_t microstepShift : 4,							// log2 of the microstepping factor (for when we use dynamic microstepping adjustment)
-			direction : 1,								// true=forwards, false=backwards
+	uint8_t direction : 1,								// true=forwards, false=backwards
 			fullCurrent : 1,							// true if the drivers are set to the full current, false if they are set to the standstill current
 			isDelta : 1;								// true if this DM uses segment-free delta kinematics
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate

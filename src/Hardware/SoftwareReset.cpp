@@ -139,7 +139,7 @@ void SoftwareResetData::Print(MessageType mtype, unsigned int slot) const noexce
 		if (cfsr & (1u << 0)) { scratchString.cat(" iaccViol"); }
 	}
 #endif
-	reprap.GetPlatform().MessageF(mtype, "%s, %s spinning, available RAM %" PRIu32 ", slot %u\n",
+	reprap.GetPlatform().MessageF(mtype, "%s, %s spinning, available RAM %" PRIi32 ", slot %u\n",
 						scratchString.c_str(),
 						GetModuleName(resetReason & 0x1F),
 						neverUsedRam,
