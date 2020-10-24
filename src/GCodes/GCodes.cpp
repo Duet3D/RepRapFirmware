@@ -485,6 +485,10 @@ void GCodes::Spin() noexcept
 		{
 			RunStateMachine(gb, reply.GetRef());                            // execute the state machine
 		}
+		if (gb.IsExecuting())
+		{
+			CheckReportDue(gb, reply.GetRef());
+		}
 	}
 
 #if HAS_LINUX_INTERFACE
@@ -4379,16 +4383,17 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const noexcept
 // 'reply' is a convenient buffer that is free for us to use.
 void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 {
-	if (gb.DoDwellTime(1000))
+	if (gb.IsReportDue())
 	{
-		if (gb.MachineState().compatibility == Compatibility::Marlin)
+		if (&gb == usbGCode && gb.MachineState().compatibility == Compatibility::Marlin)
 		{
 			// In Marlin emulation mode we should return a standard temperature report every second
 			GenerateTemperatureReport(reply);
 			reply.cat('\n');
 			platform.Message(UsbMessage, reply.c_str());
+			reply.Clear();
 		}
-		if (lastAuxStatusReportType >= 0)
+		if (&gb == auxGCode && platform.IsAuxEnabled(0) && lastAuxStatusReportType >= 0)
 		{
 			// Send a standard status response for PanelDue
 			OutputBuffer * const statusBuf =
@@ -4398,9 +4403,12 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			if (statusBuf != nullptr)
 			{
 				platform.AppendAuxReply(0, statusBuf, true);
+				if (reprap.Debug(moduleGcodes))
+				{
+					reprap.GetPlatform().MessageF(DebugMessage, "%s: Sent unsolicited status report\n", gb.GetChannel().ToString());
+				}
 			}
 		}
-		gb.StartTimer();
 	}
 }
 

@@ -84,7 +84,7 @@ const char *GCodeBuffer::GetStateText() const noexcept
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
-	: codeChannel(channel), normalInput(normalIn),
+	: codeChannel(channel), normalInput(normalIn), whenReportDueTimerStarted(millis()),
 #if HAS_MASS_STORAGE
 	  fileInput(fileIn),
 #endif
@@ -164,6 +164,20 @@ bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis) noexcept
 
 	// New dwell - set it up
 	StartTimer();
+	return false;
+}
+
+// Delay executing this GCodeBuffer for the specified time. Return true when the timer has expired.
+bool GCodeBuffer::IsReportDue() noexcept
+{
+	const uint32_t now = millis();
+
+	// Are we due?
+	if (now - whenReportDueTimerStarted >= reportDueInterval)
+	{
+		ResetReportDueTimer();
+		return true;
+	}
 	return false;
 }
 
