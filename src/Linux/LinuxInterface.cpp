@@ -197,7 +197,7 @@ void LinuxInterface::Init() noexcept
 							OutputBuffer::ReleaseAll(outBuf);
 						}
 					}
-					catch (GCodeException& e)
+					catch (const GCodeException& e)
 					{
 						// Get the error message and send it back to DSF
 						OutputBuffer *buf;
@@ -466,7 +466,7 @@ void LinuxInterface::Init() noexcept
 								packetAcknowledged = false;
 							}
 						}
-						catch (GCodeException& e)
+						catch (const GCodeException& e)
 						{
 							// Get the error message and send it back to DSF
 							String<StringLength100> errorMessage;

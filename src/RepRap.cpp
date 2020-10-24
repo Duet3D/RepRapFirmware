@@ -2337,9 +2337,21 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 			++key;
 		}
 
-		outBuf->cat(",\"result\":");
-		reprap.ReportAsJson(outBuf, key, flags, wantArrayLength);
-		outBuf->cat('}');
+		try
+		{
+			outBuf->cat(",\"result\":");
+			reprap.ReportAsJson(outBuf, key, flags, wantArrayLength);
+			outBuf->cat('}');
+			if (outBuf->HadOverflow())
+			{
+				OutputBuffer::ReleaseAll(outBuf);
+			}
+		}
+		catch (...)
+		{
+			OutputBuffer::ReleaseAll(outBuf);
+			throw;
+		}
 	}
 
 	return outBuf;

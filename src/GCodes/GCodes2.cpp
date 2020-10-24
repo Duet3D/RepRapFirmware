@@ -2696,21 +2696,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
 				if (outBuf == nullptr)
 				{
-					result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
+					OutputBuffer::ReleaseAll(outBuf);
+					// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
+					reply.copy("{\"err\":-1}\n");
 				}
-				else
+				if (&gb == auxGCode)
 				{
-					outBuf->cat('\n');
-					if (outBuf->HadOverflow())
-					{
-						OutputBuffer::ReleaseAll(outBuf);
-						// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
-						reply.copy("{\"err\":-1}\n");
-					}
-					if (&gb == auxGCode)
-					{
-						gb.ResetReportDueTimer();
-					}
+					gb.ResetReportDueTimer();
 				}
 			}
 			break;
@@ -4396,7 +4388,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		return HandleResult(gb, result, reply, outBuf);
 	}
-	catch (const GCodeException& e)
+	catch (...)
 	{
 		OutputBuffer::ReleaseAll(outBuf);
 		throw;

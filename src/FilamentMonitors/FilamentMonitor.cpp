@@ -166,7 +166,7 @@ bool FilamentMonitor::IsValid() const noexcept
 			}
 			return rslt;
 		}
-		catch (const GCodeException&)
+		catch (...)
 		{
 			delete sensor;
 			throw;
