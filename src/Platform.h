@@ -313,7 +313,7 @@ public:
 
 	void Diagnostics(MessageType mtype) noexcept;
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException);
-	bool WasDeliberateError() const noexcept { return deliberateError; }
+	static bool WasDeliberateError() noexcept { return deliberateError; }
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
 
 	bool AtxPower() const noexcept;
@@ -873,7 +873,7 @@ private:
 	bool deferredPowerDown;
 
 	// Misc
-	bool deliberateError;								// true if we deliberately caused an exception for testing purposes
+	static bool deliberateError;						// true if we deliberately caused an exception for testing purposes. Must be static in case of exception during startup.
 };
 
 #if HAS_MASS_STORAGE

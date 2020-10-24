@@ -389,6 +389,8 @@ size_t Platform::GetNumGpOutputsToReport() const noexcept
 
 #endif
 
+bool Platform::deliberateError = false;						// true if we deliberately caused an exception for testing purposes
+
 Platform::Platform() noexcept :
 #if HAS_MASS_STORAGE
 	logger(nullptr),
@@ -406,7 +408,7 @@ Platform::Platform() noexcept :
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
-	deferredPowerDown(false), deliberateError(false)
+	deferredPowerDown(false)
 {
 }
 

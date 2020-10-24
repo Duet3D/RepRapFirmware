@@ -27,7 +27,6 @@
 
 const uint8_t memPattern = 0xA5;
 
-extern "C" char *sbrk(int i);
 extern char _end;						// defined in linker script
 extern char _estack;					// defined in linker script
 
@@ -86,7 +85,7 @@ static Mutex mallocMutex;
 static Mutex filamentsMutex;
 
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
-extern "C" void __malloc_lock (struct _reent *_r) noexcept
+extern "C" void GetMallocMutex() noexcept
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't take mutex if scheduler not started or suspended
 	{
@@ -94,7 +93,7 @@ extern "C" void __malloc_lock (struct _reent *_r) noexcept
 	}
 }
 
-extern "C" void __malloc_unlock (struct _reent *_r) noexcept
+extern "C" void ReleaseMallocMutex() noexcept
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't release mutex if scheduler not started or suspended
 	{
@@ -134,7 +133,7 @@ extern "C" [[noreturn]] void AppMain() noexcept
 #endif	// !defined(DEBUG) && !defined(__LPC17xx__)
 
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
-	char* heapend = sbrk(0);
+	char* heapend = heapTop;
 	register const char * stack_ptr asm ("sp");
 	while (heapend + 16 < stack_ptr)
 	{
@@ -197,19 +196,19 @@ extern "C" [[noreturn]] void AppMain() noexcept
 	timerTask.AddToList();
 #endif
 
-	// Create the startup task
+	// Create the mutexes and the startup task
+	mallocMutex.Create("Malloc");
+	i2cMutex.Create("I2C");
+	sysDirMutex.Create("SysDir");
+	filamentsMutex.Create("Filaments");
 	mainTask.Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
+
 	vTaskStartScheduler();			// doesn't return
 	for (;;) { }					// keep gcc happy
 }
 
 extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 {
-	mallocMutex.Create("Malloc");
-	i2cMutex.Create("I2C");
-	sysDirMutex.Create("SysDir");
-	filamentsMutex.Create("Filaments");
-
 	reprap.Init();
 	for (;;)
 	{

@@ -390,7 +390,11 @@ void CanInterface::Shutdown() noexcept
 		can0dev = nullptr;
 	}
 #else
-	mcan_stop(&mcan_instance);
+	if (mcan_instance.hw != nullptr)
+	{
+		mcan_stop(&mcan_instance);
+		mcan_instance.hw = nullptr;
+	}
 #endif
 }
 
@@ -652,6 +656,15 @@ void CanInterface::SendMotion(CanMessageBuffer *buf) noexcept
 // Send a request to an expansion board and append the response to 'reply'
 GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra) noexcept
 {
+#if USE_NEW_CAN_DRIVER
+	if (can0dev == nullptr)
+#else
+	if (mcan_instance.hw == nullptr)
+#endif
+	{
+		// Transactions sometimes get requested after we have shut down CAN, e.g. when we destroy filament monitors
+		return GCodeResult::error;
+	}
 	const CanAddress dest = buf->id.Dst();
 #if USE_NEW_CAN_DRIVER
 	can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
@@ -735,9 +748,15 @@ void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 void CanInterface::SendBroadcastNoFree(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
-	can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+	if (can0dev != nullptr)
+	{
+		can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+	}
 #else
-	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
+	if (mcan_instance.hw != nullptr)
+	{
+		mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
+	}
 #endif
 }
 
@@ -745,9 +764,15 @@ void CanInterface::SendBroadcastNoFree(CanMessageBuffer *buf) noexcept
 void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 {
 #if USE_NEW_CAN_DRIVER
-	can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+	if (can0dev != nullptr)
+	{
+		can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+	}
 #else
-	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
+	if (mcan_instance.hw != nullptr)
+	{
+		mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
+	}
 #endif
 }
 
