@@ -1088,6 +1088,24 @@ bool DataTransfer::WriteAbortFileRequest(GCodeChannel channel, bool abortAll) no
 	return true;
 }
 
+bool DataTransfer::WriteMacroFileClosed(GCodeChannel channel) noexcept
+{
+	if (!CanWritePacket(sizeof(CodeChannelHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::MacroFileClosed, sizeof(CodeChannelHeader));
+
+	// Write header
+	CodeChannelHeader *header = WriteDataHeader<CodeChannelHeader>();
+	header->channel = channel.RawValue();
+	header->paddingA = 0;
+	header->paddingB = 0;
+	return true;
+}
+
 bool DataTransfer::WritePrintPaused(FilePosition position, PrintPausedReason reason) noexcept
 {
 	if (!CanWritePacket(sizeof(PrintPausedHeader)))
@@ -1327,9 +1345,29 @@ bool DataTransfer::WriteWaitForAcknowledgement(GCodeChannel channel) noexcept
 	// Write header
 	CodeChannelHeader *header = WriteDataHeader<CodeChannelHeader>();
 	header->channel = channel.RawValue();
-
+	header->paddingA = 0;
+	header->paddingB = 0;
 	return true;
 }
+
+bool DataTransfer::WriteMessageAcknowledged(GCodeChannel channel) noexcept
+{
+	if (!CanWritePacket(sizeof(CodeChannelHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::MessageAcknowledged, sizeof(CodeChannelHeader));
+
+	// Write header
+	CodeChannelHeader *header = WriteDataHeader<CodeChannelHeader>();
+	header->channel = channel.RawValue();
+	header->paddingA = 0;
+	header->paddingB = 0;
+	return true;
+}
+
 
 PacketHeader *DataTransfer::WritePacketHeader(FirmwareRequest request, size_t dataLength, uint16_t resendPacketId) noexcept
 {

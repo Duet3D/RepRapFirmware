@@ -456,13 +456,6 @@ void GCodes::Spin() noexcept
 			{
 				const bool wasCancelled = gb.MachineState().messageCancelled;
 				gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
-#if HAS_LINUX_INTERFACE
-				if (reprap.UsingLinuxInterface())
-				{
-					// Send an empty response to DCS so it can pop its internal stack
-					SendSbcEvent(gb);
-				}
-#endif
 
 				if (wasCancelled)
 				{
@@ -616,13 +609,12 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 			else
 			{
 				// Finished a macro or finished processing config.g
-				gb.MachineState().CloseFile();
+				gb.MacroFileClosed();
 				CheckFinishedRunningConfigFile(gb);
 
 				// Pop the stack and notify the SBC that we have closed the file
 				Pop(gb, false);
 				gb.Init();
-				SendSbcEvent(gb);
 
 				// Send a final code response
 				if (gb.GetState() == GCodeState::normal)
@@ -3624,17 +3616,6 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	// If we get here then we didn't handle the message, so release the buffer(s)
 	OutputBuffer::ReleaseAll(reply);
 }
-
-#if HAS_LINUX_INTERFACE
-
-// Send a channel-related event to the SBC (message prompt or end of file acknowledged)
-void GCodes::SendSbcEvent(GCodeBuffer& gb)
-{
-	MessageType type = (MessageType)((1u << gb.GetChannel().ToBaseType()) | BinaryCodeReplyFlag);
-	platform.Message(type, "");
-}
-
-#endif
 
 void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException)
 {

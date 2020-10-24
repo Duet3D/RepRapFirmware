@@ -122,7 +122,7 @@ void GCodeBuffer::Reset() noexcept
 
 #if HAS_LINUX_INTERFACE
 	requestedMacroFile.Clear();
-	isWaitingForMacro = hasStartedMacro = abortFile = abortAllFiles = invalidated = false;
+	isWaitingForMacro = hasStartedMacro = abortFile = abortAllFiles = invalidated = messageAcknowledged = macroFileClosed = false;
 	isBinaryBuffer = false;
 	machineState->lastCodeFromSbc = machineState->isMacroFromCode = false;
 #endif
@@ -864,6 +864,9 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 			ms->waitingForAcknowledgement = false;
 			ms->messageAcknowledged = true;
 			ms->messageCancelled = cancelled;
+#if HAS_LINUX_INTERFACE
+			messageAcknowledged = true;
+#endif
 		}
 	}
 }

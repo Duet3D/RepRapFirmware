@@ -1363,14 +1363,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 #if HAS_LINUX_INTERFACE
 	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next
-		if (!gb.MachineState().lastCodeFromSbc)
-		{
-			SendSbcEvent(gb);
-		}
-		gb.SetState(GCodeState::normal);
-		break;
 #endif
-
 	case GCodeState::checkError:				// we return to this state after running the retractprobe macro when there may be a stored error message
 		gb.SetState(GCodeState::normal);
 		break;

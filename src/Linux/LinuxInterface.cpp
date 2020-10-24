@@ -28,7 +28,6 @@
 extern char _end;		// defined by the linker
 
 Mutex LinuxInterface::gcodeReplyMutex;
-Mutex LinuxInterface::codesMutex;
 
 #ifdef __LPC17xx__
 constexpr size_t LinuxTaskStackWords = 375;
@@ -60,7 +59,6 @@ LinuxInterface::~LinuxInterface()
 void LinuxInterface::Init() noexcept
 {
 	gcodeReplyMutex.Create("LinuxReply");
-	codesMutex.Create("LinuxCodes");
 
 #if defined(DUET_NG)
 	// Make sure that the Wifi module if present is disabled. The ESP Reset pin is already forced low in Platform::Init();
@@ -123,7 +121,7 @@ void LinuxInterface::Init() noexcept
 				// Perform a G/M/T-code
 				case LinuxRequest::Code:
 				{
-					MutexLocker lock(codesMutex);
+					TaskCriticalSectionLocker locker;
 
 					// Read the next code and check if the GB is waiting for a macro file
 					const CodeHeader *code = reinterpret_cast<const CodeHeader*>(transfer.ReadData(packet->length));
@@ -157,6 +155,7 @@ void LinuxInterface::Init() noexcept
 						txPointer = 0;
 						sendBufferUpdate = true;
 					}
+
 					// Check to see if we are about to overwrite older packets.
 					if (txPointer < rxPointer && txPointer + sizeof(BufferedCodeHeader) + packet->length > rxPointer)
 					{
@@ -536,7 +535,8 @@ void LinuxInterface::Init() noexcept
 			// Notify DSF about the available buffer space
 			if (sendBufferUpdate || transfer.LinuxHadReset())
 			{
-				MutexLocker lock(codesMutex);
+				TaskCriticalSectionLocker locker;
+
 				const uint16_t bufferSpace = (txLength == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
 				sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
 			}
@@ -591,19 +591,29 @@ void LinuxInterface::Init() noexcept
 							gb->Invalidate(false);
 						}
 
-						// Handle file abort requests
+						// Handle file requests
 						if (gb->IsAbortRequested() && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
 						{
-							gb->AcknowledgeAbort();
+							gb->FileAbortSent();
 							gb->Invalidate();
 						}
+						else if (gb->IsMacroFileClosed() && transfer.WriteMacroFileClosed(channel))
+						{
+							// Note this is only sent when a macro file has finished successfully
+							gb->MacroFileClosedSent();
+						}
 
-						// Handle blocking messages
+						// Handle blocking messages and their results
 						if (gb->MachineState().waitingForAcknowledgement && !gb->MachineState().waitingForAcknowledgementSent &&
 							transfer.WriteWaitForAcknowledgement(channel))
 						{
 							gb->MachineState().waitingForAcknowledgementSent = true;
 							gb->Invalidate();
+						}
+						else if (gb->IsMessageAcknowledged() && transfer.WriteMessageAcknowledged(channel))
+						{
+							// Note this is only sent when a message was acknowledged in a regular way (i.e. by M292)
+							gb->MessageAcknowledgementSent();
 						}
 
 						// Send pending firmware codes
@@ -706,7 +716,7 @@ bool LinuxInterface::IsConnected() const noexcept
 
 bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
-	if (gb.IsInvalidated() ||
+	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() ||
 		gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
 		(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
 	{
@@ -714,7 +724,7 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 		return false;
 	}
 
-	MutexLocker lock(codesMutex);
+	TaskCriticalSectionLocker locker;
 	if (rxPointer != txPointer || txLength != 0)
 	{
 		bool updateRxPointer = true;
@@ -825,7 +835,7 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noex
 
 void LinuxInterface::InvalidateBufferChannel(GCodeChannel channel) noexcept
 {
-	MutexLocker lock(codesMutex);
+	TaskCriticalSectionLocker locker;
 	if (rxPointer != txPointer || txLength != 0)
 	{
 		bool updateRxPointer = true;

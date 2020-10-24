@@ -59,6 +59,7 @@ public:
 	bool WriteCodeReply(MessageType type, OutputBuffer *&response) noexcept;
 	bool WriteMacroRequest(GCodeChannel channel, const char *filename, bool fromCode) noexcept;
 	bool WriteAbortFileRequest(GCodeChannel channel, bool abortAll) noexcept;
+	bool WriteMacroFileClosed(GCodeChannel channel) noexcept;
 	bool WritePrintPaused(FilePosition position, PrintPausedReason reason) noexcept;
 	bool WriteHeightMap() noexcept;
 	bool WriteLocked(GCodeChannel channel) noexcept;
@@ -67,6 +68,7 @@ public:
 	bool WriteEvaluationError(const char *expression, const char *errorMessage) noexcept;
 	bool WriteDoCode(GCodeChannel channel, const char *code, size_t length) noexcept;
 	bool WriteWaitForAcknowledgement(GCodeChannel channel) noexcept;
+	bool WriteMessageAcknowledged(GCodeChannel channel) noexcept;
 
 private:
 	enum class SpiState
