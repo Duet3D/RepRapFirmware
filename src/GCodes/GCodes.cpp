@@ -4383,9 +4383,9 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const noexcept
 // 'reply' is a convenient buffer that is free for us to use.
 void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 {
-	if (gb.IsReportDue())
+	if (&gb == usbGCode)
 	{
-		if (&gb == usbGCode && gb.MachineState().compatibility == Compatibility::Marlin)
+		if (gb.MachineState().compatibility == Compatibility::Marlin && gb.IsReportDue())
 		{
 			// In Marlin emulation mode we should return a standard temperature report every second
 			GenerateTemperatureReport(reply);
@@ -4393,7 +4393,10 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			platform.Message(UsbMessage, reply.c_str());
 			reply.Clear();
 		}
-		if (&gb == auxGCode && platform.IsAuxEnabled(0) && lastAuxStatusReportType >= 0)
+	}
+	else if (&gb == auxGCode)
+	{
+		if ( lastAuxStatusReportType >= 0 && platform.IsAuxEnabled(0) && gb.IsReportDue())
 		{
 			// Send a standard status response for PanelDue
 			OutputBuffer * const statusBuf =

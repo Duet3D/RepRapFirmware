@@ -29,11 +29,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	// Perform the next operation of the state machine for this gcode source
 	GCodeResult stateMachineResult = GCodeResult::ok;
 
-	if (gb.GetState() != GCodeState::normal)
-	{
-		CheckReportDue(gb, reply);
-	}
-
 	switch (gb.GetState())
 	{
 	case GCodeState::waitingForSpecialMoveToComplete:
