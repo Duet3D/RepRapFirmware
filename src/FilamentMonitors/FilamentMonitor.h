@@ -18,17 +18,20 @@
 #if defined(DUET3) || defined(DUET3MINI)
 # include <Duet3Common.h>
 #else
-
-enum class FilamentSensorStatus : uint8_t
-{
-	notPresent = 0,
+# include <General/NamedEnum.h>
+NamedEnum(FilamentSensorStatus, uint8_t,
+	noMonitor,
 	ok,
+	noDataReceived,
 	noFilament,
 	tooLittleMovement,
 	tooMuchMovement,
 	sensorError
-};
+);
+#endif
 
+#if SUPPORT_CAN_EXPANSION
+class CanMessageFilamentMonitorsStatus;
 #endif
 
 class FilamentMonitor INHERIT_OBJECT_MODEL
@@ -64,11 +67,11 @@ public:
 	// Check that this monitor still refers to a valid extruder
 	bool IsValid() const noexcept;
 
+	// Get the status of the filament monitor as a string
+	const char *GetStatusText() const noexcept { return lastStatus.ToString(); }
+
 	// Static initialisation
 	static void InitStatic() noexcept;
-
-	// Return an error message corresponding to a status code
-	static const char *GetErrorMessage(FilamentSensorStatus f) noexcept;
 
 	// Poll the filament sensors
 	static void Spin() noexcept;
@@ -94,6 +97,10 @@ public:
 	static FilamentMonitor *GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+	static void UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatus& msg) noexcept;
+#endif
+
 	// This must be public so that the array descriptor in class RepRap can lock it
 	static ReadWriteLock filamentMonitorsLock;
 
@@ -110,14 +117,9 @@ protected:
 		return lrintf(100 * f);
 	}
 
-private:
-
-#if SUPPORT_CAN_EXPANSION
-	// For a remote filament monitor, we use the local FilamentMonitor object to keep a copy of all the configuration parameters,
-	// 'port' is unused, and 'driver' holds the CAN address and driver number that the filament monitor is attached to.
-	// For a local filament monitor, driver.IsLocal() is true.
 	bool IsLocal() const noexcept { return driver.IsLocal(); }
-#endif
+
+private:
 
 	// Create a filament sensor returning null if not a valid sensor type
 	static FilamentMonitor *Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) noexcept;
@@ -134,6 +136,7 @@ private:
 
 	bool isrWasPrinting;
 	bool haveIsrStepsCommanded;
+	FilamentSensorStatus lastStatus;
 #if SUPPORT_CAN_EXPANSION
 	bool hasRemote;
 #endif

@@ -23,7 +23,7 @@ constexpr ObjectModelTableEntry SimpleFilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	{ "enabled",			OBJECT_MODEL_FUNC(self->enabled),		 			ObjectModelEntryFlags::none },
-	{ "filamentPresent",	OBJECT_MODEL_FUNC(self->filamentPresent),		 	ObjectModelEntryFlags::live },
+	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),			ObjectModelEntryFlags::live },
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("simple"), 				ObjectModelEntryFlags::none },
 };
 

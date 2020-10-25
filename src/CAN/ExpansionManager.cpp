@@ -109,7 +109,7 @@ void ExpansionManager::UpdateBoardState(CanAddress address, BoardState newState)
 	}
 }
 
-// Process an announcement from an expansion board and free the message buffer that it arrived in
+// Process an announcement from an expansion board. Don't free the message buffer that it arrived in
 void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 {
 	const CanAddress src = buf->id.Src();

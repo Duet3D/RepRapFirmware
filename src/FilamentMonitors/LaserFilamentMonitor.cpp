@@ -30,23 +30,23 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. LaserFilamentMonitor members
-	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->dataReceived && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::none },
-	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																		ObjectModelEntryFlags::none },
-	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 													ObjectModelEntryFlags::none },
-	{ "filamentPresent",	OBJECT_MODEL_FUNC_IF(self->switchOpenMask != 0, (self->sensorValue & self->switchOpenMask) == 0),	ObjectModelEntryFlags::live },
-	{ "type",				OBJECT_MODEL_FUNC_NOSELF("laser"), 																	ObjectModelEntryFlags::none },
+	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::none },
+	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
+	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 														ObjectModelEntryFlags::none },
+	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),																ObjectModelEntryFlags::live },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("laser"), 																		ObjectModelEntryFlags::none },
 
 	// 1. LaserFilamentMonitor.calibrated members
-	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 										ObjectModelEntryFlags::none },
-	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 										ObjectModelEntryFlags::none },
-	{ "sensitivity",		OBJECT_MODEL_FUNC(ConvertToPercent(self->MeasuredSensitivity())), 									ObjectModelEntryFlags::none },
-	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 												ObjectModelEntryFlags::none },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::none },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::none },
+	{ "sensitivity",		OBJECT_MODEL_FUNC(ConvertToPercent(self->MeasuredSensitivity())), 										ObjectModelEntryFlags::none },
+	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::none },
 
 	// 2. LaserFilamentMonitor.configured members
-	{ "calibrationFactor",	OBJECT_MODEL_FUNC(self->calibrationFactor, 3), 														ObjectModelEntryFlags::none },
-	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 										ObjectModelEntryFlags::none },
-	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 										ObjectModelEntryFlags::none },
-	{ "sampleDistance",	 	OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 											ObjectModelEntryFlags::none },
+	{ "calibrationFactor",	OBJECT_MODEL_FUNC(self->calibrationFactor, 3), 															ObjectModelEntryFlags::none },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 											ObjectModelEntryFlags::none },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 											ObjectModelEntryFlags::none },
+	{ "sampleDistance",	 	OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 												ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] = { 3, 5, 4, 4 };
@@ -356,6 +356,11 @@ FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, 
 // Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
 FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept
 {
+	if (!dataReceived)
+	{
+		return FilamentSensorStatus::noDataReceived;
+	}
+
 	if (reprap.Debug(moduleFilamentSensors))
 	{
 		debugPrintf("Extr req %.3f meas %.3f%s\n", (double)amountCommanded, (double)amountMeasured, (overdue) ? " overdue" : "");
@@ -439,9 +444,10 @@ FilamentSensorStatus LaserFilamentMonitor::Clear() noexcept
 	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();								// to keep the diagnostics up to date
 
-	return (sensorError) ? FilamentSensorStatus::sensorError
-			: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
-				: FilamentSensorStatus::ok;
+	return (!dataReceived) ? FilamentSensorStatus::noDataReceived
+			: (sensorError) ? FilamentSensorStatus::sensorError
+				: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
+					: FilamentSensorStatus::ok;
 }
 
 // Print diagnostic info for this sensor

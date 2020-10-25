@@ -60,7 +60,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #if HAS_VOLTAGE_MONITOR
 	powerFailScript(nullptr),
 #endif
-	isFlashing(false), lastWarningMillis(0), atxPowerControlled(false)
+	isFlashing(false), lastFilamentError(FilamentSensorStatus::ok), lastWarningMillis(0), atxPowerControlled(false)
 #if HAS_MASS_STORAGE
 	, sdTimingFile(nullptr)
 #endif
@@ -823,7 +823,7 @@ void GCodes::CheckFilament() noexcept
 	   )
 	{
 		String<MediumStringLength> filamentErrorString;
-		filamentErrorString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentMonitor::GetErrorMessage(lastFilamentError));
+		filamentErrorString.printf("Extruder %u reports '%s'", lastFilamentErrorExtruder, lastFilamentError.ToString());
 		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.c_str());
 		lastFilamentError = FilamentSensorStatus::ok;
 		filamentErrorString.cat('\n');

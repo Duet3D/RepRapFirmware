@@ -41,7 +41,7 @@ size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 
 // Constructor
 FilamentMonitor::FilamentMonitor(unsigned int extruder, unsigned int t) noexcept
-	: extruderNumber(extruder), type(t)
+	: extruderNumber(extruder), type(t), lastStatus(FilamentSensorStatus::noDataReceived)
 #if SUPPORT_CAN_EXPANSION
 	  , hasRemote(false)
 #endif
@@ -227,20 +227,6 @@ bool FilamentMonitor::IsValid() const noexcept
 	return fm;
 }
 
-// Return an error message corresponding to a status code
-/*static*/ const char *FilamentMonitor::GetErrorMessage(FilamentSensorStatus f) noexcept
-{
-	switch(f)
-	{
-	case FilamentSensorStatus::ok:					return "no error";
-	case FilamentSensorStatus::noFilament:			return "no filament";
-	case FilamentSensorStatus::tooLittleMovement:	return "too little movement";
-	case FilamentSensorStatus::tooMuchMovement:		return "too much movement";
-	case FilamentSensorStatus::sensorError:			return "sensor not working";
-	default:										return "unknown error";
-	}
-}
-
 // ISR
 /*static*/ void FilamentMonitor::InterruptEntry(CallbackParameter param) noexcept
 {
@@ -293,11 +279,12 @@ bool FilamentMonitor::IsValid() const noexcept
 				{
 					const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(ExtruderToLogicalDrive(extruder));
 					const FilamentSensorStatus fstat = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
+					fs.lastStatus = fstat;
 					if (fstat != FilamentSensorStatus::ok)
 					{
 						if (reprap.Debug(moduleFilamentSensors))
 						{
-							debugPrintf("Filament error: extruder %u reports %s\n", extruder, FilamentMonitor::GetErrorMessage(fstat));
+							debugPrintf("Filament error: extruder %u reports %s\n", extruder, fstat.ToString());
 						}
 						else
 						{
@@ -307,12 +294,49 @@ bool FilamentMonitor::IsValid() const noexcept
 				}
 				else
 				{
-					fs.Clear();
+					fs.lastStatus = fs.Clear();
 				}
 			}
 		}
 	}
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+/*static*/ void FilamentMonitor::UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatus& msg) noexcept
+{
+	ReadLocker lock(filamentMonitorsLock);
+
+	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
+	{
+		if (filamentSensors[extruder] != nullptr)
+		{
+			FilamentMonitor& fs = *filamentSensors[extruder];
+			if (fs.driver.boardAddress == src && fs.driver.localDriver < msg.numMonitorsReported)
+			{
+				const FilamentSensorStatus fstat(msg.data[fs.driver.localDriver].status);
+				fs.lastStatus = fstat;
+				GCodes& gCodes = reprap.GetGCodes();
+				if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
+				{
+					if (fstat != FilamentSensorStatus::ok)
+					{
+						if (reprap.Debug(moduleFilamentSensors))
+						{
+							debugPrintf("Filament error: extruder %u reports %s\n", extruder, fstat.ToString());
+						}
+						else
+						{
+							gCodes.FilamentError(extruder, fstat);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+#endif
 
 // Close down the filament monitors, in particular stop them generating interrupts. Called when we are about to update firmware.
 /*static*/ void FilamentMonitor::Exit() noexcept

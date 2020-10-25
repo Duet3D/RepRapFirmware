@@ -293,9 +293,16 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			reprap.GetExpansion().ProcessAnnouncement(buf);
 			break;
 
-		case CanMessageType::driversStatusReport:
+		case CanMessageType::filamentMonitorsStatusReport:
+			FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
+			break;
+
+		case CanMessageType::driversStatusReport:	// not handled yet
 		default:
-//			buf->DebugPrint("Rec: ");
+			if (reprap.Debug(moduleCan))
+			{
+				buf->DebugPrint("Rec: ");
+			}
 			break;
 		}
 	}
