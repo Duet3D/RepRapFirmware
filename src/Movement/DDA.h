@@ -66,9 +66,9 @@ public:
 	int32_t GetTimeLeft() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	uint32_t InsertHiccup(uint32_t now) noexcept;
+	uint32_t InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
 #else
-	void InsertHiccup(uint32_t now) noexcept;
+	void InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
 #endif
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
@@ -134,22 +134,23 @@ public:
 	// Use the same defaults as for the SAM4E for now.
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = 20;														// how long we hiccup for
+	static constexpr uint32_t HiccupTime = (30 * StepTimer::StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #elif SAM4E || SAM4S || SAME5x
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = 20;														// how long we hiccup for
+	static constexpr uint32_t HiccupTime = (30 * StepTimer::StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #elif defined(__LPC17xx__)
     static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000;		// the smallest sensible interval between calculations (40us) in step timer clocks
     static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = 20;														// how long we hiccup for
+	static constexpr uint32_t HiccupTime = (30 * StepTimer::StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #else	// SAM3X
 	static constexpr uint32_t MinCalcIntervalDelta = (60 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (60 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = 20;														// how long we hiccup for
+	static constexpr uint32_t HiccupTime = (40 * StepTimer::StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #endif
 	static constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;			// the maximum time we spend looping in the ISR , in step clocks
 	static constexpr uint32_t WakeupTime = (100 * StepTimer::StepClockRate)/1000000;				// stop resting 100us before the move is due to end
+	static constexpr uint32_t HiccupIncrement = HiccupTime/2;										// how much we increase the hiccup time by on each attempt
 
 	static void PrintMoves() noexcept;																// print saved moves for debugging
 
@@ -354,21 +355,21 @@ inline bool DDA::CanPauseAfter() const noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Insert a hiccup, returning the amount of time inserted
-inline __attribute__((always_inline)) uint32_t DDA::InsertHiccup(uint32_t now) noexcept
+inline __attribute__((always_inline)) uint32_t DDA::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
 {
 	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
 	const uint32_t oldStartTime = afterPrepare.moveStartTime;
-	afterPrepare.moveStartTime = now + DDA::HiccupTime - ticksDueAfterStart;
+	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
 	return afterPrepare.moveStartTime - oldStartTime;
 }
 
 #else
 
 // Insert a hiccup
-inline __attribute__((always_inline)) void DDA::InsertHiccup(uint32_t now) noexcept
+inline __attribute__((always_inline)) void DDA::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
 {
 	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
-	afterPrepare.moveStartTime = now + DDA::HiccupTime - ticksDueAfterStart;
+	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
 }
 
 #endif
