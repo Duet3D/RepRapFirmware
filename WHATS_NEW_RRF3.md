@@ -2,15 +2,32 @@ RepRapFirmware 3.2-beta3 (in preparation)
 ========================
 
 Upgrade notes:
-- It is no longer permitted to create a filament monitor using M591 and subsequently to change the driver that the extruder is mapped to using M584
+- It is no longer permitted to create a filament monitor using M591 and subsequently to user M584 to change the driver that the extruder is mapped to
+- [Duet 3 + expansion/tool boards] Changes have been made to the CAN message protocols, therefore you must upgrade tool and expansion boards to firmware 3.2beta3
+- [Duet+SBC] Changes have been made to the DCS message protocols, therefore you must upgrade DSF to version 3.2beta3
 
 New features/changed behaviour:
+- Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
 - If a filament monitor is configured for some extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
+- [Duet+PanelDue] Status messages are sent to an attached PanelDue running firmware 3.2 during homing, heating tools etc.
+- It is no longer necessary to separate multiple G- or M-commands on a single line with a space or tab character
+- If the system runs out of memory, it will now reset and the Last Software Reset Reason will be "OutOfMemory"
+- The M122 P102 and M122 P103 timing functions are more accurate and give more consistent results than in previous firmware versions
+
+Object model changes:
+- All types of filament monitors have a new field "status". The value is one of "noMonitor", "ok", "noDataReceived", "noFilament", "tooLittleMovement", "tooMuchMovement", "sensorError".
+- Field "filamentPresent" is removed from those types of filament monitor that previously supported it. Use "status" instead.
+- Laser, rotating magnet and pulsed filament still support the "calibrated" fields, but only for filament monitors connected to the main board
+- Fields "supports12864" in boards[0] has been renamed to "supportsDirectDisplay"
 
 Bug fixes:
 - M701 and M702 commands crashed the firmware with an assertion failure (new bug in 3.2beta2)
 - G92 commands incremented seqs.move when they didn't need to (old bug)
 - G92 Znn didn't clear zDatumSetByProbing (old bug)
+- The handling of out-of-buffer situations has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
+- In RepRapFirmware mode, empty responses to commands were not suppressed. They are now suppressed except when the command came from HTTP or SBC.
+- [Duet+SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
+- [Duet+SBC] When nested macros were used, commands were sometimes executed out-of-order
 
 RepRapFirmware 3.2-beta2
 ========================
