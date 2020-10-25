@@ -2374,8 +2374,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 
 				// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
-
-				// If we need to wait for an acknowledgement, save the state and set waiting
 				if (sParam == 2 || sParam == 3)
 				{
 #if HAS_LINUX_INTERFACE

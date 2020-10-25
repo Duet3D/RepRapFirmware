@@ -59,11 +59,6 @@ public:
 #endif
 
 private:
-	void InvalidateBufferChannel(GCodeChannel channel) noexcept;		// Invalidate every buffered G-code of the corresponding channel from the buffer ring
-
-	static Mutex gcodeReplyMutex;										// static so that the LinuxInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
-	static Mutex codesMutex;
-
 	DataTransfer transfer;
 	bool wasConnected;
 	uint32_t numDisconnects;
@@ -80,7 +75,6 @@ private:
 
 	uint32_t iapWritePointer;
 	uint32_t iapRamAvailable;											// must be at least 64Kb otherwise the SPI IAP can't work
-	OutputStack *gcodeReply;
 
 #if SUPPORT_CAN_EXPANSION
 	// Data needed when a CAN expansion board requests a firmware file chunk
@@ -91,6 +85,10 @@ private:
 	int32_t requestedFileDataLength;
 #endif
 
+	static Mutex gcodeReplyMutex;											// static so that the LinuxInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
+	OutputStack *gcodeReply;
+
+	void InvalidateBufferChannel(GCodeChannel channel) noexcept;            // Invalidate every buffered G-code of the corresponding channel from the buffer ring
 };
 
 inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept
