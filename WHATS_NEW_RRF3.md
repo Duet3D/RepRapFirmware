@@ -8,10 +8,11 @@ Upgrade notes:
 
 New features/changed behaviour:
 - Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
-- If a filament monitor is configured for some extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
+- If a filament monitor is configured for an extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
+- If a filament error occurs, RepRapFirmware now tries to run file sys/filamentError#.g where # is the extruder number in minimum-width format; or if that file is not found then file sys/filamentError.g. If neither file is found then it falls back to running sys/pause.g, which is what it always ran in previous firmware versions.
 - [Duet+PanelDue] Status messages are sent to an attached PanelDue running firmware 3.2 during homing, heating tools etc.
 - It is no longer necessary to separate multiple G- or M-commands on a single line with a space or tab character
-- If the system runs out of memory, it will now reset and the Last Software Reset Reason will be "OutOfMemory"
+- If the system runs out of memory, it will now reset and the Last Software Reset Reason reported by M122 will be "OutOfMemory"
 - The M122 P102 and M122 P103 timing functions are more accurate and give more consistent results than in previous firmware versions
 
 Object model changes:
