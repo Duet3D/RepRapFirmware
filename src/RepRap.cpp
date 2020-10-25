@@ -1830,7 +1830,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 	return response;
 }
 
-// Get the JSON status response for PanelDue or the old web server.
+// Get the JSON status response for PanelDue
 // Type 0 was the old-style webserver status response, but is no longer supported.
 // Type 1 is the new-style webserver status response.
 // Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
@@ -1999,13 +1999,13 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 		response->EncodeString(FIRMWARE_NAME, false);
 	}
 
-	response->cat('}');
+	response->cat("}\n");			// include a newline to help PanelDue resync
 	return response;
 }
 
 #if HAS_MASS_STORAGE
 
-// Get the list of files in the specified directory in JSON format.
+// Get the list of files in the specified directory in JSON format. PanelDue uses this one, so include a newline at the end.
 // If flagDirs is true then we prefix each directory with a * character.
 OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bool flagsDirs) noexcept
 {
@@ -2070,11 +2070,16 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 
 	if (err != 0)
 	{
-		response->catf("],\"err\":%u}", err);
+		response->catf("],\"err\":%u}\n", err);
 	}
 	else
 	{
-		response->catf("],\"next\":%u,\"err\":%u}", nextFile, err);
+		response->catf("],\"next\":%u,\"err\":%u}\n", nextFile, err);
+	}
+
+	if (response->HadOverflow())
+	{
+		OutputBuffer::ReleaseAll(response);
 	}
 	return response;
 }
@@ -2159,13 +2164,17 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 	// If there is no error, don't append "err":0 because if we do then DWC thinks there has been an error - looks like it doesn't check the value
 	if (err != 0)
 	{
-		response->catf("],\"err\":%u}", err);
+		response->catf("],\"err\":%u}\n", err);
 	}
 	else
 	{
-		response->catf("],\"next\":%u}", nextFile);
+		response->catf("],\"next\":%u}\n", nextFile);
 	}
 
+	if (response->HadOverflow())
+	{
+		OutputBuffer::ReleaseAll(response);
+	}
 	return response;
 }
 
@@ -2318,6 +2327,7 @@ void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numVa
 #if SUPPORT_OBJECT_MODEL
 
 // Return a query into the object model, or return nullptr if no buffer available
+// We append a newline to help PanelDue resync after receiving corrupt or incomplete data. DWC ignores it.
 OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const THROWS(GCodeException)
 {
 	OutputBuffer *outBuf;
@@ -2341,7 +2351,7 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 		{
 			outBuf->cat(",\"result\":");
 			reprap.ReportAsJson(outBuf, key, flags, wantArrayLength);
-			outBuf->cat('}');
+			outBuf->cat("}\n");
 			if (outBuf->HadOverflow())
 			{
 				OutputBuffer::ReleaseAll(outBuf);

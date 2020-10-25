@@ -1845,6 +1845,22 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #endif
 }
 
+// Execute a timed square root that takes less than one millisecond
+static uint32_t TimedSqrt(uint64_t arg, uint32_t& timeAcc) noexcept
+{
+	cpu_irq_disable();
+	asm volatile("":::"memory");
+	uint32_t now1 = SysTick->VAL;
+	const uint32_t ret = isqrt64(arg);
+	uint32_t now2 = SysTick->VAL;
+	asm volatile("":::"memory");
+	cpu_irq_enable();
+	now1 &= 0x00FFFFFF;
+	now2 &= 0x00FFFFFF;
+	timeAcc += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+	return ret;
+}
+
 GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException)
 {
 	static const uint32_t dummy[2] = { 0, 0 };
@@ -2108,13 +2124,9 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			uint32_t tim1 = 0;
 			for (uint32_t i = 0; i < 100; ++i)
 			{
-				const uint32_t num1 = 0x7265ac3d + i;
+				const uint32_t num1 = 0x7fffffff - (67 * i);
 				const uint64_t sq = (uint64_t)num1 * num1;
-				cpu_irq_disable();
-				const uint32_t now1 = StepTimer::GetTimerTicks();
-				const uint32_t num1a = isqrt64(sq);
-				tim1 += StepTimer::GetTimerTicks() - now1;
-				cpu_irq_enable();
+				const uint32_t num1a = TimedSqrt(sq, tim1);
 				if (num1a != num1)
 				{
 					ok1 = false;
@@ -2125,13 +2137,9 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			uint32_t tim2 = 0;
 			for (uint32_t i = 0; i < 100; ++i)
 			{
-				const uint32_t num2 = 0x0000a4c5 + i;
+				const uint32_t num2 = 0x0000ffff - (67 * i);
 				const uint64_t sq = (uint64_t)num2 * num2;
-				cpu_irq_disable();
-				const uint32_t now2 = StepTimer::GetTimerTicks();
-				const uint32_t num2a = isqrt64(sq);
-				tim2 += StepTimer::GetTimerTicks() - now2;
-				cpu_irq_enable();
+				const uint32_t num2a = TimedSqrt(sq, tim2);
 				if (num2a != num2)
 				{
 					ok2 = false;
@@ -2139,34 +2147,32 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 
 			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
-					(double)(tim1 * 10000)/StepTimer::StepClockRate, (ok1) ? "ok" : "ERROR",
-							(double)(tim2 * 10000)/StepTimer::StepClockRate, (ok2) ? "ok" : "ERROR");
+					(double)(tim1 * 10000)/SystemCoreClock, (ok1) ? "ok" : "ERROR",
+							(double)(tim2 * 10000)/SystemCoreClock, (ok2) ? "ok" : "ERROR");
 		}
 		break;
 
 	case (unsigned int)DiagnosticTestType::TimeSinCos:			// Show the sin/cosine calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
-			bool ok = true;
 			uint32_t tim1 = 0;
 			for (unsigned int i = 0; i < 100; ++i)
 			{
 				const float angle = 0.01 * i;
+
 				cpu_irq_disable();
-				const uint32_t now1 = StepTimer::GetTimerTicks();
-				const float f1 = RepRap::SinfCosf(angle);
-				tim1 += StepTimer::GetTimerTicks() - now1;
+				asm volatile("":::"memory");
+				uint32_t now1 = SysTick->VAL;
+				(void)RepRap::SinfCosf(angle);
+				uint32_t now2 = SysTick->VAL;
+				asm volatile("":::"memory");
 				cpu_irq_enable();
-				if (f1 >= 1.5)
-				{
-					ok = false;		// need to use f1 to prevent the calculations being omitted
-				}
+				now1 &= 0x00FFFFFF;
+				now2 &= 0x00FFFFFF;
+				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
 			}
 
 			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			if (ok)			// should always be true
-			{
-				reply.printf("Sine + cosine: float %.2fus", (double)(tim1 * 10000)/StepTimer::StepClockRate);
-			}
+			reply.printf("Sine + cosine: float %.2fus", (double)(tim1 * 10000)/SystemCoreClock);
 		}
 		break;
 

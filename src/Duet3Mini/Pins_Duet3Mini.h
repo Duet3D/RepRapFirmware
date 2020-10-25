@@ -20,8 +20,8 @@
 #endif
 
 #ifdef DUET3MINI_V04
-#define BOARD_NAME				"Duet 3 Mini 5+ prototype v0.4"
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+ prototype v0.4"
+#define BOARD_NAME				"Duet 3 Mini 5+"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+"
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME "_v04.uf2"
 #endif
 

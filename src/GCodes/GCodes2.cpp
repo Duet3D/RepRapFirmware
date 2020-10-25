@@ -714,18 +714,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					outBuf = reprap.GetFilesResponse(dir.c_str(), rparam, true);	// send the file list in JSON format
 					if (outBuf == nullptr)
 					{
-						return false;
+						reply.copy("{\"err\":-1}");
 					}
-					outBuf->cat('\n');
 				}
 				else if (sparam == 3)
 				{
 					outBuf = reprap.GetFilelistResponse(dir.c_str(), rparam);
 					if (outBuf == nullptr)
 					{
-						return false;
+						reply.copy("{\"err\":-1}");
 					}
-					outBuf->cat('\n');
 				}
 				else
 				{
