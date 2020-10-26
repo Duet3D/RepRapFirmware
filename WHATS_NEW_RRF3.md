@@ -19,7 +19,8 @@ Object model changes:
 - All types of filament monitors have a new field "status". The value is one of "noMonitor", "ok", "noDataReceived", "noFilament", "tooLittleMovement", "tooMuchMovement", "sensorError".
 - Field "filamentPresent" is removed from those types of filament monitor that previously supported it. Use "status" instead.
 - Laser, rotating magnet and pulsed filament still support the "calibrated" fields, but only for filament monitors connected to the main board
-- Fields "supports12864" in boards[0] has been renamed to "supportsDirectDisplay"
+- Field "supports12864" in boards[0] has been renamed to "supportsDirectDisplay"
+- Field "move.axes[].homed" is no longer flagged live, and it now remains the true homed status during a simulation
 
 Bug fixes:
 - M701 and M702 commands crashed the firmware with an assertion failure (new bug in 3.2beta2)
