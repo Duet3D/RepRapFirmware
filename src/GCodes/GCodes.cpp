@@ -765,7 +765,7 @@ void GCodes::EndSimulation(GCodeBuffer *gb) noexcept
 	RestorePosition(simulationRestorePoint, gb);
 	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
 	reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
-	axesHomed = axesHomedBeforeSimulation;
+	axesVirtuallyHomed = axesHomed;
 }
 
 // Check for and execute triggers
@@ -1701,7 +1701,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 // Check that enough axes have been homed, returning true if insufficient axes homed
 bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept
 {
-	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesMoved, noMovesBeforeHoming) & ~axesHomed).IsNonEmpty();
+	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesMoved, noMovesBeforeHoming) & ~axesVirtuallyHomed).IsNonEmpty();
 }
 
 // Execute a straight move
@@ -1958,7 +1958,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 
 		ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned);
 																				// apply tool offset, baby stepping, Z hop and axis scaling
-		AxesBitmap effectiveAxesHomed = axesHomed;
+		AxesBitmap effectiveAxesHomed = axesVirtuallyHomed;
 		if (doingManualBedProbe)
 		{
 			effectiveAxesHomed.ClearBit(Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
@@ -2222,7 +2222,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 
 	// Transform to machine coordinates and check that it is within limits
 	ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned);			// set the final position
-	if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, true, limitAxes) != LimitPositionResult::ok)
+	if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 	{
 		err = "G2/G3: outside machine limits";				// abandon the move
 		return true;
@@ -2497,7 +2497,7 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 		}
 
 		// Limit the end position at each segment. This is needed for arc moves on any printer, and for [segmented] straight moves on SCARA printers.
-		if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, nullptr, numVisibleAxes, axesHomed, true, limitAxes) != LimitPositionResult::ok)
+		if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 		{
 			segMoveState = SegmentedMoveState::aborted;
 			doingArcMove = false;
@@ -4181,30 +4181,45 @@ GCodeResult GCodes::AdvanceHash(const StringRef &reply) noexcept
 bool GCodes::AllAxesAreHomed() const noexcept
 {
 	const AxesBitmap allAxes = AxesBitmap::MakeLowestNBits(numVisibleAxes);
-	return (axesHomed & allAxes) == allAxes;
+	return (axesVirtuallyHomed & allAxes) == allAxes;
 }
 
 // Tell us that the axis is now homed
 void GCodes::SetAxisIsHomed(unsigned int axis) noexcept
 {
-	axesHomed.SetBit(axis);
+	if (simulationMode == 0)
+	{
+		axesHomed.SetBit(axis);
+		axesVirtuallyHomed = axesHomed;
+		reprap.MoveUpdated();
+	}
 }
 
 // Tell us that the axis is not homed
 void GCodes::SetAxisNotHomed(unsigned int axis) noexcept
 {
-	axesHomed.ClearBit(axis);
-	if (axis == Z_AXIS)
+	if (simulationMode == 0)
 	{
-		zDatumSetByProbing = false;
+		axesHomed.ClearBit(axis);
+		axesVirtuallyHomed = axesHomed;
+		if (axis == Z_AXIS)
+		{
+			zDatumSetByProbing = false;
+		}
+		reprap.MoveUpdated();
 	}
 }
 
 // Flag all axes as not homed
 void GCodes::SetAllAxesNotHomed() noexcept
 {
-	axesHomed.Clear();
-	zDatumSetByProbing = false;
+	if (simulationMode == 0)
+	{
+		axesHomed.Clear();
+		axesVirtuallyHomed = axesHomed;
+		zDatumSetByProbing = false;
+		reprap.MoveUpdated();
+	}
 }
 
 #if HAS_MASS_STORAGE

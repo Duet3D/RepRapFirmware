@@ -110,7 +110,7 @@ public:
 	bool IsTriggerBusy() const noexcept;										// Return true if the trigger G-code buffer is busy running config.g or a trigger file
 
 	bool IsAxisHomed(unsigned int axis) const noexcept							// Has the axis been homed?
-		{ return axesHomed.IsBitSet(axis); }
+		{ return axesVirtuallyHomed.IsBitSet(axis); }
 	void SetAxisIsHomed(unsigned int axis) noexcept;							// Tell us that the axis is now homed
 	void SetAxisNotHomed(unsigned int axis) noexcept;							// Tell us that the axis is not homed
 	void SetAllAxesNotHomed() noexcept;											// Flag all axes as not homed
@@ -542,7 +542,6 @@ private:
 	};
 	SegmentedMoveState segMoveState;
 
-	AxesBitmap axesHomedBeforeSimulation;		// axes that were homed when we started the simulation
 	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
 
 	RestorePoint numberedRestorePoints[NumRestorePoints];				// Restore points accessible using the R parameter in the G0/G1 command
@@ -576,6 +575,7 @@ private:
 
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
+	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
 	AxesBitmap continuousRotationAxes;			// Axes declared as continuous rotation axes in M584
 
 	float pausedFanSpeeds[MaxFans];				// Fan speeds when the print was paused or a tool change started

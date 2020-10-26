@@ -96,14 +96,15 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
 		}
 		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
-		axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
-		if (axesIncluded.IsBitSet(Z_AXIS))
+		if (simulationMode != 0)
 		{
-			if (zDatumSetByProbing)
+			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
+			axesVirtuallyHomed = axesHomed;
+			if (axesIncluded.IsBitSet(Z_AXIS))
 			{
 				zDatumSetByProbing = false;
-				reprap.MoveUpdated();
 			}
+			reprap.MoveUpdated();				// because we may have updated axesHomed or zDatumSetByProbing
 		}
 
 #if SUPPORT_ROLAND
@@ -395,8 +396,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 	{
 		if (simulationMode == 0)
 		{
-			axesHomedBeforeSimulation = axesHomed;
-			axesHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
+			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 			SavePosition(simulationRestorePoint, gb);
 			simulationRestorePoint.feedRate = gb.MachineState().feedRate;
 		}
@@ -443,8 +443,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 			if (simulationMode == 0)
 			{
 				// Starting a new simulation, so save the current position
-				axesHomedBeforeSimulation = axesHomed;
-				axesHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
+				axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 				SavePosition(simulationRestorePoint, gb);
 			}
 			simulationTime = 0.0;
