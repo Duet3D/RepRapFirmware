@@ -9,7 +9,7 @@ Upgrade notes:
 New features/changed behaviour:
 - Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
 - If a filament monitor is configured for an extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
-- If a filament error occurs, RepRapFirmware now tries to run file sys/filamentError#.g where # is the extruder number in minimum-width format; or if that file is not found then file sys/filamentError.g. If neither file is found then it falls back to running sys/pause.g, which is what it always ran in previous firmware versions.
+- If a filament error occurs, RepRapFirmware now tries to run file sys/filament-error#.g where # is the extruder number in minimum-width format; or if that file is not found then file sys/filament-error.g. If neither file is found then it falls back to running sys/pause.g.
 - [Duet+PanelDue] Status messages are sent to an attached PanelDue running firmware 3.2 during homing, heating tools etc.
 - It is no longer necessary to separate multiple G- or M-commands on a single line with a space or tab character
 - If the system runs out of memory, it will now reset and the Last Software Reset Reason reported by M122 will be "OutOfMemory"
@@ -27,6 +27,7 @@ Bug fixes:
 - G92 Znn didn't clear zDatumSetByProbing (old bug)
 - The handling of out-of-buffer situations has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
 - In RepRapFirmware mode, empty responses to commands were not suppressed. They are now suppressed except when the command came from HTTP or SBC.
+- [LPC/STM port, might affect Duets in rare situations] If hiccups occurred frequently and there was other activity in the system causing frequeny high-priority interrupts, a watchdog timeout could occur
 - [Duet+SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
 - [Duet+SBC] When nested macros were used, commands were sometimes executed out-of-order
 
