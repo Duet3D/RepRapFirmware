@@ -170,6 +170,7 @@ public:
 
 	GCodeState GetState() const noexcept;
 	void SetState(GCodeState newState) noexcept;
+	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
 	void MessageAcknowledged(bool cancelled) noexcept;
 
@@ -291,6 +292,12 @@ inline GCodeState GCodeBuffer::GetState() const noexcept
 
 inline void GCodeBuffer::SetState(GCodeState newState) noexcept
 {
+	machineState->SetState(newState);
+}
+
+inline void GCodeBuffer::SetState(GCodeState newState, uint16_t param) noexcept
+{
+	machineState->stateParameter = param;
 	machineState->SetState(newState);
 }
 

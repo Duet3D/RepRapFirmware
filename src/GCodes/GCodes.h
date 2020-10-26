@@ -61,7 +61,7 @@ enum class PauseReason
 	filamentChange,	// M600 command
 	trigger,		// external switch
 	heaterFault,	// heater fault detected
-	filament,		// filament monitor
+	filamentError,	// filament monitor
 #if HAS_SMART_DRIVERS
 	stall,			// motor stall detected
 #endif
@@ -251,6 +251,7 @@ public:
 	// Standard macro filenames
 #define DEPLOYPROBE		"deployprobe"
 #define RETRACTPROBE	"retractprobe"
+#define FILAMENT_ERROR	"filament-error"
 #define TPRE			"tpre"
 #define TPOST			"tpost"
 #define TFREE			"tfree"
@@ -387,7 +388,7 @@ private:
 	void CheckHeaterFault() noexcept;											// Check for and respond to a heater fault, returning true if we should exit
 	void DoEmergencyStop() noexcept;											// Execute an emergency stop
 
-	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg) noexcept	// Pause the print
+	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint16_t param = 0) noexcept	// Pause the print
 		pre(resourceOwners[movementResource] = &gb);
 	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;						// Check if a pause is pending, action it if so
 

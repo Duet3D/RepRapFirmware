@@ -21,13 +21,14 @@ GCodeMachineState::GCodeMachineState() noexcept
 	  fileId(0),
 #endif
 	  lineNumber(0),
-	  compatibility(Compatibility::RepRapFirmware), drivesRelative(false), axesRelative(false),
+	  drivesRelative(false), axesRelative(false),
 #if HAS_LINUX_INTERFACE
 	  lastCodeFromSbc(false), isMacroFromCode(false), isFileFinished(false), fileError(false),
 #endif
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting(0),
+	  waitingForAcknowledgement(false), messageAcknowledged(false),
+	  compatibility(Compatibility::RepRapFirmware), blockNesting(0),
 	  previous(nullptr), errorMessage(nullptr),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 {
@@ -45,13 +46,14 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 #endif
 	  lockedResources(prev.lockedResources),
 	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
-	  compatibility(prev.compatibility), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
+	  drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 #if HAS_LINUX_INTERFACE
 	  lastCodeFromSbc(prev.lastCodeFromSbc), isMacroFromCode(prev.isMacroFromCode), isFileFinished(prev.isFileFinished), fileError(false),
 #endif
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501),  runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting((withinSameFile) ? prev.blockNesting : 0),
+	  waitingForAcknowledgement(false), messageAcknowledged(false),
+	  compatibility(prev.compatibility), blockNesting((withinSameFile) ? prev.blockNesting : 0),
 	  previous(&prev), errorMessage(nullptr),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 {

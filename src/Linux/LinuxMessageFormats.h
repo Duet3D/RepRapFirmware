@@ -189,7 +189,7 @@ enum class PrintPausedReason : uint8_t
 	filamentChange = 3,
 	trigger = 4,
 	heaterFault = 5,
-	filament = 6,
+	filamentError = 6,
 	stall = 7,
 	lowVoltage = 8
 };

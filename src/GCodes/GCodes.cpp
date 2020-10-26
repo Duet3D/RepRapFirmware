@@ -822,9 +822,9 @@ void GCodes::CheckFilament() noexcept
 		&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
 	   )
 	{
-		String<MediumStringLength> filamentErrorString;
-		filamentErrorString.printf("Extruder %u reports '%s'", lastFilamentErrorExtruder, lastFilamentError.ToString());
-		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.c_str());
+		String<StringLength50> filamentErrorString;
+		filamentErrorString.printf("Extruder %u reported '%s'", lastFilamentErrorExtruder, lastFilamentError.ToString());
+		DoPause(*autoPauseGCode, PauseReason::filamentError, filamentErrorString.c_str(), (uint16_t)lastFilamentErrorExtruder);
 		lastFilamentError = FilamentSensorStatus::ok;
 		filamentErrorString.cat('\n');
 		platform.Message(LogMessage, filamentErrorString.c_str());
@@ -850,7 +850,7 @@ void GCodes::DoEmergencyStop() noexcept
 }
 
 // Pause the print. Before calling this, check that we are doing a file print that isn't already paused and get the movement lock.
-void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg) noexcept
+void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint16_t param) noexcept
 {
 	if (&gb == fileGCode)
 	{
@@ -957,7 +957,10 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg) noexc
 	}
 #endif
 
-	gb.SetState((reason == PauseReason::filamentChange) ? GCodeState::filamentChangePause1 : GCodeState::pausing1);
+	const GCodeState newState = (reason == PauseReason::filamentChange) ? GCodeState::filamentChangePause1
+								: (reason == PauseReason::filamentError) ? GCodeState::filamentErrorPause1
+									: GCodeState::pausing1;
+	gb.SetState(newState, param);
 	isPaused = true;
 
 #if HAS_LINUX_INTERFACE
@@ -979,8 +982,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg) noexc
 		case PauseReason::heaterFault:
 			pauseReason = PrintPausedReason::heaterFault;
 			break;
-		case PauseReason::filament:
-			pauseReason = PrintPausedReason::filament;
+		case PauseReason::filamentError:
+			pauseReason = PrintPausedReason::filamentError;
 			break;
 # if HAS_SMART_DRIVERS
 		case PauseReason::stall:
@@ -1220,7 +1223,7 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers) noexcept
 		return false;
 	}
 
-	String<MediumStringLength> stallErrorString;
+	String<StringLength50> stallErrorString;
 	stallErrorString.printf("Stall detected on driver(s)");
 	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
 	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.c_str());

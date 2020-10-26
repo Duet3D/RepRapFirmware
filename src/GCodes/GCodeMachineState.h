@@ -52,6 +52,9 @@ enum class GCodeState : uint8_t
 	filamentChangePause1,
 	filamentChangePause2,
 
+	filamentErrorPause1,
+	filamentErrorPause2,
+
 	resuming1,
 	resuming2,
 	resuming3,
@@ -184,7 +187,6 @@ public:
 	BlockState blockStates[MaxBlockIndent];
 	uint32_t lineNumber;
 
-	Compatibility compatibility;
 	uint32_t
 		drivesRelative : 1,
 		axesRelative : 1,
@@ -209,7 +211,9 @@ public:
 		messageAcknowledged : 1,
 		messageCancelled : 1;
 
+	Compatibility compatibility;
 	uint8_t blockNesting;
+	uint16_t stateParameter;					// a parameter, the meaning of which depends on what state we are in
 
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;

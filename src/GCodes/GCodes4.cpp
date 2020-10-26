@@ -354,9 +354,28 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, 600))
+				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, -1))
 				{
-					DoFileMacro(gb, PAUSE_G, true, 600);
+					DoFileMacro(gb, PAUSE_G, true, -1);
+				}
+			}
+		}
+		break;
+
+	case GCodeState::filamentErrorPause1:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			gb.AdvanceState();
+			if (AllAxesAreHomed())
+			{
+				String<StringLength20> macroName;
+				macroName.printf(FILAMENT_ERROR "%u.g", gb.MachineState().stateParameter);
+				if (!DoFileMacro(gb, macroName.c_str(), false, -1))
+				{
+					if (!DoFileMacro(gb, FILAMENT_ERROR ".g", false, -1))
+					{
+						DoFileMacro(gb, PAUSE_G, true, -1);
+					}
 				}
 			}
 		}
@@ -364,6 +383,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::pausing2:
 	case GCodeState::filamentChangePause2:
+	case GCodeState::filamentErrorPause2:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			reply.printf((gb.GetState() == GCodeState::filamentChangePause2) ? "Printing paused for filament change at" : "Printing paused at");
