@@ -96,7 +96,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
 		}
 		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
-		if (simulationMode != 0)
+		if (simulationMode == 0)
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
 			axesVirtuallyHomed = axesHomed;

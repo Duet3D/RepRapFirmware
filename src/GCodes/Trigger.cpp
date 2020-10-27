@@ -31,67 +31,73 @@ bool Trigger::IsUnused() const noexcept
 	return highLevelEndstops.IsEmpty() && lowLevelEndstops.IsEmpty() && highLevelInputs.IsEmpty() && lowLevelInputs.IsEmpty();
 }
 
-// Check whether this trigger is active and update the input states
+// Check whether this trigger is active and update the input states. This is called in a polling loop, so it needs to be fast.
+// TODO when we switch to interrupt-driven endstops, make this interrupt-driven instead
 bool Trigger::Check() noexcept
 {
 	bool triggered = false;
 
 	// Check the endstops
-	EndstopsManager& endstops = reprap.GetPlatform().GetEndstops();
-	(highLevelEndstops | lowLevelEndstops)
-		.Iterate([this, &endstops, &triggered](unsigned int axis, unsigned int)
-					{
-						const bool stopped = (endstops.Stopped(axis) == EndStopHit::atStop);
-						if (stopped != endstopStates.IsBitSet(axis))
-						{
-							if (stopped)
-							{
-								endstopStates.SetBit(axis);
-								if (highLevelEndstops.IsBitSet(axis))
-								{
-									triggered = true;
-								}
-							}
-							else
-							{
-								endstopStates.ClearBit(axis);
-								if (lowLevelEndstops.IsBitSet(axis))
-								{
-									triggered = true;
-								}
-							}
-						}
-					}
-				);
+	const AxesBitmap endstopsMonitored = highLevelEndstops | lowLevelEndstops;
+	if (endstopsMonitored.IsNonEmpty())
+	{
+		EndstopsManager& endstops = reprap.GetPlatform().GetEndstops();
+		endstopsMonitored.Iterate([this, &endstops, &triggered](unsigned int axis, unsigned int)
+									{
+										const bool stopped = (endstops.Stopped(axis) == EndStopHit::atStop);
+										if (stopped != endstopStates.IsBitSet(axis))
+										{
+											if (stopped)
+											{
+												endstopStates.SetBit(axis);
+												if (highLevelEndstops.IsBitSet(axis))
+												{
+													triggered = true;
+												}
+											}
+											else
+											{
+												endstopStates.ClearBit(axis);
+												if (lowLevelEndstops.IsBitSet(axis))
+												{
+													triggered = true;
+												}
+											}
+										}
+									}
+								);
+	}
 
-	Platform& platform = reprap.GetPlatform();
-	(highLevelInputs | lowLevelInputs)
-		.Iterate([this, &platform, &triggered](unsigned int inPort, unsigned int)
-					{
-						const bool isActive = reprap.GetPlatform().GetGpInPort(inPort).GetState();
-						if (isActive != inputStates.IsBitSet(inPort))
-						{
-							if (isActive)
-							{
-								inputStates.SetBit(inPort);
-								if (highLevelInputs.IsBitSet(inPort))
+	const InputPortsBitmap portsMonitored = highLevelInputs | lowLevelInputs;
+	if (portsMonitored.IsNonEmpty())
+	{
+		Platform& platform = reprap.GetPlatform();
+		portsMonitored.Iterate([this, &platform, &triggered](unsigned int inPort, unsigned int)
 								{
-									triggered = true;
-								}
-							}
-							else
-							{
-								inputStates.ClearBit(inPort);
-								if (lowLevelInputs.IsBitSet(inPort))
-								{
-									triggered = true;
-								}
-							}
+									const bool isActive = reprap.GetPlatform().GetGpInPort(inPort).GetState();
+									if (isActive != inputStates.IsBitSet(inPort))
+									{
+										if (isActive)
+										{
+											inputStates.SetBit(inPort);
+											if (highLevelInputs.IsBitSet(inPort))
+											{
+												triggered = true;
+											}
+										}
+										else
+										{
+											inputStates.ClearBit(inPort);
+											if (lowLevelInputs.IsBitSet(inPort))
+											{
+												triggered = true;
+											}
+										}
 
-						}
-					}
-				);
-
+									}
+								}
+							);
+	}
 	return triggered &&
 			(condition == 0
 				|| (condition == 1 && reprap.GetPrintMonitor().IsPrinting())
