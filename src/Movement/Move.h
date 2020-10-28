@@ -62,8 +62,8 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const noexcept;					 	// Get the current position of a motor
-	float LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept;	// Gives the last point at the end of the last complete DDA
-	bool AllMovesAreFinished(bool waiting) noexcept;						// Is the look-ahead ring empty?
+	float LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept; // Gives the last point at the end of the last complete DDA
+	bool WaitingForAllMovesFinished() noexcept;								// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept __attribute__ ((hot));						// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept; // Set the current position to be this
 	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept;	// Force the live coordinates (see above) to be these
@@ -271,7 +271,6 @@ private:
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
-	bool executeAllMoves;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	static constexpr size_t LaserTaskStackWords = 100;	// stack size in dwords for the laser and IOBits task
@@ -310,15 +309,6 @@ inline void Move::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) n
 inline void Move::ResetExtruderPositions() noexcept
 {
 	mainDDARing.ResetExtruderPositions();
-}
-
-// To wait until all the current moves in the buffers are complete, call this function repeatedly and wait for it to return true.
-// Then do whatever you wanted to do after all current moves have finished.
-inline bool Move::AllMovesAreFinished(bool waiting) noexcept
-{
-	const bool finished = NoLiveMovement();
-	executeAllMoves = waiting && !finished;
-	return finished;
 }
 
 #if HAS_SMART_DRIVERS

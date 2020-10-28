@@ -29,7 +29,7 @@ public:
 	bool AddAsyncMove(const AsyncMove& nextMove) noexcept;
 #endif
 
-	void Spin(uint8_t simulationMode, bool shouldStartMove) noexcept;					// Try to process moves in the ring, returning true if the ring is idle
+	void Spin(uint8_t simulationMode, bool shouldStartMove) noexcept;					// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
@@ -38,7 +38,6 @@ public:
 	void OnMoveCompleted(DDA *cdda, Platform& p) noexcept;								// called when the state has been set to 'completed'
 	bool ScheduleNextStepInterrupt() noexcept;											// Schedule the next step interrupt, returning true if we failed because it is due immediately
 	void CurrentMoveCompleted() noexcept __attribute__ ((hot));							// Signal that the current move has just been completed
-	void TryStartNextMove(Platform& p, uint32_t startTime) noexcept __attribute__ ((hot));	// Try to start another move
 
 	uint32_t ExtruderPrintingSince() const noexcept { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
 	int32_t GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting) noexcept;
@@ -83,6 +82,8 @@ public:
 	void RecordLookaheadError() noexcept { ++numLookaheadErrors; }						// Record a lookahead error
 	void Diagnostics(MessageType mtype, const char *prefix) noexcept;
 
+	bool SetWaitingToEmpty() noexcept;
+
 private:
 	bool StartNextMove(Platform& p, uint32_t startTime) noexcept __attribute__ ((hot));	// Start the next move, returning true if laser or IObits need to be controlled
 	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept;
@@ -107,6 +108,7 @@ private:
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
+	unsigned int numNoMoveUnderruns;											// How many times we wanted a new move but there were none
 	unsigned int numLookaheadErrors;											// How many times our lookahead algorithm failed
 	unsigned int stepErrors;													// count of step errors, for diagnostics
 
@@ -118,6 +120,7 @@ private:
 	volatile bool extrudersPrinting;											// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
 	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates in liveCoordinates are reliable (the extruder ones always are)
 	volatile bool liveCoordinatesChanged;										// True if the live coordinates have changed since LiveCoordinates was last called
+	volatile bool waitingForRingToEmpty;										// True if Move has signalled that we are waiting for this ring to empty
 };
 
 // Start the next move. Return true if laser or IO bits need to be active

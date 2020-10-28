@@ -47,7 +47,8 @@ void DDARing::Init1(unsigned int numDdas) noexcept
 void DDARing::Init2() noexcept
 {
 	stepErrors = 0;
-	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
+	numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
+	waitingForRingToEmpty = false;
 
 	// Put the origin on the lookahead ring with default velocity in the previous position to the first one that will be used.
 	// Do this by calling SetLiveCoordinates and SetPositions, so that the motor coordinates will be correct too even on a delta.
@@ -182,76 +183,25 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 
 #endif
 
+// Try to process moves in the ring
 void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 {
+	DDA *cdda = currentDda;											// capture volatile variable
+
 	// If we are simulating, simulate completion of the current move.
 	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
-	if (simulationMode != 0)
+	if (simulationMode != 0 && cdda != nullptr)
 	{
-		DDA * const cdda2 = currentDda;								// currentDda is declared volatile, so copy it in the next line
-		if (cdda2 != nullptr)
-		{
-			simulationTime += (float)cdda2->GetClocksNeeded()/StepTimer::StepClockRate;
-			cdda2->Complete();
-			CurrentMoveCompleted();
-		}
+		simulationTime += (float)cdda->GetClocksNeeded()/StepTimer::StepClockRate;
+		cdda->Complete();
+		CurrentMoveCompleted();
+		cdda = currentDda;
 	}
 
-	// See whether we need to kick off a move
-	DDA *cdda = currentDda;											// capture volatile variable
-	if (cdda == nullptr)
+	// If we are already moving, see whether we need to prepare any more moves
+	if (cdda != nullptr)
 	{
-		// No DDA is executing, so start executing a new one if possible
-		if (shouldStartMove || !CanAddMove())
-		{
-			DDA * dda = getPointer;									// capture volatile variable
-			if (dda->GetState() == DDA::provisional)
-			{
-				PrepareMoves(dda, 0, 0, simulationMode);
-			}
-
-			if (dda->GetState() == DDA::completed)
-			{
-				// We prepared the move but found there was nothing to do because endstops are already triggered
-				getPointer = dda = dda->GetNext();
-				completedMoves++;
-			}
-			else if (dda->GetState() == DDA::frozen)
-			{
-				if (simulationMode != 0)
-				{
-					currentDda = dda;								// pretend we are executing this move
-				}
-				else
-				{
-					Platform& p = reprap.GetPlatform();
-					SetBasePriority(NvicPriorityStep);				// shut out step interrupt
-					const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
-					if (ScheduleNextStepInterrupt())
-					{
-						Interrupt(p);
-					}
-					SetBasePriority(0);
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-					if (wakeLaser)
-					{
-						Move::WakeLaserTask();
-					}
-					else
-					{
-						p.SetLaserPwm(0);
-					}
-#else
-					(void)wakeLaser;
-#endif
-				}
-			}
-		}
-	}
-	else
-	{
-		// See whether we need to prepare any moves. First count how many prepared or executing moves we have and how long they will take.
+		// Count how many prepared or executing moves we have and how long they will take
 		int32_t preparedTime = 0;
 		unsigned int preparedCount = 0;
 		DDA::DDAState st;
@@ -267,6 +217,49 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 		}
 
 		PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
+	}
+	else if (shouldStartMove || waitingForRingToEmpty || !CanAddMove())						// no DDA is executing, so start executing a new one if possible
+	{
+		DDA * dda = getPointer;										// capture volatile variable
+		PrepareMoves(dda, 0, 0, simulationMode);
+
+		if (dda->GetState() == DDA::completed)
+		{
+			// We prepared the move but found there was nothing to do because endstops are already triggered
+			getPointer = dda = dda->GetNext();
+			completedMoves++;
+		}
+		else if (dda->GetState() == DDA::frozen)
+		{
+			if (simulationMode != 0)
+			{
+				currentDda = dda;									// pretend we are executing this move
+			}
+			else
+			{
+				Platform& p = reprap.GetPlatform();
+				SetBasePriority(NvicPriorityStep);					// shut out step interrupt
+				const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
+				if (ScheduleNextStepInterrupt())
+				{
+					Interrupt(p);
+				}
+				SetBasePriority(0);
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+				if (wakeLaser)
+				{
+					Move::WakeLaserTask();
+				}
+				else
+				{
+					p.SetLaserPwm(0);
+				}
+#else
+				(void)wakeLaser;
+#endif
+			}
+		}
 	}
 }
 
@@ -304,37 +297,7 @@ float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 	return addPointer->AdvanceBabyStepping(*this, axis, amount);
 }
 
-// Try to start another move. Must be called with interrupts disabled, to avoid a race condition.
-void DDARing::TryStartNextMove(Platform& p, uint32_t startTime) noexcept
-{
-	const DDA::DDAState st = getPointer->GetState();
-	if (st == DDA::frozen)
-	{
-#if SUPPORT_LASER || SUPPORT_IOBITS
-		if (StartNextMove(p, startTime))
-		{
-			Move::WakeLaserTaskFromISR();
-		}
-#else
-		(void)StartNextMove(p, startTime);
-#endif
-	}
-	else
-	{
-		if (st == DDA::provisional)
-		{
-			++numPrepareUnderruns;					// there are more moves available, but they are not prepared yet. Signal an underrun.
-		}
-		p.ExtrudeOff();								// turn off ancillary PWM
-#if SUPPORT_LASER
-		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
-		{
-			p.SetLaserPwm(0);						// turn off the laser
-		}
-#endif
-	}
-}
-
+// ISR for the step interrupt
 void DDARing::Interrupt(Platform& p) noexcept
 {
 	const uint16_t isrStartTime = StepTimer::GetTimerTicks16();
@@ -406,8 +369,40 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 	// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
 	// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
 	const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
-	CurrentMoveCompleted();					// tell the DDA ring that the current move is complete
-	TryStartNextMove(p, finishTime);		// schedule the next move
+	CurrentMoveCompleted();							// tell the DDA ring that the current move is complete
+
+	// Try to start a new move
+	const DDA::DDAState st = getPointer->GetState();
+	if (st == DDA::frozen)
+	{
+#if SUPPORT_LASER || SUPPORT_IOBITS
+		if (StartNextMove(p, finishTime))
+		{
+			Move::WakeLaserTaskFromISR();
+		}
+#else
+		(void)StartNextMove(p, startTime);
+#endif
+	}
+	else
+	{
+		if (st == DDA::provisional)
+		{
+			++numPrepareUnderruns;					// there are more moves available, but they are not prepared yet. Signal an underrun.
+		}
+		else if (!waitingForRingToEmpty)
+		{
+			++numNoMoveUnderruns;
+		}
+		p.ExtrudeOff();								// turn off ancillary PWM
+#if SUPPORT_LASER
+		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		{
+			p.SetLaserPwm(0);						// turn off the laser
+		}
+#endif
+		waitingForRingToEmpty = false;
+	}
 }
 
 // This is called from the step ISR when the current move has been completed
@@ -425,6 +420,18 @@ void DDARing::CurrentMoveCompleted() noexcept
 
 	getPointer = getPointer->GetNext();
 	completedMoves++;
+}
+
+// Tell the DDA ring that the caller is waiting for it to empty. Returns true if it is already empty.
+bool DDARing::SetWaitingToEmpty() noexcept
+{
+	waitingForRingToEmpty = true;					// set this first to avoid a possible race condition
+	const bool ret = IsIdle();
+	if (ret)
+	{
+		waitingForRingToEmpty = false;
+	}
+	return ret;
 }
 
 int32_t DDARing::GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting) noexcept
@@ -773,10 +780,10 @@ void DDARing::Diagnostics(MessageType mtype, const char *prefix) noexcept
 {
 	const DDA * const cdda = currentDda;
 	reprap.GetPlatform().MessageF(mtype,
-									"=== %sDDARing ===\nScheduled moves: %" PRIu32 ", completed moves: %" PRIu32 ", StepErrors: %u, LaErrors: %u, Underruns: %u, %u  CDDA state: %d\n",
-									prefix, scheduledMoves, completedMoves, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns,
+									"=== %sDDARing ===\nScheduled moves %" PRIu32 ", completed moves %" PRIu32 ", StepErrors %u, LaErrors %u, Underruns [%u, %u, %u], CDDA state %d\n",
+									prefix, scheduledMoves, completedMoves, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns, numNoMoveUnderruns,
 									(cdda == nullptr) ? -1 : (int)cdda->GetState());
-	stepErrors = numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
+	stepErrors = numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
 }
 
 #if SUPPORT_LASER

@@ -677,12 +677,6 @@ inline bool DDA::IsAccelerationMove() const noexcept
 			   );
 }
 
-// Return true if there is no reason to delay preparing this move
-bool DDA::IsGoodToPrepare() const noexcept
-{
-	return endSpeed >= topSpeed;							// if it never decelerates, we can't improve it
-}
-
 #if 0
 #define LA_DEBUG	do { if (fabsf(fsquare(laDDA->endSpeed) - fsquare(laDDA->startSpeed)) > 2.02 * laDDA->acceleration * laDDA->totalDistance \
 								|| laDDA->topSpeed > laDDA->requestedSpeed) { \
@@ -719,12 +713,12 @@ pre(state == provisional)
 				goingUp = false;
 			}
 			else if (   laDDA->IsDecelerationMove()
-					 && laDDA->prev->state == DDA::provisional			// if we can't adjust the previous move then we don't care (and its figures may not be reliable if it has been recycled already)
 					 && laDDA->prev->beforePrepare.decelDistance > 0.0	// if the previous move has no deceleration phase then no point in adjusting it
 					)
 			{
-				// This is a deceleration-only move, so we may have to adjust the previous move as well to get optimum behaviour
-				if (   laDDA->prev->state == provisional
+				const DDAState st = laDDA->prev->state;
+				// This is a deceleration-only move, and the previous one has a deceleration phase. We may have to adjust the previous move as well to get optimum behaviour.
+				if (   st == provisional
 					&& laDDA->prev->flags.xyMoving == laDDA->flags.xyMoving
 					&& (   laDDA->prev->flags.isPrintingMove == laDDA->flags.isPrintingMove
 						|| (laDDA->prev->flags.isPrintingMove && laDDA->prev->requestedSpeed == laDDA->requestedSpeed)	// special case to support coast-to-end
@@ -739,7 +733,10 @@ pre(state == provisional)
 				else
 				{
 					// This move is a deceleration-only move but we can't adjust the previous one
-					laDDA->flags.hadLookaheadUnderrun = true;
+					if (st == frozen || st == executing)
+					{
+						laDDA->flags.hadLookaheadUnderrun = true;
+					}
 					const float maxReachableSpeed = sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
 					if (laDDA->beforePrepare.targetNextSpeed > maxReachableSpeed)
 					{

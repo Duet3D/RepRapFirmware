@@ -342,6 +342,12 @@ inline __attribute__((always_inline)) bool DDA::ScheduleNextStepInterrupt(StepTi
 	return false;
 }
 
+// Return true if there is no reason to delay preparing this move
+inline bool DDA::IsGoodToPrepare() const noexcept
+{
+	return endSpeed >= topSpeed;							// if it never decelerates, we can't improve it
+}
+
 inline bool DDA::CanPauseAfter() const noexcept
 {
 	return flags.canPauseAfter

@@ -1491,7 +1491,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 	}
 
 	// Wait for all the queued moves to stop so we get the actual last position
-	if (!reprap.GetMove().AllMovesAreFinished(true))
+	if (!reprap.GetMove().WaitingForAllMovesFinished())
 	{
 		return false;
 	}

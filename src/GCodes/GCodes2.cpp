@@ -2305,7 +2305,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished(false))
+					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
 					{
 						// The pipeline is empty, so execute the babystepping move immediately
 						SetMoveBufferDefaults();
