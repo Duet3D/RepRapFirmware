@@ -295,7 +295,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 			p.MessageF(mtype, " %s(%s)", m->GetName(), pcTaskGetName(holder->GetFreeRTOSHandle()));
 		}
 	}
-	p.MessageF(mtype, "\n");
+	p.Message(mtype, "\n");
 }
 
 TaskHandle Tasks::GetMainTask() noexcept

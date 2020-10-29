@@ -317,6 +317,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #else
 	{ "logFile",				OBJECT_MODEL_FUNC_NOSELF(nullptr),										ObjectModelEntryFlags::none },
 #endif
+	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::none },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
@@ -380,7 +381,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																		// directories
 #endif
 	25,																		// limits
-	15 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
+	16 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
 	2,																		// state.beep
 	6,																		// state.messageBox
 	11 + HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE			// seqs
@@ -2414,6 +2415,7 @@ void RepRap::SetMessage(const char *msg) noexcept
 	{
 		platform->SendPanelDueMessage(0, msg);
 	}
+	platform->Message(MessageType::LogInfo, msg);
 }
 
 // Display a message box on the web interface
@@ -2711,7 +2713,7 @@ void RepRap::UpdateFirmware() noexcept
 	FileStore * const iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		platform->MessageF(FirmwareUpdateMessage, "IAP file '" IAP_UPDATE_FILE "' not found\n");
+		platform->Message(FirmwareUpdateMessage, "IAP file '" IAP_UPDATE_FILE "' not found\n");
 		return;
 	}
 

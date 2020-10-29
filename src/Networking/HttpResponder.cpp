@@ -462,14 +462,14 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			{
 				// Wrong password
 				response->copy("{\"err\":1}");
-				reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s attempted login with incorrect password\n", IP4String(GetRemoteIP()).c_str());
+				reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s attempted login with incorrect password\n", IP4String(GetRemoteIP()).c_str());
 				return true;
 			}
 			if (!Authenticate())
 			{
 				// No more HTTP sessions available
 				response->copy("{\"err\":2}");
-				reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s attempted login but no more sessions available\n", IP4String(GetRemoteIP()).c_str());
+				reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s attempted login but no more sessions available\n", IP4String(GetRemoteIP()).c_str());
 				return true;
 			}
 		}
@@ -477,7 +477,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		// Client has been logged in
 		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\",\"apiLevel\":%u}",
 							HttpSessionTimeout, GetPlatform().GetBoardString(), ApiLevel);
-		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
+		reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
 
 		// See if we can update the current RTC date and time
 		const char* const timeString = GetKeyValue("time");
@@ -499,7 +499,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	else if (StringEqualsIgnoreCase(request, "disconnect"))
 	{
 		response->printf("{\"err\":%d}", (RemoveAuthentication()) ? 0 : 1);
-		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s disconnected\n", IP4String(GetRemoteIP()).c_str());
+		reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s disconnected\n", IP4String(GetRemoteIP()).c_str());
 	}
 	else if (StringEqualsIgnoreCase(request, "status"))
 	{
@@ -1081,7 +1081,7 @@ void HttpResponder::ProcessMessage() noexcept
 	if (reprap.Debug(moduleWebserver))
 	{
 		Platform& p = GetPlatform();
-		p.MessageF(UsbMessage, "HTTP req, command words {");
+		p.Message(UsbMessage, "HTTP req, command words {");
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
 			p.MessageF(UsbMessage, " %s", commandWords[i]);

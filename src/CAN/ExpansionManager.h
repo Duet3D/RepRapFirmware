@@ -49,12 +49,12 @@ public:
 
 	void EmergencyStop() noexcept;
 
+	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
 	void UpdateBoardState(CanAddress address, BoardState newState) noexcept;
-	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 
 	unsigned int numExpansionBoards;
 	unsigned int numBoardsFlashing;

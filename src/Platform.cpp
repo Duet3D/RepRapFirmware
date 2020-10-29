@@ -1725,14 +1725,14 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: ",
 			 (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
 
-	if (LPC_SYSCTL->RSID & RSID_POR) { MessageF(mtype, "[power up]"); }
-	if (LPC_SYSCTL->RSID & RSID_EXTR) { MessageF(mtype, "[reset button]"); }
-	if (LPC_SYSCTL->RSID & RSID_WDTR) { MessageF(mtype, "[watchdog]"); }
-	if (LPC_SYSCTL->RSID & RSID_BODR) { MessageF(mtype, "[brownout]"); }
-	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { MessageF(mtype, "[software]"); }
-	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { MessageF(mtype, "[lockup]"); }
+	if (LPC_SYSCTL->RSID & RSID_POR) { Message(mtype, "[power up]"); }
+	if (LPC_SYSCTL->RSID & RSID_EXTR) { Message(mtype, "[reset button]"); }
+	if (LPC_SYSCTL->RSID & RSID_WDTR) { Message(mtype, "[watchdog]"); }
+	if (LPC_SYSCTL->RSID & RSID_BODR) { Message(mtype, "[brownout]"); }
+	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { Message(mtype, "[software]"); }
+	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { Message(mtype, "[lockup]"); }
 
-	MessageF(mtype, "\n");
+	Message(mtype, "\n");
 #else
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
 # ifdef DUET_NG
@@ -3082,9 +3082,9 @@ void Platform::RawMessage(MessageType type, const char *message) noexcept
 {
 #if HAS_MASS_STORAGE
 	// Deal with logging
-	if ((type & LogMessage) != 0 && logger != nullptr)
+	if (logger != nullptr)
 	{
-		logger->LogMessage(realTime, message);
+		logger->LogMessage(realTime, message, type);
 	}
 #endif
 
@@ -3163,9 +3163,9 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 {
 #if HAS_MASS_STORAGE
 	// First deal with logging because it doesn't hang on to the buffer
-	if ((type & LogMessage) != 0 && logger != nullptr)
+	if (logger != nullptr)
 	{
-		logger->LogMessage(realTime, buffer);
+		logger->LogMessage(realTime, buffer, type);
 	}
 #endif
 
@@ -3321,6 +3321,8 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 		reprap.SetAlert(message, title, sParam, tParam, controls);		// make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
 	}
 
+	MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), message);
+
 	mt = (MessageType)(mt & (UsbMessage | TelnetMessage));
 	if (mt != 0)
 	{
@@ -3348,16 +3350,17 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 	if (gb.Seen('S'))
 	{
 		StopLogging();
-		if (gb.GetIValue() > 0)
+		const auto logLevel = (LogLevel) gb.GetLimitedUIValue('S', LogLevel::NumValues, LogLevel::OFF);
+		if (logLevel > LogLevel::OFF)
 		{
 			// Start logging
 			if (logger == nullptr)
 			{
-				logger = new Logger();
+				logger = new Logger(logLevel);
 			}
 			else
 			{
-				StopLogging();
+				logger->SetLogLevel(logLevel);
 			}
 
 			char buf[MaxFilenameLength + 1];
@@ -3375,7 +3378,15 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 	}
 	else
 	{
-		reply.printf("Event logging is %s", (logger != nullptr && logger->IsActive()) ? "enabled" : "disabled");
+		if (logger == nullptr || !logger->IsActive())
+		{
+			reply.copy("Event logging is disabled");
+		}
+		else
+		{
+			const auto logLevel = logger->GetLogLevel();
+			reply.printf("Event logging is enabled at log level %s", logLevel.ToString());
+		}
 	}
 	return GCodeResult::ok;
 }
@@ -3387,6 +3398,16 @@ const char *Platform::GetLogFileName() const noexcept
 }
 
 #endif
+
+const char *Platform::GetLogLevel() const noexcept
+{
+	static const LogLevel off = LogLevel::OFF;	// need to have an instance otherwise it will fail .ToString() below
+#if HAS_MASS_STORAGE
+	return (logger == nullptr) ? off.ToString() : logger->GetLogLevel().ToString();
+#else
+	return off.ToString();
+#endif
+}
 
 // This is called from EmergencyStop. It closes the log file and stops logging.
 void Platform::StopLogging() noexcept
@@ -3423,7 +3444,7 @@ void Platform::AtxPowerOff(bool defer) noexcept
 #if HAS_MASS_STORAGE
 		if (logger != nullptr)
 		{
-			logger->LogMessage(realTime, "Power off commanded");
+			logger->LogMessage(realTime, "Power off commanded", LogWarn);
 			logger->Flush(true);
 			// We don't call logger->Stop() here because we don't know whether turning off the power will work
 		}
@@ -4272,7 +4293,7 @@ bool Platform::SetDateTime(time_t time) noexcept
 
 		// Write a log message, giving the time since power up in same format as the logger does
 		const uint32_t timeSincePowerUp = (uint32_t)(millis64()/1000u);
-		MessageF(LogMessage, "Date and time set at power up + %02" PRIu32 ":%02" PRIu32 ":%02" PRIu32 "\n", timeSincePowerUp/3600u, (timeSincePowerUp % 3600u)/60u, timeSincePowerUp % 60u);
+		MessageF(LogWarn, "Date and time set at power up + %02" PRIu32 ":%02" PRIu32 ":%02" PRIu32 "\n", timeSincePowerUp/3600u, (timeSincePowerUp % 3600u)/60u, timeSincePowerUp % 60u);
 		timeLastUpdatedMillis = millis();
 	}
 	return ok;
