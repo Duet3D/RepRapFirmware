@@ -24,12 +24,14 @@
 #if HAS_LINUX_INTERFACE
 
 # define PARSER_OPERATION(_x)	((isBinaryBuffer) ? (binaryParser._x) : (stringParser._x))
+# define BINARY_OR(_x)			((isBinaryBuffer) || (_x))
 # define NOT_BINARY_AND(_x)		((!isBinaryBuffer) && (_x))
 # define IF_NOT_BINARY(_x)		{ if (!isBinaryBuffer) { _x; } }
 
 #else
 
 # define PARSER_OPERATION(_x)	(stringParser._x)
+# define BINARY_OR(_x)			(_x)
 # define NOT_BINARY_AND(_x)		(_x)
 # define IF_NOT_BINARY(_x)		{ _x; }
 
@@ -909,9 +911,9 @@ bool GCodeBuffer::IsWritingBinary() const noexcept
 	return NOT_BINARY_AND(stringParser.IsWritingBinary());
 }
 
-void GCodeBuffer::WriteBinaryToFile(char b) noexcept
+bool GCodeBuffer::WriteBinaryToFile(char b) noexcept
 {
-	IF_NOT_BINARY(stringParser.WriteBinaryToFile(b));
+	return BINARY_OR(stringParser.WriteBinaryToFile(b));
 }
 
 void GCodeBuffer::FinishWritingBinary() noexcept

@@ -15,8 +15,7 @@
 
 #include <Stream.h>
 
-const size_t GCodeInputBufferSize = 256;						// How many bytes can we cache per input source?
-const size_t GCodeInputFileReadThreshold = 128;					// How many free bytes must be available before data is read from the SD card?
+const size_t GCodeInputBufferSize = 256;						// How many bytes can we cache per input source? Make this a power of 2 for efficiency
 
 // This base class provides incoming G-codes for the GCodeBuffer class
 class GCodeInput
@@ -53,7 +52,6 @@ private:
 	Stream &device;
 };
 
-
 // When characters from input sources are received, they should be checked consequently for M112 (Emergency Stop).
 // This allows us to react faster to an incoming emergency stop since other codes may be blocking the associated
 // GCodeBuffer instance.
@@ -87,6 +85,19 @@ protected:
 	GCodeInputState state;
 	size_t writingPointer, readingPointer;
 	char buffer[GCodeInputBufferSize];
+};
+
+// Class to buffer input from streams that have very slow single-character interfaces, in particular the Microchip SAM4E/4S/E70 USB driver
+class BufferedStreamGCodeInput : public RegularGCodeInput
+{
+public:
+	BufferedStreamGCodeInput(Stream &dev) noexcept : RegularGCodeInput(), device(dev) { }
+
+	void Reset() noexcept override;
+	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
+
+private:
+	Stream &device;
 };
 
 enum class GCodeInputReadResult : uint8_t { haveData, noData, error };

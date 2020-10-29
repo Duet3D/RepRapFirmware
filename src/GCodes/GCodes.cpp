@@ -87,7 +87,13 @@ GCodes::GCodes(Platform& p) noexcept :
 # endif // SUPPORT_TELNET || HAS_LINUX_INTERFACE
 
 #if defined(SERIAL_MAIN_DEVICE)
+# if SAME5x
+	// CoreN2G already uses an efficient buffer for receiving data from USB
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
+# else
+	// CoreNG USB driver is inefficient when read in single-character mode
+	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_MAIN_DEVICE);
+# endif
 	usbGCode = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_LINUX_INTERFACE
 	usbGCode = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatbility::marlin);
@@ -428,12 +434,19 @@ void GCodes::Spin() noexcept
 
 	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
-	if (gbp->IsCompletelyIdle()
+	if (!autoPauseGCode->IsCompletelyIdle()
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-		&& !gbp->MachineState().DoingFile()
+		|| autoPauseGCode->MachineState().DoingFile()
 #endif
-	   )	// if autoPause is not active
+	   )	// if autoPause is active
 	{
+		(void)SpinGCodeBuffer(*autoPauseGCode);
+	}
+	else
+	{
+		// Scan the GCode input channels until we find one that we can do some useful work with, or we have scanned them all.
+		// The idea is that when a single GCode input channel is active, we do some useful work every time we come through this polling loop, not once every N times (N = number of input channels)
+		const size_t originalNextGCodeSource = nextGcodeSource;
 		do
 		{
 			gbp = gcodeSources[nextGcodeSource];
@@ -442,47 +455,13 @@ void GCodes::Spin() noexcept
 			{
 				nextGcodeSource = 0;
 			}
-		} while (gbp == nullptr);									// we must have at least one GCode source, so this can't loop indefinitely
-	}
-	GCodeBuffer& gb = *gbp;
-
-	// Set up a buffer for the reply
-	String<GCodeReplyLength> reply;
-	{
-		MutexLocker gbLock(gb.mutex);
-		if (gb.GetState() == GCodeState::normal)
-		{
-			if (gb.MachineState().messageAcknowledged)
+			if (gbp != nullptr && SpinGCodeBuffer(*gbp))			// if we did something useful
 			{
-				const bool wasCancelled = gb.MachineState().messageCancelled;
-				gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
-
-				if (wasCancelled)
-				{
-					if (gb.MachineState().GetPrevious() == nullptr)
-					{
-						StopPrint(StopPrintReason::userCancelled);
-					}
-					else
-					{
-						FileMacroCyclesReturn(gb);
-					}
-				}
+				break;
 			}
-			else
-			{
-				StartNextGCode(gb, reply.GetRef());
-			}
-		}
-		else
-		{
-			RunStateMachine(gb, reply.GetRef());                            // execute the state machine
-		}
-		if (gb.IsExecuting())
-		{
-			CheckReportDue(gb, reply.GetRef());
-		}
+		} while (nextGcodeSource != originalNextGCodeSource);
 	}
+
 
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -511,8 +490,50 @@ void GCodes::Spin() noexcept
 	}
 }
 
-// Start a new gcode, or continue to execute one that has already been started:
-void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
+
+// Do some work on an input channel, returning true if we did something significant
+bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
+{
+	// Set up a buffer for the reply
+	String<GCodeReplyLength> reply;
+
+	MutexLocker gbLock(gb.mutex);
+	if (gb.GetState() == GCodeState::normal)
+	{
+		if (gb.MachineState().messageAcknowledged)
+		{
+			const bool wasCancelled = gb.MachineState().messageCancelled;
+			gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+
+			if (wasCancelled)
+			{
+				if (gb.MachineState().GetPrevious() == nullptr)
+				{
+					StopPrint(StopPrintReason::userCancelled);
+				}
+				else
+				{
+					FileMacroCyclesReturn(gb);
+				}
+			}
+			return wasCancelled;
+		}
+
+		return StartNextGCode(gb, reply.GetRef());
+	}
+	else
+	{
+		RunStateMachine(gb, reply.GetRef());                            // execute the state machine
+	}
+	if (gb.IsExecuting())
+	{
+		CheckReportDue(gb, reply.GetRef());
+	}
+	return true;
+}
+
+// Start a new gcode, or continue to execute one that has already been started. Return true if we found something significant to do.
+bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (IsPaused() && &gb == fileGCode && !gb.IsDoingFileMacro())
 	{
@@ -520,37 +541,14 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// There is a potential issue here if fileGCode holds any locks, so unlock everything.
 		UnlockAll(gb);
 	}
-	else if (gb.IsReady())
-	{
-		bool done;
-		try
-		{
-			done = gb.CheckMetaCommand(reply);
-		}
-		catch (const GCodeException& e)
-		{
-			e.GetMessage(reply, &gb);
-			HandleReplyPreserveResult(gb, GCodeResult::error, reply.c_str());
-			gb.Init();
-			return;
-		}
-
-		if (done)
-		{
-			HandleReplyPreserveResult(gb, GCodeResult::ok, reply.c_str());
-		}
-		else
-		{
-			gb.SetFinished(ActOnCode(gb, reply));
-		}
-	}
-	else if (gb.IsExecuting())
+	else if (gb.IsReady() || gb.IsExecuting())
 	{
 		gb.SetFinished(ActOnCode(gb, reply));
+		return true;
 	}
 	else if (gb.IsDoingFile())
 	{
-		DoFilePrint(gb, reply);
+		return DoFilePrint(gb, reply);
 	}
 	else if (&gb == daemonGCode)
 	{
@@ -559,7 +557,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 			&& gb.DoDwellTime(1000)
 		   )
 		{
-			DoFileMacro(gb, DAEMON_G, false, -1);
+			return DoFileMacro(gb, DAEMON_G, false, -1);
 		}
 	}
 	else
@@ -571,6 +569,24 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (gotCommand)
 		{
 			gb.DecodeCommand();
+			bool done;
+			try
+			{
+				done = gb.CheckMetaCommand(reply);
+			}
+			catch (const GCodeException& e)
+			{
+				e.GetMessage(reply, &gb);
+				HandleReplyPreserveResult(gb, GCodeResult::error, reply.c_str());
+				gb.Init();
+				return true;
+			}
+
+			if (done)
+			{
+				HandleReplyPreserveResult(gb, GCodeResult::ok, reply.c_str());
+				return true;
+			}
 		}
 #if HAS_LINUX_INTERFACE
 		else if (reprap.UsingLinuxInterface())
@@ -579,9 +595,11 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 #endif
 	}
+	return false;
 }
 
-void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
+// Try to continue with a print from file, returning true if we did anything significant
+bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -627,6 +645,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					CheckForDeferredPause(gb);
 				}
 			}
+			return true;
 		}
 		else
 		{
@@ -643,6 +662,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				reprap.GetLinuxInterface().FillBuffer(gb);
 			}
+			return false;
 		}
 	}
 	else
@@ -668,7 +688,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					HandleReplyPreserveResult(gb, GCodeResult::error, reply.c_str());
 					gb.Init();
 					AbortPrint(gb);
-					break;
+					return true;
 				}
 
 				if (done)
@@ -684,11 +704,12 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					}
 				}
 			}
-			break;
+			return true;
 
 		case GCodeInputReadResult::error:
+		default:
 			AbortPrint(gb);
-			break;
+			return true;
 
 		case GCodeInputReadResult::noData:
 			// We have reached the end of the file. Check for the last line of gcode not ending in newline.
@@ -705,7 +726,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					HandleReply(gb, GCodeResult::error, reply.c_str());
 					gb.Init();
 					AbortPrint(gb);
-					break;
+					return true;
 				}
 
 				if (done)
@@ -720,8 +741,9 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 						gb.SetFinished(ActOnCode(gb, reply));
 					}
 				}
-				break;
+				return true;
 			}
+
 			gb.Init();								// mark buffer as empty
 
 			if (gb.MachineState().GetPrevious() == nullptr)
@@ -752,7 +774,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					CheckForDeferredPause(gb);
 				}
 			}
-			break;
+			return true;
 		}
 #endif
 	}

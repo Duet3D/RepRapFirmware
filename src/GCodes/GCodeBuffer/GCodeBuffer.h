@@ -186,7 +186,7 @@ public:
 	void WriteToFile() noexcept;								// Write the current GCode to file
 
 	bool IsWritingBinary() const noexcept;						// Returns true if writing binary
-	void WriteBinaryToFile(char b) noexcept;					// Write a byte to the file
+	bool WriteBinaryToFile(char b) noexcept;					// Write a byte to the file, returning true if the upload is now complete
 	void FinishWritingBinary() noexcept;
 #endif
 

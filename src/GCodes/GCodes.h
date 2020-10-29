@@ -303,14 +303,15 @@ private:
 	void UnlockResource(const GCodeBuffer& gb, Resource r) noexcept;			// Unlock the resource if we own it
 	void UnlockMovement(const GCodeBuffer& gb) noexcept;						// Unlock the movement resource if we own it
 
-	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
+	bool SpinGCodeBuffer(GCodeBuffer& gb) noexcept;								// Do some work on an input channel
+	bool StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Execute a step of the state machine
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps);
 
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
 	void StopPrint(StopPrintReason reason) noexcept;							// Stop the current print
 
-	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;			// Get G Codes from a file and print them
+	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;			// Get G Codes from a file and print them
 	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = -1) noexcept;
 																						// Run a GCode macro file, optionally report error if not found
 	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro

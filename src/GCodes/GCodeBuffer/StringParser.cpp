@@ -1473,14 +1473,15 @@ void StringParser::WriteToFile() noexcept
 	Init();
 }
 
-void StringParser::WriteBinaryToFile(char b) noexcept
+// Write a character to file, returning true if we finished doing the binary upload
+bool StringParser::WriteBinaryToFile(char b) noexcept
 {
 	if (b == eofString[eofStringCounter] && writingFileSize == 0)
 	{
 		eofStringCounter++;
 		if (eofStringCounter < ARRAY_SIZE(eofString) - 1)
 		{
-			return;					// not reached end of input yet
+			return false;					// not reached end of input yet
 		}
 	}
 	else
@@ -1496,11 +1497,12 @@ void StringParser::WriteBinaryToFile(char b) noexcept
 		fileBeingWritten->Write(b);		// writing one character at a time isn't very efficient, but uploading HTML files via USB is rarely done these days
 		if (writingFileSize == 0 || fileBeingWritten->Length() < writingFileSize)
 		{
-			return;					// not reached end of input yet
+			return false;					// not reached end of input yet
 		}
 	}
 
 	FinishWritingBinary();
+	return true;
 }
 
 void StringParser::FinishWritingBinary() noexcept

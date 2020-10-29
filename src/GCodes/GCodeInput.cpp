@@ -11,38 +11,48 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 
+const size_t GCodeInputFileReadThreshold = 128;		// How many free bytes must be available before data is read from the file
+const size_t GCodeInputUSBReadThreshold = 128;		// How many free bytes must be available before we read more data from USB
+
 // Read some input bytes into the GCode buffer. Return true if there is a line of GCode waiting to be processed.
+// This needs to be efficient
 bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
 {
-	const size_t bytesToPass = min<size_t>(BytesCached(), GCODE_LENGTH);
-	for (size_t i = 0; i < bytesToPass; i++)
-	{
-		const char c = ReadByte();
+	const size_t bytesToPass = BytesCached();
 
 #if HAS_MASS_STORAGE
-		if (gb->IsWritingBinary())
+	// To save calling IsWritingBinary on every character when we are not uploading a file in binary mode, use a separate loop for uploading
+	if (gb->IsWritingBinary())
+	{
+		for (size_t i = 0; i < bytesToPass; i++)
 		{
-			// HTML uploads are handled by the GCodes class
-			gb->WriteBinaryToFile(c);
-		}
-		else if (gb->Put(c))
-		{
-			if (gb->IsWritingFile())
+			const char c = ReadByte();
+			if (gb->WriteBinaryToFile(c))
 			{
-				gb->WriteToFile();
-			}
-			else
-			{
-				return true;
+				return false;				// finished binary upload, so we may as well stop here
 			}
 		}
-#else
-		if (gb->Put(c))
-		{
-			// Code is complete, so stop here
-			return true;
-		}
+	}
+	else
 #endif
+	{
+		for (size_t i = 0; i < bytesToPass; i++)
+		{
+			const char c = ReadByte();
+			if (gb->Put(c))					// process a character, returns true if a line of GCode is complete
+			{
+#if HAS_MASS_STORAGE
+				if (gb->IsWritingFile())
+				{
+					gb->WriteToFile();
+				}
+				else
+#endif
+				{
+					return true;			// a line of GCode is complete, so stop here
+				}
+			}
+		}
 	}
 
 	return false;
@@ -91,14 +101,9 @@ char RegularGCodeInput::ReadByte() noexcept
 	return c;
 }
 
-
 size_t RegularGCodeInput::BytesCached() const noexcept
 {
-	if (writingPointer >= readingPointer)
-	{
-		return writingPointer - readingPointer;
-	}
-	return GCodeInputBufferSize - readingPointer + writingPointer;
+	return (writingPointer - readingPointer) % GCodeInputBufferSize;
 }
 
 size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
@@ -106,6 +111,28 @@ size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
 	return (readingPointer - writingPointer - 1u) % GCodeInputBufferSize;
 }
 
+// BufferedStreamGCodeInput methods
+void BufferedStreamGCodeInput::Reset() noexcept
+{
+	RegularGCodeInput::Reset();
+	while (device.available() > 0)
+	{
+		device.read();
+	}
+}
+
+bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
+{
+	const size_t spaceLeft = BufferSpaceLeft();
+	if (spaceLeft >= GCodeInputUSBReadThreshold)
+	{
+		const size_t maxToTransfer = (readingPointer > writingPointer) ? spaceLeft : GCodeInputBufferSize - writingPointer;
+		writingPointer = (writingPointer + device.readBytes(buffer + writingPointer, maxToTransfer)) % GCodeInputBufferSize;
+	}
+	return StandardGCodeInput::FillBuffer(gb);
+}
+
+// NetworkGCodeInput methods
 void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 {
 	if (BufferSpaceLeft() == 0)
