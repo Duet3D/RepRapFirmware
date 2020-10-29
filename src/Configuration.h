@@ -235,6 +235,7 @@ constexpr size_t MachineNameLength = StringLength50;
 constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
 constexpr size_t StringBufferLength = StringLength256;	// Length of the string buffer used by the expression parser
+constexpr size_t StringLengthLoggedCommand = StringLength100;	// Length of a string buffer for a command to be logged
 
 #if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer

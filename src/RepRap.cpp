@@ -314,11 +314,10 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #endif
 #if HAS_MASS_STORAGE
 	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
-	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 #else
 	{ "logFile",				OBJECT_MODEL_FUNC_NOSELF(nullptr),										ObjectModelEntryFlags::none },
-	{ "logLevel",				OBJECT_MODEL_FUNC_NOSELF(nullptr),										ObjectModelEntryFlags::none },
 #endif
+	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::none },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },

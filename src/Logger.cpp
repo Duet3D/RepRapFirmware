@@ -41,7 +41,7 @@ void Logger::Start(time_t time, const StringRef& filename) noexcept
 			lastFlushFileSize = logFile.Length();
 			logFile.Seek(lastFlushFileSize);
 			logFileName.copy(filename.c_str());
-			String<40> startMessage;
+			String<StringLength50> startMessage;
 			startMessage.printf("Event logging started at level %s\n", logLevel.ToString());
 			InternalLogMessage(time, startMessage.c_str(), MessageLogLevel::INFO);
 			LogFirmwareInfo(time);
@@ -50,11 +50,11 @@ void Logger::Start(time_t time, const StringRef& filename) noexcept
 	}
 }
 
-// TODO: Move this to a more sensible location
+// TODO: Move this to a more sensible location ?
 void Logger::LogFirmwareInfo(time_t time) noexcept
 {
 	const size_t versionStringLength = 80
-#if 0 && SUPPORT_CAN_EXPANSION // TODO
+#if 0 && SUPPORT_CAN_EXPANSION // TODO enable this once the part below is cleaned up
 			+ reprap.GetExpansion().GetNumExpansionBoards() + 1 * 80
 #endif
 			;
@@ -62,7 +62,7 @@ void Logger::LogFirmwareInfo(time_t time) noexcept
 	StringRef firmwareInfo(buffer, ARRAY_SIZE(buffer));// This is huge but should accomodate for around 20 boards
 	firmwareInfo.printf("Running: %s: %s (%s)", reprap.GetPlatform().GetElectronicsString(), VERSION, DATE);
 
-#if 0 && SUPPORT_CAN_EXPANSION // TODO
+#if 0 && SUPPORT_CAN_EXPANSION // TODO this needs some rework - for now the main board is used only
 	for (size_t i = 1; i < reprap.GetExpansion().GetNumExpansionBoards() + 1; ++i)
 	{
 		auto expansionBoardData = reprap.GetExpansion().FindIndexedBoard(i);
@@ -93,11 +93,13 @@ void Logger::SetLogLevel(LogLevel newLogLevel) noexcept
 	}
 }
 
-//bool Logger::IsLoggingEnabledFor(const MessageType mt) const noexcept
-//{
-//	const auto messageLogLevel = GetMessageLogLevel(mt);
-//	return IsLoggingEnabledFor(messageLogLevel);
-//}
+#if 0 // Currently not needed but might be useful in the future
+bool Logger::IsLoggingEnabledFor(const MessageType mt) const noexcept
+{
+	const auto messageLogLevel = GetMessageLogLevel(mt);
+	return IsLoggingEnabledFor(messageLogLevel);
+}
+#endif
 
 void Logger::LogMessage(time_t time, const char *message, MessageType type) noexcept
 {
@@ -124,11 +126,7 @@ void Logger::LogMessage(time_t time, OutputBuffer *buf, MessageType type) noexce
 			return;
 		}
 		Lock loggerLock(inLogger);
-		bool ok = WriteDateTime(time);
-		if (ok)
-		{
-			ok = WriteLogLevelPrefix(messageLogLevel);
-		}
+		bool ok = WriteDateTimeAndLogLevelPrefix(time, messageLogLevel);
 		if (ok)
 		{
 			ok = buf->WriteToFile(logFile);
@@ -149,11 +147,7 @@ void Logger::LogMessage(time_t time, OutputBuffer *buf, MessageType type) noexce
 // Version of LogMessage for when we already know we want to proceed and we have already set inLogger
 void Logger::InternalLogMessage(time_t time, const char *message, const MessageLogLevel messageLogLevel) noexcept
 {
-	bool ok = WriteDateTime(time);
-	if (ok)
-	{
-		ok = WriteLogLevelPrefix(messageLogLevel);
-	}
+	bool ok = WriteDateTimeAndLogLevelPrefix(time, messageLogLevel);
 	if (ok)
 	{
 		const size_t len = strlen(message);
@@ -201,11 +195,11 @@ void Logger::Flush(bool forced) noexcept
 	}
 }
 
-// Write the data and time to the file followed by a space.
+// Write the data, time and message log level to the file followed by a space.
 // Caller must already have checked and set inLogger.
-bool Logger::WriteDateTime(time_t time) noexcept
+bool Logger::WriteDateTimeAndLogLevelPrefix(time_t time, MessageLogLevel messageLogLevel) noexcept
 {
-	String<30> bufferSpace;
+	String<StringLength50> bufferSpace;
 	const StringRef buf = bufferSpace.GetRef();
 	if (time == 0)
 	{
@@ -219,14 +213,7 @@ bool Logger::WriteDateTime(time_t time) noexcept
 		buf.printf("%04u-%02u-%02u %02u:%02u:%02u ",
 						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 	}
-	return logFile.Write(buf.c_str());
-}
-
-bool Logger::WriteLogLevelPrefix(MessageLogLevel messageLogLevel) noexcept
-{
-	String<10> bufferSpace;
-	const StringRef buf = bufferSpace.GetRef();
-	buf.printf("[%s] ", messageLogLevel.ToString());
+	buf.catf("[%s] ", messageLogLevel.ToString());
 	return logFile.Write(buf.c_str());
 }
 

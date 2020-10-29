@@ -1673,10 +1673,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				gb.GetQuotedString(message.GetRef());
 
 				MessageType type = GenericMessage;
-#if 0 && HAS_MASS_STORAGE
-				// Send all M118 to debug log
-				type = AddLogDebug(type);
-#endif
 				bool seenP = false;
 				if (gb.Seen('P'))
 				{

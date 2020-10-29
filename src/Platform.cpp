@@ -3397,12 +3397,16 @@ const char *Platform::GetLogFileName() const noexcept
 	return (logger == nullptr) ? nullptr : logger->GetFileName();
 }
 
+#endif
+
 const char *Platform::GetLogLevel() const noexcept
 {
+#if HAS_MASS_STORAGE
 	return (logger == nullptr) ? nullptr : logger->GetLogLevel().ToString();
-}
-
+#else
+	return LogLevel::OFF.ToString();
 #endif
+}
 
 // This is called from EmergencyStop. It closes the log file and stops logging.
 void Platform::StopLogging() noexcept
