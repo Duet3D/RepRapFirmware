@@ -14,6 +14,13 @@ New features/changed behaviour:
 - It is no longer necessary to separate multiple G- or M-commands on a single line with a space or tab character
 - If the system runs out of memory, it will now reset and the Last Software Reset Reason reported by M122 will be "OutOfMemory"
 - The M122 P102 and M122 P103 timing functions are more accurate and give more consistent results than in previous firmware versions
+- Logging to file now has four log levels
+    * 0: OFF (as previously no logging)
+    * 1: WARN (all previous log statements are in this category)
+    * 2: INFO (M117, M291, M292 and G10 fall into this category) and
+    * 3: DEBUG (everything else that creates an output)
+- M929 now takes values for the Snnn paramter from 0 (OFF) to 3 (DEBUG)
+- M118 has a new Lnnn parameter to specify into which log level a message will be logged (default: DEBUG). Using L0 will prevent a message to appear in the log file
 
 Object model changes:
 - All types of filament monitors have a new field "status". The value is one of "noMonitor", "ok", "noDataReceived", "noFilament", "tooLittleMovement", "tooMuchMovement", "sensorError".
@@ -28,7 +35,7 @@ Bug fixes:
 - G92 Znn didn't clear zDatumSetByProbing (old bug)
 - The handling of out-of-buffer situations has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
 - In RepRapFirmware mode, empty responses to commands were not suppressed. They are now suppressed except when the command came from HTTP or SBC.
-- [LPC/STM port, might affect Duets in rare situations] If hiccups occurred frequently and there was other activity in the system causing frequeny high-priority interrupts, a watchdog timeout could occur
+- [LPC/STM port, might affect Duets in rare situations] If hiccups occurred frequently and there was other activity in the system causing frequent high-priority interrupts, a watchdog timeout could occur
 - [Duet+SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
 - [Duet+SBC] When nested macros were used, commands were sometimes executed out-of-order
 
