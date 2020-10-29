@@ -3401,10 +3401,11 @@ const char *Platform::GetLogFileName() const noexcept
 
 const char *Platform::GetLogLevel() const noexcept
 {
+	static const LogLevel off = LogLevel::OFF;	// need to have an instance otherwise it will fail .ToString() below
 #if HAS_MASS_STORAGE
-	return (logger == nullptr) ? nullptr : logger->GetLogLevel().ToString();
+	return (logger == nullptr) ? off.ToString() : logger->GetLogLevel().ToString();
 #else
-	return LogLevel::OFF.ToString();
+	return off.ToString();
 #endif
 }
 
