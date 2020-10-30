@@ -16,6 +16,15 @@
 # include <Hardware/NonVolatileMemory.h>
 #endif
 
+#if SAME5x		// if using CoreN2G
+# include <AnalogIn.h>
+using AnalogIn::AdcBits;
+#endif
+
+// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
+static constexpr unsigned int AdcOversampleBits = 2;							// we use 2-bit oversampling
+static constexpr int32_t OversampledAdcRange = 1u << (AdcBits + AdcOversampleBits);	// The readings we pass in should be in range 0..(AdcRange - 1)
+
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3
 //
@@ -41,12 +50,12 @@ int32_t Thermistor::GetRawReading(bool& valid) const noexcept
 		// Filtered ADC channel
 		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
 		valid = tempFilter.IsValid();
-		return tempFilter.GetSum()/(tempFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
+		return tempFilter.GetSum()/(tempFilter.NumAveraged() >> AdcOversampleBits);
 	}
 
 	// Raw ADC channel
 	valid = true;
-	return (uint32_t)port.ReadAnalog() << Thermistor::AdcOversampleBits;
+	return (uint32_t)port.ReadAnalog() << AdcOversampleBits;
 }
 
 // Configure the temperature sensor
@@ -103,8 +112,8 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 			if (valid)
 			{
 				const int32_t computedCorrection =
-								(val - (int32_t)(reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum()/(ThermistorAveragingFilter::NumAveraged() >> Thermistor::AdcOversampleBits)))
-									/(1 << (AdcBits + Thermistor::AdcOversampleBits - 13));
+								(val - (int32_t)(reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum()/(ThermistorAveragingFilter::NumAveraged() >> AdcOversampleBits)))
+									/(1 << (AdcBits + AdcOversampleBits - 13));
 				if (computedCorrection >= -127 && computedCorrection <= 127)
 				{
 					adcLowOffset = (int8_t)computedCorrection;
@@ -160,8 +169,8 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 				}
 #endif
 				const int32_t computedCorrection =
-								(val - (int32_t)(vrefReading/(ThermistorAveragingFilter::NumAveraged() >> Thermistor::AdcOversampleBits)))
-									/(1 << (AdcBits + Thermistor::AdcOversampleBits - 13));
+								(val - (int32_t)(vrefReading/(ThermistorAveragingFilter::NumAveraged() >> AdcOversampleBits)))
+									/(1 << (AdcBits + AdcOversampleBits - 13));
 				if (computedCorrection >= -127 && computedCorrection <= 127)
 				{
 					adcHighOffset = (int8_t)computedCorrection;
@@ -241,24 +250,24 @@ void Thermistor::Poll() noexcept
 	const volatile ThermistorAveragingFilter& vssaFilter = reprap.GetPlatform().GetAdcFilter(VssaFilterIndex);
 	if (tempFilterValid && vrefFilter.IsValid() && vssaFilter.IsValid())
 	{
-		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
+		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> AdcOversampleBits);
+		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> AdcOversampleBits);
+		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits + AdcOversampleBits - 13)));
 # ifdef DUET3
 		// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon, so extrapolate the VrefMon reading to estimate VrefP.
 		// Version 1.01 and later boards have the series resistors connected to VrefMon.
 		const int32_t correctedVrefReading = (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
 											? rawAveragedVssaReading + lrintf((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0))
 											: rawAveragedVrefReading;
-		const int32_t averagedVrefReading = correctedVrefReading + (adcHighOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
+		const int32_t averagedVrefReading = correctedVrefReading + (adcHighOffset * (1 << (AdcBits + AdcOversampleBits - 13)));
 # else
-		const int32_t averagedVrefReading = rawAveragedVrefReading + (adcHighOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
+		const int32_t averagedVrefReading = rawAveragedVrefReading + (adcHighOffset * (1 << (AdcBits + AdcOversampleBits - 13)));
 # endif
 
 		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor.
 		// VSSA is the voltage measured across the VSSA fuse. We assume the same maximum resistance for the fuse.
 		// Assume a maximum ADC reading offset of 100.
-		constexpr int32_t maxDrop = (OversampledAdcRange * VrefSeriesR)/(MinVrefLoadR + VrefSeriesR) + (100 << Thermistor::AdcOversampleBits);
+		constexpr int32_t maxDrop = (OversampledAdcRange * VrefSeriesR)/(MinVrefLoadR + VrefSeriesR) + (100 << AdcOversampleBits);
 
 		if (averagedVrefReading < OversampledAdcRange - maxDrop)
 		{
@@ -274,8 +283,8 @@ void Thermistor::Poll() noexcept
 	if (tempFilterValid)
 	{
 		{
-			const int32_t averagedVrefReading = OversampledAdcRange + (adcHighOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13)));
-			const int32_t averagedVssaReading = adcLowOffset * (1 << (AdcBits + Thermistor::AdcOversampleBits - 13));
+			const int32_t averagedVrefReading = OversampledAdcRange + (adcHighOffset * (1 << (AdcBits + AdcOversampleBits - 13)));
+			const int32_t averagedVssaReading = adcLowOffset * (1 << (AdcBits + AdcOversampleBits - 13));
 #endif
 			// Calculate the resistance
 			if (averagedVrefReading <= averagedTempReading)

@@ -10,11 +10,6 @@
 
 #include "SensorWithPort.h"
 
-#if SAME5x
-# include <AnalogIn.h>
-using AnalogIn::AdcBits;
-#endif
-
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3
 //
@@ -35,9 +30,6 @@ public:
 	static constexpr const char *TypeNamePT1000 = "pt1000";
 
 private:
-	// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
-	static constexpr unsigned int AdcOversampleBits = 2;							// we use 2-bit oversampling
-
 	void CalcDerivedParameters() noexcept;											// calculate shA and shB
 	int32_t GetRawReading(bool& valid) const noexcept;								// get the ADC reading
 
@@ -49,8 +41,6 @@ private:
 
 	// The following are derived from the configurable parameters
 	float shA, shB;																	// derived parameters
-
-	static constexpr int32_t OversampledAdcRange = 1u << (AdcBits + AdcOversampleBits);	// The readings we pass in should be in range 0..(AdcRange - 1)
 };
 
 #endif /* SRC_HEATING_THERMISTOR_H_ */

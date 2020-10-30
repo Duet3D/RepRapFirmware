@@ -10,7 +10,11 @@
 #include "Pins.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include <AnalogIn.h>
+
+#if SAME5x		// if using CoreN2G
+# include <AnalogIn.h>
+using AnalogIn::AdcBits;
+#endif
 
 // ADC resolution
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
