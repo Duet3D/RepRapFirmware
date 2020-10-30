@@ -25,7 +25,7 @@
 #include <Cache.h>
 #include <TaskPriorities.h>
 
-extern char _end;		// defined by the linker
+extern char _estack;		// defined by the linker
 
 Mutex LinuxInterface::gcodeReplyMutex;
 
@@ -70,7 +70,7 @@ void LinuxInterface::Init() noexcept
 	linuxTask->Create(LinuxTaskStart, "Linux", nullptr, TaskPriority::SpinPriority);
 	transfer.SetLinuxTask(linuxTask);
 	transfer.StartNextTransfer();
-	iapRamAvailable = &_end - Tasks::GetHeapTop();
+	iapRamAvailable = &_estack - Tasks::GetHeapTop();
 }
 
 [[noreturn]] void LinuxInterface::TaskLoop() noexcept
@@ -705,7 +705,7 @@ void LinuxInterface::Diagnostics(MessageType mtype) noexcept
 {
 	reprap.GetPlatform().Message(mtype, "=== SBC interface ===\n");
 	transfer.Diagnostics(mtype);
-	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 ", boot RAM 0x%05" PRIx32 "\n", numDisconnects, iapRamAvailable);
+	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 ", IAP RAM available 0x%05" PRIx32 "\n", numDisconnects, iapRamAvailable);
 	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d\n", (int)rxPointer, (int)txPointer, (int)txLength);
 }
 
