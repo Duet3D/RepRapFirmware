@@ -1539,12 +1539,16 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 /*static*/ float DDA::VectorBoxIntersection(const float v[], const float box[]) noexcept
 {
 	// Generate a vector length that is guaranteed to exceed the size of the box
-
-	const float biggerThanBoxDiagonal = 2.0 * Magnitude(box);
-	float magnitude = biggerThanBoxDiagonal;
+	float magnitude = 0.0;
 	for (size_t d = 0; d < MaxAxesPlusExtruders; d++)
 	{
-		if (biggerThanBoxDiagonal * v[d] > box[d] && box[d] < magnitude * v[d])
+		magnitude += box[d];
+	}
+
+	// Now reduce the length until every axis fits
+	for (size_t d = 0; d < MaxAxesPlusExtruders; d++)
+	{
+		if (magnitude * v[d] > box[d])
 		{
 			magnitude = box[d]/v[d];
 		}
@@ -1552,18 +1556,15 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 	return magnitude;
 }
 
-// Normalise all axes and extruders
-
-
 // Get the magnitude measured over all axes and extruders
 /*static*/ float DDA::Magnitude(const float v[]) noexcept
 {
-	float magnitude = 0.0;
+	float magnitudeSquared = 0.0;
 	for (size_t d = 0; d < MaxAxesPlusExtruders; d++)
 	{
-		magnitude += fsquare(v[d]);
+		magnitudeSquared += fsquare(v[d]);
 	}
-	return magnitude;
+	return sqrtf(magnitudeSquared);
 }
 
 // Normalise a vector with dim1 dimensions to unit length over the specified axes, and also return its previous magnitude in dim2 dimensions
