@@ -314,7 +314,11 @@ typedef double floatc_t;						// type of matrix element used for calibration
 typedef float floatc_t;							// type of matrix element used for calibration
 #endif
 
-typedef Bitmap<uint16_t> AxesBitmap;			// Type of a bitmap representing a set of axes
+#ifdef DUET3
+typedef Bitmap<uint32_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
+#else
+typedef Bitmap<uint16_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
+#endif
 typedef Bitmap<uint32_t> ExtrudersBitmap;		// Type of a bitmap representing a set of extruder drive numbers
 typedef Bitmap<uint32_t> DriversBitmap;			// Type of a bitmap representing a set of local driver numbers
 typedef Bitmap<uint32_t> FansBitmap;			// Type of a bitmap representing a set of fan numbers
@@ -323,15 +327,13 @@ typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing 
 typedef Bitmap<uint16_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
 
-typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
-
 #if defined(DUET3) || defined(DUET3MINI)
 typedef Bitmap<uint64_t> SensorsBitmap;
 #else
 typedef Bitmap<uint32_t> SensorsBitmap;
 #endif
 
-static_assert(MaxAxes <= AxesBitmap::MaxBits());
+static_assert(MaxAxesPlusExtruders <= AxesBitmap::MaxBits());
 static_assert(MaxExtruders <= ExtrudersBitmap::MaxBits());
 static_assert(MaxFans <= FansBitmap::MaxBits());
 static_assert(MaxHeaters <= HeatersBitmap::MaxBits());
@@ -340,8 +342,10 @@ static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
 static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
 
+typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
+
 #if SUPPORT_IOBITS
-typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
+typedef uint16_t IoBits_t;						// Type of the port control bitmap (G1 P parameter)
 #endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
