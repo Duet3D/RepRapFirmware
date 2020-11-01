@@ -156,6 +156,17 @@ enum class BoardType : uint8_t
 #endif
 };
 
+// Type of an axis. The values must correspond to values of the R parameter in the M584 command.
+enum class AxisWrapType : uint8_t
+{
+	noWrap = 0,						// axis does not wrap
+	wrapAt360,						// axis wraps, actual position are modulo 360deg
+#if 0	// shortcut axes not implemented yet
+	wrapWithShortcut,				// axis wraps, G0 moves are allowed to take the shortest direction
+#endif
+	undefined						// this one must be last
+};
+
 /***************************************************************************************************/
 
 // Enumeration to describe various tests we do in response to the M122 command
@@ -456,6 +467,16 @@ public:
 	float GetPressureAdvance(size_t extruder) const noexcept;
 	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
+	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
+	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
+	inline bool IsAxisRotational(size_t axis) const noexcept { return rotationalAxes.IsBitSet(axis); }
+	inline bool IsAxisContinuous(size_t axis) const noexcept { return continuousAxes.IsBitSet(axis); }
+#if 0	// shortcut axes not implemented yet
+	inline bool IsAxisShortcutAllowed(size_t axis) const noexcept { return shortcutAxes.IsBitSet(axis); }
+#endif
+
+	void SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational) noexcept;
+
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const noexcept
 		pre(axis < MaxAxes)
 		{ return axisDrivers[axis]; }
@@ -681,6 +702,12 @@ private:
 	uint32_t driveDriverBits[MaxAxesPlusExtruders + NumDirectDrivers];
 															// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
+	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
+	AxesBitmap rotationalAxes;								// axes that behave like rotational axes w.r.t. feedrate handling
+	AxesBitmap continuousAxes;								// axes that wrap modulo 360
+#if 0	// shortcut axes not implemented yet
+	AxesBitmap shortcutAxes;								// axes that wrap modulo 360 and for which G0 may choose the shortest direction
+#endif
 
 	float pressureAdvance[MaxExtruders];
 #if SUPPORT_NONLINEAR_EXTRUSION

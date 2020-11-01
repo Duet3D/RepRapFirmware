@@ -182,7 +182,7 @@ public:
 	// The speeds along individual Cartesian axes have already been limited before this is called.
 	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept = 0;
 
-	// Return true if the specified axis is a continuous rotation axis
+	// Return true if the specified axis is a continuous rotational axis and G0 commands may choose which direction to move it in
 	virtual bool IsContinuousRotationAxis(size_t axis) const noexcept;
 
 	// Return a bitmap of the motors that cause movement of a particular axis or tower.

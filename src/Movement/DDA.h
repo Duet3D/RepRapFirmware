@@ -180,7 +180,6 @@ private:
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept;
-	float NormaliseXYZ() noexcept;											// Make the direction vector unit-normal in XYZ
 	void AdjustAcceleration() noexcept;										// Adjust the acceleration and deceleration to reduce ringing
 
 #if SUPPORT_CAN_EXPANSION
@@ -188,12 +187,15 @@ private:
 #endif
 
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept __attribute__ ((hot));	// Try to smooth out moves in the queue
-    static float Normalise(float v[], size_t dim1, size_t dim2) noexcept;  	// Normalise a vector of dim1 dimensions to unit length in the first dim1 dimensions
+    static float Normalise(float v[], AxesBitmap unitLengthAxes) noexcept;  // Normalise a vector to unit length over the specified axes
+    static float Normalise(float v[]) noexcept; 							// Normalise a vector to unit length over all axes
+	float NormaliseLinearMotion(AxesBitmap linearAxes) noexcept;			// Make the direction vector unit-normal in XYZ
     static void Absolute(float v[], size_t dimensions) noexcept;			// Put a vector in the positive hyperquadrant
-    static float Magnitude(const float v[], size_t dimensions) noexcept;  	// Return the length of a vector
-    static void Scale(float v[], float scale, size_t dimensions) noexcept;	// Multiply a vector by a scalar
-    static float VectorBoxIntersection(const float v[], 					// Compute the length that a vector would have to have to...
-    		const float box[], size_t dimensions) noexcept;					// ...just touch the surface of a hyperbox.
+
+    static float Magnitude(const float v[]) noexcept;						// Get the magnitude measured over all axes and extruders
+    static float Magnitude(const float v[], AxesBitmap axes) noexcept;  	// Return the length of a vector over the specified orthogonal axes
+    static void Scale(float v[], float scale) noexcept;						// Multiply a vector by a scalar
+    static float VectorBoxIntersection(const float v[], const float box[]) noexcept;	// Compute the length that a vector would have to have to just touch the surface of a hyperbox of MaxAxesPlusExtruders dimensions.
 
     DDA *next;										// The next one in the ring
 	DDA *prev;										// The previous one in the ring

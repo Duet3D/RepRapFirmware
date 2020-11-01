@@ -663,6 +663,8 @@ void Platform::Init() noexcept
 		axisDrivers[axis].driverNumbers[0].SetLocal(driver);
 		driveDriverBits[axis] = StepPins::CalcDriverBitmap(driver);	// overwrite the default value set up earlier
 	}
+	linearAxes = AxesBitmap::MakeLowestNBits(3);				// XYZ axes are linear
+
 	for (size_t axis = MinAxes; axis < MaxAxes; ++axis)
 	{
 		axisDrivers[axis].numDrivers = 0;
@@ -2932,6 +2934,34 @@ void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverI
 		}
 	}
 	driveDriverBits[axis] = bitmap;
+}
+
+// Set the characteristics of an axis
+void Platform::SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational) noexcept
+{
+	if (isNistRotational)
+	{
+		rotationalAxes.SetBit(axis);
+	}
+	else
+	{
+		linearAxes.SetBit(axis);
+	}
+
+	switch (wrapType)
+	{
+#if 0	// shortcut axes not implemented yet
+	case AxisWrapType::wrapWithShortcut:
+		shortcutAxes.SetBit(axis);
+		// no break
+#endif
+	case AxisWrapType::wrapAt360:
+		continuousAxes.SetBit(axis);
+		break;
+
+	default:
+		break;
+	}
 }
 
 // Map an extruder to a driver

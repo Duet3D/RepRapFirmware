@@ -156,7 +156,6 @@ public:
 	size_t GetTotalAxes() const noexcept { return numTotalAxes; }
 	size_t GetVisibleAxes() const noexcept { return numVisibleAxes; }
 	size_t GetNumExtruders() const noexcept { return numExtruders; }
-	AxesBitmap GetContinuousRotationAxes() const noexcept { return continuousRotationAxes; }
 
 	const char* GetMachineModeString() const noexcept;							// Get the name of the current machine mode
 
@@ -577,7 +576,6 @@ private:
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
-	AxesBitmap continuousRotationAxes;			// Axes declared as continuous rotation axes in M584
 
 	float pausedFanSpeeds[MaxFans];				// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number

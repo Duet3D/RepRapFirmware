@@ -547,7 +547,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 #if SUPPORT_CAN_EXPANSION
 	AxesBitmap axesToUpdate;
 #endif
-	const bool newAxesAreContinuousRotation = (gb.Seen('R') && gb.GetIValue() > 0);
+
+	const AxisWrapType newAxesType = (gb.Seen('R')) ? (AxisWrapType)gb.GetLimitedUIValue('R', (unsigned int)AxisWrapType::undefined) : AxisWrapType::undefined;
+	const bool seenS = gb.Seen('S');
+	const bool newAxesAreNistRotational = seenS && gb.GetLimitedUIValue('S', 2) == 1;
 	while ((c = *lettersToTry) != 0)
 	{
 		if (gb.Seen(c))
@@ -611,10 +614,11 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 				{
 					// We are creating a new axis
 					axisLetters[drive] = c;								// assign the drive to this drive letter
-					if (newAxesAreContinuousRotation)
-					{
-						continuousRotationAxes.SetBit(drive);
-					}
+					const AxisWrapType wrapType = (newAxesType != AxisWrapType::undefined) ? newAxesType
+													: (c >= 'A' && c <= 'D') ? AxisWrapType::wrapAt360			// default A thru D to rotational but not continuous
+														: AxisWrapType::noWrap;									// default other axes to linear
+					const bool isNistRotational = (seenS) ? newAxesAreNistRotational : (c >= 'A' && c <= 'D');
+					platform.SetAxisType(drive, wrapType, isNistRotational);
 					++numTotalAxes;
 					if (numTotalAxes + numExtruders > MaxAxesPlusExtruders)
 					{
@@ -689,15 +693,26 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	reply.copy("Driver assignments:");
 	bool printed = false;
-	for (size_t drive = 0; drive < numTotalAxes; ++ drive)
+	for (size_t axis = 0; axis < numTotalAxes; ++ axis)
 	{
 		reply.cat(' ');
-		const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
-		if (reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
+		const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
+		if (platform.IsAxisRotational(axis))
 		{
-			reply.cat('r');
+			reply.cat("(r)");
 		}
-		char c = axisLetters[drive];
+		if (platform.IsAxisContinuous(axis))
+		{
+			reply.cat("(c)");
+		}
+#if 0	// shortcut axes not implemented yet
+		if (platform.IsAxisShortcutAllowed(axis))
+		{
+			reply.cat("(s)");
+		}
+#endif
+
+		char c = axisLetters[axis];
 		for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 		{
 			printed = true;
