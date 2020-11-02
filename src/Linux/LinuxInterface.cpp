@@ -558,10 +558,15 @@ void LinuxInterface::Init() noexcept
 					const GCodeChannel channel(i);
 					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 
-					// Handle macro start requests
+					// Handle macro requests
 					if (gb->IsWaitingForMacro())
 					{
-						if (gb->IsMacroRequestPending())
+						if (gb->IsMacroFileClosed() && transfer.WriteMacroFileClosed(channel))
+						{
+							// Note this is only sent when a macro file has finished successfully
+							gb->MacroFileClosedSent();
+						}
+						else if (gb->IsMacroRequestPending())
 						{
 							const char * const requestedMacroFile = gb->GetRequestedMacroFile();
 							bool fromCode = gb->IsMacroFromCode();

@@ -623,8 +623,10 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					StopPrint(StopPrintReason::normalCompletion);
 				}
+				return true;
 			}
-			else
+
+			if (!gb.IsMacroFileClosed())
 			{
 				// Finished a macro or finished processing config.g
 				gb.MacroFileClosed();
@@ -644,8 +646,9 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					}
 					CheckForDeferredPause(gb);
 				}
+				return true;
 			}
-			return true;
+			return false;
 		}
 		else
 		{
@@ -660,7 +663,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			if (!gotCommand)
 			{
-				reprap.GetLinuxInterface().FillBuffer(gb);
+				return reprap.GetLinuxInterface().FillBuffer(gb);
 			}
 			return false;
 		}
