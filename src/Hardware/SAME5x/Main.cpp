@@ -25,12 +25,7 @@ void AppInit() noexcept
 
 	// Initialise the GCLKs we use that are not initialised by CoreNG
 
-	// GCLK2: XOSC1 direct, 25MHz output for Ethernet PHY
-	hri_gclk_write_GENCTRL_reg(GCLK, 2,
-			  GCLK_GENCTRL_DIV(1) | (0 << GCLK_GENCTRL_RUNSTDBY_Pos)
-			| (0 << GCLK_GENCTRL_DIVSEL_Pos) | (1 << GCLK_GENCTRL_OE_Pos)
-			| (0 << GCLK_GENCTRL_OOV_Pos) | (0 << GCLK_GENCTRL_IDC_Pos)
-			| GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_XOSC1);
+	// GCLK2 is used by the Ethernet version only. We initialise it in GmacInterface.
 
 	// GCLK5: FDPLL1, 90MHz for SDHC
 	hri_gclk_write_GENCTRL_reg(GCLK, 5,

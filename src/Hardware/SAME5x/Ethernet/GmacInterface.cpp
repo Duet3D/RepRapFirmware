@@ -688,12 +688,20 @@ err_t ethernetif_init(struct netif *netif) noexcept
 // Initialise the GMAC and Phy
 void ethernetif_hardware_init() noexcept
 {
-	// Set up Ethernet clock
+	// Set up PHY clock
+	// GCLK2: XOSC1 direct, 25MHz output for Ethernet PHY
+	hri_gclk_write_GENCTRL_reg(GCLK, 2,
+			  GCLK_GENCTRL_DIV(1) | (0 << GCLK_GENCTRL_RUNSTDBY_Pos)
+			| (0 << GCLK_GENCTRL_DIVSEL_Pos) | (1 << GCLK_GENCTRL_OE_Pos)
+			| (0 << GCLK_GENCTRL_OOV_Pos) | (0 << GCLK_GENCTRL_IDC_Pos)
+			| GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_XOSC1);
+	SetPinFunction(EthernetClockOutPin, EthernetClockOutPinFunction);
+
+	// Set up GMAC clock
 	hri_mclk_set_AHBMASK_GMAC_bit(MCLK);
 	hri_mclk_set_APBCMASK_GMAC_bit(MCLK);
 
 	// Setup Ethernet pins
-	SetPinFunction(EthernetClockOutPin, EthernetClockOutPinFunction);
 	for (Pin p : EthernetMacPins)
 	{
 		SetPinFunction(p, EthernetMacPinsPinFunction);

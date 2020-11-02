@@ -82,9 +82,9 @@ void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId c
 		move->initialSpeedFraction = params.initialSpeedFraction;
 		move->finalSpeedFraction = params.finalSpeedFraction;
 		move->pressureAdvanceDrives = 0;
-		move->deltaDrives = 0;								//TODO
-		move->endStopsToCheck = 0;							//TODO
-		move->stopAllDrivesOnEndstopHit = false;			//TODO
+		move->deltaDrives = 0;			//TODO
+		move->zero = 0;
+		move->filamentMonitorsEnabled = reprap.GetGCodes().IsReallyPrinting();
 
 		// Additional parameters for delta movements
 		move->initialX = params.initialX;

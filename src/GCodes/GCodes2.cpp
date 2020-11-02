@@ -2764,11 +2764,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			if (gb.Seen('C'))
 			{
-				if (platform.AssignLaserPin(gb, reply))
-				{
-					reply.copy("Laser mode selected");
-				}
-				else
+				if (!platform.AssignLaserPin(gb, reply))
 				{
 					result = GCodeResult::error;
 				}
@@ -2803,7 +2799,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				machineType = MachineType::cnc;						// switch to CNC mode even if the spindle parameter is bad
 				reprap.StateUpdated();
-				reply.copy("CNC mode selected");
 			}
 
 			{
