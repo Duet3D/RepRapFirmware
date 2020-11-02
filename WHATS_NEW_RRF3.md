@@ -2,7 +2,7 @@ RepRapFirmware 3.2-beta3 (in preparation)
 ========================
 
 Upgrade notes:
-- It is no longer permitted to create a filament monitor using M591 and subsequently to user M584 to change the driver that the extruder is mapped to
+- It is no longer permitted to create a filament monitor using M591 and subsequently to use M584 to change the driver that the extruder is mapped to
 - [Duet 3 + expansion/tool boards] Changes have been made to the CAN message protocols, therefore you must upgrade tool and expansion boards to firmware 3.2beta3
 - [Duet+SBC] Changes have been made to the DCS message protocols, therefore you must upgrade DSF to version 3.2beta3
 
@@ -14,6 +14,7 @@ New features/changed behaviour:
 - It is no longer necessary to separate multiple G- or M-commands on a single line with a space or tab character
 - If the system runs out of memory, it will now reset and the Last Software Reset Reason reported by M122 will be "OutOfMemory"
 - The M122 P102 and M122 P103 timing functions are more accurate and give more consistent results than in previous firmware versions
+- M122 for expansion and tool boards now reports the bootloader version, if available
 - Logging to file now has four log levels
     * 0: OFF (as previously no logging)
     * 1: WARN (all previous logged messages are in this category)
@@ -22,6 +23,7 @@ New features/changed behaviour:
 - M929 now takes values for the Snnn paramter from 0 (OFF) to 3 (DEBUG)
 - M118 has a new Lnnn parameter to specify at which log level the message will be logged (default: DEBUG). Using L0 will prevent a message being copied to the log file.
 - The speed of processing of GCodes received fom USB has been improved, to match the speed of processing GCodes read from the SD card
+- [Duet3 + expansion/tool boards] Expansion and tool boards can now have their bootloaders updated via CAN using the command M122 B# S3 where # is the board address. The bootoader file is Duet3Bootloader-SAME5x.bin for the EXP3HC board, Duet3Bootloader-SAMC21.bin for the other expansion boards by Duet3D, and Duet3Bootloader-SAMMYC21.bin for the Sammy-C21 development board. These files are available at https://github.com/Duet3D/Duet3Bootloader/releases.
 
 Object model changes:
 - All types of filament monitors have a new field "status". The value is one of "noMonitor", "ok", "noDataReceived", "noFilament", "tooLittleMovement", "tooMuchMovement", "sensorError".
@@ -36,6 +38,7 @@ Bug fixes:
 - G92 Znn didn't clear zDatumSetByProbing (old bug)
 - The handling of out-of-buffer situations has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
 - In RepRapFirmware mode, empty responses to commands were not suppressed. They are now suppressed except when the command came from HTTP or SBC.
+- Feed rate calculations did not confirm to the NIST standard when the Z axis and one or more rotational axes were moving, but not X or Y.
 - [Duet 3] When using a LinearAnalog sensor, the readings returned were too high above the minimum reading by a factor of 4
 - [LPC/STM port, might affect Duets in rare situations] If hiccups occurred frequently and there was other activity in the system causing frequent high-priority interrupts, a watchdog timeout could occur
 - [Duet+SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
