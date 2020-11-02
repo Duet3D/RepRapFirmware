@@ -31,7 +31,7 @@ Logger::Logger(LogLevel logLvl) noexcept : logFile(), lastFlushTime(0), lastFlus
 
 void Logger::Start(time_t time, const StringRef& filename) noexcept
 {
-	if (!inLogger && logLevel > LogLevel::OFF)
+	if (!inLogger && logLevel > LogLevel::off)
 	{
 		Lock loggerLock(inLogger);
 		FileStore * const f = reprap.GetPlatform().OpenSysFile(filename.c_str(), OpenMode::append);

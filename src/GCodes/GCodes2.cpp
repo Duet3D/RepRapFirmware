@@ -1716,19 +1716,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						type = MessageType::NoDestinationMessage;
 					}
-					const LogLevel logLevel = (LogLevel) gb.GetLimitedUIValue('L', LogLevel::NumValues, LogLevel::OFF);
+					const LogLevel logLevel = (LogLevel) gb.GetLimitedUIValue('L', LogLevel::NumValues, LogLevel::off);
 					switch (logLevel.ToBaseType())
 					{
-					case LogLevel::OFF:
+					case LogLevel::off:
 						type = RemoveLogging(type);
 						break;
-					case LogLevel::WARN:
+					case LogLevel::warn:
 						type = AddLogWarn(type);
 						break;
-					case LogLevel::INFO:
+					case LogLevel::info:
 						type = AddLogInfo(type);
 						break;
-					case LogLevel::DEBUG:
+					case LogLevel::debug:
 						type = AddLogDebug(type);
 						break;
 					}

@@ -3380,8 +3380,8 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 	if (gb.Seen('S'))
 	{
 		StopLogging();
-		const auto logLevel = (LogLevel) gb.GetLimitedUIValue('S', LogLevel::NumValues, LogLevel::OFF);
-		if (logLevel > LogLevel::OFF)
+		const auto logLevel = (LogLevel) gb.GetLimitedUIValue('S', LogLevel::NumValues, LogLevel::off);
+		if (logLevel > LogLevel::off)
 		{
 			// Start logging
 			if (logger == nullptr)
@@ -3431,7 +3431,7 @@ const char *Platform::GetLogFileName() const noexcept
 
 const char *Platform::GetLogLevel() const noexcept
 {
-	static const LogLevel off = LogLevel::OFF;	// need to have an instance otherwise it will fail .ToString() below
+	static const LogLevel off = LogLevel::off;	// need to have an instance otherwise it will fail .ToString() below
 #if HAS_MASS_STORAGE
 	return (logger == nullptr) ? off.ToString() : logger->GetLogLevel().ToString();
 #else
