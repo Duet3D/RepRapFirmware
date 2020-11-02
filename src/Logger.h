@@ -19,7 +19,7 @@
 
 class OutputBuffer;
 
-NamedEnum(LogLevel, uint8_t, OFF, WARN, INFO, DEBUG);
+NamedEnum(LogLevel, uint8_t, off, warn, info, debug);
 
 class Logger
 {
