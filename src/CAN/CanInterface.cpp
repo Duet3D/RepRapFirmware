@@ -502,9 +502,11 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #else
 			WaitForTxBufferFree(&mcan_instance, TxBufferIndexTimeSync, MaxTimeSyncSendWait);		// make sure we can send immediately
 #endif
-			msg->lastTimeSent = msg->lastTimeAcknowledged = lastTimeSent;							// TODO set lastTimeAcknowledged correctly
+			msg->lastTimeSent = lastTimeSent;
+			msg->lastTimeAcknowledgeDelay = 0;														// TODO set lastTimeAcknowledgeDelay correctly
+			msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
 			msg->timeSent = lastTimeSent = StepTimer::GetTimerTicks();
-			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
+			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();							// TODO save CAN bandwidth by sending this just once per second
 #if USE_NEW_CAN_DRIVER
 			can0dev->SendMessage(TxBufferIndexTimeSync, 0, buf);
 #else
