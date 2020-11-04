@@ -58,14 +58,14 @@ enum MessageType : uint32_t
 	NetworkInfoMessage = UsbMessage | AuxMessage | LogWarn				 	// A message that conveys information about the state of the network interface
 };
 
-inline MessageType AddLogDebug(MessageType mt)
+inline constexpr MessageType AddLogDebug(MessageType mt) noexcept
 {
 	// Debug level has no flags set such that any non-flagged message automatically
 	// is part of this log level - force it by removing the existing flags
 	return (MessageType)(mt & ~(LogMessageLowBit | LogMessageHighBit));
 }
 
-inline MessageType AddLogWarn(MessageType mt)
+inline constexpr MessageType AddLogWarn(MessageType mt) noexcept
 {
 	// Since increasing log levels have lower numbers we need to delete
 	// any existing log flags first - otherwise this could lead to MessageLogLevel
@@ -73,7 +73,7 @@ inline MessageType AddLogWarn(MessageType mt)
 	return (MessageType)(AddLogDebug(mt) | LogWarn);
 }
 
-inline MessageType AddLogInfo(MessageType mt)
+inline constexpr MessageType AddLogInfo(MessageType mt) noexcept
 {
 	// Since increasing log levels have lower numbers we need to delete
 	// any existing log flags first - otherwise this could lead to MessageLogLevel
@@ -81,17 +81,17 @@ inline MessageType AddLogInfo(MessageType mt)
 	return (MessageType)(AddLogDebug(mt) | LogInfo);
 }
 
-inline MessageType RemoveLogging(MessageType mt)
+inline constexpr MessageType RemoveLogging(MessageType mt) noexcept
 {
 	return (MessageType)(mt | LogOff);
 }
 
-inline MessageType AddError(MessageType mt)
+inline constexpr MessageType AddError(MessageType mt) noexcept
 {
 	return AddLogWarn((MessageType)(mt | ErrorMessageFlag));
 }
 
-inline MessageType AddWarning(MessageType mt)
+inline constexpr MessageType AddWarning(MessageType mt) noexcept
 {
 	return AddLogWarn((MessageType)(mt | WarningMessageFlag));
 }

@@ -508,16 +508,16 @@ void RepRap::Init() noexcept
 
 	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
 
+	platform->MessageF(UsbMessage, "%s\n", VersionText);
+
 #if HAS_LINUX_INTERFACE && !HAS_MASS_STORAGE
 	linuxInterface->Init();
 	usingLinuxInterface = true;
 #endif
 
-	platform->MessageF(UsbMessage, "%s\n", VersionText);
-
 #if HAS_MASS_STORAGE
-	// Try to mount the first SD card
 	{
+		// Try to mount the first SD card
 		GCodeResult rslt;
 		String<100> reply;
 		do
@@ -529,34 +529,31 @@ void RepRap::Init() noexcept
 
 		if (rslt == GCodeResult::ok)
 		{
+# if HAS_LINUX_INTERFACE
+			delete linuxInterface;						// free up the RAM for more tools etc.
+			linuxInterface = nullptr;
+# endif
 			// Run the configuration file
-			if (RunStartupFile(GCodes::CONFIG_FILE) || RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
+			if (!RunStartupFile(GCodes::CONFIG_FILE) && !RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
 			{
-				// Processed config.g so OK. Leave usingLinuxInterface set to false.
-# if HAS_LINUX_INTERFACE
-				delete linuxInterface;					// free up the RAM for more tools etc.
-				linuxInterface = nullptr;
-# endif
-			}
-			else
-			{
-# if HAS_LINUX_INTERFACE
-				linuxInterface->Init();
-				usingLinuxInterface = true;				// we failed to open config.g or default.g so assume we have a SBC connected
-# else
-				platform->Message(UsbMessage, "Error, no configuration file found\n");
-# endif
+				platform->Message(AddWarning(UsbMessage), "no configuration file found\n");
 			}
 		}
+# if HAS_LINUX_INTERFACE
+		else if (!MassStorage::IsCardDetected(0))		// if we failed to mount the SD card because there was no card in the slot
+		{
+			linuxInterface->Init();
+			usingLinuxInterface = true;
+		}
+# endif
 		else
 		{
 # if HAS_LINUX_INTERFACE
-			linuxInterface->Init();
-			usingLinuxInterface = true;
-# else
-			delay(3000);								// Wait a few seconds so users have a chance to see this
-			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
+			delete linuxInterface;						// free up the RAM for more tools etc.
+			linuxInterface = nullptr;
 # endif
+			delay(3000);								// Wait a few seconds so users have a chance to see this
+			platform->MessageF(AddWarning(UsbMessage), "%s\n", reply.c_str());
 		}
 	}
 #endif
@@ -2454,11 +2451,13 @@ size_t RepRap::GetStatusIndex() const noexcept
 #if HAS_VOLTAGE_MONITOR
 			: (!platform->HasVinPower() && !gCodes->IsSimulating())		? 3		// Off i.e. powered down
 #endif
-			: (gCodes->IsPausing()) 									? 4		// Pausing / Decelerating
-			: (gCodes->IsResuming()) 									? 5		// Resuming
-			: (gCodes->IsPaused()) 										? 6		// Paused / Stopped
-			: (printMonitor->IsPrinting() && gCodes->IsSimulating())	? 7		// Simulating
-			: (printMonitor->IsPrinting())							  	? 8		// Printing
+			: (gCodes->GetPauseState() == PauseState::pausing)			? 4		// Pausing
+			: (gCodes->GetPauseState() == PauseState::resuming)			? 5		// Resuming
+			: (gCodes->GetPauseState() == PauseState::paused)			? 6		// Paused
+			: (printMonitor->IsPrinting())
+			  	  ? ((gCodes->IsSimulating())							? 7		// Simulating
+			: 														  	  8		// Printing
+			  	  	)
 			: (gCodes->IsDoingToolChange())								? 9		// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
 			   gCodes->WaitingForAcknowledgement()) 					? 10	// Busy
