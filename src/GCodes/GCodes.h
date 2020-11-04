@@ -78,6 +78,14 @@ enum class StopPrintReason
 	abort
 };
 
+enum class PauseState : uint8_t
+{
+	notPaused = 0,
+	pausing,
+	paused,
+	resuming
+};
+
 //****************************************************************************************************
 
 class LinuxInterface;
@@ -133,13 +141,11 @@ public:
 	NetworkGCodeInput *GetTelnetInput() const noexcept { return telnetInput; }
 #endif
 
+	PauseState GetPauseState() const noexcept { return pauseState; }
 	bool IsFlashing() const noexcept { return isFlashing; }						// Is a new firmware binary going to be flashed?
 
-	bool IsPaused() const noexcept;
-	bool IsPausing() const noexcept;
-	bool IsResuming() const noexcept;
-	bool IsRunning() const noexcept;
 	bool IsReallyPrinting() const noexcept;										// Return true if we are printing from SD card and not pausing, paused or resuming
+	bool IsReallyPrintingOrResuming() const noexcept;
 	bool IsSimulating() const noexcept { return simulationMode != 0; }
 	bool IsDoingToolChange() const noexcept { return doingToolChange; }
 	bool IsHeatingUp() const noexcept;											// Return true if the SD card print is waiting for a heater to reach temperature
@@ -495,7 +501,7 @@ private:
 #if HAS_LINUX_INTERFACE
 	FilePosition lastFilePosition;				// Last known file position
 #endif
-	bool isPaused;								// true if the print has been paused manually or automatically
+	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
 	bool pausePending;							// true if we have been asked to pause but we are running a macro
 	bool filamentChangePausePending;			// true if we have been asked to pause for a filament change but we are running a macro
 	bool runningConfigFile;						// We are running config.g during the startup process

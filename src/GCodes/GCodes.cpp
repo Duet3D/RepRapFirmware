@@ -278,7 +278,7 @@ void GCodes::Reset() noexcept
 	simulationTime = 0.0;
 	lastDuration = 0;
 
-	isPaused = false;
+	pauseState = PauseState::notPaused;
 #if HAS_VOLTAGE_MONITOR
 	isPowerFailPaused = false;
 #endif
@@ -535,9 +535,9 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 // Start a new gcode, or continue to execute one that has already been started. Return true if we found something significant to do.
 bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-	if (IsPaused() && &gb == fileGCode && !gb.IsDoingFileMacro())
+	if (&gb == fileGCode && (pauseState != PauseState::notPaused || (pausePending && !gb.IsDoingFileMacro())))
 	{
-		// We are paused, so don't process any more gcodes from the file being printed.
+		// We are paused or pausing, so don't process any more gcodes from the file being printed.
 		// There is a potential issue here if fileGCode holds any locks, so unlock everything.
 		UnlockAll(gb);
 	}
@@ -986,7 +986,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 								: (reason == PauseReason::filamentError) ? GCodeState::filamentErrorPause1
 									: GCodeState::pausing1;
 	gb.SetState(newState, param);
-	isPaused = true;
+	pauseState = PauseState::pausing;
 
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -1055,31 +1055,16 @@ void GCodes::CheckForDeferredPause(GCodeBuffer& gb) noexcept
 	}
 }
 
-bool GCodes::IsPaused() const noexcept
-{
-	return isPaused && !IsPausing() && !IsResuming();
-}
-
-bool GCodes::IsPausing() const noexcept
-{
-	return pausePending || fileGCode->IsPausing() || triggerGCode->IsPausing() || autoPauseGCode->IsPausing() || daemonGCode->IsPausing();
-}
-
-bool GCodes::IsResuming() const noexcept
-{
-	return fileGCode->IsResuming();
-}
-
-bool GCodes::IsRunning() const noexcept
-{
-	return !IsPaused() && !IsPausing() && !IsResuming();
-}
-
 // Return true if we are printing from SD card and not pausing, paused or resuming
 // TODO make this independent of PrintMonitor
 bool GCodes::IsReallyPrinting() const noexcept
 {
-	return reprap.GetPrintMonitor().IsPrinting() && IsRunning();
+	return reprap.GetPrintMonitor().IsPrinting() && pauseState == PauseState::notPaused;
+}
+
+bool GCodes::IsReallyPrintingOrResuming() const noexcept
+{
+	return reprap.GetPrintMonitor().IsPrinting() && (pauseState == PauseState::notPaused || pauseState == PauseState::resuming);
 }
 
 // Return true if the SD card print is waiting for a heater to reach temperature
@@ -1154,7 +1139,7 @@ bool GCodes::DoEmergencyPause() noexcept
 
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
-	isPaused = true;
+	pauseState = PauseState::paused;
 
 	return true;
 }
@@ -1172,24 +1157,24 @@ bool GCodes::LowVoltagePause() noexcept
 	}
 
 	reprap.GetHeat().SuspendHeaters(true);			// turn the heaters off to conserve power for the motors to execute the pause
-	if (IsResuming())
+	switch (pauseState)
 	{
+	case PauseState::resuming:
 		// This is an unlucky situation, because the resume macro is probably being run, which will probably lower the head back on to the print.
 		// It may well be that the power loss will prevent the resume macro being completed. If not, try again when the print has been resumed.
 		return false;
-	}
 
-	if (IsPausing())
-	{
+	case PauseState::pausing:
 		// We are in the process of pausing already, so the resume info has already been saved.
 		// With luck the retraction and lifting of the head in the pause.g file has been done already.
 		return true;
-	}
 
-	if (IsPaused())
-	{
+	case PauseState::paused:
 		// Resume info has already been saved, and resuming will be prevented while the power is low
 		return true;
+
+	default:
+		break;
 	}
 
 	if (reprap.GetPrintMonitor().IsPrinting())
@@ -1218,7 +1203,7 @@ bool GCodes::LowVoltagePause() noexcept
 bool GCodes::LowVoltageResume() noexcept
 {
 	reprap.GetHeat().SuspendHeaters(false);			// turn the heaters on again
-	if (isPaused && isPowerFailPaused)
+	if (pauseState != PauseState::notPaused && isPowerFailPaused)
 	{
 		isPowerFailPaused = false;					// pretend it's a normal pause
 		// Run resurrect.g automatically
@@ -1270,6 +1255,7 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 	}
 
 	autoPauseGCode->SetState(GCodeState::resuming1); // set up to resume after rehoming
+	pauseState = PauseState::resuming;
 	DoFileMacro(*autoPauseGCode, REHOME_G, true); 	// run the SD card rehome-and-resume script
 	return true;
 }
@@ -3851,7 +3837,8 @@ bool GCodes::IsCodeQueueIdle() const noexcept
 void GCodes::StopPrint(StopPrintReason reason) noexcept
 {
 	segmentsLeft = 0;
-	isPaused = pausePending = filamentChangePausePending = false;
+	pausePending = filamentChangePausePending = false;
+	pauseState = PauseState::notPaused;
 
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -4652,7 +4639,7 @@ void GCodes::CheckHeaterFault() noexcept
 			DoPause(*autoPauseGCode, PauseReason::heaterFault, "Heater fault");
 			heaterFaultState = HeaterFaultState::timing;
 		}
-		else if (IsPausing() || IsPaused())
+		else if (pauseState == PauseState::pausing || pauseState == PauseState::paused)
 		{
 			heaterFaultState = HeaterFaultState::timing;
 		}

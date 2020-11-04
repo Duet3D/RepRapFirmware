@@ -167,7 +167,7 @@ void PrintMonitor::Spin() noexcept
 	}
 
 	// Don't do any updates if the print has been paused
-	if (!gCodes.IsRunning())
+	if (gCodes.GetPauseState() != PauseState::notPaused)
 	{
 		if (pauseStartTime == 0)
 		{

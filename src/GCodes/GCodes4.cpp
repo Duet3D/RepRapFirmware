@@ -392,6 +392,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reply.catf(" %c%.1f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
 			}
 			platform.MessageF(LogWarn, "%s\n", reply.c_str());
+			pauseState = PauseState::paused;
 			gb.SetState(GCodeState::normal);
 		}
 		break;
@@ -439,9 +440,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			moveFractionToSkip = pauseRestorePoint.proportionDone;
 			restartInitialUserX = pauseRestorePoint.initialUserX;
 			restartInitialUserY = pauseRestorePoint.initialUserY;
-			isPaused = false;
 			reply.copy("Printing resumed");
 			platform.Message(LogWarn, "Printing resumed\n");
+			pauseState = PauseState::notPaused;
 			gb.SetState(GCodeState::normal);
 		}
 		break;

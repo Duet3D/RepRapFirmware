@@ -84,8 +84,11 @@ bool MenuItem::IsVisible() const noexcept
 	case 3:		return !reprap.GetGCodes().IsReallyPrinting();
 	case 4:		return reprap.GetPrintMonitor().IsPrinting();
 	case 5:		return !reprap.GetPrintMonitor().IsPrinting();
-	case 6:		return reprap.GetGCodes().IsPaused() || reprap.GetGCodes().IsPausing();
-	case 7:		return reprap.GetGCodes().IsReallyPrinting() || reprap.GetGCodes().IsResuming();
+	case 6:		{
+					const PauseState ps = reprap.GetGCodes().GetPauseState();
+					return ps == PauseState::pausing || ps == PauseState::paused;
+				}
+	case 7:		return reprap.GetGCodes().IsReallyPrintingOrResuming();
 	case 10:	return MassStorage::IsDriveMounted(0);
 	case 11:	return !MassStorage::IsDriveMounted(0);
 	case 20:

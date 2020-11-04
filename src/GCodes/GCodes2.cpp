@@ -493,7 +493,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 0: // Stop
 		case 1: // Sleep
 			// Don't allow M0 or M1 to stop a print, unless the print is paused or the command comes from the file being printed itself.
-			if (reprap.GetPrintMonitor().IsPrinting() && &gb != fileGCode && !IsPaused())
+			if (reprap.GetPrintMonitor().IsPrinting() && &gb != fileGCode && pauseState != PauseState::paused)
 			{
 				reply.copy("Pause the print before attempting to cancel it");
 				result = GCodeResult::error;
@@ -506,7 +506,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			else
 			{
-				const bool wasPaused = isPaused;				// isPaused gets cleared by CancelPrint
+				const auto oldPauseState = pauseState;			// pauseState gets reset by CancelPrint
 				const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
 				isWaiting = cancelWait = false;					// we may have been waiting for temperatures to be reached
 				StopPrint((&gb == fileGCode) ? StopPrintReason::normalCompletion : StopPrintReason::userCancelled);
@@ -514,7 +514,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 				{
 					// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-					if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, 0))
+					if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, 0))
 					{
 						break;
 					}
@@ -841,7 +841,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 		case 24: // Print/resume-printing the selected file
-			if (IsPausing() || IsResuming())
+			if (pauseState == PauseState::pausing || pauseState == PauseState::resuming)
 			{
 				// ignore the resume request
 			}
@@ -852,7 +852,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					return false;
 				}
 
-				if (IsPaused())
+				if (pauseState == PauseState::paused)
 				{
 #if HAS_VOLTAGE_MONITOR
 					if (!platform.IsPowerOk())
@@ -863,6 +863,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else
 #endif
 					{
+						pauseState = PauseState::resuming;
 						gb.SetState(GCodeState::resuming1);
 						if (AllAxesAreHomed())
 						{
@@ -905,7 +906,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 226: // Synchronous pause, normally initiated from within the file being printed
 		case 601:
-			if (!isPaused && !IsPausing())
+			if (pauseState == PauseState::notPaused)
 			{
 				if (gb.IsDoingFileMacro())
 				{
@@ -923,7 +924,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 600: // Filament change pause, synchronous
-			if (!isPaused && !IsPausing())
+			if (pauseState == PauseState::notPaused)
 			{
 				if (gb.IsDoingFileMacro())
 				{
@@ -941,7 +942,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 25: // Pause the print
-			if (isPaused)
+			if (pauseState != PauseState::notPaused)
 			{
 				reply.copy("Printing is already paused!");
 				result = GCodeResult::error;

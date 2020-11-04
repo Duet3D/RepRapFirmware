@@ -7,7 +7,7 @@ void AppInit() noexcept
 	// Initialise FDPLL1. (25MHz / 10) * 72 = 180MHz which we will divide by 2 to get 90MHz.
 	hri_oscctrl_write_DPLLRATIO_reg(OSCCTRL, 1,
 			  OSCCTRL_DPLLRATIO_LDRFRAC(0)
-			| OSCCTRL_DPLLRATIO_LDR(71));
+			| OSCCTRL_DPLLRATIO_LDR(72 - 1));
 	hri_oscctrl_write_DPLLCTRLB_reg(OSCCTRL, 1,
 			  OSCCTRL_DPLLCTRLB_DIV(4)
 			| (0 << OSCCTRL_DPLLCTRLB_DCOEN_Pos)

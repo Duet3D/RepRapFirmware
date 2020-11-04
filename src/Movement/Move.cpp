@@ -318,7 +318,9 @@ void Move::Spin() noexcept
 #endif
 	   )
 	{
-		if (moveState == MoveState::executing && !reprap.GetGCodes().IsPaused())
+		if (   moveState == MoveState::executing
+			&& reprap.GetGCodes().GetPauseState() == PauseState::notPaused	// for now we don't go into idle hold when we are paused (is this sensible?)
+		   )
 		{
 			lastStateChangeTime = millis();				// record when we first noticed that the machine was idle
 			moveState = MoveState::timing;

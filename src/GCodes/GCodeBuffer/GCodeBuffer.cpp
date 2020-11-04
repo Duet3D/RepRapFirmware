@@ -952,21 +952,4 @@ void GCodeBuffer::AppendFullCommand(const StringRef &s) const noexcept
 	PARSER_OPERATION(AppendFullCommand(s));
 }
 
-bool GCodeBuffer::IsPausing() const
-{
-	const GCodeState topState = OriginalMachineState().GetState();
-	return (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
-			|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
-#if HAS_VOLTAGE_MONITOR
-			|| topState == GCodeState::powerFailPausing1
-#endif
-	   	   );
-}
-
-bool GCodeBuffer::IsResuming() const
-{
-	const GCodeState topState = OriginalMachineState().GetState();
-	return topState == GCodeState::resuming1 || topState == GCodeState::resuming2 || topState == GCodeState::resuming3;
-}
-
 // End
