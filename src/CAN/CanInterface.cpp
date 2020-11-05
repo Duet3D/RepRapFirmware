@@ -599,7 +599,7 @@ template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<
 	return rslt;
 }
 
-static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const StringRef& reply, uint16_t state) noexcept
+static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const StringRef& reply, DriverStateControl state) noexcept
 {
 	GCodeResult rslt = GCodeResult::ok;
 	size_t start = 0;
@@ -619,7 +619,7 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 			return GCodeResult::error;
 		}
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-		CanMessageMultipleDrivesRequest<uint16_t> * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<uint16_t>>(rid, CanId::MasterAddress, boardAddress, CanMessageType::setDriverStates);
+		const auto msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<DriverStateControl>>(rid, CanId::MasterAddress, boardAddress, CanMessageType::setDriverStates);
 		msg->driversToUpdate = driverBits.GetRaw();
 		size_t numDrivers = 0;
 		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
@@ -805,16 +805,22 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 	}
 }
 
+void CanInterface::EnableRemoteDrivers(const CanDriversList& drivers) noexcept
+{
+	String<1> dummy;
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverActive));
+}
+
 void CanInterface::DisableRemoteDrivers(const CanDriversList& drivers) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), CanMessageMultipleDrivesRequest<uint16_t>::driverDisabled);
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverDisabled));
 }
 
-void CanInterface::SetRemoteDriversIdle(const CanDriversList& drivers) noexcept
+void CanInterface::SetRemoteDriversIdle(const CanDriversList& drivers, float idleCurrentFactor) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), CanMessageMultipleDrivesRequest<uint16_t>::driverIdle);
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverIdle, rintf(idleCurrentFactor * 100)));
 }
 
 GCodeResult CanInterface::SetRemoteStandstillCurrentPercent(const CanDriversData<float>& data, const StringRef& reply) noexcept

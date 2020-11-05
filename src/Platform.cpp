@@ -2536,13 +2536,24 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 }
 
 // Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
-void Platform::EnableLocalDrivers(size_t axisOrExtruder) noexcept
+void Platform::EnableDrivers(size_t axisOrExtruder) noexcept
 {
 	if (driverState[axisOrExtruder] != DriverStatus::enabled)
 	{
 		driverState[axisOrExtruder] = DriverStatus::enabled;
 		const float requiredCurrent = motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder];
-		IterateLocalDrivers(axisOrExtruder, [this, requiredCurrent](uint8_t driver) { EnableOneLocalDriver(driver, requiredCurrent); });
+#if SUPPORT_CAN_EXPANSION
+		CanDriversList canDriversToEnable;
+		IterateDrivers(axisOrExtruder,
+						[this, requiredCurrent](uint8_t driver) { EnableOneLocalDriver(driver, requiredCurrent); },
+						[&canDriversToEnable](DriverId driver) { canDriversToEnable.AddEntry(driver); }
+					  );
+		CanInterface::EnableRemoteDrivers(canDriversToEnable);
+#else
+		IterateDrivers(axisOrExtruder,
+						[this, requiredCurrent](uint8_t driver) { EnableOneLocalDriver(driver, requiredCurrent); }
+					  );
+#endif
 	}
 }
 
@@ -2616,7 +2627,7 @@ void Platform::SetDriversIdle() noexcept
 			}
 		}
 #if SUPPORT_CAN_EXPANSION
-		CanInterface::SetRemoteDriversIdle(canDriversToSetIdle);
+		CanInterface::SetRemoteDriversIdle(canDriversToSetIdle, idleCurrentFactor);
 #endif
 	}
 }
