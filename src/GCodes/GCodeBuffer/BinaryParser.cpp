@@ -31,15 +31,22 @@ void BinaryParser::Put(const char *data, size_t len) noexcept
 {
 	memcpy(gb.buffer, data, len);
 	bufferLength = len;
-	gb.bufferState = GCodeBufferState::ready;
+	gb.bufferState = GCodeBufferState::parsingGCode;
 	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
 	gb.machineState->lineNumber = header->lineNumber;
+}
 
-	if (reprap.Debug(moduleGcodes))
+void BinaryParser::DecodeCommand() noexcept
+{
+	if (gb.bufferState == GCodeBufferState::parsingGCode)
 	{
-		String<MaxCodeBufferSize> buf;
-		AppendFullCommand(buf.GetRef());
-		reprap.GetPlatform().MessageF(DebugMessage, "%s: %s\n", gb.GetIdentity(), buf.c_str());
+		if (reprap.Debug(moduleGcodes))
+		{
+			String<MaxCodeBufferSize> buf;
+			AppendFullCommand(buf.GetRef());
+			reprap.GetPlatform().MessageF(DebugMessage, "%s: %s\n", gb.GetIdentity(), buf.c_str());
+		}
+		gb.bufferState = GCodeBufferState::executing;
 	}
 }
 

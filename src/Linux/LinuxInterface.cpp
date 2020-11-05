@@ -729,53 +729,63 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 		return false;
 	}
 
-	TaskCriticalSectionLocker locker;
-	if (rxPointer != txPointer || txLength != 0)
+	bool gotCommand = false;
 	{
-		bool updateRxPointer = true;
-		uint16_t readPointer = rxPointer;
-		do
+		TaskCriticalSectionLocker locker;
+		if (rxPointer != txPointer || txLength != 0)
 		{
-			BufferedCodeHeader * const bufHeader = reinterpret_cast<BufferedCodeHeader*>(codeBuffer + readPointer);
-			readPointer += sizeof(BufferedCodeHeader);
-			const CodeHeader * const header = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
-			readPointer += bufHeader->length;
-
-			if (bufHeader->isPending)
+			bool updateRxPointer = true;
+			uint16_t readPointer = rxPointer;
+			do
 			{
-				if (gb.GetChannel().RawValue() == header->channel)
-				{
-					gb.PutAndDecode(reinterpret_cast<const char *>(header), bufHeader->length, true);
-					bufHeader->isPending = false;
+				BufferedCodeHeader * const bufHeader = reinterpret_cast<BufferedCodeHeader*>(codeBuffer + readPointer);
+				readPointer += sizeof(BufferedCodeHeader);
+				const CodeHeader * const header = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
+				readPointer += bufHeader->length;
 
-					if (updateRxPointer)
+				if (bufHeader->isPending)
+				{
+					if (gb.GetChannel().RawValue() == header->channel)
 					{
-						sendBufferUpdate = true;
+						gb.PutAndDecode(reinterpret_cast<const char *>(header), bufHeader->length, true);
+						bufHeader->isPending = false;
 
-						rxPointer = readPointer;
-						if (rxPointer == txLength)
+						if (updateRxPointer)
 						{
-							rxPointer = txLength = 0;
+							sendBufferUpdate = true;
+
+							rxPointer = readPointer;
+							if (rxPointer == txLength)
+							{
+								rxPointer = txLength = 0;
+							}
+							else if (rxPointer == txPointer && txLength == 0)
+							{
+								rxPointer = txPointer = 0;
+							}
 						}
-						else if (rxPointer == txPointer && txLength == 0)
-						{
-							rxPointer = txPointer = 0;
-						}
+
+						gotCommand = true;
+						break;
 					}
-
-					return true;
+					else
+					{
+						updateRxPointer = false;
+					}
 				}
-				else
+
+				if (readPointer == txLength)
 				{
-					updateRxPointer = false;
+					readPointer = 0;
 				}
-			}
+			} while (readPointer != txPointer);
+		}
+	}
 
-			if (readPointer == txLength)
-			{
-				readPointer = 0;
-			}
-		} while (readPointer != txPointer);
+	if (gotCommand)
+	{
+		gb.DecodeCommand();
+		return true;
 	}
 	return false;
 }

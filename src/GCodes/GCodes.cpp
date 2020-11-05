@@ -591,7 +591,7 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if HAS_LINUX_INTERFACE
 		else if (reprap.UsingLinuxInterface())
 		{
-			reprap.GetLinuxInterface().FillBuffer(gb);
+			return reprap.GetLinuxInterface().FillBuffer(gb);
 		}
 #endif
 	}

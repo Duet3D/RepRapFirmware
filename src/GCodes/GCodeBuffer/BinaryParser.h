@@ -26,6 +26,7 @@ public:
 	BinaryParser(GCodeBuffer& gcodeBuffer) noexcept;
 	void Init() noexcept; 											// Set it up to parse another G-code
 	void Put(const char *data, size_t len) noexcept;				// Add an entire string, overwriting any existing content
+	void DecodeCommand() noexcept;									// Print the buffer content in debug mode and prepare for execution
 	bool Seen(char c) noexcept __attribute__((hot));				// Is a character present?
 
 	char GetCommandLetter() const noexcept;

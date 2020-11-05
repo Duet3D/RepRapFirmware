@@ -243,7 +243,7 @@ bool GCodeBuffer::Put(char c) noexcept
 // Decode the command in the buffer when it is complete
 void GCodeBuffer::DecodeCommand() noexcept
 {
-	IF_NOT_BINARY(stringParser.DecodeCommand());
+	PARSER_OPERATION(DecodeCommand());
 }
 
 // Check whether the current command is a meta command, or we are skipping a block. Return true if we are and the current line no longer needs to be processed.
