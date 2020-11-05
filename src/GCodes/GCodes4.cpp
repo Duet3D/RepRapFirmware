@@ -556,7 +556,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::gridProbing2b:		// ready to probe the current grid probe point
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			lastProbedTime = millis();
+			lastProbedTime = millis();														// start the recovery timer
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			if (zp->GetProbeType() != ZProbeType::none && zp->GetTurnHeatersOff())
 			{
@@ -566,7 +566,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::gridProbing3:	// ready to probe the current grid probe point
+	case GCodeState::gridProbing3:		// ready to probe the current grid probe point
 		{
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			if (millis() - lastProbedTime >= (uint32_t)(zp->GetRecoveryTime() * SecondsToMillis))
@@ -841,7 +841,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::probingAtPoint2b:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			// Head has finished moving to the correct XY position
+			// Head has finished moving to the correct XY position and BLTouch has been deployed
 			lastProbedTime = millis();								// start the probe recovery timer
 			if (platform.GetZProbeOrDefault(currentZProbeNumber)->GetTurnHeatersOff())
 			{
@@ -1115,7 +1115,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		gb.SetState(GCodeState::normal);
 		break;
-
 
 	case GCodeState::straightProbe0:			// ready to deploy the probe
 		if (LockMovementAndWaitForStandstill(gb))

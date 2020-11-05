@@ -314,6 +314,16 @@ inline bool GCodeBuffer::IsDoingFile() const noexcept
 	return machineState->DoingFile();
 }
 
+inline bool GCodeBuffer::IsReady() const noexcept
+{
+	return bufferState == GCodeBufferState::ready;
+}
+
+inline bool GCodeBuffer::IsExecuting() const noexcept
+{
+	return bufferState == GCodeBufferState::executing;
+}
+
 // Return true if this source is executing a file from the local SD card
 inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 {

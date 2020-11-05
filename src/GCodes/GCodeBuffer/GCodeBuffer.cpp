@@ -641,16 +641,6 @@ bool GCodeBuffer::IsCompletelyIdle() const noexcept
 	return GetState() == GCodeState::normal && IsIdle();
 }
 
-bool GCodeBuffer::IsReady() const noexcept
-{
-	return bufferState == GCodeBufferState::ready;
-}
-
-bool GCodeBuffer::IsExecuting() const noexcept
-{
-	return bufferState == GCodeBufferState::executing;
-}
-
 void GCodeBuffer::SetFinished(bool f) noexcept
 {
 	if (f)
