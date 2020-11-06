@@ -262,7 +262,7 @@ void delay(uint32_t ms) noexcept
 }
 
 // Optimised version of memcpy for when we know that the source and destination are 32-bit aligned and a whole number of 32-bit words are to be copied
-void __attribute__ ((__optimize__ ("-fno-tree-loop-distribute-patterns"))) memcpy32(uint32_t *dst, const uint32_t *src, size_t numWords) noexcept
+void __attribute__ ((__optimize__ ("-fno-tree-loop-distribute-patterns"))) memcpyu32(uint32_t *dst, const uint32_t *src, size_t numWords) noexcept
 {
 	while (numWords >= 4)
 	{

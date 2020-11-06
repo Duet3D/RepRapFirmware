@@ -513,16 +513,16 @@ bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 	if (liveCoordinatesValid)
 	{
 		// All coordinates are valid, so copy them across
-		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * MaxAxesPlusExtruders);
+		memcpyf(m, const_cast<const float *>(liveCoordinates), MaxAxesPlusExtruders);
 		liveCoordinatesChanged = false;
 		cpu_irq_enable();
 	}
 	else
 	{
 		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
-		memcpy(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), sizeof(m[0]) * (MaxAxesPlusExtruders - numTotalAxes));
+		memcpyf(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), MaxAxesPlusExtruders - numTotalAxes);
 		int32_t tempEndPoints[MaxAxes];
-		memcpy(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints));
+		memcpyi32(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), ARRAY_SIZE(tempEndPoints));
 		cpu_irq_enable();
 
 		reprap.GetMove().MotorStepsToCartesian(tempEndPoints, numVisibleAxes, numTotalAxes, m);		// this is slow, so do it with interrupts enabled
@@ -531,7 +531,7 @@ bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 		cpu_irq_disable();
 		if (memcmp(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints)) == 0)
 		{
-			memcpy(const_cast<float *>(liveCoordinates), m, sizeof(m[0]) * numVisibleAxes);
+			memcpyf(const_cast<float *>(liveCoordinates), m, numVisibleAxes);
 			liveCoordinatesValid = true;
 			liveCoordinatesChanged = false;
 		}

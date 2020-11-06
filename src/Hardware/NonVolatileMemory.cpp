@@ -21,7 +21,7 @@ void NonVolatileMemory::EnsureRead() noexcept
 	if (state == NvmState::notRead)
 	{
 #if SAME5x
-		memcpy(&buffer, reinterpret_cast<const void *>(SEEPROM_ADDR), sizeof(buffer));
+		memcpyu32(reinterpret_cast<uint32_t*>(&buffer), reinterpret_cast<const uint32_t *>(SEEPROM_ADDR), sizeof(buffer)/sizeof(uint32_t));
 #elif defined(__LPC17xx__)
 # error		//TODO
 #elif SAM4E || SAM4S || SAME70
@@ -56,7 +56,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 	{
 		// No need to erase on the SAME5x because the EEPROM emulation manages it
         while (NVMCTRL->SEESTAT.bit.BUSY) { }
-        memcpy(reinterpret_cast<uint8_t*>(SEEPROM_ADDR), &buffer, sizeof(buffer));
+        memcpyu32(reinterpret_cast<uint32_t*>(SEEPROM_ADDR), reinterpret_cast<const uint32_t*>(&buffer), sizeof(buffer)/sizeof(uint32_t));
 		state = NvmState::clean;
         while (NVMCTRL->SEESTAT.bit.BUSY) { }
 	}

@@ -441,7 +441,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 	// 5. Compute the maximum acceleration available
 	float normalisedDirectionVector[MaxAxesPlusExtruders];			// used to hold a unit-length vector in the direction of motion
-	memcpy(normalisedDirectionVector, directionVector, sizeof(normalisedDirectionVector));
+	memcpyf(normalisedDirectionVector, directionVector, ARRAY_SIZE(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, MaxAxesPlusExtruders);
 	acceleration = beforePrepare.maxAcceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
 	if (flags.xyMoving)											// apply M204 acceleration limits to XY moves

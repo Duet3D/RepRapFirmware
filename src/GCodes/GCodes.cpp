@@ -1831,7 +1831,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	}
 
 	// Set up the initial coordinates
-	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
+	memcpyf(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes);
 
 	// Deal with axis movement
 	const float initialXY[2] = { currentUserPosition[X_AXIS], currentUserPosition[Y_AXIS] };
@@ -2183,7 +2183,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		}
 	}
 
-	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
+	memcpyf(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes);
 
 	// Save the arc centre user coordinates for later
 	const float userArcCentreX = moveBuffer.initialUserX + iParam;
