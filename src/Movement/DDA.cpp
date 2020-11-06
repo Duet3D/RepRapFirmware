@@ -441,7 +441,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 	// 5. Compute the maximum acceleration available
 	float normalisedDirectionVector[MaxAxesPlusExtruders];			// used to hold a unit-length vector in the direction of motion
-	memcpy(normalisedDirectionVector, directionVector, sizeof(normalisedDirectionVector));
+	memcpyf(normalisedDirectionVector, directionVector, ARRAY_SIZE(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, MaxAxesPlusExtruders);
 	acceleration = beforePrepare.maxAcceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
 	if (flags.xyMoving)											// apply M204 acceleration limits to XY moves
@@ -1251,7 +1251,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		Platform& platform = reprap.GetPlatform();
 		if (flags.isLeadscrewAdjustmentMove)
 		{
-			platform.EnableLocalDrivers(Z_AXIS);			// ensure all Z motors are enabled
+			platform.EnableDrivers(Z_AXIS);			// ensure all Z motors are enabled
 		}
 
 		AxesBitmap additionalAxisMotorsToEnable, axisMotorsEnabled;
@@ -1305,11 +1305,11 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 			}
 			else if (flags.isDeltaMovement && reprap.GetMove().GetKinematics().GetMotionType(drive) == MotionType::segmentFreeDelta)
 			{
+				platform.EnableDrivers(drive);
 				// On a delta we need to move all towers even if some of them have no net movement
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
-					platform.EnableLocalDrivers(drive);
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 					pdm->totalSteps = labs(delta);
 					pdm->direction = (delta >= 0);
@@ -1350,6 +1350,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (delta != 0)
 				{
+					platform.EnableDrivers(drive);
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{
 						// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
@@ -1363,9 +1364,9 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 							delta += stepsPerRotation;
 						}
 					}
+
 					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 					{
-						platform.EnableLocalDrivers(drive);
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 						pdm->totalSteps = labs(delta);
 						pdm->direction = (delta >= 0);
@@ -1423,6 +1424,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					const size_t extruder = LogicalDriveToExtruder(drive);
 #if SUPPORT_CAN_EXPANSION
 					afterPrepare.drivesMoving.SetBit(drive);
+					platform.EnableDrivers(drive);
 					const DriverId driver = platform.GetExtruderDriver(extruder);
 					if (driver.IsRemote())
 					{
@@ -1437,7 +1439,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[extruder], speedChange, flags.usePressureAdvance);
-						platform.EnableLocalDrivers(drive);
 
 						if (stepsToDo)
 						{
@@ -1473,10 +1474,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		{
 			const size_t drive = additionalAxisMotorsToEnable.LowestSetBit();
 			additionalAxisMotorsToEnable.ClearBit(drive);
-			if (platform.GetDriversBitmap(drive) != 0)									// if any of the connected axis drives is local
-			{
-				platform.EnableLocalDrivers(drive);
-			}
+			platform.EnableDrivers(drive);
 #if SUPPORT_CAN_EXPANSION
 			const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 			for (size_t i = 0; i < config.numDrivers; ++i)

@@ -780,7 +780,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	// Get the target coordinates (as user position) and check if we would move at all
 	float userPositionTarget[MaxAxes];
-	memcpy(userPositionTarget, currentUserPosition, numVisibleAxes * sizeof(currentUserPosition[0]));
+	memcpyf(userPositionTarget, currentUserPosition, numVisibleAxes);
 
 	bool seen = false;
 	bool doesMove = false;

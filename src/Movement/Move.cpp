@@ -490,7 +490,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
-	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
+	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentTool(), doBedCompensation);
 	SetLiveCoordinates(newPos);
 	mainDDARing.SetPositions(newPos);
@@ -724,7 +724,7 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 void Move::SetZeroHeightError(const float coords[MaxAxes]) noexcept
 {
 	float tempCoords[MaxAxes];
-	memcpy(tempCoords, coords, sizeof(tempCoords));
+	memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
 	AxisTransform(tempCoords, nullptr);
 	zShift = -GetInterpolatedHeightError(tempCoords[X_AXIS], tempCoords[Y_AXIS]);
 }

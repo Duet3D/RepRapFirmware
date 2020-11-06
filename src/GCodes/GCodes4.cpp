@@ -960,7 +960,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 					// Find the coordinates of the Z probe to pass to SetZeroHeightError
 					float tempCoords[MaxAxes];
-					memcpy(tempCoords, moveBuffer.coords, sizeof(tempCoords));
+					memcpyf(tempCoords, moveBuffer.coords, ARRAY_SIZE(tempCoords));
 					tempCoords[X_AXIS] += zp->GetXOffset();
 					tempCoords[Y_AXIS] += zp->GetYOffset();
 					reprap.GetMove().SetZeroHeightError(tempCoords);
@@ -1044,7 +1044,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 				// Find the coordinates of the Z probe to pass to SetZeroHeightError
 				float tempCoords[MaxAxes];
-				memcpy(tempCoords, moveBuffer.coords, sizeof(tempCoords));
+				memcpyf(tempCoords, moveBuffer.coords, ARRAY_SIZE(tempCoords));
 				tempCoords[X_AXIS] += zp->GetXOffset();
 				tempCoords[Y_AXIS] += zp->GetYOffset();
 				reprap.GetMove().SetZeroHeightError(tempCoords);

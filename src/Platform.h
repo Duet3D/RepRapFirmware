@@ -429,7 +429,7 @@ public:
 	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
 	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
 	int8_t GetEnableValue(size_t driver) const noexcept;
-	void EnableLocalDrivers(size_t axisOrExtruder) noexcept;
+	void EnableDrivers(size_t axisOrExtruder) noexcept;
 	void EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept;
 	void DisableAllDrivers() noexcept;
 	void DisableDrivers(size_t axisOrExtruder) noexcept;
