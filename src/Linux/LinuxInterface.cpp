@@ -741,6 +741,7 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 
 	bool gotCommand = false;
 	{
+		//TODO can we take the lock inside the loop body instead, if we re-read readPointer and writePointer after taking it?
 		TaskCriticalSectionLocker locker;
 		if (rxPointer != txPointer || txLength != 0)
 		{

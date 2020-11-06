@@ -37,20 +37,20 @@ public:
 	void SetLogLevel(LogLevel newLogLevel) noexcept;
 #if 0 // Currently not needed but might be useful in the future
 	bool IsLoggingEnabledFor(const MessageType mt) const noexcept;
-	bool IsWarnEnabled() const noexcept { return logLevel >= LogLevel::WARN; }
-	bool IsInfoEnabled() const noexcept { return logLevel >= LogLevel::INFO; }
-	bool IsDebugEnabled() const noexcept { return logLevel >= LogLevel::DEBUG; }
+	bool IsWarnEnabled() const noexcept { return logLevel >= LogLevel::warn; }
+	bool IsInfoEnabled() const noexcept { return logLevel >= LogLevel::info; }
+	bool IsDebugEnabled() const noexcept { return logLevel >= LogLevel::debug; }
 #endif
 
 private:
-	NamedEnum(MessageLogLevel, uint8_t, DEBUG, INFO, WARN, OFF);
+	NamedEnum(MessageLogLevel, uint8_t, debug, info, warn, off);
 	MessageLogLevel GetMessageLogLevel(MessageType mt) const noexcept { return (MessageLogLevel) ((mt & MessageType::LogOff)>>30); }
 
 	static const uint8_t LogEnabledThreshold = 3;
 
 	bool WriteDateTimeAndLogLevelPrefix(time_t time, MessageLogLevel messageLogLevel) noexcept;
 	void InternalLogMessage(time_t time, const char *message, const MessageLogLevel messageLogLevel) noexcept;
-	bool IsLoggingEnabledFor(const MessageLogLevel mll) const noexcept { return (mll < MessageLogLevel::OFF) && (mll.ToBaseType() + logLevel.ToBaseType() >= LogEnabledThreshold); }
+	bool IsLoggingEnabledFor(const MessageLogLevel mll) const noexcept { return (mll < MessageLogLevel::off) && (mll.ToBaseType() + logLevel.ToBaseType() >= LogEnabledThreshold); }
 	void LogFirmwareInfo(time_t time) noexcept;
 	bool IsEmptyMessage(const char * message) const noexcept { return message[0] == '\0' || (message[0] == '\n' && message[1] == '\0'); }
 
