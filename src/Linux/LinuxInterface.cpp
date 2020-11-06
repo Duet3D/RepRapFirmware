@@ -177,8 +177,10 @@ void LinuxInterface::Init() noexcept
 					bufHeader->length = packet->length;
 					txPointer += sizeof(BufferedCodeHeader);
 
-					// Store the corresponding code
-					memcpy(codeBuffer + txPointer, code, packet->length);
+					// Store the corresponding code. Binary codes are always aligned on a 4-byte boundary
+					uint32_t *dst = reinterpret_cast<uint32_t *>(codeBuffer + txPointer);
+					const uint32_t *src = reinterpret_cast<const uint32_t *>(code);
+					memcpyu32(dst, src, packet->length / sizeof(uint32_t));
 					txPointer += packet->length;
 					break;
 				}
@@ -401,14 +403,20 @@ void LinuxInterface::Init() noexcept
 
 				// Write another chunk of the IAP binary to the designated Flash area
 				case LinuxRequest::WriteIap:
+				{
 					if (iapWritePointer == IAP_IMAGE_START)			// if start of IAP write
 					{
 						reprap.PrepareToLoadIap();
 						writingIap = true;
 					}
-					memcpy(reinterpret_cast<char *>(iapWritePointer), transfer.ReadData(packet->length), packet->length);
+
+					// Copy another IAP chunk. It's always bound on a 4-byte boundary
+					uint32_t *dst = reinterpret_cast<uint32_t *>(iapWritePointer);
+					const uint32_t *src = reinterpret_cast<const uint32_t *>(transfer.ReadData(packet->length));
+					memcpyu32(dst, src, packet->length / sizeof(uint32_t));
 					iapWritePointer += packet->length;
 					break;
+				}
 
 				// Launch the IAP binary
 				case LinuxRequest::StartIap:
@@ -611,7 +619,7 @@ void LinuxInterface::Init() noexcept
 
 							// Handle blocking messages and their results
 							if (gb->MachineState().waitingForAcknowledgement && gb->IsMessagePromptPending() &&
-									transfer.WriteWaitForAcknowledgement(channel))
+								transfer.WriteWaitForAcknowledgement(channel))
 							{
 								gb->MessagePromptSent();
 								gb->Invalidate();
@@ -749,7 +757,7 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 				{
 					if (gb.GetChannel().RawValue() == header->channel)
 					{
-						gb.PutBinary(reinterpret_cast<const char *>(header), bufHeader->length);
+						gb.PutBinary(reinterpret_cast<const uint32_t *>(header), bufHeader->length / sizeof(uint32_t));
 						bufHeader->isPending = false;
 
 						if (updateRxPointer)

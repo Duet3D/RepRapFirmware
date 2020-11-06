@@ -27,10 +27,10 @@ void BinaryParser::Init() noexcept
 	seenParameterValue = nullptr;
 }
 
-void BinaryParser::Put(const char *data, size_t len) noexcept
+void BinaryParser::Put(const uint32_t *data, size_t len) noexcept
 {
-	memcpy(gb.buffer, data, len);
-	bufferLength = len;
+	memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
+	bufferLength = len * sizeof(uint32_t);
 	gb.bufferState = GCodeBufferState::parsingGCode;
 	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
 	gb.machineState->lineNumber = header->lineNumber;

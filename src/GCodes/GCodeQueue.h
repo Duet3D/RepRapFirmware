@@ -50,8 +50,10 @@ private:
 
 #if HAS_LINUX_INTERFACE
 	bool isBinary;
-#endif
+	alignas(4) char data[BufferSizePerQueueItem];
+#else
 	char data[BufferSizePerQueueItem];
+#endif
 	size_t dataLength;
 
 	uint32_t executeAtMove;

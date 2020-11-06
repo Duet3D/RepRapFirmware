@@ -556,7 +556,7 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename
 	memset(info.filamentNeeded, 0, ARRAY_SIZE(info.filamentNeeded) * sizeof(float));
 	const char *data = ReadData(packetLength - sizeof(PrintStartedHeader));
 	size_t filamentsSize = info.numFilaments * sizeof(float);
-	memcpy(info.filamentNeeded, data, filamentsSize);
+	memcpyf(info.filamentNeeded, reinterpret_cast<const float *>(data), info.numFilaments);
 	data += filamentsSize;
 
 	// Read file name

@@ -255,12 +255,12 @@ bool GCodeBuffer::CheckMetaCommand(const StringRef& reply)
 #if HAS_LINUX_INTERFACE
 
 // Add an entire binary G-Code, overwriting any existing content
-void GCodeBuffer::PutBinary(const char *str, size_t len) noexcept
+void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 {
 	machineState->lastCodeFromSbc = true;
 	isBinaryBuffer = true;
 	macroJustStarted = false;
-	binaryParser.Put(str, len);
+	binaryParser.Put(data, len);
 }
 
 #endif

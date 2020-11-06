@@ -51,7 +51,7 @@ public:
 
 	bool Put(char c) noexcept __attribute__((hot));								// Add a character to the end
 #if HAS_LINUX_INTERFACE
-	void PutBinary(const char *data, size_t len) noexcept;						// Add an entire binary G-Code, overwriting any existing content
+	void PutBinary(const uint32_t *data, size_t len) noexcept;						// Add an entire binary G-Code, overwriting any existing content
 #endif
 	void PutAndDecode(const char *data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
 	void PutAndDecode(const char *str) noexcept;								// Add a null-terminated string, overwriting any existing content
