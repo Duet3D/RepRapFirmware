@@ -275,9 +275,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			UpdateCurrentUserPosition();				// get the actual position of the new tool
 
 			gb.AdvanceState();
-			if (machineType != MachineType::fff)
+			if (machineType != MachineType::fff || toolChangeParam == 0)
 			{
-				gb.AdvanceState();						// skip moving tool to the new height if not a 3D printer
+				gb.AdvanceState();						// skip moving tool to the new height if not a 3D printer or Tn P0 was given
 			}
 
 			if (reprap.GetCurrentTool() != nullptr && (toolChangeParam & TPostBit) != 0)	// 2020-04-29: run tpost file even if not all axes have been homed
@@ -293,6 +293,21 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChange3:					// move the new tool to the correct height
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing
 		{
+			// Check here if the tool offsets being applied would exceed Z axis limits
+			auto currentTool = reprap.GetCurrentTool();
+			if (currentTool != nullptr)
+			{
+				const float newZPos = (moveBuffer.coords[Z_AXIS] - currentTool->GetOffset(Z_AXIS));
+				if(newZPos > platform.AxisMaximum(Z_AXIS) || newZPos < platform.AxisMinimum(Z_AXIS))
+				{
+					gb.MachineState().feedRate = toolChangeRestorePoint.feedRate;
+					doingToolChange = false;
+					gb.MachineState().SetError("New tool too close to Z axis limit. Aborting tool change");
+					AbortPrint(gb);
+					gb.SetState(GCodeState::checkError);
+					break;
+				}
+			}
 			// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
 			// Only do this if we are running as an FDM printer, because it's not appropriate for CNC machines.
 			SetMoveBufferDefaults();
