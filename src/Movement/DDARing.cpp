@@ -381,7 +381,7 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 			Move::WakeLaserTaskFromISR();
 		}
 #else
-		(void)StartNextMove(p, startTime);
+		(void)StartNextMove(p, finishTime);
 #endif
 	}
 	else
