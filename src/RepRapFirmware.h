@@ -73,6 +73,9 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 void delay(uint32_t ms) noexcept;
 static inline void WatchdogReset() noexcept { return watchdogReset(); }
 
+// Optimised version of memcpy for use when the source and destination are known to be 32-bit aligned and a whole number of 32-bit words is to be copied
+void memcpy32(uint32_t *dst, const uint32_t *src, size_t numWords) noexcept;
+
 #endif
 
 // API level definition.
