@@ -11,7 +11,7 @@
 #include <limits>
 
 #if HAS_LINUX_INTERFACE
-static unsigned int LastFileId = 1;
+static uint8_t LastFileId = 1;
 #endif
 
 // Create a default initialised GCodeMachineState
@@ -23,7 +23,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 	  lineNumber(0),
 	  drivesRelative(false), axesRelative(false),
 #if HAS_LINUX_INTERFACE
-	  lastCodeFromSbc(false), isMacroFromCode(false), isFileFinished(false), fileError(false),
+	  lastCodeFromSbc(false), macroStartedByCode(false), fileFinished(false),
 #endif
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
@@ -48,9 +48,9 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
 	  drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 #if HAS_LINUX_INTERFACE
-	  lastCodeFromSbc(prev.lastCodeFromSbc), isMacroFromCode(prev.isMacroFromCode), isFileFinished(prev.isFileFinished), fileError(false),
+	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif
-	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501),  runningM502(prev.runningM502),
+	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
 	  waitingForAcknowledgement(false), messageAcknowledged(false),
 	  compatibility(prev.compatibility), blockNesting((withinSameFile) ? prev.blockNesting : 0),
@@ -73,12 +73,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 GCodeMachineState::~GCodeMachineState() noexcept
 {
 #if HAS_MASS_STORAGE
-# if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
-# endif
-	{
-		fileState.Close();
-	}
+	fileState.Close();
 #endif
 }
 
@@ -87,8 +82,13 @@ GCodeMachineState::~GCodeMachineState() noexcept
 // Set the state to indicate a file is being processed
 void GCodeMachineState::SetFileExecuting() noexcept
 {
-	fileId = LastFileId++;
-	isFileFinished = fileError = false;
+#if HAS_MASS_STORAGE
+	if (!fileState.IsLive())
+#endif
+	{
+		fileId = LastFileId++;
+		fileFinished = false;
+	}
 }
 
 #endif
@@ -97,9 +97,9 @@ void GCodeMachineState::SetFileExecuting() noexcept
 bool GCodeMachineState::DoingFile() const noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+	if (reprap.UsingLinuxInterface() && fileId != 0)
 	{
-		return fileId != 0;
+		return true;
 	}
 #endif
 #if HAS_MASS_STORAGE
@@ -113,15 +113,15 @@ bool GCodeMachineState::DoingFile() const noexcept
 void GCodeMachineState::CloseFile() noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+	if (reprap.UsingLinuxInterface() && fileId != 0)
 	{
-		const uint32_t lastFileId = fileId;
+		const uint8_t lastFileId = fileId;
 		for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->previous)
 		{
 			if (ms->fileId == lastFileId)
 			{
-				ms->isFileFinished = false;
 				ms->fileId = 0;
+				ms->fileFinished = false;
 			}
 		}
 	}
@@ -137,14 +137,13 @@ void GCodeMachineState::CloseFile() noexcept
 void GCodeMachineState::WaitForAcknowledgement() noexcept
 {
 	waitingForAcknowledgement = true;
-#if HAS_LINUX_INTERFACE
-	waitingForAcknowledgementSent = false;
-	if (!reprap.UsingLinuxInterface())
-#endif
+#if HAS_MASS_STORAGE
+	if (fileState.IsLive())
 	{
 		// Stop reading from the current file
 		CloseFile();
 	}
+#endif
 }
 
 void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept

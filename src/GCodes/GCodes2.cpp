@@ -926,9 +926,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 600: // Filament change pause, synchronous
 			if (pauseState == PauseState::notPaused)
 			{
-				if (gb.IsDoingFileMacro())
+				if (fileGCode->IsDoingFileMacro())
 				{
 					filamentChangePausePending = true;
+					if (&gb != fileGCode)
+					{
+						return false;							// wait for the current macro to finish
+					}
 				}
 				else
 				{
@@ -955,6 +959,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			else if (fileGCode->IsDoingFileMacro())
 			{
 				pausePending = true;
+				if (&gb != fileGCode)
+				{
+					return false;						// wait for the current macro to finish
+				}
 			}
 			else
 			{
@@ -2418,7 +2426,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (Push(gb, true))					// stack the machine state including the file position
 					{
 						UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
-						gb.MachineState().WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
+						gb.WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
 					}
 				}
 

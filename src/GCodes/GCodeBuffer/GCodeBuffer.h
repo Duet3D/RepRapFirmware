@@ -51,10 +51,9 @@ public:
 
 	bool Put(char c) noexcept __attribute__((hot));								// Add a character to the end
 #if HAS_LINUX_INTERFACE
-	void PutAndDecode(const char *data, size_t len, bool isBinary = false) noexcept;	// Add an entire G-Code, overwriting any existing content
-#else
-	void PutAndDecode(const char *data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
+	void PutBinary(const char *data, size_t len) noexcept;						// Add an entire binary G-Code, overwriting any existing content
 #endif
+	void PutAndDecode(const char *data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
 	void PutAndDecode(const char *str) noexcept;								// Add a null-terminated string, overwriting any existing content
 	void StartNewFile() noexcept;												// Called when we start a new file
 	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
@@ -130,35 +129,39 @@ public:
 	bool IsDoingFileMacro() const noexcept;						// Return true if this source is executing a file macro
 	FilePosition GetFilePosition() const noexcept;				// Get the file position at the start of the current command
 
+	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
+
 #if HAS_LINUX_INTERFACE
 	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
 
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
-	void SetFileFinished(bool error) noexcept;					// Mark the last file as finished
-	void SetPrintFinished() noexcept;							// Mark the print file as finished
+	void SetFileFinished() noexcept;							// Mark the current file as finished
+	void SetPrintFinished() noexcept;							// Mark the current print file as finished
 
 	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
-	bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
-	bool HasStartedMacro() const noexcept { return hasStartedMacro; }		// Has this GB just started a new macro file?
+	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
+	bool HasJustStartedMacro() const noexcept { return macroJustStarted; }	// Has this GB just started a new macro file?
 	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }		// Indicates if a macro file is being requested
 	const char *GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
-	bool IsMacroFromCode() const noexcept { return machineState->isMacroFromCode; }	// Returns if the macro was requested from a code
-	void MacroRequestSent() noexcept { requestedMacroFile.Clear(); }	// Called when a macro file request has been sent
-	void ResolveMacroRequest(bool hadError, bool isEmpty) noexcept;		// Resolve the call waiting for a macro to be executed
-	bool IsMacroEmpty() const noexcept { return macroEmpty; }			// Returns if the last opened macro file is empty
+	bool IsMacroStartedByCode() const noexcept;								// Indicates if the last macro was requested from a code
+	void MacroRequestSent() noexcept { requestedMacroFile.Clear(); }		// Called when a macro file request has been sent
+	void ResolveMacroRequest(bool hadError, bool isEmpty) noexcept;			// Resolve the call waiting for a macro to be executed
+	bool IsMacroEmpty() const noexcept { return macroFileEmpty; }			// Return true if the opened macro file is actually empty
 
-	bool IsAbortRequested() const noexcept;						// Is the cancellation of the current file requested?
-	bool IsAbortAllRequested() const noexcept;					// Is the cancellation of all files being executed on this channel requested?
-	void FileAbortSent() noexcept;								// Called when the SBC has been notified about a file (or all files) being closed
+	void MacroFileClosed() noexcept;										// Called to notify the SBC about the file being internally closed on success
+	volatile bool IsMacroFileClosed() const noexcept { return macroFileClosed; }	// Indicates if a file has been closed internally in RRF
+	void MacroFileClosedSent() noexcept { macroFileClosed = false; }		// Called when the SBC has been notified about the internally closed file
 
-	void MacroFileClosed() noexcept;							// Called to notify the SBC about the file being internally closed on success
-	bool IsMacroFileClosed() const noexcept;					// Indicates if a file has been closed internally in RRF
-	void MacroFileClosedSent() noexcept;						// Called when the SBC has been notified about the internally closed file
+	bool IsAbortRequested() const noexcept { return abortFile; }			// Is the cancellation of the current file requested?
+	bool IsAbortAllRequested() const noexcept { return abortAllFiles; }		// Is the cancellation of all files being executed on this channel requested?
+	void FileAbortSent() noexcept { abortFile = abortAllFiles = false; }	// Called when the SBC has been notified about a file (or all files) being closed
 
-	bool IsMessageAcknowledged() const noexcept;				// Indicates if a message has been acknowledged
-	void MessageAcknowledgementSent() noexcept;					// Called when the SBC has been notified about the message acknowledgement
+	bool IsMessagePromptPending() const noexcept { return messagePromptPending; }	// Is the SBC supposed to be notified about a message waiting for acknowledgement?
+	void MessagePromptSent() noexcept { messagePromptPending = false; }				// Called when the SBC has been notified about a message waiting for acknowledgement
+	bool IsMessageAcknowledged() const noexcept { return messageAcknowledged; }		// Indicates if a message has been acknowledged
+	void MessageAcknowledgementSent() noexcept { messageAcknowledged = false; }		// Called when the SBC has been notified about the message acknowledgement
 
-	bool IsInvalidated() const noexcept { return invalidated; }	// Indicates if the channel is invalidated
+	bool IsInvalidated() const noexcept { return invalidated; }		// Indicates if the channel is invalidated
 	void Invalidate(bool i = true) noexcept { invalidated = i; }	// Invalidate this channel (or not)
 
 	bool IsSendRequested() const noexcept { return sendToSbc; }	// Is this code supposed to be sent to the SBC
@@ -261,25 +264,41 @@ private:
 #endif
 
 #if HAS_LINUX_INTERFACE
+	// Accessed by both the Main and Linux tasks
+	BinarySemaphore macroSemaphore;
+	volatile bool isWaitingForMacro;	// Is this GB waiting in DoFileMacro?
+	volatile bool macroFileClosed;		// Last macro file has been closed in RRF, tell the SBC
+
+	// Accessed only when the GB mutex is acquired
 	String<MaxFilenameLength> requestedMacroFile;
-	uint16_t
-		isWaitingForMacro : 1,		// Is this GB waiting in DoFileMacro?
-		hasStartedMacro : 1,		// Whether the GB has just started a macro file
-		macroEmpty : 1,				// May be true if the macro file could be opened but it is empty
-		macroError : 1,				// Whether the macro file could be opened or if an error occurred
+	uint8_t
+		macroJustStarted : 1,		// Whether the GB has just started a macro file
+		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred
+		macroFileEmpty : 1,			// Whether the macro file is actually empty
 		abortFile : 1,				// Whether to abort the last file on the stack
 		abortAllFiles : 1,			// Whether to abort all opened files
-		invalidated : 1,			// Set to true if the GB content is not valid and about to be cleared
 		sendToSbc : 1,				// Indicates if the GB string content is supposed to be sent to the SBC
-		messageAcknowledged : 1,	// Last message has been acknowledged
-		macroFileClosed : 1;		// Last macro file has been closed
-	BinarySemaphore macroSemaphore;
+		messagePromptPending : 1,	// Has the SBC been notified about a message waiting for acknowledgement?
+		messageAcknowledged : 1;	// Last message has been acknowledged
+
+	// Accessed only by the Linux task
+	bool invalidated;				// Set to true if the GB content is not valid and about to be cleared
 #endif
 };
 
 inline bool GCodeBuffer::IsDoingFileMacro() const noexcept
 {
 	return machineState->doingFileMacro;
+}
+
+inline bool GCodeBuffer::IsFileFinished() const noexcept
+{
+	return machineState->fileFinished;
+}
+
+inline bool GCodeBuffer::IsMacroStartedByCode() const noexcept
+{
+	return machineState->macroStartedByCode;
 }
 
 inline GCodeState GCodeBuffer::GetState() const noexcept
@@ -333,50 +352,5 @@ inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 	return IsDoingFile();
 #endif
 }
-
-#if HAS_LINUX_INTERFACE
-
-inline bool GCodeBuffer::IsAbortRequested() const noexcept
-{
-	return abortFile;
-}
-
-inline bool GCodeBuffer::IsAbortAllRequested() const noexcept
-{
-	return abortAllFiles;
-}
-
-inline void GCodeBuffer::FileAbortSent() noexcept
-{
-	abortFile = abortAllFiles = false;
-}
-
-inline void GCodeBuffer::MacroFileClosed() noexcept
-{
-	machineState->CloseFile();
-	macroFileClosed = true;
-}
-
-inline bool GCodeBuffer::IsMacroFileClosed() const noexcept
-{
-	return macroFileClosed;
-}
-
-inline void GCodeBuffer::MacroFileClosedSent() noexcept
-{
-	macroFileClosed = false;
-}
-
-inline bool GCodeBuffer::IsMessageAcknowledged() const noexcept
-{
-	return messageAcknowledged;
-}
-
-inline void GCodeBuffer::MessageAcknowledgementSent() noexcept
-{
-	messageAcknowledged = false;
-}
-
-#endif
 
 #endif /* SRC_GCODES_GCODEBUFFER_GCODEBUFFER_H */

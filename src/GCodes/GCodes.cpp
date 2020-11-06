@@ -640,7 +640,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if (gb.GetState() == GCodeState::normal)
 				{
 					UnlockAll(gb);
-					if (!gb.MachineState().lastCodeFromSbc || gb.MachineState().isMacroFromCode)
+					if (!gb.MachineState().lastCodeFromSbc || gb.MachineState().macroStartedByCode)
 					{
 						HandleReply(gb, GCodeResult::ok, "");
 					}
@@ -2598,11 +2598,10 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			gb.AbortFile(false, true);
 			return true;
 		}
-		gb.MachineState().SetFileExecuting();
 		gb.StartNewFile();
 		if (gb.IsMacroEmpty())
 		{
-			gb.SetFileFinished(false);
+			gb.SetFileFinished();
 		}
 	}
 	else
@@ -2827,7 +2826,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *tit
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
-		gb.MachineState().WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
+		gb.WaitForAcknowledgement();									// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
 		platform.SendAlert(mt, message, title, 2, 0.0, axes);
 	}
@@ -3075,17 +3074,16 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	if (reprap.UsingLinuxInterface())
 	{
 		lastFilePosition = noFilePosition;
-		fileGCode->OriginalMachineState().SetFileExecuting();
 	}
 	else
 #endif
 	{
 #if HAS_MASS_STORAGE
 		fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
-		fileGCode->StartNewFile();
 		fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
 #endif
 	}
+	fileGCode->StartNewFile();
 
 	lastFilamentError = FilamentSensorStatus::ok;
 	lastPrintingMoveHeight = -1.0;
@@ -3450,8 +3448,8 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	if (gb.MachineState().lastCodeFromSbc)
 	{
 		MessageType type = gb.GetResponseMessageType();
-		if (rslt == GCodeResult::notFinished || gb.HasStartedMacro() ||
-			(gb.MachineState().waitingForAcknowledgement && !gb.MachineState().waitingForAcknowledgementSent))
+		if (rslt == GCodeResult::notFinished || gb.HasJustStartedMacro() ||
+			(gb.MachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
 		{
 			if (reply[0] == 0)
 			{

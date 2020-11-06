@@ -247,10 +247,15 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
 void QueuedCode::AssignTo(GCodeBuffer *gb) noexcept
 {
 #if HAS_LINUX_INTERFACE
-	gb->PutAndDecode(data, dataLength, isBinary);
-#else
-	gb->PutAndDecode(data, dataLength);
+	if (isBinary)
+	{
+		gb->PutBinary(data, dataLength);
+	}
+	else
 #endif
+	{
+		gb->PutAndDecode(data, dataLength);
+	}
 }
 
 // End

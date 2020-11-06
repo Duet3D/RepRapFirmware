@@ -181,20 +181,19 @@ public:
 	FileData fileState;
 #endif
 #if HAS_LINUX_INTERFACE
-	uint32_t fileId;							// virtual file ID to deal with stack push/pops when a file is being cancelled or finished in the wrong stack level
+	uint8_t fileId;								// virtual file ID to deal with stack push/pops when a file is being cancelled or finished in the wrong stack level
 #endif
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];
 	uint32_t lineNumber;
 
-	uint32_t
+	uint16_t
 		drivesRelative : 1,
 		axesRelative : 1,
 #if HAS_LINUX_INTERFACE
 		lastCodeFromSbc : 1,
-		isMacroFromCode : 1,
-		isFileFinished : 1,
-		fileError: 1,
+		macroStartedByCode : 1,
+		fileFinished : 1,
 #endif
 		doingFileMacro : 1,
 		waitWhileCooling : 1,
@@ -205,9 +204,6 @@ public:
 		runningSystemMacro : 1,					// true if running a system macro file
 		usingInches : 1,						// true if units are inches not mm
 		waitingForAcknowledgement : 1,
-#if HAS_LINUX_INTERFACE
-		waitingForAcknowledgementSent : 1,
-#endif
 		messageAcknowledged : 1,
 		messageCancelled : 1;
 

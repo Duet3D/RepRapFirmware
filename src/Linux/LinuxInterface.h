@@ -70,7 +70,7 @@ private:
 	StopPrintReason printStopReason;
 
 	char codeBuffer[SpiCodeBufferSize];
-	uint16_t rxPointer, txPointer, txLength;
+	volatile uint16_t rxPointer, txPointer, txLength;
 	bool sendBufferUpdate;
 
 	uint32_t iapWritePointer;
