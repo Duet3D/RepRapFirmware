@@ -27,6 +27,8 @@ void BinaryParser::Init() noexcept
 	seenParameterValue = nullptr;
 }
 
+// Add an entire binary G-Code, overwriting any existing content
+// CAUTION! This may be called with the task scheduler suspended, so don't do anything that might block or take more than a few microseconds to execute
 void BinaryParser::Put(const char *data, size_t len) noexcept
 {
 	memcpy(gb.buffer, data, len);

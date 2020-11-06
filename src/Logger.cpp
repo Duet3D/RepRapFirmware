@@ -43,7 +43,7 @@ void Logger::Start(time_t time, const StringRef& filename) noexcept
 			logFileName.copy(filename.c_str());
 			String<StringLength50> startMessage;
 			startMessage.printf("Event logging started at level %s\n", logLevel.ToString());
-			InternalLogMessage(time, startMessage.c_str(), MessageLogLevel::INFO);
+			InternalLogMessage(time, startMessage.c_str(), MessageLogLevel::info);
 			LogFirmwareInfo(time);
 			reprap.StateUpdated();
 		}
@@ -59,7 +59,7 @@ void Logger::LogFirmwareInfo(time_t time) noexcept
 #endif
 			;
 	char buffer[versionStringLength];
-	StringRef firmwareInfo(buffer, ARRAY_SIZE(buffer));// This is huge but should accomodate for around 20 boards
+	StringRef firmwareInfo(buffer, ARRAY_SIZE(buffer));						// This is huge but should accommodate around 20 boards
 	firmwareInfo.printf("Running: %s: %s (%s)", reprap.GetPlatform().GetElectronicsString(), VERSION, DATE);
 
 #if 0 && SUPPORT_CAN_EXPANSION // TODO this needs some rework - for now the main board is used only
@@ -69,7 +69,7 @@ void Logger::LogFirmwareInfo(time_t time) noexcept
 		firmwareInfo.catf(" - %s", expansionBoardData.typeName);
 	}
 #endif
-	InternalLogMessage(time, firmwareInfo.c_str(), MessageLogLevel::INFO);
+	InternalLogMessage(time, firmwareInfo.c_str(), MessageLogLevel::info);
 }
 
 void Logger::Stop(time_t time) noexcept
@@ -77,7 +77,7 @@ void Logger::Stop(time_t time) noexcept
 	if (logFile.IsLive() && !inLogger)
 	{
 		Lock loggerLock(inLogger);
-		InternalLogMessage(time, "Event logging stopped\n", MessageLogLevel::INFO);
+		InternalLogMessage(time, "Event logging stopped\n", MessageLogLevel::info);
 		logFile.Close();
 		reprap.StateUpdated();
 	}

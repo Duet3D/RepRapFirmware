@@ -291,6 +291,8 @@ inline bool GCodeBuffer::IsDoingFileMacro() const noexcept
 	return machineState->doingFileMacro;
 }
 
+#if HAS_LINUX_INTERFACE
+
 inline bool GCodeBuffer::IsFileFinished() const noexcept
 {
 	return machineState->fileFinished;
@@ -300,6 +302,8 @@ inline bool GCodeBuffer::IsMacroStartedByCode() const noexcept
 {
 	return machineState->macroStartedByCode;
 }
+
+#endif
 
 inline GCodeState GCodeBuffer::GetState() const noexcept
 {
