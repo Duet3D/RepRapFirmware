@@ -31,7 +31,7 @@ New features/changed behaviour:
 - M453 and M452 no longer report the new machine mode. Use M450 after these commands if you want the machine mode to be reported.
 - If a tool change is requested but changing tool would cause the Z max limit to be exceeded because of the changed tool Z offset, the tool change is now aborted
 - [Duet 3 + expansion/tool boards] Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
-- [Duet 3 + expansion/tool boards] Expansion and tool boards can now have their bootloaders updated via CAN using the command M122 B# S3 where # is the board address. The bootloader file is Duet3Bootloader-SAME5x.bin for the EXP3HC board, Duet3Bootloader-SAMC21.bin for the other expansion boards by Duet3D, and Duet3Bootloader-SAMMYC21.bin for the Sammy-C21 development board. These files are available at https://github.com/Duet3D/Duet3Bootloader/releases.
+- [Duet 3 + expansion/tool boards] Expansion and tool boards can now have their bootloaders updated via CAN using the command M997 B# S3 where # is the board address. The bootloader file is Duet3Bootloader-SAME5x.bin for the EXP3HC board, Duet3Bootloader-SAMC21.bin for the other expansion boards by Duet3D, and Duet3Bootloader-SAMMYC21.bin for the Sammy-C21 development board. These files are available at https://github.com/Duet3D/Duet3Bootloader/releases.
 - [Duet + SBC] RepRapFirmware no longer goes into SBC mode if a SD card is inserted but can't be mounted, or if config.g is not found. This is to make diagnosis of SD card interface faults easier.
 
 Object model changes:
