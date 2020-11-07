@@ -1,13 +1,18 @@
-RepRapFirmware 3.2-beta3 (in preparation)
+RepRapFirmware 3.2-beta3
 ========================
 
 Upgrade notes:
 - It is no longer permitted to create a filament monitor using M591 and subsequently to use M584 to change the driver that the extruder is mapped to
 - [Duet 3 + expansion/tool boards] Changes have been made to the CAN message protocols, therefore you must upgrade tool and expansion boards to firmware 3.2beta3
 - [Duet+SBC] Changes have been made to the DCS message protocols, therefore you must upgrade DSF to version 3.2beta3
+- When new axes are created using M584, if no R parameter is specified then the default for axes ABCD is now rotational. Use the R0 parameter if you want them to be linear.
+
+Known issues:
+- PanelDue with firmware version 3.2.0 does not update the homed status. This will be fixed in a future PanelDueFirmware release.
 
 New features/changed behaviour:
-- Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
+- When new axes are created using M584, if no R parameter is specified then the default for axes ABCD is now rotational. Use the R0 parameter if you want them to be linear.
+- M584 has a new S parameter which specifies whether new axes created in the command are to be treated as linear (S0) or rotational (S1) for the purpose of feedrate calculation. This is separate from the R parameter, which specifies whether new axes are rotational or not. The default is to treat linear axes as linear and rotational axes as rotational. You only need to provide the S parameter if you want to change the way that the feed rate is applied.
 - If a filament monitor is configured for an extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
 - If a filament error occurs, RepRapFirmware now tries to run file sys/filament-error#.g where # is the extruder number in minimum-width format; or if that file is not found then file sys/filament-error.g. If neither file is found then it falls back to running sys/pause.g.
 - [Duet+PanelDue] Status messages are sent to an attached PanelDue running firmware 3.2 during homing, heating tools etc.
@@ -16,14 +21,18 @@ New features/changed behaviour:
 - The M122 P102 and M122 P103 timing functions are more accurate and give more consistent results than in previous firmware versions
 - M122 for expansion and tool boards now reports the bootloader version, if available
 - Logging to file now has four log levels
-    * 0: OFF (as previously no logging)
-    * 1: WARN (all previous logged messages are in this category)
-    * 2: INFO (M117, M291, M292 and G10 fall into this category) and
-    * 3: DEBUG (everything else that creates an output)
-- M929 now takes values for the Snnn paramter from 0 (OFF) to 3 (DEBUG)
+    * 0: off (as previously no logging)
+    * 1: warn (all previous logged messages are in this category)
+    * 2: info (M117, M291, M292 and G10 fall into this category) and
+    * 3: debug (everything else that generates output)
+- M929 now takes values for the Snnn parameter from 0 (no logging) to 3 (maximum logging)
 - M118 has a new Lnnn parameter to specify at which log level the message will be logged (default: DEBUG). Using L0 will prevent a message being copied to the log file.
-- The speed of processing of GCodes received fom USB has been improved, to match the speed of processing GCodes read from the SD card
-- [Duet3 + expansion/tool boards] Expansion and tool boards can now have their bootloaders updated via CAN using the command M122 B# S3 where # is the board address. The bootoader file is Duet3Bootloader-SAME5x.bin for the EXP3HC board, Duet3Bootloader-SAMC21.bin for the other expansion boards by Duet3D, and Duet3Bootloader-SAMMYC21.bin for the Sammy-C21 development board. These files are available at https://github.com/Duet3D/Duet3Bootloader/releases.
+- The speed of processing of GCodes received from USB has been improved, to match the speed of processing GCodes read from the SD card
+- M453 and M452 no longer report the new machine mode. Use M450 after these commands if you want the machine mode to be reported.
+- If a tool change is requested but changing tool would cause the Z max limit to be exceeded because of the changed tool Z offset, the tool change is now aborted
+- [Duet 3 + expansion/tool boards] Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
+- [Duet 3 + expansion/tool boards] Expansion and tool boards can now have their bootloaders updated via CAN using the command M122 B# S3 where # is the board address. The bootloader file is Duet3Bootloader-SAME5x.bin for the EXP3HC board, Duet3Bootloader-SAMC21.bin for the other expansion boards by Duet3D, and Duet3Bootloader-SAMMYC21.bin for the Sammy-C21 development board. These files are available at https://github.com/Duet3D/Duet3Bootloader/releases.
+- [Duet + SBC] RepRapFirmware no longer goes into SBC mode if a SD card is inserted but can't be mounted, or if config.g is not found. This is to make diagnosis of SD card interface faults easier.
 
 Object model changes:
 - All types of filament monitors have a new field "status". The value is one of "noMonitor", "ok", "noDataReceived", "noFilament", "tooLittleMovement", "tooMuchMovement", "sensorError".
@@ -36,10 +45,13 @@ Bug fixes:
 - M701 and M702 commands crashed the firmware with an assertion failure (new bug in 3.2beta2)
 - G92 commands incremented seqs.move when they didn't need to (old bug)
 - G92 Znn didn't clear zDatumSetByProbing (old bug)
+- Some types of underrun in the movement queue were not reported
 - The handling of out-of-buffer situations has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
 - In RepRapFirmware mode, empty responses to commands were not suppressed. They are now suppressed except when the command came from HTTP or SBC.
-- Feed rate calculations did not confirm to the NIST standard when the Z axis and one or more rotational axes were moving, but not X or Y.
+- Feed rate calculations did not confirm to the NIST standard when the Z axis and one or more rotational axes were moving, but not X or Y. This affected CNC machines with rotational axes, and OpenPnP.
+- When the machine was executing resume.g, the 'resuming' status was not reported in the object model
 - [Duet 3] When using a LinearAnalog sensor, the readings returned were too high above the minimum reading by a factor of 4
+- [Duet 3 + expansion/tool boards] The idle timeout was not always applied to remote drives, in particular to extruder drives
 - [LPC/STM port, might affect Duets in rare situations] If hiccups occurred frequently and there was other activity in the system causing frequent high-priority interrupts, a watchdog timeout could occur
 - [Duet+SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
 - [Duet+SBC] When nested macros were used, commands were sometimes executed out-of-order
