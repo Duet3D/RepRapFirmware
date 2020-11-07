@@ -1421,10 +1421,10 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 						speedChange = 0.0;
 					}
 
+					platform.EnableDrivers(drive);
 					const size_t extruder = LogicalDriveToExtruder(drive);
 #if SUPPORT_CAN_EXPANSION
 					afterPrepare.drivesMoving.SetBit(drive);
-					platform.EnableDrivers(drive);
 					const DriverId driver = platform.GetExtruderDriver(extruder);
 					if (driver.IsRemote())
 					{
