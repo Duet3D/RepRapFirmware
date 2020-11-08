@@ -9,6 +9,8 @@ Upgrade notes:
 
 Known issues:
 - PanelDue with firmware version 3.2.0 does not update the homed status. This will be fixed in a future PanelDueFirmware release.
+- When running with attached SBC, any output generated from inside a while-loop in a GCode file or macro (e.g. from a GCode command or from an echo command) will not be shown until the while-loop has completed
+- The original binary for Duet 3 EXP3HC expansion board in this release did not allow thermistors or PT1000 sensors to be configured on those boards. The release now has an updated binary (version 3.2beta3.1) that fixes this.
 
 New features/changed behaviour:
 - When new axes are created using M584, if no R parameter is specified then the default for axes ABCD is now rotational. Use the R0 parameter if you want them to be linear.
