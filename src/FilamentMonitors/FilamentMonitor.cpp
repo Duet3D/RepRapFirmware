@@ -71,7 +71,7 @@ void FilamentMonitor::Disable() noexcept
 // Try to get the pin number from the GCode command in the buffer, setting Seen if a pin number was provided and returning true if error.
 // Also attaches the ISR.
 // For a remote filament monitor, this does the full configuration or query of the remote object instead, and we always return seen true because we don't need to report local status.
-GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) noexcept
+GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException)
 {
 #if SUPPORT_CAN_EXPANSION
 	// Check that the port (if given) is on the same board as the extruder
