@@ -669,9 +669,11 @@ void LocalHeater::DoTuningStep() noexcept
 				// Decide whether to finish tuning
 				if (   tOff.GetNumSamples() == MaxTuningHeaterCycles
 					|| (   tOff.GetNumSamples() >= MinTuningHeaterCycles
-						&& dLow.GetDeviation() <= 0.5
-						&& dHigh.GetDeviation() <= 0.5
-						&& coolingTimeConstant.GetDeviation() < coolingTimeConstant.GetMean() * 0.2
+						&& tOn.DeviationFractionWithin(0.2)
+						&& dLow.DeviationFractionWithin(0.2)
+						&& dLow.DeviationFractionWithin(0.2)
+						&& dHigh.DeviationFractionWithin(0.2)
+						&& coolingTimeConstant.DeviationFractionWithin(0.2)
 					   )
 				   )
 				{
@@ -720,6 +722,20 @@ void LocalHeater::DoTuningStep() noexcept
 // Calculate the heater model from the accumulated heater parameters
 void LocalHeater::CalculateModel() noexcept
 {
+	if (reprap.Debug(moduleHeat))
+	{
+#define PLUS_OR_MINUS "\xC2\xB1"
+		reprap.GetPlatform().MessageF(GenericMessage,
+										"tOn %ld" PLUS_OR_MINUS "%ld, tOff %ld" PLUS_OR_MINUS "%ld, dHigh %ld" PLUS_OR_MINUS "%ld, dLow %ld" PLUS_OR_MINUS "%ld, C %ld" PLUS_OR_MINUS "%ld, V %.1f" PLUS_OR_MINUS "%.1f\n",
+										lrintf(tOn.GetMean()), lrintf(tOn.GetDeviation()),
+										lrintf(tOff.GetMean()), lrintf(tOff.GetDeviation()),
+										lrintf(dHigh.GetMean()), lrintf(dHigh.GetDeviation()),
+										lrintf(dLow.GetMean()), lrintf(dLow.GetDeviation()),
+										lrintf(coolingTimeConstant.GetMean()), lrintf(coolingTimeConstant.GetDeviation()),
+										(double)tuningVoltage.GetMean(), (double)tuningVoltage.GetDeviation()
+									 );
+	}
+
 	const float cycleTime = tOn.GetMean() + tOff.GetMean();		// in milliseconds
 	const float deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * 0.001)/cycleTime;		// in seconds
 	const float gain = ((tuningTargetTemp - tuningStartTemp.GetMean() - TuningHysteresis) * cycleTime) / (tOn.GetMean() * tuningPwm);

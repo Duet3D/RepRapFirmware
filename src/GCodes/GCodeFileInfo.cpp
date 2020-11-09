@@ -31,7 +31,7 @@ unsigned int GCodeFileInfo::GetNumLayers() const noexcept
 	const float nl = (firstLayerHeight > 0.0)
 						? (objectHeight - firstLayerHeight)/layerHeight + 1
 							: objectHeight/layerHeight;
-	return rintf(max<float>(nl, 0.0));
+	return (unsigned int)lrintf(max<float>(nl, 0.0));
 }
 
 // End
