@@ -816,33 +816,27 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCo
 	if (gb.Seen('H'))
 	{
 		const unsigned int heater = gb.GetUIValue();
-		const auto h = FindHeater(heater);
-		if (h.IsNotNull())
+		if (heaterBeingTuned != -1)
 		{
-			gb.MustSee('S');
-			const float temperature = gb.GetFValue();
-			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : h->GetModel().GetMaxPwm();
-			if (maxPwm < 0.1 || maxPwm > 1.0)
-			{
-				reply.copy("Invalid PWM value");
-			}
-			else
-			{
-				if (heaterBeingTuned == -1)
-				{
-					heaterBeingTuned = (int8_t)heater;
-					return h->StartAutoTune(temperature, maxPwm, reply);
-				}
-				else
-				{
-					// Trying to start a new auto tune, but we are already tuning a heater
-					reply.printf("Error: cannot start auto tuning heater %u because heater %d is being tuned", heater, heaterBeingTuned);
-				}
-			}
+			// Trying to start a new auto tune, but we are already tuning a heater
+			reply.printf("Error: cannot start auto tuning heater %u because heater %d is being tuned", heater, heaterBeingTuned);
 		}
 		else
 		{
-			reply.printf("Heater %u not found", heater);
+			const auto h = FindHeater(heater);
+			if (h.IsNotNull())
+			{
+				const GCodeResult rslt = h->StartAutoTune(gb, reply);
+				if (rslt <= GCodeResult::warning)
+				{
+					heaterBeingTuned = (int8_t)heater;
+				}
+				return rslt;
+			}
+			else
+			{
+				reply.printf("Heater %u not found", heater);
+			}
 		}
 		return GCodeResult::error;
 	}
@@ -858,7 +852,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCo
 		}
 		else
 		{
-			reply.copy("No heater has been tuned yet");
+			reply.copy("No heater has been tuned since startup");
 		}
 		return GCodeResult::ok;
 	}

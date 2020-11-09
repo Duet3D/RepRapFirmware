@@ -128,7 +128,7 @@ float RemoteHeater::GetAccumulator() const noexcept
 	return 0.0;		// not supported
 }
 
-GCodeResult RemoteHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept
+GCodeResult RemoteHeater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	reply.copy("remote heater auto tune not implemented");
 	return GCodeResult::error;

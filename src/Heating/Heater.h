@@ -33,7 +33,7 @@ public:
 	Heater(const Heater&) = delete;
 
 	// Configuration methods
-	virtual GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sensorNumber, const StringRef& reply) = 0;
+	virtual GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) = 0;
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
 	virtual GCodeResult ReportDetails(const StringRef& reply) const noexcept = 0;
 
@@ -42,7 +42,7 @@ public:
 	virtual GCodeResult ResetFault(const StringRef& reply) noexcept = 0;	// Reset a fault condition - only call this if you know what you are doing
 	virtual void SwitchOff() noexcept = 0;
 	virtual void Spin() noexcept = 0;
-	virtual GCodeResult StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept = 0;	// Start an auto tune cycle for this PID
+	virtual GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) = 0;	// Start an auto tune cycle for this heater
 	virtual void GetAutoTuneStatus(const StringRef& reply) const = 0;	// Get the auto tune status or last result
 	virtual void Suspend(bool sus) noexcept = 0;						// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const noexcept = 0;					// Get the inertial term accumulator
