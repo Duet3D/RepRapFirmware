@@ -31,8 +31,7 @@ public:
 		float heatingRate;
 		float coolingTimeConstant;
 		float deadTime;
-
-		float GetGain() const noexcept { return heatingRate * coolingTimeConstant; }
+		float gain;
 	};
 
 	LocalHeater(unsigned int heaterNum) noexcept;
@@ -92,9 +91,11 @@ private:
 
 	static_assert(sizeof(previousTemperaturesGood) * 8 >= NumPreviousTemperatures, "too few bits in previousTemperaturesGood");
 
+	static constexpr unsigned int TuningHeaterSettleCycles = 2;
 	static constexpr unsigned int MinTuningHeaterCycles = 5;
-	static constexpr unsigned int MaxTuningHeaterCycles = 20;
+	static constexpr unsigned int MaxTuningHeaterCycles = 30;
 	static constexpr float TuningHysteresis = 3.0;
+	static constexpr float TuningPeakTempDrop = 0.5;		// must be well below TuningHysteresis
 };
 
 #endif /* SRC_LOCALHEATER_H_ */

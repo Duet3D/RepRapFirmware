@@ -27,12 +27,16 @@ static DeviationAccumulator dHigh;
 static DeviationAccumulator dLow;
 static DeviationAccumulator tOn;
 static DeviationAccumulator tOff;
-static DeviationAccumulator coolingTimeConstant;
+static DeviationAccumulator heatingRate;
+static DeviationAccumulator coolingRate;
 static uint32_t lastOffTime;
 static uint32_t lastOnTime;
 static float peakTemp;									// max or min temperature
 static uint32_t peakTime;								// the time at which we recorded peakTemp
+static float afterPeakTemp;								// temperature after max from which we start timing the cooling rate
+static uint32_t afterPeakTime;							// the time at which we recorded afterPeakTemp
 static FansBitmap tuningFans;
+static bool collecting;
 static bool fanOn;										// whether we are running with the fan on or off
 
 static LocalHeater::HeaterParameters fanOffParams, fanOnParams;
@@ -40,6 +44,17 @@ static LocalHeater::HeaterParameters fanOffParams, fanOnParams;
 #if HAS_VOLTAGE_MONITOR
 static DeviationAccumulator tuningVoltage;				// sum of the voltage readings we take during the heating phase
 #endif
+
+// Clear all the counters except tuning voltage and start temperature
+static void ClearCounters() noexcept
+{
+	dHigh.Clear();
+	dLow.Clear();
+	tOn.Clear();
+	tOff.Clear();
+	heatingRate.Clear();
+	coolingRate.Clear();
+}
 
 // Member functions and constructors
 
@@ -538,16 +553,12 @@ GCodeResult LocalHeater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply) 
 	tuningStartTemp.Clear();
 	tuningBeginTime = millis();
 	tuned = false;					// assume failure
-	fanOn = false;
+	fanOn = collecting = false;
 
 	if (seenA)
 	{
 		tuningStartTemp.Add(ambientTemp);
-		dHigh.Clear();
-		dLow.Clear();
-		tOn.Clear();
-		tOff.Clear();
-		coolingTimeConstant.Clear();
+		ClearCounters();
 		timeSetHeating = millis();
 		lastPwm = tuningPwm;										// turn on heater at specified power
 		mode = HeaterMode::tuning1;
@@ -629,6 +640,7 @@ void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 // It must set lastPWM to the required PWM before returning, unless it is the same as last time.
 void LocalHeater::DoTuningStep() noexcept
 {
+	const uint32_t now = millis();
 	switch (mode)
 	{
 	case HeaterMode::tuning0:
@@ -641,7 +653,7 @@ void LocalHeater::DoTuningStep() noexcept
 
 		if (tuningStartTemp.GetDeviation() <= 2.0)
 		{
-			timeSetHeating = millis();
+			timeSetHeating = now;
 			lastPwm = tuningPwm;										// turn on heater at specified power
 			mode = HeaterMode::tuning1;
 
@@ -649,7 +661,7 @@ void LocalHeater::DoTuningStep() noexcept
 			return;
 		}
 
-		if (millis() - tuningBeginTime < 20000)
+		if (now - tuningBeginTime < 20000)
 		{
 			// Allow up to 20 seconds for starting temperature to settle
 			return;
@@ -662,7 +674,7 @@ void LocalHeater::DoTuningStep() noexcept
 		// Heating up
 		{
 			const bool isBedOrChamberHeater = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
-			const uint32_t heatingTime = millis() - timeSetHeating;
+			const uint32_t heatingTime = now - timeSetHeating;
 			const float extraTimeAllowed = (isBedOrChamberHeater) ? 120.0 : 30.0;
 			if (heatingTime > (uint32_t)((GetModel().GetDeadTime() + extraTimeAllowed) * SecondsToMillis) && (temperature - tuningStartTemp.GetMean()) < 3.0)
 			{
@@ -683,15 +695,11 @@ void LocalHeater::DoTuningStep() noexcept
 				lastPwm = 0.0;
 				SetHeater(0.0);
 				peakTemp = temperature;
-				lastOffTime = peakTime = millis();
+				lastOffTime = peakTime = now;
 #if HAS_VOLTAGE_MONITOR
 				tuningVoltage.Clear();
 #endif
-				dHigh.Clear();
-				dLow.Clear();
-				tOn.Clear();
-				tOff.Clear();
-				coolingTimeConstant.Clear();
+				ClearCounters();
 				mode = HeaterMode::tuning2;
 				reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 2, heater cycling\n");
 			}
@@ -701,63 +709,70 @@ void LocalHeater::DoTuningStep() noexcept
 	case HeaterMode::tuning2:	// Heater is off, record the peak temperature and time
 		if (temperature >= peakTemp)
 		{
-			peakTemp = temperature;
-			peakTime = millis();
+			peakTemp = afterPeakTemp = temperature;
+			peakTime = afterPeakTime = now;
 		}
-
-		if (temperature < tuningTargetTemp - TuningHysteresis)
+		else if (temperature < tuningTargetTemp - TuningHysteresis)
 		{
-			const uint32_t now = millis();
 			if (dLow.GetNumSamples() != 0)				// don't count the initial overshoot
 			{
 				dHigh.Add((float)(peakTime - lastOffTime));
 				tOff.Add((float)(now - lastOffTime));
-				const float averageTemperatureDifference = (peakTemp + temperature) * 0.5 - tuningStartTemp.GetMean();
-				coolingTimeConstant.Add((averageTemperatureDifference * (now - peakTime))/(peakTemp - temperature));
+				coolingRate.Add((afterPeakTemp - temperature) * SecondsToMillis/(now - afterPeakTime));
 
-				// Decide whether to finish tuning
-				if (   tOff.GetNumSamples() == MaxTuningHeaterCycles
-					|| (   tOff.GetNumSamples() >= MinTuningHeaterCycles
-						&& tOn.DeviationFractionWithin(0.2)
-						&& dLow.DeviationFractionWithin(0.2)
-						&& dLow.DeviationFractionWithin(0.2)
-						&& dHigh.DeviationFractionWithin(0.2)
-						&& coolingTimeConstant.DeviationFractionWithin(0.2)
-					   )
-				   )
+				// Decide whether to finish this phase
+				if (collecting)
 				{
-					if (fanOn)
+					if (   coolingRate.GetNumSamples() == MaxTuningHeaterCycles
+						|| (   coolingRate.GetNumSamples() >= MinTuningHeaterCycles
+//							&& tOn.DeviationFractionWithin(0.1)
+//							&& tOff.DeviationFractionWithin(0.1)
+							&& dLow.DeviationFractionWithin(0.2)
+							&& dHigh.DeviationFractionWithin(0.2)
+							&& heatingRate.DeviationFractionWithin(0.1)
+							&& coolingRate.DeviationFractionWithin(0.1)
+						   )
+					   )
 					{
-						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
-						CalculateModel(fanOnParams);
-						ReportModel();
-						break;
-					}
-					else
-					{
-						CalculateModel(fanOffParams);
-						if (tuningFans.IsEmpty())
+						if (fanOn)
 						{
+							reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
+							CalculateModel(fanOnParams);
 							ReportModel();
 							break;
 						}
 						else
 						{
-							reprap.GetFansManager().SetFansValue(tuningFans, 1.0);
-							fanOn = true;
-							dHigh.Clear();
-							dLow.Clear();
-							tOn.Clear();
-							tOff.Clear();
-							coolingTimeConstant.Clear();
+							CalculateModel(fanOffParams);
+							if (tuningFans.IsEmpty())
+							{
+								ReportModel();
+								break;
+							}
+							else
+							{
+								reprap.GetFansManager().SetFansValue(tuningFans, 1.0);
+								fanOn = true;
+								ClearCounters();
+							}
 						}
 					}
+				}
+				else if (coolingRate.GetNumSamples() == TuningHeaterSettleCycles)
+				{
+					collecting = true;
+					ClearCounters();
 				}
 			}
 			lastOnTime = peakTime = now;
 			peakTemp = temperature;
 			lastPwm = tuningPwm;						// turn on heater at specified power
 			mode = HeaterMode::tuning3;
+		}
+		else if (afterPeakTime == peakTime && peakTemp - temperature >= TuningPeakTempDrop)
+		{
+			afterPeakTime = now;
+			afterPeakTemp = temperature;
 		}
 		return;
 
@@ -767,19 +782,23 @@ void LocalHeater::DoTuningStep() noexcept
 #endif
 		if (temperature <= peakTemp)
 		{
-			peakTemp = temperature;
-			peakTime = millis();
+			peakTemp = afterPeakTemp = temperature;
+			peakTime = afterPeakTime = now;
 		}
-
-		if (temperature >= tuningTargetTemp)
+		else if (temperature >= tuningTargetTemp)
 		{
-			const uint32_t now = millis();
 			dLow.Add((float)(peakTime - lastOnTime));
 			tOn.Add((float)(now - lastOnTime));
+			heatingRate.Add((temperature - afterPeakTemp) * SecondsToMillis/(now - afterPeakTime));
 			lastOffTime = peakTime = now;
 			peakTemp = temperature;
 			lastPwm = 0.0;								// turn heater off
 			mode = HeaterMode::tuning2;
+		}
+		else if (afterPeakTime == peakTime && temperature - peakTemp >= TuningPeakTempDrop)
+		{
+			afterPeakTime = now;
+			afterPeakTemp = temperature;
 		}
 		return;
 
@@ -799,29 +818,34 @@ void LocalHeater::CalculateModel(HeaterParameters& params) noexcept
 	{
 #define PLUS_OR_MINUS "\xC2\xB1"
 		reprap.GetPlatform().MessageF(GenericMessage,
-										"tOn %ld" PLUS_OR_MINUS "%ld, tOff %ld" PLUS_OR_MINUS "%ld, dHigh %ld" PLUS_OR_MINUS "%ld, dLow %ld" PLUS_OR_MINUS "%ld, C %ld" PLUS_OR_MINUS "%ld, V %.1f" PLUS_OR_MINUS "%.1f\n",
+										"tOn %ld" PLUS_OR_MINUS "%ld, tOff %ld" PLUS_OR_MINUS "%ld,"
+										" dHigh %ld" PLUS_OR_MINUS "%ld, dLow %ld" PLUS_OR_MINUS "%ld,"
+										" R %.2f" PLUS_OR_MINUS "%.2f, C %.2f" PLUS_OR_MINUS "%.2f,"
+										" V %.1f" PLUS_OR_MINUS "%.1f\n",
 										lrintf(tOn.GetMean()), lrintf(tOn.GetDeviation()),
 										lrintf(tOff.GetMean()), lrintf(tOff.GetDeviation()),
 										lrintf(dHigh.GetMean()), lrintf(dHigh.GetDeviation()),
 										lrintf(dLow.GetMean()), lrintf(dLow.GetDeviation()),
-										lrintf(coolingTimeConstant.GetMean()), lrintf(coolingTimeConstant.GetDeviation()),
+										(double)heatingRate.GetMean(), (double)heatingRate.GetDeviation(),
+										(double)coolingRate.GetMean(), (double)coolingRate.GetDeviation(),
 										(double)tuningVoltage.GetMean(), (double)tuningVoltage.GetDeviation()
 									 );
 	}
 
 	const float cycleTime = tOn.GetMean() + tOff.GetMean();		// in milliseconds
-	params.deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * 0.001)/cycleTime;		// in seconds
-	params.coolingTimeConstant = coolingTimeConstant.GetMean() * 0.001;			// in seconds
-	const float gain = ((tuningTargetTemp - tuningStartTemp.GetMean() - TuningHysteresis) * cycleTime) / (tOn.GetMean() * tuningPwm);
-	params.heatingRate = gain/params.coolingTimeConstant;
-	reprap.GetPlatform().MessageF(LoggedGenericMessage, "R%.1f A%.1f C%.1f D%.2f\n",
-									(double)params.heatingRate, (double)params.GetGain(), (double)params.coolingTimeConstant, (double)params.deadTime);
+	const float averageTemperatureRise = tuningTargetTemp - 0.5 * TuningHysteresis - tuningStartTemp.GetMean();
+	params.deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * MillisToSeconds)/cycleTime;	// in seconds
+	params.coolingTimeConstant = averageTemperatureRise/coolingRate.GetMean();			// in seconds
+	params.heatingRate = (heatingRate.GetMean() + coolingRate.GetMean());
+	params.gain = averageTemperatureRise * params.heatingRate/(coolingRate.GetMean() * tuningPwm);
+	reprap.GetPlatform().MessageF(LoggedGenericMessage, "R%.1f A%.1f C%.1f D%.2f, cycles %u\n",
+									(double)params.heatingRate, (double)params.gain, (double)params.coolingTimeConstant, (double)params.deadTime, tOn.GetNumSamples());
 }
 
 void LocalHeater::ReportModel() noexcept
 {
 	String<1> dummy;
-	const GCodeResult rslt = SetModel(fanOffParams.GetGain(), fanOffParams.coolingTimeConstant, fanOffParams.deadTime, tuningPwm,
+	const GCodeResult rslt = SetModel(fanOffParams.gain, fanOffParams.coolingTimeConstant, fanOffParams.deadTime, tuningPwm,
 #if HAS_VOLTAGE_MONITOR
 										tuningVoltage.GetMean(),
 #else
@@ -849,7 +873,7 @@ void LocalHeater::ReportModel() noexcept
 	else
 	{
 		reprap.GetPlatform().MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (A=%.1f, C=%.1f, D=%.1f)\n",
-			GetHeaterNumber(), (double)fanOffParams.GetGain(), (double)fanOffParams.coolingTimeConstant, (double)fanOffParams.deadTime);
+			GetHeaterNumber(), (double)fanOffParams.gain, (double)fanOffParams.coolingTimeConstant, (double)fanOffParams.deadTime);
 	}
 }
 
