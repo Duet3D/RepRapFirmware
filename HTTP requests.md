@@ -265,6 +265,26 @@ where `dir` and `first` equal the query parameters. `err` can be one of:
 
 The `next` field may be omitted if the query was not successful and it is `0` if the query has finished. If there are more items to query, this value can be used for the `first` parameter of a successive `rr_files` request.
 
+## GET /rr_model
+
+Retrieve object model information like [M409](https://duet3d.dozuki.com/Wiki/Gcode#Section_M409_Query_object_model).
+
+Supported parameters:
+- `key`: Key to query
+- `flags`: Query flags
+
+Returns
+
+```
+{
+    "key": <key>,
+    "flags": <flags>,
+    "result": <object model JSON>
+}
+```
+
+or HTTP code 503 if the response could not be written due to a lack of memory.
+
 ## GET /rr_move
 
 Move a file or directory.
