@@ -467,7 +467,7 @@ void LinuxInterface::Init() noexcept
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 
-						// If there is a macro file waiting, the first instruction must be echo. Don't block any longer
+						// If there is a macro file waiting, the first instruction must be conditional. Don't block any longer...
 						if (gb->IsWaitingForMacro())
 						{
 							gb->ResolveMacroRequest(false, false);
