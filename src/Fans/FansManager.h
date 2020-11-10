@@ -35,6 +35,7 @@ public:
 	float GetFanValue(size_t fanNum) const noexcept;
 	GCodeResult SetFanValue(size_t fanNum, float speed, const StringRef& reply) noexcept;
 	void SetFanValue(size_t fanNum, float speed) noexcept;
+	void SetFansValue(FansBitmap whichFans, float speed) noexcept;
 	bool IsFanControllable(size_t fanNum) const noexcept;
 	const char *GetFanName(size_t fanNum) const noexcept;
 	int32_t GetFanRPM(size_t fanNum) const noexcept;

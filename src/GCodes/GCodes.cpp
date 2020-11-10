@@ -3407,8 +3407,7 @@ void GCodes::SetMappedFanSpeed(float f) noexcept
 	}
 	else
 	{
-		const FansBitmap fanMap = ct->GetFanMapping();
-		fanMap.Iterate([f](unsigned int i, unsigned int) noexcept { reprap.GetFansManager().SetFanValue(i, f); });
+		reprap.GetFansManager().SetFansValue(ct->GetFanMapping(), f);
 	}
 }
 

@@ -23,9 +23,18 @@ class HeaterMonitor;
 
 class LocalHeater : public Heater
 {
-	static const size_t NumPreviousTemperatures = 4; // How many samples we average the temperature derivative over
+	static const size_t NumPreviousTemperatures = 4;		// How many samples we average the temperature derivative over
 
 public:
+	struct HeaterParameters
+	{
+		float heatingRate;
+		float coolingTimeConstant;
+		float deadTime;
+
+		float GetGain() const noexcept { return heatingRate * coolingTimeConstant; }
+	};
+
 	LocalHeater(unsigned int heaterNum) noexcept;
 	~LocalHeater() noexcept;
 
@@ -59,7 +68,8 @@ private:
 	void SetHeater(float power) const noexcept;				// Power is a fraction in [0,1]
 	TemperatureError ReadTemperature() noexcept;			// Read and store the temperature of this heater
 	void DoTuningStep() noexcept;							// Called on each temperature sample when auto tuning
-	void CalculateModel() noexcept;							// Calculate G, td and tc from the accumulated readings
+	void CalculateModel(HeaterParameters& params) noexcept;	// Calculate G, td and tc from the accumulated readings
+	void ReportModel() noexcept;
 	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
 	void RaiseHeaterFault(const char *format, ...) noexcept;
 
@@ -84,27 +94,7 @@ private:
 
 	static constexpr unsigned int MinTuningHeaterCycles = 5;
 	static constexpr unsigned int MaxTuningHeaterCycles = 20;
-	static constexpr float TuningHysteresis = 2.0;
-
-	// Variables used during heater tuning
-	static float tuningPwm;									// the PWM to use, 0..1
-	static float tuningTargetTemp;							// the target temperature
-
-	static DeviationAccumulator tuningStartTemp;			// the temperature when we turned on the heater
-	static uint32_t tuningBeginTime;						// when we started the tuning process
-	static DeviationAccumulator dHigh;
-	static DeviationAccumulator dLow;
-	static DeviationAccumulator tOn;
-	static DeviationAccumulator tOff;
-	static DeviationAccumulator coolingTimeConstant;
-	static uint32_t lastOffTime;
-	static uint32_t lastOnTime;
-	static float peakTemp;									// max or min temperature
-	static uint32_t peakTime;								// the time at which we recorded peakTemp
-
-#if HAS_VOLTAGE_MONITOR
-	static DeviationAccumulator tuningVoltage;				// sum of the voltage readings we take during the heating phase
-#endif
+	static constexpr float TuningHysteresis = 3.0;
 };
 
 #endif /* SRC_LOCALHEATER_H_ */

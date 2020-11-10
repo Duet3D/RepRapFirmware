@@ -188,6 +188,11 @@ void FansManager::SetFanValue(size_t fanNum, float speed) noexcept
 	(void)SetFanValue(fanNum, speed, dummy.GetRef());
 }
 
+void FansManager::SetFansValue(FansBitmap whichFans, float speed) noexcept
+{
+	whichFans.Iterate([speed, this](unsigned int i, unsigned int) noexcept { SetFanValue(i, speed); });
+}
+
 // Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
 // controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
 bool FansManager::IsFanControllable(size_t fanNum) const noexcept
