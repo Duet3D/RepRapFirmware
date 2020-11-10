@@ -465,10 +465,17 @@ void LinuxInterface::Init() noexcept
 					GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expressionRef);
 					if (channel.IsValid())
 					{
+						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+
+						// If there is a macro file waiting, the first instruction must be echo. Don't block any longer
+						if (gb->IsWaitingForMacro())
+						{
+							gb->ResolveMacroRequest(false, false);
+						}
+
 						try
 						{
 							// Evaluate the expression and send the result to DSF
-							const GCodeBuffer *gb = reprap.GetGCodes().GetInput(channel);
 							MutexLocker lock(gb->mutex, 10);
 							if (lock)
 							{
