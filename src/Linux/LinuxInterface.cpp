@@ -284,7 +284,7 @@ void LinuxInterface::Init() noexcept
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-						if (gb->IsWaitingForMacro())
+						if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
 						{
 							gb->ResolveMacroRequest(error, true);
 							gb->Invalidate();
