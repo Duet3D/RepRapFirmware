@@ -119,8 +119,8 @@ void GCodeMachineState::CloseFile() noexcept
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface() && fileId != NoFileId)
 	{
-		const uint8_t lastFileId = fileId;
-		for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->previous)
+		const FileId lastFileId = fileId;
+		for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->GetPrevious())
 		{
 			if (ms->fileId == lastFileId)
 			{

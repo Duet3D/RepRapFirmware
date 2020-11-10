@@ -766,18 +766,23 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 
 void GCodeBuffer::SetFileFinished() noexcept
 {
-	FileId lastFileId = machineState->fileId;
-	if (lastFileId != NoFileId)
+	FileId macroFileId = NoFileId, printFileId = OriginalMachineState().fileId;
+	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
-		for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+		if (macroFileId == NoFileId && ms->fileId != NoFileId && ms->fileId != printFileId && !ms->fileFinished)
 		{
-			if (ms->fileId == lastFileId)
-			{
-				ms->fileFinished = true;
-			}
+			// Get the next macro file being executed
+			macroFileId = ms->fileId;
+		}
+
+		if (macroFileId != NoFileId && ms->fileId == macroFileId)
+		{
+			// Flag it (and following machine states) as finished
+			ms->fileFinished = true;
 		}
 	}
-	else
+
+	if (macroFileId == NoFileId)
 	{
 		reprap.GetPlatform().Message(WarningMessage, "Cannot set macro file finished because there is no file ID\n");
 	}
@@ -792,6 +797,7 @@ void GCodeBuffer::SetPrintFinished() noexcept
 		{
 			if (ms->fileId == printFileId)
 			{
+				// Mark machine states executing the print file as finished
 				ms->fileFinished = true;
 			}
 		}
@@ -801,6 +807,7 @@ void GCodeBuffer::SetPrintFinished() noexcept
 		reprap.GetPlatform().Message(WarningMessage, "Cannot set print file finished because there is no file ID\n");
 	}
 }
+
 // This is only called when using the Linux interface and returns if the macro file could be opened
 bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 {
