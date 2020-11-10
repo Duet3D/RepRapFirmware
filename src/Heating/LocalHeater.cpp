@@ -576,10 +576,13 @@ void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 {
 	if (mode >= HeaterMode::tuning0)
 	{
-		reply.printf("Heater %u is being tuned, phase %u of %u",
-						GetHeaterNumber(),
-						(unsigned int)mode - (unsigned int)HeaterMode::tuning0 + 1,
-						(unsigned int)HeaterMode::lastTuningMode - (unsigned int)HeaterMode::tuning0 + 1);
+		// Phases are: 1 = stabilising, 2 = heating, 3 = settling, 4 = cycling with fan off, 5 = cycling with fan on
+		const unsigned int numPhases = (tuningFans.IsEmpty()) ? 5 : 4;
+		const unsigned int currentPhase = (mode < HeaterMode::tuning2) ? (unsigned int)mode - (unsigned int)HeaterMode::tuning0 + 1
+											: (!collecting) ? 3
+												: (fanOn) ? 5
+													: 4;
+		reply.printf("Heater %u is being tuned, phase %u of %u", GetHeaterNumber(), currentPhase, numPhases);
 	}
 	else if (tuned)
 	{
