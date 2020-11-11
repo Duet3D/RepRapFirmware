@@ -179,17 +179,17 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 }
 
 // Set the process model returning true if successful
-GCodeResult Heater::SetModel(float gain, float tcOff, float tcOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(float heatingRate, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	GCodeResult rslt;
-	if (model.SetParameters(gain, tcOff, tcOn, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
+	if (model.SetParameters(heatingRate, coolingRateFanOff, coolingRateFanOn, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
 	{
 		if (model.IsEnabled())
 		{
 			rslt = UpdateModel(reply);
 			if (rslt == GCodeResult::ok)
 			{
-				const float predictedMaxTemp = gain + NormalAmbientTemperature;
+				const float predictedMaxTemp = heatingRate/coolingRateFanOff + NormalAmbientTemperature;
 				const float noWarnTemp = (GetHighestTemperatureLimit() - NormalAmbientTemperature) * 1.5 + 50.0;		// allow 50% extra power plus enough for an extra 50C
 				if (predictedMaxTemp > noWarnTemp)
 				{

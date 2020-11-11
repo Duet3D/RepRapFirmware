@@ -610,6 +610,15 @@ void Tool::IterateHeaters(std::function<void(int)> f) const noexcept
 	}
 }
 
+void Tool::SetFansPwm(float f) const noexcept
+{
+	const float pwmChange = reprap.GetFansManager().SetFansValue(fanMapping, f);
+	if (pwmChange != 0.0)
+	{
+		IterateHeaters([pwmChange](unsigned int heater) { reprap.GetHeat().PrintCoolingFanPwmChanged(heater, pwmChange); });
+	}
+}
+
 // Return true if this tool uses the specified heater
 bool Tool::UsesHeater(int8_t heater) const noexcept
 {

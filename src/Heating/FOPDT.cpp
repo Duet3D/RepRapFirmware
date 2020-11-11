@@ -38,7 +38,7 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	{ "pid",				OBJECT_MODEL_FUNC(self, 1),															ObjectModelEntryFlags::none },
 	{ "standardVoltage",	OBJECT_MODEL_FUNC(self->standardVoltage, 1),										ObjectModelEntryFlags::none },
 	{ "timeConstant",		OBJECT_MODEL_FUNC(self->GetTimeConstantFanOff(), 1),								ObjectModelEntryFlags::none },
-	{ "timeConstantFanOn",	OBJECT_MODEL_FUNC(self->GetTimeConstantFanOn(), 1),									ObjectModelEntryFlags::none },
+	{ "timeConstantFansOn",	OBJECT_MODEL_FUNC(self->GetTimeConstantFanOn(), 1),									ObjectModelEntryFlags::none },
 
 	// 1. PID members
 	{ "d",					OBJECT_MODEL_FUNC(self->loadChangeParams.tD * self->loadChangeParams.kP, 1),		ObjectModelEntryFlags::none },
@@ -58,7 +58,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt() noexcept
 	: heatingRate(DefaultHotEndHeaterHeatingRate),
-	  coolingRateFanOff(DefaultHotEndHeaterCoolingRate), coolingRateFanOn(DefaultHotEndHeaterCoolingRate),
+	  coolingRateFanOff(DefaultHotEndHeaterCoolingRate), coolingRateChangeFanOn(0.0),
 	  deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
 	  enabled(false), usePid(true), inverted(false), pidParametersOverridden(false)
 {
@@ -80,7 +80,7 @@ bool FopDt::SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pdt,
 	{
 		heatingRate = phr;
 		coolingRateFanOff = pcrFanOff;
-		coolingRateFanOn = pcrFanOn;
+		coolingRateChangeFanOn = pcrFanOn - pcrFanOff;
 		deadTime = pdt;
 		maxPwm = pMaxPwm;
 		standardVoltage = pVoltage;
@@ -121,7 +121,7 @@ bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept
 {
 	String<StringLength256> scratchString;
 	scratchString.printf("M307 H%u R%.3f C%.3f:%.3f D%.2f S%.2f V%.1f B%d\n",
-							heater, (double)heatingRate, (double)coolingRateFanOff, (double)coolingRateFanOn, (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
+							heater, (double)heatingRate, (double)GetTimeConstantFanOff(), (double)GetTimeConstantFanOn(), (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
 	bool ok = f->Write(scratchString.c_str());
 	if (ok && pidParametersOverridden)
 	{
@@ -166,7 +166,7 @@ bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept
 
 void FopDt::CalcPidConstants() noexcept
 {
-	const float averageCoolingRate = (coolingRateFanOff + coolingRateFanOn) * 0.5;
+	const float averageCoolingRate = coolingRateFanOff + 0.5 * coolingRateChangeFanOn;
 	loadChangeParams.kP = 0.7/(heatingRate * deadTime);
 	loadChangeParams.recipTi = powf(averageCoolingRate, 0.25)/(1.14 * powf(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
 	loadChangeParams.tD = deadTime * 0.7;
@@ -180,11 +180,14 @@ void FopDt::CalcPidConstants() noexcept
 
 #if SUPPORT_CAN_EXPANSION
 
-void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) const noexcept
+void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModelNew& msg) const noexcept
 {
 	msg.heater = heater;
-	msg.gain = gain;
-	msg.timeConstant = timeConstant;
+	msg.heatingRate = heatingRate;
+	msg.coolingRate = coolingRateFanOff;
+	msg.coolingRateChangeFanOn = coolingRateChangeFanOn;
+	msg.coolingRateChangeExtruding = 0.0;
+	msg.zero2 = 0.0;
 	msg.deadTime = deadTime;
 	msg.maxPwm = maxPwm;
 	msg.standardVoltage = standardVoltage;

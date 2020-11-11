@@ -102,6 +102,8 @@ public:
 	void IterateExtruders(std::function<void(unsigned int)> f) const noexcept;
 	void IterateHeaters(std::function<void(int)> f) const noexcept;
 
+	void SetFansPwm(float f) const noexcept;
+
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(activeTemps)

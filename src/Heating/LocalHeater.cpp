@@ -596,6 +596,16 @@ void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 	}
 }
 
+// Call this when the PWM of a cooling fan has changed. If there are multiple fans, caller must divide pwmChange by the number of fans.
+void LocalHeater::PrintCoolingFanPwmChanged(float pwmChange) noexcept
+{
+	if (mode == HeaterMode::stable)
+	{
+		const float coolingRateIncrease = GetModel().GetCoolingRateChangeFanOn() * pwmChange;
+		iAccumulator += (coolingRateIncrease * (GetTargetTemperature() - NormalAmbientTemperature))/GetModel().GetHeatingRate();
+	}
+}
+
 /* Notes on the auto tune algorithm
  *
  * Most 3D printer firmwares use the �str�m-H�gglund relay tuning method (sometimes called Ziegler-Nichols + relay).

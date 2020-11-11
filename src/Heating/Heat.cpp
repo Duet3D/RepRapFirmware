@@ -727,6 +727,15 @@ void Heat::Standby(int heater, const Tool *tool) noexcept
 	}
 }
 
+void Heat::PrintCoolingFanPwmChanged(unsigned int heater, float pwmChange) const noexcept
+{
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
+	{
+		h->PrintCoolingFanPwmChanged(pwmChange);
+	}
+}
+
 GCodeResult Heat::ResetFault(int heater, const StringRef& reply) noexcept
 {
 	// This gets called for all heater numbers when clearing all temperature faults, so don't report an error if the heater was not found

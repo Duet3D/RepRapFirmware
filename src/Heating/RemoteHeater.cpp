@@ -41,13 +41,13 @@ void RemoteHeater::ResetHeater() noexcept
 	//TODO
 }
 
-GCodeResult RemoteHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sensorNumber, const StringRef& reply)
+GCodeResult RemoteHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
 {
-	SetSensorNumber(sensorNumber);
+	SetSensorNumber(sn);
 	CanMessageGenericConstructor cons(M950HeaterParams);
 	cons.AddUParam('H', GetHeaterNumber());
 	cons.AddUParam('Q', freq);
-	cons.AddUParam('T', sensorNumber);
+	cons.AddUParam('T', sn);
 	cons.AddStringParam('C', portName);
 	return cons.SendAndGetResponse(CanMessageType::m950Heater, boardAddress, reply);
 }
@@ -139,6 +139,11 @@ void RemoteHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 	reply.copy("remote heater auto tune not implemented");
 }
 
+void RemoteHeater::PrintCoolingFanPwmChanged(float pwmChange) noexcept
+{
+	//TODO send a CAN message to remote
+}
+
 void RemoteHeater::Suspend(bool sus) noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
@@ -189,7 +194,7 @@ GCodeResult RemoteHeater::UpdateModel(const StringRef& reply) noexcept
 	if (buf != nullptr)
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-		CanMessageUpdateHeaterModel * const msg = buf->SetupRequestMessage<CanMessageUpdateHeaterModel>(rid, CanInterface::GetCanAddress(), boardAddress);
+		CanMessageUpdateHeaterModelNew * const msg = buf->SetupRequestMessage<CanMessageUpdateHeaterModelNew>(rid, CanInterface::GetCanAddress(), boardAddress);
 		GetModel().SetupCanMessage(GetHeaterNumber(), *msg);
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}

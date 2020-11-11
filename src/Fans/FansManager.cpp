@@ -182,15 +182,30 @@ GCodeResult FansManager::SetFanValue(size_t fanNum, float speed, const StringRef
 	return GCodeResult::error;
 }
 
-void FansManager::SetFanValue(size_t fanNum, float speed) noexcept
+// Update the PWM of the specified fan, returning the PWM change
+float FansManager::SetFanValue(size_t fanNum, float speed) noexcept
 {
-	String<1> dummy;
-	(void)SetFanValue(fanNum, speed, dummy.GetRef());
+	auto fan = FindFan(fanNum);
+	if (fan.IsNotNull())
+	{
+		const float oldPwm = fan->GetPwm();
+		String<1> dummy;
+		(void)fan->SetPwm(speed, dummy.GetRef());
+		return fan->GetPwm() - oldPwm;
+	}
+	return 0.0;
 }
 
-void FansManager::SetFansValue(FansBitmap whichFans, float speed) noexcept
+// Update the PWM of the specified fans, returning the total PWM change divided by the number of fans
+float FansManager::SetFansValue(FansBitmap whichFans, float speed) noexcept
 {
-	whichFans.Iterate([speed, this](unsigned int i, unsigned int) noexcept { SetFanValue(i, speed); });
+	float pwmChange = 0;
+	if (!whichFans.IsEmpty())
+	{
+		whichFans.Iterate([speed, this, &pwmChange](unsigned int i, unsigned int) noexcept { pwmChange += SetFanValue(i, speed); });
+		pwmChange /= whichFans.CountSetBits();
+	}
+	return pwmChange;
 }
 
 // Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan

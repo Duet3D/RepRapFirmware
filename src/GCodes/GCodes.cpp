@@ -496,6 +496,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 {
 	// Set up a buffer for the reply
 	String<GCodeReplyLength> reply;
+	bool result;
 
 	MutexLocker gbLock(gb.mutex);
 	if (gb.GetState() == GCodeState::normal)
@@ -503,7 +504,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 		if (gb.MachineState().messageAcknowledged)
 		{
 			const bool wasCancelled = gb.MachineState().messageCancelled;
-			gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+			gb.PopState(false);											// this could fail if the current macro has already been aborted
 
 			if (wasCancelled)
 			{
@@ -516,20 +517,25 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 					FileMacroCyclesReturn(gb);
 				}
 			}
-			return wasCancelled;
+			result = wasCancelled;
 		}
-
-		return StartNextGCode(gb, reply.GetRef());
+		else
+		{
+			result = StartNextGCode(gb, reply.GetRef());
+		}
 	}
 	else
 	{
 		RunStateMachine(gb, reply.GetRef());                            // execute the state machine
+		result = true;													// assume we did something useful (not necessarily true, e.g. could be waiting for movement to stop)
 	}
+
 	if (gb.IsExecuting())
 	{
 		CheckReportDue(gb, reply.GetRef());
 	}
-	return true;
+
+	return result;
 }
 
 // Start a new gcode, or continue to execute one that has already been started. Return true if we found something significant to do.
@@ -3409,7 +3415,7 @@ void GCodes::SetMappedFanSpeed(float f) noexcept
 	}
 	else
 	{
-		reprap.GetFansManager().SetFansValue(ct->GetFanMapping(), f);
+		ct->SetFansPwm(f);
 	}
 }
 

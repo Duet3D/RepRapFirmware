@@ -34,7 +34,7 @@ class FileStore;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-struct CanMessageUpdateHeaterModel;
+struct CanMessageUpdateHeaterModelNew;
 #endif
 
 class FopDt INHERIT_OBJECT_MODEL
@@ -47,7 +47,8 @@ public:
 	// Stored parameters
 	float GetHeatingRate() const noexcept { return heatingRate; }
 	float GetCoolingRateFanOff() const noexcept { return coolingRateFanOff; }
-	float GetCoolingRateFanOn() const noexcept { return coolingRateFanOn; }
+	float GetCoolingRateFanOn() const noexcept { return coolingRateFanOff + coolingRateChangeFanOn; }
+	float GetCoolingRateChangeFanOn() const noexcept { return coolingRateChangeFanOn; }
 	float GetDeadTime() const noexcept { return deadTime; }
 	float GetMaxPwm() const noexcept { return maxPwm; }
 	float GetVoltage() const noexcept { return standardVoltage; }
@@ -58,7 +59,7 @@ public:
 	// Derived parameters
 	float GetGainFanOff() const noexcept { return heatingRate/coolingRateFanOff; }
 	float GetTimeConstantFanOff() const noexcept { return 1.0/coolingRateFanOff; }
-	float GetTimeConstantFanOn() const noexcept { return 1.0/coolingRateFanOn; }
+	float GetTimeConstantFanOn() const noexcept { return 1.0/GetCoolingRateFanOn(); }
 	bool ArePidParametersOverridden() const noexcept { return pidParametersOverridden; }
 	M301PidParameters GetM301PidParameters(bool forLoadChange) const noexcept;
 	void SetM301PidParameters(const M301PidParameters& params) noexcept;
@@ -73,7 +74,7 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) const noexcept;
+	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModelNew& msg) const noexcept;
 #endif
 
 protected:
@@ -84,7 +85,7 @@ private:
 
 	float heatingRate;
 	float coolingRateFanOff;
-	float coolingRateFanOn;
+	float coolingRateChangeFanOn;
 	float deadTime;
 	float maxPwm;
 	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown

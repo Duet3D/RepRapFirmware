@@ -50,6 +50,7 @@ public:
 	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;	// Start an auto tune cycle for this heater
 	void GetAutoTuneStatus(const StringRef& reply) const noexcept override;	// Get the auto tune status or last result
 	void Suspend(bool sus) noexcept override;				// Suspend the heater to conserve power or while doing Z probing
+	void PrintCoolingFanPwmChanged(float pwmChange) noexcept override;
 
 #if SUPPORT_CAN_EXPANSION
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override { }
