@@ -518,8 +518,12 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 			}
 			return wasCancelled;
 		}
-
-		return StartNextGCode(gb, reply.GetRef());
+		bool result = StartNextGCode(gb, reply.GetRef());
+		if (gb.IsExecuting())
+		{
+			CheckReportDue(gb, reply.GetRef());
+		}
+		return result;
 	}
 	else
 	{
