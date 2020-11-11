@@ -70,7 +70,7 @@ public:
 	float GetLowestTemperatureLimit() const noexcept;					// Get the lowest temperature limit
 
 	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
-	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetModelDefaults() noexcept;
 
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
@@ -117,7 +117,7 @@ protected:
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
-	GCodeResult SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;	// Set the process model
+	GCodeResult SetModel(float gain, float tcOff, float tcOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;	// Set the process model
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];	// embedding them in the Heater uses less memory than dynamic allocation
 

@@ -405,7 +405,7 @@ private:
 	bool IsMappedFan(unsigned int fanNumber) noexcept;							// Return true if this fan number is currently being used as a print cooling fan
 	void SaveFanSpeeds() noexcept;												// Save the speeds of all fans
 
-	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
+	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply);			// Load the height map from file
 	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;	// Save the height map to the specified file

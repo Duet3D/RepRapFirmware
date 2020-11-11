@@ -234,7 +234,7 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
 #endif
 
 // Define the probing grid, called when we see an M557 command
-GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
+GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	if (!LockMovement(gb))							// to ensure that probing is not already in progress
 	{

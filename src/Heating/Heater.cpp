@@ -98,19 +98,43 @@ void Heater::SetDefaultMonitors() noexcept
 	}
 }
 
-GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
-	float gain = model.GetGain(),
-		tc = model.GetTimeConstant(),
-		td = model.GetDeadTime(),
+	float heatingRate = model.GetHeatingRate();
+	float td = model.GetDeadTime(),
 		maxPwm = model.GetMaxPwm(),
 		voltage = model.GetVoltage();
+	float coolingRates[2] = { model.GetCoolingRateFanOff(), model.GetCoolingRateFanOn() };
 	int32_t dontUsePid = model.UsePid() ? 0 : 1;
 	int32_t inversionParameter = 0;
 
-	gb.TryGetFValue('A', gain, seen);
-	gb.TryGetFValue('C', tc, seen);
+	// Get the cooling time constant(s) first
+	float timeConstants[2];
+	size_t numValues = 2;
+	if (gb.TryGetFloatArray('C', numValues, timeConstants, reply, seen, true))
+	{
+		return GCodeResult::error;
+	}
+	else if (seen)
+	{
+		coolingRates[0] = 1.0/timeConstants[0];
+		coolingRates[1] = 1.0/timeConstants[1];
+	}
+
+	if (gb.Seen('R'))
+	{
+		// New style heater model. R = heating rate, C[2] = cooling rates
+		seen = true;
+		heatingRate = gb.GetFValue();
+	}
+	else if (gb.Seen('A'))
+	{
+		// Old style heating model. A = gain, C = cooling time constant
+		seen = true;
+		const float gain = gb.GetFValue();
+		heatingRate = gain * coolingRates[0];
+	}
 	gb.TryGetFValue('D', td, seen);
 	gb.TryGetIValue('B', dontUsePid, seen);
 	gb.TryGetFValue('S', maxPwm, seen);
@@ -120,7 +144,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 	if (seen)
 	{
 		const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
-		const GCodeResult rslt = SetModel(gain, tc, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
+		const GCodeResult rslt = SetModel(heatingRate, coolingRates[0], coolingRates[1], td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
 		if (rslt != GCodeResult::ok)
 		{
 			return rslt;
@@ -135,8 +159,9 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 		const char* const mode = (!model.UsePid()) ? "bang-bang"
 									: (model.ArePidParametersOverridden()) ? "custom PID"
 										: "PID";
-		reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s", heater,
-					 (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
+		reply.printf("Heater %u model: heating rate %.3f, cooling time constant %.1f (fan off) %.1f (fan on), dead time %.2f, max PWM %.2f, calibration voltage %.1f, mode %s", heater,
+					 (double)model.GetHeatingRate(), (double)model.GetTimeConstantFanOff(), (double)model.GetTimeConstantFanOn(),
+					 (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
 		if (model.IsInverted())
 		{
 			reply.cat(", inverted temperature control");
@@ -154,10 +179,10 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 }
 
 // Set the process model returning true if successful
-GCodeResult Heater::SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(float gain, float tcOff, float tcOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	GCodeResult rslt;
-	if (model.SetParameters(gain, tc, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
+	if (model.SetParameters(gain, tcOff, tcOn, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
 	{
 		if (model.IsEnabled())
 		{
@@ -345,11 +370,12 @@ void Heater::SetModelDefaults() noexcept
 {
 	if (reprap.GetHeat().IsBedOrChamberHeater(heaterNumber))
 	{
-		model.SetParameters(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, DefaultBedTemperatureLimit, 0.0, false, false);
+		model.SetParameters(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, DefaultBedTemperatureLimit, 0.0, false, false);
 	}
 	else
 	{
-		model.SetParameters(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, 1.0, DefaultHotEndTemperatureLimit, 0.0, true, false);
+		model.SetParameters(DefaultHotEndHeaterHeatingRate, DefaultHotEndHeaterCoolingRate, DefaultHotEndHeaterCoolingRate, DefaultHotEndHeaterDeadTime,
+							1.0, DefaultHotEndTemperatureLimit, 0.0, true, false);
 	}
 
 	String<1> dummy;
