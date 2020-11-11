@@ -31,12 +31,14 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	// 0. FopDt members
 	{ "deadTime",			OBJECT_MODEL_FUNC(self->deadTime, 1),												ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->enabled),													ObjectModelEntryFlags::none },
-	{ "gain",				OBJECT_MODEL_FUNC(self->gain, 1),													ObjectModelEntryFlags::none },
+	{ "gain",				OBJECT_MODEL_FUNC(self->GetGainFanOff(), 1),										ObjectModelEntryFlags::none },	// legacy, to be removed
+	{ "heatingRate",		OBJECT_MODEL_FUNC(self->heatingRate, 3),											ObjectModelEntryFlags::none },
 	{ "inverted",			OBJECT_MODEL_FUNC(self->inverted),													ObjectModelEntryFlags::none },
 	{ "maxPwm",				OBJECT_MODEL_FUNC(self->maxPwm, 2),													ObjectModelEntryFlags::none },
 	{ "pid",				OBJECT_MODEL_FUNC(self, 1),															ObjectModelEntryFlags::none },
 	{ "standardVoltage",	OBJECT_MODEL_FUNC(self->standardVoltage, 1),										ObjectModelEntryFlags::none },
-	{ "timeConstant",		OBJECT_MODEL_FUNC(self->timeConstant, 1),											ObjectModelEntryFlags::none },
+	{ "timeConstant",		OBJECT_MODEL_FUNC(self->GetTimeConstantFanOff(), 1),								ObjectModelEntryFlags::none },
+	{ "timeConstantFanOn",	OBJECT_MODEL_FUNC(self->GetTimeConstantFanOn(), 1),									ObjectModelEntryFlags::none },
 
 	// 1. PID members
 	{ "d",					OBJECT_MODEL_FUNC(self->loadChangeParams.tD * self->loadChangeParams.kP, 1),		ObjectModelEntryFlags::none },
@@ -46,7 +48,7 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	{ "used",				OBJECT_MODEL_FUNC(self->usePid),													ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 8, 5 };
+constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
 
@@ -55,27 +57,30 @@ DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt() noexcept
-	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
+	: heatingRate(DefaultHotEndHeaterHeatingRate),
+	  coolingRateFanOff(DefaultHotEndHeaterCoolingRate), coolingRateFanOn(DefaultHotEndHeaterCoolingRate),
+	  deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
 	  enabled(false), usePid(true), inverted(false), pidParametersOverridden(false)
 {
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept
+bool FopDt::SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept
 {
-	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
-	{
-		// Setting all parameters to -1 disables the heater control completely so we can use the pin for other purposes
-		enabled = false;
-		return true;
-	}
-
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
-	const float maxGain = max<float>(1500.0, temperatureLimit + 500.0);
-	if (pg > 10.0 && pg <= maxGain && pdt > 0.099 && ptc >= 2 * pdt && pMaxPwm > 0.0099 && pMaxPwm <= 1.0)
+	const float maxTempIncrease = max<float>(1500.0, temperatureLimit + 500.0);
+	if (   phr > 0.1								// minimum 0.1C/sec at room temperature
+		&& phr/pcrFanOff <= maxTempIncrease			// max temperature increase within limits
+		&& pcrFanOn >= pcrFanOff
+		&& pdt > 0.099
+		&& 0.5 >= pdt * pcrFanOn					// dead time less then cooling time constant
+		&& pMaxPwm > 0.0099
+		&& pMaxPwm <= 1.0
+	   )
 	{
-		gain = pg;
-		timeConstant = ptc;
+		heatingRate = phr;
+		coolingRateFanOff = pcrFanOff;
+		coolingRateFanOn = pcrFanOn;
 		deadTime = pdt;
 		maxPwm = pMaxPwm;
 		standardVoltage = pVoltage;
@@ -115,8 +120,8 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept
 {
 	String<StringLength256> scratchString;
-	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f V%.1f B%d\n",
-							heater, (double)gain, (double)timeConstant, (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
+	scratchString.printf("M307 H%u R%.3f C%.3f:%.3f D%.2f S%.2f V%.1f B%d\n",
+							heater, (double)heatingRate, (double)coolingRateFanOff, (double)coolingRateFanOn, (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
 	bool ok = f->Write(scratchString.c_str());
 	if (ok && pidParametersOverridden)
 	{
@@ -161,13 +166,13 @@ bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept
 
 void FopDt::CalcPidConstants() noexcept
 {
-	const float timeFrac = deadTime/timeConstant;
-	loadChangeParams.kP = 0.7/(gain * timeFrac);
-	loadChangeParams.recipTi = (1.0/1.14)/(powf(timeConstant, 0.25) * powf(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+	const float averageCoolingRate = (coolingRateFanOff + coolingRateFanOn) * 0.5;
+	loadChangeParams.kP = 0.7/(heatingRate * deadTime);
+	loadChangeParams.recipTi = powf(averageCoolingRate, 0.25)/(1.14 * powf(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
 	loadChangeParams.tD = deadTime * 0.7;
 
-	setpointChangeParams.kP = 0.7/(gain * timeFrac);
-	setpointChangeParams.recipTi = 1.0/(powf(timeConstant, 0.5) * powf(deadTime, 0.5));			// Ti = timeConstant^0.5 * deadTime^0.5
+	setpointChangeParams.kP = 0.7/(heatingRate * deadTime);
+	setpointChangeParams.recipTi = powf(coolingRateFanOff, 0.5)/powf(deadTime, 0.5);			// Ti = timeConstant^0.5 * deadTime^0.5
 	setpointChangeParams.tD = deadTime * 0.7;
 
 	pidParametersOverridden = false;

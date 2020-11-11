@@ -15,8 +15,8 @@
 #include "Heater.h"
 #include "FOPDT.h"
 #include "TemperatureError.h"
-#include "Hardware/IoPorts.h"
-#include "GCodes/GCodeResult.h"
+#include <Hardware/IoPorts.h>
+#include <GCodes/GCodeResult.h>
 #include <Math/DeviationAccumulator.h>
 
 class HeaterMonitor;
@@ -29,9 +29,9 @@ public:
 	struct HeaterParameters
 	{
 		float heatingRate;
-		float coolingTimeConstant;
+		float coolingRate;
 		float deadTime;
-		float gain;
+		unsigned int numCycles;
 	};
 
 	LocalHeater(unsigned int heaterNum) noexcept;
@@ -68,7 +68,7 @@ private:
 	TemperatureError ReadTemperature() noexcept;			// Read and store the temperature of this heater
 	void DoTuningStep() noexcept;							// Called on each temperature sample when auto tuning
 	void CalculateModel(HeaterParameters& params) noexcept;	// Calculate G, td and tc from the accumulated readings
-	void ReportModel() noexcept;
+	void SetAndReportModel(bool usingFans) noexcept;
 	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
 	void RaiseHeaterFault(const char *format, ...) noexcept;
 
