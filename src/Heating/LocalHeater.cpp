@@ -238,7 +238,7 @@ void LocalHeater::Spin() noexcept
 		badTemperatureCount = 0;
 		if ((previousTemperaturesGood & (1 << (NumPreviousTemperatures - 1))) != 0)
 		{
-			const float tentativeDerivative = ((float)SecondsToMillis/HeatSampleIntervalMillis) * (temperature - previousTemperatures[previousTemperatureIndex])
+			const float tentativeDerivative = (SecondsToMillis/(float)HeatSampleIntervalMillis) * (temperature - previousTemperatures[previousTemperatureIndex])
 							/ (float)(NumPreviousTemperatures);
 			// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
 			if (fabsf(tentativeDerivative) <= 10.0)
@@ -366,11 +366,11 @@ void LocalHeater::Spin() noexcept
 						{
 							const float errorToUse = error;
 							iAccumulator = constrain<float>
-											(iAccumulator + (errorToUse * params.kP * params.recipTi * HeatSampleIntervalMillis * MillisToSeconds),
+											(iAccumulator + (errorToUse * params.kP * params.recipTi * (HeatSampleIntervalMillis * MillisToSeconds)),
 												0.0, GetModel().GetMaxPwm());
 							lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 						}
-	#if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR
 						// Scale the PID based on the current voltage vs. the calibration voltage
 						if (lastPwm < 1.0 && GetModel().GetVoltage() >= 10.0)				// if heater is not fully on and we know the voltage we tuned the heater at
 						{
@@ -383,7 +383,7 @@ void LocalHeater::Spin() noexcept
 								}
 							}
 						}
-	#endif
+#endif
 					}
 					else
 					{
@@ -602,7 +602,15 @@ void LocalHeater::PrintCoolingFanPwmChanged(float pwmChange) noexcept
 	if (mode == HeaterMode::stable)
 	{
 		const float coolingRateIncrease = GetModel().GetCoolingRateChangeFanOn() * pwmChange;
-		iAccumulator += (coolingRateIncrease * (GetTargetTemperature() - NormalAmbientTemperature))/GetModel().GetHeatingRate();
+		const float boost = (coolingRateIncrease * (GetTargetTemperature() - NormalAmbientTemperature) * FeedForwardMultiplier)/GetModel().GetHeatingRate();
+#if 0
+		if (reprap.Debug(moduleHeat))
+		{
+			debugPrintf("iacc=%.3f, applying boost %.3f\n", (double)iAccumulator, (double)boost);
+		}
+#endif
+		TaskCriticalSectionLocker lock;
+		iAccumulator += boost;
 	}
 }
 
@@ -626,17 +634,7 @@ void LocalHeater::PrintCoolingFanPwmChanged(float pwmChange) noexcept
  * Having a process model allows us to preset the I accumulator to a suitable value when switching between heater full on/off and using PID.
  * It will also make it easier to include feedforward terms in future.
  *
- * The auto tune procedure follows the following steps:
- * 1. Turn on any thermostatically-controlled fans that are triggered by the heater being tuned. This is done by code in the Platform module
- *    when it sees that a heater is being auto tuned.
- * 2. Accumulate temperature readings and wait for the starting temperature to stabilise. Abandon auto tuning if the starting temperature
- *    is not stable.
- * 3. Apply a known power to the heater and take temperature readings.
- * 4. Wait until the temperature vs time curve has flattened off, such that the temperature rise over the last 1/3 of the readings is less than the
- *    total temperature rise - which means we have been heating for about 3 time constants. Abandon auto tuning if we don't see a temperature rise
- *    after 30 seconds, or we exceed the target temperature plus 10C.
- * 5. Calculate the G, td and tc values that best fit the model to the temperature readings.
- * 6. Calculate the P, I and D parameters from G, td and tc using the modified Cohen-Coon tuning rules, or the Ho et al tuning rules.
+ * We can calculate the P, I and D parameters from G, td and tc using the modified Cohen-Coon tuning rules, or the Ho et al tuning rules.
  *    Cohen-Coon (modified to use half the original Kc value):
  *     Kc = (0.67/G) * (tc/td + 0.185)
  *     Ti = 2.5 * td * (tc + 0.185 * td)/(tc + 0.611 * td)
@@ -806,7 +804,7 @@ void LocalHeater::DoTuningStep() noexcept
 			lastPwm = tuningPwm;						// turn on heater at specified power
 			mode = HeaterMode::tuning3;
 		}
-		else if (afterPeakTime == peakTime && peakTemp - temperature >= TuningPeakTempDrop)
+		else if (afterPeakTime == peakTime && tuningTargetTemp - temperature >= TuningPeakTempDrop)
 		{
 			afterPeakTime = now;
 			afterPeakTemp = temperature;
@@ -832,7 +830,7 @@ void LocalHeater::DoTuningStep() noexcept
 			lastPwm = 0.0;								// turn heater off
 			mode = HeaterMode::tuning2;
 		}
-		else if (afterPeakTime == peakTime && temperature - peakTemp >= TuningPeakTempDrop)
+		else if (afterPeakTime == peakTime && temperature - tuningTargetTemp >= TuningPeakTempDrop - TuningHysteresis)
 		{
 			afterPeakTime = now;
 			afterPeakTemp = temperature;
@@ -871,10 +869,11 @@ void LocalHeater::CalculateModel(HeaterParameters& params) noexcept
 	}
 
 	const float cycleTime = tOn.GetMean() + tOff.GetMean();		// in milliseconds
-	const float averageTemperatureRise = tuningTargetTemp - 0.5 * TuningHysteresis - tuningStartTemp.GetMean();
+	const float averageTemperatureRiseHeating = tuningTargetTemp - 0.5 * (TuningHysteresis - TuningPeakTempDrop) - tuningStartTemp.GetMean();
+	const float averageTemperatureRiseCooling = tuningTargetTemp - TuningPeakTempDrop - 0.5 * TuningHysteresis - tuningStartTemp.GetMean();
 	params.deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * MillisToSeconds)/cycleTime;	// in seconds
-	params.coolingRate = coolingRate.GetMean()/averageTemperatureRise;			// in seconds
-	params.heatingRate = (heatingRate.GetMean() + coolingRate.GetMean()) / tuningPwm;
+	params.coolingRate = coolingRate.GetMean()/averageTemperatureRiseCooling;			// in seconds
+	params.heatingRate = (heatingRate.GetMean() + (coolingRate.GetMean() * averageTemperatureRiseHeating/averageTemperatureRiseCooling)) / tuningPwm;
 	params.numCycles = dHigh.GetNumSamples();
 }
 

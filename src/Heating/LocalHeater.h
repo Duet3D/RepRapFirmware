@@ -95,8 +95,9 @@ private:
 	static constexpr unsigned int TuningHeaterSettleCycles = 2;
 	static constexpr unsigned int MinTuningHeaterCycles = 5;
 	static constexpr unsigned int MaxTuningHeaterCycles = 30;
-	static constexpr float TuningHysteresis = 3.0;
-	static constexpr float TuningPeakTempDrop = 0.5;		// must be well below TuningHysteresis
+	static constexpr float TuningHysteresis = 5.0;
+	static constexpr float TuningPeakTempDrop = 2.0;		// must be well below TuningHysteresis
+	static constexpr float FeedForwardMultiplier = 1.3;		// how much we over-compensate feedforward to allow for heat reservoirs during tuning
 };
 
 #endif /* SRC_LOCALHEATER_H_ */
