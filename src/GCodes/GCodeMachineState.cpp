@@ -11,14 +11,14 @@
 #include <limits>
 
 #if HAS_LINUX_INTERFACE
-static uint8_t LastFileId = 1;
+static FileId LastFileId = FirstFileId;
 #endif
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState() noexcept
 	: feedRate(DefaultFeedRate * SecondsToMinutes),
 #if HAS_LINUX_INTERFACE
-	  fileId(0),
+	  fileId(NoFileId),
 #endif
 	  lineNumber(0),
 	  drivesRelative(false), axesRelative(false),
@@ -86,6 +86,10 @@ void GCodeMachineState::SetFileExecuting() noexcept
 	if (!fileState.IsLive())
 #endif
 	{
+		if (LastFileId == MaxFileId)
+		{
+			LastFileId = FirstFileId;
+		}
 		fileId = LastFileId++;
 		fileFinished = false;
 	}
@@ -97,7 +101,7 @@ void GCodeMachineState::SetFileExecuting() noexcept
 bool GCodeMachineState::DoingFile() const noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface() && fileId != 0)
+	if (reprap.UsingLinuxInterface() && fileId != NoFileId)
 	{
 		return true;
 	}
@@ -113,14 +117,14 @@ bool GCodeMachineState::DoingFile() const noexcept
 void GCodeMachineState::CloseFile() noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface() && fileId != 0)
+	if (reprap.UsingLinuxInterface() && fileId != NoFileId)
 	{
-		const uint8_t lastFileId = fileId;
-		for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->previous)
+		const FileId lastFileId = fileId;
+		for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->GetPrevious())
 		{
 			if (ms->fileId == lastFileId)
 			{
-				ms->fileId = 0;
+				ms->fileId = NoFileId;
 				ms->fileFinished = false;
 			}
 		}

@@ -1537,6 +1537,8 @@ bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile)
 // Recover a saved state
 void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile)
 {
+	// FIXME If withinSameFile is false, we should pop all stack levels that have the same file (ID)
+	// and output a warning message is the stack is popped more than once
 	if (!gb.PopState(withinSameFile))
 	{
 		platform.Message(ErrorMessage, "Pop(): stack underflow\n");

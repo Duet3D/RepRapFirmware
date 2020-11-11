@@ -128,6 +128,14 @@ enum class BlockType : uint8_t
 	loop						// block inside a 'while' command
 };
 
+#if HAS_LINUX_INTERFACE
+typedef uint16_t FileId;
+
+constexpr FileId NoFileId = 0;
+constexpr FileId FirstFileId = 1;
+constexpr FileId MaxFileId = 65535;
+#endif
+
 // Class to hold the state of gcode execution for some input source
 class GCodeMachineState
 {
@@ -181,7 +189,7 @@ public:
 	FileData fileState;
 #endif
 #if HAS_LINUX_INTERFACE
-	uint8_t fileId;								// virtual file ID to deal with stack push/pops when a file is being cancelled or finished in the wrong stack level
+	FileId fileId;								// virtual file ID to deal with stack push/pops when a file is being cancelled or finished in the wrong stack level
 #endif
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];
