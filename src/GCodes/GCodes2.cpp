@@ -4385,6 +4385,31 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 			}
 #endif
+#if HAS_AUX_DEVICES
+			if (gb.Seen('A'))
+			{
+				const uint32_t serialChannel = gb.GetLimitedUIValue('A', NumSerialChannels, 1);
+				const uint32_t auxChannel = serialChannel - 1;
+				if (platform.IsAuxEnabled(auxChannel))
+				{
+					if (gb.Seen('P'))
+					{
+						String<StringLength20> eraseString;
+						gb.GetQuotedString(eraseString.GetRef());
+						if (eraseString.Equals("ERASE"))
+						{
+							platform.AppendAuxReply(auxChannel, "{\"controlCommand\":\"eraseAndReset\"}\n", true);
+						}
+					}
+					else
+					{
+						platform.AppendAuxReply(auxChannel, "{\"controlCommand\":\"reset\"}\n", true);
+					}
+					break;
+				}
+			}
+#endif
+
 			if (!gb.DoDwellTime(1000))		// wait a second to allow the response to be sent back to the web server, otherwise it may retry
 			{
 				return false;
