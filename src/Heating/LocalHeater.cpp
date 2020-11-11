@@ -14,7 +14,7 @@
 #include "RepRap.h"
 #include <Tools/Tool.h>
 
-#define TUNE_WITH_PART_FAN	0
+#define TUNE_WITH_HALF_FAN	0
 
 // Private constants
 const uint32_t InitialTuningReadingInterval = 250;	// the initial reading interval in milliseconds
@@ -579,7 +579,7 @@ void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 	{
 		// Phases are: 1 = stabilising, 2 = heating, 3 = settling, 4 = cycling with fan off, 5 = cycling with fan on
 		const unsigned int numPhases = (tuningFans.IsEmpty()) ? 4
-#if TUNE_WITH_PART_FAN
+#if TUNE_WITH_HALF_FAN
 				: 6;
 #else
 				: 5;
@@ -763,24 +763,25 @@ void LocalHeater::DoTuningStep() noexcept
 								}
 								else
 								{
-#if TUNE_WITH_PART_FAN
-									reprap.GetFansManager().SetFansValue(tuningFans, 0.5);		// turn fans on at half PWM
-#else
-									reprap.GetFansManager().SetFansValue(tuningFans, 1.0);		// turn fans on at full PWM
-#endif
 									tuningPhase = 4;
 									ClearCounters();
+#if TUNE_WITH_HALF_FAN
+									reprap.GetFansManager().SetFansValue(tuningFans, 0.5);		// turn fans on at half PWM
 									reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan 50%\n");
+#else
+									reprap.GetFansManager().SetFansValue(tuningFans, 1.0);		// turn fans on at full PWM
+									reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan on\n");
+#endif
 								}
 							}
-#if TUNE_WITH_PART_FAN
+#if TUNE_WITH_HALF_FAN
 							else if (tuningPhase == 4)
 							{
-								reprap.GetFansManager().SetFansValue(tuningFans, 1.0);			// turn fans fully on
 								CalculateModel(fanOnParams);
 								tuningPhase = 5;
 								ClearCounters();
-								reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan 100%\n");
+								reprap.GetFansManager().SetFansValue(tuningFans, 1.0);			// turn fans fully on
+								reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 4, fan 100%\n");
 							}
 #endif
 							else
