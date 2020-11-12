@@ -4413,7 +4413,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 	}
 	else if (&gb == auxGCode)
 	{
-		if ( lastAuxStatusReportType >= 0 && platform.IsAuxEnabled(0) && gb.IsReportDue())
+		if (lastAuxStatusReportType >= 0 && platform.IsAuxEnabled(0) && gb.IsReportDue())
 		{
 			// Send a standard status response for PanelDue
 			OutputBuffer * const statusBuf =

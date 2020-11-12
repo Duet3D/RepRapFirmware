@@ -288,7 +288,11 @@ private:
 
 inline bool GCodeBuffer::IsDoingFileMacro() const noexcept
 {
+#if HAS_LINUX_INTERFACE
+	return machineState->doingFileMacro || IsMacroRequestPending();
+#else
 	return machineState->doingFileMacro;
+#endif
 }
 
 #if HAS_LINUX_INTERFACE
@@ -329,12 +333,16 @@ inline void GCodeBuffer::AdvanceState() noexcept
 // Return true if we can queue gcodes from this source. This is the case if a file is being executed
 inline bool GCodeBuffer::CanQueueCodes() const noexcept
 {
-	return IsDoingFile();
+	return machineState->DoingFile();
 }
 
 inline bool GCodeBuffer::IsDoingFile() const noexcept
 {
+#if HAS_LINUX_INTERFACE
+	return machineState->DoingFile() || IsMacroRequestPending();
+#else
 	return machineState->DoingFile();
+#endif
 }
 
 inline bool GCodeBuffer::IsReady() const noexcept

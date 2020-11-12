@@ -190,6 +190,8 @@ enum class DiagnosticTestType : unsigned int
 
 	SetWriteBuffer = 500,			// enable/disable the write buffer
 
+	OutputBufferStarvation = 900,	// Allocate almost all output buffers to emulate starvation
+
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
 	TestSerialBlock = 1003,			// test what happens when we write a blocking message via debugPrintf()

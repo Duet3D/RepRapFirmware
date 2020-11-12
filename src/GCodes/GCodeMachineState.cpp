@@ -10,10 +10,6 @@
 
 #include <limits>
 
-#if HAS_LINUX_INTERFACE
-static FileId LastFileId = FirstFileId;
-#endif
-
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState() noexcept
 	: feedRate(DefaultFeedRate * SecondsToMinutes),
@@ -86,11 +82,12 @@ void GCodeMachineState::SetFileExecuting() noexcept
 	if (!fileState.IsLive())
 #endif
 	{
-		if (LastFileId == MaxFileId)
+		fileId = (GetPrevious() != nullptr ? GetPrevious()->fileId : NoFileId) + 1;
+		if (fileId == NoFileId)
 		{
-			LastFileId = FirstFileId;
+			// In case the ID overlapped increase it once more (should never happen)
+			fileId++;
 		}
-		fileId = LastFileId++;
 		fileFinished = false;
 	}
 }
