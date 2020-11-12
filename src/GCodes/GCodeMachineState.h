@@ -129,11 +129,9 @@ enum class BlockType : uint8_t
 };
 
 #if HAS_LINUX_INTERFACE
-typedef uint16_t FileId;
+typedef uint8_t FileId;
 
 constexpr FileId NoFileId = 0;
-constexpr FileId FirstFileId = 1;
-constexpr FileId MaxFileId = 65535;
 #endif
 
 // Class to hold the state of gcode execution for some input source
@@ -189,7 +187,7 @@ public:
 	FileData fileState;
 #endif
 #if HAS_LINUX_INTERFACE
-	FileId fileId;								// virtual file ID to deal with stack push/pops when a file is being cancelled or finished in the wrong stack level
+	FileId fileId;								// virtual ID to distinguish files in different stack levels (only unique per GB)
 #endif
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];

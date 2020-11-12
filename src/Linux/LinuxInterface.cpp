@@ -299,7 +299,16 @@ void LinuxInterface::Init() noexcept
 							MutexLocker locker(gb->mutex, 10);
 							if (locker)
 							{
-								gb->SetFileFinished();
+								if (error)
+								{
+									gb->MachineState().CloseFile();
+									gb->PopState(false);
+									gb->Init();
+								}
+								else
+								{
+									gb->SetFileFinished();
+								}
 								gb->Invalidate();
 
 								if (reprap.Debug(moduleLinuxInterface))
@@ -595,7 +604,7 @@ void LinuxInterface::Init() noexcept
 						gb->MacroFileClosedSent();
 					}
 
-					// Handle macro requests
+					// Handle blocking macro requests
 					if (gb->IsWaitingForMacro() && gb->IsMacroRequestPending())
 					{
 						const char * const requestedMacroFile = gb->GetRequestedMacroFile();
@@ -635,6 +644,22 @@ void LinuxInterface::Init() noexcept
 							{
 								// Note this is only sent when a message was acknowledged in a regular way (i.e. by M292)
 								gb->MessageAcknowledgementSent();
+							}
+
+							// Handle non-blocking macro requests (e.g. daemon.g)
+							if (gb->IsMacroRequestPending())
+							{
+								const char * const requestedMacroFile = gb->GetRequestedMacroFile();
+								bool fromCode = gb->IsMacroStartedByCode();
+								if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
+								{
+									if (reprap.Debug(moduleLinuxInterface))
+									{
+										reprap.GetPlatform().MessageF(DebugMessage, "Requesting non-blocking macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
+									}
+									gb->MacroRequestSent();
+									gb->Invalidate();
+								}
 							}
 
 							// Send pending firmware codes
@@ -701,6 +726,10 @@ void LinuxInterface::Init() noexcept
 				}
 
 				MutexLocker locker(gb->mutex);
+				if (gb->IsMacroRequestPending())
+				{
+					gb->MacroRequestSent();
+				}
 				gb->AbortFile(true, false);
 				gb->MessageAcknowledged(true);
 			}

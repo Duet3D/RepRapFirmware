@@ -775,10 +775,17 @@ void GCodeBuffer::SetFileFinished() noexcept
 			macroFileId = ms->fileId;
 		}
 
-		if (macroFileId != NoFileId && ms->fileId == macroFileId)
+		if (macroFileId != NoFileId)
 		{
-			// Flag it (and following machine states) as finished
-			ms->fileFinished = true;
+			if (ms->fileId == macroFileId)
+			{
+				// Flag it (and following machine states) as finished
+				ms->fileFinished = true;
+			}
+			else
+			{
+				break;
+			}
 		}
 	}
 
@@ -818,20 +825,25 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	}
 
 	// Request the macro file from the SBC
-	macroJustStarted = false;
+	macroJustStarted = macroFileError = macroFileEmpty = false;
 	machineState->macroStartedByCode = fromCode;
 	requestedMacroFile.copy(filename);
-	isWaitingForMacro = true;
 
-	// Wait for a response (but not forever)
-	if (!macroSemaphore.Take(SpiConnectionTimeout))
+	// There is no need to block the main task if daemon.g is requested.
+	// If it doesn't exist, DSF will simply close the virtual file again
+	if (GetChannel() != GCodeChannel::Daemon || machineState->doingFileMacro)
 	{
-		isWaitingForMacro = false;
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to get macro response within %" PRIu32 "ms from SBC (channel %s)\n", SpiConnectionTimeout, GetChannel().ToString());
-		return false;
+		// Wait for a response (but not forever)
+		isWaitingForMacro = true;
+		if (!macroSemaphore.Take(SpiConnectionTimeout))
+		{
+			isWaitingForMacro = false;
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to get macro response within %" PRIu32 "ms from SBC (channel %s)\n", SpiConnectionTimeout, GetChannel().ToString());
+			return false;
+		}
 	}
 
-	// When we get here most of the variables above have been set
+	// When we get here we expect the Linux interface to have set the variables above for us
 	if (!macroFileError)
 	{
 		macroJustStarted = true;
