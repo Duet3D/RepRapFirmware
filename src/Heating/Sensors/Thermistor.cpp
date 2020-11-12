@@ -313,7 +313,7 @@ void Thermistor::Poll() noexcept
 				else
 				{
 					// Else it's a thermistor
-					const float logResistance = log(resistance);
+					const float logResistance = logf(resistance);
 					const float recipT = shA + shB * logResistance + shC * logResistance * logResistance * logResistance;
 					const float temp =  (recipT > 0.0) ? (1.0/recipT) + ABS_ZERO : BadErrorTemperature;
 
