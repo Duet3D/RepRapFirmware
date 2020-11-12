@@ -25,6 +25,7 @@ Licence: GPL
 #include "RepRap.h"
 #include "Sensors/TemperatureSensor.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Tools/Tool.h>
 #include <TaskPriorities.h>
 #include <General/Portability.h>
 
@@ -822,49 +823,81 @@ GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, cons
 // Process M303
 GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (gb.Seen('H'))
+	// To tune a heater, a heater number and/or a tool number musty be given
+	FansBitmap fans;
+	int heaterNumber;
+	const bool seenHeater = gb.Seen('H');
+	if (seenHeater)
 	{
-		const unsigned int heater = gb.GetUIValue();
+		heaterNumber = gb.GetIValue();
+	}
+	const bool seenTool = gb.Seen('T');
+	if (seenTool)
+	{
+		const int toolNumber = gb.GetIValue();
+		const auto tool = reprap.GetTool(toolNumber);
+		if (tool.IsNull())
+		{
+			reply.printf("tool %d not found", toolNumber);
+			return GCodeResult::error;
+		}
+		if (seenHeater)
+		{
+			if (!tool->UsesHeater(heaterNumber))
+			{
+				reply.printf("tool %d does not use heater %d", toolNumber, heaterNumber);
+				return GCodeResult::error;
+			}
+		}
+		else if (tool->HeaterCount() == 0)
+		{
+			reply.printf("tool %d has no heaters", toolNumber);
+			return GCodeResult::error;
+		}
+		else
+		{
+			heaterNumber = tool->Heater(0);
+		}
+		fans = tool->GetFanMapping();
+	}
+
+	if (seenHeater || seenTool)
+	{
 		if (heaterBeingTuned != -1)
 		{
 			// Trying to start a new auto tune, but we are already tuning a heater
-			reply.printf("Error: cannot start auto tuning heater %u because heater %d is being tuned", heater, heaterBeingTuned);
+			reply.printf("Error: cannot start a new auto tune because heater %d is being tuned", heaterBeingTuned);
+			return GCodeResult::error;
 		}
-		else
+
+		const auto h = FindHeater(heaterNumber);
+		if (h.IsNull())
 		{
-			const auto h = FindHeater(heater);
-			if (h.IsNotNull())
-			{
-				const GCodeResult rslt = h->StartAutoTune(gb, reply);
-				if (rslt <= GCodeResult::warning)
-				{
-					heaterBeingTuned = (int8_t)heater;
-				}
-				return rslt;
-			}
-			else
-			{
-				reply.printf("Heater %u not found", heater);
-			}
+			reply.printf("Heater %u not found", heaterNumber);
+			return GCodeResult::error;
 		}
-		return GCodeResult::error;
+
+		const GCodeResult rslt = h->StartAutoTune(gb, reply, fans);
+		if (rslt <= GCodeResult::warning)
+		{
+			heaterBeingTuned = (int8_t)heaterNumber;
+		}
+		return rslt;
+	}
+
+	// If we get here then neither T nor H was given, so report the auto tune status
+	const int whichPid = (heaterBeingTuned == -1) ? lastHeaterTuned : heaterBeingTuned;
+	const auto h = FindHeater(whichPid);
+
+	if (h.IsNotNull())
+	{
+		h->GetAutoTuneStatus(reply);
 	}
 	else
 	{
-		// Report the auto tune status
-		const int whichPid = (heaterBeingTuned == -1) ? lastHeaterTuned : heaterBeingTuned;
-		const auto h = FindHeater(whichPid);
-
-		if (h.IsNotNull())
-		{
-			h->GetAutoTuneStatus(reply);
-		}
-		else
-		{
-			reply.copy("No heater has been tuned since startup");
-		}
-		return GCodeResult::ok;
+		reply.copy("No heater has been tuned since startup");
 	}
+	return GCodeResult::ok;
 }
 
 // Process M308

@@ -101,6 +101,7 @@ public:
 
 	void IterateExtruders(std::function<void(unsigned int)> f) const noexcept;
 	void IterateHeaters(std::function<void(int)> f) const noexcept;
+	bool UsesHeater(int8_t heater) const noexcept;
 
 	void SetFansPwm(float f) const noexcept;
 
@@ -127,7 +128,6 @@ private:
 	void SetTemperatureFault(int8_t dudHeater) noexcept;
 	void ResetTemperatureFault(int8_t wasDudHeater) noexcept;
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const noexcept;
-	bool UsesHeater(int8_t heater) const noexcept;
 
 	static void ToolUpdated() noexcept { reprap.ToolsUpdated(); }	// call this whenever we change a variable that is reported in the OM as non-live
 

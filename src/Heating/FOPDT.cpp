@@ -60,8 +60,9 @@ FopDt::FopDt() noexcept
 	: heatingRate(DefaultHotEndHeaterHeatingRate),
 	  coolingRateFanOff(DefaultHotEndHeaterCoolingRate), coolingRateChangeFanOn(0.0),
 	  deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
-	  enabled(false), usePid(true), inverted(false), pidParametersOverridden(false)
+	  enabled(true), usePid(true), inverted(false), pidParametersOverridden(false)
 {
+	CalcPidConstants();
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.

@@ -152,27 +152,29 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 	}
 	else if (!model.IsEnabled())
 	{
-		reply.printf("Heater %u is disabled", heater);
+		reply.printf("Heater %u is disabled due to bad model", heater);
 	}
 	else
 	{
 		const char* const mode = (!model.UsePid()) ? "bang-bang"
 									: (model.ArePidParametersOverridden()) ? "custom PID"
 										: "PID";
-		reply.printf("Heater %u model: heating rate %.3f, cooling time constant %.1f (fan off) %.1f (fan on), dead time %.2f, max PWM %.2f, calibration voltage %.1f, mode %s", heater,
-					 (double)model.GetHeatingRate(), (double)model.GetTimeConstantFanOff(), (double)model.GetTimeConstantFanOn(),
-					 (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
+		reply.printf("Heater %u model: heating rate %.3f, cooling time constant %.1f", heater, (double)model.GetHeatingRate(), (double)model.GetTimeConstantFanOff());
+		if (model.GetCoolingRateChangeFanOn() > 0.0)
+		{
+			reply.catf("/%.1f", (double)model.GetTimeConstantFanOn());
+		}
+		reply.catf(", dead time %.2f, max PWM %.2f, calibration voltage %.1f, mode %s", (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
 		if (model.IsInverted())
 		{
-			reply.cat(", inverted temperature control");
+			reply.cat(", inverted control");
 		}
 		if (model.UsePid())
 		{
-			// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
 			M301PidParameters params = model.GetM301PidParameters(false);
-			reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+			reply.catf("\nComputed PID parameters: setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
 			params = model.GetM301PidParameters(true);
-			reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+			reply.catf(", load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
 		}
 	}
 	return GCodeResult::ok;

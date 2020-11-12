@@ -481,7 +481,7 @@ float LocalHeater::GetExpectedHeatingRate() const noexcept
 }
 
 // Auto tune this heater. The caller has already checked that on other heater is being tuned.
-GCodeResult LocalHeater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult LocalHeater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException)
 {
 	// Get the target temperature (required)
 	gb.MustSee('S');
@@ -493,24 +493,6 @@ GCodeResult LocalHeater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply) 
 	{
 		reply.copy("Invalid PWM value");
 		return GCodeResult::error;
-	}
-
-	// Get the optional tool number
-	int toolNumber = (gb.Seen('T')) ? gb.GetIValue() : -1;
-	if (toolNumber >= 0)
-	{
-		auto tool = reprap.GetTool(toolNumber);
-		if (tool.IsNull())
-		{
-			reply.printf("Tool %d not found", toolNumber);
-			return GCodeResult::error;
-		}
-		tuningFans = tool->GetFanMapping();
-		reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
-	}
-	else
-	{
-		tuningFans.Clear();
 	}
 
 	if (!GetModel().IsEnabled())
@@ -548,6 +530,9 @@ GCodeResult LocalHeater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply) 
 
 	reply.printf("Auto tuning heater %u using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended",
 					GetHeaterNumber(), (double)targetTemp, (double)maxPwm);
+
+	tuningFans = fans;
+	reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
 
 	tuningPwm = maxPwm;
 	tuningTargetTemp = targetTemp;

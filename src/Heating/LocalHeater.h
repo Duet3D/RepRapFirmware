@@ -47,7 +47,7 @@ public:
 	float GetTemperature() const noexcept override;			// Get the current temperature
 	float GetAveragePWM() const noexcept override;			// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	float GetAccumulator() const noexcept override;			// Return the integral accumulator
-	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;	// Start an auto tune cycle for this heater
+	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException) override;	// Start an auto tune cycle for this heater
 	void GetAutoTuneStatus(const StringRef& reply) const noexcept override;	// Get the auto tune status or last result
 	void Suspend(bool sus) noexcept override;				// Suspend the heater to conserve power or while doing Z probing
 	void PrintCoolingFanPwmChanged(float pwmChange) noexcept override;
