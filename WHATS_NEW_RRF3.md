@@ -1,3 +1,24 @@
+RepRapFirmware 3.2-beta3.2
+========================
+
+Upgrade notes:
+- [Duet 3 + expansion/tool boards] You must also update expansion and tool board firmwares to 3.2beta3.2, otherwise heaters on expansion/tool boards will not work properly
+- There have been no changes to DCS or DWC since release 3.2beta3, therefore those components will still report versoin 3.2beta3
+- See also the Known Issues
+
+Known issues:
+- If you do not have a M307 command for a bed or chamber heater in your config.g file, you may get a "Temperature increasing too slowly" fault when you try to use that heater. Workaround: either tune that heater, or add the following command (with # replaced by the heater number) to config.g to restore the old behaviour: M307 H# A90 C700 D10
+
+New features/changed behaviour:
+- The M303 heater tuning algorithm and parameters have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M303_Run_heater_tuning.
+- The M307 heater model parameters have changed, however existing M307 commands will continue to work. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M307_Set_or_report_heating_process_parameters.
+
+Bug fixes:
+- PanelDue was not updated while the firmware was waiting for a heating or delay command to complete
+- A M591 command with the C parameter not followed by a port name string caused the firmware to reset
+- [Duet3 + expansion/tool boards] Errors when reading temperature sensors on expansion and tool boards sometimes caused the expansion or tool board to reset
+- [Duet + SBC] Fixed issues with SBC communications
+
 RepRapFirmware 3.2-beta3
 ========================
 
