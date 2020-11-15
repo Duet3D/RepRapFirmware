@@ -169,6 +169,11 @@ struct DriverId
 
 	CanAddress boardAddress;
 
+	DriverId() noexcept : localDriver(0), boardAddress(CanId::NoAddress)  { }
+
+	// Constructor used by ATE configurations
+	DriverId(CanAddress addr, uint8_t drv) noexcept : localDriver(drv), boardAddress(addr) { }
+
 	void SetFromBinary(uint32_t val) noexcept
 	{
 		localDriver = val & 0x000000FF;
@@ -180,12 +185,6 @@ struct DriverId
 	{
 		localDriver = (uint8_t)driver;
 		boardAddress = CanId::MasterAddress;
-	}
-
-	void Clear() noexcept
-	{
-		localDriver = 0;
-		boardAddress = CanId::NoAddress;
 	}
 
 	bool IsLocal() const noexcept { return boardAddress == CanId::MasterAddress; }
@@ -213,6 +212,8 @@ struct DriverId
 
 #else
 
+	DriverId() noexcept : localDriver(0)  { }
+
 	// Set the driver ID from the binary value, returning true if there was a nonzero board number so that the caller knows the address is not valid
 	bool SetFromBinary(uint32_t val) noexcept
 	{
@@ -235,8 +236,6 @@ struct DriverId
 	{
 		return localDriver != other.localDriver;
 	}
-
-	void Clear() noexcept { localDriver = 0; }
 
 	bool IsLocal() const noexcept { return true; }
 	bool IsRemote() const noexcept { return false; }

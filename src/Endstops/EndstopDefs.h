@@ -30,7 +30,6 @@ struct EndstopHitDetails
 {
 	EndstopHitDetails() noexcept : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
 	{
-		driver.Clear();
 	}
 
 	void SetAction(EndstopHitAction a) noexcept { action = (uint32_t)a; }

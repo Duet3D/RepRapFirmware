@@ -258,7 +258,6 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 		break;
 
 	default:
-		value.Clear();
 		break;
 	}
 	seenParameter = nullptr;

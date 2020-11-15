@@ -4283,12 +4283,13 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 		{
 			switch (pVals[i])
 			{
-				case 10:
-					p10 = true;
-					break;
-				case 31:
-					p31 = true;
-					break;
+			case 10:
+				p10 = true;
+				break;
+
+			case 31:
+				p31 = true;
+				break;
 			}
 		}
 	}

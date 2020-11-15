@@ -33,7 +33,7 @@ void CanMotion::Init() noexcept
 }
 
 // This is called by DDA::Prepare at the start of preparing a movement
-void CanMotion::StartMovement(const DDA& dda) noexcept
+void CanMotion::StartMovement() noexcept
 {
 	// There shouldn't be any movement buffers in the list, but free any that there may be
 	for (;;)
@@ -50,7 +50,7 @@ void CanMotion::StartMovement(const DDA& dda) noexcept
 
 // This is called by DDA::Prepare for each active CAN DM in the move
 // If steps == 0 then the drivers just need to be enabled
-void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
+void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
 {
 	// Search for the correct movement buffer
 	CanMessageBuffer* buf = movementBufferList;

@@ -71,6 +71,7 @@ namespace CanInterface
 	inline CanAddress GetCanAddress() noexcept { return CanId::MasterAddress; }
 	CanRequestId AllocateRequestId(CanAddress destination) noexcept;
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr) noexcept;
+	GCodeResult SendRequestAndGetSingleReply(CanMessageBuffer *buf, CanRequestId rid, CanMessageType replyType, const StringRef& reply) noexcept;
 	void SendResponseNoFree(CanMessageBuffer *buf) noexcept;
 	void SendBroadcastNoFree(CanMessageBuffer *buf) noexcept;
 	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;
@@ -102,6 +103,8 @@ namespace CanInterface
 	GCodeResult GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef& reply) noexcept;
 	GCodeResult EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool enable, bool& currentState, const StringRef& reply) noexcept;
 	GCodeResult ChangeHandleResponseTime(CanAddress boardAddress, RemoteInputHandle h, uint16_t responseMillis, bool &currentState, const StringRef &reply) noexcept;
+	typedef void (*ReadHandlesCallbackFunction)(RemoteInputHandle h, uint16_t val) noexcept;
+	GCodeResult ReadRemoteHandles(CanAddress boardAddress, RemoteInputHandle mask, RemoteInputHandle pattern, ReadHandlesCallbackFunction callback, const StringRef &reply) noexcept;
 
 	// Filament monitor functions
 	GCodeResult CreateFilamentMonitor(DriverId driver, uint8_t type, const GCodeBuffer& gb, const StringRef& reply) noexcept;

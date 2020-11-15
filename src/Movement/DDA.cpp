@@ -1244,7 +1244,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		activeDMs = completedDMs = nullptr;
 
 #if SUPPORT_CAN_EXPANSION
-		CanMotion::StartMovement(*this);
+		CanMotion::StartMovement();
 #endif
 
 		// Handle all drivers
@@ -1274,7 +1274,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #if SUPPORT_CAN_EXPANSION
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(*this, params, driver, delta, false);
+						CanMotion::AddMovement(params, driver, delta, false);
 					}
 					else
 #endif
@@ -1338,7 +1338,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(*this, params, driver, delta, false);
+						CanMotion::AddMovement(params, driver, delta, false);
 					}
 				}
 #endif
@@ -1395,7 +1395,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 						const DriverId driver = config.driverNumbers[i];
 						if (driver.IsRemote())
 						{
-							CanMotion::AddMovement(*this, params, driver, delta, false);
+							CanMotion::AddMovement(params, driver, delta, false);
 						}
 					}
 #endif
@@ -1431,7 +1431,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 						const int32_t rawSteps = PrepareRemoteExtruder(drive, extrusionPending[extruder], speedChange);
 						if (rawSteps != 0)
 						{
-							CanMotion::AddMovement(*this, params, driver, rawSteps, flags.usePressureAdvance);
+							CanMotion::AddMovement(params, driver, rawSteps, flags.usePressureAdvance);
 						}
 					}
 					else
@@ -1482,7 +1482,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				const DriverId driver = config.driverNumbers[i];
 				if (driver.IsRemote())
 				{
-					CanMotion::AddMovement(*this, params, driver, 0, false);
+					CanMotion::AddMovement(params, driver, 0, false);
 				}
 			}
 #endif

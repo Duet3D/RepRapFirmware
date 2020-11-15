@@ -22,7 +22,7 @@
 
 
 // Handle a firmware update request
-static void HandleFirmwareBlockRequest(CanMessageBuffer *buf)
+static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 {
 	const CanMessageFirmwareUpdateRequest& msg = buf->msg.firmwareUpdateRequest;
@@ -227,7 +227,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 }
 
 // Handle an input state change message
-static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddress src)
+static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddress src) noexcept
 {
 	bool endstopStatesChanged = false;
 	for (unsigned int i = 0; i < msg.numHandles; ++i)
@@ -260,6 +260,7 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 		reprap.GetPlatform().GetEndstops().OnEndstopOrZProbeStatesChanged();
 	}
 }
+
 
 // Process a received broadcast or request message. Don't free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
