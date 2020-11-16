@@ -41,6 +41,10 @@ Licence: GPL
 # include "CAN/CanInterface.h"
 #endif
 
+#ifdef DUET3_ATE
+# include <Duet3Ate.h>
+#endif
+
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
 static Task<HeaterTaskStackWords> heaterTask;
 
@@ -1181,6 +1185,12 @@ void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemp
 				{
 					ts->UpdateRemoteTemperature(src, msg.temperatureReports[index]);
 				}
+# ifdef DUET3_ATE
+				else
+				{
+					Duet3Ate::ProcessOrphanedSensorReport(src, sensor, msg.temperatureReports[index]);
+				}
+# endif
 			}
 			++index;
 		}

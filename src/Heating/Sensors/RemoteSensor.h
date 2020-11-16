@@ -16,6 +16,7 @@ class RemoteSensor : public TemperatureSensor
 {
 public:
 	RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress) noexcept;
+	~RemoteSensor();
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 	CanAddress GetBoardAddress() const noexcept override { return boardAddress; }

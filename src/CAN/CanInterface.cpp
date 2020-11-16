@@ -658,6 +658,12 @@ void CanInterface::SendMotion(CanMessageBuffer *buf) noexcept
 // Send a request to an expansion board and append the response to 'reply'
 GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra) noexcept
 {
+	return SendRequestAndGetCustomReply(buf, rid, reply, extra, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) { });
+}
+
+// Send a request to an expansion board and append the response to 'reply'. The response may either be a standard reply or 'replyType'.
+GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, std::function<void(const CanMessageBuffer*) /*noexcept*/> callback) noexcept
+{
 #if USE_NEW_CAN_DRIVER
 	if (can0dev == nullptr)
 #else
@@ -693,11 +699,8 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 			buf->DebugPrint("Rx1:");
 		}
 
-		if (   buf->id.MsgType() == CanMessageType::standardReply
-			&& buf->id.Src() == dest
-			&& (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways)
-			&& buf->msg.standardReply.fragmentNumber == fragmentsReceived
-		   )
+		const bool matchesRequest = buf->id.Src() == dest && buf->msg.standardReply.requestId == rid;
+		if (matchesRequest && buf->id.MsgType() == CanMessageType::standardReply && buf->msg.standardReply.fragmentNumber == fragmentsReceived)
 		{
 			if (fragmentsReceived == 0)
 			{
@@ -725,6 +728,12 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 			}
 			++fragmentsReceived;
 		}
+		else if (matchesRequest &&buf->id.MsgType() == replyType && fragmentsReceived == 0)
+		{
+			callback(buf);
+			CanMessageBuffer::Free(buf);
+			return GCodeResult::ok;
+		}
 		else
 		{
 			// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
@@ -739,59 +748,6 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 }
 
 // Send a request to an expansion board and get a single reply into the same buffer. Caller must free the buffer whether a response was received or not.
-GCodeResult CanInterface::SendRequestAndGetSingleReply(CanMessageBuffer *buf, CanRequestId rid, CanMessageType replyType, const StringRef& reply) noexcept
-{
-#if USE_NEW_CAN_DRIVER
-	if (can0dev == nullptr)
-#else
-	if (mcan_instance.hw == nullptr)
-#endif
-	{
-		// Transactions sometimes get requested after we have shut down CAN, e.g. when we destroy filament monitors
-		return GCodeResult::error;
-	}
-	const CanAddress dest = buf->id.Dst();
-#if USE_NEW_CAN_DRIVER
-	can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
-#else
-	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait, false);
-#endif
-	const uint32_t whenStartedWaiting = millis();
-	const CanMessageType msgType = buf->id.MsgType();								// save for possible error message
-	for (;;)
-	{
-		const uint32_t timeWaiting = millis() - whenStartedWaiting;
-#if USE_NEW_CAN_DRIVER
-		if (!can0dev->ReceiveMessage(RxBufferIndexResponse, CanResponseTimeout - timeWaiting, buf))
-#else
-		if (!GetMessageFromFifo(&mcan_instance, buf, RxFifoIndexResponse, CanResponseTimeout - timeWaiting))
-#endif
-		{
-			break;
-		}
-
-		if (reprap.Debug(moduleCan))
-		{
-			buf->DebugPrint("Rx1:");
-		}
-
-		if (   buf->id.MsgType() == replyType
-			&& buf->id.Src() == dest
-			&& (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways)
-		   )
-		{
-			return (GCodeResult)buf->msg.standardReply.resultCode;
-		}
-
-		// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
-		reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
-										buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
-	}
-
-	reply.lcatf("Response timeout: CAN addr %u, req type %u, RID=%u", dest, (unsigned int)msgType, (unsigned int)rid);
-	return GCodeResult::error;
-}
-
 // Send a response to an expansion board and free the buffer
 void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 {
@@ -1139,16 +1095,15 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	auto msg = buf->SetupRequestMessage<CanMessageReadInputsRequest>(rid, CanId::MasterAddress, boardAddress);
 	msg->mask = mask;
 	msg->pattern = pattern;
-	const GCodeResult rslt = SendRequestAndGetSingleReply(buf, rid, CanMessageType::readInputsReply, reply);
-	if (rslt == GCodeResult::ok)
-	{
-		auto response = buf->msg.readInputsReply;
-		for (unsigned int i = 0; i < response.numReported; ++i)
-		{
-			callback(response.results[i].handle, response.results[i].value);
-		}
-	}
-	CanMessageBuffer::Free(buf);
+	const GCodeResult rslt = SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::readInputsReply,
+															[callback](const CanMessageBuffer *buf)
+																{
+																	auto response = buf->msg.readInputsReply;
+																	for (unsigned int i = 0; i < response.numReported; ++i)
+																	{
+																		callback(response.results[i].handle, response.results[i].value);
+																	}
+																});
 	return rslt;
 }
 

@@ -20,6 +20,11 @@ RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress) noe
 {
 }
 
+RemoteSensor::~RemoteSensor()
+{
+	//TODO delete the remote sensor
+}
+
 GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
 	TryConfigureSensorName(gb, changed);
