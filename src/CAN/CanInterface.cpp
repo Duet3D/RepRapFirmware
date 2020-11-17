@@ -830,7 +830,7 @@ void CanInterface::DisableRemoteDrivers(const CanDriversList& drivers) noexcept
 void CanInterface::SetRemoteDriversIdle(const CanDriversList& drivers, float idleCurrentFactor) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverIdle, rintf(idleCurrentFactor * 100)));
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverIdle, lrintf(idleCurrentFactor * 100)));
 }
 
 GCodeResult CanInterface::SetRemoteStandstillCurrentPercent(const CanDriversData<float>& data, const StringRef& reply) noexcept
