@@ -841,14 +841,19 @@ void LocalHeater::CalculateModel(HeaterParameters& params) noexcept
 										"tOn %ld" PLUS_OR_MINUS "%ld, tOff %ld" PLUS_OR_MINUS "%ld,"
 										" dHigh %ld" PLUS_OR_MINUS "%ld, dLow %ld" PLUS_OR_MINUS "%ld,"
 										" R %.3f" PLUS_OR_MINUS "%.3f, C %.3f" PLUS_OR_MINUS "%.3f,"
-										" V %.1f" PLUS_OR_MINUS "%.1f, cycles %u\n",
+#if HAS_VOLTAGE_MONITOR
+										" V %.1f" PLUS_OR_MINUS "%.1f,"
+#endif
+										" cycles %u\n",
 										lrintf(tOn.GetMean()), lrintf(tOn.GetDeviation()),
 										lrintf(tOff.GetMean()), lrintf(tOff.GetDeviation()),
 										lrintf(dHigh.GetMean()), lrintf(dHigh.GetDeviation()),
 										lrintf(dLow.GetMean()), lrintf(dLow.GetDeviation()),
 										(double)heatingRate.GetMean(), (double)heatingRate.GetDeviation(),
 										(double)coolingRate.GetMean(), (double)coolingRate.GetDeviation(),
+#if HAS_VOLTAGE_MONITOR
 										(double)tuningVoltage.GetMean(), (double)tuningVoltage.GetDeviation(),
+#endif
 										coolingRate.GetNumSamples()
 									 );
 	}
