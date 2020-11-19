@@ -305,6 +305,26 @@ void Lcd::WriteSpaces(PixelNumber numPixels) noexcept
 	justSetCursor = false;
 }
 
+// printf to LCD
+int Lcd::printf(const char* fmt, ...) noexcept
+{
+	va_list vargs;
+	va_start(vargs, fmt);
+	int ret = vuprintf([this](char c) -> bool
+						{
+							if (c != 0)
+							{
+								write(c);
+							}
+							return true;
+						},
+						fmt,
+						vargs
+					  );
+	va_end(vargs);
+	return ret;
+}
+
 // Set the left margin. This is where the cursor goes to when we print newline.
 void Lcd::SetLeftMargin(PixelNumber c) noexcept
 {

@@ -116,7 +116,7 @@ TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignmen
 
 void TextMenuItem::CorePrint(Lcd& lcd) noexcept
 {
-	lcd.print(text);
+	lcd.printf("%s", text);
 }
 
 void TextMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
@@ -138,7 +138,7 @@ void TextMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
 		lcd.SetCursor(lcd.GetNumRows(), 0);
 		lcd.SetRightMargin(lcd.GetNumCols());
 		lcd.TextInvert(false);
-		lcd.print(text);
+		lcd.printf("%s", text);
 		width = lcd.GetColumn();
 		if (align == LeftAlign)
 		{
@@ -160,7 +160,7 @@ ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Font
 void ButtonMenuItem::CorePrint(Lcd& lcd) noexcept
 {
 	lcd.WriteSpaces(1);				// space at start in case highlighted
-	lcd.print(text);
+	lcd.printf("%s", text);
 	lcd.WriteSpaces(1);				// space at end to allow for highlighting
 }
 
@@ -249,41 +249,34 @@ void ValueMenuItem::CorePrint(Lcd& lcd) noexcept
 
 	if (error)
 	{
-		lcd.print("***");
+		lcd.printf("***");
 	}
 	else
 	{
 		switch (currentFormat)
 		{
 		case PrintFormat::asFloat:
-			lcd.print(currentValue.f, decimals);
+			lcd.printf("%.*f", decimals, (double)currentValue.f);
 			break;
 
 		case PrintFormat::asPercent:
-			lcd.print(currentValue.f, decimals);
-			lcd.print('%');
+			lcd.printf("%.*f%%", decimals, (double)currentValue.f);
 			break;
 
 		case PrintFormat::asUnsigned:
-			lcd.print(currentValue.u);
+			lcd.printf("%u", currentValue.u);
 			break;
 
 		case PrintFormat::asSigned:
-			lcd.print(currentValue.i);
+			lcd.printf("%d", currentValue.i);
 			break;
 
 		case PrintFormat::asText:
-			lcd.print(textValue);
+			lcd.printf("%s", textValue);
 			break;
 
 		case PrintFormat::asIpAddress:
-			lcd.print(currentValue.u & 0x000000FF);
-			lcd.print(':');
-			lcd.print((currentValue.u >> 8) & 0x0000000FF);
-			lcd.print(':');
-			lcd.print((currentValue.u >> 16) & 0x0000000FF);
-			lcd.print(':');
-			lcd.print((currentValue.u >> 24) & 0x0000000FF);
+			lcd.printf("%u.%u.%u.%u", currentValue.u & 0x000000FF, (currentValue.u >> 8) & 0x0000000FF, (currentValue.u >> 16) & 0x0000000FF, (currentValue.u >> 24) & 0x0000000FF);
 			break;
 
 		case PrintFormat::asTime:
@@ -291,25 +284,13 @@ void ValueMenuItem::CorePrint(Lcd& lcd) noexcept
 				unsigned int hours = currentValue.u/3600,
 					minutes = (currentValue.u / 60) % 60,
 					seconds = currentValue.u % 60;
-				lcd.print(hours);
-				lcd.print(':');
-				if (minutes < 10)
-				{
-					lcd.print('0');
-				}
-				lcd.print(minutes);
-				lcd.print(':');
-				if (seconds < 10)
-				{
-					lcd.print('0');
-				}
-				lcd.print(seconds);
+				lcd.printf("%u:%02u:%02u", hours, minutes, seconds);
 			}
 			break;
 
 		case PrintFormat::undefined:
 		default:
-			lcd.print("***");
+			lcd.printf("***");
 			break;
 		}
 	}
@@ -818,7 +799,7 @@ void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 					lcd.SetRightMargin(rightMargin);
 					lcd.ClearToMargin();
 					lcd.SetCursor(row, column);
-					lcd.print(reply.c_str());
+					lcd.printf("%s", reply.c_str());
 					break;
 				}
 			}
@@ -847,13 +828,13 @@ void FilesMenuItem::ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight,
 		if (m_uListingFirstVisibleIndex == 0)
 		{
 			lcd.SetCursor(row, column);
-			lcd.print("  ..");
+			lcd.printf("  ..");
 			lcd.ClearToMargin();
 			if (highlight && m_uListingSelectedIndex == 0)
 			{
 				// Overwriting the initial spaces with '>' avoids shifting the following text when we change the selection
 				lcd.SetCursor(row, column);
-				lcd.print(">");
+				lcd.write('>');
 			}
 			line = 1;
 			dirEntriesToSkip = 0;
@@ -892,17 +873,17 @@ void FilesMenuItem::ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight,
 		// If there's actually a file to describe (not just ensuring viewport line clear)
 		if (gotFileInfo)
 		{
-			lcd.print("  ");
+			lcd.printf("  ");
 			if (oFileInfo.isDirectory)
 			{
-				lcd.print("./");
+				lcd.printf("./");
 			}
-			lcd.print(oFileInfo.fileName.c_str());
+			lcd.printf("%s", oFileInfo.fileName.c_str());
 			lcd.ClearToMargin();
 			if (highlight && m_uListingSelectedIndex == line + m_uListingFirstVisibleIndex)
 			{
 				lcd.SetCursor(row + (lcd.GetFontHeight() * line), column);
-				lcd.print(">");
+				lcd.write('>');
 			}
 		}
 		else

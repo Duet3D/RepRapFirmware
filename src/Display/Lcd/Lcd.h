@@ -8,6 +8,7 @@
 #include <Print.h>
 #include "Fonts/LcdFont.h"
 #include <Hardware/SharedSpi/SharedSpiClient.h>
+#include <General/SafeVsnprintf.h>
 
 // Enumeration for specifying drawing modes
 enum class PixelMode : uint8_t
@@ -23,7 +24,7 @@ typedef uint8_t PixelNumber;
 // This drives the GLCD in serial mode so that it needs just 2 pins.
 
 // Derive the LCD class from the Print class so that we can print stuff to it in alpha mode
-class Lcd : public Print
+class Lcd
 {
 public:
 	// Construct a GLCD driver.
@@ -51,7 +52,7 @@ public:
 	// Write a single character in the current font. Called by the 'print' functions.
 	//  c = character to write
 	// Returns the number of characters written (1 if we wrote it, 0 otherwise)
-	size_t write(uint8_t c) noexcept override;		// write a character
+	size_t write(uint8_t c) noexcept;		// write a character
 
 	// Write a space
 	void WriteSpaces(PixelNumber numPixels) noexcept;
@@ -139,6 +140,9 @@ public:
 	//  width = width of bitmap in pixels
 	//  data = bitmap image, must be ((width + 7)/8) bytes long
 	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept;
+
+	// printf to LCD
+	int printf(const char* fmt, ...) noexcept;
 
 protected:
 	virtual void HardwareInit() noexcept = 0;

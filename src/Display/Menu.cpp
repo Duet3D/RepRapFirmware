@@ -223,20 +223,16 @@ void Menu::LoadError(const char *msg, unsigned int line) noexcept
 
 	lcd.Clear();
 	lcd.SetFont(0);
-	lcd.print("Error loading menu\nFile: ");
-	lcd.print((numNestedMenus > 0) ? filenames[numNestedMenus - 1].c_str() : "(none)");
+	lcd.printf("Error loading menu\nFile: %s", (numNestedMenus > 0) ? filenames[numNestedMenus - 1].c_str() : "(none)");
 	if (line != 0)
 	{
-		lcd.print("\nLine ");
-		lcd.print(line);
+		lcd.printf("\nLine %u", line);
 		if (errorColumn != 0)
 		{
-			lcd.print(" column ");
-			lcd.print(errorColumn);
+			lcd.printf(" column %u", errorColumn);
 		}
 	}
-	lcd.write('\n');
-	lcd.print(msg);
+	lcd.printf("\n%s", msg);
 
 	lastActionTime = millis();
 	timeoutValue = ErrorTimeout;

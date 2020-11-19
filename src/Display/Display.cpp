@@ -139,7 +139,7 @@ void Display::Exit() noexcept
 			lcd->Clear();
 			lcd->SetFont(LargeFontNumber);
 			lcd->SetCursor(20, 0);
-			lcd->print("Shutting down...");
+			lcd->printf("Shutting down...");
 		}
 		lcd->FlushAll();
 	}
@@ -256,7 +256,7 @@ void Display::UpdatingFirmware() noexcept
 		lcd->Clear();
 		lcd->SetFont(LargeFontNumber);
 		lcd->SetCursor(20, 0);
-		lcd->print("Updating firmware...");
+		lcd->printf("Updating firmware...");
 		lcd->FlushAll();
 	}
 }
