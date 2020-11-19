@@ -94,7 +94,7 @@ void LinuxInterface::Init() noexcept
 				{
 					if (reprap.Debug(moduleLinuxInterface))
 					{
-						reprap.GetPlatform().Message(DebugMessage, "Error trying to read next SPI packet\n");
+						debugPrintf("Error trying to read next SPI packet\n");
 					}
 					break;
 				}
@@ -291,7 +291,7 @@ void LinuxInterface::Init() noexcept
 
 							if (reprap.Debug(moduleLinuxInterface))
 							{
-								reprap.GetPlatform().MessageF(DebugMessage, "Waiting macro completed on channel %u\n", channel.ToBaseType());
+								debugPrintf("Waiting macro completed on channel %u\n", channel.ToBaseType());
 							}
 						}
 						else
@@ -313,7 +313,7 @@ void LinuxInterface::Init() noexcept
 
 								if (reprap.Debug(moduleLinuxInterface))
 								{
-									reprap.GetPlatform().MessageF(DebugMessage, "Macro completed on channel %u\n", channel.ToBaseType());
+									debugPrintf("Macro completed on channel %u\n", channel.ToBaseType());
 								}
 							}
 							else
@@ -613,7 +613,7 @@ void LinuxInterface::Init() noexcept
 						{
 							if (reprap.Debug(moduleLinuxInterface))
 							{
-								reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
+								debugPrintf("Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 							}
 							gb->MacroRequestSent();
 							gb->Invalidate();
@@ -655,7 +655,7 @@ void LinuxInterface::Init() noexcept
 								{
 									if (reprap.Debug(moduleLinuxInterface))
 									{
-										reprap.GetPlatform().MessageF(DebugMessage, "Requesting non-blocking macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
+										debugPrintf("Requesting non-blocking macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 									}
 									gb->MacroRequestSent();
 									gb->Invalidate();

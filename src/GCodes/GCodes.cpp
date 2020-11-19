@@ -4431,7 +4431,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 				platform.AppendAuxReply(0, statusBuf, true);
 				if (reprap.Debug(moduleGcodes))
 				{
-					reprap.GetPlatform().MessageF(DebugMessage, "%s: Sent unsolicited status report\n", gb.GetChannel().ToString());
+					debugPrintf("%s: Sent unsolicited status report\n", gb.GetChannel().ToString());
 				}
 			}
 		}

@@ -700,7 +700,7 @@ void DataTransfer::ResetTransfer(bool ownRequest) noexcept
 {
 	if (reprap.Debug(moduleLinuxInterface))
 	{
-		reprap.GetPlatform().Message(DebugMessage, ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Linux request\n");
+		debugPrintf(ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Linux request\n");
 	}
 	failedTransfers++;
 
@@ -767,7 +767,7 @@ bool DataTransfer::IsReady() noexcept
 			{
 				if (reprap.Debug(moduleLinuxInterface))
 				{
-					reprap.GetPlatform().MessageF(DebugMessage, "Bad header checksum (expected %04" PRIx32 ", got %04" PRIx32 ")\n", (uint32_t)rxHeader.checksumHeader, (uint32_t)checksum);
+					debugPrintf("Bad header checksum (expected %04" PRIx32 ", got %04" PRIx32 ")\n", (uint32_t)rxHeader.checksumHeader, (uint32_t)checksum);
 				}
 				ExchangeResponse(TransferResponse::BadHeaderChecksum);
 				break;
@@ -841,7 +841,7 @@ bool DataTransfer::IsReady() noexcept
 			{
 				if (reprap.Debug(moduleLinuxInterface))
 				{
-					reprap.GetPlatform().Message(DebugMessage, "Resetting state due to Linux request\n");
+					debugPrintf("Resetting state due to Linux request\n");
 				}
 				ExchangeHeader();
 				break;
@@ -852,7 +852,7 @@ bool DataTransfer::IsReady() noexcept
 			{
 				if (reprap.Debug(moduleLinuxInterface))
 				{
-					reprap.GetPlatform().MessageF(DebugMessage, "Bad data checksum (expected %04" PRIx32 ", got %04" PRIx32 ")\n", (uint32_t)rxHeader.checksumData, (uint32_t)checksum);
+					debugPrintf("Bad data checksum (expected %04" PRIx32 ", got %04" PRIx32 ")\n", (uint32_t)rxHeader.checksumData, (uint32_t)checksum);
 				}
 				ExchangeResponse(TransferResponse::BadDataChecksum);
 				break;
