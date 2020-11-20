@@ -29,6 +29,8 @@
 # error TMC22xx_USE_SLAVEADDR not defined
 #endif
 
+#define RESET_MICROSTEP_COUNTERS_AT_INIT	0		// Duets use pulldown resistors on the step pins, so we don't get phantom microsteps at power up
+
 #include "TMC22xx.h"
 #include <RepRap.h>
 #include <TaskPriorities.h>
@@ -55,18 +57,16 @@ static bool ReadOneDiagOutput(uint8_t driver) noexcept;		// forward declaration
 #endif
 
 // Important note:
-// The TMC22xx does handle a write request immediately followed by a read request.
-// The TMC22xx does _not_ handle back-to-back read requests to different drivers, it needs a short delay between them.
+// The TMC22xx does handle a write request immediately followed by a read request to the same driver.
+// The TMC2209 does _not_ handle back-to-back read requests to different drivers on the same multiplexer channel, it needs a short delay between them to allow the first driver to release the bus.
 
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
 constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
-constexpr size_t TmcTaskStackWords = 100;
+constexpr size_t TmcTaskStackWords = 150;					// 100 may be enough except when debugging to USB
 
-#ifdef DUET3MINI
 constexpr uint16_t DriverNotPresentTimeouts = 20;
-#endif
 
 #if HAS_STALL_DETECT
 const int DefaultStallDetectThreshold = 1;
@@ -84,12 +84,21 @@ static inline constexpr size_t GetNumTmcDrivers() { return MaxSmartDrivers; }
 
 #endif
 
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+static Bitmap<uint16_t> driversStepped;
+static_assert(driversStepped.MaxBits() >= MaxSmartDrivers);
+#endif
+
 enum class DriversState : uint8_t
 {
 	shutDown = 0,
 	noPower,
 	notInitialised,
 	initialising,
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+	stepping,
+	reinitialising,
+#endif
 	ready
 };
 
@@ -258,7 +267,11 @@ constexpr uint32_t CHOPCONF_DEDGE = 1 << 29;				// step on both edges
 constexpr uint32_t CHOPCONF_DISS2G = 1 << 30;				// disable short to ground protection
 constexpr uint32_t CHOPCONF_DISS2VS = 1 << 31;				// disable low side short protection
 
-constexpr uint32_t DefaultChopConfReg = 0x10000053 | CHOPCONF_VSENSE_HIGH;	// this is the reset default + CHOPCONF_VSENSE_HIGH - try it until we find something better
+constexpr uint32_t DefaultChopConfReg = 0x00000053 | CHOPCONF_VSENSE_HIGH;	// this is the reset default + CHOPCONF_VSENSE_HIGH - CHOPCONF_INTPOL. Try it until we find something better.
+
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+constexpr uint32_t ChopConf256mstep = DefaultChopConfReg;	// the default uses x256 microstepping already
+#endif
 
 // DRV_STATUS register. See the .h file for the bit definitions.
 constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
@@ -420,22 +433,16 @@ public:
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
-#ifdef DUET3MINI
 	bool DriverAssumedPresent() const noexcept { return numWrites != 0 || numTimeouts < DriverNotPresentTimeouts; }
-#endif
 
 	void TransferDone() noexcept __attribute__ ((hot));		// called by the ISR when the SPI transfer has completed
 	void StartTransfer() noexcept __attribute__ ((hot));	// called to start a transfer
 	void TransferTimedOut() noexcept
 	{
-#ifdef DUET3MINI
 		if (DriverAssumedPresent())
 		{
 			++numTimeouts;
 		}
-#else
-		++numTimeouts;
-#endif
 		AbortTransfer();
 	}
 
@@ -445,15 +452,32 @@ public:
 	uint32_t ReadLiveStatus() const noexcept;
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
 
+	void UpdateChopConfRegister() noexcept;					// calculate the chopper control register and flag it for sending
+
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+	void SetMicrostepping256() noexcept;					// temporarily set microstepping to x256 without overwriting the user setting
+
+	bool GetMicrostepPosition(uint32_t& mscnt) noexcept
+	{
+		mscnt = readRegisters[ReadMsCnt];
+		return mscnt < 1024;
+	}
+
+	void ClearMicrostepPosition() noexcept
+	{
+		readRegisters[ReadMsCnt] = 0xFFFFFFFF;				// special value to indicate that we don't know the microstep position
+	}
+
+	void RecordStepFailure() noexcept { hadStepFailure = true; }
+#endif
+
 	// Variables used by the ISR
 	static uint32_t transferStartedTime;
 
 	void UartTmcHandler() noexcept;							// core of the ISR for this driver
-
 private:
 	bool SetChopConf(uint32_t newVal) noexcept;
 	void UpdateRegister(size_t regIndex, uint32_t regVal) noexcept;
-	void UpdateChopConfRegister() noexcept;					// calculate the chopper control register and flag it for sending
 	void UpdateCurrent() noexcept;
 	void UpdateMaxOpenLoadStepInterval() noexcept;
 #if HAS_STALL_DETECT
@@ -497,7 +521,6 @@ private:
 
 #if HAS_STALL_DETECT
 	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2209
-	static constexpr unsigned int NumReadRegistersNon09 = 6;	// the number of registers that we read from on a TMC2208/2224
 #else
 	static constexpr unsigned int NumReadRegisters = 6;			// the number of registers that we read from on a TMC2208/2224
 #endif
@@ -578,6 +601,9 @@ private:
 	uint8_t readIfCountCRC;
 #endif
 	bool enabled;											// true if driver is enabled
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+	bool hadStepFailure;
+#endif
 };
 
 // Static data members of class TmcDriverState
@@ -837,6 +863,14 @@ void TmcDriverState::UpdateChopConfRegister() noexcept
 	UpdateRegister(WriteChopConf, (enabled) ? configuredChopConfReg : configuredChopConfReg & ~CHOPCONF_TOFF_MASK);
 }
 
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+// Temporarily set microstepping to x256 and driver disabled without overwriting the user setting
+void TmcDriverState::SetMicrostepping256() noexcept
+{
+	UpdateRegister(WriteChopConf, ChopConf256mstep);
+}
+#endif
+
 // Initialise the state of the driver and its CS pin
 void TmcDriverState::Init(uint32_t p_driverNumber
 #if TMC22xx_HAS_ENABLE_PINS
@@ -876,6 +910,9 @@ pre(!driversPowered)
 	readIfCountCRC = CRCAddByte(initialSendCRC, REGNUM_IFCOUNT);
 #endif
 	enabled = false;
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+	hadStepFailure = false;
+#endif
 	registersToUpdate = 0;
 	motorCurrent = 0.0;
 	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
@@ -896,6 +933,11 @@ pre(!driversPowered)
 	{
 		accumulatedReadRegisters[i] = readRegisters[i] = 0;				// clear all read registers so that we don't use dud values, in particular we don't know the driver type yet
 	}
+
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+	ClearMicrostepPosition();
+#endif
+
 	regnumBeingUpdated = 0xFF;
 	failedOp = 0xFF;
 	registerToRead = 0;
@@ -1166,13 +1208,11 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 // Append the driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
-#ifdef DUET3MINI
 	if (!DriverAssumedPresent())
 	{
 		reply.cat("assumed not present");
 		return;
 	}
-#endif
 
 	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
 	if (lastReadStatus & TMC_RR_OT)
@@ -1199,7 +1239,13 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	{
 		reply.cat("standstill, ");
 	}
-	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+	if (hadStepFailure)
+	{
+		reply.cat("stepFail, ");
+	}
+#endif
+	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST)) == 0)
 	{
 		reply.cat("ok, ");
 	}
@@ -1456,125 +1502,245 @@ void UART_TMC_DRV1_Handler() noexcept
 
 #endif
 
-// This is the loop that the TMC task runs
-extern "C" [[noreturn]] void TmcLoop(void *) noexcept
+// Do a UART transaction with the specified driver number. Called from the TMC task loop.
+// Returns true if the transaction was completed successfully.
+bool DoTransaction(size_t driverNumber)
 {
-	TmcDriverState * currentDriver = nullptr;
-#if TMC22xx_USE_SLAVEADDR
-	size_t currentDriverNumber;
-#endif
-	for (;;)
-	{
-		if (driversState == DriversState::noPower)
-		{
-			currentDriver = nullptr;
-			TaskBase::Take();
-		}
-		else
-		{
-			if (driversState == DriversState::notInitialised)
-			{
-				for (size_t drive = 0; drive < GetNumTmcDrivers(); ++drive)
-				{
-					driverStates[drive].WriteAll();
-				}
-				driversState = DriversState::initialising;
-			}
-
-			// Do a transaction
+	TmcDriverState *currentDriver;
 #if TMC22xx_SINGLE_DRIVER
-			currentDriver = driverStates;
+	currentDriver = driverStates;
 #elif TMC22xx_USE_SLAVEADDR
-			// To avoid having to insert delays between addressing drivers on the same multiplexer channel,
-			// address drivers on alternate multiplexer channels, i.e in the order 04152637
-			if (currentDriver == nullptr || currentDriverNumber == GetNumTmcDrivers() - 1)
-			{
-				currentDriverNumber = 0;
-			}
-			else
-			{
-				++currentDriverNumber;
-			}
-			const size_t mappedDriverNumber = ((currentDriverNumber & 1u) << 2) | (currentDriverNumber >> 1);	// this assumes we have between 5 and 8 drivers
-			currentDriver = &driverStates[mappedDriverNumber];
+	const size_t mappedDriverNumber = ((driverNumber & 1u) << 2) | (driverNumber >> 1);	// this assumes we have between 5 and 8 drivers
+	currentDriver = &driverStates[mappedDriverNumber];
 #else
-			currentDriver = (currentDriver == nullptr || currentDriver + 1 == driverStates + GetNumTmcDrivers())
-								? driverStates
-									: currentDriver + 1;
+	currentDriver = &driverStates[driverNumber];
 #endif
 #if TMC22xx_USES_SERCOM
-			dmaFinishedReason = DmaCallbackReason::none;
+	dmaFinishedReason = DmaCallbackReason::none;
 #else
-			dmaFinished = false;
+	dmaFinished = false;
 #endif
-			currentDriver->StartTransfer();
+	currentDriver->StartTransfer();
 
-			// Wait for the end-of-transfer interrupt
-			const bool timedOut = !TaskBase::Take(TransferTimeout);
+	// Wait for the end-of-transfer interrupt
+	const bool timedOut = !TaskBase::Take(TransferTimeout);
 #if TMC22xx_USES_SERCOM
-			DmacManager::DisableCompletedInterrupt(DmacChanTmcRx);
+	DmacManager::DisableCompletedInterrupt(DmacChanTmcRx);
 #elif TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER
-			UART_TMC22xx->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
+	UART_TMC22xx->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
 #else
-			// Multiple UARTS - need to disable the right one
+	// Multiple UARTS - need to disable the right one
 # error code not written
 #endif
 
-			if (timedOut)
-			{
-				currentDriver->TransferTimedOut();
-			}
+	if (timedOut)
+	{
+		currentDriver->TransferTimedOut();
+	}
 #if TMC22xx_USES_SERCOM
-			else if (dmaFinishedReason == DmaCallbackReason::complete)
+	else if (dmaFinishedReason == DmaCallbackReason::complete)
 #else
-			else if (dmaFinished)
+	else if (dmaFinished)
 #endif
-			{
-				currentDriver->UartTmcHandler();
+	{
+		currentDriver->UartTmcHandler();
+#if TMC22xx_SINGLE_DRIVER
+		delay(2);						// TMC22xx can't handle back-to-back reads, so we need a short delay
+#endif
+		return true;
+	}
+#if TMC22xx_USES_SERCOM
+	else if (dmaFinishedReason != DmaCallbackReason::none)
+	{
+		// DMA error, or DMA complete and DMA error
+		currentDriver->DmaError();
+#if TMC22xx_SINGLE_DRIVER
+		delay(2);						// TMC22xx can't handle back-to-back reads, so we need a short delay
+#endif
+	}
+#endif
+	return false;
+}
 
-				if (driversState == DriversState::initialising)
+void NextDriver(size_t& currentDriverNumber) noexcept
+{
+#if !TMC22xx_SINGLE_DRIVER
+			++currentDriverNumber;
+			if (currentDriverNumber == GetNumTmcDrivers())
+			{
+				currentDriverNumber = 0;
+			}
+#endif
+}
+
+// This is the loop that the TMC task runs
+extern "C" [[noreturn]] void TmcLoop(void *) noexcept
+{
+	size_t currentDriverNumber = 0;
+	for (;;)
+	{
+		switch (driversState)
+		{
+		case DriversState::noPower:
+		case DriversState::shutDown:
+			currentDriverNumber = 0;
+			TaskBase::Take();
+			break;
+
+		case DriversState::notInitialised:
+			for (size_t drive = 0; drive < GetNumTmcDrivers(); ++drive)
+			{
+				driverStates[drive].WriteAll();
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+				driverStates[drive].SetMicrostepping256();			// switch to x256 microstepping until we can UpdateChopConfRegister
+				driverStates[drive].ClearMicrostepPosition();
+#endif
+			}
+			driversState = DriversState::initialising;
+			break;
+
+		case DriversState::initialising:
+			// Do a transaction
+			if (DoTransaction(currentDriverNumber))
+			{
+				// If all drivers that share the global enable have been initialised, move on to the next phase
+				bool allInitialised = true;
+				for (size_t i = 0; i < GetNumTmcDrivers(); ++i)
 				{
-					// If all drivers that share the global enable have been initialised, set the global enable
-					bool allInitialised = true;
-					for (size_t i = 0; i < GetNumTmcDrivers(); ++i)
-					{
 #if TMC22xx_HAS_ENABLE_PINS
-						if (driverStates[i].UsesGlobalEnable() && driverStates[i].UpdatePending())
+					if (driverStates[i].UsesGlobalEnable() && driverStates[i].UpdatePending())
 #else
-						if (driverStates[i].UpdatePending())
+					if (driverStates[i].UpdatePending())
 #endif
+					{
+						// Drivers 5-6 on the Duet 3 Mini are on the expansion board, which may not be present. So if they consistently time out, ignore them. Also allow for removed/blown drivers.
+						if (driverStates[i].DriverAssumedPresent())
 						{
-#ifdef DUET3MINI
-							// Drivers 5-7 are on the expansion board, which may not be present. So if they consistently time out, ignore them.
-							if (i < 5 || driverStates[i].DriverAssumedPresent())
-#endif
-							{
-								allInitialised = false;
-								break;
-							}
+							allInitialised = false;
+							break;
 						}
 					}
+				}
 
-					if (allInitialised)
+				if (allInitialised)
+				{
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+					driversStepped.Clear();
+					driversState = DriversState::stepping;
+#else
+					fastDigitalWriteLow(GlobalTmc22xxEnablePin);
+					driversState = DriversState::ready;
+#endif
+				}
+			}
+
+			NextDriver(currentDriverNumber);
+			break;
+
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+		case DriversState::stepping:
+			if (DoTransaction(currentDriverNumber))
+			{
+				bool moreNeeded = false;
+				for (size_t driver = 0; driver < GetNumTmcDrivers(); ++driver)
+				{
+					TmcDriverState& drv = driverStates[driver];
+					if (drv.DriverAssumedPresent())
 					{
-						fastDigitalWriteLow(GlobalTmc22xxEnablePin);
-						driversState = DriversState::ready;
+						uint32_t count;
+						if (drv.GetMicrostepPosition(count))
+						{
+							if (count != 0)
+							{
+								if (driversStepped.IsBitSet(driver))
+								{
+									// We have already stepped this driver, but it didn't adjust the microstep counter as we expected
+									drv.RecordStepFailure();
+debugPrintf("Driver %u still wrong\n", driver);
+								}
+								else
+								{
+									moreNeeded = true;						// we need to check the position again
+									driversStepped.SetBit(driver);
+									const bool backwards = (count > 512);
+									reprap.GetPlatform().SetDriverAbsoluteDirection(driver, backwards);	// a high on DIR decreases the microstep counter
+									if (backwards)
+									{
+										count = 1024 - count;
+									}
+debugPrintf("Sending %u steps to driver %u\n", (unsigned int)count, driver);
+									do
+									{
+										delayMicroseconds(1);
+										const uint32_t driverBitmap = StepPins::CalcDriverBitmap(driver);
+										StepPins::StepDriversHigh(driverBitmap);
+										delayMicroseconds(1);
+										StepPins::StepDriversLow(driverBitmap);
+										--count;
+									} while (count != 0);
+									drv.ClearMicrostepPosition();
+									break;									// only do one driver at a time, to avoid using excessive CPU time
+								}
+							}
+							else
+							{
+debugPrintf("Driver %u ok\n", driver);
+							}
+						}
+						else
+						{
+							moreNeeded = true;								// we need to wait until the microstep position is read
+						}
 					}
 				}
-#if TMC22xx_SINGLE_DRIVER
-				delay(2);						// TMC22xx can't handle back-to-back reads, so we need a short delay
-#endif
+
+				if (!moreNeeded)
+				{
+					driversState = DriversState::reinitialising;
+					for (size_t driver = 0; driver < GetNumTmcDrivers(); ++driver)
+					{
+						driverStates[driver].UpdateChopConfRegister();		// restore usual microstepping
+					}
+				}
 			}
-#if TMC22xx_USES_SERCOM
-			else if (dmaFinishedReason != DmaCallbackReason::none)
+			NextDriver(currentDriverNumber);
+			break;
+
+		case DriversState::reinitialising:
+			// If all drivers have been initialised, set the global enable
+			if (DoTransaction(currentDriverNumber))
 			{
-				// DMA error, or DMA complete and DMA error
-				currentDriver->DmaError();
-#if TMC22xx_SINGLE_DRIVER
-				delay(2);						// TMC22xx can't handle back-to-back reads, so we need a short delay
-#endif
+				bool allInitialised = true;
+				for (size_t i = 0; i < GetNumTmcDrivers(); ++i)
+				{
+# if TMC22xx_HAS_ENABLE_PINS
+					if (driverStates[i].UsesGlobalEnable() && driverStates[i].UpdatePending())
+# else
+					if (driverStates[i].UpdatePending())
+# endif
+					{
+						if (driverStates[i].DriverAssumedPresent())			// allow for missing/blown drivers
+						{
+							allInitialised = false;
+							break;
+						}
+					}
+				}
+
+				if (allInitialised)
+				{
+					fastDigitalWriteLow(GlobalTmc22xxEnablePin);
+					driversState = DriversState::ready;
+				}
 			}
+			NextDriver(currentDriverNumber);
+			break;
 #endif
+
+		case DriversState::ready:
+			(void)DoTransaction(currentDriverNumber);
+			NextDriver(currentDriverNumber);
+			break;
 		}
 	}
 }
