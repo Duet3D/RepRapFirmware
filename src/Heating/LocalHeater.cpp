@@ -693,8 +693,8 @@ void LocalHeater::DoTuningStep() noexcept
 				// Move on to next phase
 				lastPwm = 0.0;
 				SetHeater(0.0);
-				peakTemp = temperature;
-				lastOffTime = peakTime = now;
+				peakTemp = afterPeakTemp = temperature;
+				lastOffTime = peakTime = afterPeakTime = now;
 #if HAS_VOLTAGE_MONITOR
 				tuningVoltage.Clear();
 #endif
@@ -784,8 +784,8 @@ void LocalHeater::DoTuningStep() noexcept
 					reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan off\n");
 				}
 			}
-			lastOnTime = peakTime = now;
-			peakTemp = temperature;
+			lastOnTime = peakTime = afterPeakTime = now;
+			peakTemp = afterPeakTemp = temperature;
 			lastPwm = tuningPwm;						// turn on heater at specified power
 			mode = HeaterMode::tuning3;
 		}
@@ -810,8 +810,8 @@ void LocalHeater::DoTuningStep() noexcept
 			dLow.Add((float)(peakTime - lastOnTime));
 			tOn.Add((float)(now - lastOnTime));
 			heatingRate.Add((temperature - afterPeakTemp) * SecondsToMillis/(now - afterPeakTime));
-			lastOffTime = peakTime = now;
-			peakTemp = temperature;
+			lastOffTime = peakTime = afterPeakTime = now;
+			peakTemp = afterPeakTemp = temperature;
 			lastPwm = 0.0;								// turn heater off
 			mode = HeaterMode::tuning2;
 		}
