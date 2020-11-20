@@ -249,7 +249,7 @@ void debugPrintf(const char* fmt, ...) noexcept
 	{
 		va_list vargs;
 		va_start(vargs, fmt);
-		reprap.GetPlatform().MessageF(DebugMessage, fmt, vargs);
+		reprap.GetPlatform().DebugMessage(fmt, vargs);
 		va_end(vargs);
 	}
 }

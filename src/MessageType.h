@@ -44,7 +44,6 @@ enum MessageType : uint32_t
 
 	// Common combinations
 	NoDestinationMessage = 0,												// A message that is going nowhere
-	DebugMessage = BlockingUsbMessage,										// A debug message to send in blocking mode to USB
 	GenericMessage = UsbMessage | AuxMessage | HttpMessage | TelnetMessage,	// A message that is to be sent to the web, Telnet, USB and panel
 	LogOff = LogMessageLowBit | LogMessageHighBit,							// Log level "off (3): do not log this message
 	LogWarn = LogMessageHighBit,											// Log level "warn" (2): all messages of type Error and Warning are logged

@@ -418,6 +418,7 @@ public:
 	void Message(MessageType type, OutputBuffer *buffer) noexcept;
 	void MessageF(MessageType type, const char *fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));
 	void MessageF(MessageType type, const char *fmt, va_list vargs) noexcept;
+	void DebugMessage(const char *fmt, va_list vargs) noexcept;
 	bool FlushMessages() noexcept;							// Flush messages to USB and aux, returning true if there is more to send
 	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls) noexcept;
 	void StopLogging() noexcept;

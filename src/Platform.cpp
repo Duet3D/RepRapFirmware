@@ -3358,6 +3358,30 @@ void Platform::Message(MessageType type, const char *message) noexcept
 	}
 }
 
+// Send a debug message to USB using minimal stack
+void Platform::DebugMessage(const char *fmt, va_list vargs) noexcept
+{
+	MutexLocker lock(usbMutex);
+	vuprintf([](char c) -> bool
+				{
+					if (c != 0)
+					{
+						while (SERIAL_MAIN_DEVICE.IsConnected() && !reprap.SpinTimeoutImminent())
+						{
+							if (SERIAL_MAIN_DEVICE.canWrite() != 0)
+							{
+								SERIAL_MAIN_DEVICE.write(c);
+								return true;
+							}
+						}
+					}
+					return false;
+				},
+				fmt,
+				vargs
+			);
+}
+
 // Send a message box, which may require an acknowledgement
 // sParam = 0 Just display the message box, optional timeout
 // sParam = 1 As for 0 but display a Close button as well
