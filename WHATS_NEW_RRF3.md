@@ -17,7 +17,7 @@ Bug fixes:
 - [Duet 3 expansion/tool boards] CAN diagnostics incorrectly reported a large number of messages lost
 
 Other improvements:
-- Efficiency improvements to TMC2209/2209 drivers for both main and tool boards
+- Efficiency improvements to TMC2208/2209 drivers for both main and tool boards
 - Calls to debugPrintf use less stack than before
 - Changes to expansion and tool board firmware to better support ATE
 
