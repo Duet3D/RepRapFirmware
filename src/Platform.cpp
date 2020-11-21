@@ -1573,15 +1573,13 @@ float Platform::GetCpuTemperature() const noexcept
 
 void Platform::InitialiseInterrupts() noexcept
 {
-#if SAM4E || SAME70 || SAME5x || defined(__LPC17xx__)
-	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);			// set priority for watchdog interrupts
-#endif
+	// Watchdog interrupt priority if applicable has already been set up in RepRap::Init
 
 #if HAS_HIGH_SPEED_SD
-	NVIC_SetPriority(SdhcIRQn, NvicPriorityHSMCI);				// set priority for SD interface interrupts
+	NVIC_SetPriority(SdhcIRQn, NvicPriorityHSMCI);						// set priority for SD interface interrupts
 #endif
 
-	// Set PanelDue UART interrupt priority is set in AuxDevioce::Init
+	// Set PanelDue UART interrupt priority is set in AuxDevice::Init
 	// WiFi UART interrupt priority is now set in module WiFiInterface
 
 #if SUPPORT_TMC22xx && !SAME5x											// SAME5x uses a DMA interrupt instead of the UART interrupt

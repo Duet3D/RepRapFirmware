@@ -732,8 +732,9 @@ bool WaitForTxBufferFree(mcan_module *const module_inst, uint32_t whichTxBuffer,
 		{
 			delay(1);
 		}
+		return true;
 	}
-	return true;
+	return false;
 }
 
 // Get a message from a FIFO with timeout. Return true if successful, false if we timed out

@@ -483,9 +483,11 @@ void RepRap::Init() noexcept
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
 #if SAME5x
 	WatchdogInit();
+	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);								// set priority for watchdog interrupts
+	NVIC_ClearPendingIRQ(WDT_IRQn);
 	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog early warning interrupt
 #elif defined(__LPC17xx__)
-	wdt_init(1); // set wdt to 1 second. reset the processor on a watchdog fault
+	wdt_init(1);																	// set wdt to 1 second. reset the processor on a watchdog fault
 #else
 	{
 		// The clock frequency for both watchdogs is about 32768/128 = 256Hz
@@ -493,20 +495,33 @@ void RepRap::Init() noexcept
 		// The documentation says you mustn't write to the mode register within 3 slow clocks after kicking the watchdog.
 		// I have a theory that the converse is also true, i.e. after enabling the watchdog you mustn't kick it within 3 slow clocks
 		// So I've added a delay call before we set 'active' true (which enables kicking the watchdog), and that seems to fix the problem.
+# if SAM4E || SAME70
+		const uint16_t mainTimeout = 49152/128;										// set main (back stop) watchdog timeout to 1.5s second (max allowed value is 4095 = 16 seconds)
+		WDT->WDT_MR = WDT_MR_WDRSTEN | WDT_MR_WDDBGHLT | WDT_MR_WDV(mainTimeout) | WDT_MR_WDD(mainTimeout);	// reset the processor on a watchdog fault, stop it when debugging
+
+		// The RSWDT must be initialised *after* the main WDT
+		const uint16_t rsTimeout = 32768/128;										// set secondary watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
+#  if SAME70
+		RSWDT->RSWDT_MR = RSWDT_MR_WDFIEN | RSWDT_MR_WDDBGHLT | RSWDT_MR_WDV(rsTimeout) | RSWDT_MR_ALLONES_Msk;		// generate an interrupt on a watchdog fault
+		NVIC_SetPriority(RSWDT_IRQn, NvicPriorityWatchdog);							// set priority for watchdog interrupts
+		NVIC_ClearPendingIRQ(RSWDT_IRQn);
+		NVIC_EnableIRQ(RSWDT_IRQn);													// enable the watchdog interrupt
+#  else
+		RSWDT->RSWDT_MR = RSWDT_MR_WDFIEN | RSWDT_MR_WDDBGHLT | RSWDT_MR_WDV(rsTimeout) | RSWDT_MR_WDD(rsTimeout);	// generate an interrupt on a watchdog fault
+		NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);							// set priority for watchdog interrupts
+		NVIC_ClearPendingIRQ(WDT_IRQn);
+		NVIC_EnableIRQ(WDT_IRQn);													// enable the watchdog interrupt
+#  endif
+# else
+		// We don't have a RSWDT so set the main watchdog timeout to 1 second
 		const uint16_t timeout = 32768/128;											// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
 		wdt_init(WDT, WDT_MR_WDRSTEN | WDT_MR_WDDBGHLT, timeout, timeout);			// reset the processor on a watchdog fault, stop it when debugging
-
-# if SAM4E || SAME70
-		// The RSWDT must be initialised *after* the main WDT
-		const uint16_t rsTimeout = 16384/128;										// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
-		rswdt_init(RSWDT, RSWDT_MR_WDFIEN | RSWDT_MR_WDDBGHLT, rsTimeout, rsTimeout);	// generate an interrupt on a watchdog fault
-		NVIC_EnableIRQ(WDT_IRQn);													// enable the watchdog interrupt
 # endif
 		delayMicroseconds(200);														// 200us is about 6 slow clocks
 	}
 #endif
 
-	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
+	active = true;										// must do this after we initialise the watchdog but before we start the network or call Spin(), else the watchdog may time out
 
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
@@ -1169,9 +1184,9 @@ void RepRap::Tick() noexcept
 	// Kicking the watchdog before it has been initialised may trigger it!
 	if (active)
 	{
-		WatchdogReset();							// kick the watchdog
+		WatchdogReset();														// kick the watchdog
 #if SAM4E || SAME70
-		rswdt_restart(RSWDT);						// kick the secondary watchdog
+		RSWDT->RSWDT_CR = RSWDT_CR_KEY_PASSWD | RSWDT_CR_WDRSTT;				// kick the secondary watchdog
 #endif
 
 		if (!stopped)
