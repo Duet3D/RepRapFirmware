@@ -12,10 +12,6 @@
 
 #if SUPPORT_TMC22xx
 
-#ifndef TMC22xx_HAS_MUX
-# error TMC22xx_HAS_MUX not defined
-#endif
-
 #include "DriverMode.h"
 #include "MessageType.h"
 

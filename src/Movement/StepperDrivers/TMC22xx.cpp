@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
+#include "TMC22xx.h"
 
 #if SUPPORT_TMC22xx
 
@@ -30,8 +30,8 @@
 #endif
 
 #define RESET_MICROSTEP_COUNTERS_AT_INIT	0		// Duets use pulldown resistors on the step pins, so we don't get phantom microsteps at power up
+#define USE_FAST_CRC	1
 
-#include "TMC22xx.h"
 #include <RepRap.h>
 #include <TaskPriorities.h>
 #include <Movement/Move.h>
@@ -306,10 +306,9 @@ constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 // Bytes 3-6 32-bit data, MSB first
 // Byte 7 8-bit CRC
 
-//TODO use FastCrcAddByte and Reflect instead of CrcAddByte
-#if 1
+#if USE_FAST_CRC
 
-// Fast table-driven CRC-8. Unfortunately, the result needs to be reflected.
+// Fast table-driven CRC-8. The result after we have taken the CRC of all bytes needs to be reflected.
 static constexpr uint8_t crc_table[256] =
 {
 	0x00, 0x91, 0xE3, 0x72, 0x07, 0x96, 0xE4, 0x75, 0x0E, 0x9F, 0xED, 0x7C, 0x09, 0x98, 0xEA, 0x7B,
@@ -331,26 +330,33 @@ static constexpr uint8_t crc_table[256] =
 };
 
 // Add a byte to a CRC
-static inline constexpr uint8_t FastCRCAddByte(uint8_t crc, uint8_t currentByte) noexcept
+static inline constexpr uint8_t CRCAddByte(uint8_t crc, uint8_t currentByte) noexcept
 {
 	return crc_table[crc ^ currentByte];
 }
 
 // Reverse the order of the bits
-static inline constexpr uint8_t Reflect(uint8_t b) noexcept
+static inline uint8_t Reflect(uint8_t b) noexcept
 {
-#if 1
+	uint32_t temp = b;
+	asm("rbit %1,%0" : "=r" (temp) : "r" (temp));
+	return temp >> 24;
+}
+
+// Version of Reflect that can be declared constexpr so that we can use it in a static_assert
+static inline constexpr uint8_t SlowReflect(uint8_t b) noexcept
+{
 	b = (b & 0b11110000) >> 4 | (b & 0b00001111) << 4;
 	b = (b & 0b11001100) >> 2 | (b & 0b00110011) << 2;
 	b = (b & 0b10101010) >> 1 | (b & 0b01010101) << 1;
 	return b;
-#else
-	uint32_t temp = b;
-	asm("rbit %1,%0" : "=r" (temp) : "r" (temp));
-	return temp >> 24;
-#endif
 }
-#endif
+
+static_assert(SlowReflect(CRCAddByte(CRCAddByte(CRCAddByte(0, 1), 2), 3)) == 0x1E);
+
+#else
+
+// Slow CRC code
 
 // Add 1 bit to a CRC
 static inline constexpr uint8_t CRCAddBit(uint8_t crc, uint8_t currentByte, uint8_t bit) noexcept
@@ -374,10 +380,9 @@ static inline constexpr uint8_t CRCAddByte(uint8_t crc, uint8_t currentByte) noe
 	return crc;
 }
 
-//#endif
-
-static_assert(Reflect(FastCRCAddByte(FastCRCAddByte(FastCRCAddByte(0, 1), 2), 3)) == 0x1E);
 static_assert(CRCAddByte(CRCAddByte(CRCAddByte(0, 1), 2), 3) == 0x1E);
+
+#endif
 
 // CRC of the first byte we send in any request
 static constexpr uint8_t InitialByteCRC = CRCAddByte(0, 0x05);
@@ -387,8 +392,13 @@ static constexpr uint8_t InitialByteCRC = CRCAddByte(0, 0x05);
 // CRC of the first 2 bytes we send in any request
 static constexpr uint8_t InitialSendCRC = CRCAddByte(InitialByteCRC, 0x00);
 
-// CRC of a request to read the IFCOUNT register
-static constexpr uint8_t ReadIfcountCRC = CRCAddByte(InitialSendCRC, REGNUM_IFCOUNT);
+// CRC of a complete request to read the IFCOUNT register
+static constexpr uint8_t ReadIfcountCRC =
+# if USE_FAST_CRC
+	SlowReflect(CRCAddByte(InitialSendCRC, REGNUM_IFCOUNT));
+# else
+	CRCAddByte(InitialSendCRC, REGNUM_IFCOUNT);
+# endif
 
 #endif
 
@@ -735,7 +745,12 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 		crc = CRCAddByte(crc, byte);
 	}
 
-	sendData[SendDataCRCIndex0] = crc;
+	sendData[SendDataCRCIndex0] =
+#if USE_FAST_CRC
+		Reflect(crc);
+#else
+		crc;
+#endif
 
 #if TMC22xx_USE_SLAVEADDR
 	sendData[SendDataCRCIndex1] = readIfCountCRC;
@@ -792,7 +807,12 @@ inline void TmcDriverState::SetupDMAReceive(uint8_t regNum) noexcept
 	uint8_t crc = InitialSendCRC;
 #endif
 	sendData[2] = regNum;
-	sendData[3] = CRCAddByte(crc, regNum);
+	sendData[3] =
+#if USE_FAST_CRC
+		Reflect(CRCAddByte(crc, regNum));
+#else
+		CRCAddByte(crc, regNum);
+#endif
 
 	Cache::FlushBeforeDMASend(sendData, sizeof(sendData));
 	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
@@ -907,7 +927,12 @@ pre(!driversPowered)
 
 #if TMC22xx_USE_SLAVEADDR
 	initialSendCRC = CRCAddByte(InitialByteCRC, driverNumber & 3u);		// CRC of the first 2 bytes of any transmission
-	readIfCountCRC = CRCAddByte(initialSendCRC, REGNUM_IFCOUNT);
+	readIfCountCRC =
+# if USE_FAST_CRC
+		Reflect(CRCAddByte(initialSendCRC, REGNUM_IFCOUNT));
+# else
+		CRCAddByte(initialSendCRC, REGNUM_IFCOUNT);
+# endif
 #endif
 	enabled = false;
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
