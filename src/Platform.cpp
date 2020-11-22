@@ -4432,11 +4432,14 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 	axesAndExtruders.Iterate([this, &data](unsigned int axisOrExtruder, unsigned int count) noexcept
 								{
 									const StepsPerUnitAndMicrostepping driverData(this->driveStepsPerUnit[axisOrExtruder], this->microstepping[axisOrExtruder]);
-									this->IterateRemoteDrivers(axisOrExtruder, [&data, &driverData](DriverId driver) noexcept
-											{
-												data.AddEntry(driver, driverData);
-											});
-								});
+									this->IterateRemoteDrivers(axisOrExtruder,
+																[&data, &driverData](DriverId driver) noexcept
+																{
+																	data.AddEntry(driver, driverData);
+																}
+															  );
+								}
+							);
 	return CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(data, reply);
 }
 

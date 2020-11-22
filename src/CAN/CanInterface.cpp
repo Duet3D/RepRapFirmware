@@ -558,7 +558,7 @@ template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<
 	for (;;)
 	{
 		CanDriversBitmap driverBits;
-		size_t savedStart = start;
+		const size_t savedStart = start;
 		const CanAddress boardAddress = data.GetNextBoardDriverBitmap(start, driverBits);
 		if (boardAddress == CanId::NoAddress)
 		{
@@ -573,12 +573,10 @@ template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 		CanMessageMultipleDrivesRequest<T> * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<T>>(rid, CanId::MasterAddress, boardAddress, mt);
 		msg->driversToUpdate = driverBits.GetRaw();
-		size_t numDrivers = 0;
-		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
+		const size_t numDrivers = driverBits.CountSetBits();
+		for (size_t i = 0; i < numDrivers; ++i)
 		{
-			msg->values[numDrivers] = data.GetElement(savedStart);
-			++savedStart;
-			++numDrivers;
+			msg->values[i] = data.GetElement(savedStart + i);
 		}
 		buf->dataLength = msg->GetActualDataLength(numDrivers);
 		rslt = max(rslt, CanInterface::SendRequestAndGetStandardReply(buf, rid, reply));
@@ -593,7 +591,6 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 	for (;;)
 	{
 		CanDriversBitmap driverBits;
-		size_t savedStart = start;
 		const CanAddress boardAddress = drivers.GetNextBoardDriverBitmap(start, driverBits);
 		if (boardAddress == CanId::NoAddress)
 		{
@@ -608,12 +605,10 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 		const auto msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<DriverStateControl>>(rid, CanId::MasterAddress, boardAddress, CanMessageType::setDriverStates);
 		msg->driversToUpdate = driverBits.GetRaw();
-		size_t numDrivers = 0;
-		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
+		const size_t numDrivers = driverBits.CountSetBits();
+		for (size_t i = 0; i < numDrivers; ++i)
 		{
-			msg->values[numDrivers] = state;
-			++savedStart;
-			++numDrivers;
+			msg->values[i] = state;
 		}
 		buf->dataLength = msg->GetActualDataLength(numDrivers);
 		rslt = max(rslt, CanInterface::SendRequestAndGetStandardReply(buf, rid, reply));
@@ -806,16 +801,30 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 	}
 }
 
+// This one is used by ATE
+GCodeResult CanInterface::EnableRemoteDrivers(const CanDriversList& drivers, const StringRef& reply) noexcept
+{
+	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverActive));
+}
+
+// This one is used by Prepare
 void CanInterface::EnableRemoteDrivers(const CanDriversList& drivers) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverActive));
+	(void)EnableRemoteDrivers(drivers, dummy.GetRef());
 }
 
+// This one is used by ATE
+GCodeResult CanInterface::DisableRemoteDrivers(const CanDriversList& drivers, const StringRef& reply) noexcept
+{
+	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverDisabled));
+}
+
+// This one is used by Prepare
 void CanInterface::DisableRemoteDrivers(const CanDriversList& drivers) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverDisabled));
+	(void)DisableRemoteDrivers(drivers, dummy.GetRef());
 }
 
 void CanInterface::SetRemoteDriversIdle(const CanDriversList& drivers, float idleCurrentFactor) noexcept

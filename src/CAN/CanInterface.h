@@ -86,7 +86,9 @@ namespace CanInterface
 
 	// Motor control functions
 	void SendMotion(CanMessageBuffer *buf) noexcept;
+	GCodeResult EnableRemoteDrivers(const CanDriversList& drivers, const StringRef& reply) noexcept;
 	void EnableRemoteDrivers(const CanDriversList& drivers) noexcept;
+	GCodeResult DisableRemoteDrivers(const CanDriversList& drivers, const StringRef& reply) noexcept;
 	void DisableRemoteDrivers(const CanDriversList& drivers) noexcept;
 	void SetRemoteDriversIdle(const CanDriversList& drivers, float idleCurrentFactor) noexcept;
 	GCodeResult SetRemoteStandstillCurrentPercent(const CanDriversData<float>& data, const StringRef& reply) noexcept;
