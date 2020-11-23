@@ -41,6 +41,7 @@
 #include <Movement/Move.h>
 #include <Movement/StepTimer.h>
 #include <Cache.h>
+#include <General/Portability.h>
 
 #if SAME5x || SAMC21
 # include <Hardware/IoPorts.h>
@@ -1353,8 +1354,13 @@ inline void TmcDriverState::TransferDone() noexcept
 		// We could read IFCNT once to get the initial value, but doing the first write twice does no harm.
 		if (regnumBeingUpdated < NumWriteRegisters && currentIfCount == (uint8_t)(lastIfCount + 1) && (sendData[2] & 0x7F) == WriteRegNumbers[regnumBeingUpdated])
 		{
-			registersToUpdate &= ~(1u << regnumBeingUpdated);
 			++numWrites;
+			registersToUpdate &= ~(1u << regnumBeingUpdated);
+			// The value to be written may have changed since we sent it, so check that we wrote the latest data
+			if (LoadBE32(const_cast<const uint8_t *>(sendData + 3)) != writeRegisters[regnumBeingUpdated])
+			{
+				registersToUpdate |= 1u << regnumBeingUpdated;
+			}
 		}
 		else
 		{
