@@ -1764,7 +1764,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	}
 
 	// Show the current error codes
-	MessageF(mtype, "Error status: 0x%02" PRIx32 "\n", errorCodeBits);		// we only use the bottom 5 bits at present, so print just 2 bytes
+	MessageF(mtype, "Error status: 0x%02" PRIx32 "\n", errorCodeBits);		// we only use the bottom 5 bits at present, so print just 2 characters
 
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures

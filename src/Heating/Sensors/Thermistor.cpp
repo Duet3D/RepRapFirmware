@@ -104,9 +104,9 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 	if (gb.Seen('L'))
 	{
 		const int lVal = gb.GetIValue();
-#if HAS_VREF_MONITOR
 		if (lVal == 999)
 		{
+#if HAS_VREF_MONITOR
 			bool valid;
 			const int32_t val = GetRawReading(valid);
 			if (valid)
@@ -140,20 +140,24 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 				reply.copy("Temperature reading is not valid");
 				return GCodeResult::error;
 			}
+#else
+			reply.copy("Thermistor input auto calibration is not supported by this hardware");
+			return GCodeResult::error;
+#endif
 		}
 		else
-#endif
 		{
 			adcLowOffset = (int8_t)constrain<int>(lVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
 		}
 		changed = true;
 	}
+
 	if (gb.Seen('H'))
 	{
 		const int hVal = gb.GetIValue();
-#if HAS_VREF_MONITOR
 		if (hVal == 999)
 		{
+#if HAS_VREF_MONITOR
 			bool valid;
 			const int32_t val = GetRawReading(valid);
 			if (valid)
@@ -197,9 +201,12 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 				reply.copy("Temperature reading is not valid");
 				return GCodeResult::error;
 			}
+#else
+			reply.copy("Thermistor input auto calibration is not supported by this hardware");
+			return GCodeResult::error;
+#endif
 		}
 		else
-#endif
 		{
 			adcHighOffset = (int8_t)constrain<int>(hVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
 		}

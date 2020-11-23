@@ -689,7 +689,11 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 		{
 			if (fragmentsReceived == 0)
 			{
-				reply.lcatn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+				const size_t textLength = buf->msg.standardReply.GetTextLength(buf->dataLength);
+				if (textLength != 0)			// avoid concatenating blank lines to existing output
+				{
+					reply.lcatn(buf->msg.standardReply.text, textLength);
+				}
 				if (extra != nullptr)
 				{
 					*extra = buf->msg.standardReply.extra;
