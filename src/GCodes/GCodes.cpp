@@ -3498,9 +3498,10 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	case Compatibility::RepRapFirmware:
 		// In RepRapFirmware compatibility mode we suppress empty responses in most cases
 		if (   reply[0] != 0
-			|| &gb == httpGCode					// DWC expects a reply from every code, so we must even send empty responses
-			|| &gb == spiGCode					// assume that DSF always expects a response too
-			|| (gb.MachineState().doingFileMacro && !gb.MachineState().waitingForAcknowledgement)			// we must always acknowledge M292
+			|| (gb.MachineState().doingFileMacro && gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 292)	// we must always acknowledge M292
+			|| (   gb.IsLastCommand()
+				&& (&gb == httpGCode || &gb == spiGCode)	// DWC expects a reply from every code, so we must even send empty responses. Assume that DSF always expects a response too.
+			   )
 		   )
 		{
 			platform.MessageF(mt, "%s\n", reply);
@@ -3509,29 +3510,31 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 
 	case Compatibility::NanoDLP:				// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
 	case Compatibility::Marlin:
+		if (gb.IsLastCommand() && !gb.IsDoingFileMacro())
 		{
+			// Put "ok" at the end
 			const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 			// We don't need to handle M20 here because we always allocate an output buffer for that one
-			if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
-			{
-				platform.MessageF(mt, "%s\n%s\n", response, reply);
-			}
-			else if (gb.GetCommandLetter() == 'M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
+			if (gb.GetCommandLetter() == 'M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
 			{
 				platform.MessageF(mt, "%s %s\n", response, reply);
 			}
-			else if (reply[0] != 0 && !gb.IsDoingFileMacro())
+			else if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
 			{
-				platform.MessageF(mt, "%s\n%s\n", reply, response);
+				platform.MessageF(mt, "%s\n%s\n", response, reply);
 			}
 			else if (reply[0] != 0)
 			{
-				platform.MessageF(mt, "%s\n", reply);
+				platform.MessageF(mt, "%s\n%s\n", reply, response);
 			}
 			else
 			{
 				platform.MessageF(mt, "%s\n", response);
 			}
+		}
+		else if (reply[0] != 0)
+		{
+			platform.MessageF(mt, "%s\n", reply);
 		}
 		break;
 

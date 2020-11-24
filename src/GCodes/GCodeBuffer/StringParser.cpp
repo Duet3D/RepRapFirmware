@@ -894,6 +894,12 @@ size_t StringParser::DataLength() const noexcept
 	return commandEnd - commandStart;
 }
 
+// Return true if the command being processed is the last one in this line of GCode
+bool StringParser::IsLastCommand() const noexcept
+{
+	return commandEnd == gcodeLineEnd;
+}
+
 // Is 'c' in the G Code string? 'c' must be uppercase.
 // Leave the pointer one after it for a subsequent read.
 bool StringParser::Seen(char c) noexcept
