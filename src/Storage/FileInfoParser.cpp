@@ -351,7 +351,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 }
 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
-bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len) noexcept
+bool FileInfoParser::FindFirstLayerHeight(const char* bufp, size_t len) noexcept
 {
 	if (len < 4)
 	{
@@ -363,38 +363,38 @@ bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len) noexcept
 	bool inComment = false, inRelativeMode = false, foundHeight = false;
 	for(size_t i = 0; i < len - 4; i++)
 	{
-		if (buf[i] == ';')
+		if (bufp[i] == ';')
 		{
 			inComment = true;
 		}
 		else if (inComment)
 		{
-			if (buf[i] == '\n')
+			if (bufp[i] == '\n')
 			{
 				inComment = false;
 			}
 		}
-		else if (buf[i] == 'G')
+		else if (bufp[i] == 'G')
 		{
 			// See if we can switch back to absolute mode
 			if (inRelativeMode)
 			{
-				inRelativeMode = !(buf[i + 1] == '9' && buf[i + 2] == '0' && buf[i + 3] <= ' ');
+				inRelativeMode = !(bufp[i + 1] == '9' && bufp[i + 2] == '0' && bufp[i + 3] <= ' ');
 			}
 			// Ignore G0/G1 codes if in relative mode
-			else if (buf[i + 1] == '9' && buf[i + 2] == '1' && buf[i + 3] <= ' ')
+			else if (bufp[i + 1] == '9' && bufp[i + 2] == '1' && bufp[i + 3] <= ' ')
 			{
 				inRelativeMode = true;
 			}
 			// Look for "G0/G1 ... Z#HEIGHT#" command
-			else if ((buf[i + 1] == '0' || buf[i + 1] == '1') && buf[i + 2] == ' ')
+			else if ((bufp[i + 1] == '0' || bufp[i + 1] == '1') && bufp[i + 2] == ' ')
 			{
 				for(i += 3; i < len - 4; i++)
 				{
-					if (buf[i] == 'Z')
+					if (bufp[i] == 'Z')
 					{
 						//debugPrintf("Found at offset %u text: %.100s\n", i, &buf[i + 1]);
-						const float flHeight = SafeStrtof(&buf[i + 1], nullptr);
+						const float flHeight = SafeStrtof(&bufp[i + 1], nullptr);
 						if ((parsedFileInfo.firstLayerHeight == 0.0 || flHeight < parsedFileInfo.firstLayerHeight) && (flHeight <= reprap.GetPlatform().GetNozzleDiameter() * 3.0))
 						{
 							parsedFileInfo.firstLayerHeight = flHeight;				// Only report first Z height if it's somewhat reasonable
@@ -403,7 +403,7 @@ bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len) noexcept
 						}
 						break;
 					}
-					else if (buf[i] == ';')
+					else if (bufp[i] == ';')
 					{
 						// Ignore comments
 						break;
@@ -419,7 +419,7 @@ bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len) noexcept
 // This parsing algorithm needs to be fast. The old one sometimes took 5 seconds or more to parse about 120K of data.
 // To speed up parsing, we now parse forwards from the start of the buffer. This means we can't stop when we have found a G1 Z command,
 // we have to look for a later G1 Z command in the buffer. But it is faster in the (common) case that we don't find a match in the buffer at all.
-bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
+bool FileInfoParser::FindHeight(const char* bufp, size_t len) noexcept
 {
 	bool foundHeight = false;
 	bool inRelativeMode = false;
@@ -427,18 +427,18 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 	{
 		// Skip to next newline
 		char c;
-		while (len >= 6 && (c = *buf) != '\r' && c != '\n')
+		while (len >= 6 && (c = *bufp) != '\r' && c != '\n')
 		{
-			++buf;
+			++bufp;
 			--len;
 		}
 
 		// Skip the newline and any leading spaces
 		do
 		{
-			++buf;			// skip the newline
+			++bufp;			// skip the newline
 			--len;
-			c = *buf;
+			c = *bufp;
 		} while (len >= 5 && (c == ' ' || c == '\t' || c == '\r' || c == '\n'));
 
 		if (len < 5)
@@ -446,7 +446,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 			break;			// not enough characters left for a G1 Zx.x command
 		}
 
-		++buf;				// move to 1 character beyond c
+		++bufp;				// move to 1 character beyond c
 		--len;
 
 		// In theory we should skip N and a line number here if they are present, but no slicers seem to generate line numbers
@@ -455,33 +455,33 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 			if (inRelativeMode)
 			{
 				// We have seen a G91 in this buffer already, so we are only interested in G90 commands that switch back to absolute mode
-				if (buf[0] == '9' && buf[1] == '0' && (buf[2] < '0' || buf[2] > '9'))
+				if (bufp[0] == '9' && bufp[1] == '0' && (bufp[2] < '0' || bufp[2] > '9'))
 				{
 					// It's a G90 command so go back to absolute mode
 					inRelativeMode = false;
 				}
 			}
-			else if (*buf == '1' || *buf == '0')
+			else if (*bufp == '1' || *bufp == '0')
 			{
 				// It could be a G0 or G1 command
-				++buf;
+				++bufp;
 				--len;
-				if (*buf < '0' || *buf > '9')
+				if (*bufp < '0' || *bufp > '9')
 				{
 					// It is a G0 or G1 command. See if it has a Z parameter.
 					while (len >= 4)
 					{
-						c = *buf;
+						c = *bufp;
 						if (c == 'Z')
 						{
-							const char* zpos = buf + 1;
+							const char* zpos = bufp + 1;
 							// Check special case of this code ending with ";E" or "; E" - ignore such codes
-							while (len > 2 && *buf != '\n' && *buf != '\r' && *buf != ';')
+							while (len > 2 && *bufp != '\n' && *bufp != '\r' && *bufp != ';')
 							{
-								++buf;
+								++bufp;
 								--len;
 							}
-							if ((len >= 2 && StringStartsWith(buf, ";E")) || (len >= 3 && StringStartsWith(buf, "; E")))
+							if ((len >= 2 && StringStartsWith(bufp, ";E")) || (len >= 3 && StringStartsWith(bufp, "; E")))
 							{
 								// Ignore this G1 Z command
 							}
@@ -500,12 +500,12 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 						{
 							break;		// no Z parameter
 						}
-						++buf;
+						++bufp;
 						--len;
 					}
 				}
 			}
-			else if (buf[0] == '9' && buf[1] == '1' && (buf[2] < '0' || buf[2] > '9'))
+			else if (bufp[0] == '9' && bufp[1] == '1' && (bufp[2] < '0' || bufp[2] > '9'))
 			{
 				// It's a G91 command
 				inRelativeMode = true;
@@ -514,9 +514,9 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 		else if (c == ';')
 		{
 			static const char kisslicerHeightString[] = " END_LAYER_OBJECT z=";
-			if (len > 31 && StringStartsWithIgnoreCase(buf, kisslicerHeightString))
+			if (len > 31 && StringStartsWithIgnoreCase(bufp, kisslicerHeightString))
 			{
-				float objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
+				float objectHeight = SafeStrtof(bufp + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
 				if (!std::isnan(objectHeight) && !std::isinf(objectHeight))
 				{
 					parsedFileInfo.objectHeight = objectHeight;
@@ -529,7 +529,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len) noexcept
 }
 
 // Scan the buffer for the layer height. The buffer is null-terminated.
-bool FileInfoParser::FindLayerHeight(const char *buf, size_t len) noexcept
+bool FileInfoParser::FindLayerHeight(const char *bufp, size_t len) noexcept
 {
 	static const char* const layerHeightStrings[] =
 	{
@@ -540,12 +540,12 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len) noexcept
 		"layerThickness"		// Matter Control
 	};
 
-	if (*buf != 0)
+	if (*bufp != 0)
 	{
-		++buf;														// make sure we can look back 1 character after we find a match
+		++bufp;														// make sure we can look back 1 character after we find a match
 		for (const char * lhStr : layerHeightStrings)				// search for each string in turn
 		{
-			const char *pos = buf;
+			const char *pos = bufp;
 			for(;;)													// loop until success or strstr returns null
 			{
 				pos = strstr(pos, lhStr);
@@ -577,7 +577,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len) noexcept
 	return false;
 }
 
-bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len) noexcept
+bool FileInfoParser::FindSlicerInfo(const char* bufp, size_t len) noexcept
 {
 	static const char * const GeneratedByStrings[] =
 	{
@@ -592,7 +592,7 @@ bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len) noexcept
 	const char* pos;
 	do
 	{
-		pos = strstr(buf, GeneratedByStrings[index]);
+		pos = strstr(bufp, GeneratedByStrings[index]);
 		if (pos != nullptr)
 		{
 			break;
@@ -631,14 +631,14 @@ bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len) noexcept
 
 // Scan the buffer for the filament used. The buffer is null-terminated.
 // Returns the number of filaments found.
-unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexcept
+unsigned int FileInfoParser::FindFilamentUsed(const char* bufp, size_t len) noexcept
 {
 	unsigned int filamentsFound = 0;
 	const size_t maxFilaments = reprap.GetGCodes().GetNumExtruders();
 
 	// Look for filament usage as generated by Slic3r and Cura
 	const char* const filamentUsedStr1 = "ilament used";			// comment string used by slic3r and Cura, followed by filament used and "mm"
-	const char* p = buf;
+	const char* p = bufp;
 	while (filamentsFound < maxFilaments &&	(p = strstr(p, filamentUsedStr1)) != nullptr)
 	{
 		p += strlen(filamentUsedStr1);
@@ -677,7 +677,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 
 	// Look for filament usage string generated by Ideamaker
 	const char* const filamentUsedStr2 = ";Material#";			// comment string used by Ideamaker, e.g. ";Material#1 Used: 868.0"
-	p = buf;
+	p = bufp;
 	while (filamentsFound < maxFilaments &&	(p = strstr(p, filamentUsedStr2)) != nullptr)
 	{
 		p += strlen(filamentUsedStr2);
@@ -706,7 +706,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 	if (filamentsFound == 0)
 	{
 		const char *filamentLengthStr = "ilament length";	// comment string used by S3D
-		p = buf;
+		p = bufp;
 		while (filamentsFound < maxFilaments &&	(p = strstr(p, filamentLengthStr)) != nullptr)
 		{
 			p += strlen(filamentLengthStr);
@@ -730,7 +730,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 	if (filamentsFound == 0)
 	{
 		const char *filamentLengthStr = ";    Ext ";
-		p = buf;
+		p = bufp;
 		while (filamentsFound < maxFilaments && (p = strstr(p, filamentLengthStr)) != nullptr)
 		{
 			p += strlen(filamentLengthStr);
@@ -763,7 +763,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 	if (filamentsFound == 0 && reprap.GetPlatform().GetFilamentWidth() > 0.0)
 	{
 		const char *filamentVolumeStr = "; Estimated Build Volume: ";
-		p = strstr(buf, filamentVolumeStr);
+		p = strstr(bufp, filamentVolumeStr);
 		if (p != nullptr)
 		{
 			const float filamentCMM = SafeStrtof(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
@@ -778,7 +778,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len) noexc
 }
 
 // Scan the buffer for the estimated print time
-bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
+bool FileInfoParser::FindPrintTime(const char* bufp, size_t len) noexcept
 {
 	static const char* const PrintTimeStrings[] =
 	{
@@ -793,7 +793,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 
 	for (const char * ptStr : PrintTimeStrings)
 	{
-		const char* pos = strstr(buf, ptStr);
+		const char* pos = strstr(bufp, ptStr);
 		if (pos != nullptr)
 		{
 			pos += strlen(ptStr);
@@ -857,9 +857,9 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len) noexcept
 }
 
 // Scan the buffer for the simulated print time
-bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len) noexcept
+bool FileInfoParser::FindSimulatedTime(const char* bufp, size_t len) noexcept
 {
-	const char* pos = strstr(buf, SimulatedTimeString);
+	const char* pos = strstr(bufp, SimulatedTimeString);
 	if (pos != nullptr)
 	{
 		pos += strlen(SimulatedTimeString);

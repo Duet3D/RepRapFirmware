@@ -541,7 +541,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 // Start a new gcode, or continue to execute one that has already been started. Return true if we found something significant to do.
 bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-	if (&gb == fileGCode && (pauseState != PauseState::notPaused || (pausePending && !gb.IsDoingFileMacro())))
+	if (&gb == fileGCode && ((pauseState != PauseState::notPaused && pauseState != PauseState::pausing) || (pausePending && !gb.IsDoingFileMacro())))
 	{
 		// We are paused or pausing, so don't process any more gcodes from the file being printed.
 		// There is a potential issue here if fileGCode holds any locks, so unlock everything.
