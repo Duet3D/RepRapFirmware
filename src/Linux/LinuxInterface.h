@@ -28,21 +28,20 @@ class GCodeBuffer;
 class OutputBuffer;
 class OutputStack;
 
-constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for reading files from the SBC. Should be a multiple of sizeof(CanMessageFirmwareUpdateResponse::data) for best CAN performance
+//#define TRACK_FILE_CODES			// Uncomment this to enable code <-> code reply tracking for the file G-code channel
 
 // G-Code input class for an SPI channel
 class LinuxInterface
 {
 public:
 	LinuxInterface() noexcept;
-	~LinuxInterface();
 
 	// The Init method must be called prior to calling any of the other methods. Use reprap.UsingLinuxInterface() to guard calls to other members.
 	// OTOH, calling Init when we don't have a SBC connected may cause problems due to noise pickup on the SPI CS and clock inputs
 	void Init() noexcept;
 	void TaskLoop() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
-	bool IsConnected() const noexcept;
+	bool IsConnected() const noexcept { return isConnected; }
 
 	bool HasPrintStarted();
 	bool HasPrintStopped();
@@ -54,13 +53,11 @@ public:
 	void HandleGCodeReply(MessageType type, const char *reply) noexcept;	// accessed by Platform
 	void HandleGCodeReply(MessageType type, OutputBuffer *buffer) noexcept;	// accessed by Platform
 
-#if SUPPORT_CAN_EXPANSION
-	const char *GetFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, int32_t& bytesRead, uint32_t &fileLength) noexcept; 	// Request a file chunk and resume the given task when it has been received
-#endif
+	bool GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept;
 
 private:
 	DataTransfer transfer;
-	bool wasConnected;
+	bool isConnected;
 	uint32_t numDisconnects;
 
 	GCodeFileInfo fileInfo;
@@ -76,17 +73,21 @@ private:
 	uint32_t iapWritePointer;
 	uint32_t iapRamAvailable;											// must be at least 64Kb otherwise the SPI IAP can't work
 
-#if SUPPORT_CAN_EXPANSION
 	// Data needed when a CAN expansion board requests a firmware file chunk
+	volatile bool waitingForFileChunk;
+	bool fileChunkRequestSent;
 	String<FILENAME_MAX> requestedFileName;
 	uint32_t requestedFileOffset, requestedFileLength;
 	BinarySemaphore requestedFileSemaphore;
-	char requestedFileChunk[MaxFileChunkSize];
+	char *requestedFileBuffer;
 	int32_t requestedFileDataLength;
-#endif
 
+	static volatile OutputStack gcodeReply;
 	static Mutex gcodeReplyMutex;											// static so that the LinuxInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
-	OutputStack *gcodeReply;
+
+#ifdef TRACK_FILE_CODES
+	volatile size_t fileCodesRead, fileCodesHandled, fileMacrosRunning, fileMacrosClosing;
+#endif
 
 	void InvalidateBufferChannel(GCodeChannel channel) noexcept;            // Invalidate every buffered G-code of the corresponding channel from the buffer ring
 };

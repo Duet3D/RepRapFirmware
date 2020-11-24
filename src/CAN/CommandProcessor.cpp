@@ -18,6 +18,9 @@
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
+
+constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for reading files from the SBC. Should be a multiple of sizeof(CanMessageFirmwareUpdateResponse::data) for best CAN performance
+char sbcFirmwareChunk[MaxFileChunkSize];
 #endif
 
 
@@ -43,9 +46,8 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		if (reprap.UsingLinuxInterface())
 		{
 			// Fetch the firmware file from the SBC
-			int32_t bytesRead;
-			const char *data = reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, lreq, bytesRead, fileLength);
-			if (bytesRead > 0)
+			uint32_t bytesRead = lreq;
+			if (reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
 			{
 				if (fileOffset >= fileLength)
 				{
@@ -73,7 +75,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 					{
 						CanMessageFirmwareUpdateResponse * msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 						const size_t lengthToSend = min<size_t>(bytesRead - bytesSent, sizeof(msgp->data));
-						memcpy(msgp->data, data + bytesSent, lengthToSend);
+						memcpy(msgp->data, sbcFirmwareChunk + bytesSent, lengthToSend);
 						msgp->dataLength = lengthToSend;
 						msgp->err = CanMessageFirmwareUpdateResponse::ErrNone;
 						msgp->fileLength = fileLength;
@@ -91,8 +93,8 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 
 						if (bytesSent == (size_t)bytesRead)
 						{
-							data = reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, lreq, bytesRead, fileLength);
-							if (bytesRead < 0)
+							uint32_t bytesRead = lreq;
+							if (reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
 							{
 								msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 								msgp->dataLength = 0;

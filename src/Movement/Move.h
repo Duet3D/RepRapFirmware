@@ -74,6 +74,8 @@ public:
 	bool FinishedBedProbing(int sParam, const StringRef& reply) noexcept;	// Calibrate or set the bed equation after probing
 	void SetAxisCompensation(unsigned int axis, float tangent) noexcept;	// Set an axis-pair compensation angle
 	float AxisCompensation(unsigned int axis) const noexcept;				// The tangent value
+	bool IsXYCompensated() const;											// Check if XY axis compensation applies to the X or Y axis
+	void SetXYCompensation(bool xyCompensation);							// Define whether XY compensation applies to X (default) or to Y
 	void SetIdentityTransform() noexcept;									// Cancel the bed equation; does not reset axis angle compensation
 	void AxisAndBedTransform(float move[], const Tool *tool, bool useBedCompensation) const noexcept;
 																			// Take a position and apply the bed and the axis-angle compensations
@@ -246,6 +248,7 @@ private:
 	float& tanXY = tangents[0];
 	float& tanYZ = tangents[1];
 	float& tanXZ = tangents[2];
+	bool compensateXY;
 
 	HeightMap heightMap;    							// The grid definition in use and height map for G29 bed probing
 	RandomProbePointSet probePoints;					// G30 bed probe points

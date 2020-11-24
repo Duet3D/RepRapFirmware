@@ -835,7 +835,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	{
 		// Wait for a response (but not forever)
 		isWaitingForMacro = true;
-		if (!macroSemaphore.Take(SpiConnectionTimeout))
+		if (!macroSemaphore.Take(SpiMacroRequestTimeout))
 		{
 			isWaitingForMacro = false;
 			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to get macro response within %" PRIu32 "ms from SBC (channel %s)\n", SpiConnectionTimeout, GetChannel().ToString());

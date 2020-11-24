@@ -139,12 +139,13 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 
 	// 9. move.compensation.skew members
+	{ "compensateXY",			OBJECT_MODEL_FUNC(self->compensateXY),													ObjectModelEntryFlags::none },
 	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY, 4),														ObjectModelEntryFlags::none },
 	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ, 4),														ObjectModelEntryFlags::none },
 	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),														ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 10, 14, 3, 2, 4 + SUPPORT_LASER, 3, 2, 2, 5 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 3 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 10, 14, 3, 2, 4 + SUPPORT_LASER, 3, 2, 2, 5 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -184,6 +185,7 @@ void Move::Init() noexcept
 
 	// Clear the transforms
 	SetIdentityTransform();
+	compensateXY = true;
 	tanXY = tanYZ = tanXZ = 0.0;
 
 	usingMesh = useTaper = false;
@@ -588,15 +590,16 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 	{
 		// Found a Y axis. Use this one when correcting the X coordinate.
 		const AxesBitmap xAxes = Tool::GetXAxes(tool);
+		const size_t lowestXAxis = xAxes.LowestSetBit();
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			if (xAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] += tanXY*xyzPoint[lowestYAxis] + tanXZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] += (compensateXY ? tanXY*xyzPoint[lowestYAxis] : 0.0) + tanXZ*xyzPoint[Z_AXIS];
 			}
 			if (yAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] += tanYZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] += (compensateXY ? 0.0 : tanXY*xyzPoint[lowestXAxis]) + tanYZ*xyzPoint[Z_AXIS];
 			}
 		}
 	}
@@ -619,15 +622,16 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 	{
 		// Found a Y axis. Use this one when correcting the X coordinate.
 		const AxesBitmap xAxes = Tool::GetXAxes(tool);
+		const size_t lowestXAxis = xAxes.LowestSetBit();
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			if (yAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] -= tanYZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] -= ((compensateXY ? 0.0 : tanXY*xyzPoint[lowestXAxis]) + tanYZ*xyzPoint[Z_AXIS]);
 			}
 			if (xAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] -= (tanXY*xyzPoint[lowestYAxis] + tanXZ*xyzPoint[Z_AXIS]);
+				xyzPoint[axis] -= ((compensateXY ? tanXY*xyzPoint[lowestYAxis] : 0.0) + tanXZ*xyzPoint[Z_AXIS]);
 			}
 		}
 	}
@@ -804,7 +808,19 @@ void Move::SetAxisCompensation(unsigned int axis, float tangent) noexcept
 	if (axis < ARRAY_SIZE(tangents))
 	{
 		tangents[axis] = tangent;
+		reprap.MoveUpdated();
 	}
+}
+
+bool Move::IsXYCompensated() const
+{
+	return compensateXY;
+}
+
+void Move::SetXYCompensation(bool xyCompensation)
+{
+	compensateXY = xyCompensation;
+	reprap.MoveUpdated();
 }
 
 // Calibrate or set the bed equation after probing, returning true if an error occurred

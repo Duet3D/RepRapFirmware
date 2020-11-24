@@ -3095,6 +3095,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 556: // Axis compensation (we support only X, Y, Z)
+		{
+			bool seen = false;
+
 			if (gb.Seen('S'))
 			{
 				const float value = gb.GetFValue();
@@ -3105,16 +3108,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (gb.Seen(axisLetters[axis]))
 						{
 							reprap.GetMove().SetAxisCompensation(axis, gb.GetFValue() / value);
+							seen = true;
 						}
 					}
 				}
 			}
-			else
+
+			if (gb.Seen('P'))
 			{
-				reply.printf("Axis compensations - XY: %.5f, YZ: %.5f, ZX: %.5f",
+				reprap.GetMove().SetXYCompensation(gb.GetIValue() <= 0);
+				seen = true;
+			}
+
+			if (!seen)
+			{
+				reply.printf("Axis compensations - %s: %.5f, YZ: %.5f, ZX: %.5f",
+					reprap.GetMove().IsXYCompensated() ? "XY" : "YX",
 					(double)reprap.GetMove().AxisCompensation(X_AXIS), (double)reprap.GetMove().AxisCompensation(Y_AXIS), (double)reprap.GetMove().AxisCompensation(Z_AXIS));
 			}
 			break;
+		}
 
 		case 557: // Set/report Z probe point coordinates
 			result = DefineGrid(gb, reply);
