@@ -7,14 +7,17 @@ New features:
 - WiFi diagnostics now include the WiFi connection mode (needs DuetWiFiServer 1.25beta1)
 - [Duet 3 tool boards] Stepper driver diagnostics now include the PWM_AUTO register (main board diagnostics did already)
 - [Duet 3] CAN diagnostics on both main and tool/expansion boards provide more data
+- M308 S# H999 and L999 are now supported on those Duet 3 expansion/tool boards that have the required hardware support
 
 Bug fixes:
 - Tool and expansion board firmware was likely to crash if a sensor or heater fault occurred (new bug in 3.2beta3 and beta3.2)
 - The heater tuning algorithm could fail to properly measure the dead time if it was very low (thanks Andy)
+- M226, M600 and M601 got stuck in state "Pausing" (new bug in 3.2beta3)
 - [Duet 3] CAN diagnostics incorrectly reported most transmissions as having timed out
 - [Duet 3 MB6HC] A watchdog timeout didn't save any software reset data
 - [Duet 3 expansion/tool boards] If a filament monitor was configured, the expansion/tool board sent a continuous stream of status messages to the main board after the first change in filament monitor status (e.g. when the first data packet was received from a Duet3D laser or magnetic filament monitor). This had a detrimental effect on print quality.
 - [Duet 3 expansion/tool boards] CAN diagnostics incorrectly reported a large number of messages lost
+- If a TMC22xx driver received two commands to enable/disable the drive or change microstepping twice in very quick succession, the second one was sometimes lost
 
 Other improvements:
 - Efficiency improvements to TMC2208/2209 drivers for both main and tool boards
