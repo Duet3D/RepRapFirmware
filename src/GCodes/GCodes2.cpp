@@ -1746,13 +1746,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (result != GCodeResult::error)
 				{
-					if ((type & HttpMessage) == 0)
+					type = (MessageType)(type | PushFlag);
+					if ((type & HttpMessage) != 0)
 					{
-						platform.Message((MessageType)(type | PushFlag), message.c_str());
-						platform.Message(type, "\n");
+						// Send the message to HTTP before we append newline
+						constexpr MessageType mask = (MessageType)(HttpMessage | ~DestinationsMask);
+						platform.Message((MessageType)(type & mask), message.c_str());
+						type = (MessageType)(type & ~HttpMessage);
 					}
-					else
+
+					if ((type & DestinationsMask) != 0)
 					{
+						// Append newline and send the message to the remaining destinations
+						message.cat('\n');
 						platform.Message(type, message.c_str());
 					}
 				}
