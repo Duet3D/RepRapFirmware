@@ -326,6 +326,11 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 	return PARSER_OPERATION(GetCommandFraction());
 }
 
+bool GCodeBuffer::IsLastCommand() const noexcept
+{
+	return BINARY_OR(stringParser.IsLastCommand());
+}
+
 bool GCodeBuffer::ContainsExpression() const noexcept
 {
 	return PARSER_OPERATION(ContainsExpression());

@@ -41,6 +41,7 @@ public:
 	bool HasCommandNumber() const noexcept { return hasCommandNumber; }
 	int GetCommandNumber() const noexcept { return commandNumber; }
 	int8_t GetCommandFraction() const noexcept { return commandFraction; }
+	bool IsLastCommand() const noexcept;
 	bool ContainsExpression() const noexcept { return seenExpression; }
 
 	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?

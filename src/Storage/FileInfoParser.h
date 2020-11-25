@@ -52,13 +52,13 @@ public:
 private:
 
 	// G-Code parser methods
-	bool FindHeight(const char* buf, size_t len) noexcept;
-	bool FindFirstLayerHeight(const char* buf, size_t len) noexcept;
-	bool FindLayerHeight(const char* buf, size_t len) noexcept;
-	bool FindSlicerInfo(const char* buf, size_t len) noexcept;
-	bool FindPrintTime(const char* buf, size_t len) noexcept;
-	bool FindSimulatedTime(const char* buf, size_t len) noexcept;
-	unsigned int FindFilamentUsed(const char* buf, size_t len) noexcept;
+	bool FindHeight(const char* bufp, size_t len) noexcept;
+	bool FindFirstLayerHeight(const char* bufp, size_t len) noexcept;
+	bool FindLayerHeight(const char* bufp, size_t len) noexcept;
+	bool FindSlicerInfo(const char* bufp, size_t len) noexcept;
+	bool FindPrintTime(const char* bufp, size_t len) noexcept;
+	bool FindSimulatedTime(const char* bufp, size_t len) noexcept;
+	unsigned int FindFilamentUsed(const char* bufp, size_t len) noexcept;
 
 	// We parse G-Code files in multiple stages. These variables hold the required information
 	Mutex parserMutex;
