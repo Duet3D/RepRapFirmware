@@ -76,6 +76,7 @@ constexpr unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART de
 constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
 constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
 constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
+#define PANEL_DUE_FIRMWARE_FILE "PanelDueFirmware.bin"
 
 // Heater values
 constexpr uint32_t HeatSampleIntervalMillis = 250;		// interval between taking temperature samples

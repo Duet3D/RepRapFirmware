@@ -12,6 +12,10 @@
 
 namespace FirmwareUpdater
 {
+#if HAS_AUX_DEVICES
+	const unsigned int PanelDueFirmwareModule = 4;
+#endif
+
 	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, const StringRef& reply) noexcept;
 	bool IsReady() noexcept;
 	void UpdateModule(unsigned int module) noexcept;

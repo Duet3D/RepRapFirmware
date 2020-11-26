@@ -13,7 +13,10 @@
 #include "RepRap.h"
 
 #if HAS_WIFI_NETWORKING
-#include "ESP8266WiFi/WifiFirmwareUploader.h"
+# include "ESP8266WiFi/WifiFirmwareUploader.h"
+#endif
+#if HAS_AUX_DEVICES
+# include "Comms/PanelDueUpdater.h"
 #endif
 
 namespace FirmwareUpdater
@@ -32,9 +35,24 @@ namespace FirmwareUpdater
 			reply.copy("Invalid combination of firmware update modules");
 			return false;
 		}
-		if ((moduleMap & (1 << WifiFirmwareModule)) != 0 && !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, WIFI_FIRMWARE_FILE))
+		if ((moduleMap & (1 << WifiFirmwareModule)) != 0
+# if HAS_LINUX_INTERFACE
+				&& !reprap.UsingLinuxInterface()
+# endif
+				&& !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, WIFI_FIRMWARE_FILE))
 		{
 			reply.printf("File %s not found", WIFI_FIRMWARE_FILE);
+			return false;
+		}
+#endif
+#if HAS_AUX_DEVICES
+		if ((moduleMap & (1 << PanelDueFirmwareModule)) != 0
+# if HAS_LINUX_INTERFACE
+				&& !reprap.UsingLinuxInterface()
+# endif
+				&& !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, PANEL_DUE_FIRMWARE_FILE))
+		{
+			reply.printf("File %s not found", PANEL_DUE_FIRMWARE_FILE);
 			return false;
 		}
 #endif
@@ -45,21 +63,28 @@ namespace FirmwareUpdater
 	{
 #if HAS_WIFI_NETWORKING
 		WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
-		return uploader == nullptr || uploader->IsReady();
-#else
-		return true;
+		if(!(uploader == nullptr || uploader->IsReady())) {
+			return false;
+		}
 #endif
+#if HAS_AUX_DEVICES
+		if (!reprap.GetPlatform().GetPanelDueUpdater().Idle()) {
+			return false;
+		}
+#endif
+		return true;
 	}
 
 	void UpdateModule(unsigned int module) noexcept
 	{
-#if HAS_WIFI_NETWORKING
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 # ifdef DUET_NG
 		if (reprap.GetPlatform().IsDuetWiFi())
 		{
 # endif
 			switch(module)
 			{
+# if HAS_WIFI_NETWORKING
 			case WifiExternalFirmwareModule:
 				reprap.GetNetwork().ResetWiFiForUpload(true);
 				break;
@@ -73,6 +98,13 @@ namespace FirmwareUpdater
 					}
 				}
 				break;
+# endif
+# if HAS_AUX_DEVICES
+			case PanelDueFirmwareModule:
+				{
+					reprap.GetPlatform().GetPanelDueUpdater().Start();
+				}
+# endif
 			}
 # ifdef DUET_NG
 		}
