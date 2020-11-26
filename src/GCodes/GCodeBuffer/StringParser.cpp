@@ -36,7 +36,7 @@ StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 void StringParser::Init() noexcept
 {
 	gcodeLineEnd = 0;
-	commandLength = 0;
+	commandStart = commandLength = 0;								// set both to zero so that calls to GetFilePosition don't return negative values
 	readPointer = -1;
 	hadLineNumber = hadChecksum = overflowed = seenExpression = false;
 	computedChecksum = 0;
