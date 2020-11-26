@@ -54,15 +54,10 @@ DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
 
 #endif
 
-// Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
-// Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
+// The heater model is disabled until the user declares the heater to be a bed, chamber or tool heater
 FopDt::FopDt() noexcept
-	: heatingRate(DefaultHotEndHeaterHeatingRate),
-	  coolingRateFanOff(DefaultHotEndHeaterCoolingRate), coolingRateChangeFanOn(0.0),
-	  deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
-	  enabled(true), usePid(true), inverted(false), pidParametersOverridden(false)
 {
-	CalcPidConstants();
+	Clear();
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
@@ -92,6 +87,42 @@ bool FopDt::SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pdt,
 		return true;
 	}
 	return false;
+}
+
+void FopDt::Clear() noexcept
+{
+	SetDefaultToolParameters();						// set some values so that we don't report rubbish in the OM
+	enabled = false;								// heater is disabled until the parameters are set
+}
+
+// Set up default parameters for a tool heater and enable the model
+void FopDt::SetDefaultToolParameters() noexcept
+{
+	heatingRate = DefaultHotEndHeaterHeatingRate;
+	coolingRateFanOff = DefaultHotEndHeaterCoolingRate;
+	deadTime = DefaultHotEndHeaterDeadTime;
+	coolingRateChangeFanOn = 0.0;
+	maxPwm = 1.0;
+	standardVoltage = 0.0;
+	usePid = true;
+	inverted = false;
+	enabled = true;
+	CalcPidConstants();
+}
+
+// Set up default parameters for a bed/chamber heater and enable the model
+void FopDt::SetDefaultBedOrChamberParameters() noexcept
+{
+	heatingRate = DefaultBedHeaterHeatingRate;
+	coolingRateFanOff = DefaultBedHeaterCoolingRate;
+	deadTime = DefaultBedHeaterDeadTime;
+	coolingRateChangeFanOn = 0.0;
+	maxPwm = 1.0;
+	standardVoltage = 0.0;
+	usePid = false;
+	inverted = false;
+	enabled = true;
+	CalcPidConstants();
 }
 
 // Get the PID parameters as reported by M301

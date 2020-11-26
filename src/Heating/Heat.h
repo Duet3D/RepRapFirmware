@@ -70,6 +70,9 @@ public:
 	pre(index < NumChamberHeaters; -1 <= heater; heater < MaxHeaters);
 	bool IsChamberHeater(int heater) const noexcept;					// Check if this heater is a chamber heater
 
+	void SetAsToolHeater(int8_t heater) const noexcept;					// called when a tool is created that uses this heater
+	bool IsBedOrChamberHeater(int heater) const noexcept;				// Queried by the Platform class
+
 	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept;	// Is everything at temperature within tolerance?
 
 	void SwitchOffAll(bool includingChamberAndBed) noexcept;			// Turn all heaters off
@@ -100,8 +103,6 @@ public:
 	const char *GetHeaterSensorName(size_t heater) const noexcept;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
 	float GetAveragePWM(size_t heater) const noexcept					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < MaxHeaters);
-
-	bool IsBedOrChamberHeater(int heater) const noexcept;				// Queried by the Platform class
 
 	float GetHeaterTemperature(size_t heater) const noexcept;			// Result is in degrees Celsius
 

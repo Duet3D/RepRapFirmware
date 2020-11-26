@@ -215,7 +215,9 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
 	for (size_t heater = 0; heater < t->heaterCount; heater++)
 	{
-		t->heaters[heater] = h[heater];
+		const int8_t heaterNumber = (int8_t)h[heater];
+		reprap.GetHeat().SetAsToolHeater(heaterNumber);
+		t->heaters[heater] = heaterNumber;
 		t->activeTemperatures[heater] = ABS_ZERO;
 		t->standbyTemperatures[heater] = ABS_ZERO;
 	}

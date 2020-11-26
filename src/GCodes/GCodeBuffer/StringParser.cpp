@@ -897,7 +897,7 @@ size_t StringParser::DataLength() const noexcept
 // Return true if the command being processed is the last one in this line of GCode
 bool StringParser::IsLastCommand() const noexcept
 {
-	return commandEnd == gcodeLineEnd;
+	return commandEnd >= gcodeLineEnd;			// using >= here also covers the case where the buffer is empty and gcodeLineEnd has been set to zero
 }
 
 // Is 'c' in the G Code string? 'c' must be uppercase.

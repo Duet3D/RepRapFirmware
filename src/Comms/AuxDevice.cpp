@@ -55,7 +55,6 @@ void AuxDevice::SendPanelDueMessage(const char* msg) noexcept
 			Flush();
 		}
 	}
-
 }
 
 void AuxDevice::AppendAuxReply(const char *msg, bool rawMessage) noexcept

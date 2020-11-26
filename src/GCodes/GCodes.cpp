@@ -3496,11 +3496,9 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	{
 	case Compatibility::Default:
 	case Compatibility::RepRapFirmware:
-		// In RepRapFirmware compatibility mode we suppress empty responses in most cases
-		if (   reply[0] != 0
-			|| (gb.MachineState().doingFileMacro && gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 292)	// we must always acknowledge M292
-			|| (gb.IsLastCommand() && &gb == httpGCode)	// DWC expects a reply from every code, so we must even send empty responses. Assume that DSF always expects a response too.
-		   )
+		// In RepRapFirmware compatibility mode we suppress empty responses in most cases.
+		// However, DWC expects a reply from every code, so we must even send empty responses
+		if (reply[0] != 0 || gb.IsLastCommand() || &gb == httpGCode)
 		{
 			platform.MessageF(mt, "%s\n", reply);
 		}
