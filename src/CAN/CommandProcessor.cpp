@@ -94,7 +94,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 						if (bytesSent == (size_t)bytesRead)
 						{
 							uint32_t bytesRead = lreq;
-							if (reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
+							if (!reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
 							{
 								msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 								msgp->dataLength = 0;
