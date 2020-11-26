@@ -72,7 +72,6 @@ public:
 
 	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
 	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	void SetModelDefaults() noexcept;
 
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
 		{ return model.IsEnabled(); }
@@ -80,7 +79,9 @@ public:
 	void SetM301PidParameters(const M301PidParameters& params) noexcept
 		{ model.SetM301PidParameters(params); }
 
-	void SetDefaultMonitors() noexcept;
+	void ClearModelAndMonitors() noexcept;
+	void SetAsToolHeater() noexcept;
+	void SetAsBedOrChamberHeater() noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -132,6 +133,8 @@ private:
 	float maxHeatingFaultTime;						// How long a heater fault is permitted to persist before a heater fault is raised
 
 	bool active;									// Are we active or standby?
+	bool modelSetByUser;
+	bool monitorsSetByUser;
 };
 
 #endif /* SRC_HEATING_HEATER_H_ */

@@ -153,11 +153,6 @@ TemperatureError LocalHeater::ReadTemperature() noexcept
 // This must be called whenever the heater is turned on, and any time the heater is active and the target temperature is changed
 GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 {
-	if (!GetModel().IsEnabled())
-	{
-		SetModelDefaults();
-	}
-
 	if (mode == HeaterMode::fault)
 	{
 		reply.printf("Heater %u not switched on due to temperature fault\n", GetHeaterNumber());

@@ -42,7 +42,10 @@ class FopDt INHERIT_OBJECT_MODEL
 public:
 	FopDt() noexcept;
 
+	void Clear() noexcept;
 	bool SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept;
+	void SetDefaultToolParameters() noexcept;
+	void SetDefaultBedOrChamberParameters() noexcept;
 
 	// Stored parameters
 	float GetHeatingRate() const noexcept { return heatingRate; }

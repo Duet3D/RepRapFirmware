@@ -63,7 +63,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 Heater::Heater(unsigned int num) noexcept
 	: heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
-	  active(false)
+	  active(false), modelSetByUser(false), monitorsSetByUser(false)
 {
 }
 
@@ -80,21 +80,6 @@ void Heater::SetSensorNumber(int sn) noexcept
 	if (sn != sensorNumber)
 	{
 		sensorNumber = sn;
-		SetDefaultMonitors();
-	}
-}
-
-void Heater::SetDefaultMonitors() noexcept
-{
-	for (HeaterMonitor& h : monitors)
-	{
-		h.Disable();
-	}
-
-	if (sensorNumber >= 0 && sensorNumber < (int)MaxSensors)
-	{
-		const float limit = (reprap.GetHeat().IsBedOrChamberHeater(heaterNumber)) ? DefaultBedTemperatureLimit : DefaultHotEndTemperatureLimit;
-		monitors[0].Set(sensorNumber, limit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
 	}
 }
 
@@ -143,16 +128,20 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 
 	if (seen)
 	{
+		// Set the model
 		const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
 		const GCodeResult rslt = SetModel(heatingRate, coolingRates[0], coolingRates[1], td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
-		if (rslt != GCodeResult::ok)
+		if (rslt <= GCodeResult::warning)
 		{
-			return rslt;
+			modelSetByUser = true;
 		}
+		return rslt;
 	}
-	else if (!model.IsEnabled())
+
+	// Just report the model
+	if (!model.IsEnabled())
 	{
-		reply.printf("Heater %u is disabled due to bad model", heater);
+		reply.printf("Heater %u is disabled because its model is undefined", heater);
 	}
 	else
 	{
@@ -225,6 +214,7 @@ GCodeResult Heater::SetFaultDetectionParameters(float pMaxTempExcursion, float p
 	return rslt;
 }
 
+// Process M143 for this heater
 GCodeResult Heater::ConfigureMonitor(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	// Get any parameters that have been provided
@@ -256,6 +246,10 @@ GCodeResult Heater::ConfigureMonitor(GCodeBuffer &gb, const StringRef &reply) TH
 	{
 		monitors[index].Set(monitoringSensor, limit, action, trigger);
 		const GCodeResult rslt = UpdateHeaterMonitors(reply);
+		if (rslt <= GCodeResult::warning)
+		{
+			monitorsSetByUser = true;
+		}
 		reprap.HeatUpdated();
 		return rslt;
 	}
@@ -368,20 +362,41 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 	}
 }
 
-void Heater::SetModelDefaults() noexcept
+// This is called when config.g is about to be re-run
+void Heater::ClearModelAndMonitors() noexcept
 {
-	if (reprap.GetHeat().IsBedOrChamberHeater(heaterNumber))
+	model.Clear();
+	for (HeaterMonitor& hm : monitors)
 	{
-		model.SetParameters(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, DefaultBedTemperatureLimit, 0.0, false, false);
+		hm.Disable();
 	}
-	else
-	{
-		model.SetParameters(DefaultHotEndHeaterHeatingRate, DefaultHotEndHeaterCoolingRate, DefaultHotEndHeaterCoolingRate, DefaultHotEndHeaterDeadTime,
-							1.0, DefaultHotEndTemperatureLimit, 0.0, true, false);
-	}
+	modelSetByUser = monitorsSetByUser = false;
+}
 
-	String<1> dummy;
-	(void)UpdateModel(dummy.GetRef());
+// This is called when this heater is declared to be a bed or chamber heater using M140 or M141
+void Heater::SetAsToolHeater() noexcept
+{
+	if (!modelSetByUser)
+	{
+		model.SetDefaultToolParameters();
+	}
+	if (!monitorsSetByUser && sensorNumber >= 0 && sensorNumber < (int)MaxSensors)
+	{
+		monitors[0].Set(sensorNumber, DefaultHotEndTemperatureLimit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
+	}
+}
+
+// This is called when a heater is declared to be a tool heater using M563
+void Heater::SetAsBedOrChamberHeater() noexcept
+{
+	if (!modelSetByUser)
+	{
+		model.SetDefaultBedOrChamberParameters();
+	}
+	if (!monitorsSetByUser &&sensorNumber >= 0 && sensorNumber < (int)MaxSensors)
+	{
+		monitors[0].Set(sensorNumber, DefaultBedTemperatureLimit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
+	}
 }
 
 // End

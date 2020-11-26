@@ -167,11 +167,6 @@ Heater::HeaterMode RemoteHeater::GetMode() const noexcept
 // This isn't just called to turn the heater on, it is called when the temperature needs to be updated
 GCodeResult RemoteHeater::SwitchOn(const StringRef& reply) noexcept
 {
-	if (!GetModel().IsEnabled())
-	{
-		SetModelDefaults();
-	}
-
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
