@@ -4,11 +4,15 @@ RepRapFirmware 3.2-beta4
 Upgrade notes:
 - [Duet 3 + expansion/tool boards] You must update expansion/tool board firmware to 3.2beta4 as well
 
+Known issues:
+- [Duet 3 + tool/expansion boards] If you update tool or expansion board firmware, or reboot a tool or expansion board using M999 B#, you must restart the system afterwards so that the updated or reset board(s) get re-initialised from the commands in config.g
+
 New features:
-- WiFi diagnostics now include the WiFi connection mode (needs DuetWiFiServer 1.25beta1)
+- WiFi diagnostics now include the WiFi connection mode (needs DuetWiFiServer 1.25beta0)
 - [Duet 3 tool boards] Stepper driver diagnostics now include the PWM_AUTO register (main board diagnostics did already)
 - [Duet 3] CAN diagnostics on both main and tool/expansion boards provide more data
 - M308 S# H999 and L999 are now supported on those Duet 3 expansion/tool boards that have the required hardware support
+- The order in which you use M307, M140, M141 and M143 is now immaterial
 
 Bug fixes:
 - Tool and expansion board firmware was likely to crash if a sensor or heater fault occurred (new bug in 3.2beta3 and beta3.2)
@@ -17,6 +21,8 @@ Bug fixes:
 - If a TMC22xx driver received two commands to enable/disable the drive or change microstepping twice in very quick succession, the second one was sometimes lost
 - In Marlin mode, "ok" was returned per-command instead of per line of GCode
 - M118 P0 didn't append newline when the message was sent to USB and Telnet
+- Incorrect M307 default parameters were used for bed and chamber heaters
+- At the very end of a print job, RRF sometimes briefly reported a bad file position, which caused DWC to report a very high % completed
 - [Duet 3] CAN diagnostics incorrectly reported most transmissions as having timed out
 - [Duet 3 MB6HC] A watchdog timeout didn't save any software reset data
 - [Duet 3 expansion/tool boards] If a filament monitor was configured, the expansion/tool board sent a continuous stream of status messages to the main board after the first change in filament monitor status (e.g. when the first data packet was received from a Duet3D laser or magnetic filament monitor). This had a detrimental effect on print quality.
@@ -26,6 +32,7 @@ Other improvements:
 - Efficiency improvements to TMC2208/2209 drivers for both main and tool boards
 - Calls to debugPrintf use less stack than before
 - Changes to expansion and tool board firmware to better support ATE
+- Improvements to the SBC interface to resolve issues when Duet + SBC is used
 
 RepRapFirmware 3.2-beta3.2
 ==========================
