@@ -5,6 +5,7 @@ Upgrade notes:
 - [Duet 3 + expansion/tool boards] You must update expansion/tool board firmware to 3.2beta4 as well
 
 Known issues:
+- [Duet 2 + 12864 display] There is insufficient free RAM to run Duet WiFi/Ethernet with 12864 display
 - [Duet 3 + tool/expansion boards] If you update tool or expansion board firmware, or reboot a tool or expansion board using M999 B#, you must restart the system afterwards so that the updated or reset board(s) get re-initialised from the commands in config.g
 
 New features:
