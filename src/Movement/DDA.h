@@ -337,8 +337,23 @@ inline __attribute__((always_inline)) bool DDA::ScheduleNextStepInterrupt(StepTi
 {
 	if (state == executing)
 	{
-		const uint32_t whenDue = ((activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime)
-								+ afterPrepare.moveStartTime;
+		// Calculate the time when we want the next interrupt.
+		// This must be after the move is due to start, because if the interrupt is too early then DDA::Step will just reschedule the interrupt again.
+		// This leads to the ISR looping, eventually inserting ever-larger hiccups, and the print stalls.
+		uint32_t whenDue;
+		if (activeDMs != nullptr)
+		{
+			whenDue = activeDMs->nextStepTime + afterPrepare.moveStartTime;
+		}
+		else if (clocksNeeded > DDA::WakeupTime)
+		{
+			whenDue = clocksNeeded - DDA::WakeupTime + afterPrepare.moveStartTime;
+		}
+		else
+		{
+			// This case occurs when we have a very short null movement
+			whenDue = afterPrepare.moveStartTime;
+		}
 		return timer.ScheduleCallbackFromIsr(whenDue);
 	}
 	return false;
