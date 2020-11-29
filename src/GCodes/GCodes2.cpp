@@ -2092,19 +2092,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					reply.copy("Max speeds (mm/sec): ");
+					reply.copy("Max speeds (mm/min): ");
 					for (size_t axis = 0; axis < numTotalAxes; ++axis)
 					{
-						reply.catf("%c: %.1f, ", axisLetters[axis], (double)platform.MaxFeedrate(axis));
+						reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) * MinutesToSeconds));
 					}
 					reply.cat("E:");
 					char sep = ' ';
 					for (size_t extruder = 0; extruder < numExtruders; extruder++)
 					{
-						reply.catf("%c%.1f", sep, (double)platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)));
+						reply.catf("%c%.1f", sep, (double)(platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)) * MinutesToSeconds));
 						sep = ':';
 					}
-					reply.catf(", min. speed %.2f", (double)platform.MinMovementSpeed());
+					reply.catf(", min. speed %.2f", (double)(platform.MinMovementSpeed() * MinutesToSeconds));
 				}
 			}
 			break;
