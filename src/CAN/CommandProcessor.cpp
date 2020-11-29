@@ -46,7 +46,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		if (reprap.UsingLinuxInterface())
 		{
 			// Fetch the firmware file from the SBC
-			uint32_t bytesRead = lreq;
+			uint32_t bytesRead = min<uint32_t>(lreq, MaxFileChunkSize);
 			if (reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
 			{
 				if (fileOffset >= fileLength)
@@ -93,7 +93,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 
 						if (bytesSent == (size_t)bytesRead)
 						{
-							uint32_t bytesRead = lreq;
+							bytesRead = min<uint32_t>(lreq, MaxFileChunkSize);
 							if (!reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
 							{
 								msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
