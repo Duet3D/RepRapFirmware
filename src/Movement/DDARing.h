@@ -55,7 +55,6 @@ public:
 
 	DDA *GetCurrentDDA() const noexcept { return currentDda; }							// Return the DDA of the currently-executing move, or nullptr
 
-	uint32_t GetClearNumHiccups() noexcept;
 	float GetRequestedSpeed() const noexcept;
 	float GetTopSpeed() const noexcept;
 	float GetAcceleration() const noexcept;
@@ -161,13 +160,6 @@ inline bool DDARing::ScheduleNextStepInterrupt() noexcept
 {
 	DDA * const cdda = currentDda;				// capture volatile variable
 	return (cdda != nullptr) && cdda->ScheduleNextStepInterrupt(timer);
-}
-
-inline uint32_t DDARing::GetClearNumHiccups() noexcept
-{
-	const uint32_t ret = numHiccups;
-	numHiccups = 0;
-	return ret;
 }
 
 #endif /* SRC_MOVEMENT_DDARING_H_ */

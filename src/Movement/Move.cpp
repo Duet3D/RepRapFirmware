@@ -419,26 +419,7 @@ bool Move::LowPowerOrStallPause(RestorePoint& rp) noexcept
 
 void Move::Diagnostics(MessageType mtype) noexcept
 {
-	Platform& p = reprap.GetPlatform();
-	p.MessageF(mtype, "=== Move ===\nHiccups: %" PRIu32
-#if SUPPORT_ASYNC_MOVES
-						"(%" PRIu32 ")"
-#endif
-						", FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms\n",
-						mainDDARing.GetClearNumHiccups(),
-#if SUPPORT_ASYNC_MOVES
-						auxDDARing.GetClearNumHiccups(),
-#endif
-						DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval);
-	longestGcodeWaitInterval = 0;
-	DriveMovement::ResetMinFree();
-
-#if defined(__ALLIGATOR__)
-	// Motor Fault Diagnostic
-	reprap.GetPlatform().MessageF(mtype, "Motor Fault status: %s\n", digitalRead(MotorFaultDetectPin) ? "none" : "FAULT detected!" );
-#endif
-
-	// Show the current probe position heights and type of bed compensation in use
+	// Get the type of bed compensation in use
 	String<StringLength50> bedCompString;
 	if (usingMesh)
 	{
@@ -452,19 +433,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	{
 		bedCompString.copy("none");
 	}
-	p.MessageF(mtype, "Bed compensation in use: %s, comp offset %.3f\n", bedCompString.c_str(), (double)zShift);
 
-	// Only print the probe point heights if we are using old-style compensation
-	if (!usingMesh && probePoints.GetNumBedCompensationPoints() != 0)
-	{
-		// To keep the response short so that it doesn't get truncated when sending it via HTTP, we only show the first 5 bed probe points
-		bedCompString.Clear();
-		for (size_t i = 0; i < 5; ++i)
-		{
-			bedCompString.catf(" %.3f", (double)probePoints.GetZHeight(i));
-		}
-		p.MessageF(mtype, "Bed probe heights:%s\n", bedCompString.c_str());
-	}
+	Platform& p = reprap.GetPlatform();
+	p.MessageF(mtype, "=== Move ===\nFreeDm %d (min %d), maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
+						DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, bedCompString.c_str(), (double)zShift);
+	longestGcodeWaitInterval = 0;
+	DriveMovement::ResetMinFree();
 
 #if DDA_LOG_PROBE_CHANGES
 	// Temporary code to print Z probe trigger positions
