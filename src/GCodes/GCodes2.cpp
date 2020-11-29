@@ -1746,21 +1746,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (result != GCodeResult::error)
 				{
-					type = (MessageType)(type | PushFlag);
-					if ((type & HttpMessage) != 0)
+					// Append newline and send the message to the remaining destinations
+					message.cat('\n');
+					if (	(type & HttpMessage) != 0
+#if HAS_LINUX_INTERFACE
+						 && !reprap.UsingLinuxInterface()
+#endif
+					   )
 					{
-						// Send the message to HTTP before we append newline
-						constexpr MessageType mask = (MessageType)(HttpMessage | ~DestinationsMask);
-						platform.Message((MessageType)(type & mask), message.c_str());
-						type = (MessageType)(type & ~HttpMessage);
+						// Set Push flag as well to potentially save an OutputBuffer instance
+						type = (MessageType)(type | PushFlag);
 					}
-
-					if ((type & DestinationsMask) != 0)
-					{
-						// Append newline and send the message to the remaining destinations
-						message.cat('\n');
-						platform.Message(type, message.c_str());
-					}
+					platform.Message(type, message.c_str());
 				}
 			}
 			break;
