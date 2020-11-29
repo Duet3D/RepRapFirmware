@@ -70,14 +70,18 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 		const CanAddress boardAddress = RemoveBoardAddress(pn.GetRef());
 		if (boardAddress != 0)
 		{
-			reply.lcat("Remote ports not yet supported by this command");
+			reply.lcat("Remote ports are not supported by this command");
+#else
+		if (!RemoveBoardAddress(pn.GetRef()))
+		{
+			reply.lcat("Board address of port must be 0");
+#endif
 			for (size_t j = 0; j < i; ++j)
 			{
 				ports[j]->Release();
 			}
 			return 0;
 		}
-#endif
 
 		// Try to allocate the port
 		if (!ports[i]->Allocate(pn.c_str(), reply, neededFor, access[i]))
@@ -507,9 +511,12 @@ uint16_t IoPort::ReadAnalog() const noexcept
 }
 
 #if SUPPORT_CAN_EXPANSION
-
 // Remove the board address from a port name string and return it
 /*static*/ CanAddress IoPort::RemoveBoardAddress(const StringRef& portName) noexcept
+#else
+// Remove the board address if present, returning true if it was zero or not present
+/*static*/ bool IoPort::RemoveBoardAddress(const StringRef& portName) noexcept
+#endif
 {
 	size_t prefix = 0;
 	while (portName[prefix] == '!' || portName[prefix] == '^' || portName[prefix] == '*')
@@ -524,17 +531,27 @@ uint16_t IoPort::ReadAnalog() const noexcept
 		boardAddress = (boardAddress * 10) + (portName[numToSkip] - '0');
 		++numToSkip;
 	}
+#if SUPPORT_CAN_EXPANSION
 	if (numToSkip != prefix && portName[numToSkip] == '.' && boardAddress <= CanId::MaxCanAddress)
 	{
 		portName.Erase(prefix, numToSkip - prefix + 1);			// remove the board address prefix
 		return (CanAddress)boardAddress;
 	}
 	return CanId::MasterAddress;
+#else
+	if (numToSkip != prefix && portName[numToSkip] == '.')
+	{
+		if (boardAddress != 0)
+		{
+			return false;
+		}
+		portName.Erase(prefix, numToSkip - prefix + 1);			// remove the board address prefix
+	}
+	return true;
+#endif
 }
 
-#endif
-
-	// Low level pin access methods
+// Low level pin access methods
 
 /*static*/ void IoPort::SetPinMode(Pin pin, PinMode mode) noexcept
 {

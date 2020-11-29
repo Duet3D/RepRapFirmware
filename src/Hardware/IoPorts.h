@@ -56,7 +56,11 @@ public:
 	static void AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]) noexcept;
 
 #if SUPPORT_CAN_EXPANSION
+	// Remove the board address if present and return it, else return the default address
 	static CanAddress RemoveBoardAddress(const StringRef& portName) noexcept;
+#else
+	// Remove the board address if present, returning true if it was zero or not present
+	static bool RemoveBoardAddress(const StringRef& portName) noexcept;
 #endif
 
 	// Low level port access
