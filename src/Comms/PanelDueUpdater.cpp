@@ -132,201 +132,161 @@ void PanelDueUpdater::Start(const uint32_t serialChan) noexcept
 
 void PanelDueUpdater::Spin() noexcept
 {
-	switch (state)
+	try
 	{
-	case FlashState::eraseAndReset:
-		reprap.GetPlatform().Message(statusMessages, "Erase and reset PanelDue\n");
-		reprap.GetPlatform().AppendAuxReply(serialChannel-1, panelDueCommandEraseAndReset, true);
-		state = FlashState::waitAfterEraseAndReset;
-		erasedAndResetAt = millis();
-		break;
-
-	case FlashState::waitAfterEraseAndReset:
-		if (millis() - erasedAndResetAt > WaitMsAfterEraseAndReset)
+		switch (state)
 		{
-			state = FlashState::setup;
-		}
-		break;
+		case FlashState::eraseAndReset:
+			reprap.GetPlatform().Message(statusMessages, "Erase and reset PanelDue\n");
+			reprap.GetPlatform().AppendAuxReply(serialChannel-1, panelDueCommandEraseAndReset, true);
+			state = FlashState::waitAfterEraseAndReset;
+			erasedAndResetAt = millis();
+			break;
 
-	case FlashState::setup:
-		try
-		{
-			// Verifying creates the Emergency Stop sequence so disable it here
-			auto auxPort = GetAuxPort();
-			currentInterruptCallbackFn = auxPort->SetInterruptCallback(nullptr);
-			Platform& platform = reprap.GetPlatform();
-			uint32_t baudRate = platform.GetBaudRate(serialChannel);
-
-			// Make sure baud rate is set correctly
-			if (baudRate != RequiredBaudRate)
+		case FlashState::waitAfterEraseAndReset:
+			if (millis() - erasedAndResetAt > WaitMsAfterEraseAndReset)
 			{
-				currentBaudRate = baudRate;
-				platform.SetBaudRate(serialChannel, RequiredBaudRate);
-				platform.ResetChannel(serialChannel);
+				state = FlashState::setup;
 			}
+			break;
 
-			samba = new Samba();
-			samba->setDebug(DEBUG_BOSSA);
+		case FlashState::setup:
+			{
+				// Verifying creates the Emergency Stop sequence so disable it here
+				auto auxPort = GetAuxPort();
+				currentInterruptCallbackFn = auxPort->SetInterruptCallback(nullptr);
+				Platform& platform = reprap.GetPlatform();
+				uint32_t baudRate = platform.GetBaudRate(serialChannel);
 
-			serialPort = new AuxSerialPort(*auxPort);
-			samba->connect(serialPort);
+				// Make sure baud rate is set correctly
+				if (baudRate != RequiredBaudRate)
+				{
+					currentBaudRate = baudRate;
+					platform.SetBaudRate(serialChannel, RequiredBaudRate);
+					platform.ResetChannel(serialChannel);
+				}
 
-			device = new Device(*samba);
-			device->create();
+				samba = new Samba();
+				samba->setDebug(DEBUG_BOSSA);
 
-			flasherObserver = new DebugObserver();
+				serialPort = new AuxSerialPort(*auxPort);
+				samba->connect(serialPort);
 
-			flasher = new Flasher(*samba, *device, *flasherObserver);
-			state = FlashState::unlock;
-		}
-		catch (GCodeException& ex)
-		{
-			HandleException(ex);
-		}
-		break;
+				device = new Device(*samba);
+				device->create();
 
-	case FlashState::unlock:
-		try
-		{
+				flasherObserver = new DebugObserver();
+
+				flasher = new Flasher(*samba, *device, *flasherObserver);
+				state = FlashState::unlock;
+			}
+			break;
+
+		case FlashState::unlock:
 			flasher->lock(false);
 			state = FlashState::bossaErase;
-		}
-		catch (GCodeException& ex)
-		{
-			HandleException(ex);
-		}
-		break;
+			break;
 
-	case FlashState::bossaErase:
-		try
-		{
+		case FlashState::bossaErase:
 			flasher->erase(0);
 			state = FlashState::write;
-		}
-		catch (GCodeException& ex)
-		{
-			HandleException(ex);
-		}
-		break;
+			break;
 
-	case FlashState::write:
-		try
-		{
-			bool done = flasher->write(nullptr /* file is hard-coded for now */, offset);
-			if (done)
+		case FlashState::write:
 			{
-				offset = 0;						// Reset it for verification
-				state = FlashState::verify;
+				bool done = flasher->write(firmwareFilename, offset);
+				if (done)
+				{
+					offset = 0;						// Reset it for verification
+					state = FlashState::verify;
+				}
 			}
-		}
-		catch (GCodeException& ex)
-		{
-			HandleException(ex);
-		}
-		break;
+			break;
 
-	case FlashState::verify:
-		try
-		{
-			uint32_t pageErrors;
-			uint32_t totalErrors;
-			bool done = flasher->verify(nullptr /* file is hard-coded for now */, pageErrors, totalErrors, offset);
-			if (done && pageErrors == 0)
+		case FlashState::verify:
 			{
-				state = FlashState::writeOptions;
+				uint32_t pageErrors;
+				uint32_t totalErrors;
+				bool done = flasher->verify(firmwareFilename, pageErrors, totalErrors, offset);
+				if (done && pageErrors == 0)
+				{
+					state = FlashState::writeOptions;
+				}
+				else if (pageErrors > 0)
+				{
+					reprap.GetPlatform().MessageF(ErrorMessage, "Verify failed: Page errors: %" PRIu32 " - Byte errors: %" PRIu32 "\n", pageErrors, totalErrors);
+					state = FlashState::done;
+				}
 			}
-			else if (pageErrors > 0)
+			break;
+
+		case FlashState::writeOptions:
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "Verify failed: Page errors: %" PRIu32 " - Byte errors: %" PRIu32 "\n", pageErrors, totalErrors);
-				state = FlashState::done;
+				Flash* flash = device->getFlash();
+				flash->setBootFlash(true);
+				flash->writeOptions();
+				state = FlashState::bossaReset;
 			}
-		}
-		catch (GCodeException& ex)
-		{
-			HandleException(ex);
-		}
-		break;
+			break;
 
-	case FlashState::writeOptions:
-		try
-		{
-			Flash* flash = device->getFlash();
-            flash->setBootFlash(true);
-			flash->writeOptions();
-			state = FlashState::bossaReset;
-		}
-		catch (GCodeException& ex)
-		{
-			HandleException(ex);
-		}
-		break;
-
-	case FlashState::bossaReset:
-		try
-		{
+		case FlashState::bossaReset:
 			reprap.GetPlatform().Message(statusMessages, "Restarting PanelDue\n");
 			device->reset();
 			state = FlashState::done;
-		}
-		catch (GCodeException& ex)
-		{
-			HandleException(ex);
-		}
-		break;
+			break;
 
-	case FlashState::done:
-		{
-			// Restore previous baud rate
-			if (currentBaudRate != 0)
+		case FlashState::done:
 			{
-				Platform& platform = reprap.GetPlatform();
-				platform.SetBaudRate(serialChannel, currentBaudRate);
-				platform.ResetChannel(serialChannel);
+				// Restore previous baud rate
+				if (currentBaudRate != 0)
+				{
+					Platform& platform = reprap.GetPlatform();
+					platform.SetBaudRate(serialChannel, currentBaudRate);
+					platform.ResetChannel(serialChannel);
+				}
+
+				// Restore the callback for the Emergency Stop sequence
+				auto auxPort = GetAuxPort();
+				auxPort->SetInterruptCallback(currentInterruptCallbackFn);
+				currentInterruptCallbackFn = nullptr;
+	#if ALLOW_OTHER_AUX
+				serialChannel = NumSerialChannels+1;
+	#endif
+				currentBaudRate = 0;
+
+				// Delete all objects we new'd
+				delete samba;
+				samba = nullptr;
+
+				delete serialPort;
+				serialPort = nullptr;
+
+				delete device;
+				device = nullptr;
+
+				delete flasherObserver;
+				flasherObserver = nullptr;
+
+				delete flasher;
+				flasher = nullptr;
+
+				offset = 0;
+				erasedAndResetAt = 0;
+				state = FlashState::idle;
 			}
+			break;
 
-			// Restore the callback for the Emergency Stop sequence
-			auto auxPort = GetAuxPort();
-			auxPort->SetInterruptCallback(currentInterruptCallbackFn);
-			currentInterruptCallbackFn = nullptr;
-#if ALLOW_OTHER_AUX
-			serialChannel = NumSerialChannels+1;
-#endif
-			currentBaudRate = 0;
-
-			// Delete all objects we new'd
-			delete samba;
-			samba = nullptr;
-
-			delete serialPort;
-			serialPort = nullptr;
-
-			delete device;
-			device = nullptr;
-
-			delete flasherObserver;
-			flasherObserver = nullptr;
-
-			delete flasher;
-			flasher = nullptr;
-
-			offset = 0;
-			erasedAndResetAt = 0;
-			state = FlashState::idle;
+		default:
+			break;
 		}
-		break;
-
-	default:
-		break;
-
 	}
-}
-
-void PanelDueUpdater::HandleException(GCodeException& ex) noexcept
-{
-	String<StringLength100> errorMessage;
-	ex.GetMessage(errorMessage.GetRef(), nullptr);
-	reprap.GetPlatform().MessageF(ErrorMessage, "%s", errorMessage.c_str());
-	state = FlashState::done;
+	catch (GCodeException& ex)
+	{
+		String<StringLength100> errorMessage;
+		ex.GetMessage(errorMessage.GetRef(), nullptr);
+		reprap.GetPlatform().MessageF(ErrorMessage, "%s", errorMessage.c_str());
+		state = FlashState::done;
+	}
 }
 
 UARTClass* PanelDueUpdater::GetAuxPort() noexcept

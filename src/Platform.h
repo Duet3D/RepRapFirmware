@@ -377,7 +377,8 @@ public:
     bool IsAuxRaw(size_t auxNumber) const noexcept;
 	void SetAuxRaw(size_t auxNumber, bool raw) noexcept;
 #if HAS_AUX_DEVICES
-	PanelDueUpdater& GetPanelDueUpdater() noexcept { return *panelDueUpdater; }
+	PanelDueUpdater* GetPanelDueUpdater() noexcept { return panelDueUpdater; }
+	void InitPanelDueUpdater() noexcept;
 #endif
 
 	void SetIPAddress(IPAddress ip) noexcept;

@@ -29,25 +29,12 @@
 #ifndef _DEVICE_H
 #define _DEVICE_H
 
-#if 0
-#include <exception>
-#endif
-
 #include "Samba.h"
 #include "Flash.h"
 
 #include "GCodes/GCodeException.h"
 
 typedef GCodeException DeviceUnsupportedError;
-
-#if 0
-class DeviceUnsupportedError : public std::exception
-{
-public:
-    DeviceUnsupportedError() : exception() {};
-    const char* what() const throw() { return "Device unsupported"; }
-};
-#endif
 
 class Device
 {
@@ -96,10 +83,6 @@ public:
     void create();
 
     Family getFamily() { return _family; }
-
-#if 0
-    typedef std::unique_ptr<Flash> const FlashPtr;
-#endif
 
     Flash* getFlash() { return _flash; }
 

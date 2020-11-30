@@ -34,6 +34,9 @@ public:
 	void Start(const uint32_t serialChan = 1) noexcept;
 	bool Idle() const noexcept { return state == FlashState::idle; }
 
+    // For now fix the filename here
+    constexpr static const char* const firmwareFilename = DEFAULT_SYS_DIR PANEL_DUE_FIRMWARE_FILE;
+
 private:
 #if ALLOW_OTHER_AUX
 	size_t serialChannel;
@@ -64,7 +67,6 @@ private:
 	};
 	FlashState state;
 
-	void HandleException(GCodeException& ex) noexcept;
 	UARTClass* GetAuxPort() noexcept;
 };
 

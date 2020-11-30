@@ -29,10 +29,6 @@
 #ifndef _SERIALPORT_H
 #define _SERIALPORT_H
 
-#if 0
-#include <string>
-#include <memory>
-#endif
 #include <cstdint>
 
 class SerialPort
@@ -72,15 +68,6 @@ public:
     virtual void flush() = 0;
     virtual void setDTR(bool dtr) = 0;
     virtual void setRTS(bool rts) = 0;
-
-#if 0
-    virtual std::string name() const { return _name; }
-
-    typedef std::unique_ptr<SerialPort> Ptr;
-
-protected:
-    std::string _name;
-#endif
 };
 
 #endif // _SERIALPORT_H

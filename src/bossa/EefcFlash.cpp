@@ -94,7 +94,7 @@ EefcFlash::~EefcFlash()
 }
 
 void
-EefcFlash::eraseAll(uint32_t offset) THROWS(GCodeException)
+EefcFlash::eraseAll(uint32_t offset)
 {
     // Do a full chip erase if the offset is 0
     if (offset == 0)

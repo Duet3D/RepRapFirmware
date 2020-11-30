@@ -29,19 +29,6 @@
 #include "Samba.h"
 
 #include "RepRapFirmware.h"
-#if 0
-#include <string.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <unistd.h>
-#include <errno.h>
-#endif
-
-#if 0
-using namespace std;
-#endif
 
 // XMODEM definitions
 #define BLK_SIZE    128
@@ -59,15 +46,14 @@ using namespace std;
 
 #define min(a, b)   ((a) < (b) ? (a) : (b))
 
+#define printf debugPrintf
+
 Samba::Samba() :
     _canChipErase(false),
     _canWriteBuffer(false),
     _canChecksumBuffer(false),
     _readBufferSize(0),
     _debug(false)
-#if 0
-	, _isUsb(false)
-#endif
 {
 }
 
@@ -86,63 +72,13 @@ Samba::init()
     uint8_t dummy[1024];
     _port->read(dummy, sizeof(dummy));
 
-#if 0
-    if (!_isUsb)
-    {
-        if (_debug)
-        	debugPrintf("Send auto-baud\n");
-
-        // RS-232 auto-baud sequence
-        _port->put(0x80);
-        _port->get();
-        _port->put(0x80);
-        _port->get();
-        _port->put('#');
-        _port->read(cmd, 3);
-    }
-#endif
-
     // Set binary mode
     if (_debug)
-    	debugPrintf("Set binary mode\n");
+    	printf("Set binary mode\n");
     cmd[0] = 'N';
     cmd[1] = '#';
     _port->write(cmd, 2);
     _port->read(cmd, 2);
-
-#if 0
-    std::string ver;
-    try
-    {
-        ver = version();
-    }
-    catch(SambaError& err)
-    {
-        return false;
-    }
-
-    std::size_t extIndex = ver.find("[Arduino:");
-    if (extIndex != string::npos)
-    {
-        extIndex += 9;
-        while (ver[extIndex] != ']')
-        {
-            switch (ver[extIndex])
-            {
-                case 'X': _canChipErase = true; break;
-                case 'Y': _canWriteBuffer = true; break;
-                case 'Z': _canChecksumBuffer = true; break;
-            }
-            extIndex++;
-        }
-
-        // All SAMD-based Arduino/AdaFruit boards have a bug in their bootloader
-        // that trying to read 64 bytes or more over USB corrupts the data.
-        // We must limit these boards to read chunks of 63 bytes.
-        if (_isUsb)
-            _readBufferSize = 63;
-    }
-#endif
 
     _port->timeout(TIMEOUT_NORMAL);
 
@@ -154,30 +90,11 @@ Samba::connect(SerialPort* port, int bps)
 {
     _port = port;
 
-#if 0
-    // Try to connect at a high speed if USB
-    _isUsb = _port->isUsb();
-    if (_isUsb)
-    {
-        if (_port->open(921600) && init())
-        {
-            if (_debug)
-                debugPrintf("Connected at 921600 baud\n");
-            return true;
-        }
-        else
-        {
-            _port->close();
-        }
-    }
-    _isUsb = false;
-#endif
-
     // Try the serial port at slower speed
     if (_port->open(bps) && init())
     {
         if (_debug)
-        	debugPrintf("Connected at %d baud\n", bps);
+        	printf("Connected at %d baud\n", bps);
         return true;
     }
 
@@ -189,37 +106,23 @@ void
 Samba::disconnect()
 {
     _port->close();
-#if 0
-    _port.release();
-#endif
 }
 
 void
-Samba::writeByte(uint32_t addr, uint8_t value) THROWS(GCodeException)
+Samba::writeByte(uint32_t addr, uint8_t value)
 {
     uint8_t cmd[14];
 
     if (_debug)
-        debugPrintf("%s(addr=%#" PRIx32 ",value=%#" PRIx8 ")\n", __FUNCTION__, addr, value);
+        printf("%s(addr=%#" PRIx32 ",value=%#" PRIx8 ")\n", __FUNCTION__, addr, value);
 
     SafeSnprintf((char*) cmd, sizeof(cmd), "O%08" PRIX32 ",%02" PRIX8 "#", addr, value);
     if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) -  1)
         throw SambaError("Samba::writeByte: _port->write failed");
-
-#if 0
-    // The SAM firmware has a bug that if the command and binary data
-    // are received in the same USB data packet, then the firmware
-    // gets confused.  Even though the writes are separated in the code,
-    // USB drivers often do write combining which can put them together
-    // in the same USB data packet.  To avoid this, we call the serial
-    // port object's flush method before writing the data.
-    if (_isUsb)
-        _port->flush();
-#endif
 }
 
 uint8_t
-Samba::readByte(uint32_t addr) THROWS(GCodeException)
+Samba::readByte(uint32_t addr)
 {
     uint8_t cmd[13];
     uint8_t value;
@@ -233,39 +136,28 @@ Samba::readByte(uint32_t addr) THROWS(GCodeException)
     value = cmd[0];
 
     if (_debug)
-        debugPrintf("%s(addr=%#" PRIx32 ")=%#" PRIx8 "\n", __FUNCTION__, addr, value);
+        printf("%s(addr=%#" PRIx32 ")=%#" PRIx8 "\n", __FUNCTION__, addr, value);
 
     return value;
 }
 
 
 void
-Samba::writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException)
+Samba::writeWord(uint32_t addr, uint32_t value)
 {
     uint8_t cmd[20];
 
     if (_debug)
-        debugPrintf("%s(addr=%#" PRIx32 ",value=%#" PRIx32 ")\n", __FUNCTION__, addr, value);
+        printf("%s(addr=%#" PRIx32 ",value=%#" PRIx32 ")\n", __FUNCTION__, addr, value);
 
     SafeSnprintf((char*) cmd, sizeof(cmd), "W%08" PRIX32 ",%08" PRIX32 "#", addr, value);
     if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
         throw SambaError("Samba::writeWord: _port->write failed");
-
-#if 0
-    // The SAM firmware has a bug that if the command and binary data
-    // are received in the same USB data packet, then the firmware
-    // gets confused.  Even though the writes are sperated in the code,
-    // USB drivers often do write combining which can put them together
-    // in the same USB data packet.  To avoid this, we call the serial
-    // port object's flush method before writing the data.
-    if (_isUsb)
-        _port->flush();
-#endif
 }
 
 
 uint32_t
-Samba::readWord(uint32_t addr) THROWS(GCodeException)
+Samba::readWord(uint32_t addr)
 {
     uint8_t cmd[13];
     uint32_t value;
@@ -279,7 +171,7 @@ Samba::readWord(uint32_t addr) THROWS(GCodeException)
     value = (cmd[3] << 24 | cmd[2] << 16 | cmd[1] << 8 | cmd[0] << 0);
 
     if (_debug)
-        debugPrintf("%s(addr=%#" PRIx32 ")=%#" PRIx32 "\n", __FUNCTION__, addr, value);
+        printf("%s(addr=%#" PRIx32 ")=%#" PRIx32 "\n", __FUNCTION__, addr, value);
 
     return value;
 }
@@ -354,7 +246,7 @@ Samba::checksumCalc(uint8_t data, uint16_t crc16) {
 }
 
 void
-Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
+Samba::readXmodem(uint8_t* buffer, int size)
 {
     uint8_t blk[BLK_SIZE + 5];
     uint32_t blkNum = 1;
@@ -403,7 +295,7 @@ Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
 }
 
 void
-Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
+Samba::writeXmodem(const uint8_t* buffer, int size)
 {
     uint8_t blk[BLK_SIZE + 5];
     uint32_t blkNum = 1;
@@ -456,49 +348,14 @@ Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
         throw SambaError("Samba::writeXmodem: max retries reached 3");
 }
 
-#if 0
 void
-Samba::readBinary(uint8_t* buffer, int size)
-{
-    if (_port->read(buffer, size) != size)
-        throw SambaError("Samba::readBinary: _port->read failed");
-}
-
-void
-Samba::writeBinary(const uint8_t* buffer, int size)
-{
-    while (size)
-    {
-        int written = _port->write(buffer, size);
-        if (written <= 0)
-            throw SambaError("Samba::writeBinary: _port->write failed");
-        buffer += written;
-        size -= written;
-    }
-}
-#endif
-
-void
-Samba::read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException)
+Samba::read(uint32_t addr, uint8_t* buffer, int size)
 {
     uint8_t cmd[20];
     int chunk;
 
     if (_debug)
-        debugPrintf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
-
-#if 0
-    // The SAM firmware has a bug reading powers of 2 over 32 bytes
-    // via USB.  If that is the case here, then read the first byte
-    // with a readByte and then read one less than the requested size.
-    if (_isUsb && _readBufferSize == 0 && size > 32 && !(size & (size - 1)))
-    {
-        *buffer = readByte(addr);
-        addr++;
-        buffer++;
-        size--;
-    }
-#endif
+        printf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
 
     while (size > 0)
     {
@@ -512,12 +369,7 @@ Samba::read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException)
         if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
             throw SambaError("Samba::read: _port->write failed");
 
-#if 0
-        if (_isUsb)
-            readBinary(buffer, chunk);
-        else
-#endif
-            readXmodem(buffer, chunk);
+		readXmodem(buffer, chunk);
 
         size -= chunk;
         addr += chunk;
@@ -526,95 +378,37 @@ Samba::read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException)
 }
 
 void
-Samba::write(uint32_t addr, const uint8_t* buffer, int size) THROWS(GCodeException)
+Samba::write(uint32_t addr, const uint8_t* buffer, int size)
 {
     uint8_t cmd[20];
 
     if (_debug)
-        debugPrintf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
+        printf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
 
     SafeSnprintf((char*) cmd, sizeof(cmd), "S%08" PRIX32 ",%08X#", addr, size);
     if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
+    {
         throw SambaError("Samba::write: _port->write failed");
+    }
 
-#if 0
-    // The SAM firmware has a bug that if the command and binary data
-    // are received in the same USB data packet, then the firmware
-    // gets confused.  Even though the writes are separated in the code,
-    // USB drivers often do write combining which can put them together
-    // in the same USB data packet.  To avoid this, we call the serial
-    // port object's flush method before writing the data.
-    if (_isUsb)
-    {
-        _port->flush();
-        writeBinary(buffer, size);
-    }
-    else
-#endif
-    {
-        writeXmodem(buffer, size);
-    }
+	writeXmodem(buffer, size);
 }
 
 void
-Samba::go(uint32_t addr) THROWS(GCodeException)
+Samba::go(uint32_t addr)
 {
     uint8_t cmd[11];
 
     if (_debug)
-        debugPrintf("%s(addr=%#" PRIx32 ")\n", __FUNCTION__, addr);
+        printf("%s(addr=%#" PRIx32 ")\n", __FUNCTION__, addr);
 
     SafeSnprintf((char*) cmd, sizeof(cmd), "G%08" PRIX32 "#", addr);
     if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
         throw SambaError("Samba::go: _port->write failed");
-
-#if 0
-    // The SAM firmware can get confused if another command is
-    // received in the same USB data packet as the go command
-    // so we flush after writing the command over USB.
-    if (_isUsb)
-        _port->flush();
-#endif
 }
-
-#if 0
-std::string
-Samba::version()
-{
-    uint8_t cmd[256];
-    char* str;
-    int size;
-    int pos;
-
-    cmd[0] = 'V';
-    cmd[1] = '#';
-    _port->write(cmd, 2);
-
-    _port->timeout(TIMEOUT_QUICK);
-    size = _port->read(cmd, sizeof(cmd) - 1);
-    _port->timeout(TIMEOUT_NORMAL);
-    if (size <= 0)
-        throw SambaError();
-
-    str = (char*) cmd;
-    for (pos = 0; pos < size; pos++)
-    {
-        if (!isprint(str[pos]))
-            break;
-    }
-    str[pos] = '\0';
-
-    std::string ver(str);
-
-    if (_debug)
-        printf("%s()=%s\n", __FUNCTION__, ver.c_str());
-
-    return ver;
-}
-#endif
 
 void
-Samba::chipErase(uint32_t start_addr) THROWS(GCodeException)
+Samba::chipErase(uint32_t start_addr)
 {
     if (!_canChipErase)
         throw SambaError("Samba::chipErase: cannot erase chip");
@@ -622,7 +416,7 @@ Samba::chipErase(uint32_t start_addr) THROWS(GCodeException)
     uint8_t cmd[64];
 
     if (_debug)
-        debugPrintf("%s(addr=%#" PRIx32 ")\n", __FUNCTION__, start_addr);
+        printf("%s(addr=%#" PRIx32 ")\n", __FUNCTION__, start_addr);
 
     int l = SafeSnprintf((char*) cmd, sizeof(cmd), "X%08" PRIX32 "#", start_addr);
     if (_port->write(cmd, l) != l)
@@ -635,7 +429,7 @@ Samba::chipErase(uint32_t start_addr) THROWS(GCodeException)
 }
 
 void
-Samba::writeBuffer(uint32_t src_addr, uint32_t dst_addr, uint32_t size) THROWS(GCodeException)
+Samba::writeBuffer(uint32_t src_addr, uint32_t dst_addr, uint32_t size)
 {
     if (!_canWriteBuffer)
         throw SambaError("Samba::writeBuffer: cannot write buffer");
@@ -644,7 +438,7 @@ Samba::writeBuffer(uint32_t src_addr, uint32_t dst_addr, uint32_t size) THROWS(G
         throw SambaError("Samba::writeBuffer: size > checksumBufferSize()");
 
     if (_debug)
-        debugPrintf("%s(scr_addr=%#" PRIx32 ", dst_addr=%#" PRIx32 ", size=%#" PRIx32 ")\n", __FUNCTION__, src_addr, dst_addr, size);
+        printf("%s(scr_addr=%#" PRIx32 ", dst_addr=%#" PRIx32 ", size=%#" PRIx32 ")\n", __FUNCTION__, src_addr, dst_addr, size);
 
     uint8_t cmd[64];
     int l = SafeSnprintf((char*) cmd, sizeof(cmd), "Y%08" PRIX32 ",0#", src_addr);
@@ -669,7 +463,7 @@ Samba::writeBuffer(uint32_t src_addr, uint32_t dst_addr, uint32_t size) THROWS(G
 }
 
 uint16_t
-Samba::checksumBuffer(uint32_t start_addr, uint32_t size) THROWS(GCodeException)
+Samba::checksumBuffer(uint32_t start_addr, uint32_t size)
 {
     if (!_canChecksumBuffer)
         throw SambaError("Samba::checksumBuffer: cannot checksum buffer");
@@ -678,7 +472,7 @@ Samba::checksumBuffer(uint32_t start_addr, uint32_t size) THROWS(GCodeException)
         throw SambaError("Samba::checksumBuffer: size > checksumBufferSize()");
 
     if (_debug)
-        debugPrintf("%s(start_addr=%#" PRIx32 ", size=%#" PRIx32 ") = ", __FUNCTION__, start_addr, size);
+        printf("%s(start_addr=%#" PRIx32 ", size=%#" PRIx32 ") = ", __FUNCTION__, start_addr, size);
 
     uint8_t cmd[64];
     int l = SafeSnprintf((char*) cmd, sizeof(cmd), "Z%08" PRIX32 ",%08" PRIX32 "#", start_addr, size);
@@ -697,7 +491,7 @@ Samba::checksumBuffer(uint32_t start_addr, uint32_t size) THROWS(GCodeException)
     if (errno != 0)
         throw SambaError("Samba::checksumBuffer: cannot parse result");
     if (_debug)
-        debugPrintf("%" PRIx32 "\n", res);
+        printf("%" PRIx32 "\n", res);
     return res;
 }
 

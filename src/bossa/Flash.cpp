@@ -28,10 +28,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include "Flash.h"
 
-#if 0
-#include <assert.h>
-#endif
-
 Flash::Flash(Samba& samba,
 			const char* name,
              uint32_t addr,
@@ -44,11 +40,6 @@ Flash::Flash(Samba& samba,
     : _samba(samba), _name(name), _addr(addr), _pages(pages), _size(size),
       _planes(planes), _lockRegions(lockRegions), _user(user), _wordCopy(samba, user)
 {
-#if 0
-    assert((size & (size - 1)) == 0);
-    assert((pages & (pages - 1)) == 0);
-    assert((lockRegions & (lockRegions - 1)) == 0);
-#endif
 
     _wordCopy.setWords(size / sizeof(uint32_t));
     _wordCopy.setStack(stack);

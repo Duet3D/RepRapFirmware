@@ -400,6 +400,9 @@ Platform::Platform() noexcept :
 	nextDriveToPoll(0),
 #endif
 	lastFanCheckTime(0),
+#if HAS_AUX_DEVICES
+	panelDueUpdater(nullptr),
+#endif
 #if HAS_MASS_STORAGE
 	sysDir(nullptr),
 #endif
@@ -459,7 +462,6 @@ void Platform::Init() noexcept
     auxDevices[0].Init(&SERIAL_AUX_DEVICE);
 	baudRates[1] = AUX_BAUD_RATE;
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
-	panelDueUpdater = new PanelDueUpdater();
 #endif
 
 #ifdef SERIAL_AUX2_DEVICE
@@ -3100,6 +3102,16 @@ void Platform::SetAuxRaw(size_t auxNumber, bool raw) noexcept
 	}
 #endif
 }
+
+#if HAS_AUX_DEVICES
+void Platform::InitPanelDueUpdater() noexcept
+{
+	if (panelDueUpdater == nullptr)
+	{
+		panelDueUpdater = new PanelDueUpdater();
+	}
+}
+#endif
 
 void Platform::AppendAuxReply(size_t auxNumber, const char *msg, bool rawMessage) noexcept
 {

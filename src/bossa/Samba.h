@@ -30,12 +30,6 @@
 #ifndef _SAMBA_H
 #define _SAMBA_H
 
-#if 0
-#include <string>
-#include <stdint.h>
-#include <exception>
-#include <memory>
-#endif
 #include "General/StringRef.h"
 
 #include "SerialPort.h"
@@ -43,16 +37,6 @@
 #include "GCodes/GCodeException.h"
 
 typedef GCodeException SambaError;
-
-#if 0
-class SambaError : public std::exception
-{
-public:
-    SambaError() : exception() {};
-    const char* what() const throw() { return "SAM-BA operation failed"; }
-};
-#endif
-
 
 
 class Samba
@@ -64,20 +48,16 @@ public:
     bool connect(SerialPort* port, int bps = 115200);
     void disconnect();
 
-    void writeByte(uint32_t addr, uint8_t value) THROWS(GCodeException);
-    uint8_t readByte(uint32_t addr) THROWS(GCodeException);
+    void writeByte(uint32_t addr, uint8_t value);
+    uint8_t readByte(uint32_t addr);
 
-    void writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException);
-    uint32_t readWord(uint32_t addr) THROWS(GCodeException);
+    void writeWord(uint32_t addr, uint32_t value);
+    uint32_t readWord(uint32_t addr);
 
-    void write(uint32_t addr, const uint8_t* buffer, int size) THROWS(GCodeException);
-    void read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException);
+    void write(uint32_t addr, const uint8_t* buffer, int size);
+    void read(uint32_t addr, uint8_t* buffer, int size);
 
-    void go(uint32_t addr) THROWS(GCodeException);
-
-#if 0
-    StringRef version();
-#endif
+    void go(uint32_t addr);
 
     void chipId(uint32_t& chipId, uint32_t& extChipId);
 
@@ -89,14 +69,14 @@ public:
 
     // Extended SAM-BA functions
     bool canChipErase() { return _canChipErase; }
-    void chipErase(uint32_t start_addr) THROWS(GCodeException);
+    void chipErase(uint32_t start_addr);
 
     bool canWriteBuffer() { return _canWriteBuffer; }
-    void writeBuffer(uint32_t src_addr, uint32_t dst_addr, uint32_t size) THROWS(GCodeException);
+    void writeBuffer(uint32_t src_addr, uint32_t dst_addr, uint32_t size);
     uint32_t writeBufferSize() { return 4096; }
 
     bool canChecksumBuffer() { return _canChecksumBuffer; }
-    uint16_t checksumBuffer(uint32_t start_addr, uint32_t size) THROWS(GCodeException);
+    uint16_t checksumBuffer(uint32_t start_addr, uint32_t size);
     uint32_t checksumBufferSize() { return 4096; }
     uint16_t checksumCalc(uint8_t c, uint16_t crc);
 
@@ -106,9 +86,6 @@ private:
     bool _canChecksumBuffer;
     int _readBufferSize;
     bool _debug;
-#if 0
-    bool _isUsb;
-#endif
     SerialPort* _port;
 
     bool init();
@@ -116,13 +93,9 @@ private:
     uint16_t crc16Calc(const uint8_t *data, int len);
     bool crc16Check(const uint8_t *blk);
     void crc16Add(uint8_t *blk);
-    void writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException);
-    void readXmodem(uint8_t* buffer, int size) THROWS(GCodeException);
+    void writeXmodem(const uint8_t* buffer, int size);
+    void readXmodem(uint8_t* buffer, int size);
 
-#if 0
-    void writeBinary(const uint8_t* buffer, int size);
-    void readBinary(uint8_t* buffer, int size);
-#endif
 };
 
 

@@ -27,14 +27,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
 #include "Device.h"
-#if 0
-#include "EfcFlash.h"
-#endif
 #include "EefcFlash.h"
-#if 0
-#include "D2xNvmFlash.h"
-#include "D5xNvmFlash.h"
-#endif
 
 void
 Device::readChipId(uint32_t& chipId, uint32_t& extChipId)

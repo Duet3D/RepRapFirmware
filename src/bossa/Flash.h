@@ -30,11 +30,6 @@
 #define _FLASH_H
 
 #include "General/Vector.hpp"
-#if 0
-#include <stdint.h>
-#include <memory>
-#include <exception>
-#endif
 
 #include "Samba.h"
 #include "WordCopyApplet.h"
@@ -48,59 +43,6 @@ typedef GCodeException FlashCmdError;
 typedef GCodeException FlashTimeoutError;
 typedef GCodeException BootFlashError;
 typedef GCodeException FlashEraseError;
-
-#if 0
-class FlashPageError : public std::exception
-{
-public:
-    FlashPageError() : exception() {};
-    const char* what() const throw() { return "Invalid flash page"; }
-};
-
-class FlashRegionError : public std::exception
-{
-public:
-    FlashRegionError() : exception() {};
-    const char* what() const throw() { return "Invalid lock region"; }
-};
-
-class FlashLockError : public std::exception
-{
-public:
-    FlashLockError() : exception() {};
-    const char* what() const throw() { return "Flash page is locked"; }
-};
-
-class FlashCmdError : public std::exception
-{
-public:
-    FlashCmdError() : exception() {};
-    const char* what() const throw() { return "Flash command failed"; }
-};
-
-class FlashTimeoutError : public std::exception
-{
-public:
-    FlashTimeoutError() : exception() {};
-    const char* what() const throw() { return "Flash command timeout"; }
-};
-
-class BootFlashError : public std::exception
-{
-public:
-    BootFlashError() : exception() {};
-    const char* what() const throw() { return "Unable to clear boot flash for this device"; }
-
-};
-
-class FlashEraseError : public std::exception
-{
-public:
-    FlashEraseError() : exception() {};
-    const char* what() const throw() { return "Flash erase failed"; }
-
-};
-#endif
 
 template<class T>
 class FlashOption

@@ -52,7 +52,7 @@ public:
               bool canBrownout);
     virtual ~EefcFlash();
 
-    void eraseAll(uint32_t offset) THROWS(GCodeException);
+    void eraseAll(uint32_t offset);
     void eraseAuto(bool enable);
 
     Vector<bool, 16> getLockRegions();

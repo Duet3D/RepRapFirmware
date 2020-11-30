@@ -68,7 +68,8 @@ namespace FirmwareUpdater
 		}
 #endif
 #if HAS_AUX_DEVICES
-		if (!reprap.GetPlatform().GetPanelDueUpdater().Idle()) {
+		PanelDueUpdater *panelDueUpdater = reprap.GetPlatform().GetPanelDueUpdater();
+		if (panelDueUpdater != nullptr && !panelDueUpdater->Idle()) {
 			return false;
 		}
 #endif
@@ -102,7 +103,12 @@ namespace FirmwareUpdater
 # if HAS_AUX_DEVICES
 			case PanelDueFirmwareModule:
 				{
-					reprap.GetPlatform().GetPanelDueUpdater().Start();
+					Platform& platform = reprap.GetPlatform();
+					if (platform.GetPanelDueUpdater() == nullptr)
+					{
+						platform.InitPanelDueUpdater();
+					}
+					platform.GetPanelDueUpdater()->Start();
 				}
 # endif
 			}

@@ -29,12 +29,6 @@
 #ifndef _FLASHER_H
 #define _FLASHER_H
 
-#if 0
-#include <string>
-#include <exception>
-#include <vector>
-#endif
-
 #include "Device.h"
 #include "Flash.h"
 #include "Samba.h"
@@ -43,20 +37,6 @@
 
 typedef GCodeException FlashOffsetError;
 typedef GCodeException FileSizeError;
-
-#if 0
-#include "FileError.h"
-#endif
-
-#if 0
-class FlashOffsetError : public std::exception
-{
-public:
-    FlashOffsetError() : std::exception() {};
-    virtual const char* what() const throw() { return "Flash offset is invalid"; }
-};
-
-#endif
 
 class FlasherObserver
 {
@@ -68,42 +48,6 @@ public:
     virtual void onProgress(int num, int div) = 0;
 };
 
-#if 0
-
-class FlasherInfo
-{
-public:
-    FlasherInfo() {}
-    virtual ~FlasherInfo() {}
-
-    void print();
-
-    std::string name;
-    uint32_t    chipId;
-    uint32_t    extChipId;
-    std::string version;
-    uint32_t    address;
-    uint32_t    numPages;
-    uint32_t    pageSize;
-    uint32_t    totalSize;
-    uint32_t    numPlanes;
-
-    bool        security;
-    bool        bootFlash;
-    bool        bod;
-    bool        bor;
-
-    bool        canBootFlash;
-    bool        canBod;
-    bool        canBor;
-    bool        canChipErase;
-    bool        canWriteBuffer;
-    bool        canChecksumBuffer;
-
-    std::vector<bool> lockRegions;
-};
-#endif
-
 class Flasher
 {
 public:
@@ -113,16 +57,10 @@ public:
     virtual ~Flasher() {}
 
     void erase(uint32_t foffset);
-    int GetNextChunk(char* buffer, const uint32_t amount, uint32_t& offset) noexcept;
+    int GetNextChunk(char* buffer, const uint32_t amount, uint32_t& offset, const char* filename) noexcept;
     bool write(const char* filename, uint32_t& foffset);
     bool verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset);
-#if 0
-    void read(const char* filename, uint32_t fsize, uint32_t foffset = 0);
-#endif
     void lock(/* std::string& regionArg, */ bool enable);
-#if 0
-    void info(FlasherInfo& info);
-#endif
 
 private:
     Samba& _samba;
@@ -132,8 +70,6 @@ private:
     uint32_t pageNum;
     FileStore * infile;
     FilePosition fileSize;
-    // For now fix the filename here
-    constexpr static const char* const absoluteFname = DEFAULT_SYS_DIR PANEL_DUE_FIRMWARE_FILE;
 };
 
 #endif // _FLASHER_H
