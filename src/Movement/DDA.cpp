@@ -1789,9 +1789,6 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 #endif
 }
 
-// The remaining functions are speed-critical, so use full optimisation
-// The GCC optimize pragma appears to be broken, if we try to force O3 optimisation here then functions are never inlined
-
 // Start executing this move. Must be called with interrupts disabled or basepri >= set interrupt priority, to avoid a race condition.
 void DDA::Start(Platform& p, uint32_t tim) noexcept
 pre(state == frozen)

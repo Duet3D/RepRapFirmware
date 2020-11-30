@@ -27,7 +27,7 @@ public:
 	StringParser(GCodeBuffer& gcodeBuffer) noexcept;
 	void Init() noexcept; 													// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;							// Write some debug info
-	bool Put(char c) noexcept __attribute__((hot));							// Add a character to the end
+	bool Put(char c) noexcept SPEED_CRITICAL;				// Add a character to the end
 	void PutCommand(const char *str) noexcept;								// Put a complete command but don't decode it
 	void DecodeCommand() noexcept;											// Decode the next command in the line
 	void PutAndDecode(const char *str, size_t len) noexcept;				// Add an entire string, overwriting any existing content
@@ -44,10 +44,10 @@ public:
 	bool IsLastCommand() const noexcept;
 	bool ContainsExpression() const noexcept { return seenExpression; }
 
-	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?
-	float GetFValue() THROWS(GCodeException) __attribute__((hot));				// Get a float after a key letter
-	float GetDistance() THROWS(GCodeException);									// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() THROWS(GCodeException) __attribute__((hot));			// Get an integer after a key letter
+	bool Seen(char c) noexcept SPEED_CRITICAL;					// Is a character present?
+	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;	// Get a float after a key letter
+	float GetDistance() THROWS(GCodeException) SPEED_CRITICAL;	// Get a distance or coordinate and convert it from inches to mm if necessary
+	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;	// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);								// Get an unsigned integer value
 	DriverId GetDriverId() THROWS(GCodeException);								// Get a driver ID
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);			// Get an IP address quad after a key letter
@@ -57,7 +57,7 @@ public:
 	void GetQuotedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);	// Get and copy a quoted string
 	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);	// Get and copy a string which may or may not be quoted
 	void GetReducedString(const StringRef& str) THROWS(GCodeException);			// Get and copy a quoted string, removing certain characters
-	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException) SPEED_CRITICAL; // Get a colon-separated list of floats after a key letter
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter

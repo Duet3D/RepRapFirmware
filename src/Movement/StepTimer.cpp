@@ -217,7 +217,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 }
 
 // Step pulse timer interrupt
-extern "C" void STEP_TC_HANDLER() noexcept __attribute__ ((hot));
+extern "C" void STEP_TC_HANDLER() noexcept SPEED_CRITICAL;
 
 void STEP_TC_HANDLER() noexcept
 {

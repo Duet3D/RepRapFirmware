@@ -226,8 +226,8 @@ public:
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
 
-	void TransferDone() noexcept __attribute__ ((hot));						// called by the ISR when the SPI transfer has completed
-	void StartTransfer() noexcept __attribute__ ((hot));					// called to start a transfer
+	void TransferDone() noexcept SPEED_CRITICAL;		// called by the ISR when the SPI transfer has completed
+	void StartTransfer() noexcept SPEED_CRITICAL;		// called to start a transfer
 
 	uint32_t ReadLiveStatus() const noexcept;
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
@@ -244,7 +244,7 @@ private:
 		maxSgLoadRegister = 0;
 	}
 
-	static void SetupDMA(uint32_t outVal) noexcept __attribute__ ((hot));	// set up the PDC to send a register and receive the status
+	static void SetupDMA(uint32_t outVal) noexcept SPEED_CRITICAL;	// set up the PDC to send a register and receive the status
 
 	static constexpr unsigned int NumRegisters = 5;			// the number of registers that we write to
 	volatile uint32_t registers[NumRegisters];				// the values we want the TMC2660 writable registers to have
@@ -849,7 +849,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 # error TMC handler name not defined
 #endif
 
-extern "C" void TMC2660_SPI_Handler(void) noexcept __attribute__ ((hot));
+extern "C" void TMC2660_SPI_Handler(void) noexcept SPEED_CRITICAL;
 
 void TMC2660_SPI_Handler(void) noexcept
 {

@@ -23,21 +23,21 @@ public:
 
 	void RecycleDDAs() noexcept;
 	bool CanAddMove() const noexcept;
-	bool AddStandardMove(const RawMove &nextMove, bool doMotorMapping) noexcept __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
+	bool AddStandardMove(const RawMove &nextMove, bool doMotorMapping) noexcept SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxis]) noexcept;
 #if SUPPORT_ASYNC_MOVES
 	bool AddAsyncMove(const AsyncMove& nextMove) noexcept;
 #endif
 
-	void Spin(uint8_t simulationMode, bool shouldStartMove) noexcept;					// Try to process moves in the ring
+	void Spin(uint8_t simulationMode, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
-	void Interrupt(Platform& p) noexcept;												// Check endstops, generate step pulses
+	void Interrupt(Platform& p) noexcept SPEED_CRITICAL;				// Check endstops, generate step pulses
 	void OnMoveCompleted(DDA *cdda, Platform& p) noexcept;								// called when the state has been set to 'completed'
-	bool ScheduleNextStepInterrupt() noexcept;											// Schedule the next step interrupt, returning true if we failed because it is due immediately
-	void CurrentMoveCompleted() noexcept __attribute__ ((hot));							// Signal that the current move has just been completed
+	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;			// Schedule the next step interrupt, returning true if we failed because it is due immediately
+	void CurrentMoveCompleted() noexcept SPEED_CRITICAL;				// Signal that the current move has just been completed
 
 	uint32_t ExtruderPrintingSince() const noexcept { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
 	int32_t GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting) noexcept;
@@ -84,7 +84,7 @@ public:
 	bool SetWaitingToEmpty() noexcept;
 
 private:
-	bool StartNextMove(Platform& p, uint32_t startTime) noexcept __attribute__ ((hot));	// Start the next move, returning true if laser or IObits need to be controlled
+	bool StartNextMove(Platform& p, uint32_t startTime) noexcept SPEED_CRITICAL;	// Start the next move, returning true if laser or IObits need to be controlled
 	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept;
 
 	static void TimerCallback(CallbackParameter p) noexcept;

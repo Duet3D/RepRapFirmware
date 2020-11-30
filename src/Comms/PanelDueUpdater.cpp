@@ -249,9 +249,9 @@ void PanelDueUpdater::Spin() noexcept
 				auto auxPort = GetAuxPort();
 				auxPort->SetInterruptCallback(currentInterruptCallbackFn);
 				currentInterruptCallbackFn = nullptr;
-	#if ALLOW_OTHER_AUX
+#if ALLOW_OTHER_AUX
 				serialChannel = NumSerialChannels+1;
-	#endif
+#endif
 				currentBaudRate = 0;
 
 				// Delete all objects we new'd
@@ -300,3 +300,5 @@ UARTClass* PanelDueUpdater::GetAuxPort() noexcept
 #endif
 			&SERIAL_AUX_DEVICE;
 }
+
+// End

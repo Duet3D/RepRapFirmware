@@ -27,19 +27,19 @@ public:
 	void SetCallback(TimerCallbackFunction cb, CallbackParameter param) noexcept;
 
 	// Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent
-	bool ScheduleCallback(Ticks when) noexcept;
+	bool ScheduleCallback(Ticks when) noexcept SPEED_CRITICAL;
 
 	// As ScheduleCallback but base priority >= NvicPriorityStep when called. Can be called from within a callback.
-	bool ScheduleCallbackFromIsr(Ticks when) noexcept;
+	bool ScheduleCallbackFromIsr(Ticks when) noexcept SPEED_CRITICAL;
 
 	// Check whether a callback really is due, schedule it if not. Returns true if it really is due. Can be called from within a callback.
-	bool ScheduleCallbackFromIsr() noexcept;
+	bool ScheduleCallbackFromIsr() noexcept SPEED_CRITICAL;
 
 	// Cancel any scheduled callbacks
 	void CancelCallback() noexcept;
 
 	// As CancelCallback but base priority >= NvicPriorityStep when called
-	void CancelCallbackFromIsr() noexcept;
+	void CancelCallbackFromIsr() noexcept SPEED_CRITICAL;
 
 	// Initialise the timer system
 	static void Init() noexcept;
@@ -48,7 +48,7 @@ public:
 	static void DisableTimerInterrupt() noexcept;
 
 	// Get the current tick count
-	static Ticks GetTimerTicks() noexcept __attribute__ ((hot));
+	static Ticks GetTimerTicks() noexcept SPEED_CRITICAL;
 
 	// Get the current tick count when we only need a 16-bit value. Faster than GetTimerTicks() on the SAM4S and SAME70.
 	static uint16_t GetTimerTicks16() noexcept;

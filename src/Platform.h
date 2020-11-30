@@ -357,7 +357,7 @@ public:
 	const MacAddress& GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
 
 	// Timing
-	void Tick() noexcept __attribute__((hot));						// Process a systick interrupt
+	void Tick() noexcept SPEED_CRITICAL;			// Process a systick interrupt
 
 	// Real-time clock
 	bool IsDateTimeSet() const noexcept { return realTime != 0; }	// Has the RTC been set yet?

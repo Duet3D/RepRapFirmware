@@ -332,7 +332,7 @@ private:
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
 	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
 
-	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) __attribute__((hot));	// Execute a straight move
+	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) SPEED_CRITICAL;	// Execute a straight move
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)				// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(GCodeBuffer& gb) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already

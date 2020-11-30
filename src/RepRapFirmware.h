@@ -98,6 +98,8 @@ inline void memcpyf(float *dst, const float *src, size_t numFloats) noexcept
 
 #endif
 
+#define SPEED_CRITICAL	__attribute__((optimize("O2")))
+
 // API level definition.
 // ApiLevel 1 is the first level that supports rr_model.
 constexpr unsigned int ApiLevel = 1;

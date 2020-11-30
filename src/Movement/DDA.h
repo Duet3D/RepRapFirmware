@@ -39,21 +39,21 @@ public:
 
 	DDA(DDA* n) noexcept;
 
-	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
+	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept  SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxDriversPerAxis]) noexcept;		// Set up a leadscrew motor move
 #if SUPPORT_ASYNC_MOVES
 	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept;			// Set up an async move
 #endif
 
-	void Start(Platform& p, uint32_t tim) noexcept __attribute__ ((hot));			// Start executing the DDA, i.e. move the move.
-	void StepDrivers(Platform& p) noexcept __attribute__ ((hot));					// Take one step of the DDA, called by timed interrupt.
-	bool ScheduleNextStepInterrupt(StepTimer& timer) const noexcept;				// Schedule the next interrupt, returning true if we can't because it is already due
+	void Start(Platform& p, uint32_t tim) noexcept SPEED_CRITICAL;	// Start executing the DDA, i.e. move the move.
+	void StepDrivers(Platform& p) noexcept SPEED_CRITICAL;			// Take one step of the DDA, called by timed interrupt.
+	bool ScheduleNextStepInterrupt(StepTimer& timer) const noexcept SPEED_CRITICAL;	// Schedule the next interrupt, returning true if we can't because it is already due
 
 	void SetNext(DDA *n) noexcept { next = n; }
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	void Complete() noexcept { state = completed; }
 	bool Free() noexcept;
-	void Prepare(uint8_t simMode, float extrusionPending[]) noexcept __attribute__ ((hot));	// Calculate all the values and freeze this DDA
+	void Prepare(uint8_t simMode, float extrusionPending[]) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
 	bool HasStepError() const noexcept;
 	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
@@ -170,11 +170,11 @@ public:
 private:
 	DriveMovement *FindDM(size_t drive) const noexcept;						// find the DM for a drive if there is one even if it is completed
 	DriveMovement *FindActiveDM(size_t drive) const noexcept;				// find the DM for a drive if there is one but only if it is active
-	void RecalculateMove(DDARing& ring) noexcept __attribute__ ((hot));
-	void MatchSpeeds() noexcept __attribute__ ((hot));
+	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
+	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	void ReduceHomingSpeed() noexcept;										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive) noexcept;									// stop movement of a drive and recalculate the endpoint
-	void InsertDM(DriveMovement *dm) noexcept __attribute__ ((hot));
+	void InsertDM(DriveMovement *dm) noexcept SPEED_CRITICAL;
 	void DeactivateDM(size_t drive) noexcept;
 	void ReleaseDMs() noexcept;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
@@ -186,7 +186,7 @@ private:
 	int32_t PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const noexcept;
 #endif
 
-	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept __attribute__ ((hot));	// Try to smooth out moves in the queue
+	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept  SPEED_CRITICAL;	// Try to smooth out moves in the queue
     static float Normalise(float v[], AxesBitmap unitLengthAxes) noexcept;  // Normalise a vector to unit length over the specified axes
     static float Normalise(float v[]) noexcept; 							// Normalise a vector to unit length over all axes
 	float NormaliseLinearMotion(AxesBitmap linearAxes) noexcept;			// Make the direction vector unit-normal in XYZ
