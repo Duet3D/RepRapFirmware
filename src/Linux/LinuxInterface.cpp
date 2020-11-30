@@ -565,7 +565,7 @@ void LinuxInterface::Init() noexcept
 #endif
 							gb->ResolveMacroRequest(false, false);
 						}
-						else
+						else if (channel != GCodeChannel::Daemon)
 						{
 							reprap.GetPlatform().MessageF(WarningMessage, "Macro file has been started on channel %s but none was requested\n", channel.ToString());
 						}
