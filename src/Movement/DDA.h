@@ -337,8 +337,23 @@ inline __attribute__((always_inline)) bool DDA::ScheduleNextStepInterrupt(StepTi
 {
 	if (state == executing)
 	{
-		const uint32_t whenDue = ((activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime)
-								+ afterPrepare.moveStartTime;
+		// Calculate the time when we want the next interrupt.
+		// This must be after the move is due to start, because if the interrupt is too early then DDA::Step will just reschedule the interrupt again.
+		// This leads to the ISR looping, eventually inserting ever-larger hiccups, and the print stalls.
+		uint32_t whenDue;
+		if (activeDMs != nullptr)
+		{
+			whenDue = activeDMs->nextStepTime + afterPrepare.moveStartTime;
+		}
+		else if (clocksNeeded > DDA::WakeupTime)
+		{
+			whenDue = clocksNeeded - DDA::WakeupTime + afterPrepare.moveStartTime;
+		}
+		else
+		{
+			// This case occurs when we have a very short null movement
+			whenDue = afterPrepare.moveStartTime;
+		}
 		return timer.ScheduleCallbackFromIsr(whenDue);
 	}
 	return false;
@@ -363,6 +378,7 @@ inline bool DDA::CanPauseAfter() const noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Insert a hiccup, returning the amount of time inserted
+// Note, clocksNeeded may be less than DDA:WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
 inline __attribute__((always_inline)) uint32_t DDA::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
 {
 	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
@@ -374,6 +390,7 @@ inline __attribute__((always_inline)) uint32_t DDA::InsertHiccup(uint32_t whenNe
 #else
 
 // Insert a hiccup
+// Note, clocksNeeded may be less than DDA:WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
 inline __attribute__((always_inline)) void DDA::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
 {
 	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
