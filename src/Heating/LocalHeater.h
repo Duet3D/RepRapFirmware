@@ -92,12 +92,14 @@ private:
 
 	static_assert(sizeof(previousTemperaturesGood) * 8 >= NumPreviousTemperatures, "too few bits in previousTemperaturesGood");
 
-	static constexpr unsigned int TuningHeaterSettleCycles = 2;
+	static constexpr unsigned int TuningHeaterMinIdleCycles = 3;	// minimum number of idle cycles after heating up, including the initial overshoot and cool down
+	static constexpr unsigned int TuningHeaterMaxIdleCycles = 10;
 	static constexpr unsigned int MinTuningHeaterCycles = 5;
-	static constexpr unsigned int MaxTuningHeaterCycles = 30;
+	static constexpr unsigned int MaxTuningHeaterCycles = 25;
 	static constexpr float TuningHysteresis = 5.0;
 	static constexpr float TuningPeakTempDrop = 2.0;		// must be well below TuningHysteresis
 	static constexpr float FeedForwardMultiplier = 1.3;		// how much we over-compensate feedforward to allow for heat reservoirs during tuning
+	static constexpr float HeaterSettledCoolingTimeRatio = 0.93;
 };
 
 #endif /* SRC_LOCALHEATER_H_ */
