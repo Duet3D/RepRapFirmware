@@ -1746,17 +1746,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (result != GCodeResult::error)
 				{
-					// Append newline and send the message to the remaining destinations
+					// Append newline and send the message to the destinations
 					message.cat('\n');
-					if (	(type & HttpMessage) != 0
-#if HAS_LINUX_INTERFACE
-						 && !reprap.UsingLinuxInterface()
-#endif
-					   )
-					{
-						// Set Push flag as well to potentially save an OutputBuffer instance
-						type = (MessageType)(type | PushFlag);
-					}
 					platform.Message(type, message.c_str());
 				}
 			}
@@ -2053,13 +2044,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 203: // Set/print minimum/maximum feedrates
 			{
+				// Units are mm/sec if S1 is given, else mm/min
+				const bool usingMmPerSec = (gb.Seen('S') && gb.GetIValue() == 1);
+				const float settingMultiplier = (usingMmPerSec) ? 1.0 : SecondsToMinutes;
 				bool seen = false;
 
 				// Do the minimum first, because we constrain the maximum rates to be no lower than it
 				if (gb.Seen('I'))
 				{
 					seen = true;
-					platform.SetMinMovementSpeed(gb.GetDistance() * SecondsToMinutes);
+					platform.SetMinMovementSpeed(gb.GetDistance() * settingMultiplier);
 				}
 
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
@@ -2067,7 +2061,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen(axisLetters[axis]))
 					{
 						seen = true;
-						platform.SetMaxFeedrate(axis, gb.GetDistance() * SecondsToMinutes);
+						platform.SetMaxFeedrate(axis, gb.GetDistance() * settingMultiplier);
 					}
 				}
 
@@ -2079,7 +2073,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.GetFloatArray(eVals, eCount, true);
 					for (size_t e = 0; e < eCount; e++)
 					{
-						platform.SetMaxFeedrate(ExtruderToLogicalDrive(e), gb.ConvertDistance(eVals[e]) * SecondsToMinutes);
+						platform.SetMaxFeedrate(ExtruderToLogicalDrive(e), gb.ConvertDistance(eVals[e]) * settingMultiplier);
 					}
 				}
 
@@ -2089,19 +2083,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					reply.copy("Max speeds (mm/min): ");
+					const float reportingMultiplier = (usingMmPerSec) ? 1.0 : MinutesToSeconds;
+					reply.printf("Max speeds (mm/%s): ", (usingMmPerSec) ? "sec" : "min");
 					for (size_t axis = 0; axis < numTotalAxes; ++axis)
 					{
-						reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) * MinutesToSeconds));
+						reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) * reportingMultiplier));
 					}
 					reply.cat("E:");
 					char sep = ' ';
 					for (size_t extruder = 0; extruder < numExtruders; extruder++)
 					{
-						reply.catf("%c%.1f", sep, (double)(platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)) * MinutesToSeconds));
+						reply.catf("%c%.1f", sep, (double)(platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)) * reportingMultiplier));
 						sep = ':';
 					}
-					reply.catf(", min. speed %.2f", (double)(platform.MinMovementSpeed() * MinutesToSeconds));
+					reply.catf(", min. speed %.2f", (double)(platform.MinMovementSpeed() * reportingMultiplier));
 				}
 			}
 			break;
