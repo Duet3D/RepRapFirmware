@@ -8,7 +8,7 @@
 #include "Heating/Heat.h"
 #include "Endstops/ZProbe.h"
 
-#if HAS_WIFI_NETWORKING
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 # include "FirmwareUpdater.h"
 #endif
 
@@ -463,12 +463,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::flashing1:
-#if HAS_WIFI_NETWORKING
-// wilriker: This probably can be removed
-//		if (&gb == auxGCode)								// if M997 S1 is sent from USB, don't keep sending temperature reports
-//		{
-//			CheckReportDue(gb, reply);						// this is so that the ATE gets status reports and can tell when flashing is complete
-//		}
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())
@@ -481,14 +476,26 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					firmwareUpdateModuleMap &= ~(1u << module);
 					FirmwareUpdater::UpdateModule(module);
 					updating = true;
+					isFlashingPanelDue = (module == FirmwareUpdater::PanelDueFirmwareModule);
 					break;
 				}
 			}
 			if (!updating)
 			{
+				isFlashingPanelDue = false;
 				gb.SetState(GCodeState::flashing2);
 			}
 		}
+# if HAS_AUX_DEVICES
+		else
+		{
+			PanelDueUpdater* panelDueUpdater = platform.GetPanelDueUpdater();
+			if (panelDueUpdater != nullptr)
+			{
+				panelDueUpdater->Spin();
+			}
+		}
+# endif
 #else
 		gb.SetState(GCodeState::flashing2);
 #endif

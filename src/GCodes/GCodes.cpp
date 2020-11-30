@@ -60,7 +60,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #if HAS_VOLTAGE_MONITOR
 	powerFailScript(nullptr),
 #endif
-	isFlashing(false), lastFilamentError(FilamentSensorStatus::ok), lastWarningMillis(0), atxPowerControlled(false)
+	isFlashing(false), isFlashingPanelDue(false), lastFilamentError(FilamentSensorStatus::ok), lastWarningMillis(0), atxPowerControlled(false)
 #if HAS_MASS_STORAGE
 	, sdTimingFile(nullptr)
 #endif
@@ -454,6 +454,10 @@ void GCodes::Spin() noexcept
 			if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)	// the last one is autoPauseGCode, so don't do it again
 			{
 				nextGcodeSource = 0;
+			}
+			if (isFlashingPanelDue && gbp == auxGCode)				// Skip auxGCode while flashing PanelDue is in progress
+			{
+				continue;
 			}
 			if (gbp != nullptr && SpinGCodeBuffer(*gbp))			// if we did something useful
 			{

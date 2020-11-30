@@ -623,6 +623,7 @@ private:
 	// Firmware update
 	uint8_t firmwareUpdateModuleMap;			// Bitmap of firmware modules to be updated
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
+	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
 
 	// Code queue
 	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution

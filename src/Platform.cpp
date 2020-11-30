@@ -400,6 +400,9 @@ Platform::Platform() noexcept :
 	nextDriveToPoll(0),
 #endif
 	lastFanCheckTime(0),
+#if HAS_AUX_DEVICES
+	panelDueUpdater(nullptr),
+#endif
 #if HAS_MASS_STORAGE
 	sysDir(nullptr),
 #endif
@@ -3099,6 +3102,16 @@ void Platform::SetAuxRaw(size_t auxNumber, bool raw) noexcept
 	}
 #endif
 }
+
+#if HAS_AUX_DEVICES
+void Platform::InitPanelDueUpdater() noexcept
+{
+	if (panelDueUpdater == nullptr)
+	{
+		panelDueUpdater = new PanelDueUpdater();
+	}
+}
+#endif
 
 void Platform::AppendAuxReply(size_t auxNumber, const char *msg, bool rawMessage) noexcept
 {
