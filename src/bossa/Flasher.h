@@ -41,26 +41,26 @@ typedef GCodeException FileSizeError;
 class FlasherObserver
 {
 public:
-    FlasherObserver() {}
+    FlasherObserver() noexcept {}
     virtual ~FlasherObserver() {}
 
-    virtual void onStatus(const char *message, ...) = 0;
-    virtual void onProgress(int num, int div) = 0;
+    virtual void onStatus(const char *message, ...) noexcept = 0;
+    virtual void onProgress(int num, int div) noexcept = 0;
 };
 
 class Flasher
 {
 public:
-    Flasher(Samba& samba, Device& device, FlasherObserver& observer)
+    Flasher(Samba& samba, Device& device, FlasherObserver& observer) noexcept
     	: _samba(samba), _flash(device.getFlash()), _observer(observer), pageNum(0), infile(nullptr), fileSize(0)
     {}
     virtual ~Flasher() {}
 
-    void erase(uint32_t foffset);
+    void erase(uint32_t foffset) THROWS(GCodeException);
     int GetNextChunk(char* buffer, const uint32_t amount, uint32_t& offset, const char* filename) noexcept;
-    bool write(const char* filename, uint32_t& foffset);
-    bool verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset);
-    void lock(/* std::string& regionArg, */ bool enable);
+    bool write(const char* filename, uint32_t& foffset) THROWS(GCodeException);
+    bool verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException);
+    void lock(/* std::string& regionArg, */ bool enable) THROWS(GCodeException);
 
 private:
     Samba& _samba;

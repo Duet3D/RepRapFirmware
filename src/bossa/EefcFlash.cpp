@@ -28,12 +28,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include "EefcFlash.h"
 
-#if 0
-#include <assert.h>
-#include <unistd.h>
-#include <stdio.h>
-#endif
-
 #define EEFC_KEY        0x5a
 
 #define EEFC0_FMR       (_regs + 0x00)
@@ -73,15 +67,10 @@ EefcFlash::EefcFlash(Samba& samba,
                      uint32_t user,
                      uint32_t stack,
                      uint32_t regs,
-                     bool canBrownout)
+                     bool canBrownout) THROWS(GCodeException)
     : Flash(samba, name, addr, pages, size, planes, lockRegions, user, stack),
       _regs(regs), _canBrownout(canBrownout), _eraseAuto(true)
 {
-#if 0
-    assert(planes == 1 || planes == 2);
-    assert(pages <= 4096);
-    assert(lockRegions <= 256);
-#endif
 
     // SAM3 Errata (FWS must be 6)
     _samba.writeWord(EEFC0_FMR, 0x6 << 8);
@@ -94,7 +83,7 @@ EefcFlash::~EefcFlash()
 }
 
 void
-EefcFlash::eraseAll(uint32_t offset)
+EefcFlash::eraseAll(uint32_t offset) THROWS(GCodeException)
 {
     // Do a full chip erase if the offset is 0
     if (offset == 0)
@@ -136,13 +125,13 @@ EefcFlash::eraseAll(uint32_t offset)
 }
 
 void
-EefcFlash::eraseAuto(bool enable)
+EefcFlash::eraseAuto(bool enable) noexcept
 {
     _eraseAuto = enable;
 }
 
 Vector<bool, 16>
-EefcFlash::getLockRegions()
+EefcFlash::getLockRegions() THROWS(GCodeException)
 {
     Vector<bool, 16> regions(_lockRegions, false);
     uint32_t frr;
@@ -182,6 +171,7 @@ EefcFlash::getLockRegions()
     return regions;
 }
 
+#if ORIGINAL_BOSSA_CODE
 bool
 EefcFlash::getSecurity()
 {
@@ -214,9 +204,10 @@ EefcFlash::getBor()
     waitFSR();
     return (readFRR0() & (1 << 2));
 }
+#endif
 
 bool
-EefcFlash::getBootFlash()
+EefcFlash::getBootFlash() THROWS(GCodeException)
 {
     waitFSR();
     writeFCR0(EEFC_FCMD_GGPB, 0);
@@ -225,14 +216,14 @@ EefcFlash::getBootFlash()
 }
 
 void
-EefcFlash::writeOptions()
+EefcFlash::writeOptions() THROWS(GCodeException)
 {
     if (canBootFlash() && _bootFlash.isDirty() && _bootFlash.get() != getBootFlash())
     {
         waitFSR();
         writeFCR0(_bootFlash.get() ? EEFC_FCMD_SGPB : EEFC_FCMD_CGPB, (canBod() ? 3 : 1));
     }
-#if 0
+#if ORIGINAL_BOSSA_CODE
     if (canBor() && _bor.isDirty() && _bor.get() != getBor())
     {
         waitFSR();
@@ -273,7 +264,7 @@ EefcFlash::writeOptions()
             }
         }
     }
-#if 0
+#if ORIGINAL_BOSSA_CODE
     if (_security.isDirty() && _security.get() == true && _security.get() != getSecurity())
     {
         waitFSR();
@@ -283,7 +274,7 @@ EefcFlash::writeOptions()
 }
 
 void
-EefcFlash::writePage(uint32_t page)
+EefcFlash::writePage(uint32_t page) THROWS(GCodeException)
 {
     if (page >= _pages)
         throw FlashPageError("EefcFlash::writePage: FlashPageError");
@@ -300,7 +291,7 @@ EefcFlash::writePage(uint32_t page)
 }
 
 void
-EefcFlash::readPage(uint32_t page, uint8_t* data)
+EefcFlash::readPage(uint32_t page, uint8_t* data) THROWS(GCodeException)
 {
     if (page >= _pages)
         throw FlashPageError("EefcFlash::readPage: FlashPageError");
@@ -316,7 +307,7 @@ EefcFlash::readPage(uint32_t page, uint8_t* data)
 }
 
 void
-EefcFlash::waitFSR(int seconds)
+EefcFlash::waitFSR(int seconds) THROWS(GCodeException)
 {
     int tries = seconds * 1000;
     uint32_t fsr0;
@@ -347,25 +338,25 @@ EefcFlash::waitFSR(int seconds)
 }
 
 void
-EefcFlash::writeFCR0(uint8_t cmd, uint32_t arg)
+EefcFlash::writeFCR0(uint8_t cmd, uint32_t arg) THROWS(GCodeException)
 {
     _samba.writeWord(EEFC0_FCR, (EEFC_KEY << 24) | (arg << 8) | cmd);
 }
 
 void
-EefcFlash::writeFCR1(uint8_t cmd, uint32_t arg)
+EefcFlash::writeFCR1(uint8_t cmd, uint32_t arg) THROWS(GCodeException)
 {
     _samba.writeWord(EEFC1_FCR, (EEFC_KEY << 24) | (arg << 8) | cmd);
 }
 
 uint32_t
-EefcFlash::readFRR0()
+EefcFlash::readFRR0() THROWS(GCodeException)
 {
     return _samba.readWord(EEFC0_FRR);
 }
 
 uint32_t
-EefcFlash::readFRR1()
+EefcFlash::readFRR1() THROWS(GCodeException)
 {
     return _samba.readWord(EEFC1_FRR);
 }

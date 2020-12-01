@@ -30,9 +30,6 @@
 #define _EEFCFLASH_H
 
 #include <cstdint>
-#if 0
-#include <exception>
-#endif
 
 #include "Flash.h"
 
@@ -49,29 +46,33 @@ public:
               uint32_t user,
               uint32_t stack,
               uint32_t regs,
-              bool canBrownout);
+              bool canBrownout) THROWS(GCodeException);
     virtual ~EefcFlash();
 
-    void eraseAll(uint32_t offset);
-    void eraseAuto(bool enable);
+    void eraseAll(uint32_t offset) THROWS(GCodeException);
+    void eraseAuto(bool enable) noexcept;
 
-    Vector<bool, 16> getLockRegions();
+    Vector<bool, 16> getLockRegions() THROWS(GCodeException);
 
+#if ORIGINAL_BOSSA_CODE
     bool getSecurity();
 
     bool getBod();
-    bool canBod() { return _canBrownout; }
+#endif
+    bool canBod() noexcept { return _canBrownout; }
 
+#if ORIGINAL_BOSSA_CODE
     bool getBor();
-    bool canBor() { return _canBrownout; }
+#endif
+    bool canBor() noexcept { return _canBrownout; }
 
-    bool getBootFlash();
-    bool canBootFlash() { return true; }
+    bool getBootFlash() THROWS(GCodeException);
+    bool canBootFlash() noexcept { return true; }
 
-    void writeOptions();
+    void writeOptions() THROWS(GCodeException);
 
-    void writePage(uint32_t page);
-    void readPage(uint32_t page, uint8_t* data);
+    void writePage(uint32_t page) THROWS(GCodeException);
+    void readPage(uint32_t page, uint8_t* data) THROWS(GCodeException);
 
     static const uint32_t PagesPerErase;
 
@@ -80,11 +81,11 @@ private:
     bool _canBrownout;
     bool _eraseAuto;
 
-    void waitFSR(int seconds = 1);
-    void writeFCR0(uint8_t cmd, uint32_t arg);
-    void writeFCR1(uint8_t cmd, uint32_t arg);
-    uint32_t readFRR0();
-    uint32_t readFRR1();
+    void waitFSR(int seconds = 1) THROWS(GCodeException);
+    void writeFCR0(uint8_t cmd, uint32_t arg) THROWS(GCodeException);
+    void writeFCR1(uint8_t cmd, uint32_t arg) THROWS(GCodeException);
+    uint32_t readFRR0() THROWS(GCodeException);
+    uint32_t readFRR1() THROWS(GCodeException);
 };
 
 #endif // _EEFCFLASH_H

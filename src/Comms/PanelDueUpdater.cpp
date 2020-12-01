@@ -16,7 +16,7 @@ constexpr MessageType statusMessages = (MessageType) (UsbMessage | HttpMessage |
 class AuxSerialPort : public SerialPort
 {
 public:
-	AuxSerialPort(UARTClass& uartClass) : uart(uartClass), _timeout(0) {}
+	AuxSerialPort(UARTClass& uartClass) noexcept : uart(uartClass), _timeout(0) {}
 	~AuxSerialPort() {}
 
 	bool open(int baud = 115200,
@@ -69,7 +69,7 @@ int AuxSerialPort::read(uint8_t* data, int size) noexcept
 class DebugObserver : public FlasherObserver
 {
 public:
-	DebugObserver() {}
+	DebugObserver() noexcept {}
 	virtual ~DebugObserver() {}
 
 	virtual void onStatus(const char *message, ...) noexcept;
@@ -134,10 +134,10 @@ void PanelDueUpdater::Spin() noexcept
 {
 	try
 	{
-		switch (state)
+		switch (state.RawValue())
 		{
 		case FlashState::eraseAndReset:
-			reprap.GetPlatform().Message(statusMessages, "Erase and reset PanelDue\n");
+			reprap.GetPlatform().Message(statusMessages, "Sending Erase-and-Reset command to PanelDue\n");
 			reprap.GetPlatform().AppendAuxReply(serialChannel-1, panelDueCommandEraseAndReset, true);
 			state = FlashState::waitAfterEraseAndReset;
 			erasedAndResetAt = millis();
@@ -152,6 +152,7 @@ void PanelDueUpdater::Spin() noexcept
 
 		case FlashState::setup:
 			{
+				reprap.GetPlatform().Message(statusMessages, "Establishing connection to PanelDue bootloader\n");
 				// Verifying creates the Emergency Stop sequence so disable it here
 				auto auxPort = GetAuxPort();
 				currentInterruptCallbackFn = auxPort->SetInterruptCallback(nullptr);
@@ -173,44 +174,46 @@ void PanelDueUpdater::Spin() noexcept
 				samba->connect(serialPort);
 
 				device = new Device(*samba);
-				device->create();
+				device->create();				// If this throws the bootloader did not answer
 
 				flasherObserver = new DebugObserver();
 
 				flasher = new Flasher(*samba, *device, *flasherObserver);
-				state = FlashState::unlock;
+				state = FlashState::bossaUnlock;
 			}
 			break;
 
-		case FlashState::unlock:
+		case FlashState::bossaUnlock:
+			reprap.GetPlatform().Message(statusMessages, "Unlocking PanelDue flash memory\n");
 			flasher->lock(false);
 			state = FlashState::bossaErase;
 			break;
 
 		case FlashState::bossaErase:
+			reprap.GetPlatform().Message(statusMessages, "Erasing PanelDue flash memory\n");
 			flasher->erase(0);
-			state = FlashState::write;
+			state = FlashState::bossaWrite;
 			break;
 
-		case FlashState::write:
+		case FlashState::bossaWrite:
 			{
 				bool done = flasher->write(firmwareFilename, offset);
 				if (done)
 				{
 					offset = 0;						// Reset it for verification
-					state = FlashState::verify;
+					state = FlashState::bossaVerify;
 				}
 			}
 			break;
 
-		case FlashState::verify:
+		case FlashState::bossaVerify:
 			{
 				uint32_t pageErrors;
 				uint32_t totalErrors;
 				bool done = flasher->verify(firmwareFilename, pageErrors, totalErrors, offset);
 				if (done && pageErrors == 0)
 				{
-					state = FlashState::writeOptions;
+					state = FlashState::bossaWriteOptions;
 				}
 				else if (pageErrors > 0)
 				{
@@ -220,8 +223,9 @@ void PanelDueUpdater::Spin() noexcept
 			}
 			break;
 
-		case FlashState::writeOptions:
+		case FlashState::bossaWriteOptions:
 			{
+				reprap.GetPlatform().Message(statusMessages, "Writing PanelDue flash options\n");
 				Flash* flash = device->getFlash();
 				flash->setBootFlash(true);
 				flash->writeOptions();
@@ -282,9 +286,19 @@ void PanelDueUpdater::Spin() noexcept
 	}
 	catch (GCodeException& ex)
 	{
+#if DEBUG_BOSSA
 		String<StringLength100> errorMessage;
 		ex.GetMessage(errorMessage.GetRef(), nullptr);
 		reprap.GetPlatform().MessageF(ErrorMessage, "%s", errorMessage.c_str());
+#endif
+		if (state == FlashState::setup)
+		{
+			reprap.GetPlatform().Message(ErrorMessage, "Failed to communicate with PanelDue bootloader (no START signal received). Please press the Erase and Reset switches on PanelDue.");
+		}
+		else
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Flashing PanelDue failed in step %s. Please try again.", state.ToString());
+		}
 		state = FlashState::done;
 	}
 }

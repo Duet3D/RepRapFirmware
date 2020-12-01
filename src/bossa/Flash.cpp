@@ -36,7 +36,7 @@ Flash::Flash(Samba& samba,
              uint32_t planes,
              uint32_t lockRegions,
              uint32_t user,
-             uint32_t stack)
+             uint32_t stack) THROWS(GCodeException)
     : _samba(samba), _name(name), _addr(addr), _pages(pages), _size(size),
       _planes(planes), _lockRegions(lockRegions), _user(user), _wordCopy(samba, user)
 {
@@ -52,7 +52,7 @@ Flash::Flash(Samba& samba,
 }
 
 void
-Flash::setLockRegions(const Vector<bool, 16>& regions)
+Flash::setLockRegions(const Vector<bool, 16>& regions) THROWS(GCodeException)
 {
     if (regions.Size() > _lockRegions)
         throw FlashRegionError("Flash::setLockRegions: regions.Size() > _lockRegions");
@@ -61,41 +61,35 @@ Flash::setLockRegions(const Vector<bool, 16>& regions)
 }
 
 void
-Flash::setSecurity()
+Flash::setSecurity() noexcept
 {
     _security.set(true);
 }
 
 void
-Flash::setBor(bool enable)
+Flash::setBor(bool enable) noexcept
 {
     if (canBor())
         _bor.set(enable);
 }
 
 void
-Flash::setBod(bool enable)
+Flash::setBod(bool enable) noexcept
 {
     if (canBod())
         _bod.set(enable);
 }
 
 void
-Flash::setBootFlash(bool enable)
+Flash::setBootFlash(bool enable) noexcept
 {
     if (canBootFlash())
         _bootFlash.set(enable);
 }
 
 void
-Flash::loadBuffer(const uint8_t* data, uint16_t bufferSize)
+Flash::loadBuffer(const uint8_t* data, uint16_t bufferSize) THROWS(GCodeException)
 {
     _samba.write(_onBufferA ? _pageBufferA : _pageBufferB, data, bufferSize);
-}
-
-void
-Flash::writeBuffer(uint32_t dst_addr, uint32_t size)
-{
-    _samba.writeBuffer(_onBufferA ? _pageBufferA : _pageBufferB, dst_addr + _addr, size);
 }
 

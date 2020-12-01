@@ -42,16 +42,16 @@ public:
            uint32_t size,
            uint32_t start,
            uint32_t stack,
-           uint32_t reset);
+           uint32_t reset) THROWS(GCodeException);
     virtual ~Applet() {}
 
-    virtual uint32_t size() { return _size; }
-    virtual uint32_t addr() { return _addr; }
+    virtual uint32_t size() noexcept { return _size; }
+    virtual uint32_t addr() noexcept { return _addr; }
 
-    virtual void setStack(uint32_t stack);
+    virtual void setStack(uint32_t stack) THROWS(GCodeException);
 
-    virtual void run(); // To be used for Thumb-1 based devices (ARM7TDMI, ARM9)
-    virtual void runv(); // To be used for Thumb-2 based devices (Cortex-Mx)
+    virtual void run() THROWS(GCodeException); // To be used for Thumb-1 based devices (ARM7TDMI, ARM9)
+    virtual void runv() THROWS(GCodeException); // To be used for Thumb-2 based devices (Cortex-Mx)
 
 protected:
     Samba& _samba;

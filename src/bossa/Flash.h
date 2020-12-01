@@ -29,6 +29,7 @@
 #ifndef _FLASH_H
 #define _FLASH_H
 
+#define ORIGINAL_BOSSA_CODE (0)
 #include "General/Vector.hpp"
 
 #include "Samba.h"
@@ -48,11 +49,11 @@ template<class T>
 class FlashOption
 {
 public:
-    FlashOption() : _dirty(false) {}
+    FlashOption() noexcept : _dirty(false) {}
     virtual ~FlashOption() {}
-    void set(const T& value) { _value = value; _dirty = true; }
-    const T& get() { return _value; }
-    bool isDirty() { return _dirty; }
+    void set(const T& value) noexcept { _value = value; _dirty = true; }
+    const T& get() noexcept { return _value; }
+    bool isDirty() noexcept { return _dirty; }
 
 private:
     T    _value;
@@ -70,46 +71,51 @@ public:
           uint32_t planes,               // Number of flash planes
           uint32_t lockRegions,          // Number of flash lock regions
           uint32_t user,                 // Address in SRAM where the applet and buffers will be placed
-          uint32_t stack);               // Address in SRAM where the applet stack will be placed
+          uint32_t stack) THROWS(GCodeException);               // Address in SRAM where the applet stack will be placed
     virtual ~Flash() {}
 
-    const char* name() { return _name; }
+    const char* name() noexcept { return _name; }
 
-    virtual uint32_t address() { return _addr; }
-    virtual uint32_t pageSize() { return _size; }
-    virtual uint32_t numPages() { return _pages; }
-    virtual uint32_t numPlanes() { return _planes; }
-    virtual uint32_t totalSize() { return _size * _pages; }
-    virtual uint32_t lockRegions() { return _lockRegions; }
+    virtual uint32_t address() noexcept { return _addr; }
+    virtual uint32_t pageSize() noexcept { return _size; }
+    virtual uint32_t numPages() noexcept { return _pages; }
+    virtual uint32_t numPlanes() noexcept { return _planes; }
+    virtual uint32_t totalSize() noexcept { return _size * _pages; }
+    virtual uint32_t lockRegions() noexcept { return _lockRegions; }
 
-    virtual void eraseAll(uint32_t offset) = 0;
-    virtual void eraseAuto(bool enable) = 0;
+    virtual void eraseAll(uint32_t offset) THROWS(GCodeException) = 0;
+    virtual void eraseAuto(bool enable) noexcept = 0;
 
-    virtual Vector<bool, 16> getLockRegions() = 0;
-    virtual void setLockRegions(const Vector<bool, 16>& regions);
+    virtual Vector<bool, 16> getLockRegions() THROWS(GCodeException) = 0;
+    virtual void setLockRegions(const Vector<bool, 16>& regions) THROWS(GCodeException);
 
+#if ORIGINAL_BOSSA_CODE
     virtual bool getSecurity() = 0;
-    virtual void setSecurity();
+#endif
+    virtual void setSecurity() noexcept;
 
+#if ORIGINAL_BOSSA_CODE
     virtual bool getBod() = 0;
-    virtual void setBod(bool enable);
-    virtual bool canBod() = 0;
+#endif
+    virtual void setBod(bool enable) noexcept;
+    virtual bool canBod() noexcept = 0;
 
+#if ORIGINAL_BOSSA_CODE
     virtual bool getBor() = 0;
-    virtual void setBor(bool enable);
-    virtual bool canBor() = 0;
+#endif
+    virtual void setBor(bool enable) noexcept;
+    virtual bool canBor() noexcept = 0;
 
-    virtual bool getBootFlash() = 0;
-    virtual void setBootFlash(bool enable);
-    virtual bool canBootFlash() = 0;
+    virtual bool getBootFlash() THROWS(GCodeException) = 0;
+    virtual void setBootFlash(bool enable) noexcept;
+    virtual bool canBootFlash() noexcept = 0;
 
-    virtual void writeOptions() = 0;
+    virtual void writeOptions() THROWS(GCodeException) = 0;
 
-    virtual void writePage(uint32_t page) = 0;
-    virtual void readPage(uint32_t page, uint8_t* data) = 0;
+    virtual void writePage(uint32_t page) THROWS(GCodeException) = 0;
+    virtual void readPage(uint32_t page, uint8_t* data) THROWS(GCodeException) = 0;
 
-    virtual void writeBuffer(uint32_t dst_addr, uint32_t size);
-    virtual void loadBuffer(const uint8_t* data, uint16_t size);
+    virtual void loadBuffer(const uint8_t* data, uint16_t size) THROWS(GCodeException);
 
 protected:
     Samba& _samba;

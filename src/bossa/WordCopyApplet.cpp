@@ -28,7 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include "WordCopyApplet.h"
 
-WordCopyApplet::WordCopyApplet(Samba& samba, uint32_t addr)
+WordCopyApplet::WordCopyApplet(Samba& samba, uint32_t addr) THROWS(GCodeException)
     : Applet(samba,
              addr,
              applet.code,
@@ -44,19 +44,19 @@ WordCopyApplet::~WordCopyApplet()
 }
 
 void
-WordCopyApplet::setDstAddr(uint32_t dstAddr)
+WordCopyApplet::setDstAddr(uint32_t dstAddr) THROWS(GCodeException)
 {
     _samba.writeWord(_addr + applet.dst_addr, dstAddr);
 }
 
 void
-WordCopyApplet::setSrcAddr(uint32_t srcAddr)
+WordCopyApplet::setSrcAddr(uint32_t srcAddr) THROWS(GCodeException)
 {
     _samba.writeWord(_addr + applet.src_addr, srcAddr);
 }
 
 void
-WordCopyApplet::setWords(uint32_t words)
+WordCopyApplet::setWords(uint32_t words) THROWS(GCodeException)
 {
     _samba.writeWord(_addr + applet.words, words);
 }

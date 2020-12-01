@@ -34,27 +34,27 @@ Applet::Applet(Samba& samba,
                uint32_t size,
                uint32_t start,
                uint32_t stack,
-               uint32_t reset) :
+               uint32_t reset) THROWS(GCodeException) :
     _samba(samba), _addr(addr), _size(size), _start(start), _stack(stack), _reset(reset)
 {
     _samba.write(addr, code, size);
 }
 
 void
-Applet::setStack(uint32_t stack)
+Applet::setStack(uint32_t stack) THROWS(GCodeException)
 {
     _samba.writeWord(_stack, stack);
 }
 
 void
-Applet::run()
+Applet::run() THROWS(GCodeException)
 {
     // Add one to the start address for Thumb mode
     _samba.go(_start + 1);
 }
 
 void
-Applet::runv()
+Applet::runv() THROWS(GCodeException)
 {
     // Add one to the start address for Thumb mode
     _samba.writeWord(_reset, _start + 1);

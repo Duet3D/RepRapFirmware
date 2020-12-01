@@ -9,6 +9,7 @@
 #define SRC_COMMS_PANELDUEUPDATER_H_
 
 #include <RepRap.h>
+#include <General/NamedEnum.h>
 
 #ifdef DUET3MINI			// if using CoreN2G
 # include <SAME5x_C21/Uart.h>
@@ -44,6 +45,20 @@ public:
     constexpr static const char* const firmwareFilename = DEFAULT_SYS_DIR PANEL_DUE_FIRMWARE_FILE;
 
 private:
+	NamedEnum(FlashState, uint8_t,
+		idle,
+		eraseAndReset,
+		waitAfterEraseAndReset,
+		setup,
+		bossaUnlock,
+		bossaErase,
+		bossaWrite,
+		bossaVerify,
+		bossaWriteOptions,
+		bossaReset,
+		done
+	);
+
 #if ALLOW_OTHER_AUX
 	size_t serialChannel;
 #endif
@@ -56,21 +71,6 @@ private:
 	UARTClass::InterruptCallbackFn currentInterruptCallbackFn;
 	uint32_t offset;
 	uint32_t erasedAndResetAt;
-
-	enum class FlashState
-	{
-		idle,
-		eraseAndReset,
-		waitAfterEraseAndReset,
-		setup,
-		unlock,
-		bossaErase,
-		write,
-		verify,
-		writeOptions,
-		bossaReset,
-		done
-	};
 	FlashState state;
 
 	UARTClass* GetAuxPort() noexcept;

@@ -34,7 +34,7 @@
 class SerialPort
 {
 public:
-    SerialPort() {}
+    SerialPort() noexcept {}
     virtual ~SerialPort() {}
 
     enum Parity
@@ -54,20 +54,20 @@ public:
     virtual bool open(int baud = 115200,
                       int data = 8,
                       Parity parity = ParityNone,
-                      StopBit stop = StopBitOne) = 0;
-    virtual void close() = 0;
+                      StopBit stop = StopBitOne) noexcept = 0;
+    virtual void close() noexcept = 0;
 
-    virtual bool isUsb() = 0;
+    virtual bool isUsb() noexcept = 0;
 
-    virtual int read(uint8_t* data, int size) = 0;
-    virtual int write(const uint8_t* data, int size) = 0;
-    virtual int get() = 0;
-    virtual int put(int c) = 0;
+    virtual int read(uint8_t* data, int size) noexcept = 0;
+    virtual int write(const uint8_t* data, int size) noexcept = 0;
+    virtual int get() noexcept = 0;
+    virtual int put(int c) noexcept = 0;
 
-    virtual bool timeout(int millisecs) = 0;
-    virtual void flush() = 0;
-    virtual void setDTR(bool dtr) = 0;
-    virtual void setRTS(bool rts) = 0;
+    virtual bool timeout(int millisecs) noexcept = 0;
+    virtual void flush() noexcept = 0;
+    virtual void setDTR(bool dtr) noexcept = 0;
+    virtual void setRTS(bool rts) noexcept = 0;
 };
 
 #endif // _SERIALPORT_H

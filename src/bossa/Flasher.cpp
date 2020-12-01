@@ -36,9 +36,11 @@
 #endif
 
 void
-Flasher::erase(uint32_t foffset)
+Flasher::erase(uint32_t foffset) THROWS(GCodeException)
 {
+#if ORIGINAL_BOSSA_CODE
     _observer.onStatus("Erase flash\n");
+#endif
     _flash->eraseAll(foffset);
     _flash->eraseAuto(false);
 }
@@ -67,7 +69,7 @@ int Flasher::GetNextChunk(char* buffer, const uint32_t length, uint32_t& offset,
 }
 
 bool
-Flasher::write(const char* filename, uint32_t& foffset)
+Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
 {
     uint32_t pageSize = _flash->pageSize();
     uint32_t numPages;
@@ -123,7 +125,7 @@ Flasher::write(const char* filename, uint32_t& foffset)
                 throw FileSizeError("Flasher::write: FileSizeError");
             }
 
-            _observer.onStatus("Write %ld bytes to flash (%u pages)\n", fileSize, numPages);
+            _observer.onStatus("Writing %ld bytes to PanelDue flash memory\n", fileSize);
         }
 
 		uint8_t buffer[pageSize];
@@ -162,7 +164,7 @@ Flasher::write(const char* filename, uint32_t& foffset)
 }
 
 bool
-Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset)
+Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException)
 {
     uint32_t pageSize = _flash->pageSize();
     uint8_t bufferA[pageSize];
@@ -202,7 +204,7 @@ Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalError
             if (numPages > _flash->numPages())
                 throw FileSizeError("Flasher::verify: FileSizeError");
 
-            _observer.onStatus("Verify %ld bytes of flash\n", fileSize);
+            _observer.onStatus("Verifying %ld bytes of PanelDue flash memory\n", fileSize);
         }
 
         if ((fbytes = GetNextChunk((char*)bufferA, pageSize, foffset, filename)) > 0)
@@ -250,7 +252,7 @@ Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalError
 
      _observer.onProgress(numPages, numPages);
 
-#if 0 // This has to be checked outside because we use the return value now used to indicate if we finished
+#if ORIGINAL_BOSSA_CODE // This has to be checked outside because we use the return value now used to indicate if we finished
     if (pageErrors != 0)
         return false;
 #endif
@@ -259,16 +261,16 @@ Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalError
 }
 
 void
-Flasher::lock(/* string& regionArg, */ bool enable)
+Flasher::lock(/* string& regionArg, */ bool enable) THROWS(GCodeException)
 {
-#if 0
+#if ORIGINAL_BOSSA_CODE
     if (regionArg.empty())
     {
-#endif
         _observer.onStatus("%s all regions\n", enable ? "Lock" : "Unlock");
+#endif
         Vector<bool, 16> regions(_flash->lockRegions(), enable);
         _flash->setLockRegions(regions);
-#if 0
+#if ORIGINAL_BOSSA_CODE
     }
     else
     {

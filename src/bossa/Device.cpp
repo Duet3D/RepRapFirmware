@@ -29,6 +29,7 @@
 #include "Device.h"
 #include "EefcFlash.h"
 
+#if ORIGINAL_BOSSA_CODE
 void
 Device::readChipId(uint32_t& chipId, uint32_t& extChipId)
 {
@@ -41,12 +42,13 @@ Device::readChipId(uint32_t& chipId, uint32_t& extChipId)
         extChipId = _samba.readWord(0x400e0944);
     }
 }
+#endif
 
 void
-Device::create()
+Device::create() THROWS(GCodeException)
 {
     Flash* flashPtr;
-#if 0
+#if ORIGINAL_BOSSA_CODE
     uint32_t chipId = 0;
     uint32_t cpuId = 0;
     uint32_t extChipId = 0;
@@ -96,7 +98,6 @@ Device::create()
     // Instantiate the proper flash for the device
     switch (chipId & 0x7fffffe0)
     {
-#if 0
     //
     // SAM7SE
     //
@@ -204,16 +205,14 @@ Device::create()
         _family = FAMILY_SAM4S;
         flashPtr = new EefcFlash(_samba, "ATSAM4S8", 0x400000, 1024, 512, 1, 64, 0x20001000, 0x20020000, 0x400e0a00, false);
         break;
-#endif
     case 0x288b09e0 : // A
     case 0x289b09e0 : // B
     case 0x28ab09e0 : // C
 #endif
         _family = FAMILY_SAM4S;
         flashPtr = new EefcFlash(_samba, "ATSAM4S4", 0x400000, 512, 512, 1, 16, 0x20001000, 0x20010000, 0x400e0a00, false);
-#if 0
+#if ORIGINAL_BOSSA_CODE
         break;
-#if 0
     case 0x288b07e0 : // A
     case 0x289b07e0 : // B
     case 0x28ab07e0 : // C
@@ -622,7 +621,6 @@ Device::create()
             break;
         }
         break;
-#endif
     //
     // Unsupported device
     //
@@ -638,13 +636,13 @@ Device::create()
 }
 
 void
-Device::reset()
+Device::reset() THROWS(GCodeException)
 {
     try
     {
         switch (_family)
         {
-#if 0
+#if ORIGINAL_BOSSA_CODE
         case FAMILY_SAMD21:
         case FAMILY_SAMR21:
         case FAMILY_SAML21:
@@ -674,7 +672,7 @@ Device::reset()
         case FAMILY_SAM4S:
             _samba.writeWord(0x400E1400, 0xA500000D);
             break;
-#if 0
+#if ORIGINAL_BOSSA_CODE
         case FAMILY_SAM4E:
             _samba.writeWord(0x400E1800, 0xA500000D);
             break;

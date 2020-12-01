@@ -41,7 +41,7 @@ class Device
 public:
     enum Family {
         FAMILY_NONE,
-#if 0
+#if ORIGINAL_BOSSA_CODE
 
         FAMILY_SAM7S,
         FAMILY_SAM7SE,
@@ -56,7 +56,7 @@ public:
         FAMILY_SAM3A,
 #endif
         FAMILY_SAM4S,
-#if 0
+#if ORIGINAL_BOSSA_CODE
         FAMILY_SAM4E,
 
         FAMILY_SAM9XE,
@@ -77,23 +77,25 @@ public:
 #endif
     };
 
-    Device(Samba& samba) : _samba(samba), _flash(nullptr), _family(FAMILY_NONE) {}
+    Device(Samba& samba) noexcept : _samba(samba), _flash(nullptr), _family(FAMILY_NONE) {}
     virtual ~Device() {  delete _flash; }
 
-    void create();
+    void create() THROWS(GCodeException);
 
-    Family getFamily() { return _family; }
+    Family getFamily() noexcept { return _family; }
 
-    Flash* getFlash() { return _flash; }
+    Flash* getFlash() noexcept { return _flash; }
 
-    void reset();
+    void reset() THROWS(GCodeException);
 
 private:
     Samba& _samba;
     Flash* _flash;
     Family _family;
 
+#if ORIGINAL_BOSSA_CODE
     void readChipId(uint32_t& chipId, uint32_t& extChipId);
+#endif
 };
 
 #endif // _DEVICE_H

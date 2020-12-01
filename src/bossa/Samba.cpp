@@ -48,7 +48,7 @@
 
 #define printf debugPrintf
 
-Samba::Samba() :
+Samba::Samba() noexcept :
     _canChipErase(false),
     _canWriteBuffer(false),
     _canChecksumBuffer(false),
@@ -62,7 +62,7 @@ Samba::~Samba()
 }
 
 bool
-Samba::init()
+Samba::init() noexcept
 {
     uint8_t cmd[3];
 
@@ -86,7 +86,7 @@ Samba::init()
 }
 
 bool
-Samba::connect(SerialPort* port, int bps)
+Samba::connect(SerialPort* port, int bps) noexcept
 {
     _port = port;
 
@@ -103,47 +103,14 @@ Samba::connect(SerialPort* port, int bps)
 }
 
 void
-Samba::disconnect()
+Samba::disconnect() noexcept
 {
     _port->close();
 }
 
-void
-Samba::writeByte(uint32_t addr, uint8_t value)
-{
-    uint8_t cmd[14];
-
-    if (_debug)
-        printf("%s(addr=%#" PRIx32 ",value=%#" PRIx8 ")\n", __FUNCTION__, addr, value);
-
-    SafeSnprintf((char*) cmd, sizeof(cmd), "O%08" PRIX32 ",%02" PRIX8 "#", addr, value);
-    if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) -  1)
-        throw SambaError("Samba::writeByte: _port->write failed");
-}
-
-uint8_t
-Samba::readByte(uint32_t addr)
-{
-    uint8_t cmd[13];
-    uint8_t value;
-
-    SafeSnprintf((char*) cmd, sizeof(cmd), "o%08" PRIX32 ",4#", addr);
-    if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
-        throw SambaError("Samba::readByte: _port->write failed");
-    if (_port->read(cmd, sizeof(uint8_t)) != sizeof(uint8_t))
-        throw SambaError("Samba::readByte: _port->read failed");
-
-    value = cmd[0];
-
-    if (_debug)
-        printf("%s(addr=%#" PRIx32 ")=%#" PRIx8 "\n", __FUNCTION__, addr, value);
-
-    return value;
-}
-
 
 void
-Samba::writeWord(uint32_t addr, uint32_t value)
+Samba::writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException)
 {
     uint8_t cmd[20];
 
@@ -157,7 +124,7 @@ Samba::writeWord(uint32_t addr, uint32_t value)
 
 
 uint32_t
-Samba::readWord(uint32_t addr)
+Samba::readWord(uint32_t addr) THROWS(GCodeException)
 {
     uint8_t cmd[13];
     uint32_t value;
@@ -212,7 +179,7 @@ static const uint16_t crc16Table[256] = {
 };
 
 uint16_t
-Samba::crc16Calc(const uint8_t *data, int len)
+Samba::crc16Calc(const uint8_t *data, int len) noexcept
 {
     uint16_t crc16 = 0;
 
@@ -222,7 +189,7 @@ Samba::crc16Calc(const uint8_t *data, int len)
 }
 
 bool
-Samba::crc16Check(const uint8_t *blk)
+Samba::crc16Check(const uint8_t *blk) noexcept
 {
     uint16_t crc16;
 
@@ -231,7 +198,7 @@ Samba::crc16Check(const uint8_t *blk)
 }
 
 void
-Samba::crc16Add(uint8_t *blk)
+Samba::crc16Add(uint8_t *blk) noexcept
 {
     uint16_t crc16;
 
@@ -241,12 +208,13 @@ Samba::crc16Add(uint8_t *blk)
 }
 
 uint16_t
-Samba::checksumCalc(uint8_t data, uint16_t crc16) {
+Samba::checksumCalc(uint8_t data, uint16_t crc16) noexcept
+{
     return (crc16 << 8) ^ crc16Table[((crc16 >> 8) ^ data) & 0xff];
 }
 
 void
-Samba::readXmodem(uint8_t* buffer, int size)
+Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
 {
     uint8_t blk[BLK_SIZE + 5];
     uint32_t blkNum = 1;
@@ -295,7 +263,7 @@ Samba::readXmodem(uint8_t* buffer, int size)
 }
 
 void
-Samba::writeXmodem(const uint8_t* buffer, int size)
+Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
 {
     uint8_t blk[BLK_SIZE + 5];
     uint32_t blkNum = 1;
@@ -349,7 +317,7 @@ Samba::writeXmodem(const uint8_t* buffer, int size)
 }
 
 void
-Samba::read(uint32_t addr, uint8_t* buffer, int size)
+Samba::read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException)
 {
     uint8_t cmd[20];
     int chunk;
@@ -378,7 +346,7 @@ Samba::read(uint32_t addr, uint8_t* buffer, int size)
 }
 
 void
-Samba::write(uint32_t addr, const uint8_t* buffer, int size)
+Samba::write(uint32_t addr, const uint8_t* buffer, int size) THROWS(GCodeException)
 {
     uint8_t cmd[20];
 
@@ -395,7 +363,7 @@ Samba::write(uint32_t addr, const uint8_t* buffer, int size)
 }
 
 void
-Samba::go(uint32_t addr)
+Samba::go(uint32_t addr) THROWS(GCodeException)
 {
     uint8_t cmd[11];
 
@@ -406,92 +374,3 @@ Samba::go(uint32_t addr)
     if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
         throw SambaError("Samba::go: _port->write failed");
 }
-
-void
-Samba::chipErase(uint32_t start_addr)
-{
-    if (!_canChipErase)
-        throw SambaError("Samba::chipErase: cannot erase chip");
-
-    uint8_t cmd[64];
-
-    if (_debug)
-        printf("%s(addr=%#" PRIx32 ")\n", __FUNCTION__, start_addr);
-
-    int l = SafeSnprintf((char*) cmd, sizeof(cmd), "X%08" PRIX32 "#", start_addr);
-    if (_port->write(cmd, l) != l)
-        throw SambaError("Samba::chipErase: _port->write failed");
-    _port->timeout(TIMEOUT_LONG);
-    _port->read(cmd, 3); // Expects "X\n\r"
-    _port->timeout(TIMEOUT_NORMAL);
-    if (cmd[0] != 'X')
-        throw SambaError("Samba::chipErase: unexpected response (expected: 'X')");
-}
-
-void
-Samba::writeBuffer(uint32_t src_addr, uint32_t dst_addr, uint32_t size)
-{
-    if (!_canWriteBuffer)
-        throw SambaError("Samba::writeBuffer: cannot write buffer");
-
-    if (size > checksumBufferSize())
-        throw SambaError("Samba::writeBuffer: size > checksumBufferSize()");
-
-    if (_debug)
-        printf("%s(scr_addr=%#" PRIx32 ", dst_addr=%#" PRIx32 ", size=%#" PRIx32 ")\n", __FUNCTION__, src_addr, dst_addr, size);
-
-    uint8_t cmd[64];
-    int l = SafeSnprintf((char*) cmd, sizeof(cmd), "Y%08" PRIX32 ",0#", src_addr);
-    if (_port->write(cmd, l) != l)
-        throw SambaError("Samba::writeBuffer: _port->write 1 failed");
-    _port->timeout(TIMEOUT_QUICK);
-    cmd[0] = 0;
-    _port->read(cmd, 3); // Expects "Y\n\r"
-    _port->timeout(TIMEOUT_NORMAL);
-    if (cmd[0] != 'Y')
-        throw SambaError("Samba::writeBuffer: unexpected response (expected: 'Y')");
-
-    l = SafeSnprintf((char*) cmd, sizeof(cmd), "Y%08" PRIX32 ",%08" PRIX32 "#", dst_addr, size);
-    if (_port->write(cmd, l) != l)
-        throw SambaError("Samba::writeBuffer: _port->write 2 failed");
-    _port->timeout(TIMEOUT_LONG);
-    cmd[0] = 0;
-    _port->read(cmd, 3); // Expects "Y\n\r"
-    _port->timeout(TIMEOUT_NORMAL);
-    if (cmd[0] != 'Y')
-        throw SambaError("Samba::writeBuffer: unexpected response (expected: 'Y')");
-}
-
-uint16_t
-Samba::checksumBuffer(uint32_t start_addr, uint32_t size)
-{
-    if (!_canChecksumBuffer)
-        throw SambaError("Samba::checksumBuffer: cannot checksum buffer");
-
-    if (size > checksumBufferSize())
-        throw SambaError("Samba::checksumBuffer: size > checksumBufferSize()");
-
-    if (_debug)
-        printf("%s(start_addr=%#" PRIx32 ", size=%#" PRIx32 ") = ", __FUNCTION__, start_addr, size);
-
-    uint8_t cmd[64];
-    int l = SafeSnprintf((char*) cmd, sizeof(cmd), "Z%08" PRIX32 ",%08" PRIX32 "#", start_addr, size);
-    if (_port->write(cmd, l) != l)
-        throw SambaError("Samba::checksumBuffer: _port->write failed");
-    _port->timeout(TIMEOUT_LONG);
-    cmd[0] = 0;
-    _port->read(cmd, 12); // Expects "Z00000000#\n\r"
-    _port->timeout(TIMEOUT_NORMAL);
-    if (cmd[0] != 'Z')
-        throw SambaError("Samba::checksumBuffer: unexpected response (expected: 'Z')");
-
-    cmd[9] = 0;
-    errno = 0;
-    uint32_t res = StrHexToU32((char*) &cmd[1], NULL);
-    if (errno != 0)
-        throw SambaError("Samba::checksumBuffer: cannot parse result");
-    if (_debug)
-        printf("%" PRIx32 "\n", res);
-    return res;
-}
-

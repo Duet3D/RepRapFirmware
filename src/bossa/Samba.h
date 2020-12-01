@@ -42,43 +42,33 @@ typedef GCodeException SambaError;
 class Samba
 {
 public:
-    Samba();
+    Samba() noexcept;
     virtual ~Samba();
 
-    bool connect(SerialPort* port, int bps = 115200);
-    void disconnect();
+    bool connect(SerialPort* port, int bps = 115200) noexcept;
+    void disconnect() noexcept;
 
-    void writeByte(uint32_t addr, uint8_t value);
-    uint8_t readByte(uint32_t addr);
+    void writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException);
+    uint32_t readWord(uint32_t addr) THROWS(GCodeException);
 
-    void writeWord(uint32_t addr, uint32_t value);
-    uint32_t readWord(uint32_t addr);
+    void write(uint32_t addr, const uint8_t* buffer, int size) THROWS(GCodeException);
+    void read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException);
 
-    void write(uint32_t addr, const uint8_t* buffer, int size);
-    void read(uint32_t addr, uint8_t* buffer, int size);
+    void go(uint32_t addr) THROWS(GCodeException);
 
-    void go(uint32_t addr);
+    void setDebug(bool debug) noexcept { _debug = debug; }
 
-    void chipId(uint32_t& chipId, uint32_t& extChipId);
-
-    void setDebug(bool debug) { _debug = debug; }
-
-    const SerialPort& getSerialPort() { return *_port; }
-
-    void reset();
+    const SerialPort& getSerialPort() noexcept { return *_port; }
 
     // Extended SAM-BA functions
-    bool canChipErase() { return _canChipErase; }
-    void chipErase(uint32_t start_addr);
+    bool canChipErase() noexcept { return _canChipErase; }
 
-    bool canWriteBuffer() { return _canWriteBuffer; }
-    void writeBuffer(uint32_t src_addr, uint32_t dst_addr, uint32_t size);
-    uint32_t writeBufferSize() { return 4096; }
+    bool canWriteBuffer() noexcept { return _canWriteBuffer; }
+    uint32_t writeBufferSize() noexcept { return 4096; }
 
-    bool canChecksumBuffer() { return _canChecksumBuffer; }
-    uint16_t checksumBuffer(uint32_t start_addr, uint32_t size);
-    uint32_t checksumBufferSize() { return 4096; }
-    uint16_t checksumCalc(uint8_t c, uint16_t crc);
+    bool canChecksumBuffer() noexcept { return _canChecksumBuffer; }
+    uint32_t checksumBufferSize() noexcept { return 4096; }
+    uint16_t checksumCalc(uint8_t c, uint16_t crc) noexcept;
 
 private:
     bool _canChipErase;
@@ -88,13 +78,13 @@ private:
     bool _debug;
     SerialPort* _port;
 
-    bool init();
+    bool init() noexcept;
 
-    uint16_t crc16Calc(const uint8_t *data, int len);
-    bool crc16Check(const uint8_t *blk);
-    void crc16Add(uint8_t *blk);
-    void writeXmodem(const uint8_t* buffer, int size);
-    void readXmodem(uint8_t* buffer, int size);
+    uint16_t crc16Calc(const uint8_t *data, int len) noexcept;
+    bool crc16Check(const uint8_t *blk) noexcept;
+    void crc16Add(uint8_t *blk) noexcept;
+    void writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException);
+    void readXmodem(uint8_t* buffer, int size) THROWS(GCodeException);
 
 };
 
