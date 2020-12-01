@@ -170,7 +170,7 @@ void Display::ErrorBeep() noexcept
 
 void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException)
 {
-	// ST7567-based displays need a resistor ration setting and a contrast setting
+	// ST7567-based displays need a resistor ratio setting and a contrast setting
 	// For now we always pass these as parameters toLcd::Init(). If we get any more, consider passing the GCodeBuffer and letting the display pick the parameters instead.
 	const uint32_t contrast = (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio;
 	const uint32_t resistorRatio = (gb.Seen('R')) ? gb.GetUIValue() : DefaultDisplayResistorRatio;
@@ -204,7 +204,12 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		switch (gb.GetUIValue())
 		{
 		case 1:		// 12864 display, ST7920 controller
+#ifdef DUET3MINI
+			// On the Duet 3 Mini we use the A0 pin as CS because it more nearly matches the pinout of the display (with the connectors reversed)
+			InitDisplay(gb, new Lcd7920(fonts, ARRAY_SIZE(fonts)), LcdA0Pin, NoPin, true);
+#else
 			InitDisplay(gb, new Lcd7920(fonts, ARRAY_SIZE(fonts)), LcdCSPin, NoPin, true);
+#endif
 			break;
 
 		case 2:		// 12864 display, ST7567 controller
