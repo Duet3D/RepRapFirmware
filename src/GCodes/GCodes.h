@@ -143,6 +143,7 @@ public:
 
 	PauseState GetPauseState() const noexcept { return pauseState; }
 	bool IsFlashing() const noexcept { return isFlashing; }						// Is a new firmware binary going to be flashed?
+	bool IsFlashingPanelDue() const noexcept { return isFlashingPanelDue; }
 
 	bool IsReallyPrinting() const noexcept;										// Return true if we are printing from SD card and not pausing, paused or resuming
 	bool IsReallyPrintingOrResuming() const noexcept;

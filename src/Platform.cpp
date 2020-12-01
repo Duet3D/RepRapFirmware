@@ -954,7 +954,11 @@ void Platform::PanelDueBeep(int freq, int ms) noexcept
 void Platform::SendPanelDueMessage(size_t auxNumber, const char* msg) noexcept
 {
 #if HAS_AUX_DEVICES
-	auxDevices[auxNumber].SendPanelDueMessage(msg);
+	// Don't send anything to PanelDue while we are flashing it
+	if (!reprap.GetGCodes().IsFlashingPanelDue())
+	{
+		auxDevices[auxNumber].SendPanelDueMessage(msg);
+	}
 #endif
 }
 
@@ -3118,6 +3122,11 @@ void Platform::AppendAuxReply(size_t auxNumber, const char *msg, bool rawMessage
 #if HAS_AUX_DEVICES
 	if (auxNumber < ARRAY_SIZE(auxDevices))
 	{
+		// Don't send anything to PanelDue while we are flashing it
+		if (auxNumber == 0 && reprap.GetGCodes().IsFlashingPanelDue())
+		{
+			return;
+		}
 		auxDevices[auxNumber].AppendAuxReply(msg, rawMessage);
 	}
 #endif
@@ -3128,6 +3137,12 @@ void Platform::AppendAuxReply(size_t auxNumber, OutputBuffer *reply, bool rawMes
 #if HAS_AUX_DEVICES
 	if (auxNumber < ARRAY_SIZE(auxDevices))
 	{
+		// Don't send anything to PanelDue while we are flashing it
+		if (auxNumber == 0 && reprap.GetGCodes().IsFlashingPanelDue())
+		{
+			OutputBuffer::ReleaseAll(reply);
+			return;
+		}
 		auxDevices[auxNumber].AppendAuxReply(reply, rawMessage);
 	}
 	else

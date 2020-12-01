@@ -8,7 +8,6 @@
 #include <Comms/PanelDueUpdater.h>
 #include "Platform.h"
 
-constexpr MessageType statusMessages = (MessageType) (UsbMessage | HttpMessage | TelnetMessage);
 #if !ALLOW_OTHER_AUX
  constexpr uint32_t serialChannel = 1;
 #endif
@@ -69,11 +68,14 @@ int AuxSerialPort::read(uint8_t* data, int size) noexcept
 class DebugObserver : public FlasherObserver
 {
 public:
-	DebugObserver() noexcept {}
+	DebugObserver() noexcept : lastPercentage(0) {}
 	virtual ~DebugObserver() {}
 
 	virtual void onStatus(const char *message, ...) noexcept;
 	virtual void onProgress(int num, int div) noexcept;
+    virtual void Reset() noexcept { lastPercentage = 0; };
+private:
+	uint8_t lastPercentage;
 };
 
 void DebugObserver::onStatus(const char *message, ...) noexcept
@@ -81,15 +83,17 @@ void DebugObserver::onStatus(const char *message, ...) noexcept
 	va_list ap;
 
 	va_start(ap, message);
-	reprap.GetPlatform().MessageF(statusMessages, message, ap);
+	reprap.GetPlatform().MessageF(GenericMessage, message, ap);
 	va_end(ap);
 }
 
 void DebugObserver::onProgress(int num, int div) noexcept
 {
-#if DEBUG_BOSSA
-	debugPrintf("%d%% (%d/%d pages)\n", num * 100 / div, num, div);
-#endif
+	uint8_t percentage = (uint8_t)(num * 100 / div);
+	if (percentage == lastPercentage + 20) {
+		lastPercentage = percentage;
+		reprap.GetPlatform().MessageF(GenericMessage, "Progress: %d%%\n", percentage);
+	}
 }
 
 PanelDueUpdater::PanelDueUpdater() noexcept
@@ -137,8 +141,10 @@ void PanelDueUpdater::Spin() noexcept
 		switch (state.RawValue())
 		{
 		case FlashState::eraseAndReset:
-			reprap.GetPlatform().Message(statusMessages, "Sending Erase-and-Reset command to PanelDue\n");
-			reprap.GetPlatform().AppendAuxReply(serialChannel-1, panelDueCommandEraseAndReset, true);
+			reprap.GetPlatform().Message(GenericMessage, "Sending Erase-and-Reset command to PanelDue\n");
+
+			// Since writing messages via AppendAuxReply is disabled while flashing we need to send it directly
+			GetAuxPort()->write(panelDueCommandEraseAndReset);
 			state = FlashState::waitAfterEraseAndReset;
 			erasedAndResetAt = millis();
 			break;
@@ -152,7 +158,8 @@ void PanelDueUpdater::Spin() noexcept
 
 		case FlashState::setup:
 			{
-				reprap.GetPlatform().Message(statusMessages, "Establishing connection to PanelDue bootloader\n");
+				reprap.GetPlatform().Message(GenericMessage, "Establishing connection to PanelDue bootloader\n");
+
 				// Verifying creates the Emergency Stop sequence so disable it here
 				auto auxPort = GetAuxPort();
 				currentInterruptCallbackFn = auxPort->SetInterruptCallback(nullptr);
@@ -184,13 +191,13 @@ void PanelDueUpdater::Spin() noexcept
 			break;
 
 		case FlashState::bossaUnlock:
-			reprap.GetPlatform().Message(statusMessages, "Unlocking PanelDue flash memory\n");
+			reprap.GetPlatform().Message(GenericMessage, "Unlocking PanelDue flash memory\n");
 			flasher->lock(false);
 			state = FlashState::bossaErase;
 			break;
 
 		case FlashState::bossaErase:
-			reprap.GetPlatform().Message(statusMessages, "Erasing PanelDue flash memory\n");
+			reprap.GetPlatform().Message(GenericMessage, "Erasing PanelDue flash memory\n");
 			flasher->erase(0);
 			state = FlashState::bossaWrite;
 			break;
@@ -202,6 +209,7 @@ void PanelDueUpdater::Spin() noexcept
 				{
 					offset = 0;						// Reset it for verification
 					state = FlashState::bossaVerify;
+					flasherObserver->Reset();
 				}
 			}
 			break;
@@ -225,7 +233,7 @@ void PanelDueUpdater::Spin() noexcept
 
 		case FlashState::bossaWriteOptions:
 			{
-				reprap.GetPlatform().Message(statusMessages, "Writing PanelDue flash options\n");
+				reprap.GetPlatform().Message(GenericMessage, "Writing PanelDue flash options\n");
 				Flash* flash = device->getFlash();
 				flash->setBootFlash(true);
 				flash->writeOptions();
@@ -234,7 +242,7 @@ void PanelDueUpdater::Spin() noexcept
 			break;
 
 		case FlashState::bossaReset:
-			reprap.GetPlatform().Message(statusMessages, "Restarting PanelDue\n");
+			reprap.GetPlatform().Message(GenericMessage, "Restarting PanelDue\n");
 			device->reset();
 			state = FlashState::done;
 			break;
