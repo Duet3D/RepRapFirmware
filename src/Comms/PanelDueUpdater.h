@@ -8,18 +8,24 @@
 #ifndef SRC_COMMS_PANELDUEUPDATER_H_
 #define SRC_COMMS_PANELDUEUPDATER_H_
 
-#include "RepRap.h"
-#include "UARTClass.h"
+#include <RepRap.h>
+
+#ifdef DUET3MINI			// if using CoreN2G
+# include <SAME5x_C21/Uart.h>
+# define UARTClass	Uart
+#else						// using CoreNG
+# include <UARTClass.h>
+#endif
 
 #define DEBUG_BOSSA (0)
 #define ALLOW_OTHER_AUX (0) // If we ever decide to allow PanelDue on something else than AUX reenable this
 
-#include "bossa/Samba.h"
-#include "bossa/Device.h"
-#include "bossa/Flasher.h"
-#include "bossa/SerialPort.h"
+#include <bossa/Samba.h>
+#include <bossa/Device.h>
+#include <bossa/Flasher.h>
+#include <bossa/SerialPort.h>
 
-constexpr size_t RequiredBaudRate = 115200;
+constexpr uint32_t RequiredBaudRate = 115200;
 
 constexpr const char * panelDueCommandEraseAndReset	= "{\"controlCommand\":\"eraseAndReset\"}\n";
 constexpr const char * panelDueCommandReset 		= "{\"controlCommand\":\"reset\"}\n";
