@@ -8,7 +8,10 @@
 #ifndef SRC_COMMS_PANELDUEUPDATER_H_
 #define SRC_COMMS_PANELDUEUPDATER_H_
 
-#include <RepRap.h>
+#include <RepRapFirmware.h>
+
+#if HAS_AUX_DEVICES
+
 #include <General/NamedEnum.h>
 
 #ifdef DUET3MINI			// if using CoreN2G
@@ -75,5 +78,7 @@ private:
 
 	UARTClass* GetAuxPort() noexcept;
 };
+
+#endif	// HAS_AUX_DEVICES
 
 #endif /* SRC_COMMS_PANELDUEUPDATER_H_ */

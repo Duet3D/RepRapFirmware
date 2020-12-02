@@ -5,8 +5,12 @@
  *      Author: manuel
  */
 
-#include <Comms/PanelDueUpdater.h>
-#include "Platform.h"
+#include "PanelDueUpdater.h"
+
+#if HAS_AUX_DEVICES
+
+#include <Platform.h>
+#include <RepRap.h>
 
 #if !ALLOW_OTHER_AUX
  constexpr uint32_t serialChannel = 1;
@@ -322,5 +326,7 @@ UARTClass* PanelDueUpdater::GetAuxPort() noexcept
 #endif
 			&SERIAL_AUX_DEVICE;
 }
+
+#endif
 
 // End
