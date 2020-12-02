@@ -1,3 +1,26 @@
+RepRapFirmware 3.2-beta4.1
+==========================
+
+Upgrade notes:
+- Only the main board binaries have changed since beta4. Tool/expansion board binaries, DuetWiFiServer and DWC are the same as in beta4.
+- [Duet 3 + expansion/tool boards] You must update expansion/tool board firmware to the 3.2beta4 binaries, which are included in this release
+
+Known issues:
+- [Duet 2 + 12864 display] There is insufficient free RAM to run Duet WiFi/Ethernet with 12864 display
+
+New features:
+- Version 3 PanelDue boards (including all PanelDue 5i/7i) can now be updated from the Duet using M997 S4
+- The heater tuning algorithm has been improved for the case where the heating system had a large thermal reservoir that was somewhat decoupled from the temperature sensor (e.g. silicone bed heaters with built-in thermistors)
+- The M203 command now supports an optional S1 parameter which changes the units to mm/sec. The default is still mm/min.
+- [Duet 2 Ethernet/WiFi/Maestro] Duet 2 builds now permit port names to have a "0." prefix, e.g. "0.e0heat". The "0." prefix is ignored.
+- [Duet 3 Mini only] If M918 P1 is used then the pin labelled A0 is now uses as the chip select (CS) pin instead of pin SPI2_CS3
+
+Bug fixes:
+- When a GCode file included very short moves, sometimes the print paused for a time (sometimes a very long time) at that point
+- M918 P0 reported an error instead of just deleting any existing display
+- [Duet 3 + SBC + tool/expansion boards] It was not possible to update tool or expansion board firmware when a SBC was connected
+- [Duet 3 + SBC] When file daemon.g was requested, spurious warning messages could be displayed
+
 RepRapFirmware 3.2-beta4
 ========================
 
