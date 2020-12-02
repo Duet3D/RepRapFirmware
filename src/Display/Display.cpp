@@ -194,15 +194,26 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 
 	if (gb.Seen('P'))
 	{
+		// Delete any existing LCD, menu and encoder
 		Lcd *tempLcd = nullptr;
 		std::swap(lcd, tempLcd);
 		delete tempLcd;
-		delete menu;
-		menu = nullptr;
+
+		Menu *tempMenu = nullptr;
+		std::swap(menu, tempMenu);
+		delete tempMenu;
+
+		RotaryEncoder *tempEncoder = nullptr;
+		std::swap(encoder, tempEncoder);
+		delete tempEncoder;
 
 		seen = true;
 		switch (gb.GetUIValue())
 		{
+		case 0:		// no display
+			// We have already deleted the display, menu buffer and encoder, so nothing to do here
+			break;
+
 		case 1:		// 12864 display, ST7920 controller
 #ifdef DUET3MINI
 			// On the Duet 3 Mini we use the A0 pin as CS because it more nearly matches the pinout of the display (with the connectors reversed)

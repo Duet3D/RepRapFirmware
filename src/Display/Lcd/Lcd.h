@@ -41,7 +41,7 @@ public:
 	uint32_t GetSpiFrequency() const noexcept { return device.GetFrequency(); }
 
 	// Initialize the display
-	void Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t p_contrastRatio, uint8_t p_resistorRatio) noexcept;
+	void Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t p_contrastRatio, uint8_t p_resistorRatio) noexcept;
 
 	// Select the font to use for subsequent calls to write() in graphics mode
 	void SetFont(size_t newFont) noexcept;
@@ -155,6 +155,7 @@ protected:
 	uint8_t *image;									// image buffer
 	SharedSpiClient device;
 	const PixelNumber numRows, numCols;
+	Pin csPin;
 	Pin a0Pin;
 	uint8_t contrastRatio;
 	uint8_t resistorRatio;

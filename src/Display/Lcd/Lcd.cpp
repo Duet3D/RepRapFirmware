@@ -20,13 +20,16 @@ Lcd::Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nF
 Lcd::~Lcd()
 {
 	delete image;
+	pinMode(csPin, INPUT_PULLUP);
+	pinMode(a0Pin, INPUT_PULLUP);
 }
 
 // Initialise. a0Pin is only used by the ST7567.
-void Lcd::Init(Pin csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t p_contrastRatio, uint8_t p_resistorRatio) noexcept
+void Lcd::Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t p_contrastRatio, uint8_t p_resistorRatio) noexcept
 {
 	// All this is SPI-display specific hardware initialisation, which prohibits I2C-display or UART-display support.
 	// NOTE: https://github.com/SchmartMaker/RepRapFirmware/tree/ST7565/src/Display did contain this abstraction
+	csPin = p_csPin;
 	a0Pin = p_a0Pin;
 	contrastRatio = p_contrastRatio;
 	resistorRatio = p_resistorRatio;
