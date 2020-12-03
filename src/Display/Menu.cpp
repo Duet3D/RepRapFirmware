@@ -110,6 +110,7 @@ void Menu::LoadFixedMenu() noexcept
 {
 	displayingFixedMenu = true;
 	numNestedMenus = 0;
+	commandBufferIndex = 0;
 	rowOffset = 0;
 	currentMargin = 0;
 	lcd.Clear();
@@ -122,25 +123,8 @@ void Menu::LoadFixedMenu() noexcept
 	char acLine1[] = "text R3 C5 F0 T\"No SD Card Found\"";
 	char acLine2[] = "button R15 C5 F0 T\"Mount SD\" A\"M21\"";
 
-	const char *errMsg = ParseMenuLine(acLine1);
-	if (nullptr != errMsg)
-	{
-		LoadError(errMsg, 1);
-	}
-	if (commandBufferIndex == sizeof(commandBuffer))
-	{
-		LoadError("|Menu buffer full", 1);
-	}
-
-	errMsg = ParseMenuLine(acLine2);
-	if (nullptr != errMsg)
-	{
-		LoadError(errMsg, 2);
-	}
-	if (commandBufferIndex == sizeof(commandBuffer))
-	{
-		LoadError("|Menu buffer full", 2);
-	}
+	(void)ParseMenuLine(acLine1);
+	(void)ParseMenuLine(acLine2);
 }
 
 // Display a M291 message box
