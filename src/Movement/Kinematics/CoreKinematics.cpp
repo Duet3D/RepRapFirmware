@@ -206,7 +206,7 @@ CoreKinematics::CoreKinematics(KinematicsType k) noexcept : ZLeadscrewKinematics
 		inverseMatrix(1, 3) = 1.0;
 		inverseMatrix(1, 4) = -1.0;
 		inverseMatrix(3, 4) = 1.0;
-		inverseMatrix(4, 4) = 0.0;		// V can't be commanded directly
+		// V can't be commanded directly, but we need to leave inverseMatrix(4, 4) = 1.0 so that the matrix can be inverted
 		break;
 
 	case KinematicsType::coreXYUV:

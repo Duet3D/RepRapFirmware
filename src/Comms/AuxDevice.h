@@ -30,6 +30,8 @@ public:
 	void AppendAuxReply(OutputBuffer *reply, bool rawMessage) noexcept;
 	bool Flush() noexcept;
 
+	void Diagnostics(MessageType mt, unsigned int index) noexcept;
+
 private:
 	UARTClass *uart;
 	volatile OutputStack outStack;

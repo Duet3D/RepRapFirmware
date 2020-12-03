@@ -5,7 +5,10 @@
  *      Author: David
  */
 
-#include <Comms/AuxDevice.h>
+#include "AuxDevice.h"
+
+#include <RepRap.h>
+#include <Platform.h>
 
 AuxDevice::AuxDevice() noexcept : uart(nullptr), seq(0), enabled(false), raw(true)
 {
@@ -147,6 +150,12 @@ bool AuxDevice::Flush() noexcept
 		hasMore = !outStack.IsEmpty();
 	}
 	return hasMore;
+}
+
+void AuxDevice::Diagnostics(MessageType mt, unsigned int index) noexcept
+{
+	const UARTClass::Errors errs = uart->GetAndClearErrors();
+	reprap.GetPlatform().MessageF(mt, "Aux%u errors %u,%u,%u\n", index, (unsigned int)errs.uartOverrun, (unsigned int)errs.bufferOverrun, (unsigned int)errs.framing);
 }
 
 // End
