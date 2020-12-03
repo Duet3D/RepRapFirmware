@@ -2,8 +2,9 @@ RepRapFirmware 3.2-beta4.1
 ==========================
 
 Upgrade notes:
-- Only the main board binaries have changed since beta4. Tool/expansion board binaries, DuetWiFiServer and DWC are the same as in beta4.
-- [Duet 3 + expansion/tool boards] You must update expansion/tool board firmware to the 3.2beta4 binaries, which are included in this release
+- **Update 2012-12-03**: the binaries for the tool and expansion boards have been updated to versoin 3.2beta4.1, to fix a stack overflow when a heater fault occurs on a Duet 3 tool or expansion board
+- ~~Only the main board binaries have changed since beta4. Tool/expansion board binaries,~~ DuetWiFiServer and DWC are the same as in beta4.
+- [Duet 3 + expansion/tool boards] You must update expansion/tool board firmware to the ~~3.2beta4~~ **3.2beta4.1** binaries, which are included in this release
 
 Known issues:
 - [Duet 2 + 12864 display] There is insufficient free RAM to run Duet WiFi/Ethernet with 12864 display
