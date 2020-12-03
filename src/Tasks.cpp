@@ -11,6 +11,7 @@
 #include <Cache.h>
 #include <TaskPriorities.h>
 #include <Hardware/SoftwareReset.h>
+#include <Storage/CRC32.h>
 
 #if SAM4E || SAM4S || SAME70
 # include "sam/services/flash_efc/flash_efc.h"		// for efc_enable_cloe()

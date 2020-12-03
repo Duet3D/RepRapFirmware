@@ -398,10 +398,12 @@ public:
 #endif
 
 	// File functions
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
-	bool Delete(const char* folder, const char *filename) const noexcept;
 	bool FileExists(const char* folder, const char *filename) const noexcept;
+#endif
+#if HAS_MASS_STORAGE
+	bool Delete(const char* folder, const char *filename) const noexcept;
 	bool DirectoryExists(const char *folder, const char *dir) const noexcept;
 
 	const char* GetWebDir() const noexcept; 					// Where the html etc files are
@@ -587,11 +589,11 @@ public:
 	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
 #endif
 
-#if HAS_MASS_STORAGE
 	// Logging support
+	const char *GetLogLevel() const noexcept;
+#if HAS_MASS_STORAGE
 	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	const char *GetLogFileName() const noexcept;
-	const char *GetLogLevel() const noexcept;
 #endif
 
 	// Ancillary PWM

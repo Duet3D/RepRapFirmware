@@ -1682,10 +1682,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				gb.GetQuotedString(message.GetRef());
 
 				MessageType type = GenericMessage;
+#if HAS_MASS_STORAGE
 				bool seenP = false;
+#endif
 				if (gb.Seen('P'))
 				{
+#if HAS_MASS_STORAGE
 					seenP = true;
+#endif
 					const int32_t param = gb.GetIValue();
 					switch (param)
 					{

@@ -30,7 +30,12 @@ namespace MassStorage
 
 #if HAS_MASS_STORAGE
 	void Init() noexcept;
+#endif
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileStore* OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
+	bool FileExists(const char *filePath) noexcept;
+#endif
+#if HAS_MASS_STORAGE
 	bool FindFirst(const char *directory, FileInfo &file_info) noexcept;
 	bool FindNext(FileInfo &file_info) noexcept;
 	void AbandonFindNext() noexcept;
@@ -38,7 +43,6 @@ namespace MassStorage
 	bool EnsurePath(const char* filePath, bool messageIfFailed) noexcept;
 	bool MakeDirectory(const char *directory, bool messageIfFailed) noexcept;
 	bool Rename(const char *oldFilePath, const char *newFilePath, bool messageIfFailed) noexcept;
-	bool FileExists(const char *filePath) noexcept;
 	bool DirectoryExists(const StringRef& path) noexcept;									// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
 	bool DirectoryExists(const char *path) noexcept;
 	time_t GetLastModifiedTime(const char *filePath) noexcept;

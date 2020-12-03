@@ -6,6 +6,10 @@
 
 #include <Libraries/sd_mmc/sd_mmc.h>
 
+#if HAS_LINUX_INTERFACE
+# include <Linux/LinuxInterface.h>
+#endif
+
 // Check that the LFN configuration in FatFS is sufficient
 static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
@@ -96,13 +100,18 @@ DEFINE_GET_OBJECT_MODEL_TABLE(SdCardInfo)
 
 static SdCardInfo info[NumSdCards];
 
-static Mutex fsMutex, dirMutex;
+static Mutex dirMutex;
 
 static FileInfoParser infoParser;
 static DIR findDir;
 static FileWriteBuffer *freeWriteBuffers;
+#endif
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+static Mutex fsMutex;
 static FileStore files[MAX_FILES];
+#endif
 
+#if HAS_MASS_STORAGE
 // Static helper functions
 FileWriteBuffer *MassStorage::AllocateWriteBuffer() noexcept
 {
@@ -228,7 +237,9 @@ void MassStorage::Init() noexcept
 
 	// We no longer mount the SD card here because it may take a long time if it fails
 }
+#endif
 
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
 	{
@@ -244,7 +255,9 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 	reprap.GetPlatform().Message(ErrorMessage, "Max open file count exceeded.\n");
 	return nullptr;
 }
+#endif
 
+#if HAS_MASS_STORAGE
 // Close all files
 void MassStorage::CloseAllFiles() noexcept
 {
@@ -514,13 +527,36 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool 
 	}
 	return true;
 }
+#endif
 
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 // Check if the specified file exists
 bool MassStorage::FileExists(const char *filePath) noexcept
 {
-	FILINFO fil;
-	return (f_stat(filePath, &fil) == FR_OK);
+#if HAS_LINUX_INTERFACE
+	if (!reprap.UsingLinuxInterface())
+#endif
+	{
+#if HAS_MASS_STORAGE
+		FILINFO fil;
+		return (f_stat(filePath, &fil) == FR_OK);
+#else
+		return false;
+#endif
+	}
+#if HAS_LINUX_INTERFACE
+	else
+	{
+		char dummyBuf[1];
+		uint32_t dummyLen = 0;
+		uint32_t dummyFileSize = 0;
+		return reprap.GetLinuxInterface().GetFileChunk(filePath, 0, dummyBuf, dummyLen, dummyFileSize);
+	}
+#endif
 }
+#endif
+
+#if HAS_MASS_STORAGE
 
 // Check if the specified directory exists
 // Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!

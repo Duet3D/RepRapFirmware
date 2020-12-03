@@ -162,6 +162,10 @@
 # define HAS_MASS_STORAGE		1
 #endif
 
+#if SUPPORT_FTP && !HAS_MASS_STORAGE
+# error "FTP support requires mass storage, too."
+#endif
+
 #ifndef SUPPORT_ASYNC_MOVES
 # define SUPPORT_ASYNC_MOVES	0
 #endif

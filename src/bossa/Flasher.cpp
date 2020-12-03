@@ -45,70 +45,27 @@ Flasher::erase(uint32_t foffset) THROWS(GCodeException)
     _flash->eraseAuto(false);
 }
 
-int Flasher::GetNextChunk(char* buffer, const uint32_t length, uint32_t& offset, const char* filename) noexcept
-{
-	uint32_t read = 0;
-#if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
-#endif
-	{
-		read = infile->Read(buffer, length);
-	}
-#if HAS_LINUX_INTERFACE
-	else
-	{
-		read = length;
-		const bool success = reprap.GetLinuxInterface().GetFileChunk(filename, offset, (char*)buffer, read, fileSize);
-		if (!success) {
-			return -1;
-		}
-	}
-#endif
-	offset += read;
-	return read;
-}
 
 bool
 Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
 {
     uint32_t pageSize = _flash->pageSize();
     uint32_t numPages;
-    size_t fbytes = 0;
+    int fbytes = 0;
 
     if (foffset == 0)
     {
     	pageNum = 0;
     	Platform& platform = reprap.GetPlatform();
-#if HAS_LINUX_INTERFACE
-    	if (!reprap.UsingLinuxInterface())
-#endif
-    	{
-    		infile = MassStorage::OpenFile(filename, OpenMode::read, 0);
-    		if (infile == nullptr)
-    		{
-    			platform.MessageF(ErrorMessage, "Failed to open file %s\n", filename);
-    			throw GCodeException(nullptr);
-    		}
-    		fileSize = infile->Length();
-    	}
-#if HAS_LINUX_INTERFACE
-    	else
-    	{
-    		char dummyBuf[1];
-    		uint32_t dummyLen = 0;
-    		if (!reprap.GetLinuxInterface().GetFileChunk(filename, 0, dummyBuf, dummyLen, fileSize))
-    		{
-    			platform.MessageF(ErrorMessage, "Failed to open file %s\n", filename);
-    			throw GCodeException(nullptr);
-    		}
-    	}
-#endif
-		if (fileSize == 0)
+		infile = MassStorage::OpenFile(filename, OpenMode::read, 0);
+		if (infile == nullptr)
 		{
-	    	if (infile != nullptr)
-			{
-	        	infile->Close();
-			}
+			platform.MessageF(ErrorMessage, "Failed to open file %s\n", filename);
+			throw GCodeException(nullptr);
+		}
+		if (infile->Length() == 0)
+		{
+			infile->Close();
 			platform.MessageF(ErrorMessage, "Firmware file is empty %s\n", filename);
 			throw GCodeException(nullptr);
 		}
@@ -117,7 +74,7 @@ Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
     try
     {
 
-        numPages = (fileSize + pageSize - 1) / pageSize;
+        numPages = (infile->Length() + pageSize - 1) / pageSize;
         if (foffset == 0)
         {
             if (numPages > _flash->numPages())
@@ -125,21 +82,22 @@ Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
                 throw FileSizeError("Flasher::write: FileSizeError");
             }
 
-            _observer.onStatus("Writing %ld bytes to PanelDue flash memory\n", fileSize);
+            _observer.onStatus("Writing %ld bytes to PanelDue flash memory\n", infile->Length());
         }
 
 		uint8_t buffer[pageSize];
 		uint32_t pageOffset = foffset / pageSize;
 
-		if ((fbytes = GetNextChunk((char*)buffer, pageSize, foffset, filename)) > 0)
+		if ((fbytes = infile->Read((char*)buffer, pageSize)) > 0)
 		{
 			_observer.onProgress(pageNum, numPages);
 
 			_flash->loadBuffer(buffer, fbytes);
 			_flash->writePage(pageOffset /* + pageNum */);
+			foffset += fbytes;
 
 			pageNum++;
-			if (!(pageNum == numPages || fbytes != pageSize))
+			if (!(pageNum == numPages || fbytes != (int)pageSize))
 			{
 				return false;				// We get back in the next PanelDueFlasher::Spin() iteration
 			}
@@ -147,18 +105,11 @@ Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
     }
     catch(...)
     {
-    	if (infile != nullptr)
-		{
-        	infile->Close();
-		}
-
+		infile->Close();
         throw;
     }
 
-	if (infile != nullptr)
-	{
-		infile->Close();
-	}
+	infile->Close();
     _observer.onProgress(numPages, numPages);
     return true;
 }
@@ -172,7 +123,7 @@ Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalError
     uint32_t numPages;
     uint32_t pageOffset;
     uint32_t byteErrors = 0;
-    size_t fbytes;
+    int fbytes;
 
     pageErrors = 0;
     totalErrors = 0;
@@ -187,36 +138,32 @@ Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalError
     	// Note that we can skip all checks for file validity here since
     	// we would not get here from write() if any of these failed
 
-#if HAS_LINUX_INTERFACE
-    	if (!reprap.UsingLinuxInterface())
-#endif
-    	{
-    		infile = MassStorage::OpenFile(filename, OpenMode::read, 0);
-    	}
+		infile = MassStorage::OpenFile(filename, OpenMode::read, 0);
     }
 
     try
     {
 
-        numPages = (fileSize + pageSize - 1) / pageSize;
+        numPages = (infile->Length() + pageSize - 1) / pageSize;
         if (foffset == 0)
         {
             if (numPages > _flash->numPages())
                 throw FileSizeError("Flasher::verify: FileSizeError");
 
-            _observer.onStatus("Verifying %ld bytes of PanelDue flash memory\n", fileSize);
+            _observer.onStatus("Verifying %ld bytes of PanelDue flash memory\n", infile->Length());
         }
 
-        if ((fbytes = GetNextChunk((char*)bufferA, pageSize, foffset, filename)) > 0)
+        if ((fbytes = infile->Read((char*)bufferA, pageSize)) > 0)
         {
             byteErrors = 0;
+			foffset += fbytes;
 
             _observer.onProgress(pageNum, numPages);
 
             {
                 _flash->readPage(pageOffset /*+ pageNum */, bufferB);
 
-                for (uint32_t i = 0; i < fbytes; i++)
+                for (uint32_t i = 0; i < (uint32_t) fbytes; i++)
                 {
                     if (bufferA[i] != bufferB[i])
                         byteErrors++;
@@ -230,7 +177,7 @@ Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalError
             }
 
             pageNum++;
-            if (!(pageNum == numPages || fbytes != pageSize))
+            if (!(pageNum == numPages || fbytes != (int)pageSize))
             {
                 return false;				// We get back in the next PanelDueFlasher::Spin() iteration
             }
@@ -238,17 +185,11 @@ Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalError
     }
     catch(...)
     {
-    	if (infile != nullptr)
-    	{
-            infile->Close();
-    	}
+		infile->Close();
         throw;
     }
 
-	if (infile != nullptr)
-	{
-        infile->Close();
-	}
+	infile->Close();
 
      _observer.onProgress(numPages, numPages);
 

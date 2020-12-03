@@ -53,12 +53,11 @@ class Flasher
 {
 public:
     Flasher(Samba& samba, Device& device, FlasherObserver& observer) noexcept
-    	: _samba(samba), _flash(device.getFlash()), _observer(observer), pageNum(0), infile(nullptr), fileSize(0)
+    	: _samba(samba), _flash(device.getFlash()), _observer(observer), pageNum(0), infile(nullptr)
     {}
     virtual ~Flasher() {}
 
     void erase(uint32_t foffset) THROWS(GCodeException);
-    int GetNextChunk(char* buffer, const uint32_t amount, uint32_t& offset, const char* filename) noexcept;
     bool write(const char* filename, uint32_t& foffset) THROWS(GCodeException);
     bool verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException);
     void lock(/* std::string& regionArg, */ bool enable) THROWS(GCodeException);
@@ -70,7 +69,6 @@ private:
 
     uint32_t pageNum;
     FileStore * infile;
-    FilePosition fileSize;
 };
 
 #endif // _FLASHER_H

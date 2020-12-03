@@ -791,6 +791,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 #endif
 	}
+	return false;
 }
 
 // Restore positions etc. when exiting simulation mode
