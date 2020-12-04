@@ -464,7 +464,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			|| code == 112
 			|| code == 374 || code == 375
 			|| code == 470 || code == 471
-			|| code == 500 || code == 503 || code == 505 || code == 550
+			|| code == 500 || code == 503 || code == 505
+			|| code == 540 || code == 550 || code == 552 || code == 586 || (code >= 587 && code <= 589)
 			|| code == 703
 			|| code == 905 || code == 929 || code == 997 || code == 999
 		   )
@@ -3538,6 +3539,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 
+				bool seen = false;
+#if SUPPORT_HTTP
+				if (gb.Seen('C'))
+				{
+					String<16> corsSite;
+					gb.GetQuotedString(corsSite.GetRef());
+					reprap.GetNetwork().SetCorsSite(corsSite.c_str());
+					seen = true;
+				}
+#endif
+
 				if (gb.Seen('P'))
 				{
 					const unsigned int protocol = gb.GetUIValue();
@@ -3554,10 +3566,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							result = reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
 						}
+						seen = true;
 					}
 				}
-				else
+
+
+				if (!seen)
 				{
+#if SUPPORT_HTTP
+					if (reprap.GetNetwork().GetCorsSite() != nullptr)
+					{
+						reply.printf("CORS enabled for site '%s', ", reprap.GetNetwork().GetCorsSite());
+					}
+					else
+					{
+						reply.copy("CORS disabled, ");
+					}
+#endif
 					// Default to reporting current protocols if P or S parameter missing
 					result = reprap.GetNetwork().ReportProtocols(interface, reply);
 				}

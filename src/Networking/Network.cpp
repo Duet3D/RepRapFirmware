@@ -124,6 +124,9 @@ constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 #if HAS_NETWORKING
+# if SUPPORT_HTTP
+	{ "corsSite",	OBJECT_MODEL_FUNC(self->GetCorsSite()),					ObjectModelEntryFlags::none },
+# endif
 	{ "hostname",	OBJECT_MODEL_FUNC(self->GetHostname()),					ObjectModelEntryFlags::none },
 	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfacesArrayDescriptor),	ObjectModelEntryFlags::none },
 #endif
@@ -132,7 +135,11 @@ constexpr ObjectModelTableEntry Network::objectModelTable[] =
 
 constexpr uint8_t Network::objectModelTableDescriptor[] = { 1,
 #if HAS_NETWORKING
+# if SUPPORT_HTTP
+		4
+# else
 		3
+# endif
 #else
 		1
 #endif
