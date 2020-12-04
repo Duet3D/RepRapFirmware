@@ -166,6 +166,8 @@ CRC32::CRC32() noexcept
 	Reset();
 }
 
+CRC32::~CRC32() { }
+
 void CRC32::Update(char c) noexcept
 {
 	crc = (CRC_32_TAB[(crc ^ c) & 0xFF] ^ (crc >> 8));
@@ -173,7 +175,7 @@ void CRC32::Update(char c) noexcept
 
 // A note on CRC algorithms on ARM:
 // Original algorithm (1 byte per loop iteration, 1K table): 7 instructions, 11 clocks (11 clocks/byte)
-// Algorithm currently used on non-SAME70 processors (4 bytes per loop iteration, 1K table): 19 instructions, 26 clocks (6.5 clocks/byte)
+// Algorithm currently used on non-SAME70/SAME5x processors (4 bytes per loop iteration, 1K table): 19 instructions, 26 clocks (6.5 clocks/byte)
 // Slicing-by-4 using 1 dword per loop iteration: 15 instructions, 18 clocks (4.5 clocks/byte)
 // Slicing-by-4 using 1 quadword per loop iteration: 28 instructions, 31 clocks (3.875 clocks/byte)
 void CRC32::Update(const char *s, size_t len) noexcept
@@ -193,7 +195,7 @@ void CRC32::Update(const char *s, size_t len) noexcept
 	const char * const endAligned = s + ((end - s) & ~7);
 	while (s != endAligned)
 	{
-		// Slicing-by-4 algorithm, 2 quadwords at a time
+		// Slicing-by-4 algorithm, 2 dwords at a time
 		const uint32_t data0 = *reinterpret_cast<const uint32_t*>(s) ^ locCrc;
 	    locCrc = CRC_32_TAB[(data0 >> 24) & 0xFF] ^ CRC_32_TAB1[(data0 >> 16) & 0xFF] ^ CRC_32_TAB2[(data0 >> 8) & 0xFF] ^ CRC_32_TAB3[data0 & 0xFF];
 		const uint32_t data1 = *reinterpret_cast<const uint32_t*>(s + 4) ^ locCrc;
@@ -213,7 +215,7 @@ void CRC32::Update(const char *s, size_t len) noexcept
 	}
 #endif
 
-	// Process up to 7 (SAME70) or 3 (others) bytes at the end
+	// Process up to 7 (SAME70/SAME5x) or 3 (others) bytes at the end
 	while (s != end)
 	{
 		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
@@ -222,7 +224,4 @@ void CRC32::Update(const char *s, size_t len) noexcept
 	crc = locCrc;
 }
 
-void CRC32::Reset() noexcept
-{
-	crc = 0xffffffff;
-}
+// End

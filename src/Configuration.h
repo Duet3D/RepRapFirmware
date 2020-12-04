@@ -371,7 +371,5 @@ static_assert(MaxExpectedWebDirFilenameLength + strlen(WEB_DIR) + strlen(".gz") 
 
 // List defaults
 constexpr char LIST_SEPARATOR = ':';
-constexpr char FILE_LIST_SEPARATOR = ',';
-constexpr char FILE_LIST_BRACKET = '"';
 
 #endif

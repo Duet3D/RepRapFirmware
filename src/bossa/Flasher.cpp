@@ -35,8 +35,7 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
-void
-Flasher::erase(uint32_t foffset) THROWS(GCodeException)
+void Flasher::erase(uint32_t foffset) THROWS(GCodeException)
 {
 #if ORIGINAL_BOSSA_CODE
     _observer.onStatus("Erase flash\n");
@@ -45,9 +44,7 @@ Flasher::erase(uint32_t foffset) THROWS(GCodeException)
     _flash->eraseAuto(false);
 }
 
-
-bool
-Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
+bool Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
 {
     uint32_t pageSize = _flash->pageSize();
     uint32_t numPages;
@@ -114,8 +111,7 @@ Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
     return true;
 }
 
-bool
-Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException)
+bool Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException)
 {
     uint32_t pageSize = _flash->pageSize();
     uint8_t bufferA[pageSize];
@@ -201,8 +197,7 @@ Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalError
     return true;
 }
 
-void
-Flasher::lock(/* string& regionArg, */ bool enable) THROWS(GCodeException)
+void Flasher::lock(/* string& regionArg, */ bool enable) THROWS(GCodeException)
 {
 #if ORIGINAL_BOSSA_CODE
     if (regionArg.empty())
@@ -235,3 +230,5 @@ Flasher::lock(/* string& regionArg, */ bool enable) THROWS(GCodeException)
     }
 #endif
 }
+
+// End

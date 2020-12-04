@@ -118,7 +118,7 @@ private:
 	void ExchangeResponse(uint32_t response) noexcept;
 	void ExchangeData() noexcept;
 	void ResetTransfer(bool ownRequest) noexcept;
-	uint16_t CRC16(const char *buffer, size_t length) const noexcept;
+	uint16_t CalcCRC16(const char *buffer, size_t length) const noexcept;
 
 	template<typename T> const T *ReadDataHeader() noexcept;
 

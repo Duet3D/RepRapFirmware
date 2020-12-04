@@ -749,25 +749,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					FileInfo fileInfo;
 					if (MassStorage::FindFirst(dir.c_str(), fileInfo))
 					{
-						// iterate through all entries and append each file name
-						do {
+						// Iterate through all entries and append each file name
+						bool first = true;
+						do
+						{
 							if (encapsulateList)
 							{
-								outBuf->catf("%c%s%c%c", FILE_LIST_BRACKET, fileInfo.fileName.c_str(), FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
+								outBuf->catf((first) ? "\"%s\"" : ",\"%s\"", fileInfo.fileName.c_str());
+								first = false;
 							}
 							else
 							{
 								outBuf->catf("%s\n", fileInfo.fileName.c_str());
 							}
 						} while (MassStorage::FindNext(fileInfo));
-
-						if (encapsulateList)
-						{
-							// remove the last separator
-							(*outBuf)[outBuf->Length() - 1] = 0;
-						}
 					}
-					else
+					else if (!encapsulateList)
 					{
 						outBuf->cat("NONE\n");
 					}

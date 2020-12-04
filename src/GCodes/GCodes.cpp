@@ -3593,24 +3593,20 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 		{
 			platform.Message(type, "Begin file list\n");
 			platform.Message(type, reply);
-			platform.Message(type, "End file list\n");
-			platform.Message(type, response);
-			platform.Message(type, "\n");
+			platform.MessageF(type, "End file list\n%s\n", response);
 			return;
 		}
 
 		if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
 		{
-			platform.Message(type, response);
-			platform.Message(type, "\n");
+			platform.MessageF(type, "%s\n", response);
 			platform.Message(type, reply);
 			return;
 		}
 
 		if (gb.GetCommandLetter() =='M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
 		{
-			platform.Message(type, response);
-			platform.Message(type, " ");
+			platform.MessageF(type, "%s ", response);
 			platform.Message(type, reply);
 			return;
 		}
@@ -3618,9 +3614,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 		if (reply->Length() != 0 && !gb.IsDoingFileMacro())
 		{
 			platform.Message(type, reply);
-			platform.Message(type, "\n");
-			platform.Message(type, response);
-			platform.Message(type, "\n");
+			platform.MessageF(type, "\n%s\n", response);
 		}
 		else if (reply->Length() != 0)
 		{
@@ -3629,8 +3623,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 		else
 		{
 			OutputBuffer::ReleaseAll(reply);
-			platform.Message(type, response);
-			platform.Message(type, "\n");
+			platform.MessageF(type, "%s\n", response);
 		}
 		return;
 

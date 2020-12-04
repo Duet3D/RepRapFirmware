@@ -14,9 +14,11 @@
 # include "Libraries/Fatfs/diskio.h"
 # include "Movement/StepTimer.h"
 #endif
+
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
 #endif
+
 FileStore::FileStore() noexcept
 	:
 #if HAS_MASS_STORAGE
@@ -48,48 +50,36 @@ void FileStore::Init() noexcept
 #endif
 }
 
-#if HAS_MASS_STORAGE
-
-// Invalidate the file if it uses the specified FATFS object
-bool FileStore::Invalidate(const FATFS *fs, bool doClose) noexcept
-{
-	if (file.obj.fs == fs)
-	{
-		if (doClose)
-		{
-			(void)ForceClose();
-		}
-		else
-		{
-			file.obj.fs = nullptr;
-			if (writeBuffer != nullptr)
-			{
-				MassStorage::ReleaseWriteBuffer(writeBuffer);
-				writeBuffer = nullptr;
-			}
-		}
-		usageMode = FileUseMode::invalidated;
-		return true;
-	}
-	return false;
-}
-
-// Return true if the file is open on the specified file system
-bool FileStore::IsOpenOn(const FATFS *fs) const noexcept
-{
-	return openCount != 0 && file.obj.fs == fs;
-}
-#endif
-
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
-#endif
+	if (reprap.UsingLinuxInterface())
 	{
-# if HAS_MASS_STORAGE
+		if (mode != OpenMode::read)
+		{
+			REPORT_INTERNAL_ERROR;
+			return false;
+		}
+		//TODO allocating dynamic memory here isn't nice because of possible memory fragmentation. Try to avoid it in future.
+		absoluteFilename = new char[strlen(filePath)+1];
+		strcpy(absoluteFilename, filePath);
+		char dummyBuf[1];
+		uint32_t dummyLen = 0;
+		if (!reprap.GetLinuxInterface().GetFileChunk(absoluteFilename, 0, dummyBuf, dummyLen, length))
+		{
+			delete absoluteFilename;
+			absoluteFilename = nullptr;
+			return false;
+		}
+		usageMode = FileUseMode::readOnly;
+		offset = 0;
+		return true;
+	}
+#endif
+#if HAS_MASS_STORAGE
+	{
 		const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
 		writeBuffer = nullptr;
 
@@ -147,122 +137,17 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 # endif
 		reprap.VolumesUpdated();
 		return true;
+	}
 # else
-		return false;
+	return false;
 # endif
-	}
-#if HAS_LINUX_INTERFACE
-	else
-	{
-		if (mode != OpenMode::read)
-		{
-			reprap.GetPlatform().Message(WarningMessage, "When using LinuxInterface files can only be opened for read access.\n");
-			return false;
-		}
-		absoluteFilename = new char[strlen(filePath)+1];
-		strcpy(absoluteFilename, filePath);
-		char dummyBuf[1];
-		uint32_t dummyLen = 0;
-		if (!reprap.GetLinuxInterface().GetFileChunk(absoluteFilename, 0, dummyBuf, dummyLen, length))
-		{
-			delete absoluteFilename;
-			absoluteFilename = nullptr;
-			return false;
-		}
-		usageMode = FileUseMode::readOnly;
-		offset = 0;
-		return true;
-	}
-#endif
 }
-
-#if HAS_MASS_STORAGE
-void FileStore::Duplicate() noexcept
-{
-	switch (usageMode)
-	{
-	case FileUseMode::free:
-		REPORT_INTERNAL_ERROR;
-		break;
-
-	case FileUseMode::readOnly:
-	case FileUseMode::readWrite:
-		{
-			const irqflags_t flags = cpu_irq_save();
-			++openCount;
-			cpu_irq_restore(flags);
-		}
-		break;
-
-	case FileUseMode::invalidated:
-	default:
-		break;
-	}
-}
-#endif
 
 // This may be called from an ISR, in which case we need to defer the close
 bool FileStore::Close() noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
-#endif
-	{
-#if HAS_MASS_STORAGE
-		switch (usageMode)
-		{
-		case FileUseMode::free:
-			if (!inInterrupt())
-			{
-				REPORT_INTERNAL_ERROR;
-			}
-			return false;
-
-		case FileUseMode::readOnly:
-		case FileUseMode::readWrite:
-			{
-				const irqflags_t flags = cpu_irq_save();
-				if (openCount > 1)
-				{
-					--openCount;
-					cpu_irq_restore(flags);
-					return true;
-				}
-				else if (inInterrupt())
-				{
-					closeRequested = true;
-					cpu_irq_restore(flags);
-					return true;
-				}
-				else
-				{
-					cpu_irq_restore(flags);
-					return ForceClose();
-				}
-			}
-
-		case FileUseMode::invalidated:
-		default:
-			{
-				const irqflags_t flags = cpu_irq_save();
-				if (openCount > 1)
-				{
-					--openCount;
-				}
-				else
-				{
-					usageMode = FileUseMode::free;
-				}
-				cpu_irq_restore(flags);
-#endif
-				return true;
-#if HAS_MASS_STORAGE
-			}
-		}
-#endif
-	}
-#if HAS_LINUX_INTERFACE
-	else
+	if (reprap.UsingLinuxInterface())
 	{
 		offset = 0;
 		length = 0;
@@ -272,31 +157,59 @@ bool FileStore::Close() noexcept
 		return true;
 	}
 #endif
-}
-
 #if HAS_MASS_STORAGE
-bool FileStore::ForceClose() noexcept
-{
-	bool ok = true;
-	if (usageMode == FileUseMode::readWrite)
+	switch (usageMode)
 	{
-		ok = Flush();
-	}
+	case FileUseMode::free:
+		if (!inInterrupt())
+		{
+			REPORT_INTERNAL_ERROR;
+		}
+		return false;
 
-	if (writeBuffer != nullptr)
-	{
-		MassStorage::ReleaseWriteBuffer(writeBuffer);
-		writeBuffer = nullptr;
-	}
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			const irqflags_t flags = cpu_irq_save();
+			if (openCount > 1)
+			{
+				--openCount;
+				cpu_irq_restore(flags);
+				return true;
+			}
+			else if (inInterrupt())
+			{
+				closeRequested = true;
+				cpu_irq_restore(flags);
+				return true;
+			}
+			else
+			{
+				cpu_irq_restore(flags);
+				return ForceClose();
+			}
+		}
 
-	const FRESULT fr = f_close(&file);
-	usageMode = FileUseMode::free;
-	closeRequested = false;
-	openCount = 0;
-	reprap.VolumesUpdated();
-	return ok && fr == FR_OK;
-}
+	case FileUseMode::invalidated:
+	default:
+		{
+			const irqflags_t flags = cpu_irq_save();
+			if (openCount > 1)
+			{
+				--openCount;
+			}
+			else
+			{
+				usageMode = FileUseMode::free;
+			}
+			cpu_irq_restore(flags);
+			return true;
+		}
+	}
+#else
+	return true;
 #endif
+}
 
 bool FileStore::Seek(FilePosition pos) noexcept
 {
@@ -309,17 +222,7 @@ bool FileStore::Seek(FilePosition pos) noexcept
 	case FileUseMode::readOnly:
 	case FileUseMode::readWrite:
 #if HAS_LINUX_INTERFACE
-		if (!reprap.UsingLinuxInterface())
-#endif
-		{
-#if HAS_MASS_STORAGE
-			return f_lseek(&file, pos) == FR_OK;
-#else
-			return false;
-#endif
-		}
-#if HAS_LINUX_INTERFACE
-		else
+		if (reprap.UsingLinuxInterface())
 		{
 			const bool validTarget = offset < length;
 			if (validTarget)
@@ -328,6 +231,11 @@ bool FileStore::Seek(FilePosition pos) noexcept
 			}
 			return validTarget;
 		}
+#endif
+#if HAS_MASS_STORAGE
+		return f_lseek(&file, pos) == FR_OK;
+#else
+		return false;
 #endif
 
 	case FileUseMode::invalidated:
@@ -339,36 +247,17 @@ bool FileStore::Seek(FilePosition pos) noexcept
 FilePosition FileStore::Position() const noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
-#endif
-	{
-		return
-#if HAS_MASS_STORAGE
-				(usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fptr :
-#endif
-						0;
-	}
-#if HAS_LINUX_INTERFACE
-	else
+	if (reprap.UsingLinuxInterface())
 	{
 		return offset;
 	}
 #endif
-}
-
 #if HAS_MASS_STORAGE
-uint32_t FileStore::ClusterSize() const noexcept
-{
-	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
-}
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fptr : 0;
+#else
+	return 0;
 #endif
-
-#if 0	// not currently used
-bool FileStore::GoToEnd()
-{
-	return Seek(Length());
 }
-#endif
 
 FilePosition FileStore::Length() const noexcept
 {
@@ -380,27 +269,22 @@ FilePosition FileStore::Length() const noexcept
 
 	case FileUseMode::readOnly:
 #if HAS_LINUX_INTERFACE
-		if (!reprap.UsingLinuxInterface())
-#endif
-		{
-#if HAS_MASS_STORAGE
-			return f_size(&file);
-#else
-			return 0;
-#endif
-		}
-#if HAS_LINUX_INTERFACE
-		else
+		if (reprap.UsingLinuxInterface())
 		{
 			return length;
 		}
+#endif
+#if HAS_MASS_STORAGE
+		return f_size(&file);
+#else
+		return 0;
 #endif
 
 	case FileUseMode::readWrite:
 #if HAS_MASS_STORAGE
 		return (writeBuffer != nullptr) ? f_size(&file) + writeBuffer->BytesStored() : f_size(&file);
 #else
-			return 0;
+		return 0;
 #endif
 
 	case FileUseMode::invalidated:
@@ -426,37 +310,33 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 
 	case FileUseMode::readOnly:
 	case FileUseMode::readWrite:
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
 		{
-#if HAS_LINUX_INTERFACE
-			if (!reprap.UsingLinuxInterface())
-#endif
+			uint32_t read = nBytes;
+			const bool success = reprap.GetLinuxInterface().GetFileChunk(absoluteFilename, offset, extBuf, read, length);
+			if (!success)
 			{
-#if HAS_MASS_STORAGE
-				UINT bytes_read;
-				FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
-				if (readStatus != FR_OK)
-				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Cannot read file, error code %d\n", (int)readStatus);
-#endif
-					return -1;
-#if HAS_MASS_STORAGE
-				}
-				return (int)bytes_read;
-#endif
+				return -1;
 			}
-#if HAS_LINUX_INTERFACE
-			else
-			{
-				uint32_t read = nBytes;
-				const bool success = reprap.GetLinuxInterface().GetFileChunk(absoluteFilename, offset, extBuf, read, length);
-				if (!success) {
-					return -1;
-				}
-				offset += read;
-				return (int)read;
-			}
-#endif
+			offset += read;
+			return (int)read;
 		}
+#endif
+#if HAS_MASS_STORAGE
+		{
+			UINT bytes_read;
+			FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
+			if (readStatus != FR_OK)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Cannot read file, error code %d\n", (int)readStatus);
+				return -1;
+			}
+			return (int)bytes_read;
+		}
+#else
+		return -1;
+#endif
 
 	case FileUseMode::invalidated:
 	default:
@@ -499,7 +379,83 @@ int FileStore::ReadLine(char* buf, size_t nBytes) noexcept
 	return i;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE			// the remaining functions are only supported on local storage
+
+// Invalidate the file if it uses the specified FATFS object
+bool FileStore::Invalidate(const FATFS *fs, bool doClose) noexcept
+{
+	if (file.obj.fs == fs)
+	{
+		if (doClose)
+		{
+			(void)ForceClose();
+		}
+		else
+		{
+			file.obj.fs = nullptr;
+			if (writeBuffer != nullptr)
+			{
+				MassStorage::ReleaseWriteBuffer(writeBuffer);
+				writeBuffer = nullptr;
+			}
+		}
+		usageMode = FileUseMode::invalidated;
+		return true;
+	}
+	return false;
+}
+
+// Return true if the file is open on the specified file system
+bool FileStore::IsOpenOn(const FATFS *fs) const noexcept
+{
+	return openCount != 0 && file.obj.fs == fs;
+}
+
+void FileStore::Duplicate() noexcept
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+		REPORT_INTERNAL_ERROR;
+		break;
+
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			const irqflags_t flags = cpu_irq_save();
+			++openCount;
+			cpu_irq_restore(flags);
+		}
+		break;
+
+	case FileUseMode::invalidated:
+	default:
+		break;
+	}
+}
+
+bool FileStore::ForceClose() noexcept
+{
+	bool ok = true;
+	if (usageMode == FileUseMode::readWrite)
+	{
+		ok = Flush();
+	}
+
+	if (writeBuffer != nullptr)
+	{
+		MassStorage::ReleaseWriteBuffer(writeBuffer);
+		writeBuffer = nullptr;
+	}
+
+	const FRESULT fr = f_close(&file);
+	usageMode = FileUseMode::free;
+	closeRequested = false;
+	openCount = 0;
+	reprap.VolumesUpdated();
+	return ok && fr == FR_OK;
+}
+
 FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
 {
 	if (calcCrc)
@@ -638,9 +594,20 @@ bool FileStore::IsSameFile(const FIL& otherFile) const noexcept
 {
 	return file.obj.fs == otherFile.obj.fs && file.dir_sect == otherFile.dir_sect && file.dir_ptr == otherFile.dir_ptr;
 }
-#endif
 
-#if 0	// not currently used
+uint32_t FileStore::ClusterSize() const noexcept
+{
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
+}
+
+#endif	// HAS_MASS_STORAGE
+
+#if 0	// these are not currently used
+
+bool FileStore::GoToEnd()
+{
+	return Seek(Length());
+}
 
 // Provide a cluster map for fast seeking. Needs _USE_FASTSEEK defined as 1 in conf_fatfs to make any difference.
 // The first element of the table must be set to the total number of 32-bit entries in the table before calling this.
