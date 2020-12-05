@@ -21,8 +21,8 @@ public:
 	void Enable() const noexcept;
 	void SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noexcept;
 	bool TransceivePacket(const uint8_t *tx_data, uint8_t *rx_data, size_t len) const noexcept;
-	bool Take(uint32_t timeout) const noexcept { return mutex.Take(timeout); }					// get ownership of this SPI, return true if successful
-	void Release() const noexcept { mutex.Release(); }
+	bool Take(uint32_t timeout) noexcept { return mutex.Take(timeout); }					// get ownership of this SPI, return true if successful
+	void Release() noexcept { mutex.Release(); }
 
 	static void Init() noexcept;
 	static SharedSpiDevice& GetMainSharedSpiDevice() noexcept { return *mainSharedSpiDevice; }

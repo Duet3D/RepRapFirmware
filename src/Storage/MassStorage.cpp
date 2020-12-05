@@ -948,7 +948,7 @@ bool MassStorage::IsDriveMounted(size_t drive) noexcept
 	return drive < NumSdCards && info[drive].isMounted;
 }
 
-const Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
+Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
 {
 	return info[vol].volMutex;
 }

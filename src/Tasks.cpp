@@ -309,17 +309,17 @@ void Tasks::TerminateMainTask() noexcept
 	mainTask.TerminateAndUnlink();
 }
 
-const Mutex *Tasks::GetI2CMutex() noexcept
+Mutex *Tasks::GetI2CMutex() noexcept
 {
 	return &i2cMutex;
 }
 
-const Mutex *Tasks::GetSysDirMutex() noexcept
+Mutex *Tasks::GetSysDirMutex() noexcept
 {
 	return &sysDirMutex;
 }
 
-const Mutex *Tasks::GetFilamentsMutex() noexcept
+Mutex *Tasks::GetFilamentsMutex() noexcept
 {
 	return &filamentsMutex;
 }

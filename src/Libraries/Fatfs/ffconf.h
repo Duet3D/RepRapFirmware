@@ -267,7 +267,7 @@
 struct Mutex;									// FreeRTOS mutex
 #define FF_FS_REENTRANT		1					/* 0:Disable or 1:Enable */
 #define FF_FS_TIMEOUT		1000				/* Timeout period in unit of time ticks */
-#define FF_SYNC_t			const struct Mutex*	/* O/S dependent type of sync object. e.g. HANDLE, OS_EVENT*, ID and etc.. */
+#define FF_SYNC_t			struct Mutex*		/* O/S dependent type of sync object. e.g. HANDLE, OS_EVENT*, ID and etc.. */
 
 #else
 

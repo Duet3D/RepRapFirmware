@@ -19,9 +19,9 @@ namespace Tasks
 	void TerminateMainTask() noexcept;
 	ptrdiff_t GetNeverUsedRam() noexcept;
 	const char* GetHeapTop() noexcept;
-	const Mutex *GetI2CMutex() noexcept;
-	const Mutex *GetSysDirMutex() noexcept;
-	const Mutex *GetFilamentsMutex() noexcept;
+	Mutex *GetI2CMutex() noexcept;
+	Mutex *GetSysDirMutex() noexcept;
+	Mutex *GetFilamentsMutex() noexcept;
 }
 
 #endif /* SRC_TASKS_H_ */
