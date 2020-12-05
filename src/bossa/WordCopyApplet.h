@@ -43,7 +43,7 @@ public:
     void setWords(uint32_t words) THROWS(GCodeException);
 
 private:
-    static WordCopyArm applet;
+    static const WordCopyArm applet;
 };
 
 #endif // _WORDCOPYAPPLET_H
