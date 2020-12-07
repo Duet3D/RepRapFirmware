@@ -35,7 +35,7 @@
 #endif
 
 #if HAS_WIFI_NETWORKING
-# include "FirmwareUpdater.h"
+# include <Comms/FirmwareUpdater.h>
 #endif
 
 #if SUPPORT_12864_LCD

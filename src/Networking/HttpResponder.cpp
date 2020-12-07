@@ -670,10 +670,7 @@ bool HttpResponder::SendFileInfo(bool quitEarly) noexcept
 						"Content-Type: application/json\r\n"
 					);
 		outBuf->catf("Content-Length: %u\r\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-		if (reprap.GetNetwork().GetCorsSite() != nullptr)
-		{
-			outBuf->catf("Access-Control-Allow-Origin: %s\r\n", reprap.GetNetwork().GetCorsSite());
-		}
+		AddCorsHeader();
 		outBuf->cat("Connection: close\r\n\r\n");
 		outBuf->Append(jsonResponse);
 		if (outBuf->HadOverflow())
@@ -862,10 +859,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile) noexc
 						"Pragma: no-cache\r\n"
 						"Expires: 0\r\n"
 					);
-		if (reprap.GetNetwork().GetCorsSite() != nullptr)
-		{
-			outBuf->catf("Access-Control-Allow-Origin: %s\r\n", reprap.GetNetwork().GetCorsSite());
-		}
+		AddCorsHeader();
 	}
 
 	const char* contentType;
@@ -953,10 +947,7 @@ void HttpResponder::SendGCodeReply() noexcept
 						"Content-Type: text/plain\r\n"
 					);
 		outBuf->catf("Content-Length: %u\r\n", gcodeReply.DataLength());
-		if (reprap.GetNetwork().GetCorsSite() != nullptr)
-		{
-			outBuf->catf("Access-Control-Allow-Origin: %s\r\n", reprap.GetNetwork().GetCorsSite());
-		}
+		AddCorsHeader();
 		outBuf->cat("Connection: close\r\n\r\n");
 		outStack.Append(gcodeReply);
 
@@ -1061,10 +1052,7 @@ void HttpResponder::SendJsonResponse(const char* command) noexcept
 				);
 	const unsigned int replyLength = (jsonResponse != nullptr) ? jsonResponse->Length() : 0;
 	outBuf->catf("Content-Length: %u\r\n", replyLength);
-	if (reprap.GetNetwork().GetCorsSite() != nullptr)
-	{
-		outBuf->catf("Access-Control-Allow-Origin: %s\r\n", reprap.GetNetwork().GetCorsSite());
-	}
+	AddCorsHeader();
 	outBuf->catf("Connection: %s\r\n\r\n", keepOpen ? "keep-alive" : "close");
 	outBuf->Append(jsonResponse);
 
@@ -1152,8 +1140,8 @@ void HttpResponder::ProcessRequest() noexcept
 						);
 			if (reprap.GetNetwork().GetCorsSite() != nullptr)
 			{
-				outBuf->catf("Access-Control-Allow-Headers: Content-Type\r\n"
-							 "Access-Control-Allow-Origin: %s\r\n", reprap.GetNetwork().GetCorsSite());
+				outBuf->catf("Access-Control-Allow-Headers: Content-Type\r\n");
+				AddCorsHeader();
 			}
 			outBuf->cat("\r\n");
 			if (outBuf->HadOverflow())
@@ -1282,10 +1270,7 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code) noexc
 	{
 		outBuf->printf("HTTP/1.1 %u %s\r\n"
 					   "Connection: close\r\n", code, response);
-		if (reprap.GetNetwork().GetCorsSite() != nullptr)
-		{
-			outBuf->catf("Access-Control-Allow-Origin: %s\r\n", reprap.GetNetwork().GetCorsSite());
-		}
+		AddCorsHeader();
 		outBuf->catf("\r\n%s%s%s", ErrorPagePart1, response, ErrorPagePart2);
 		Commit();
 	}
@@ -1517,6 +1502,14 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 /*static*/ void HttpResponder::CommonDiagnostics(MessageType mtype) noexcept
 {
 	GetPlatform().MessageF(mtype, "HTTP sessions: %u of %u\n", numSessions, MaxHttpSessions);
+}
+
+void HttpResponder::AddCorsHeader() noexcept
+{
+	if (reprap.GetNetwork().GetCorsSite() != nullptr)
+	{
+		outBuf->catf("Access-Control-Allow-Origin: %s\r\n", reprap.GetNetwork().GetCorsSite());
+	}
 }
 
 // Static data

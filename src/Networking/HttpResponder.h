@@ -89,6 +89,7 @@ private:
 	void ProcessRequest() noexcept;
 	void RejectMessage(const char* s, unsigned int code = 500) noexcept;
 	bool SendFileInfo(bool quitEarly) noexcept;
+	void AddCorsHeader() noexcept;
 
 #if HAS_MASS_STORAGE
 	void DoUpload() noexcept;
