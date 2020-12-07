@@ -102,6 +102,11 @@ public:
 	GCodeResult SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept;
 	const MacAddress& GetMacAddress(unsigned int interface) const noexcept;
 
+#if SUPPORT_HTTP
+	const char *GetCorsSite() const noexcept { return corsSite.IsEmpty() ? nullptr : corsSite.c_str(); }
+	void SetCorsSite(const char *site) noexcept { corsSite.copy(site); }
+#endif
+
 	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
 
 	void HandleHttpGCodeReply(const char *msg) noexcept;
@@ -137,6 +142,9 @@ private:
 
 	uint32_t fastLoop, slowLoop;
 
+#if SUPPORT_HTTP
+	String<16> corsSite;
+#endif
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 };
 
