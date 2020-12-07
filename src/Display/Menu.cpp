@@ -652,7 +652,12 @@ void Menu::EncoderAction(int action) noexcept
 // Refresh is called every Spin() of the Display under most circumstances; an appropriate place to check if timeout action needs to be taken
 void Menu::Refresh() noexcept
 {
-	if (!MassStorage::IsDriveMounted(0))
+	if (
+#if HAS_LINUX_INTERFACE
+		!reprap.UsingLinuxInterface() &&
+#endif
+		!MassStorage::IsDriveMounted(0)
+	   )
 	{
 		if (!displayingFixedMenu)
 		{
