@@ -27,7 +27,7 @@ public:
 	void Init() noexcept; 											// Set it up to parse another G-code
 	void Put(const uint32_t *data, size_t len) noexcept;			// Add an entire binary code, overwriting any existing content
 	void DecodeCommand() noexcept;									// Print the buffer content in debug mode and prepare for execution
-	bool Seen(char c) noexcept SPEED_CRITICAL;				// Is a character present?
+	bool Seen(char c) noexcept SPEED_CRITICAL;						// Is a character present?
 
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;
@@ -35,21 +35,21 @@ public:
 	int8_t GetCommandFraction() const noexcept;
 	bool ContainsExpression() const noexcept;
 
-	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter
-	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;			// Get an integer after a key letter
+	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get a float after a key letter
+	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);								// Get an unsigned integer value
 	DriverId GetDriverId() THROWS(GCodeException);								// Get a driver ID
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);			// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);					// Get a MAC address sextet after a key letter
 	void GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);	// Get a string with no preceding key letter
-	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);	// Get the complete parameter string
-	void GetQuotedString(const StringRef& str) THROWS(GCodeException);			// Get and copy a quoted string
-	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);	// Get and copy a string which may or may not be quoted
-	void GetReducedString(const StringRef& str) THROWS(GCodeException);			// Get and copy a quoted string, removing certain characters
+	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);					// Get the complete parameter string
+	void GetQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);			// Get and copy a quoted string
+	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);	// Get and copy a string which may or may not be quoted
+	void GetReducedString(const StringRef& str) THROWS(GCodeException);							// Get and copy a quoted string, removing certain characters
 	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException) SPEED_CRITICAL; // Get a colon-separated list of floats after a key letter
-	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);			// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
-	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
+	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of drivers after a key letter
 
 	void SetFinished() noexcept;									// Set the G Code finished
 
@@ -89,9 +89,9 @@ inline void BinaryParser::GetCompleteParameters(const StringRef& str) THROWS(GCo
 }
 
 // Get a string, which must be enclosed in double quotes. DSF sorts out quotes, so we needn't worry about them.
-inline void BinaryParser::GetQuotedString(const StringRef& str) THROWS(GCodeException)
+inline void BinaryParser::GetQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
-	GetPossiblyQuotedString(str);
+	GetPossiblyQuotedString(str, allowEmpty);
 }
 
 #endif
