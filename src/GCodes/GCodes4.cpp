@@ -474,7 +474,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if ((firmwareUpdateModuleMap & (1u << module)) != 0)
 				{
 					firmwareUpdateModuleMap &= ~(1u << module);
-					FirmwareUpdater::UpdateModule(module);
+					FirmwareUpdater::UpdateModule(module, serialChannelForPanelDueFlashing);
 					updating = true;
 					isFlashingPanelDue = (module == FirmwareUpdater::PanelDueFirmwareModule);
 					break;

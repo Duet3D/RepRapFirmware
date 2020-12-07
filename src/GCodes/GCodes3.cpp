@@ -1073,6 +1073,12 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		}
 	}
 #endif
+#if HAS_AUX_DEVICES && 0	// Disabled until we allow PanelDue on another port
+	if (gb.Seen('A'))
+	{
+		serialChannelForPanelDueFlashing = gb.GetLimitedUIValue('A', NumSerialChannels, 1);
+	}
+#endif
 
 	reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off because the main loop may get suspended
 	DisableDrives();									// all motors off
@@ -1109,11 +1115,19 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		}
 
 		// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
-#if HAS_WIFI_NETWORKING
-		if (!FirmwareUpdater::CheckFirmwareUpdatePrerequisites(firmwareUpdateModuleMap, reply))
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+		const auto result = FirmwareUpdater::CheckFirmwareUpdatePrerequisites(
+				firmwareUpdateModuleMap, gb, reply,
+# if HAS_AUX_DEVICES
+				serialChannelForPanelDueFlashing
+#else
+				0
+#endif
+				);
+		if (result != GCodeResult::ok)
 		{
 			firmwareUpdateModuleMap = 0;
-			return GCodeResult::error;
+			return result;
 		}
 #endif
 		if ((firmwareUpdateModuleMap & 1) != 0 && !reprap.CheckFirmwareUpdatePrerequisites(reply))

@@ -21,9 +21,6 @@
 # include <UARTClass.h>
 #endif
 
-#define DEBUG_BOSSA (0)
-#define ALLOW_OTHER_AUX (0) // If we ever decide to allow PanelDue on something else than AUX reenable this
-
 #include <bossa/Samba.h>
 #include <bossa/Device.h>
 #include <bossa/Flasher.h>
@@ -34,7 +31,7 @@ constexpr uint32_t RequiredBaudRate = 115200;
 constexpr const char * panelDueCommandEraseAndReset	= "{\"controlCommand\":\"eraseAndReset\"}\n";
 constexpr const char * panelDueCommandReset 		= "{\"controlCommand\":\"reset\"}\n";
 
-constexpr uint32_t WaitMsAfterEraseAndReset = 1000;			// How long to wait in ms after eraseAndReset
+constexpr uint16_t WaitMsAfterEraseAndReset = 2000;			// How long to wait in ms after eraseAndReset
 
 class PanelDueUpdater {
 public:
@@ -62,9 +59,7 @@ private:
 		done
 	);
 
-#if ALLOW_OTHER_AUX
-	size_t serialChannel;
-#endif
+	uint8_t serialChannel;
 	size_t currentBaudRate;
 	Samba* samba;
 	SerialPort* serialPort;

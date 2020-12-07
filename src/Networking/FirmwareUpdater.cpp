@@ -11,6 +11,7 @@
 #include "Network.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "GCodes/GCodes.h"
 
 #if HAS_WIFI_NETWORKING
 # include "ESP8266WiFi/WifiFirmwareUploader.h"
@@ -27,36 +28,42 @@ namespace FirmwareUpdater
 
 	// Check that the prerequisites are satisfied.
 	// Return true if yes, else print a message and return false.
-	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, const StringRef& reply) noexcept
+	GCodeResult CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, GCodeBuffer& gb, const StringRef& reply, const size_t serialChannel) noexcept
 	{
 #if HAS_WIFI_NETWORKING
+		GCodeResult result;
+		if (!reprap.GetGCodes().CheckNetworkCommandAllowed(gb, reply, result))
+		{
+			return result;
+		}
 		if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & (1 << WifiFirmwareModule)) != 0)
 		{
 			reply.copy("Invalid combination of firmware update modules");
-			return false;
+			return GCodeResult::error;
 		}
 		if ((moduleMap & (1 << WifiFirmwareModule)) != 0
-# if HAS_LINUX_INTERFACE
-				&& !reprap.UsingLinuxInterface()
-# endif
 				&& !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, WIFI_FIRMWARE_FILE))
 		{
 			reply.printf("File %s not found", WIFI_FIRMWARE_FILE);
-			return false;
+			return GCodeResult::error;
 		}
 #endif
 #if HAS_AUX_DEVICES
-		if ((moduleMap & (1 << PanelDueFirmwareModule)) != 0
-# if HAS_LINUX_INTERFACE
-				&& !reprap.UsingLinuxInterface()
-# endif
-				&& !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, PANEL_DUE_FIRMWARE_FILE))
+		if ((moduleMap & (1 << PanelDueFirmwareModule)) != 0)
 		{
-			reply.printf("File %s not found", PANEL_DUE_FIRMWARE_FILE);
-			return false;
+			if (!reprap.GetPlatform().IsAuxEnabled(serialChannel-1) || reprap.GetPlatform().IsAuxRaw(serialChannel-1))
+			{
+				reply.printf("Aux port %d is not enabled or not in PanelDue mode", serialChannel-1);
+				return GCodeResult::error;
+			}
+			if (!reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, PANEL_DUE_FIRMWARE_FILE))
+			{
+				reply.printf("File %s not found", PanelDueUpdater::firmwareFilename);
+				return GCodeResult::error;
+			}
 		}
 #endif
-		return true;
+		return GCodeResult::ok;
 	}
 
 	bool IsReady() noexcept
@@ -76,45 +83,46 @@ namespace FirmwareUpdater
 		return true;
 	}
 
-	void UpdateModule(unsigned int module) noexcept
+	void UpdateModule(unsigned int module, const size_t serialChannel) noexcept
 	{
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
-# ifdef DUET_NG
-		if (reprap.GetPlatform().IsDuetWiFi())
+		switch(module)
 		{
-# endif
-			switch(module)
-			{
 # if HAS_WIFI_NETWORKING
-			case WifiExternalFirmwareModule:
+		case WifiExternalFirmwareModule:
+# ifdef DUET_NG
+			if (reprap.GetPlatform().IsDuetWiFi())
+# endif
+			{
 				reprap.GetNetwork().ResetWiFiForUpload(true);
-				break;
+			}
+			break;
 
-			case WifiFirmwareModule:
+		case WifiFirmwareModule:
+# ifdef DUET_NG
+			if (reprap.GetPlatform().IsDuetWiFi())
+# endif
+			{
+				WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
+				if (uploader != nullptr)
 				{
-					WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
-					if (uploader != nullptr)
-					{
-						uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, DEFAULT_SYS_DIR, WifiFirmwareUploader::FirmwareAddress);
-					}
+					uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, DEFAULT_SYS_DIR, WifiFirmwareUploader::FirmwareAddress);
 				}
-				break;
+			}
+			break;
 # endif
 # if HAS_AUX_DEVICES
-			case PanelDueFirmwareModule:
+		case PanelDueFirmwareModule:
+			{
+				Platform& platform = reprap.GetPlatform();
+				if (platform.GetPanelDueUpdater() == nullptr)
 				{
-					Platform& platform = reprap.GetPlatform();
-					if (platform.GetPanelDueUpdater() == nullptr)
-					{
-						platform.InitPanelDueUpdater();
-					}
-					platform.GetPanelDueUpdater()->Start();
+					platform.InitPanelDueUpdater();
 				}
-# endif
+				platform.GetPanelDueUpdater()->Start(serialChannel);
 			}
-# ifdef DUET_NG
-		}
 # endif
+		}
 #endif
 	}
 }
