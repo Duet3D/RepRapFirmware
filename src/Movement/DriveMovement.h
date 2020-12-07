@@ -8,7 +8,8 @@
 #ifndef DRIVEMOVEMENT_H_
 #define DRIVEMOVEMENT_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
+#include <Tasks.h>
 
 class LinearDeltaKinematics;
 
@@ -134,6 +135,9 @@ public:
 
 	DriveMovement(DriveMovement *next) noexcept;
 
+	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
+	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
+
 	bool CalcNextStepTimeCartesian(const DDA &dda, bool live) noexcept SPEED_CRITICAL;
 	bool CalcNextStepTimeDelta(const DDA &dda, bool live) noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
@@ -153,9 +157,7 @@ public:
 #endif
 
 	static void InitialAllocate(unsigned int num) noexcept;
-	static int NumFree() noexcept { return numFree; }
-	static int MinFree() noexcept { return minFree; }
-	static void ResetMinFree() noexcept { minFree = numFree; }
+	static unsigned int NumCreated() noexcept { return numCreated; }
 	static DriveMovement *Allocate(size_t p_drive, DMState st) noexcept;
 	static void Release(DriveMovement *item) noexcept;
 
@@ -164,8 +166,7 @@ private:
 	bool CalcNextStepTimeDeltaFull(const DDA &dda, bool live) noexcept SPEED_CRITICAL;
 
 	static DriveMovement *freeList;
-	static int numFree;
-	static int minFree;
+	static unsigned int numCreated;
 
 	// Parameters common to Cartesian, delta and extruder moves
 
@@ -321,7 +322,6 @@ inline void DriveMovement::Release(DriveMovement *item) noexcept
 {
 	item->nextDM = freeList;
 	freeList = item;
-	++numFree;
 }
 
 #if HAS_SMART_DRIVERS

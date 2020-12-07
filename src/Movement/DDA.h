@@ -8,10 +8,11 @@
 #ifndef DDA_H_
 #define DDA_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
 #include "DriveMovement.h"
 #include "StepTimer.h"
-#include "GCodes/GCodes.h"			// for class RawMove
+#include <Tasks.h>
+#include <GCodes/GCodes.h>			// for class RawMove
 
 #ifdef DUET_NG
 # define DDA_LOG_PROBE_CHANGES	0
@@ -38,6 +39,9 @@ public:
 	};
 
 	DDA(DDA* n) noexcept;
+
+	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
+	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
 
 	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept  SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxDriversPerAxis]) noexcept;		// Set up a leadscrew motor move

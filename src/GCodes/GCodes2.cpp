@@ -3614,6 +3614,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 #endif
 
+		case 595:	// Configure movement queue size
+			result = reprap.GetMove().ConfigureMovementQueue(gb, reply);
+			break;
+
 		// For cases 600 and 601, see 226
 
 		// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.

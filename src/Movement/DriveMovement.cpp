@@ -16,35 +16,33 @@
 // Static members
 
 DriveMovement *DriveMovement::freeList = nullptr;
-int DriveMovement::numFree = 0;
-int DriveMovement::minFree = 0;
+unsigned int DriveMovement::numCreated = 0;
 
 void DriveMovement::InitialAllocate(unsigned int num) noexcept
 {
-	while (num != 0)
+	while (num > numCreated)
 	{
 		freeList = new DriveMovement(freeList);
-		++numFree;
-		--num;
+		++numCreated;
 	}
-	ResetMinFree();
 }
 
+// Allocate a DM, from the freelist if possible, else create a new one
 DriveMovement *DriveMovement::Allocate(size_t p_drive, DMState st) noexcept
 {
-	DriveMovement * const dm = freeList;
+	DriveMovement * dm = freeList;
 	if (dm != nullptr)
 	{
 		freeList = dm->nextDM;
-		--numFree;
-		if (numFree < minFree)
-		{
-			minFree = numFree;
-		}
 		dm->nextDM = nullptr;
-		dm->drive = (uint8_t)p_drive;
-		dm->state = st;
 	}
+	else
+	{
+		dm = new DriveMovement(nullptr);
+		++numCreated;
+	}
+	dm->drive = (uint8_t)p_drive;
+	dm->state = st;
 	return dm;
 }
 
