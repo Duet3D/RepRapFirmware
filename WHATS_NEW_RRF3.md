@@ -1,3 +1,28 @@
+RepRapFirmware 3.2RC1
+=====================
+
+Upgrade notes:
+- [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.2RC1 also
+- [DUET + SBC] The SPI protocol has changed, therefore versions of DCS prior to 3.2RC1 will be unable to communicate with this version of RRF
+
+Known issues:
+- [Duet + SBC] The "files" command does not work in menu files for 12864 displays
+
+New features:
+- New M595 command is provided to increase the length of the movement queue and to pre-allocate DriveMovement objects
+- The number of DriveMovement objects pre-allocated is reduced to save memory. If the system runs out of DrivemMovement objects, it will try to allocate new ones dynamically.
+- DDAs and DriveMovement objects are now alocated from a non-freeable memory pool to reduce memory overhead, saving several hundred bytes of RAM
+- CORS headers are only sent in HTTP responses if explictly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
+- Added aux port diagnostics (overrun and framing errors) to M122 report
+- [Duet 3 Mini] Added data cache hit count to M122 report
+- [Duet + SBC] 12864 displays are now supported (but see under Known Issues)
+
+Bug fixes:
+- Fixed crash that occured on some systems when M918 was used to configure a 12864 display but no SD card was present
+- After updating PanelDue firmware with M997 S4 the PanelDue did not always reset automatically
+- If M997 S4 was used but no aux port was configured, the firmware could reset after 20 seconds
+- [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
+
 RepRapFirmware 3.2-beta4.1
 ==========================
 
