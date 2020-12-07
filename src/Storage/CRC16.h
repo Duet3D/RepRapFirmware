@@ -3,6 +3,8 @@
  *
  *  Created on: 4 Dec 2020
  *      Author: David
+ *
+ * This calculates CRC16 CCIT with initial CRC value Zero.
  */
 
 #ifndef SRC_STORAGE_CRC16_H_
@@ -20,7 +22,7 @@ public:
 	~CRC16();
 	void Update(char c) noexcept;
 	void Update(const char *c, size_t len) noexcept;
-	void Reset(uint16_t initialValue = 0xFFFF) noexcept;
+	void Reset(uint16_t initialValue = 0) noexcept;
 	uint16_t Get() const noexcept;
 };
 

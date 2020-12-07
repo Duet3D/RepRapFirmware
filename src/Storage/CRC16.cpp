@@ -54,7 +54,7 @@ CRC16::~CRC16()
 
 void CRC16::Update(char c) noexcept
 {
-	crc = (uint16_t)((crc >> 8) ^ crc16_table[(crc ^ c) & 0x00FF]);
+	crc = (uint16_t)((crc << 8) ^ crc16_table[((crc >> 8) ^ c) & 0x00ff]);
 }
 
 void CRC16::Update(const char *c, size_t len) noexcept
@@ -63,7 +63,7 @@ void CRC16::Update(const char *c, size_t len) noexcept
 	uint16_t locCrc = crc;
 	while (len != 0)
 	{
-		locCrc = (uint16_t)((locCrc >> 8) ^ crc16_table[(locCrc ^ *c++) & 0x00FF]);
+		locCrc = (uint16_t)((locCrc << 8) ^ crc16_table[((locCrc >> 8) ^ *c++) & 0x00ff]);
 		--len;
 	}
 	crc = locCrc;
