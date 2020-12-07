@@ -763,12 +763,12 @@ bool DataTransfer::IsReady() noexcept
 				break;
 			}
 
-			const uint16_t checksum = CalcCRC16(reinterpret_cast<const char *>(&rxHeader), sizeof(TransferHeader) - sizeof(uint16_t));
-			if (rxHeader.checksumHeader != checksum)
+			const uint32_t checksum = CalcCRC32(reinterpret_cast<const char *>(&rxHeader), sizeof(TransferHeader) - sizeof(uint32_t));
+			if (rxHeader.crcHeader != checksum)
 			{
 				if (reprap.Debug(moduleLinuxInterface))
 				{
-					debugPrintf("Bad header checksum (expected %04" PRIx32 ", got %04" PRIx32 ")\n", (uint32_t)rxHeader.checksumHeader, (uint32_t)checksum);
+					debugPrintf("Bad header CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcHeader, checksum);
 				}
 				ExchangeResponse(TransferResponse::BadHeaderChecksum);
 				break;
@@ -848,12 +848,12 @@ bool DataTransfer::IsReady() noexcept
 				break;
 			}
 
-			const uint16_t checksum = CalcCRC16(rxBuffer, rxHeader.dataLength);
-			if (rxHeader.checksumData != checksum)
+			const uint32_t checksum = CalcCRC32(rxBuffer, rxHeader.dataLength);
+			if (rxHeader.crcData != checksum)
 			{
 				if (reprap.Debug(moduleLinuxInterface))
 				{
-					debugPrintf("Bad data checksum (expected %04" PRIx32 ", got %04" PRIx32 ")\n", (uint32_t)rxHeader.checksumData, (uint32_t)checksum);
+					debugPrintf("Bad data CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcData, checksum);
 				}
 				ExchangeResponse(TransferResponse::BadDataChecksum);
 				break;
@@ -937,15 +937,15 @@ void DataTransfer::StartNextTransfer() noexcept
 	rxHeader.numPackets = 0;
 	rxHeader.protocolVersion = 0;
 	rxHeader.dataLength = 0;
-	rxHeader.checksumData = 0;
-	rxHeader.checksumHeader = 0;
+	rxHeader.crcData = 0;
+	rxHeader.crcHeader = 0;
 
 	// Set up TX transfer header
 	txHeader.numPackets = packetId;
 	txHeader.sequenceNumber++;
 	txHeader.dataLength = txPointer;
-	txHeader.checksumData = CalcCRC16(txBuffer, txPointer);
-	txHeader.checksumHeader = CalcCRC16(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint16_t));
+	txHeader.crcData = CalcCRC32(txBuffer, txPointer);
+	txHeader.crcHeader = CalcCRC32(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint32_t));
 
 	// Begin SPI transfer
 	ExchangeHeader();
@@ -1399,9 +1399,9 @@ template<typename T> T *DataTransfer::WriteDataHeader() noexcept
 	return header;
 }
 
-uint16_t DataTransfer::CalcCRC16(const char *buffer, size_t length) const noexcept
+uint32_t DataTransfer::CalcCRC32(const char *buffer, size_t length) const noexcept
 {
-	CRC16 crc;
+	CRC32 crc;
 	crc.Update(buffer, length);
 	return crc.Get();
 }
