@@ -1131,19 +1131,19 @@ void HttpResponder::ProcessRequest() noexcept
 
 		if (StringEqualsIgnoreCase(commandWords[0], "OPTIONS"))
 		{
-			outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+			outBuf->copy(	"HTTP/1.1 204 No Content\r\n"
 							"Allow: OPTIONS, GET, POST\r\n"
 							"Cache-Control: no-cache, no-store, must-revalidate\r\n"
 							"Pragma: no-cache\r\n"
 							"Expires: 0\r\n"
 							"Content-Length: 0\r\n"
-							"\r\n"
 						);
 			if (reprap.GetNetwork().GetCorsSite() != nullptr)
 			{
 				outBuf->catf("Access-Control-Allow-Headers: Content-Type\r\n");
 				AddCorsHeader();
 			}
+			outBuf->cat("\r\n");
 			if (outBuf->HadOverflow())
 			{
 				OutputBuffer::ReleaseAll(outBuf);

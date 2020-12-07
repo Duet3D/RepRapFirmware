@@ -142,7 +142,6 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 // Report the protocols and ports in use
 GCodeResult W5500Interface::ReportProtocols(const StringRef& reply) const noexcept
 {
-	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
 		ReportOneProtocol(i, reply);
