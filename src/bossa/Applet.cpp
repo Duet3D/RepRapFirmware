@@ -30,7 +30,7 @@
 
 Applet::Applet(Samba& samba,
                uint32_t addr,
-               uint8_t* code,
+               const uint8_t* code,
                uint32_t size,
                uint32_t start,
                uint32_t stack,
