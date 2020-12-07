@@ -35,7 +35,7 @@
 #endif
 
 #if HAS_WIFI_NETWORKING
-# include "FirmwareUpdater.h"
+# include <Comms/FirmwareUpdater.h>
 #endif
 
 #if SUPPORT_12864_LCD
@@ -3538,7 +3538,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_HTTP
 				if (gb.Seen('C'))
 				{
-					String<16> corsSite;
+					String<StringLength20> corsSite;
 					gb.GetQuotedString(corsSite.GetRef());
 					reprap.GetNetwork().SetCorsSite(corsSite.c_str());
 					seen = true;

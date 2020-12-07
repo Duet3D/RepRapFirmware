@@ -19,8 +19,8 @@
 #include "Tasks.h"
 #include "Hardware/I2C.h"
 
-#if HAS_WIFI_NETWORKING
-# include "FirmwareUpdater.h"
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+# include <Comms/FirmwareUpdater.h>
 #endif
 
 #if SUPPORT_TMC2660

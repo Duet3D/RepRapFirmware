@@ -9,7 +9,7 @@
 #include "Endstops/ZProbe.h"
 
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
-# include "FirmwareUpdater.h"
+# include <Comms/FirmwareUpdater.h>
 #endif
 
 // Execute a step of the state machine
