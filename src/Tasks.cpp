@@ -243,6 +243,21 @@ const char* Tasks::GetHeapTop() noexcept
 	return heapTop;
 }
 
+// Allocate memory permanently. Using this saves about 8 bytes per object. You must not call free() on the returned object.
+// It doesn't try to allocate from the free list maintained by malloc, only from virgin memory.
+void *Tasks::AllocPermanent(size_t sz, std::align_val_t align) noexcept
+{
+	GetMallocMutex();
+	char *newHeapLimit = reinterpret_cast<char *>(reinterpret_cast<uint32_t>(heapLimit - sz) & ~((uint32_t)align - 1));
+	if (newHeapLimit < heapTop)
+	{
+		OutOfMemoryHandler();
+	}
+	heapLimit = newHeapLimit;
+	ReleaseMallocMutex();
+	return newHeapLimit;
+}
+
 // Write data about the current task
 void Tasks::Diagnostics(MessageType mtype) noexcept
 {
