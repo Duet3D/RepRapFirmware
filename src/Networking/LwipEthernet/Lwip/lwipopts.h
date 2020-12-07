@@ -121,7 +121,7 @@
  * MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB_LISTEN         4
+#define MEMP_NUM_TCP_PCB_LISTEN         7
 
 /**
  * MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments.
