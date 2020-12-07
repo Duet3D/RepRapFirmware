@@ -428,15 +428,15 @@ void GCodeBuffer::GetUnprecedentedString(const StringRef& str, bool allowEmpty) 
 }
 
 // Get and copy a quoted string
-void GCodeBuffer::GetQuotedString(const StringRef& str) THROWS(GCodeException)
+void GCodeBuffer::GetQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
-	PARSER_OPERATION(GetQuotedString(str));
+	PARSER_OPERATION(GetQuotedString(str, allowEmpty));
 }
 
 // Get and copy a string which may or may not be quoted
-void GCodeBuffer::GetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
+void GCodeBuffer::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
-	PARSER_OPERATION(GetPossiblyQuotedString(str));
+	PARSER_OPERATION(GetPossiblyQuotedString(str, allowEmpty));
 }
 
 void GCodeBuffer::GetReducedString(const StringRef& str) THROWS(GCodeException)
