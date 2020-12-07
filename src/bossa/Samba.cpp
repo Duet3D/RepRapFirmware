@@ -29,6 +29,7 @@
 #include "Samba.h"
 
 #include "RepRapFirmware.h"
+#include "Storage/CRC16.h"
 
 // XMODEM definitions
 #define BLK_SIZE    128
@@ -145,25 +146,6 @@ Samba::readWord(uint32_t addr) THROWS(GCodeException)
     return value;
 }
 
-bool
-Samba::crc16Check(const uint8_t *blk) noexcept
-{
-    uint16_t receivedCRC16 = blk[BLK_SIZE + 3] << 8 | blk[BLK_SIZE + 4];
-    crc16Calculator.Reset(0);
-    crc16Calculator.Update((char*) &blk[3], BLK_SIZE);
-    return (crc16Calculator.Get() == receivedCRC16);
-}
-
-void
-Samba::crc16Add(uint8_t *blk) noexcept
-{
-	crc16Calculator.Reset(0);
-	crc16Calculator.Update((char*) &blk[3], BLK_SIZE);
-    auto checksum = crc16Calculator.Get();
-    blk[BLK_SIZE + 3] = (checksum >> 8) & 0xff;
-    blk[BLK_SIZE + 4] = checksum & 0xff;
-}
-
 void
 Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
 {
@@ -171,6 +153,7 @@ Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
     uint32_t blkNum = 1;
     int retries;
     int bytes;
+    CRC16 crc16;
 
     while (size > 0)
     {
@@ -180,10 +163,13 @@ Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
                 _port->put(START);
 
             bytes = _port->read(blk, sizeof(blk));
+            crc16.Reset(0);
+            crc16.Update((char*) &blk[3], BLK_SIZE);
+            uint16_t receivedCRC16 = blk[BLK_SIZE + 3] << 8 | blk[BLK_SIZE + 4];
             if (bytes == sizeof(blk) &&
                 blk[0] == SOH &&
                 blk[1] == (blkNum & 0xff) &&
-                crc16Check(blk))
+				crc16.Get() == receivedCRC16)
                 break;
 
             if (blkNum != 1)
@@ -229,6 +215,7 @@ Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
     if (retries == MAX_RETRIES)
         throw SambaError("Samba::writeXmodem: max retries reached getting START signal");
 
+    CRC16 crc16;
     while (size > 0)
     {
         blk[0] = SOH;
@@ -237,7 +224,12 @@ Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
         memmove(&blk[3], buffer, min(size, BLK_SIZE));
         if (size < BLK_SIZE)
             memset(&blk[3] + size, 0, BLK_SIZE - size);
-        crc16Add(blk);
+
+        crc16.Reset(0);
+    	crc16.Update((char*) &blk[3], BLK_SIZE);
+        auto checksum = crc16.Get();
+        blk[BLK_SIZE + 3] = (checksum >> 8) & 0xff;
+        blk[BLK_SIZE + 4] = checksum & 0xff;
 
         for (retries = 0; retries < MAX_RETRIES; retries++)
         {

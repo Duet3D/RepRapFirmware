@@ -35,7 +35,6 @@
 #include "SerialPort.h"
 
 #include "GCodes/GCodeException.h"
-#include "Storage/CRC16.h"
 
 typedef GCodeException SambaError;
 
@@ -83,12 +82,9 @@ private:
     bool _debug;
 #endif
     SerialPort* _port;
-    CRC16 crc16Calculator;
 
     bool init() noexcept;
 
-    bool crc16Check(const uint8_t *blk) noexcept;
-    void crc16Add(uint8_t *blk) noexcept;
     void writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException);
     void readXmodem(uint8_t* buffer, int size) THROWS(GCodeException);
 
