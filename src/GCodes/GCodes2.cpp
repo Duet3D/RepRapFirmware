@@ -3538,9 +3538,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_HTTP
 				if (gb.Seen('C'))
 				{
-					String<StringLength20> corsSite;
-					gb.GetQuotedString(corsSite.GetRef());
-					reprap.GetNetwork().SetCorsSite(corsSite.c_str());
+					try
+					{
+						String<StringLength20> corsSite;
+						gb.GetQuotedString(corsSite.GetRef());
+						reprap.GetNetwork().SetCorsSite(corsSite.c_str());
+					}
+					catch (GCodeException)
+					{
+						reprap.GetNetwork().SetCorsSite("");
+					}
 					seen = true;
 				}
 #endif
