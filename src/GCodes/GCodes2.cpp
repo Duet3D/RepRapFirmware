@@ -3543,7 +3543,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_HTTP
 				if (gb.Seen('C'))
 				{
-					String<16> corsSite;
+					String<StringLength20> corsSite;
 					gb.GetQuotedString(corsSite.GetRef());
 					reprap.GetNetwork().SetCorsSite(corsSite.c_str());
 					seen = true;
@@ -3576,11 +3576,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_HTTP
 					if (reprap.GetNetwork().GetCorsSite() != nullptr)
 					{
-						reply.printf("CORS enabled for site '%s', ", reprap.GetNetwork().GetCorsSite());
+						reply.printf("CORS enabled for site '%s'", reprap.GetNetwork().GetCorsSite());
 					}
 					else
 					{
-						reply.copy("CORS disabled, ");
+						reply.copy("CORS disabled");
 					}
 #endif
 					// Default to reporting current protocols if P or S parameter missing

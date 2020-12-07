@@ -143,7 +143,7 @@ private:
 	uint32_t fastLoop, slowLoop;
 
 #if SUPPORT_HTTP
-	String<16> corsSite;
+	String<StringLength20> corsSite;
 #endif
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 };

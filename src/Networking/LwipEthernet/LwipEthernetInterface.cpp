@@ -262,7 +262,6 @@ void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 // Report the protocols and ports in use
 GCodeResult LwipEthernetInterface::ReportProtocols(const StringRef& reply) const noexcept
 {
-	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
 		ReportOneProtocol(i, reply);
