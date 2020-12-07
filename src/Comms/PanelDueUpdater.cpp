@@ -12,10 +12,6 @@
 #include <Platform.h>
 #include <RepRap.h>
 
-#if !ALLOW_OTHER_AUX
- constexpr uint32_t serialChannel = 1;
-#endif
-
 class AuxSerialPort : public SerialPort
 {
 public:
@@ -102,10 +98,8 @@ void DebugObserver::onProgress(int num, int div) noexcept
 
 PanelDueUpdater::PanelDueUpdater() noexcept
 	:
-#if ALLOW_OTHER_AUX
-		serialChannel(NumSerialChannels+1) ,
-#endif
-		currentBaudRate(0)
+		serialChannel(NumSerialChannels+1)
+		, currentBaudRate(0)
 		, samba(nullptr)
 		, serialPort(nullptr)
 		, device(nullptr)
@@ -132,9 +126,7 @@ void PanelDueUpdater::Start(const uint32_t serialChan) noexcept
 	{
 		return;
 	}
-#if ALLOW_OTHER_AUX
 	serialChannel = serialChan;
-#endif
 	state = FlashState::eraseAndReset;
 }
 
@@ -145,12 +137,16 @@ void PanelDueUpdater::Spin() noexcept
 		switch (state.RawValue())
 		{
 		case FlashState::eraseAndReset:
-			reprap.GetPlatform().Message(GenericMessage, "Sending Erase-and-Reset command to PanelDue\n");
+			{
+				reprap.GetPlatform().Message(GenericMessage, "Sending Erase-and-Reset command to PanelDue\n");
 
-			// Since writing messages via AppendAuxReply is disabled while flashing we need to send it directly
-			GetAuxPort()->write(panelDueCommandEraseAndReset);
-			state = FlashState::waitAfterEraseAndReset;
-			erasedAndResetAt = millis();
+				// Since writing messages via AppendAuxReply is disabled while flashing we need to send it directly
+				auto auxPort = GetAuxPort();
+				auxPort->write(panelDueCommandEraseAndReset);
+				auxPort->flush();
+				state = FlashState::waitAfterEraseAndReset;
+				erasedAndResetAt = millis();
+			}
 			break;
 
 		case FlashState::waitAfterEraseAndReset:
@@ -179,7 +175,6 @@ void PanelDueUpdater::Spin() noexcept
 				}
 
 				samba = new Samba();
-				samba->setDebug(DEBUG_BOSSA);
 
 				serialPort = new AuxSerialPort(*auxPort);
 				samba->connect(serialPort);
@@ -248,6 +243,7 @@ void PanelDueUpdater::Spin() noexcept
 		case FlashState::bossaReset:
 			reprap.GetPlatform().Message(GenericMessage, "Restarting PanelDue\n");
 			device->reset();
+			GetAuxPort()->flush();
 			state = FlashState::done;
 			break;
 
@@ -265,9 +261,7 @@ void PanelDueUpdater::Spin() noexcept
 				auto auxPort = GetAuxPort();
 				auxPort->SetInterruptCallback(currentInterruptCallbackFn);
 				currentInterruptCallbackFn = nullptr;
-#if ALLOW_OTHER_AUX
 				serialChannel = NumSerialChannels+1;
-#endif
 				currentBaudRate = 0;
 
 				// Delete all objects we new'd
@@ -305,7 +299,7 @@ void PanelDueUpdater::Spin() noexcept
 #endif
 		if (state == FlashState::setup)
 		{
-			reprap.GetPlatform().Message(ErrorMessage, "Failed to communicate with PanelDue bootloader (no START signal received). Please press the Erase and Reset switches on PanelDue.");
+			reprap.GetPlatform().Message(ErrorMessage, "Failed to communicate with PanelDue bootloader (no START signal received). Please try again or press the Erase and Reset switches on PanelDue.");
 		}
 		else
 		{
@@ -318,13 +312,11 @@ void PanelDueUpdater::Spin() noexcept
 UARTClass* PanelDueUpdater::GetAuxPort() noexcept
 {
 	return
-#if ALLOW_OTHER_AUX
 			serialChannel == 0 || serialChannel > NumSerialChannels ? nullptr :
-# ifdef SERIAL_AUX2_DEVICE
+#ifdef SERIAL_AUX2_DEVICE
 			serialChannel == 2 ? &SERIAL_AUX2_DEVICE :
-# endif
 #endif
-			&SERIAL_AUX_DEVICE;
+			&SERIAL_AUX_DEVICE;	// Channel 1
 }
 
 #endif

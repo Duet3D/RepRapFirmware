@@ -38,6 +38,7 @@
 
 typedef GCodeException SambaError;
 
+#define DEBUG_BOSSA (0)
 
 class Samba
 {
@@ -56,7 +57,9 @@ public:
 
     void go(uint32_t addr) THROWS(GCodeException);
 
+#if DEBUG_BOSSA
     void setDebug(bool debug) noexcept { _debug = debug; }
+#endif
 
     const SerialPort& getSerialPort() noexcept { return *_port; }
 
@@ -75,7 +78,9 @@ private:
     bool _canWriteBuffer;
     bool _canChecksumBuffer;
     int _readBufferSize;
+#if DEBUG_BOSSA
     bool _debug;
+#endif
     SerialPort* _port;
 
     bool init() noexcept;

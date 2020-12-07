@@ -46,14 +46,11 @@
 
 #define min(a, b)   ((a) < (b) ? (a) : (b))
 
-#define printf debugPrintf
-
 Samba::Samba() noexcept :
     _canChipErase(false),
     _canWriteBuffer(false),
     _canChecksumBuffer(false),
-    _readBufferSize(0),
-    _debug(false)
+    _readBufferSize(0)
 {
 }
 
@@ -73,8 +70,10 @@ Samba::init() noexcept
     _port->read(dummy, sizeof(dummy));
 
     // Set binary mode
-    if (_debug)
-    	printf("Set binary mode\n");
+#if DEBUG_BOSSA
+	debugPrintf("Set binary mode\n");
+#endif
+
     cmd[0] = 'N';
     cmd[1] = '#';
     _port->write(cmd, 2);
@@ -93,8 +92,9 @@ Samba::connect(SerialPort* port, int bps) noexcept
     // Try the serial port at slower speed
     if (_port->open(bps) && init())
     {
-        if (_debug)
-        	printf("Connected at %d baud\n", bps);
+#if DEBUG_BOSSA
+		debugPrintf("Connected at %d baud\n", bps);
+#endif
         return true;
     }
 
@@ -114,8 +114,9 @@ Samba::writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException)
 {
     uint8_t cmd[20];
 
-    if (_debug)
-        printf("%s(addr=%#" PRIx32 ",value=%#" PRIx32 ")\n", __FUNCTION__, addr, value);
+#if DEBUG_BOSSA
+	debugPrintf("%s(addr=%#" PRIx32 ",value=%#" PRIx32 ")\n", __FUNCTION__, addr, value);
+#endif
 
     SafeSnprintf((char*) cmd, sizeof(cmd), "W%08" PRIX32 ",%08" PRIX32 "#", addr, value);
     if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
@@ -137,8 +138,9 @@ Samba::readWord(uint32_t addr) THROWS(GCodeException)
 
     value = (cmd[3] << 24 | cmd[2] << 16 | cmd[1] << 8 | cmd[0] << 0);
 
-    if (_debug)
-        printf("%s(addr=%#" PRIx32 ")=%#" PRIx32 "\n", __FUNCTION__, addr, value);
+#if DEBUG_BOSSA
+	debugPrintf("%s(addr=%#" PRIx32 ")=%#" PRIx32 "\n", __FUNCTION__, addr, value);
+#endif
 
     return value;
 }
@@ -322,8 +324,9 @@ Samba::read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException)
     uint8_t cmd[20];
     int chunk;
 
-    if (_debug)
-        printf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
+#if DEBUG_BOSSA
+	debugPrintf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
+#endif
 
     while (size > 0)
     {
@@ -350,8 +353,9 @@ Samba::write(uint32_t addr, const uint8_t* buffer, int size) THROWS(GCodeExcepti
 {
     uint8_t cmd[20];
 
-    if (_debug)
-        printf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
+#if DEBUG_BOSSA
+	debugPrintf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
+#endif
 
     SafeSnprintf((char*) cmd, sizeof(cmd), "S%08" PRIX32 ",%08X#", addr, size);
     if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
@@ -367,8 +371,9 @@ Samba::go(uint32_t addr) THROWS(GCodeException)
 {
     uint8_t cmd[11];
 
-    if (_debug)
-        printf("%s(addr=%#" PRIx32 ")\n", __FUNCTION__, addr);
+#if DEBUG_BOSSA
+	debugPrintf("%s(addr=%#" PRIx32 ")\n", __FUNCTION__, addr);
+#endif
 
     SafeSnprintf((char*) cmd, sizeof(cmd), "G%08" PRIX32 "#", addr);
     if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)

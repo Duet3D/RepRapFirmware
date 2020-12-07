@@ -56,11 +56,14 @@ void GCodes::CommandEmergencyStop(UARTClass *p) noexcept
 #endif
 
 GCodes::GCodes(Platform& p) noexcept :
-	platform(p), machineType(MachineType::fff), active(false),
-#if HAS_VOLTAGE_MONITOR
-	powerFailScript(nullptr),
+#if HAS_AUX_DEVICES
+	serialChannelForPanelDueFlashing(1),
 #endif
-	isFlashing(false), isFlashingPanelDue(false), lastFilamentError(FilamentSensorStatus::ok), lastWarningMillis(0), atxPowerControlled(false)
+	platform(p), machineType(MachineType::fff), active(false)
+#if HAS_VOLTAGE_MONITOR
+	, powerFailScript(nullptr)
+#endif
+	, isFlashing(false), isFlashingPanelDue(false), lastFilamentError(FilamentSensorStatus::ok), lastWarningMillis(0), atxPowerControlled(false)
 #if HAS_MASS_STORAGE
 	, sdTimingFile(nullptr)
 #endif
