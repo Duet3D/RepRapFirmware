@@ -8,6 +8,8 @@
 #include "DDARing.h"
 #include "RepRap.h"
 #include "Move.h"
+#include <Tasks.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMotion.h"
@@ -89,6 +91,61 @@ void DDARing::Exit() noexcept
 		(void)checkPointer->Free();
 		checkPointer = checkPointer->GetNext();
 	}
+}
+
+GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	uint32_t numDdasWanted = 0, numDMsWanted = 0;
+	gb.TryGetUIValue('P', numDdasWanted, seen);
+	gb.TryGetUIValue('S', numDMsWanted, seen);
+	if (seen)
+	{
+		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+
+		ptrdiff_t memoryNeeded = 0;
+		if (numDdasWanted > numDdasInRing)
+		{
+			memoryNeeded += (numDdasWanted - numDdasInRing) * (sizeof(DDA) + 8);
+		}
+		if (numDMsWanted > DriveMovement::NumCreated())
+		{
+			memoryNeeded += (numDMsWanted - DriveMovement::NumCreated()) * (sizeof(DriveMovement) + 8);
+		}
+		if (memoryNeeded != 0)
+		{
+			memoryNeeded += 1024;					// allow some margin
+			const ptrdiff_t memoryAvailable = Tasks::GetNeverUsedRam();
+			if (memoryNeeded >= memoryAvailable)
+			{
+				reply.printf("insufficient RAM (available %d, needed %d)", memoryAvailable, memoryNeeded);
+				return GCodeResult::error;
+			}
+
+			// Allocate the extra DDAs and put them in the ring.
+			// We must be careful that addPointer->next points to the same DDA as before.
+			//TODO can we combine this with the code in Init1?
+			while (numDdasWanted > numDdasInRing)
+			{
+				DDA * const newDda = new DDA(addPointer);
+				newDda->SetPrevious(addPointer->GetPrevious());
+				addPointer->GetPrevious()->SetNext(newDda);
+				addPointer->SetPrevious(newDda);
+				++numDdasInRing;
+			}
+
+			// Allocate the extra DMs
+			DriveMovement::InitialAllocate(numDMsWanted);		// this will only create any extra ones wanted
+		}
+	}
+	else
+	{
+		reply.printf("DDAs %u, DMs %u", numDdasInRing, DriveMovement::NumCreated());
+	}
+	return GCodeResult::ok;
 }
 
 void DDARing::RecycleDDAs() noexcept
@@ -269,7 +326,6 @@ void DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsig
 	// If the number of prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
-		   && DriveMovement::NumFree() >= (int)MaxAxesPlusExtruders	// check that we won't run out of DMs
 		   && moveTimeLeft < (int32_t)UsualMinimumPreparedTime		// prepare moves one eighth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring
 		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < (int32_t)AbsoluteMinimumPreparedTime)

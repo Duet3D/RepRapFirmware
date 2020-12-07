@@ -38,6 +38,7 @@
 
 typedef GCodeException SambaError;
 
+#define DEBUG_BOSSA (0)
 
 class Samba
 {
@@ -56,7 +57,9 @@ public:
 
     void go(uint32_t addr) THROWS(GCodeException);
 
+#if DEBUG_BOSSA
     void setDebug(bool debug) noexcept { _debug = debug; }
+#endif
 
     const SerialPort& getSerialPort() noexcept { return *_port; }
 
@@ -68,21 +71,20 @@ public:
 
     bool canChecksumBuffer() noexcept { return _canChecksumBuffer; }
     uint32_t checksumBufferSize() noexcept { return 4096; }
-    uint16_t checksumCalc(uint8_t c, uint16_t crc) noexcept;
+    uint16_t crc16Calc(const uint8_t *data, int len) noexcept;
 
 private:
     bool _canChipErase;
     bool _canWriteBuffer;
     bool _canChecksumBuffer;
     int _readBufferSize;
+#if DEBUG_BOSSA
     bool _debug;
+#endif
     SerialPort* _port;
 
     bool init() noexcept;
 
-    uint16_t crc16Calc(const uint8_t *data, int len) noexcept;
-    bool crc16Check(const uint8_t *blk) noexcept;
-    void crc16Add(uint8_t *blk) noexcept;
     void writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException);
     void readXmodem(uint8_t* buffer, int size) THROWS(GCodeException);
 

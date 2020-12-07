@@ -63,18 +63,22 @@ extern "C"
 	}
 
 	// Callback functions for LWIP (may be called from ISR)
+	// This occasionally seems to get called with a null pcb argument, so check for that here
 	static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 	{
 		LWIP_UNUSED_ARG(arg);
 		LWIP_UNUSED_ARG(err);
 
-		if (ethernetInterface->ConnectionEstablished(pcb))
+		if (pcb != nullptr)
 		{
-			// A socket has accepted this connection and will deal with it
-			return ERR_OK;
-		}
+			if (ethernetInterface->ConnectionEstablished(pcb))
+			{
+				// A socket has accepted this connection and will deal with it
+				return ERR_OK;
+			}
 
-		tcp_abort(pcb);
+			tcp_abort(pcb);
+		}
 		return ERR_ABRT;
 	}
 
@@ -201,9 +205,24 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 	if (listeningPcbs[protocol] == nullptr)
 	{
 		tcp_pcb *pcb = tcp_new();
-		tcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]);
-		listeningPcbs[protocol] = tcp_listen(pcb);
-		tcp_accept(listeningPcbs[protocol], conn_accept);
+		if (pcb == nullptr)
+		{
+			platform.Message(ErrorMessage, "unable to allocate a pcb\n");
+		}
+		else
+		{
+			tcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]);
+			pcb = tcp_listen(pcb);
+			if (pcb == nullptr)
+			{
+				platform.Message(ErrorMessage, "tcp_listen call failed\n");
+			}
+			else
+			{
+				listeningPcbs[protocol] = pcb;
+				tcp_accept(listeningPcbs[protocol], conn_accept);
+			}
+		}
 	}
 
 	switch(protocol)
@@ -590,11 +609,25 @@ void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
 	}
 
 	tcp_pcb *pcb = tcp_new();
-	tcp_bind(pcb, IP_ADDR_ANY, port);
-	listeningPcbs[NumProtocols] = tcp_listen(pcb);
-	tcp_accept(listeningPcbs[NumProtocols], conn_accept);
-
-	sockets[FtpDataSocketNumber]->Init(FtpDataSocketNumber, port, FtpDataProtocol);
+	if (pcb == nullptr)
+	{
+		platform.Message(ErrorMessage, "unable to allocate a pcb\n");
+	}
+	else
+	{
+		tcp_bind(pcb, IP_ADDR_ANY, port);
+		pcb = tcp_listen(pcb);
+		if (pcb == nullptr)
+		{
+			platform.Message(ErrorMessage, "tcp_listen call failed\n");
+		}
+		else
+		{
+			listeningPcbs[NumProtocols] = pcb;
+			tcp_accept(listeningPcbs[NumProtocols], conn_accept);
+			sockets[FtpDataSocketNumber]->Init(FtpDataSocketNumber, port, FtpDataProtocol);
+		}
+	}
 }
 
 // Close FTP data port and purge associated resources

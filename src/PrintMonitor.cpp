@@ -155,7 +155,7 @@ void PrintMonitor::Spin() noexcept
 		if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 		{
 			WriteLocker locker(printMonitorLock);
-			printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+			printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished);
 			if (!printingFileParsed)
 			{
 				return;
@@ -287,7 +287,7 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 	else
 # endif
 	{
-		printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+		printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished);
 	}
 	reprap.JobUpdated();
 #endif

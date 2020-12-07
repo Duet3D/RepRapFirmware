@@ -166,11 +166,11 @@ Move::Move() noexcept
 {
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
-	mainDDARing.Init1(DdaRingLength);
+	mainDDARing.Init1(InitialDdaRingLength);
 #if SUPPORT_ASYNC_MOVES
 	auxDDARing.Init1(AuxDdaRingLength);
 #endif
-	DriveMovement::InitialAllocate(NumDms);
+	DriveMovement::InitialAllocate(InitialNumDms);
 }
 
 void Move::Init() noexcept
@@ -435,10 +435,9 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	}
 
 	Platform& p = reprap.GetPlatform();
-	p.MessageF(mtype, "=== Move ===\nFreeDm %d (min %d), maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
-						DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, bedCompString.c_str(), (double)zShift);
+	p.MessageF(mtype, "=== Move ===\nDMs created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
+						DriveMovement::NumCreated(), longestGcodeWaitInterval, bedCompString.c_str(), (double)zShift);
 	longestGcodeWaitInterval = 0;
-	DriveMovement::ResetMinFree();
 
 #if DDA_LOG_PROBE_CHANGES
 	// Temporary code to print Z probe trigger positions
@@ -1037,6 +1036,12 @@ GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef&
 		}
 	}
 	return GCodeResult::ok;
+}
+
+// Process M595
+GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept
+{
+	return mainDDARing.ConfigureMovementQueue(gb, reply);
 }
 
 // Return the current live XYZ and extruder coordinates

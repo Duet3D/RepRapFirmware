@@ -22,12 +22,12 @@ FileInfoParser::FileInfoParser() noexcept
 }
 
 // This following method needs to be called repeatedly until it returns true - this may take a few runs
-bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
+GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
 	if (!lock)
 	{
-		return false;
+		return GCodeResult::notFinished;
 	}
 
 	if (parseState != notParsing && !StringEqualsIgnoreCase(filePath, filenameBeingParsed.c_str()))
@@ -35,7 +35,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 		// We are already parsing a different file
 		if (millis() - lastFileParseTime < MaxFileParseInterval)
 		{
-			return false;				// try again later
+			return GCodeResult::notFinished;				// try again later
 		}
 
 		// Time this client out because it has probably disconnected
@@ -50,7 +50,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 		if (MassStorage::DirectoryExists(filePath))
 		{
 			info.isValid = false;
-			return true;
+			return GCodeResult::ok;
 		}
 
 		fileBeingParsed = MassStorage::OpenFile(filePath, OpenMode::read, 0);
@@ -58,7 +58,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 		{
 			// Something went wrong - we cannot open it
 			info.isValid = false;
-			return true;
+			return GCodeResult::error;
 		}
 
 		// File has been opened, let's start now
@@ -85,7 +85,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 			fileBeingParsed->Close();
 			parsedFileInfo.incomplete = false;
 			info = parsedFileInfo;
-			return true;
+			return GCodeResult::ok;
 		}
 		parseState = parsingHeader;
 	}
@@ -117,11 +117,11 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 				const int nbytes = fileBeingParsed->Read(&buf[fileOverlapLength], sizeToRead);
 				if (nbytes != (int)sizeToRead)
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to read header of G-Code file \"%s\"\n", filePath);
+					reprap.GetPlatform().MessageF(WarningMessage, "Failed to read header of G-Code file \"%s\"\n", filePath);
 					parseState = notParsing;
 					fileBeingParsed->Close();
 					info = parsedFileInfo;
-					return true;
+					return GCodeResult::warning;
 				}
 				buf[sizeToScan] = 0;
 
@@ -210,11 +210,11 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 				const uint32_t startTime = millis();
 				if (!fileBeingParsed->Seek(thisSeekPos))
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Could not seek from end of file \"%s\"\n", filePath);
+					reprap.GetPlatform().MessageF(WarningMessage, "Could not seek from end of file \"%s\"\n", filePath);
 					parseState = notParsing;
 					fileBeingParsed->Close();
 					info = parsedFileInfo;
-					return true;
+					return GCodeResult::warning;
 				}
 				accumulatedSeekTime += millis() - startTime;
 				if (doFullSeek)
@@ -243,11 +243,11 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 				int nbytes = fileBeingParsed->Read(buf, sizeToRead);
 				if (nbytes != (int)sizeToRead)
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to read footer from G-Code file \"%s\"\n", filePath);
+					reprap.GetPlatform().MessageF(WarningMessage, "Failed to read footer from G-Code file \"%s\"\n", filePath);
 					parseState = notParsing;
 					fileBeingParsed->Close();
 					info = parsedFileInfo;
-					return true;
+					return GCodeResult::warning;
 				}
 				buf[sizeToScan] = 0;
 
@@ -320,7 +320,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 					fileBeingParsed->Close();
 					parsedFileInfo.incomplete = false;
 					info = parsedFileInfo;
-					return true;
+					return GCodeResult::ok;
 				}
 
 				// Else go back further
@@ -335,7 +335,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 			fileBeingParsed->Close();
 			info = parsedFileInfo;
 			parseState = notParsing;
-			return true;
+			return GCodeResult::ok;
 		}
 		lastFileParseTime = millis();
 	} while (!reprap.GetPrintMonitor().IsPrinting() && lastFileParseTime - loopStartTime < MAX_FILEINFO_PROCESS_TIME);
@@ -345,9 +345,9 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 		info = parsedFileInfo;				// note that the 'incomplete' flag is still set
 		fileBeingParsed->Close();
 		parseState = notParsing;
-		return true;
+		return GCodeResult::ok;
 	}
-	return false;
+	return GCodeResult::notFinished;
 }
 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.

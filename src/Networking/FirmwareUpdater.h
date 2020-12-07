@@ -9,6 +9,7 @@
 #define SRC_NETWORKING_FIRMWAREUPDATER_H_
 
 #include "RepRapFirmware.h"
+#include "GCodes/GCodeResult.h"
 
 namespace FirmwareUpdater
 {
@@ -16,9 +17,9 @@ namespace FirmwareUpdater
 	const unsigned int PanelDueFirmwareModule = 4;
 #endif
 
-	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, const StringRef& reply) noexcept;
+	GCodeResult CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, GCodeBuffer& gb, const StringRef& reply, size_t serialChannel) noexcept;
 	bool IsReady() noexcept;
-	void UpdateModule(unsigned int module) noexcept;
+	void UpdateModule(unsigned int module, const size_t serialChannel) noexcept;
 }
 
 #endif /* SRC_NETWORKING_FIRMWAREUPDATER_H_ */

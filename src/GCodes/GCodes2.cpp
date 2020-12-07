@@ -1047,12 +1047,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				String<MaxFilenameLength> filename;
 				gb.GetUnprecedentedString(filename.GetRef(), true);
-				const bool done = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
-				if (outBuf != nullptr)
-				{
-					outBuf->cat('\n');
-				}
-				result = (done) ? GCodeResult::ok : GCodeResult::notFinished;
+				result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
 # endif
 			}
 			break;
@@ -3638,6 +3633,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			result = reprap.GetMove().StartHeightFollowing(gb, reply);
 			break;
 #endif
+
+		case 595:	// Configure movement queue size
+			result = reprap.GetMove().ConfigureMovementQueue(gb, reply);
+			break;
 
 		// For cases 600 and 601, see 226
 

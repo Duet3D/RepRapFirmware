@@ -659,7 +659,7 @@ const char* HttpResponder::GetKeyValue(const char *key) const noexcept
 bool HttpResponder::SendFileInfo(bool quitEarly) noexcept
 {
 	OutputBuffer *jsonResponse = nullptr;
-	bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed.c_str(), jsonResponse, quitEarly);
+	bool gotFileInfo = (reprap.GetFileInfoResponse(filenameBeingProcessed.c_str(), jsonResponse, quitEarly) != GCodeResult::notFinished);
 	if (gotFileInfo)
 	{
 		// Got it - send the response now
