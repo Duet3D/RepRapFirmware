@@ -19,7 +19,7 @@ constexpr uint8_t LinuxFormatCode = 0x5F;			// standard format code for RRF SPI 
 constexpr uint8_t LiunxFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode
 constexpr uint8_t InvalidFormatCode = 0xC9;			// must be different from any other format code
 
-constexpr uint16_t LinuxProtocolVersion = 3;
+constexpr uint16_t LinuxProtocolVersion = 4;
 
 constexpr size_t LinuxTransferBufferSize = 8192;	// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
 static_assert(LinuxTransferBufferSize % sizeof(uint32_t) == 0, "LinuxTransferBufferSize must be a whole number of dwords");
@@ -98,8 +98,8 @@ struct TransferHeader
 	uint16_t protocolVersion;
 	uint16_t sequenceNumber;
 	uint16_t dataLength;
-	uint16_t checksumData;
-	uint16_t checksumHeader;
+	uint32_t crcData;
+	uint32_t crcHeader;
 };
 
 enum TransferResponse : uint32_t
