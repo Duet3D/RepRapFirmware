@@ -8,12 +8,13 @@
 #ifndef SRC_STORAGE_FILEINFOPARSER_H_
 #define SRC_STORAGE_FILEINFOPARSER_H_
 
-#include "RepRapFirmware.h"
-#include "GCodes/GCodeFileInfo.h"
+#include <RepRapFirmware.h>
+#include <GCodes/GCodeFileInfo.h>
+#include <GCodes/GCodeResult.h>
 
 #if HAS_MASS_STORAGE
 
-#include "RTOSIface/RTOSIface.h"
+#include <RTOSIface/RTOSIface.h>
 
 const FilePosition GCODE_HEADER_SIZE = 20000uL;		// How many bytes to read from the header - I (DC) have a Kisslicer file with a layer height comment 14Kb from the start
 const FilePosition GCODE_FOOTER_SIZE = 400000uL;	// How many bytes to read from the footer
@@ -44,8 +45,8 @@ class FileInfoParser
 public:
 	FileInfoParser() noexcept;
 
-	// The following method needs to be called repeatedly until it returns true - this may take a few runs
-	bool GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
+	// The following method needs to be called repeatedly until it doesn't return GCodeResult::notFinished - this may take a few runs
+	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
 
 	static constexpr const char* SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
 

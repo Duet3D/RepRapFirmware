@@ -953,7 +953,7 @@ Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
 	return info[vol].volMutex;
 }
 
-bool MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
+GCodeResult MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	return infoParser.GetFileInfo(filePath, info, quitEarly);
 }

@@ -58,7 +58,7 @@ namespace MassStorage
 	unsigned int GetNumFreeFiles() noexcept;
 	void Spin() noexcept;
 	Mutex& GetVolumeMutex(size_t vol) noexcept;
-	bool GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
+	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
 	void RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
 	FileWriteBuffer *AllocateWriteBuffer() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;

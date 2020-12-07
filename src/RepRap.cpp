@@ -2194,7 +2194,8 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 #endif
 
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
-bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
+// Return GCodeResult::Wating if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
+GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
@@ -2207,23 +2208,23 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			info.isValid = false;
 		}
-		else if (!MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly))
+		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly) == GCodeResult::notFinished)
 		{
 			// This may take a few runs...
-			return false;
+			return GCodeResult::notFinished;
 		}
 #else
-		return false;
+		return GCodeResult::notFinished;
 #endif
 	}
 	else if (!printMonitor->GetPrintingFileInfo(info))
 	{
-		return false;
+		return GCodeResult::notFinished;
 	}
 
 	if (!OutputBuffer::Allocate(response))
 	{
-		return false;
+		return GCodeResult::notFinished;
 	}
 
 	if (info.isValid)
@@ -2272,13 +2273,12 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 
 		response->cat(",\"generatedBy\":");
 		response->EncodeString(info.generatedBy, false);
-		response->cat('}');
+		response->cat("}\n");
+		return GCodeResult::ok;
 	}
-	else
-	{
-		response->copy("{\"err\":1}");
-	}
-	return true;
+
+	response->copy("{\"err\":1}\n");
+	return GCodeResult::warning;
 }
 
 // Helper functions to write JSON arrays

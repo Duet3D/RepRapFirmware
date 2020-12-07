@@ -1046,12 +1046,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				String<MaxFilenameLength> filename;
 				gb.GetUnprecedentedString(filename.GetRef(), true);
-				const bool done = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
-				if (outBuf != nullptr)
-				{
-					outBuf->cat('\n');
-				}
-				result = (done) ? GCodeResult::ok : GCodeResult::notFinished;
+				result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
 # endif
 			}
 			break;
