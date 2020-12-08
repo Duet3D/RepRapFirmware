@@ -75,7 +75,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 	if (state == NvmState::writeNeeded)
 	{
 # if SAM4E || SAM4S || SAME70
-		flash_write_user_signature(&buffer, sizeof(buffer)/sizeof(uint32_t));
+		flash_write_user_signature(reinterpret_cast<const uint32_t*>(&buffer));
 # elif defined(__LPC17xx__)
 		LPC_WriteSoftwareResetData(slot, buffer, sizeof(buffer));
 # else

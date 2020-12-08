@@ -207,6 +207,9 @@ void Move::Exit() noexcept
 {
 	StepTimer::DisableTimerInterrupt();
 	mainDDARing.Exit();
+#if SUPPORT_ASYNC_MOVES
+	auxDDARing.Exit();
+#endif
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	delete laserTask;
 	laserTask = nullptr;
