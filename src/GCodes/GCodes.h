@@ -465,7 +465,14 @@ private:
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
 #if HAS_AUX_DEVICES
-	uint8_t serialChannelForPanelDueFlashing;
+#if !ALLOW_ARBITRARY_PANELDUE_PORT
+	static constexpr
+#endif
+	uint8_t serialChannelForPanelDueFlashing
+#if !ALLOW_ARBITRARY_PANELDUE_PORT
+	= 1
+#endif
+	;
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(UARTClass *p) noexcept;
 #endif

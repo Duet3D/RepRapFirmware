@@ -1073,7 +1073,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		}
 	}
 #endif
-#if HAS_AUX_DEVICES && 0	// Disabled until we allow PanelDue on another port
+#if HAS_AUX_DEVICES && ALLOW_ARBITRARY_PANELDUE_PORT	// Disabled until we allow PanelDue on another port
 	if (gb.Seen('A'))
 	{
 		serialChannelForPanelDueFlashing = gb.GetLimitedUIValue('A', NumSerialChannels, 1);

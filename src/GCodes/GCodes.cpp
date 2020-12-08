@@ -56,7 +56,7 @@ void GCodes::CommandEmergencyStop(UARTClass *p) noexcept
 #endif
 
 GCodes::GCodes(Platform& p) noexcept :
-#if HAS_AUX_DEVICES
+#if HAS_AUX_DEVICES && ALLOW_ARBITRARY_PANELDUE_PORT
 	serialChannelForPanelDueFlashing(1),
 #endif
 	platform(p), machineType(MachineType::fff), active(false)
