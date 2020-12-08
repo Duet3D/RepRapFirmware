@@ -14,7 +14,7 @@
 #include <Storage/CRC32.h>
 
 #if SAM4E || SAM4S || SAME70
-# include "sam/services/flash_efc/flash_efc.h"		// for efc_enable_cloe()
+# include <efc/efc.h>		// for efc_enable_cloe()
 #endif
 
 #if SAME5x

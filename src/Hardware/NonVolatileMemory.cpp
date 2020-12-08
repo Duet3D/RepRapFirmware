@@ -9,7 +9,7 @@
 
 #if SAM4E || SAM4S || SAME70
 # include <Cache.h>
-# include <flash_efc.h>
+# include <Flash.h>
 #endif
 
 NonVolatileMemory::NonVolatileMemory() noexcept : state(NvmState::notRead)

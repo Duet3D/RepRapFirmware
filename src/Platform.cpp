@@ -42,7 +42,7 @@
 #include <Hardware/NonVolatileMemory.h>
 
 #if SAM4E || SAM4S || SAME70
-# include "sam/services/flash_efc/flash_efc.h"		// for flash_read_unique_id()
+# include <Flash.h>		// for flash_read_unique_id()
 #endif
 
 #if SAME70
