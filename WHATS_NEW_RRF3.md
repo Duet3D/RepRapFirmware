@@ -4,6 +4,7 @@ RepRapFirmware 3.2RC1
 Upgrade notes:
 - [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.2RC1 also
 - [DUET + SBC] The SPI protocol has changed, therefore versions of DCS prior to 3.2RC1 will be unable to communicate with this version of RRF
+- [DWC] If you are running DWC in a development environment (e.g. via `npm run serve`), use [M586 C"*"](https://duet3d.dozuki.com/Wiki/Gcode#Section_M586_Configure_network_protocols) or similar to permit cross-origin HTTP access 
 
 Known issues:
 - [Duet + SBC] The "files" command does not work in menu files for 12864 displays
