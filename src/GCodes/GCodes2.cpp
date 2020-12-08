@@ -3539,7 +3539,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('C'))
 				{
 					String<StringLength20> corsSite;
-					gb.GetQuotedString(corsSite.GetRef());
+					gb.GetQuotedString(corsSite.GetRef(), true);
 					reprap.GetNetwork().SetCorsSite(corsSite.c_str());
 					seen = true;
 				}
