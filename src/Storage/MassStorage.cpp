@@ -111,6 +111,42 @@ static Mutex fsMutex;
 static FileStore files[MAX_FILES];
 #endif
 
+// Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
+/*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept
+{
+	bool hadError = false;
+	if (directory != nullptr && directory[0] != 0 && fileName[0] != '/' && (strlen(fileName) < 2 || !isdigit(fileName[0]) || fileName[1] != ':'))
+	{
+		hadError = outbuf.copy(directory);
+		if (!hadError)
+		{
+			const size_t len = outbuf.strlen();
+			if (len != 0 && outbuf[len - 1] != '/')
+			{
+				hadError = outbuf.cat('/');
+			}
+		}
+	}
+	else
+	{
+		outbuf.Clear();
+	}
+	if (!hadError)
+	{
+		hadError = outbuf.cat(fileName);
+	}
+	if (hadError)
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Filename too long: cap=%u, dir=%.12s%s name=%.12s%s\n",
+										outbuf.Capacity(),
+										directory, (strlen(directory) > 12 ? "..." : ""),
+										fileName, (strlen(fileName) > 12 ? "..." : "")
+									 );
+		outbuf.copy("?????");
+	}
+	return !hadError;
+}
+
 #if HAS_MASS_STORAGE
 // Static helper functions
 FileWriteBuffer *MassStorage::AllocateWriteBuffer() noexcept
@@ -269,42 +305,6 @@ void MassStorage::CloseAllFiles() noexcept
 			f.Close();
 		}
 	}
-}
-
-// Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
-/*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept
-{
-	bool hadError = false;
-	if (directory != nullptr && directory[0] != 0 && fileName[0] != '/' && (strlen(fileName) < 2 || !isdigit(fileName[0]) || fileName[1] != ':'))
-	{
-		hadError = outbuf.copy(directory);
-		if (!hadError)
-		{
-			const size_t len = outbuf.strlen();
-			if (len != 0 && outbuf[len - 1] != '/')
-			{
-				hadError = outbuf.cat('/');
-			}
-		}
-	}
-	else
-	{
-		outbuf.Clear();
-	}
-	if (!hadError)
-	{
-		hadError = outbuf.cat(fileName);
-	}
-	if (hadError)
-	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Filename too long: cap=%u, dir=%.12s%s name=%.12s%s\n",
-										outbuf.Capacity(),
-										directory, (strlen(directory) > 12 ? "..." : ""),
-										fileName, (strlen(fileName) > 12 ? "..." : "")
-									 );
-		outbuf.copy("?????");
-	}
-	return !hadError;
 }
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.

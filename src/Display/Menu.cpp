@@ -120,11 +120,13 @@ void Menu::LoadFixedMenu() noexcept
 
 	ResetCache();
 
+#if HAS_MASS_STORAGE
 	char acLine1[] = "text R3 C5 F0 T\"No SD Card Found\"";
 	char acLine2[] = "button R15 C5 F0 T\"Mount SD\" A\"M21\"";
 
 	(void)ParseMenuLine(acLine1);
 	(void)ParseMenuLine(acLine2);
+#endif
 }
 
 // Display a M291 message box
@@ -374,6 +376,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		AddItem(pNewItem, true);
 		column += pNewItem->GetWidth();
 	}
+#if HAS_MASS_STORAGE
 	else if (StringEqualsIgnoreCase(commandWord, "files"))
 	{
 		const char * const actionString = AppendString(action);
@@ -383,6 +386,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		row += nparam * lcd.GetFontHeight(fontNumber);
 		column = 0;
 	}
+#endif
 	else
 	{
 		errorColumn = 1;
@@ -656,7 +660,11 @@ void Menu::Refresh() noexcept
 #if HAS_LINUX_INTERFACE
 		!reprap.UsingLinuxInterface() &&
 #endif
+#if HAS_MASS_STORAGE
 		!MassStorage::IsDriveMounted(0)
+#else
+		true	// When there is no mass storage drives cannot be mounted anyway and the above equals true
+#endif
 	   )
 	{
 		if (!displayingFixedMenu)

@@ -181,6 +181,7 @@ private:
 	bool error;							// for temporary use when printing
 };
 
+#if HAS_MASS_STORAGE
 class FilesMenuItem final : public MenuItem
 {
 public:
@@ -227,6 +228,7 @@ private:
 	enum CardState : uint8_t { notStarted, mounting, mounted, error } sdCardState;
 	uint8_t initialDirectoryNesting;
 };
+#endif
 
 class ImageMenuItem final : public MenuItem
 {

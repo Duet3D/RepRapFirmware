@@ -89,8 +89,10 @@ bool MenuItem::IsVisible() const noexcept
 					return ps == PauseState::pausing || ps == PauseState::paused;
 				}
 	case 7:		return reprap.GetGCodes().IsReallyPrintingOrResuming();
+#if HAS_MASS_STORAGE
 	case 10:	return MassStorage::IsDriveMounted(0);
 	case 11:	return !MassStorage::IsDriveMounted(0);
+#endif
 	case 20:
 		{		const auto tool = reprap.GetCurrentOrDefaultTool();			// this can be null, especially during startup
 				return tool.IsNotNull() && tool->HasTemperatureFault();
@@ -683,6 +685,7 @@ bool ValueMenuItem::Adjust(int clicks) noexcept
 				: Adjust_AlterHelper(clicks);
 }
 
+#if HAS_MASS_STORAGE
 FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf) noexcept
 	: MenuItem(r, c, w, LeftAlign, fn, vis), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
         m_uListingFirstVisibleIndex(0), m_uListingSelectedIndex(0)
@@ -1078,6 +1081,7 @@ PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, Pi
 	// TODO
 	return 0;
 }
+#endif
 
 // Image menu item members
 // The image file format is:

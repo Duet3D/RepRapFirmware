@@ -38,6 +38,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the secon
 # define HAS_WIFI_NETWORKING	0
 # define HAS_W5500_NETWORKING	0
 # define HAS_LINUX_INTERFACE	1
+# define HAS_MASS_STORAGE		0
 #else
 # define HAS_WIFI_NETWORKING	1
 # define HAS_W5500_NETWORKING	1
@@ -45,7 +46,11 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the secon
 #endif
 
 #define HAS_CPU_TEMP_SENSOR		1
-#define HAS_HIGH_SPEED_SD		1
+#if defined(USE_SBC)
+# define HAS_HIGH_SPEED_SD		0
+#else
+# define HAS_HIGH_SPEED_SD		1
+#endif
 #define SUPPORT_TMC2660			1
 #define TMC2660_USES_USART		1
 #define HAS_VOLTAGE_MONITOR		1
@@ -55,7 +60,11 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the secon
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
-#define SUPPORT_SCANNER			1					// set zero to disable support for FreeLSS scanners
+#if defined(USE_SBC)
+# define SUPPORT_SCANNER		0
+#else
+# define SUPPORT_SCANNER		1					// set zero to disable support for FreeLSS scanners
+#endif
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors

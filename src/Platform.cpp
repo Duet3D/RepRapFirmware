@@ -3918,14 +3918,7 @@ bool Platform::IsDuetWiFi() const noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE
-
-// Where the system files are. Not thread safe!
-const char* Platform::InternalGetSysDir() const noexcept
-{
-	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
-}
-
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 // Open a file
 FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
 {
@@ -3935,16 +3928,25 @@ FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode
 				: nullptr;
 }
 
-bool Platform::Delete(const char* folder, const char *filename) const noexcept
-{
-	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
-}
-
 bool Platform::FileExists(const char* folder, const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
+}
+#endif
+
+#if HAS_MASS_STORAGE
+
+// Where the system files are. Not thread safe!
+const char* Platform::InternalGetSysDir() const noexcept
+{
+	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
+}
+
+bool Platform::Delete(const char* folder, const char *filename) const noexcept
+{
+	String<MaxFilenameLength> location;
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
 }
 
 bool Platform::DirectoryExists(const char *folder, const char *dir) const noexcept

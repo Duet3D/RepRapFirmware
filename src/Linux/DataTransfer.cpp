@@ -9,7 +9,7 @@
 
 #if HAS_LINUX_INTERFACE
 
-#include <Storage/CRC16.h>
+#include <Storage/CRC32.h>
 #include <algorithm>
 
 #if defined(DUET_NG) && defined(USE_SBC)
