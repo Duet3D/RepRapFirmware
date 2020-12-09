@@ -22,6 +22,7 @@ Bug fixes:
 - Fixed crash that occured on some systems when M918 was used to configure a 12864 display but no SD card was present
 - After updating PanelDue firmware with M997 S4 the PanelDue did not always reset automatically
 - If M997 S4 was used but no aux port was configured, the firmware could reset after 20 seconds
+- Laser and magnetic filament monnitors paused print even when disabled if no data was received or the sensor reported an error
 - [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
 
 RepRapFirmware 3.2-beta4.1
