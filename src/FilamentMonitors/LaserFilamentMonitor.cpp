@@ -350,7 +350,7 @@ FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, 
 		extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	}
 
-	return ret;
+	return (comparisonEnabled) ? ret : FilamentSensorStatus::ok;
 }
 
 // Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
@@ -444,10 +444,11 @@ FilamentSensorStatus LaserFilamentMonitor::Clear() noexcept
 	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();								// to keep the diagnostics up to date
 
-	return (!dataReceived) ? FilamentSensorStatus::noDataReceived
-			: (sensorError) ? FilamentSensorStatus::sensorError
-				: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
-					: FilamentSensorStatus::ok;
+	return (!comparisonEnabled) ? FilamentSensorStatus::ok
+			: (!dataReceived) ? FilamentSensorStatus::noDataReceived
+				: (sensorError) ? FilamentSensorStatus::sensorError
+					: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
+						: FilamentSensorStatus::ok;
 }
 
 // Print diagnostic info for this sensor
