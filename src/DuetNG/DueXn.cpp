@@ -20,7 +20,7 @@ namespace DuetExpansion
 
 	static SX1509 dueXnExpander;
 	static uint16_t dueXnInputMask;
-	static uint16_t dueXnInputBits = 0;
+	static volatile uint16_t dueXnInputBits = 0;
 	static ExpansionBoardType dueXnBoardType = ExpansionBoardType::none;
 
 	const uint8_t AdditionalIoExpanderAddress = 0x71;	// address of the SX1509B we allow for general I/O expansion
@@ -29,7 +29,7 @@ namespace DuetExpansion
 	static bool additionalIoExpanderPresent = false;
 	static uint16_t additionalIoInputBits = 0;
 
-	static uint32_t dueXnReadCount = 0;
+	static volatile uint32_t dueXnReadCount = 0;
 	static uint32_t dueXnReadCountResetMillis = 0;
 	static volatile bool taskWaiting = false;
 	static volatile bool inputsChanged = false;
@@ -78,24 +78,21 @@ namespace DuetExpansion
 		}
 	}
 
+	// This is the loop executed by the DueX task
 	extern "C" [[noreturn]] void DueXTask(void * pvParameters) noexcept
 	{
 		for (;;)
 		{
 			inputsChanged = false;
+			taskWaiting = false;
+			TaskBase::ClearNotifyCount();
 			dueXnInputBits = dueXnExpander.digitalReadAll();
+			taskWaiting = true;
 			++dueXnReadCount;
-
-			cpu_irq_disable();
+			__DSB();
 			if (!inputsChanged)
 			{
-				taskWaiting = true;
-				cpu_irq_enable();
 				(void)TaskBase::Take();
-			}
-			else
-			{
-				cpu_irq_enable();
 			}
 		}
 	}
@@ -257,12 +254,6 @@ bool DuetExpansion::DigitalRead(Pin pin) noexcept
 	{
 		if (dueXnBoardType != ExpansionBoardType::none)
 		{
-			if (!digitalRead(DueX_INT) && !inInterrupt() && __get_BASEPRI() == 0)	// we must not call expander.digitalRead() from within an ISR or if the tick interrupt is disabled
-			{
-				// Interrupt is active, so input data may have changed
-				dueXnInputBits = dueXnExpander.digitalReadAll();
-			}
-
 			return (dueXnInputBits & (1u << (pin - DueXnExpansionStart))) != 0;
 		}
 	}
