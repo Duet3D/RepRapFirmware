@@ -7,7 +7,7 @@ Upgrade notes:
 - [DWC] If you are running DWC in a development environment (e.g. via `npm run serve`), use [M586 C"*"](https://duet3d.dozuki.com/Wiki/Gcode#Section_M586_Configure_network_protocols) or similar to permit cross-origin HTTP access 
 
 Known issues:
-- [Duet + SBC] The "files" command does not work in menu files for 12864 displays
+- [Duet + SBC + 12864 display] Menu files are slow to load
 
 New features:
 - New M595 command is provided to increase the length of the movement queue and to pre-allocate DriveMovement objects
@@ -16,7 +16,7 @@ New features:
 - CORS headers are only sent in HTTP responses if explictly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
 - Added aux port diagnostics (overrun and framing errors) to M122 report
 - [Duet 3 Mini] Added data cache hit count to M122 report
-- [Duet + SBC] 12864 displays are now supported (but see under Known Issues)
+- [Duet + SBC] 12864 displays are now supported. Note, the 'files' menu item type is not supported in SBC mode.
 
 Bug fixes:
 - Fixed crash that occured on some systems when M918 was used to configure a 12864 display but no SD card was present
