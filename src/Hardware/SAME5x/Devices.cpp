@@ -21,32 +21,32 @@ constexpr size_t AnalogInTaskStackWords = 300;
 static Task<AnalogInTaskStackWords> analogInTask;
 
 // Serial device support
-void Serial0PortInit(Uart *) noexcept
+void Serial0PortInit(AsyncSerial *) noexcept
 {
 	SetPinFunction(Serial0TxPin, Serial0PinFunction);
 	SetPinFunction(Serial0RxPin, Serial0PinFunction);
 }
 
-void Serial0PortDeinit(Uart *) noexcept
+void Serial0PortDeinit(AsyncSerial *) noexcept
 {
 	pinMode(Serial0TxPin, INPUT_PULLUP);
 	pinMode(Serial0RxPin, INPUT_PULLUP);
 }
 
-void Serial1PortInit(Uart *) noexcept
+void Serial1PortInit(AsyncSerial *) noexcept
 {
 	SetPinFunction(Serial1TxPin, Serial1PinFunction);
 	SetPinFunction(Serial1RxPin, Serial1PinFunction);
 }
 
-void Serial1PortDeinit(Uart *) noexcept
+void Serial1PortDeinit(AsyncSerial *) noexcept
 {
 	pinMode(Serial1TxPin, INPUT_PULLUP);
 	pinMode(Serial1RxPin, INPUT_PULLUP);
 }
 
-Uart serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
-Uart serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
+AsyncSerial serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
+AsyncSerial serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
 
 # if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
 #  error SERIAL0_ISRn not defined

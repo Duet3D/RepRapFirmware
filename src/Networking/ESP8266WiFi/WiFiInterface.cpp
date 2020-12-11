@@ -42,7 +42,7 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # include <DmacManager.h>
 # include <Interrupts.h>
 # include <Serial.h>
-# include <Uart.h>
+# include <AsyncSerial.h>
 
 # define USE_PDC            0		// use SAM4 peripheral DMA controller
 # define USE_DMAC           0 		// use SAM4 general DMA controller
@@ -96,7 +96,7 @@ const unsigned int MaxHttpConnections = 4;
 
 #if SAME5x
 
-void SerialWiFiPortInit(Uart*) noexcept
+void SerialWiFiPortInit(AsyncSerial*) noexcept
 {
 	for (Pin p : WiFiUartSercomPins)
 	{
@@ -104,7 +104,7 @@ void SerialWiFiPortInit(Uart*) noexcept
 	}
 }
 
-void SerialWiFiPortDeinit(Uart*) noexcept
+void SerialWiFiPortDeinit(AsyncSerial*) noexcept
 {
 	for (Pin p : WiFiUartSercomPins)
 	{
@@ -158,7 +158,7 @@ static bool spi_dma_check_rx_complete() noexcept;
 
 #ifdef DUET3MINI
 
-Uart *SerialWiFiDevice;
+AsyncSerial *SerialWiFiDevice;
 # define SERIAL_WIFI_DEVICE	(*SerialWiFiDevice)
 
 # if !defined(SERIAL_WIFI_ISR0) || !defined(SERIAL_WIFI_ISR2) || !defined(SERIAL_WIFI_ISR3)
@@ -257,7 +257,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	strcpy(wiFiServerVersion, "(unknown)");
 
 #ifdef DUET3MINI
-	SerialWiFiDevice = new Uart(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
+	SerialWiFiDevice = new AsyncSerial(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
 	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
 #else
 	SERIAL_WIFI_DEVICE.setInterruptPriority(NvicPriorityWiFiUart);

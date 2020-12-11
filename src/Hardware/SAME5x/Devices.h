@@ -9,10 +9,10 @@
 #ifndef SRC_HARDWARE_SAME5X_DEVICES_H_
 #define SRC_HARDWARE_SAME5X_DEVICES_H_
 
-#include "Uart.h"
-typedef Uart UARTClass;
+#include <AsyncSerial.h>
+typedef AsyncSerial UARTClass;
 
-extern Uart serialUart0, serialUart1;
+extern AsyncSerial serialUart0, serialUart1;
 
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include "SerialCDC.h"

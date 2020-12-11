@@ -15,10 +15,10 @@
 #include <General/NamedEnum.h>
 
 #ifdef DUET3MINI			// if using CoreN2G
-# include <SAME5x_C21/Uart.h>
-# define UARTClass	Uart
+# include <AsyncSerial.h>
 #else						// using CoreNG
 # include <UARTClass.h>
+typedef UARTClass AsyncSerial;
 #endif
 
 #include <bossa/Samba.h>
