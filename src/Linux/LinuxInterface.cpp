@@ -855,7 +855,7 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 		TaskCriticalSectionLocker locker;
 		if (rxPointer != txPointer || txLength != 0)
 		{
-			bool updateRxPointer = true;
+			bool updateRxPointer = true, overlapped = false;
 			uint16_t readPointer = rxPointer;
 			do
 			{
@@ -919,8 +919,9 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 					}
 				}
 
-				if (readPointer == txLength)
+				if (readPointer == txLength && !overlapped)
 				{
+					overlapped = true;
 					readPointer = 0;
 				}
 			} while (readPointer != txPointer);
