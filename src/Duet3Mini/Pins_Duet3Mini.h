@@ -28,11 +28,11 @@
 # endif
 #endif
 
-constexpr size_t NumFirmwareUpdateModules = 5;		// 0 = mainboard, 1 = wifi 4 = PanelDue, other values unused
+constexpr size_t NumFirmwareUpdateModules = 5;		// 0 = mainboard, 1 = wifi, 4 = PanelDue, other values unused
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".uf2"
-#define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
-#define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap_" BOARD_SHORT_NAME ".bin"
+#define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
+#define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap32_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 
 #define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"

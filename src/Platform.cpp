@@ -249,7 +249,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_LINUX_INTERFACE
 	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),														ObjectModelEntryFlags::none },
 #endif
+#if HAS_MASS_STORAGE
 	{ "iapFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),															ObjectModelEntryFlags::none },
+#endif
 	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),														ObjectModelEntryFlags::verbose },
 	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),												ObjectModelEntryFlags::verbose },
 	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																			ObjectModelEntryFlags::live },
@@ -342,7 +344,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	9,																		// number of sections
-	12 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
+	11 + HAS_LINUX_INTERFACE + HAS_MASS_STORAGE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
 #else
