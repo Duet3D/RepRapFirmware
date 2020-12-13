@@ -21,7 +21,6 @@ namespace Tasks
 	void *AllocPermanent(size_t sz, std::align_val_t align = (std::align_val_t)__STDCPP_DEFAULT_NEW_ALIGNMENT__) noexcept;
 	const char* GetHeapTop() noexcept;
 	Mutex *GetI2CMutex() noexcept;
-	Mutex *GetSysDirMutex() noexcept;
 	Mutex *GetFilamentsMutex() noexcept;
 }
 

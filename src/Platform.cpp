@@ -3921,6 +3921,7 @@ bool Platform::IsDuetWiFi() const noexcept
 #endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+
 // Open a file
 FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
 {
@@ -3935,11 +3936,12 @@ bool Platform::FileExists(const char* folder, const char *filename) const noexce
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
+
 #endif
 
 #if HAS_MASS_STORAGE
 
-// Where the system files are. Not thread safe!
+// Return a pointer to a string holding the directory where the system files are. Lock the sysdir lock before calling this.
 const char* Platform::InternalGetSysDir() const noexcept
 {
 	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
@@ -3961,7 +3963,7 @@ bool Platform::DirectoryExists(const char *folder, const char *dir) const noexce
 GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcept
 {
 	String<MaxFilenameLength> newSysDir;
-	MutexLocker lock(Tasks::GetSysDirMutex());
+	WriteLocker lock(sysDirLock);
 
 	if (!MassStorage::CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir) || (!newSysDir.EndsWith('/') && newSysDir.cat('/')))
 	{
@@ -4001,20 +4003,18 @@ bool Platform::DeleteSysFile(const char *filename) const noexcept
 
 bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const noexcept
 {
-	MutexLocker lock(Tasks::GetSysDirMutex());
-	return MassStorage::CombineName(result, InternalGetSysDir(), filename);
+	return MassStorage::CombineName(result, GetSysDir().Ptr(), filename);
 }
 
 void Platform::AppendSysDir(const StringRef & path) const noexcept
 {
-	MutexLocker lock(Tasks::GetSysDirMutex());
-	path.cat(InternalGetSysDir());
+	path.cat(GetSysDir().Ptr());
 }
 
-void Platform::EncodeSysDir(OutputBuffer *buf) const noexcept
+ReadLockedPointer<const char> Platform::GetSysDir() const noexcept
 {
-	MutexLocker lock(Tasks::GetSysDirMutex());
-	buf->EncodeString(InternalGetSysDir(), false);
+	ReadLocker lock(sysDirLock);
+	return ReadLockedPointer<const char>(lock, InternalGetSysDir());
 }
 
 #endif

@@ -51,9 +51,7 @@ void AuxDevice::SendPanelDueMessage(const char* msg) noexcept
 		OutputBuffer *buf;
 		if (OutputBuffer::Allocate(buf))
 		{
-			buf->copy("{\"message\":");
-			buf->EncodeString(msg, false);
-			buf->cat("}\n");
+			buf->printf("{\"message\":\"%.s\"}\n", msg);
 			outStack.Push(buf);
 			Flush();
 		}
@@ -76,9 +74,7 @@ void AuxDevice::AppendAuxReply(const char *msg, bool rawMessage) noexcept
 			else
 			{
 				seq++;
-				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":", seq);
-				buf->EncodeString(msg, true, false);
-				buf->cat("}\n");
+				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", seq, msg);
 			}
 			outStack.Push(buf);
 		}

@@ -298,28 +298,6 @@ size_t OutputBuffer::EncodeChar(char c) noexcept
 	return 1;
 }
 
-// Encode a string in JSON format and append it to the buffer and return the number of bytes written
-size_t OutputBuffer::EncodeString(const char *src, bool allowControlChars, bool prependAsterisk) noexcept
-{
-	size_t bytesWritten = cat('"');
-	if (prependAsterisk)
-	{
-		bytesWritten += cat('*');
-	}
-
-	if (src != nullptr)
-	{
-		char c;
-		while ((c = *src++) != 0 && (c >= ' ' || allowControlChars))
-		{
-			bytesWritten += EncodeChar(c);
-		}
-	}
-
-	bytesWritten += cat('"');
-	return bytesWritten;
-}
-
 size_t OutputBuffer::EncodeReply(OutputBuffer *src) noexcept
 {
 	size_t bytesWritten = cat('"');

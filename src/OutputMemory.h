@@ -63,14 +63,7 @@ public:
 	size_t lcat(const char *src, size_t len) noexcept;
 	size_t cat(StringRef &str) noexcept;
 
-	size_t EncodeString(const char *src, bool allowControlChars, bool prependAsterisk = false) noexcept;
 	size_t EncodeChar(char c) noexcept;
-
-	template<size_t Len> size_t EncodeString(const String<Len>& str, bool allowControlChars, bool prependAsterisk = false) noexcept
-	{
-		return EncodeString(str.c_str(), allowControlChars, prependAsterisk);
-	}
-
 	size_t EncodeReply(OutputBuffer *src) noexcept;
 
 	uint32_t GetAge() const noexcept;
