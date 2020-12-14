@@ -10,6 +10,8 @@
 
 #include "Endstop.h"
 
+#if HAS_STALL_DETECT
+
 // Motor stall detection endstop
 class StallDetectionEndstop final : public Endstop
 {
@@ -17,7 +19,7 @@ public:
 	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<StallDetectionEndstop>(); }
 	void operator delete(void* p) noexcept { FreelistManager::Release<StallDetectionEndstop>(p); }
 
-	StallDetectionEndstop(uint8_t axis, EndStopPosition pos, bool p_individualMotors) noexcept;		// for creating axis endstops
+	StallDetectionEndstop(uint8_t p_axis, EndStopPosition pos, bool p_individualMotors) noexcept;		// for creating axis endstops
 	StallDetectionEndstop() noexcept;							// for creating the single extruders endstop
 
 	EndStopType GetEndstopType() const noexcept override { return (individualMotors) ? EndStopType::motorStallIndividual : EndStopType::motorStallAny; }
@@ -34,5 +36,7 @@ private:
 	bool individualMotors;
 	bool stopAll;
 };
+
+#endif
 
 #endif /* SRC_ENDSTOPS_STALLDETECTIONENDSTOP_H_ */

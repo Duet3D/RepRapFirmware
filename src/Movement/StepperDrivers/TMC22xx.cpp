@@ -2124,7 +2124,7 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 
 #ifdef DUET3MINI_V04
 
-// Stall detection for Duet 3 Mini prototype v0.4
+// Stall detection for Duet 3 Mini v0.4 and later
 // Each TMC2209 DIAG output is routed to its own MCU pin, however we don't have enough EXINTs on the SAME54 to give each one its own interrupt.
 // So we route them all to CCL input pins instead, which lets us selectively OR them together in 3 groups and generate an interrupt from the resulting events
 
@@ -2192,6 +2192,25 @@ static void InitStallDetectionLogic() noexcept
 	}
 
 	CCL->CTRL.reg = CCL_CTRL_ENABLE;							// enable the CCL
+}
+
+#endif
+
+
+#if HAS_STALL_DETECT
+
+DriversBitmap SmartDrivers::GetStalledDrivers(DriversBitmap driversOfInterest) noexcept
+{
+	DriversBitmap rslt;
+	driversOfInterest.Iterate([&rslt](unsigned int driverNumber, unsigned int count)
+								{
+									if (driverNumber < ARRAY_SIZE(DriverDiagPins) && digitalRead(DriverDiagPins[driverNumber]))
+									{
+										rslt.SetBit(driverNumber);
+									}
+								}
+							 );
+	return rslt;
 }
 
 #endif

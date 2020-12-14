@@ -743,6 +743,7 @@ inline void TmcDriverState::TransferDone() noexcept
 		if (interval == 0 || interval > maxStallStepInterval)	// if the motor speed is too low to get reliable stall indication
 		{
 			status &= ~TMC_RR_SG;								// remove the stall status bit
+			EndstopOrZProbe::SetDriversNotStalled(driverBit);
 		}
 		else if (rdselState == 1)
 		{
@@ -755,9 +756,16 @@ inline void TmcDriverState::TransferDone() noexcept
 			{
 				maxSgLoadRegister = sgLoad;
 			}
+			if ((status & TMC_RR_SG) != 0)
+			{
+				EndstopOrZProbe::SetDriversStalled(driverBit);
+			}
+			else
+			{
+				EndstopOrZProbe::SetDriversNotStalled(driverBit);
+			}
 		}
 
-		EndstopOrZProbe::UpdateStalledDrivers(driverBit, (status & TMC_RR_SG) != 0);
 		if (rdselState == 0)
 		{
 			mstepPosition = (status >> TMC_RR_MSTEP_SHIFT) & 1023;
@@ -939,7 +947,7 @@ namespace SmartDrivers
 #endif
 
 		driversState = DriversState::noPower;
-		EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
+		EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 		for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 		{
 			driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
@@ -1048,7 +1056,7 @@ namespace SmartDrivers
 			{
 			case DriversState::noPower:
 				// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
-				EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
+				EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 				for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 				{
 					driverStates[driver].WriteAll();
@@ -1154,7 +1162,7 @@ namespace SmartDrivers
 		{
 			digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
 			driversState = DriversState::noPower;
-			EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
+			EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 		}
 	}
 
@@ -1163,7 +1171,7 @@ namespace SmartDrivers
 	{
 		digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
 		driversState = DriversState::noPower;
-		EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap::MakeLowestNBits(MaxSmartDrivers), false);
+		EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 	}
 
 	void SetStallThreshold(size_t driver, int sgThreshold) noexcept

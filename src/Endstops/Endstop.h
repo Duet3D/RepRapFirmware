@@ -14,6 +14,10 @@
 #include <Hardware/IoPorts.h>
 #include <General/FreelistManager.h>
 
+#if SUPPORT_TMC22xx && HAS_STALL_DETECT
+# include <Movement/StepperDrivers/TMC22xx.h>
+#endif
+
 class AxisDriversConfig;
 class CanMessageBuffer;
 
@@ -32,28 +36,57 @@ public:
 	EndstopOrZProbe *GetNext() const noexcept { return next; }
 	void SetNext(EndstopOrZProbe *e) noexcept { next = e; }
 
-	static void UpdateStalledDrivers(DriversBitmap drivers, bool isStalled) noexcept;
+#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
+	static void SetDriversStalled(DriversBitmap drivers) noexcept;
+	static void SetDriversNotStalled(DriversBitmap drivers) noexcept;
+#endif
 
 protected:
-	static DriversBitmap GetStalledDrivers() noexcept { return stalledDrivers; }
+
+#if HAS_STALL_DETECT
+	static DriversBitmap GetStalledDrivers(DriversBitmap driversOfInterest) noexcept;
+#endif
 
 private:
 	EndstopOrZProbe *next;								// next endstop in linked list
 
+#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
 	static DriversBitmap stalledDrivers;				// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
+#endif
 };
 
-inline void EndstopOrZProbe::UpdateStalledDrivers(DriversBitmap drivers, bool isStalled) noexcept
+#if HAS_STALL_DETECT
+
+# if SUPPORT_TMC2660 || SUPPORT_TMC51xx
+
+// This is called by the TMC driver to tell us which drivers are stalled or not stalled
+inline void EndstopOrZProbe::SetDriversStalled(DriversBitmap drivers) noexcept
 {
-	if (isStalled)
-	{
-		stalledDrivers |= drivers;
-	}
-	else
-	{
-		stalledDrivers &= ~drivers;
-	}
+	stalledDrivers |= drivers;
 }
+
+// This is called by the TMC driver to tell us which drivers are stalled or not stalled
+inline void EndstopOrZProbe::SetDriversNotStalled(DriversBitmap drivers) noexcept
+{
+	stalledDrivers &= ~drivers;
+}
+
+// Return which drivers out of the set of interest are stalled
+inline DriversBitmap EndstopOrZProbe::GetStalledDrivers(DriversBitmap driversOfInterest) noexcept
+{
+	return stalledDrivers & driversOfInterest;
+}
+
+# elif SUPPORT_TMC22xx
+
+// Return which drivers out of the set of interest are stalled
+inline DriversBitmap EndstopOrZProbe::GetStalledDrivers(DriversBitmap driversOfInterest) noexcept
+{
+	return SmartDrivers::GetStalledDrivers(driversOfInterest);
+}
+
+# endif
+#endif
 
 class Endstop : public EndstopOrZProbe
 {

@@ -100,7 +100,9 @@ private:
 	EndstopOrZProbe * volatile activeEndstops;			// linked list of endstops and Z probes that are active for the current move
 
 	Endstop *axisEndstops[MaxAxes];						// the endstops assigned to each axis (each one may have several switches), each may be null
+#if HAS_STALL_DETECT
 	StallDetectionEndstop *extrudersEndstop;			// the endstop used for extruder stall detection, one will do for all extruders
+#endif
 	ZProbe *zProbes[MaxZProbes];						// the Z probes used. The first one is always non-null.
 	ZProbe *defaultZProbe;
 

@@ -163,7 +163,7 @@ int ZProbe::GetReading() const noexcept
 #if HAS_STALL_DETECT
 			{
 				const DriversBitmap zDrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).GetDriversBitmap();
-				zProbeVal = (zDrivers.Intersects(GetStalledDrivers())) ? 1000 : 0;
+				zProbeVal = (GetStalledDrivers(zDrivers).IsNonEmpty()) ? 1000 : 0;
 			}
 #else
 			return 1000;

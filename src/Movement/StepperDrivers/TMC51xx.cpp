@@ -907,12 +907,12 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	{
 		readRegisters[ReadDrvStat] |= TMC_RR_SG;
 		accumulatedDriveStatus |= TMC_RR_SG;
-		EndstopOrZProbe::UpdateStalledDrivers(driverBit, true);
+		EndstopOrZProbe::SetDriversStalled(driverBit);
 	}
 	else
 	{
 		readRegisters[ReadDrvStat] &= ~TMC_RR_SG;
-		EndstopOrZProbe::UpdateStalledDrivers(driverBit, false);
+		EndstopOrZProbe::SetDriversNotStalled(driverBit);
 	}
 
 	previousRegIndexRequested = (regIndexBeingUpdated == NoRegIndex) ? regIndexRequested : NoRegIndex;

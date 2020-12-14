@@ -62,6 +62,10 @@ namespace SmartDrivers
 	void SetStandstillCurrentPercent(size_t drive, float percent) noexcept;
 	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
+
+#if HAS_STALL_DETECT
+	DriversBitmap GetStalledDrivers(DriversBitmap driversOfInterest) noexcept;
+#endif
 };
 
 #endif

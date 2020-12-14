@@ -98,7 +98,12 @@ DEFINE_GET_OBJECT_MODEL_TABLE(EndstopsManager)
 
 #endif
 
-EndstopsManager::EndstopsManager() noexcept : activeEndstops(nullptr), extrudersEndstop(nullptr), isHomingMove(false)
+EndstopsManager::EndstopsManager() noexcept
+		: activeEndstops(nullptr),
+#if HAS_STALL_DETECT
+		  extrudersEndstop(nullptr),
+#endif
+		  isHomingMove(false)
 {
 	for (Endstop *& es : axisEndstops)
 	{
@@ -214,6 +219,7 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 {
 	if (extruders.IsNonEmpty())
 	{
+#if HAS_STALL_DETECT
 		if (extrudersEndstop == nullptr)
 		{
 			extrudersEndstop = new StallDetectionEndstop;
@@ -224,7 +230,7 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 			const unsigned int extruder = extruders.LowestSetBit();
 			extruders.ClearBit(extruder);
 			const DriverId driver = reprap.GetPlatform().GetExtruderDriver(extruder);
-#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_CAN_EXPANSION
 			if (driver.IsLocal())
 			{
 				drivers.SetBit(driver.localDriver);
@@ -234,13 +240,16 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 				//TODO remote stall detect endstop
 				return false;
 			}
-#else
+# else
 			drivers.SetBit(driver.localDriver);
-#endif
+# endif
 		}
 
 		extrudersEndstop->SetDrivers(drivers);
 		AddToActive(*extrudersEndstop);
+#else
+		return false;
+#endif
 	}
 	return true;
 }
@@ -413,29 +422,50 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 
 			if (pos == EndStopPosition::noEndStop)
 			{
-				delete axisEndstops[axis];
-				axisEndstops[axis] = nullptr;
+				Endstop *es = nullptr;
+				std::swap(es, axisEndstops[axis]);
+				delete es;
 			}
 			else
 			{
 				switch (inputType.ToBaseType())
 				{
+#if HAS_STALL_DETECT
 				case EndStopType::motorStallAny:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					delete axisEndstops[axis];
-					axisEndstops[axis] = new StallDetectionEndstop(axis, pos, false);
+					{
+						Endstop *es = new StallDetectionEndstop(axis, pos, false);
+						std::swap(es, axisEndstops[axis]);
+						delete es;
+					}
 					break;
 
 				case EndStopType::motorStallIndividual:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					delete axisEndstops[axis];
-					axisEndstops[axis] = new StallDetectionEndstop(axis, pos, true);
+					{
+						Endstop *es = new StallDetectionEndstop(axis, pos, true);
+						std::swap(es, axisEndstops[axis]);
+						delete es;
+					}
 					break;
-
+#else
+				case EndStopType::motorStallAny:
+				case EndStopType::motorStallIndividual:
+					{
+						Endstop *es = nullptr;
+						std::swap(es, axisEndstops[axis]);
+						delete es;
+					}
+					reply.copy("Stall detection not supported by this hardware");
+					return GCodeResult::error;
+#endif
 				case EndStopType::zProbeAsEndstop:
 					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					delete axisEndstops[axis];
-					axisEndstops[axis] = new ZProbeEndstop(axis, pos);
+					{
+						Endstop *es = new ZProbeEndstop(axis, pos);
+						std::swap(es, axisEndstops[axis]);
+						delete es;
+					}
 					break;
 
 				case EndStopType::inputPin:
