@@ -1004,7 +1004,7 @@ void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, const Expression
 {
 	String<StringLength50> rslt;
 	val.ExtractRequestedPart(rslt.GetRef());
-	buf->EncodeString(rslt.c_str(), true);
+	buf->catf("\"%.s\"", rslt.c_str());
 }
 
 ExpressionValue ObjectModel::GetExpansionBoardDetailLength(const ExpressionValue& val) noexcept

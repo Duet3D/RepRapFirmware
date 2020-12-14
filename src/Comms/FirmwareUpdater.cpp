@@ -8,14 +8,15 @@
 #include "FirmwareUpdater.h"
 
 #include "RepRapFirmware.h"
-#include "Network.h"
 #include "Platform.h"
 #include "RepRap.h"
 #include "GCodes/GCodes.h"
 
 #if HAS_WIFI_NETWORKING
+# include "Network.h"
 # include "ESP8266WiFi/WifiFirmwareUploader.h"
 #endif
+
 #if HAS_AUX_DEVICES
 # include "Comms/PanelDueUpdater.h"
 #endif

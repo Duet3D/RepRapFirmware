@@ -226,7 +226,7 @@ void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 			if (!reprap.UsingLinuxInterface())
 #endif
 			{
-				reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %" PRIu32 "\n", item->data, item->executeAtMove);
+				reprap.GetPlatform().MessageF(mtype, "Queued '%.*s' for move %" PRIu32 "\n", item->dataLength, item->data, item->executeAtMove);
 			}
 		} while ((item = item->Next()) != nullptr);
 		reprap.GetPlatform().MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
