@@ -240,3 +240,6 @@ void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress&
 	netMask.SetV4LittleEndian(gs_net_if.netmask.addr);
 	gateWay.SetV4LittleEndian(gs_net_if.gw.addr);
 }
+
+// End
+

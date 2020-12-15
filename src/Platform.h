@@ -184,6 +184,7 @@ enum class DiagnosticTestType : unsigned int
 	TimeSDWrite = 104,				// do a write timing test on the SD card
 	PrintObjectSizes = 105,			// print the sizes of various objects
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects
+	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 
 #ifdef __LPC17xx__
 	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
