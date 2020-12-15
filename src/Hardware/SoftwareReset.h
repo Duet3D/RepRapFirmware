@@ -62,8 +62,10 @@ struct SoftwareResetData
 	uint32_t bfar;								// bus fault address register
 	uint32_t sp;								// stack pointer
 	uint32_t when;								// value of the RTC when the software reset occurred
-	uint32_t taskName;							// first 4 bytes of the task name
-	uint32_t spare[2];							// unused at present
+	uint32_t taskName;							// first 4 bytes of the task name, or 'none'
+	uint32_t stackOffset;						// how many spare words of stack the running task has
+	uint32_t stackMarkerValid : 1,				// true if the stack low marker wasn't overwritten
+			 spare : 31;						// unused at present
 	// The stack length is set to 27 words because that is the most we can print in a single message using our 256-byte format buffer
 	uint32_t stack[27];							// stack when the exception occurred, with the link register and program counter at the bottom
 

@@ -26,7 +26,7 @@
 #include "task.h"
 #include <malloc.h>
 
-const uint8_t memPattern = 0xA5;
+const uint8_t memPattern = 0xA5;		// this must be the same pattern as FreeRTOS because we use common code for checking for stack overflow
 
 extern char _end;						// defined in linker script
 extern char _estack;					// defined in linker script
@@ -264,16 +264,12 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 	// Print memory stats
 	{
 		const char * const ramstart =
-#if SAME70
-			(char *) 0x20400000;
-#elif SAM4E || SAM4S || SAME5x
-			(char *) 0x20000000;
-#elif SAM3XA
-			(char *) 0x20070000;
+#if SAME5x
+			(char *) HSRAM_ADDR;
 #elif defined(__LPC17xx__)
 			(char *) 0x10000000;
 #else
-# error Unsupported processor
+			(char *) IRAM_ADDR;
 #endif
 		p.MessageF(mtype, "Static ram: %d\n", &_end - ramstart);
 
