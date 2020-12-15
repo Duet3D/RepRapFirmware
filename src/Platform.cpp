@@ -2281,11 +2281,14 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::TimeCRC32:
 		{
 			CRC32 crc;
+			cpu_irq_disable();
 			asm volatile("":::"memory");
 			uint32_t now1 = SysTick->VAL;
 			crc.Update(
 #if SAME5x
 						reinterpret_cast<const char*>(HSRAM_ADDR),
+#elif SAME70
+						reinterpret_cast<const char*>(IRAM_ADDR + 0x10000),		// make sure we choose an address after the end of the non-cacheable RAM
 #else
 						reinterpret_cast<const char*>(IRAM_ADDR),
 #endif
