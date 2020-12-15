@@ -635,7 +635,7 @@ void DataTransfer::ReadAssignFilament(int& extruder, StringRef& filamentName) no
 	extruder = header->extruder;
 
 	// Read filament name
-	const char *name = ReadData(header->filamentLength + sizeof(AssignFilamentHeader));
+	const char *name = ReadData(header->filamentLength);
 	filamentName.copy(name, header->filamentLength);
 }
 
