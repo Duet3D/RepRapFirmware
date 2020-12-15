@@ -2,34 +2,38 @@ RepRapFirmware 3.2RC1
 =====================
 
 Upgrade notes:
+- The IAP files for this release have changed. After installing 3.2RC1, the new IAP file will be needed next time you upgrade or downgrade the firmware. The new IAP files all have 'iap32' in the filename where it used to be 'iap', therefore they can coexist in /sys with the old IAP files.
 - [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.2RC1 also
-- [DUET + SBC] The SPI protocol has changed, therefore versions of DCS prior to 3.2RC1 will be unable to communicate with this version of RRF
-- [DWC] If you are running DWC in a development environment (e.g. via `npm run serve`), use [M586 C"*"](https://duet3d.dozuki.com/Wiki/Gcode#Section_M586_Configure_network_protocols) or similar to permit cross-origin HTTP access 
+- [Duet + SBC] The SPI protocol has changed, therefore versions of DCS prior to 3.2RC1 will be unable to communicate with this version of RRF
+- [DWC] If you are running DWC in a development environment (e.g. via `npm run serve`), use [M586 C"*"](https://duet3d.dozuki.com/Wiki/Gcode#Section_M586_Configure_network_protocols) or similar to permit cross-origin HTTP access
+- [Duet 2 + SBC] You may need to use Bossa to upgrade to 3.2RC1
 
 Known issues:
 - [Duet + SBC + 12864 display] Menu files are slow to load
 
 New features:
 - New M595 command is provided to increase the length of the movement queue and to pre-allocate DriveMovement objects
-- The number of DriveMovement objects pre-allocated is reduced to save memory. If the system runs out of DrivemMovement objects, it will try to allocate new ones dynamically.
-- DDAs and DriveMovement objects are now alocated from a non-freeable memory pool to reduce memory overhead, saving several hundred bytes of RAM
-- CORS headers are only sent in HTTP responses if explictly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
+- The number of DriveMovement objects pre-allocated is reduced to save memory. If the system runs out of DriveMovement objects, it will try to allocate new ones dynamically.
+- DDAs and DriveMovement objects are now allocated from a non-freeable memory pool to reduce memory overhead, saving several hundred bytes of RAM
+- CORS headers are only sent in HTTP responses if explicitly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
 - Added aux port diagnostics (overrun and framing errors) to M122 report
+- [Duet 3 Mini] Stall homing is now supported
 - [Duet 3 Mini] Added data cache hit count to M122 report
 - [Duet + SBC] 12864 displays are now supported. Note, the 'files' menu item type is not supported in SBC mode.
 
 Bug fixes:
-- Fixed crash that occured on some systems when M918 was used to configure a 12864 display but no SD card was present
+- Fixed crash that occurred on some systems when M918 was used to configure a 12864 display but no SD card was present
 - After updating PanelDue firmware with M997 S4 the PanelDue did not always reset automatically
 - If M997 S4 was used but no aux port was configured, the firmware could reset after 20 seconds
-- Laser and magnetic filament monnitors paused print even when disabled if no data was received or the sensor reported an error
+- Laser and magnetic filament monitors paused the print even when disabled if no data was received or the sensor reported an error
+- In M122 reports, queued GCodes were printed with spurious characters after each command
 - [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
 
 RepRapFirmware 3.2-beta4.1
 ==========================
 
 Upgrade notes:
-- **Update 2012-12-03**: the binaries for the tool and expansion boards have been updated to versoin 3.2beta4.1, to fix a stack overflow when a heater fault occurs on a Duet 3 tool or expansion board
+- **Update 2012-12-03**: the binaries for the tool and expansion boards have been updated to version 3.2beta4.1, to fix a stack overflow when a heater fault occurs on a Duet 3 tool or expansion board
 - ~~Only the main board binaries have changed since beta4. Tool/expansion board binaries,~~ DuetWiFiServer and DWC are the same as in beta4.
 - [Duet 3 + expansion/tool boards] You must update expansion/tool board firmware to the ~~3.2beta4~~ **3.2beta4.1** binaries, which are included in this release
 
