@@ -3,6 +3,9 @@
  *
  *  Created on: 4 Dec 2020
  *      Author: David
+ *
+ *  CRC-16 computation. This is currently not speed-critical because it is only used when flashing PanelDue.
+ *  So we don't use the hardware CRC unit on the SAME5x, or slicing-by-4.
  */
 
 #include "CRC16.h"
@@ -48,10 +51,6 @@ CRC16::CRC16() noexcept
 	Reset();
 }
 
-CRC16::~CRC16()
-{
-}
-
 void CRC16::Update(char c) noexcept
 {
 	crc = (uint16_t)((crc << 8) ^ crc16_table[((crc >> 8) ^ c) & 0x00ff]);
@@ -59,8 +58,7 @@ void CRC16::Update(char c) noexcept
 
 void CRC16::Update(const char *c, size_t len) noexcept
 {
-	//TODO speed this up, by unrolling the loop and/or using slicing-by-4 and/or using hardware CRC on the SAME5x
-	uint16_t locCrc = crc;
+	uint16_t locCrc = crc;			// copy into a local variable to make it faster and smaller
 	while (len != 0)
 	{
 		locCrc = (uint16_t)((locCrc << 8) ^ crc16_table[((locCrc >> 8) ^ *c++) & 0x00ff]);
