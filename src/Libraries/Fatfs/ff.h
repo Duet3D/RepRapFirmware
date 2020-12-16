@@ -22,6 +22,10 @@
 #ifndef FF_DEFINED
 #define FF_DEFINED	86604	/* Revision ID */
 
+#if 1	// dc
+# include <Core.h>		// for processor definitions
+#endif
+
 #ifdef __cplusplus
 # define NOEXCEPT	noexcept
 extern "C" {
@@ -166,7 +170,11 @@ typedef struct {
 	DWORD	bitbase;		/* Allocation bitmap base sector */
 #endif
 	DWORD	winsect;		/* Current sector appearing in the win[] */
+#if SAME70
+	BYTE *win;				// pointer to the sector buffer, which is in non-cached memory
+#else
 	BYTE	win[FF_MAX_SS];	/* Disk access window for Directory, FAT (and file data at tiny cfg) */
+#endif
 } FATFS;
 
 

@@ -116,24 +116,23 @@
 /* Get a value of 2 to 15 bit. */
 #define BIT_2_TO_15_MASK         0x0000fffc
 
-#define __nocache	__attribute__((section(".ram_nocache")))
-
 /* Message ram definition. */
-alignas(4) __nocache static struct mcan_rx_element mcan0_rx_buffer[CONF_MCAN0_RX_BUFFER_NUM];
-alignas(4) __nocache static struct mcan_rx_element mcan0_rx_fifo_0[CONF_MCAN0_RX_FIFO_0_NUM];
-alignas(4) __nocache static struct mcan_rx_element mcan0_rx_fifo_1[CONF_MCAN0_RX_FIFO_1_NUM];
-alignas(4) __nocache static struct mcan_tx_element mcan0_tx_buffer[CONF_MCAN0_TX_BUFFER_NUM + CONF_MCAN0_TX_FIFO_QUEUE_NUM];
-alignas(4) __nocache static struct mcan_tx_event_element mcan0_tx_event_fifo[CONF_MCAN0_TX_EVENT_FIFO];
-alignas(4) __nocache static struct mcan_standard_message_filter_element mcan0_rx_standard_filter[CONF_MCAN0_RX_STANDARD_ID_FILTER_NUM];
-alignas(4) __nocache static struct mcan_extended_message_filter_element mcan0_rx_extended_filter[CONF_MCAN0_RX_EXTENDED_ID_FILTER_NUM];
+#define CanMemory	__attribute__ ((section (".CanMessage")))
+alignas(4) CanMemory static struct mcan_rx_element mcan0_rx_buffer[CONF_MCAN0_RX_BUFFER_NUM];
+alignas(4) CanMemory static struct mcan_rx_element mcan0_rx_fifo_0[CONF_MCAN0_RX_FIFO_0_NUM];
+alignas(4) CanMemory static struct mcan_rx_element mcan0_rx_fifo_1[CONF_MCAN0_RX_FIFO_1_NUM];
+alignas(4) CanMemory static struct mcan_tx_element mcan0_tx_buffer[CONF_MCAN0_TX_BUFFER_NUM + CONF_MCAN0_TX_FIFO_QUEUE_NUM];
+alignas(4) CanMemory static struct mcan_tx_event_element mcan0_tx_event_fifo[CONF_MCAN0_TX_EVENT_FIFO];
+alignas(4) CanMemory static struct mcan_standard_message_filter_element mcan0_rx_standard_filter[CONF_MCAN0_RX_STANDARD_ID_FILTER_NUM];
+alignas(4) CanMemory static struct mcan_extended_message_filter_element mcan0_rx_extended_filter[CONF_MCAN0_RX_EXTENDED_ID_FILTER_NUM];
 
-alignas(4) __nocache static struct mcan_rx_element mcan1_rx_buffer[CONF_MCAN1_RX_BUFFER_NUM];
-alignas(4) __nocache static struct mcan_rx_element mcan1_rx_fifo_0[CONF_MCAN1_RX_FIFO_0_NUM];
-alignas(4) __nocache static struct mcan_rx_element mcan1_rx_fifo_1[CONF_MCAN1_RX_FIFO_1_NUM];
-alignas(4) __nocache static struct mcan_tx_element mcan1_tx_buffer[CONF_MCAN1_TX_BUFFER_NUM + CONF_MCAN1_TX_FIFO_QUEUE_NUM];
-alignas(4) __nocache static struct mcan_tx_event_element mcan1_tx_event_fifo[CONF_MCAN1_TX_EVENT_FIFO];
-alignas(4) __nocache static struct mcan_standard_message_filter_element mcan1_rx_standard_filter[CONF_MCAN1_RX_STANDARD_ID_FILTER_NUM];
-alignas(4) __nocache static struct mcan_extended_message_filter_element mcan1_rx_extended_filter[CONF_MCAN1_RX_EXTENDED_ID_FILTER_NUM];
+alignas(4) CanMemory static struct mcan_rx_element mcan1_rx_buffer[CONF_MCAN1_RX_BUFFER_NUM];
+alignas(4) CanMemory static struct mcan_rx_element mcan1_rx_fifo_0[CONF_MCAN1_RX_FIFO_0_NUM];
+alignas(4) CanMemory static struct mcan_rx_element mcan1_rx_fifo_1[CONF_MCAN1_RX_FIFO_1_NUM];
+alignas(4) CanMemory static struct mcan_tx_element mcan1_tx_buffer[CONF_MCAN1_TX_BUFFER_NUM + CONF_MCAN1_TX_FIFO_QUEUE_NUM];
+alignas(4) CanMemory static struct mcan_tx_event_element mcan1_tx_event_fifo[CONF_MCAN1_TX_EVENT_FIFO];
+alignas(4) CanMemory static struct mcan_standard_message_filter_element mcan1_rx_standard_filter[CONF_MCAN1_RX_STANDARD_ID_FILTER_NUM];
+alignas(4) CanMemory static struct mcan_extended_message_filter_element mcan1_rx_extended_filter[CONF_MCAN1_RX_EXTENDED_ID_FILTER_NUM];
 
 static constexpr uint8_t dlc2len[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
 
