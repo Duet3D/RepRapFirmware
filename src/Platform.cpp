@@ -36,10 +36,11 @@
 #include "Logger.h"
 #include "Tasks.h"
 #include <Cache.h>
-#include "Hardware/SharedSpi/SharedSpiDevice.h"
-#include "Math/Isqrt.h"
-#include "Hardware/I2C.h"
+#include <Hardware/SharedSpi/SharedSpiDevice.h>
+#include <Math/Isqrt.h>
+#include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
+#include <Storage/CRC32.h>
 
 #if SAM4E || SAM4S || SAME70
 # include <Flash.h>		// for flash_read_unique_id()
