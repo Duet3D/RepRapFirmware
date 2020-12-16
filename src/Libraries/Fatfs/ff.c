@@ -575,9 +575,23 @@ static const BYTE DbcTbl[] = MKCVTBL(TBL_DC, FF_CODE_PAGE);
 #if 1	//dc42
 // Function to check whether a buffer pointer is suitably aligned.
 // If it isn't then we must not do direct sector reads/writes due to limitations of the hardware
+
+#if SAME70
+extern uint32_t _nocache_ram_start;
+extern uint32_t _nocache_ram_end;
+#endif
+
 static inline _Bool isAligned(const BYTE *p)
 {
-#if FF_DISKIO_ALIGN == 1
+#if SAME70
+	// On the SAME70 all transfers must be within non-cached memory. We assume the whole buffer either is or isn't.
+	if (p < (const BYTE*)&_nocache_ram_start || p >= (const BYTE*)&_nocache_ram_end)
+	{
+		return false;
+	}
+#endif
+
+#if FF_DISKIO_ALIGN <= 1
 	return true;
 #else
 	return ((unsigned int)p & (FF_DISKIO_ALIGN - 1)) == 0;
@@ -1123,7 +1137,11 @@ static FRESULT sync_fs (	/* Returns FR_OK or FR_DISK_ERR */
 	if (res == FR_OK) {
 		if (fs->fs_type == FS_FAT32 && fs->fsi_flag == 1) {	/* FAT32: Update FSInfo sector if needed */
 			/* Create FSInfo structure */
+#if 1	//dc
+			mem_set(fs->win, 0, FF_MAX_SS);
+#else
 			mem_set(fs->win, 0, sizeof fs->win);
+#endif
 			st_word(fs->win + BS_55AA, 0xAA55);
 			st_dword(fs->win + FSI_LeadSig, 0x41615252);
 			st_dword(fs->win + FSI_StrucSig, 0x61417272);
@@ -1674,7 +1692,11 @@ static FRESULT dir_clear (	/* Returns FR_OK or FR_DISK_ERR */
 	if (sync_window(fs) != FR_OK) return FR_DISK_ERR;	/* Flush disk access window */
 	sect = clst2sect(fs, clst);		/* Top of the cluster */
 	fs->winsect = sect;				/* Set window to top of the cluster */
+#if 1	// dc
+	mem_set(fs->win, 0, FF_MAX_SS);	/* Clear window buffer */
+#else
 	mem_set(fs->win, 0, sizeof fs->win);	/* Clear window buffer */
+#endif
 #if FF_USE_LFN == 3		/* Quick table clear by using multi-secter write */
 	/* Allocate a temporary buffer */
 	for (szb = ((DWORD)fs->csize * SS(fs) >= MAX_MALLOC) ? MAX_MALLOC : fs->csize * SS(fs), ibuf = 0; szb > SS(fs) && (ibuf = ff_memalloc(szb)) == 0; szb /= 2) ;
