@@ -29,9 +29,10 @@ static_assert(SD_MMC_MEM_CNT == NumSdCards);
 
 // Private data and methods
 
-#if SAME70
-alignas(4) static __nocache uint8_t sectorBuffers[512][NumSdCards];
-#endif
+# if SAME70
+alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][512];
+alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
+# endif
 
 enum class CardDetectState : uint8_t
 {
@@ -121,6 +122,7 @@ static FileInfoParser infoParser;
 static DIR findDir;
 static FileWriteBuffer *freeWriteBuffers;
 #endif
+
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 static Mutex fsMutex;
 static FileStore files[MAX_FILES];
@@ -167,14 +169,14 @@ static FileStore files[MAX_FILES];
 FileWriteBuffer *MassStorage::AllocateWriteBuffer() noexcept
 {
 	MutexLocker lock(fsMutex);
-	if (freeWriteBuffers == nullptr)
-	{
-		return nullptr;
-	}
 
 	FileWriteBuffer * const buffer = freeWriteBuffers;
-	freeWriteBuffers = buffer->Next();
-	buffer->SetNext(nullptr);
+	if (buffer != nullptr)
+	{
+		freeWriteBuffers = buffer->Next();
+		buffer->SetNext(nullptr);
+		buffer->DataTaken();				// make sure that the write pointer is clear
+	}
 	return buffer;
 }
 
@@ -271,7 +273,11 @@ void MassStorage::Init() noexcept
 	freeWriteBuffers = nullptr;
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
+#if SAME70
+		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers, writeBufferStorage[i]);
+#else
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
+#endif
 	}
 
 	for (size_t card = 0; card < NumSdCards; ++card)
