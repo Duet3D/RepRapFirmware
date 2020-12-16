@@ -93,7 +93,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 			// Also try to allocate a write buffer so we can perform faster writes
 			// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
 			// especially as we need to flush messages to SD card regularly.
-			// Currently, append mode is used for the log file and for appending simulated print times to GCodes files (which required read access too).
+			// Currently, append mode is used for the log file and for appending simulated print times to GCodes files (which require read access too).
 			if (mode == OpenMode::write || mode == OpenMode::writeWithCrc)
 			{
 				writeBuffer = MassStorage::AllocateWriteBuffer();
@@ -497,7 +497,7 @@ bool FileStore::Write(const char *s, size_t len) noexcept
 			{
 				do
 				{
-					size_t bytesStored = writeBuffer->Store(s + totalBytesWritten, len - totalBytesWritten);
+					const size_t bytesStored = writeBuffer->Store(s + totalBytesWritten, len - totalBytesWritten);
 					if (writeBuffer->BytesLeft() == 0)
 					{
 						const size_t bytesToWrite = writeBuffer->BytesStored();

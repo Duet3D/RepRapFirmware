@@ -77,7 +77,7 @@
 
 #define LWIP_MEMPOOL(name,num,size,desc) LWIP_MEMPOOL_DECLARE(name,num,size,desc)
 
-#if SAME70	//dc
+#if defined(SAME70) && SAME70	//dc
 # define LWIP_PBUF_MEMPOOL(name, num, payload, desc) __attribute__((section(".ram_nocache"))) LWIP_MEMPOOL(name, num, (LWIP_MEM_ALIGN_SIZE(sizeof(struct pbuf)) + LWIP_MEM_ALIGN_SIZE(payload)), desc)
 #endif
 
@@ -85,7 +85,7 @@
 
 const struct memp_desc *const memp_pools[MEMP_MAX] = {
 #define LWIP_MEMPOOL(name,num,size,desc) &memp_ ## name,
-#if SAME70	//dc
+#if defined(SAME70) && SAME70	//dc
 # undef LWIP_PBUF_MEMPOOL
 #endif
 #include "lwip/priv/memp_std.h"

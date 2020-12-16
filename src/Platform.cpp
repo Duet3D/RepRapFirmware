@@ -36,10 +36,11 @@
 #include "Logger.h"
 #include "Tasks.h"
 #include <Cache.h>
-#include "Hardware/SharedSpi/SharedSpiDevice.h"
-#include "Math/Isqrt.h"
-#include "Hardware/I2C.h"
+#include <Hardware/SharedSpi/SharedSpiDevice.h>
+#include <Math/Isqrt.h>
+#include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
+#include <Storage/CRC32.h>
 
 #if SAM4E || SAM4S || SAME70
 # include <Flash.h>		// for flash_read_unique_id()
@@ -2287,12 +2288,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			crc.Update(
 #if SAME5x
 						reinterpret_cast<const char*>(HSRAM_ADDR),
-#elif SAME70
-						reinterpret_cast<const char*>(IRAM_ADDR + 0x10000),		// make sure we choose an address after the end of the non-cacheable RAM
 #else
-						reinterpret_cast<const char*>(IRAM_ADDR),
+						reinterpret_cast<const char*>(IRAM_ADDR),		// for the SAME70 this is in the non-cacheable RAM, which is the usual case when computing a CRC
 #endif
-						1024);
+						4096);
 			uint32_t now2 = SysTick->VAL;
 			asm volatile("":::"memory");
 			cpu_irq_enable();
@@ -2300,7 +2299,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			now2 &= 0x00FFFFFF;
 			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
 			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			reply.printf("CRC of 1kb %.2fus", (double)(tim1 * 10000)/SystemCoreClock);
+			reply.printf("CRC of 4kb %.2fus", (double)(tim1 * 10000)/SystemCoreClock);
 		}
 		break;
 

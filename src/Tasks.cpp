@@ -223,12 +223,12 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 static ptrdiff_t GetHandlerFreeStack() noexcept
 {
 	const char * const ramend = &_estack;
-	const char * stack_lwm = heapTop;
+	const char * stack_lwm = sysStackLimit;
 	while (stack_lwm < ramend && *stack_lwm == memPattern)
 	{
 		++stack_lwm;
 	}
-	return stack_lwm - heapLimit;
+	return stack_lwm - sysStackLimit;
 }
 
 ptrdiff_t Tasks::GetNeverUsedRam() noexcept

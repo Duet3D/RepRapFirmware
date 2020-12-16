@@ -19,7 +19,7 @@ private:
 
 public:
 	CRC16() noexcept;
-	~CRC16();
+
 	void Update(char c) noexcept;
 	void Update(const char *c, size_t len) noexcept;
 	void Reset(uint16_t initialValue = 0) noexcept;

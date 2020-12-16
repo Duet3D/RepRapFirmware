@@ -577,15 +577,17 @@ static const BYTE DbcTbl[] = MKCVTBL(TBL_DC, FF_CODE_PAGE);
 // If it isn't then we must not do direct sector reads/writes due to limitations of the hardware
 
 #if SAME70
-extern uint32_t _nocache_ram_start;
-extern uint32_t _nocache_ram_end;
+extern uint8_t _nocache_ram_start;
+extern uint8_t _nocache_ram_end;
 #endif
 
-static inline _Bool isAligned(const BYTE *p)
+//extern int debugPrintf(const char *, ...);
+
+static _Bool isAligned(const BYTE *p)
 {
 #if SAME70
 	// On the SAME70 all transfers must be within non-cached memory. We assume the whole buffer either is or isn't.
-	if (p < (const BYTE*)&_nocache_ram_start || p >= (const BYTE*)&_nocache_ram_end)
+	if (p < &_nocache_ram_start || p >= &_nocache_ram_end)
 	{
 		return false;
 	}
@@ -594,7 +596,7 @@ static inline _Bool isAligned(const BYTE *p)
 #if FF_DISKIO_ALIGN <= 1
 	return true;
 #else
-	return ((unsigned int)p & (FF_DISKIO_ALIGN - 1)) == 0;
+	return ((uint32_t)p & (FF_DISKIO_ALIGN - 1)) == 0;
 #endif
 }
 #endif

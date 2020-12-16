@@ -32,13 +32,17 @@ const size_t FileWriteBufLen = 4096;
 class FileWriteBuffer
 {
 public:
+#if SAME70
+	FileWriteBuffer(FileWriteBuffer *n, char *storage) noexcept : next(n), index(0), buf(storage) { }
+#else
 	FileWriteBuffer(FileWriteBuffer *n) noexcept : next(n), index(0) { }
+#endif
 
 	FileWriteBuffer *Next() const noexcept { return next; }
 	void SetNext(FileWriteBuffer *n) noexcept { next = n; }
 
-	char *Data() noexcept { return reinterpret_cast<char *>(data32); }
-	const char *Data() const noexcept { return reinterpret_cast<const char *>(data32); }
+	char *Data() noexcept { return buf; }
+	const char *Data() const noexcept { return buf; }
 	const size_t BytesStored() const noexcept { return index; }
 	const size_t BytesLeft() const noexcept { return FileWriteBufLen - index; }
 
@@ -50,13 +54,17 @@ private:
 	FileWriteBuffer *next;
 
 	size_t index;
-	uint32_t data32[FileWriteBufLen / sizeof(uint32_t)];	// 32-bit aligned buffer for better HSMCI performance
+#if SAME70
+	char *buf;
+#else
+	alignas(4) char buf[FileWriteBufLen];								// 32-bit aligned buffer for better HSMCI performance
+#endif
 };
 
 inline size_t FileWriteBuffer::Store(const char *data, size_t length) noexcept
 {
 	size_t bytesToStore = min<size_t>(BytesLeft(), length);
-	memcpy(Data() + index, data, bytesToStore);
+	memcpy(buf + index, data, bytesToStore);
 	index += bytesToStore;
 	return bytesToStore;
 }
