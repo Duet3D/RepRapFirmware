@@ -6,20 +6,21 @@ Upgrade notes:
 - [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.2RC1 also
 - [Duet + SBC] The SPI protocol has changed, therefore versions of DCS prior to 3.2RC1 will be unable to communicate with this version of RRF
 - [DWC] If you are running DWC in a development environment (e.g. via `npm run serve`), use [M586 C"*"](https://duet3d.dozuki.com/Wiki/Gcode#Section_M586_Configure_network_protocols) or similar to permit cross-origin HTTP access
-- [Duet 2 + SBC] You may need to use Bossa to upgrade to 3.2RC1
 
 Known issues:
 - [Duet + SBC + 12864 display] Menu files are slow to load
 
 New features:
-- New M595 command is provided to increase the length of the movement queue and to pre-allocate DriveMovement objects
+- New M595 command is provided to allow the movement queue to be lengthened and optionally to pre-allocate DriveMovement objects
 - The number of DriveMovement objects pre-allocated is reduced to save memory. If the system runs out of DriveMovement objects, it will try to allocate new ones dynamically.
-- DDAs and DriveMovement objects are now allocated from a non-freeable memory pool to reduce memory overhead, saving several hundred bytes of RAM
+- The amount of free RAM has been increased. This should be sufficient to allow 12864 displays to be supported on Duet WiFi/Ethernet.
 - CORS headers are only sent in HTTP responses if explicitly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
 - Added aux port diagnostics (overrun and framing errors) to M122 report
+- When an unexpected software reset occurs, a stack usage check is performed and the result added to the software reset data
 - [Duet 3 Mini] Stall homing is now supported
 - [Duet 3 Mini] Added data cache hit count to M122 report
 - [Duet + SBC] 12864 displays are now supported. Note, the 'files' menu item type is not supported in SBC mode.
+- [Duet 3 MBHC] Significant performance improvements
 
 Bug fixes:
 - Fixed crash that occurred on some systems when M918 was used to configure a 12864 display but no SD card was present
@@ -28,6 +29,7 @@ Bug fixes:
 - Laser and magnetic filament monitors paused the print even when disabled if no data was received or the sensor reported an error
 - In M122 reports, queued GCodes were printed with spurious characters after each command
 - [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
+- [Duet 3 MB6HC] The second aux port using the IO_1 connector did not work
 
 RepRapFirmware 3.2-beta4.1
 ==========================
