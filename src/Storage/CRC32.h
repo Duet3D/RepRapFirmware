@@ -9,14 +9,11 @@
 # define USE_SAME5x_HARDWARE_CRC	0
 #endif
 
-// Note: when USE_SAME5x_HARDWARE_CRC is true, the UIpdate methods must not be called from an ISR!
+// Note: when USE_SAME5x_HARDWARE_CRC is true, the Update methods must not be called from an ISR!
 class CRC32
 {
 private:
 	uint32_t crc;
-#if USE_SAME5x_HARDWARE_CRC
-	uint32_t finalCrc;
-#endif
 
 public:
 	CRC32() noexcept;
@@ -30,19 +27,12 @@ public:
 
 inline uint32_t CRC32::Get() const noexcept
 {
-#if USE_SAME5x_HARDWARE_CRC
-	return finalCrc;
-#else
 	return ~crc;
-#endif
 }
 
 inline void CRC32::Reset(uint32_t initialValue) noexcept
 {
 	crc = initialValue;
-#if USE_SAME5x_HARDWARE_CRC
-	finalCrc = ~initialValue;				// this is only correct if initialValue is a binary palindrome, but that is normally the case, and it only matters when we CRC a zero-length block
-#endif
 }
 
 #endif

@@ -3,8 +3,18 @@
 #include "CRC32.h"
 
 #if USE_SAME5x_HARDWARE_CRC
+
 # include <RTOSIface/RTOSIface.h>
-#else
+
+// Reverse the order of bits in a 32-bit word
+static inline uint32_t Reflect(uint32_t v) noexcept
+{
+	uint32_t rslt;
+	asm("rbit %0,%1" : "=r" (rslt) : "r" (v));
+	return rslt;
+}
+
+#endif
 
 constexpr uint32_t CRC_32_TAB[256] =
 {
@@ -54,7 +64,7 @@ constexpr uint32_t CRC_32_TAB[256] =
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
 
-# if SAME70 || SAME5x
+# if SAME70 || (SAME5x && !USE_SAME5x_HARDWARE_CRC)
 
 // On SAME70 we have more flash memory available, so use 4K table instead of 1K and the faster slicing-by-4 algorithm
 constexpr uint32_t CRC_32_TAB1[256] =
@@ -165,7 +175,6 @@ constexpr uint32_t CRC_32_TAB3[256] =
 	0x43D23E48,0xFB6E592D,0xE9DBF6C3,0x516791A6,0xCCB0A91F,0x740CCE7A,0x66B96194,0xDE0506F1,
 };
 
-# endif
 #endif
 
 CRC32::CRC32() noexcept
@@ -175,21 +184,7 @@ CRC32::CRC32() noexcept
 
 void CRC32::Update(char c) noexcept
 {
-#if USE_SAME5x_HARDWARE_CRC
-	// This is very inefficient because of the call to TaslCriticalSectionLocker, but I don't think we use this function anyway.
-	TaskCriticalSectionLocker lock;
-
-	DMAC->CRCCTRL.reg = DMAC_CRCCTRL_CRCBEATSIZE_BYTE | DMAC_CRCCTRL_CRCSRC_DISABLE | DMAC_CRCCTRL_CRCPOLY_CRC32;	// disable the CRC unit
-	DMAC->CRCCHKSUM.reg = crc;
-	DMAC->CRCCTRL.reg = DMAC_CRCCTRL_CRCBEATSIZE_BYTE | DMAC_CRCCTRL_CRCSRC_IO | DMAC_CRCCTRL_CRCPOLY_CRC32;
-	DMAC->CRCDATAIN.reg = c;
-	asm volatile("nop");
-	crc = DMAC->CRCCHKSUM.reg;
-	DMAC->CRCSTATUS.reg = DMAC_CRCSTATUS_CRCBUSY;
-	finalCrc = DMAC->CRCCHKSUM.reg;
-#else
 	crc = (CRC_32_TAB[(crc ^ c) & 0xFF] ^ (crc >> 8));
-#endif
 }
 
 // A note on CRC algorithms on ARM:
@@ -203,22 +198,23 @@ void CRC32::Update(const char *s, size_t len) noexcept
 	const char * const end = s + len;
 
 #if USE_SAME5x_HARDWARE_CRC
-	if (s != end)
+	if (len >= 26)								// 26 is about the optimum changeover point
 	{
+		uint32_t reflectedCrc = Reflect(crc);
 		TaskCriticalSectionLocker lock;			// we need exclusive use of the CRC unit
 
 		if ((reinterpret_cast<uint32_t>(s) & 3) != 0)
 		{
 			// Process any bytes at the start until we reach a dword boundary
 			DMAC->CRCCTRL.reg = DMAC_CRCCTRL_CRCBEATSIZE_BYTE | DMAC_CRCCTRL_CRCSRC_DISABLE | DMAC_CRCCTRL_CRCPOLY_CRC32;	// disable the CRC unit
-			DMAC->CRCCHKSUM.reg = crc;
+			DMAC->CRCCHKSUM.reg = reflectedCrc;
 			DMAC->CRCCTRL.reg = DMAC_CRCCTRL_CRCBEATSIZE_BYTE | DMAC_CRCCTRL_CRCSRC_IO | DMAC_CRCCTRL_CRCPOLY_CRC32;
 			do
 			{
 				DMAC->CRCDATAIN.reg = *s++;
 			} while ((reinterpret_cast<uint32_t>(s) & 3) != 0 && s != end);
 
-			crc = DMAC->CRCCHKSUM.reg;
+			reflectedCrc = DMAC->CRCCHKSUM.reg;
 			DMAC->CRCSTATUS.reg = DMAC_CRCSTATUS_CRCBUSY;
 		}
 
@@ -227,7 +223,7 @@ void CRC32::Update(const char *s, size_t len) noexcept
 		if (s != endAligned)
 		{
 			DMAC->CRCCTRL.reg = DMAC_CRCCTRL_CRCBEATSIZE_WORD | DMAC_CRCCTRL_CRCSRC_DISABLE | DMAC_CRCCTRL_CRCPOLY_CRC32;	// disable the CRC unit
-			DMAC->CRCCHKSUM.reg = crc;
+			DMAC->CRCCHKSUM.reg = reflectedCrc;
 			DMAC->CRCCTRL.reg = DMAC_CRCCTRL_CRCBEATSIZE_WORD | DMAC_CRCCTRL_CRCSRC_IO | DMAC_CRCCTRL_CRCPOLY_CRC32;
 			do
 			{
@@ -235,7 +231,7 @@ void CRC32::Update(const char *s, size_t len) noexcept
 				s += 4;
 			} while (s != endAligned);
 
-			crc = DMAC->CRCCHKSUM.reg;
+			reflectedCrc = DMAC->CRCCHKSUM.reg;
 			DMAC->CRCSTATUS.reg = DMAC_CRCSTATUS_CRCBUSY;
 		}
 
@@ -243,7 +239,7 @@ void CRC32::Update(const char *s, size_t len) noexcept
 		if (s != end)
 		{
 			DMAC->CRCCTRL.reg = DMAC_CRCCTRL_CRCBEATSIZE_BYTE | DMAC_CRCCTRL_CRCSRC_DISABLE | DMAC_CRCCTRL_CRCPOLY_CRC32;	// disable the CRC unit
-			DMAC->CRCCHKSUM.reg = crc;
+			DMAC->CRCCHKSUM.reg = reflectedCrc;
 			DMAC->CRCCTRL.reg = DMAC_CRCCTRL_CRCBEATSIZE_BYTE | DMAC_CRCCTRL_CRCSRC_IO | DMAC_CRCCTRL_CRCPOLY_CRC32;
 			do
 			{
@@ -251,55 +247,57 @@ void CRC32::Update(const char *s, size_t len) noexcept
 			}
 			while (s != end);
 
-			crc = DMAC->CRCCHKSUM.reg;
+			reflectedCrc = DMAC->CRCCHKSUM.reg;
 			DMAC->CRCSTATUS.reg = DMAC_CRCSTATUS_CRCBUSY;
 		}
-		finalCrc = DMAC->CRCCHKSUM.reg;
+		crc = Reflect(reflectedCrc);
 	}
-#else
-	// Work on a local copy of the crc to avoid storing it all the time
-	uint32_t locCrc = crc;
-
-	// Process any bytes at the start until we reach a dword boundary
-	while ((reinterpret_cast<uint32_t>(s) & 3) != 0 && s != end)
+	else
+#endif
 	{
-		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
-	}
+		// Work on a local copy of the crc to avoid storing it all the time
+		uint32_t locCrc = crc;
 
-# if SAME70 || SAME5x
-	// Process an whole number of quadwords
-	const char * const endAligned = s + ((end - s) & ~7);
-	while (s != endAligned)
-	{
-		// Slicing-by-4 algorithm, 2 dwords at a time
-		const uint32_t data0 = *reinterpret_cast<const uint32_t*>(s) ^ locCrc;
-	    locCrc = CRC_32_TAB[(data0 >> 24) & 0xFF] ^ CRC_32_TAB1[(data0 >> 16) & 0xFF] ^ CRC_32_TAB2[(data0 >> 8) & 0xFF] ^ CRC_32_TAB3[data0 & 0xFF];
-		const uint32_t data1 = *reinterpret_cast<const uint32_t*>(s + 4) ^ locCrc;
-	    locCrc = CRC_32_TAB[(data1 >> 24) & 0xFF] ^ CRC_32_TAB1[(data1 >> 16) & 0xFF] ^ CRC_32_TAB2[(data1 >> 8) & 0xFF] ^ CRC_32_TAB3[data1 & 0xFF];
-		s += 8;
-	}
+		// Process any bytes at the start until we reach a dword boundary
+		while ((reinterpret_cast<uint32_t>(s) & 3) != 0 && s != end)
+		{
+			locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
+		}
+
+# if SAME70 || (SAME5x && !USE_SAME5x_HARDWARE_CRC)
+		// Process an whole number of quadwords
+		const char * const endAligned = s + ((end - s) & ~7);
+		while (s != endAligned)
+		{
+			// Slicing-by-4 algorithm, 2 dwords at a time
+			const uint32_t data0 = *reinterpret_cast<const uint32_t*>(s) ^ locCrc;
+			locCrc = CRC_32_TAB[(data0 >> 24) & 0xFF] ^ CRC_32_TAB1[(data0 >> 16) & 0xFF] ^ CRC_32_TAB2[(data0 >> 8) & 0xFF] ^ CRC_32_TAB3[data0 & 0xFF];
+			const uint32_t data1 = *reinterpret_cast<const uint32_t*>(s + 4) ^ locCrc;
+			locCrc = CRC_32_TAB[(data1 >> 24) & 0xFF] ^ CRC_32_TAB1[(data1 >> 16) & 0xFF] ^ CRC_32_TAB2[(data1 >> 8) & 0xFF] ^ CRC_32_TAB3[data1 & 0xFF];
+			s += 8;
+		}
 # else
-	// Process a whole number of dwords
-	const char * const endAligned = s + ((end - s) & ~3);
-	while (s != endAligned)
-	{
-		const uint32_t data = *reinterpret_cast<const uint32_t*>(s);
-		s += 4;
-		locCrc = (CRC_32_TAB[(locCrc ^ data) & 0xFF] ^ (locCrc >> 8));
-		locCrc = (CRC_32_TAB[(locCrc ^ (data >> 8)) & 0xFF] ^ (locCrc >> 8));
-		locCrc = (CRC_32_TAB[(locCrc ^ (data >> 16)) & 0xFF] ^ (locCrc >> 8));
-		locCrc = (CRC_32_TAB[(locCrc ^ (data >> 24)) & 0xFF] ^ (locCrc >> 8));
-	}
+		// Process a whole number of dwords
+		const char * const endAligned = s + ((end - s) & ~3);
+		while (s != endAligned)
+		{
+			const uint32_t data = *reinterpret_cast<const uint32_t*>(s);
+			s += 4;
+			locCrc = (CRC_32_TAB[(locCrc ^ data) & 0xFF] ^ (locCrc >> 8));
+			locCrc = (CRC_32_TAB[(locCrc ^ (data >> 8)) & 0xFF] ^ (locCrc >> 8));
+			locCrc = (CRC_32_TAB[(locCrc ^ (data >> 16)) & 0xFF] ^ (locCrc >> 8));
+			locCrc = (CRC_32_TAB[(locCrc ^ (data >> 24)) & 0xFF] ^ (locCrc >> 8));
+		}
 # endif
 
-	// Process up to 7 (SAME70/SAME5x) or 3 (others) bytes at the end
-	while (s != end)
-	{
-		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
-	}
+		// Process up to 7 (SAME70/SAME5x) or 3 (others) bytes at the end
+		while (s != end)
+		{
+			locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
+		}
 
-	crc = locCrc;
-#endif
+		crc = locCrc;
+	}
 }
 
 // End

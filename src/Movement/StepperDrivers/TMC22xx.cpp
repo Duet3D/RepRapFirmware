@@ -361,7 +361,7 @@ static inline uint8_t Reflect(uint8_t b) noexcept
 	return SlowReflect(b);
 #else
 	uint32_t temp = b;
-	asm("rbit %1,%0" : "=r" (temp) : "r" (temp));
+	asm("rbit %0,%1" : "=r" (temp) : "r" (temp));
 	return temp >> 24;
 #endif
 }
