@@ -444,6 +444,7 @@ static pbuf *gmac_low_level_input(struct netif *netif) noexcept
 		const uint32_t length = p_rx->status.val & GMAC_RXD_LEN_MASK;
 
 		/* Fetch pre-allocated pbuf. */
+		Cache::InvalidateAfterDMAReceive(p->payload, length);
 		p->len = length;
 
 		/* Remove this pbuf from its descriptor. */

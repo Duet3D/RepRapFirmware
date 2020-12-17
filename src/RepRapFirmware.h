@@ -134,6 +134,10 @@ static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logica
 #define THROWS(...)				// expands to nothing, for providing exception specifications
 #define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
 
+// Assertion mechanism
+extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute((naked));
+#define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
+
 // Struct to hold min, max and current values
 struct MinMaxCurrent
 {
