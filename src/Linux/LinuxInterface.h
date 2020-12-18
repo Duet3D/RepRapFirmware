@@ -66,9 +66,9 @@ private:
 	bool reportPause, reportPauseWritten, printStarted, printStopped;
 	StopPrintReason printStopReason;
 
-	char codeBuffer[SpiCodeBufferSize];
-	volatile uint16_t rxPointer, txPointer, txLength;
-	bool sendBufferUpdate;
+	char *codeBuffer;
+	volatile uint16_t rxPointer, txPointer, txEnd;
+	volatile bool sendBufferUpdate;
 
 	uint32_t iapWritePointer;
 	uint32_t iapRamAvailable;											// must be at least 64Kb otherwise the SPI IAP can't work
