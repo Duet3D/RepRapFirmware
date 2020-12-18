@@ -145,6 +145,11 @@ bool FilamentMonitor::IsValid() const noexcept
 			reprap.SensorsUpdated();
 		}
 
+		if (newSensorType == 0)
+		{
+			return GCodeResult::ok;												// M591 D# P0 just deletes any existing sensor
+		}
+
 		gb.MustSee('C');														// make sure the port name parameter is present
 		sensor = Create(extruder, newSensorType, gb, reply);					// create the new sensor
 		if (sensor == nullptr)

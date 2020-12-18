@@ -415,6 +415,34 @@ RepRap::RepRap() noexcept
 	// Don't call constructors for other objects here
 }
 
+#if 0
+
+///DEBUG to catch memory corruption
+const size_t WatchSize = 32768;
+uint32_t *watchBuffer;
+
+static void InitWatchBuffer() noexcept
+{
+	watchBuffer = (uint32_t*)malloc(WatchSize);
+	memset(watchBuffer, 0x5A, WatchSize);
+}
+
+static void CheckWatchBuffer(unsigned int module) noexcept
+{
+	uint32_t *p = watchBuffer, *end = watchBuffer + 32768/sizeof(uint32_t);
+	while (p < end)
+	{
+		if (*p != 0x5A5A5A5A)
+		{
+			debugPrintf("Address %p data %08" PRIx32 " module %u\n", p, *p, module);
+			*p = 0x5A5A5A5A;
+		}
+		++p;
+	}
+}
+
+#endif
+
 void RepRap::Init() noexcept
 {
 	OutputBuffer::Init();
