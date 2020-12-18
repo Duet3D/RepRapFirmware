@@ -61,7 +61,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 #define SUPPORT_CAN_EXPANSION	0
 #endif
 
-#define SUPPORT_DOTSTAR_LED		1
+#define SUPPORT_LED_STRIPS		1
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER			1					// set zero to disable support for FreeLSS scanners
@@ -307,7 +307,7 @@ constexpr Pin LcdNeopixelOutPin = PortBPin(14);			// shared with io4.out
 // Neopixel output
 constexpr Pin NeopixelOutPin = PortAPin(8);
 constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;		// QSPI Data[0]
-#define DOTSTAR_USES_USART		(0)
+#define LEDSTRIP_USES_USART		(0)
 
 // Shared SPI definitions
 constexpr uint8_t SharedSpiSercomNumber = 7;

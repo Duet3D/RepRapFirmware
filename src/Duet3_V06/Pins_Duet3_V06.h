@@ -32,7 +32,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_VREF_MONITOR		1
 
 #define SUPPORT_CAN_EXPANSION	1
-#define SUPPORT_DOTSTAR_LED		1
+#define SUPPORT_LED_STRIPS		1
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
@@ -148,7 +148,7 @@ constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 
 // DotStar LED control
-#define DOTSTAR_USES_USART	0
+#define LEDSTRIP_USES_USART	0
 
 constexpr Pin DotStarMosiPin = PortAPin(13);
 constexpr Pin DotStarSclkPin = PortAPin(14);

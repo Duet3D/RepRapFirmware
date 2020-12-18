@@ -42,8 +42,8 @@
 # include "Display/Display.h"
 #endif
 
-#if SUPPORT_DOTSTAR_LED
-# include "Fans/DotStarLed.h"
+#if SUPPORT_LED_STRIPS
+# include <Fans/LedStripDriver.h>
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -1905,9 +1905,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			break;
 
-#if SUPPORT_DOTSTAR_LED
+#if SUPPORT_LED_STRIPS
 		case 150:
-			result = DotStarLed::SetColours(gb, reply);
+			result = LedStripDriver::SetColours(gb, reply);
 			break;
 #endif
 

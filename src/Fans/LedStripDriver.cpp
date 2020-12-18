@@ -5,16 +5,16 @@
  *      Author: David
  */
 
-#include "DotStarLed.h"
+#include <Fans/LedStripDriver.h>
 
-#if SUPPORT_DOTSTAR_LED
+#if SUPPORT_LED_STRIPS
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
 #include <RepRap.h>
 #include <GCodes/GCodes.h>
 
-#if DOTSTAR_USES_USART
+#if LEDSTRIP_USES_USART
 # include <sam/drivers/pdc/pdc.h>
 # include <sam/drivers/usart/usart.h>
 #else
@@ -33,36 +33,57 @@
 # define USE_16BIT_SPI	0		// set to use 16-bit SPI transfers instead of 8-bit
 #endif
 
-#if USE_16BIT_SPI && DOTSTAR_USES_USART
+#if USE_16BIT_SPI && LEDSTRIP_USES_USART
 # error Invalid combination
 #endif
 
+// On Duet 3 Mini only we support a string of three bit-banged Neopixels on the 12864 display
+#define SUPPORT_BITBANG_NEOPIXEL	(defined(DUET3MINI))
+#define SUPPORT_DOTSTAR				(!defined(DUET3MINI))
+
 // Duet 5 Mini only supports NeoPixel, not DotStar. So the DotStar code is dead in the Duet 3 Mini build.
 
-namespace DotStarLed
+namespace LedStripDriver
 {
 	constexpr uint32_t DefaultDotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 	constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2500000;		// must be between about 2MHz and about 4MHz
 	constexpr uint32_t DefaultSpiFrequencies[2] = { DefaultDotStarSpiClockFrequency, DefaultNeoPixelSpiClockFrequency };
-	constexpr uint32_t MinNeoPixelResetTicks = (50 * StepTimer::StepClockRate)/1000000;		// 50us minimum Neopixel reset time
+	constexpr uint32_t MinNeoPixelResetTicks = (250 * StepTimer::StepClockRate)/1000000;		// 250us minimum Neopixel reset time on later chips
 
 	constexpr size_t ChunkBufferSize = 720;								// the size of our DMA buffer. DotStar LEDs use 4 bytes/LED, NeoPixels use 12 bytes/LED.
 	constexpr unsigned int MaxDotStarChunkSize = ChunkBufferSize/4;		// maximum number of DotStarLEDs we DMA to in one go. Most strips have 30 LEDs/metre.
 	constexpr unsigned int MaxNeoPixelChunkSize = ChunkBufferSize/12;	// maximum number of NeoPixels we can support. A full ring contains 60.
 
-	static uint32_t ledType = 1;										// 0 = DotStar (not supported on Duet 3 Mini), 1 = NeoPixel, 2 = NeoPixel on Mini 12864 display (Duet 3 Mini only)
+	static uint32_t currentFrequency;									// the SPI frequency we are using
+	static unsigned int ledType = 1;									// 0 = DotStar (not supported on Duet 3 Mini), 1 = NeoPixel, 2 = NeoPixel on Mini 12864 display (Duet 3 Mini only)
 	static uint32_t whenDmaFinished = 0;								// the time in step clocks when we determined that the DMA had finished
 	static unsigned int numRemaining = 0;								// how much of the current request remains after the current transfer (DotStar only)
 	static unsigned int totalSent = 0;									// total amount of data sent since the start frame (DotStar only)
 	static unsigned int numAlreadyInBuffer = 0;							// number of pixels already store in the buffer (NeoPixel only)
-	static bool needStartFrame = true;									// true if we need to send a start frame with the next command
-	static bool busy = false;											// true if DMA was started and is not known to have finished
-	alignas(4) static uint8_t chunkBuffer[ChunkBufferSize];				// buffer for sending data to LEDs
+	static bool needStartFrame;											// true if we need to send a start frame with the next command
+	static bool busy;													// true if DMA was started and is not known to have finished
+	static bool needInit;
 
-	// DMA the data
+#if SAME70
+	alignas(4) static __nocache uint8_t chunkBuffer[ChunkBufferSize];	// buffer for sending data to LEDs
+#else
+	alignas(4) static uint8_t chunkBuffer[ChunkBufferSize];				// buffer for sending data to LEDs
+#endif
+
+	constexpr const char *LedTypeNames[] =
+	{
+		"DotStar",
+		"NeoPixel",
+#if SUPPORT_BITBANG_NEOPIXEL
+		"NeoPixel on 12864 display"
+#endif
+	};
+	constexpr unsigned int NumSupportedLedTypes = ARRAY_SIZE(LedTypeNames);
+
+	// DMA the data. Must be a multiple of 2 bytes if USE_16BIT_SPI is true.
 	static void DmaSendChunkBuffer(size_t numBytes) noexcept
 	{
-#if DOTSTAR_USES_USART
+#if LEDSTRIP_USES_USART
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_TXDIS;			// reset transmitter and receiver, disable transmitter
 		Pdc * const usartPdc = usart_get_pdc_base(DotStarUsart);
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS;		// disable the PDC
@@ -71,7 +92,6 @@ namespace DotStarLed
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_TXTEN;								// enable the PDC to send data
 		DotStarUsart->US_CR = US_CR_TXEN;										// enable transmitter
 #elif SAME5x
-		//TODO use 16-bit mode to make the DMA more efficient, but that probably requires us to swap alternate bytes in the buffer
 		DmacManager::DisableChannel(DmacChanDotStarTx);
 		DmacManager::SetTriggerSource(DmacChanDotStarTx, DmaTrigSource::qspi_tx);
 # if USE_16BIT_SPI
@@ -101,10 +121,10 @@ namespace DotStarLed
 						| XDMAC_CC_DAM_FIXED_AM
 						| XDMAC_CC_PERID((uint32_t)DmaTrigSource::qspitx);
 # if USE_16BIT_SPI
-		p_cfg.mbr_ubc = numBytes/2;			//TODO is this correct? The datasheet isn't clear.
-#else
+		p_cfg.mbr_ubc = numBytes/2;
+# else
 		p_cfg.mbr_ubc = numBytes;
-#endif
+# endif
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(chunkBuffer);
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(QSPI->QSPI_TDR));
 		xdmac_configure_transfer(XDMAC, DmacChanDotStarTx, &p_cfg);
@@ -120,7 +140,7 @@ namespace DotStarLed
 	{
 		if (busy)																// if we sent something
 		{
-#if DOTSTAR_USES_USART
+#if LEDSTRIP_USES_USART
 			if ((DotStarUsart->US_CSR & US_CSR_ENDTX) != 0)						// if we are no longer sending
 #elif SAME5x
 			if ((DmacManager::GetAndClearChannelStatus(DmacChanDotStarTx) & DMAC_CHINTFLAG_TCMPL) != 0)
@@ -136,9 +156,9 @@ namespace DotStarLed
 	}
 
 	// Setup the SPI peripheral. Only call this when the busy flag is not set.
-	static void SetupSpi(uint32_t frequency) noexcept
+	static void SetupSpi() noexcept
 	{
-#if DOTSTAR_USES_USART
+#if LEDSTRIP_USES_USART
 		// Set the USART in SPI mode, with the clock high when inactive, data changing on the falling edge of the clock
 		DotStarUsart->US_IDR = ~0u;
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
@@ -148,7 +168,7 @@ namespace DotStarLed
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		DotStarUsart->US_BRGR = SystemPeripheralClock()/frequency;				// set SPI clock frequency
+		DotStarUsart->US_BRGR = SystemPeripheralClock()/currentFrequency;				// set SPI clock frequency
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 #elif SAME5x
 		// DotStar on Duet 3 Mini uses the QSPI peripheral
@@ -158,7 +178,7 @@ namespace DotStarLed
 # else
 		QSPI->CTRLB.reg = QSPI_CTRLB_DATALEN_8BITS;								// SPI mode, 8 bits per transfer
 # endif
-		QSPI->BAUD.reg = QSPI_BAUD_CPOL | QSPI_BAUD_CPHA | QSPI_BAUD_BAUD(SystemCoreClockFreq/frequency - 1);
+		QSPI->BAUD.reg = QSPI_BAUD_CPOL | QSPI_BAUD_CPHA | QSPI_BAUD_BAUD(SystemCoreClockFreq/currentFrequency - 1);
 		QSPI->CTRLA.reg = QSPI_CTRLA_ENABLE;
 #elif SAME70
 		// DotStar on Duet 3 uses the QSPI peripheral
@@ -168,12 +188,16 @@ namespace DotStarLed
 # else
 		QSPI->QSPI_MR = QSPI_MR_NBBITS_8_BIT;									// SPI mode, 8 bits per transfer
 # endif
-		QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/frequency - 1);
+		QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/currentFrequency - 1);
 		QSPI->QSPI_CR = QSPI_CR_QSPIEN;
+		if (ledType == 1)
+		{
+			QSPI->QSPI_TDR = 0;													// send a word of zeros to set the data line low
+		}
 #endif
 	}
 
-#ifndef DUET3MINI
+#if SUPPORT_DOTSTAR
 	// Send data to DotStar LEDs
 	static GCodeResult SendDotStarData(uint32_t data, uint32_t numLeds, bool following) noexcept
 	{
@@ -273,11 +297,12 @@ namespace DotStarLed
 		{
 			DmaSendChunkBuffer(12 * numAlreadyInBuffer);			// send data by DMA to SPI
 			numAlreadyInBuffer = 0;
+			needStartFrame = true;
 		}
 		return GCodeResult::ok;
 	}
 
-#ifdef DUET3MINI
+#if SUPPORT_BITBANG_NEOPIXEL
 	constexpr uint32_t NanosecondsToCycles(uint32_t ns) noexcept
 	{
 		return (ns * (uint64_t)SystemCoreClockFreq)/1000000000u;
@@ -340,7 +365,7 @@ namespace DotStarLed
 #endif
 }
 
-void DotStarLed::Init() noexcept
+void LedStripDriver::Init() noexcept
 {
 #if SAME5x
 	SetPinFunction(NeopixelOutPin, NeopixelOutPinFunction);
@@ -356,11 +381,11 @@ void DotStarLed::Init() noexcept
 	pmc_enable_periph_clk(DotStarClockId);
 #endif
 
-	SetupSpi(DefaultSpiFrequencies[ledType]);
+	currentFrequency = DefaultSpiFrequencies[ledType];
+	SetupSpi();
 
 	// Initialise variables
-	numRemaining = totalSent = 0;
-	needStartFrame = true;
+	needInit = true;
 	busy = false;
 }
 
@@ -373,7 +398,7 @@ void DotStarLed::Init() noexcept
 //	If there is a gap or more then about 9us in transmission, the string will reset and the next command will be taken as applying to the start of the strip.
 //  Therefore we need to DMA the data for all LEDs in one go. So the maximum strip length is limited by the size of our DMA buffer.
 //	We buffer up incoming data until we get a command with the Following parameter missing or set to zero, then we DMA it all.
-GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (DmaInProgress())													// if we are sending something
 	{
@@ -385,17 +410,16 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 		return GCodeResult::notFinished;									// give the NeoPixels time to reset
 	}
 
-	bool seen = false;
-
 	// Deal with changing the LED type first
+	bool seenType = false;
 	if (gb.Seen('X'))
 	{
-		seen = true;
-		const uint32_t newType = gb.GetLimitedUIValue('X',
-#ifdef DUET3MINI
-				3, 1														// types 1 and 2 are supported
+		seenType = true;
+		const uint32_t newType = gb.GetLimitedUIValue('X', NumSupportedLedTypes,
+#if SUPPORT_DOTSTAR
+				0
 #else
-				2, 0														// types 0 and 1 are supported
+				1
 #endif
 			);
 		const bool typeChanged = (newType != ledType);
@@ -403,55 +427,48 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 		if (newType != 2)
 		{
 			bool setFrequency = typeChanged;
-
-			uint32_t frequency = DefaultSpiFrequencies[newType];
-			gb.TryGetUIValue('Q', frequency, setFrequency);
+			currentFrequency = DefaultSpiFrequencies[newType];
+			gb.TryGetUIValue('Q', currentFrequency, setFrequency);
 			if (setFrequency)
 			{
-				SetupSpi(frequency);
+				SetupSpi();
 			}
 		}
 
 		if (typeChanged)
 		{
 			ledType = newType;
-			numRemaining = totalSent = numAlreadyInBuffer = 0;
-			needStartFrame = true;
-
-			if (ledType == 1)
-			{
-				// Set the SPI data output low to start a WS2812 reset sequence
-				chunkBuffer[0] = 0;
-				DmaSendChunkBuffer(1);
-				return GCodeResult::notFinished;
-			}
-#ifdef DUET3MINI
-			else if (ledType == 2)
-			{
-				// Set the data output low to start a WS2812 reset sequence
-				IoPort::SetPinMode(LcdNeopixelOutPin, PinMode::OUTPUT_LOW);
-				whenDmaFinished = StepTimer::GetTimerTicks();
-				return GCodeResult::notFinished;
-			}
-#endif
+			needInit = true;
 		}
 	}
 
-	if (ledType == 2)
+	if (needInit)
 	{
-		// Interrupts are disabled while bit-banging the data, so make sure movement has stopped
-		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		// Either we changed the type, or this is first-time initialisation
+		numRemaining = totalSent = numAlreadyInBuffer = 0;
+		needInit = false;
+
+#if SUPPORT_BITBANG_NEOPIXEL
+		if (ledType == 2)
 		{
-			return GCodeResult::notFinished;
+			// Set the data output low to start a WS2812 reset sequence
+			IoPort::SetPinMode(LcdNeopixelOutPin, PinMode::OUTPUT_LOW);
+			whenDmaFinished = StepTimer::GetTimerTicks();
 		}
+#endif
+		needStartFrame = true;
+		return GCodeResult::notFinished;
 	}
 
 	// Get the RGB and brightness values
 	uint32_t red = 0, green = 0, blue = 0, brightness = 128, numLeds = MaxDotStarChunkSize;
 	bool following = false;
-	gb.TryGetLimitedUIValue('R', red, seen, 256);
-	gb.TryGetLimitedUIValue('U', green, seen, 256);
-	gb.TryGetLimitedUIValue('B', blue, seen, 256);
+	bool seenColours = false;
+
+	gb.TryGetLimitedUIValue('R', red, seenColours, 256);
+	gb.TryGetLimitedUIValue('U', green, seenColours, 256);
+	gb.TryGetLimitedUIValue('B', blue, seenColours, 256);
+
 	if (gb.Seen('P'))
 	{
 		brightness = gb.GetLimitedUIValue('P', 256);						// valid P values are 0-255
@@ -460,24 +477,40 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 	{
 		brightness = gb.GetLimitedUIValue('Y',  32) << 3;					// valid Y values are 0-31
 	}
-	gb.TryGetUIValue('S', numLeds, seen);
-	gb.TryGetBValue('F', following, seen);
 
-	if (!seen || (numLeds == 0 && !needStartFrame && !following))
+	gb.TryGetUIValue('S', numLeds, seenColours);
+	gb.TryGetBValue('F', following, seenColours);
+
+	if (!seenColours)
+	{
+		if (!seenType)
+		{
+			// Report the current configuration
+			reply.printf("Led type is %s, frequency %.2fMHz", LedTypeNames[ledType], (double)((float)currentFrequency * 0.000001));
+		}
+		return GCodeResult::ok;
+	}
+
+	// If there are no LEDs to set, we have finished unless we need to send a start frame to DotStar LEDs
+	if (numLeds == 0
+#if SUPPORT_DOTSTAR
+		&& (ledType != 0 || (!needStartFrame && !following))
+#endif
+		)
 	{
 		return GCodeResult::ok;
 	}
 
-	if (numRemaining != 0)
-	{
-		numLeds = numRemaining;												// we have come back to do another chunk (applies to DotStar only)
-	}
-
 	switch (ledType)
 	{
-#ifndef DUET3MINI
+#if SUPPORT_DOTSTAR
 	case 0:	// DotStar
 		{
+			if (numRemaining != 0)
+			{
+				numLeds = numRemaining;
+			}
+
 #if USE_16BIT_SPI
 			// Swap bytes for 16-bit SPI
 			const uint32_t data = ((brightness >> 11) | (0xE0 << 8)) | ((blue & 255)) | ((green & 255) << 24) | ((red & 255) << 16);
@@ -496,8 +529,14 @@ GCodeResult DotStarLed::SetColours(GCodeBuffer& gb, const StringRef& reply) THRO
 									numLeds, following
 							      );
 
-#ifdef DUET3MINI
+#if SUPPORT_BITBANG_NEOPIXEL
 	case 2:
+		// Interrupts are disabled while bit-banging the data, so make sure movement has stopped
+		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+
 		// Scale RGB by the brightness
 		return BitBangNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
 									(uint8_t)((green * brightness + 255) >> 8),

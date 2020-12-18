@@ -58,8 +58,8 @@
 # define SUPPORT_12864_LCD		0
 #endif
 
-#ifndef SUPPORT_DOTSTAR_LED
-# define SUPPORT_DOTSTAR_LED	0
+#ifndef SUPPORT_LED_STRIPS
+# define SUPPORT_LED_STRIPS		0
 #endif
 
 #define HAS_AUX_DEVICES			(defined(SERIAL_AUX_DEVICE))		// if SERIAL_AUX_DEVICE is defined then we have one or more aux devices

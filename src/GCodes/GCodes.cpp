@@ -37,8 +37,8 @@
 #include "Tools/Tool.h"
 #include "Endstops/ZProbe.h"
 
-#if SUPPORT_DOTSTAR_LED
-# include "Fans/DotStarLed.h"
+#if SUPPORT_LED_STRIPS
+# include <Fans/LedStripDriver.h>
 #endif
 
 #if HAS_LINUX_INTERFACE
@@ -190,8 +190,8 @@ void GCodes::Init() noexcept
 	reprap.GetScanner().SetGCodeBuffer(usbGCode);
 #endif
 
-#if SUPPORT_DOTSTAR_LED
-	DotStarLed::Init();
+#if SUPPORT_LED_STRIPS
+	LedStripDriver::Init();
 #endif
 
 #if HAS_AUX_DEVICES && !defined(__LPC17xx__)

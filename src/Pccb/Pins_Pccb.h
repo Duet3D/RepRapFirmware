@@ -57,7 +57,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
-#define SUPPORT_DOTSTAR_LED		1					// set nonzero to support DotStar LED strips
+#define SUPPORT_LED_STRIPS		1					// set nonzero to support DotStar LED strips
 #define ALLOCATE_DEFAULT_PORTS	1
 
 // The physical capabilities of the machine
@@ -214,7 +214,7 @@ constexpr Pin DiagPin = NoPin;
 constexpr bool DiagOnPolarity = true;
 
 // DotStar LED control (USART0 is SharedSPI so we use USART1)
-#define DOTSTAR_USES_USART	1
+#define LEDSTRIP_USES_USART	1
 
 Usart * const DotStarUsart = USART1;
 constexpr Pin DotStarMosiPin = PortAPin(22);
