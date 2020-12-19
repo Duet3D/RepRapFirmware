@@ -2284,7 +2284,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::TimeCRC32:
 		{
-			const size_t length = (gb.Seen('S')) ? gb.GetUIValue() : 4096;
+			const size_t length = (gb.Seen('S')) ? gb.GetUIValue() : 1024;
 			CRC32 crc;
 			cpu_irq_disable();
 			asm volatile("":::"memory");
