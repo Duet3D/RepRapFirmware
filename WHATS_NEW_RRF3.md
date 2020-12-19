@@ -14,6 +14,7 @@ New features:
 - New M595 command is provided to allow the movement queue to be lengthened and optionally to pre-allocate DriveMovement objects
 - The number of DriveMovement objects pre-allocated is reduced to save memory. If the system runs out of DriveMovement objects, it will try to allocate new ones dynamically.
 - The amount of free RAM has been increased. This should be sufficient to allow 12864 displays to be supported on Duet WiFi/Ethernet.
+- M591 may now be used to delete a filament monitor using the syntax M591 D# P0 where # is the extruder number
 - CORS headers are only sent in HTTP responses if explicitly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
 - Added aux port diagnostics (overrun and framing errors) to M122 report
 - When an unexpected software reset occurs, a stack usage check is performed and the result added to the software reset data
@@ -28,6 +29,7 @@ Bug fixes:
 - If M997 S4 was used but no aux port was configured, the firmware could reset after 20 seconds
 - Laser and magnetic filament monitors paused the print even when disabled if no data was received or the sensor reported an error
 - In M122 reports, queued GCodes were printed with spurious characters after each command
+- M669 K5 reported that the kinematics matrix was invalid
 - [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
 - [Duet 3 MB6HC] The second aux port using the IO_1 connector did not work
 
