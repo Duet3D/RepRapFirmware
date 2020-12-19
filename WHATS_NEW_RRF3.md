@@ -30,6 +30,7 @@ Bug fixes:
 - Laser and magnetic filament monitors paused the print even when disabled if no data was received or the sensor reported an error
 - In M122 reports, queued GCodes were printed with spurious characters after each command
 - M669 K5 reported that the kinematics matrix was invalid
+- In beta4 the minimum allowed heater gain was too low
 - [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
 - [Duet 3 MB6HC] The second aux port using the IO_1 connector did not work
 
