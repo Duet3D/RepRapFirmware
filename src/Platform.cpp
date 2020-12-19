@@ -862,16 +862,11 @@ void Platform::ReadUniqueId()
 # else
 	memset(uniqueId, 0, sizeof(uniqueId));
 
-	uint32_t rc;
+	const bool cacheWasEnabled = Cache::Disable();
+	const uint32_t rc = flash_read_unique_id(uniqueId);
+	if (cacheWasEnabled)
 	{
-		// Prevent scheduling while we have the cache disabled
-		TaskCriticalSectionLocker lock;
-		const bool cacheWasEnabled = Cache::Disable();
-		rc = flash_read_unique_id(uniqueId, 4);
-		if (cacheWasEnabled)
-		{
-			Cache::Enable();
-		}
+		Cache::Enable();
 	}
 
 	if (rc == 0)
