@@ -53,6 +53,11 @@
 #include "sd_mmc.h"
 #include "conf_sd_mmc.h"
 
+#if SAME70	//DC
+# define __nocache		__attribute__((section(".ram_nocache")))
+#else
+# define __nocache		// nothing
+#endif
 /**
  * \ingroup sd_mmc_stack
  * \defgroup sd_mmc_stack_internal Implementation of SD/MMC/SDIO Stack
@@ -224,7 +229,8 @@ struct sd_mmc_card {
 };
 
 //! SD/MMC card list
-static struct sd_mmc_card sd_mmc_cards[SD_MMC_MEM_CNT];
+//DC added __nocache for SAME70 because 'csd' is read by DMA
+static __nocache struct sd_mmc_card sd_mmc_cards[SD_MMC_MEM_CNT];
 
 //! Index of current slot selected
 static uint8_t sd_mmc_slot_sel;
@@ -740,7 +746,12 @@ static bool sdio_cmd52_set_high_speed(void)
  */
 static bool sd_cm6_set_high_speed(void)
 {
+
+#if SAME70
+	static __nocache uint8_t switch_status[SD_SW_STATUS_BSIZE];
+#else
 	uint8_t switch_status[SD_SW_STATUS_BSIZE];
+#endif
 
 	if (!sd_mmc_card->iface->adtc_start(SD_CMD6_SWITCH_FUNC,
 			SD_CMD6_MODE_SWITCH
@@ -1212,7 +1223,11 @@ static bool sd_acmd6(void)
  */
 static bool sd_acmd51(void)
 {
+#if SAME70
+	static __nocache uint8_t scr[SD_SCR_REG_BSIZE];
+#else
 	uint8_t scr[SD_SCR_REG_BSIZE];
+#endif
 
 	// CMD55 - Indicate to the card that the next command is an
 	// application specific command rather than a standard command.

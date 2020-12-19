@@ -2171,8 +2171,8 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 
 			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
-					(double)((tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
-							(double)((tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR");
+					(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
+							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR");
 		}
 		break;
 
@@ -2197,7 +2197,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 
 			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			reply.printf("Sine + cosine: float %.2fus", (double)((tim1 * (1'000'000/iterations))/SystemCoreClock));
+			reply.printf("Sine + cosine: float %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
 		}
 		break;
 
