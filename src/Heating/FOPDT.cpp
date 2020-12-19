@@ -65,7 +65,7 @@ bool FopDt::SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pdt,
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
 	const float maxTempIncrease = max<float>(1500.0, temperatureLimit + 500.0);
-	if (   phr > 0.1								// minimum 0.1C/sec at room temperature
+	if (   phr/pcrFanOff > 10.0						// minimum 10C temperature rise (same as with earlier heater model)
 		&& phr/pcrFanOff <= maxTempIncrease			// max temperature increase within limits
 		&& pcrFanOn >= pcrFanOff
 		&& pdt > 0.099

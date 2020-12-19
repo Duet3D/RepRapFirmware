@@ -876,9 +876,10 @@ void LocalHeater::SetAndReportModel(bool usingFans) noexcept
 {
 	const float hRate = (usingFans) ? (fanOffParams.heatingRate + fanOnParams.heatingRate) * 0.5 : fanOffParams.heatingRate;
 	const float deadTime = (usingFans) ? (fanOffParams.deadTime + fanOnParams.deadTime) * 0.5 : fanOffParams.deadTime;
+	const float fanOnCoolingRate = (usingFans) ? fanOnParams.coolingRate : fanOffParams.coolingRate;
 	String<StringLength256> str;
 	const GCodeResult rslt = SetModel(	hRate,
-										fanOffParams.coolingRate, (usingFans) ? fanOnParams.coolingRate : fanOffParams.coolingRate,
+										fanOffParams.coolingRate, fanOnCoolingRate,
 										deadTime,
 										tuningPwm,
 #if HAS_VOLTAGE_MONITOR
@@ -915,9 +916,9 @@ void LocalHeater::SetAndReportModel(bool usingFans) noexcept
 	}
 	else
 	{
-		reprap.GetPlatform().MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (R=%.3f, C=%.3f:%.3f, D=%.1f)\n",
+		reprap.GetPlatform().MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (R=%.3f, 1/C=%.4f:%.4f, D=%.1f)\n",
 										GetHeaterNumber(), (double)hRate,
-										(double)fanOffParams.coolingRate, (double)fanOnParams.coolingRate,
+										(double)fanOffParams.coolingRate, (double)fanOnCoolingRate,
 										(double)fanOffParams.deadTime);
 	}
 }
