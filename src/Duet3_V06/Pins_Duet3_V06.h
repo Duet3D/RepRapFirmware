@@ -293,8 +293,8 @@ constexpr Pin SbcTfrReadyPin = PortEPin(2);
 
 // DMA channel allocation
 constexpr DmaChannel DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver
-constexpr DmaChannel DmacChanWiFiTx = 1;		// only on v0.3 board
-constexpr DmaChannel DmacChanWiFiRx = 2;		// only on v0.3 board
+//constexpr DmaChannel DmacChanWiFiTx = 1;		// only on v0.3 board
+//constexpr DmaChannel DmacChanWiFiRx = 2;		// only on v0.3 board
 constexpr DmaChannel DmacChanTmcTx = 3;
 constexpr DmaChannel DmacChanTmcRx = 4;
 constexpr DmaChannel DmacChanSbcTx = 5;
