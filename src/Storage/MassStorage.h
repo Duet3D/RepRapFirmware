@@ -28,10 +28,8 @@ namespace MassStorage
 	bool CombineName(const StringRef& out, const char* directory, const char* fileName) noexcept;	// returns false if error i.e. filename too long
 	const char* GetMonthName(const uint8_t month) noexcept;
 
-#if HAS_MASS_STORAGE
-	void Init() noexcept;
-#endif
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	void Init() noexcept;
 	FileStore* OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
 	bool FileExists(const char *filePath) noexcept;
 #endif

@@ -261,13 +261,19 @@ static const char* TranslateCardError(sd_mmc_err_t err) noexcept
 	}
 }
 
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+
 void MassStorage::Init() noexcept
 {
+	fsMutex.Create("FileSystem");
+
+# if HAS_MASS_STORAGE
 	static const char * const VolMutexNames[] = { "SD0", "SD1" };
 	static_assert(ARRAY_SIZE(VolMutexNames) >= NumSdCards, "Incorrect VolMutexNames array");
 
 	// Create the mutexes
-	fsMutex.Create("FileSystem");
 	dirMutex.Create("DirSearch");
 
 	freeWriteBuffers = nullptr;
@@ -293,10 +299,9 @@ void MassStorage::Init() noexcept
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack
 
 	// We no longer mount the SD card here because it may take a long time if it fails
+# endif
 }
-#endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
 	{

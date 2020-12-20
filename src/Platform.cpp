@@ -485,7 +485,7 @@ void Platform::Init() noexcept
 		pinMode(SdCardDetectPins[i], INPUT_PULLUP);
 	}
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	MassStorage::Init();
 #endif
 
