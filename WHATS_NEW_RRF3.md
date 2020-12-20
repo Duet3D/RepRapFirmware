@@ -21,7 +21,7 @@ New features:
 - [Duet 3 Mini] Stall homing is now supported
 - [Duet 3 Mini] Added data cache hit count to M122 report
 - [Duet + SBC] 12864 displays are now supported. Note, the 'files' menu item type is not supported in SBC mode.
-- [Duet 3 MBHC] Significant performance improvements
+- [Duet 3 MBHC] Significant performance improvements, for example the maximum step rate is greatly increased
 
 Bug fixes:
 - Fixed crash that occurred on some systems when M918 was used to configure a 12864 display but no SD card was present
