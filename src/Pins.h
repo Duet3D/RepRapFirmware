@@ -166,12 +166,18 @@
 # define HAS_MASS_STORAGE		1
 #endif
 
+#if !HAS_MASS_STORAGE && !HAS_LINUX_INTERFACE
+# if SUPPORT_12864_LCD
+#  error "12864 LCD support requires mass storage or SBC interface"
+# endif
+#endif
+
 #if !HAS_MASS_STORAGE
 # if SUPPORT_FTP
-#  error "FTP support requires mass storage, too."
+#  error "FTP support requires mass storage"
 # endif
 # if SUPPORT_SCANNER
-#  error "Scanner support requires mass storage, too."
+#  error "Scanner support requires mass storage"
 # endif
 #endif
 
