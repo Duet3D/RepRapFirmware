@@ -4193,6 +4193,11 @@ MinMaxCurrent Platform::GetV12Voltages() const noexcept
 	return result;
 }
 
+float Platform::GetCurrentV12Voltage() const noexcept
+{
+	return AdcReadingToPowerVoltage(currentV12);
+}
+
 #endif
 
 #if HAS_SMART_DRIVERS

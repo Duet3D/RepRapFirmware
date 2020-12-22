@@ -16,6 +16,21 @@
 #include "Heating/Heat.h"
 #include "ExpansionManager.h"
 
+#ifndef DUET3_ATE
+# include <Movement/Move.h>
+# include <Version.h>
+
+# if SUPPORT_TMC2660
+#  include "Movement/StepperDrivers/TMC2660.h"
+# endif
+# if SUPPORT_TMC22xx
+#  include "Movement/StepperDrivers/TMC22xx.h"
+# endif
+# if SUPPORT_TMC51xx
+#  include "Movement/StepperDrivers/TMC51xx.h"
+# endif
+#endif
+
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
 
@@ -28,7 +43,7 @@ static void EnterTestMode(const CanMessageEnterTestMode& msg) noexcept
 {
 	if (msg.passwd == CanMessageEnterTestMode::Passwd)
 	{
-		CanInterface::EnterTestMode(msg.address & CanId::BoardAddressMask);
+		CanInterface::EnterTestMode(msg.parameter);
 	}
 }
 
@@ -271,54 +286,246 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 	}
 }
 
+#ifndef DUET3_ATE
+
+static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
+{
+	static constexpr uint8_t LastDiagnosticsPart = 2;				// the last diagnostics part is typeDiagnosticsPart0 + 7
+
+	switch (msg.type)
+	{
+	case CanMessageReturnInfo::typeFirmwareVersion:
+	default:
+		reply.printf("%s (%s)", VERSION, DATE);
+		break;
+
+	case CanMessageReturnInfo::typeBoardName:
+		reply.copy(BOARD_NAME);
+		break;
+
+	case CanMessageReturnInfo::typeBootloaderName:
+		reply.copy("(n/a)");
+		break;
+
+	case CanMessageReturnInfo::typeM408:
+		// For now we ignore the parameter and always return the same set of info
+		// This command is currently only used by the ATE, which needs the board type and the voltages
+		reply.copy("{\"firmwareElectronics\":\"Duet 3 ");
+		reply.cat(BOARD_NAME);
+		reply.cat("\"");
+#if HAS_VOLTAGE_MONITOR
+		{
+			const MinMaxCurrent voltages = reprap.GetPlatform().GetPowerVoltages();
+			reply.catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
+					(double)voltages.min, (double)voltages.current, (double)voltages.max);
+		}
+#endif
+#if HAS_12V_MONITOR
+		{
+			const MinMaxCurrent voltages = reprap.GetPlatform().GetV12Voltages();
+			reply.catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
+					(double)voltages.min, (double)voltages.current, (double)voltages.max);
+		}
+#endif
+		reply.cat('}');
+		break;
+
+	case CanMessageReturnInfo::typeDiagnosticsPart0:
+		extra = LastDiagnosticsPart;
+		reply.lcatf("%s (%s)", VERSION, DATE);
+		break;
+
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 1:
+		extra = LastDiagnosticsPart;
+		for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+		{
+
+			reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
+#if HAS_SMART_DRIVERS
+				", "
+#endif
+				, driver, reprap.GetMove().GetEndPoint(driver), (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
+#if HAS_SMART_DRIVERS
+			SmartDrivers::AppendDriverStatus(driver, reply);
+#endif
+		}
+		break;
+
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 2:
+		extra = LastDiagnosticsPart;
+		{
+#if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
+			reply.catf("VIN: %.1fV, V12: %.1fV\n", (double)reprap.GetPlatform().GetCurrentPowerVoltage(), (double)reprap.GetPlatform().GetCurrentV12Voltage());
+#elif HAS_VOLTAGE_MONITOR
+			reply.catf("VIN: %.1fV\n", (double)reprap.GetPlatform().GetCurrentPowerVoltage());
+#elif HAS_12V_MONITOR
+			reply.catf("V12: %.1fV\n", (double)reprap.GetPlatform().GetCurrentV12Voltage());
+#endif
+#if HAS_CPU_TEMP_SENSOR
+			const MinMaxCurrent temps = reprap.GetPlatform().GetMcuTemperatures();
+			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC\n", (double)temps.min, (double)temps.current, (double)temps.max);
+#endif
+		}
+		break;
+	}
+	return GCodeResult::ok;
+}
+
+#endif
 
 // Process a received broadcast or request message. Don't free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
-	if (buf->id.Src() != CanId::MasterAddress)								// I don't think we should receive our own broadcasts, but in case we do...
+	if (buf->id.Src() != CanInterface::GetCanAddress())								// I don't think we should receive our own broadcasts, but in case we do...
 	{
-		switch (buf->id.MsgType())
+		const CanMessageType id = buf->id.MsgType();
+#ifndef DUET3_ATE
+		if (CanInterface::InEutMode())
 		{
-		case CanMessageType::inputStateChanged:
-			//TODO we should preferably handle this one using a separate high-priority queue or buffer
-			HandleInputStateChanged(buf->msg.inputChanged, buf->id.Src());
-			break;
+			String<StringLength500> reply;
+			const StringRef& replyRef = reply.GetRef();
+			GCodeResult rslt;
+			CanRequestId requestId;
+			uint8_t extra = 0;
 
-		case CanMessageType::firmwareBlockRequest:
-			HandleFirmwareBlockRequest(buf);
-			break;
-
-		case CanMessageType::sensorTemperaturesReport:
-			reprap.GetHeat().ProcessRemoteSensorsReport(buf->id.Src(), buf->msg.sensorTemperaturesBroadcast);
-			break;
-
-		case CanMessageType::heatersStatusReport:
-			reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
-			break;
-
-		case CanMessageType::fansReport:
-			reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fansReport);
-			break;
-
-		case CanMessageType::announce:
-			reprap.GetExpansion().ProcessAnnouncement(buf);
-			break;
-
-		case CanMessageType::filamentMonitorsStatusReport:
-			FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
-			break;
-
-		case CanMessageType::enterTestMode:
-			EnterTestMode(buf->msg.enterTestMode);
-			break;
-
-		case CanMessageType::driversStatusReport:	// not handled yet
-		default:
-			if (reprap.Debug(moduleCan))
+			switch (id)
 			{
-				buf->DebugPrint("Rec: ");
+			case CanMessageType::movement:
+				reprap.GetMove().AddMoveFromRemote(buf->msg.move);
+				return;							// no reply needed
+
+			case CanMessageType::returnInfo:
+				requestId = buf->msg.getInfo.requestId;
+				rslt = EutGetInfo(buf->msg.getInfo, replyRef, extra);
+				break;
+
+			case CanMessageType::m308New:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetHeat().EutProcessM308(buf->msg.generic, replyRef);
+				break;
+
+			case CanMessageType::m950Gpio:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetPlatform().EutHandleM950Gpio(buf->msg.generic, replyRef);
+				break;
+
+			case CanMessageType::writeGpio:
+				requestId = buf->msg.writeGpio.requestId;
+				rslt = reprap.GetPlatform().EutHandleGpioWrite(buf->msg.writeGpio, replyRef);
+				break;
+
+			case CanMessageType::setMotorCurrents:
+				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
+				rslt = reprap.GetPlatform().EutSetMotorCurrents(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				break;
+
+			case CanMessageType::setStepsPerMmAndMicrostepping:
+				requestId = buf->msg.multipleDrivesStepsPerUnitAndMicrostepping.requestId;
+				rslt = reprap.GetPlatform().EutSetStepsPerMmAndMicrostepping(buf->msg.multipleDrivesStepsPerUnitAndMicrostepping, buf->dataLength, replyRef);
+				break;
+
+			case CanMessageType::setDriverStates:
+				requestId = buf->msg.multipleDrivesRequestUint16.requestId;
+				rslt = reprap.GetPlatform().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, replyRef);
+				break;
+
+			case CanMessageType::createInputMonitor:
+				requestId = buf->msg.createInputMonitor.requestId;
+				rslt = InputMonitor::EutCreate(buf->msg.createInputMonitor, buf->dataLength, replyRef, extra);
+				break;
+
+			case CanMessageType::changeInputMonitor:
+				requestId = buf->msg.changeInputMonitor.requestId;
+				rslt = InputMonitor::EutChange(buf->msg.changeInputMonitor, replyRef, extra);
+				break;
+
+			case CanMessageType::readInputsRequest:
+				// This one has its own reply message type
+				InputMonitor::EutReadInputs(buf);
+				CanInterface::SendResponseNoFree(buf);
+				return;
+
+			default:
+				if (reprap.Debug(moduleCan))
+				{
+					buf->DebugPrint("Rec: ");
+				}
+				break;
 			}
-			break;
+
+			// Re-use the message buffer to send a standard reply
+			const CanAddress srcAddress = buf->id.Src();
+			CanMessageStandardReply *msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+			msg->resultCode = (uint16_t)rslt;
+			msg->extra = extra;
+			const size_t totalLength = reply.strlen();
+			size_t lengthDone = 0;
+			uint8_t fragmentNumber = 0;
+			for (;;)
+			{
+				const size_t fragmentLength = min<size_t>(totalLength - lengthDone, CanMessageStandardReply::MaxTextLength);
+				memcpy(msg->text, reply.c_str() + lengthDone, fragmentLength);
+				lengthDone += fragmentLength;
+				buf->dataLength = msg->GetActualDataLength(fragmentLength);
+				msg->fragmentNumber = fragmentNumber;
+				if (lengthDone == totalLength)
+				{
+					msg->moreFollows = false;
+					CanInterface::SendResponseNoFree(buf);
+					break;
+				}
+				msg->moreFollows = true;
+				CanInterface::SendResponseNoFree(buf);
+				++fragmentNumber;
+			}
+		}
+		else
+#endif
+		{
+			// Handle messages received in normal operation mode
+			switch (id)
+			{
+			case CanMessageType::inputStateChanged:
+				//TODO we should preferably handle this one using a separate high-priority queue or buffer
+				HandleInputStateChanged(buf->msg.inputChanged, buf->id.Src());
+				break;
+
+			case CanMessageType::firmwareBlockRequest:
+				HandleFirmwareBlockRequest(buf);
+				break;
+
+			case CanMessageType::sensorTemperaturesReport:
+				reprap.GetHeat().ProcessRemoteSensorsReport(buf->id.Src(), buf->msg.sensorTemperaturesBroadcast);
+				break;
+
+			case CanMessageType::heatersStatusReport:
+				reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
+				break;
+
+			case CanMessageType::fansReport:
+				reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fansReport);
+				break;
+
+			case CanMessageType::announce:
+				reprap.GetExpansion().ProcessAnnouncement(buf);
+				break;
+
+			case CanMessageType::filamentMonitorsStatusReport:
+				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
+				break;
+
+			case CanMessageType::enterTestMode:
+				EnterTestMode(buf->msg.enterTestMode);
+				break;
+
+			case CanMessageType::driversStatusReport:	// not handled yet
+			default:
+				if (reprap.Debug(moduleCan))
+				{
+					buf->DebugPrint("Rec: ");
+				}
+				break;
+			}
 		}
 	}
 }

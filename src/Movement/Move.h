@@ -194,9 +194,13 @@ public:
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	void LaserTaskRun() noexcept;
 
-	static void CreateLaserTask() noexcept;						// create the laser task if we haven't already
-	static void WakeLaserTask() noexcept;						// wake up the laser task, called at the start of a new move
-	static void WakeLaserTaskFromISR() noexcept;				// wake up the laser task, called at the start of a new move
+	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
+	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move
+	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+	void AddMoveFromRemote(const CanMessageMovement& msg) noexcept;							// add a move from the ATE to the movement queue
 #endif
 
 protected:

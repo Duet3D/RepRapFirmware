@@ -537,7 +537,7 @@ uint16_t IoPort::ReadAnalog() const noexcept
 		portName.Erase(prefix, numToSkip - prefix + 1);			// remove the board address prefix
 		return (CanAddress)boardAddress;
 	}
-	return CanId::MasterAddress;
+	return CanInterface::MyAddress;
 #else
 	if (numToSkip != prefix && portName[numToSkip] == '.')
 	{
