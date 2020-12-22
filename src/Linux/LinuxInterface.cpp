@@ -74,10 +74,22 @@ void LinuxInterface::Init() noexcept
 
 [[noreturn]] void LinuxInterface::TaskLoop() noexcept
 {
-	bool writingIap = false;
+	bool writingIap = false, hadReset = false;
 	for (;;)
 	{
-		if (transfer.IsReady())
+		bool isReady = false;
+		if (hadReset)
+		{
+			isReady = true;
+			hadReset = false;
+		}
+		else if (transfer.IsReady())
+		{
+			isReady = true;
+			hadReset = isConnected && transfer.LinuxHadReset();
+		}
+
+		if (isReady && !hadReset)
 		{
 			// Check if the connection state has changed
 			if (!isConnected && !writingIap)
@@ -628,7 +640,7 @@ void LinuxInterface::Init() noexcept
 			}
 
 			// Notify DSF about the available buffer space
-			if (!codeBufferAvailable || sendBufferUpdate || transfer.LinuxHadReset())
+			if (!codeBufferAvailable || sendBufferUpdate)
 			{
 				TaskCriticalSectionLocker locker;
 
@@ -764,7 +776,7 @@ void LinuxInterface::Init() noexcept
 			// Wait for the next SPI transaction to complete or for a timeout to occur
 			TaskBase::Take(SpiConnectionTimeout);
 		}
-		else if (isConnected && !writingIap && !transfer.IsConnected())
+		else if (isConnected && !writingIap && (!transfer.IsConnected() || hadReset))
 		{
 			isConnected = false;
 			numDisconnects++;
@@ -774,13 +786,11 @@ void LinuxInterface::Init() noexcept
 			sendBufferUpdate = true;
 			iapWritePointer = IAP_IMAGE_START;
 
-#if SUPPORT_CAN_EXPANSION
 			if (!requestedFileName.IsEmpty())
 			{
 				requestedFileDataLength = -1;
 				requestedFileSemaphore.Give();
 			}
-#endif
 
 			// Don't cache any messages if they cannot be sent
 			{
@@ -813,8 +823,16 @@ void LinuxInterface::Init() noexcept
 			// Turn off all the heaters
 			reprap.GetHeat().SwitchOffAll(true);
 
-			// Wait indefinitely for the next transfer
-			TaskBase::Take();
+			if (hadReset)
+			{
+				// Let the main task invalidate resources
+				RTOSIface::Yield();
+			}
+			else
+			{
+				// Wait indefinitely for the next transfer
+				TaskBase::Take();
+			}
 		}
 		else if (!writingIap)
 		{

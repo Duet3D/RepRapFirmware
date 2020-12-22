@@ -141,7 +141,7 @@ inline bool DataTransfer::IsConnected() const noexcept
 
 inline bool DataTransfer::LinuxHadReset() const noexcept
 {
-	return lastTransferNumber + 1 != rxHeader.sequenceNumber;
+	return lastTransferNumber != 0 && (lastTransferNumber + 1 != rxHeader.sequenceNumber);
 }
 
 inline size_t DataTransfer::PacketsToRead() const noexcept
