@@ -913,16 +913,18 @@ bool DataTransfer::IsReady() noexcept
 		disable_spi();
 		ExchangeHeader();
 	}
-	else if (!IsConnected() && rxHeader.sequenceNumber != 0)
+	else if (!IsConnected() && lastTransferNumber != 0)
 	{
-		// The Linux interface is no longer connected. Reset the sequence numbers and clear the data to send
+		// The Linux interface is no longer connected...
+		disable_spi();
+
+		// Reset the sequence numbers and clear the data to send
 		lastTransferNumber = 0;
 		rxHeader.sequenceNumber = 0;
 		txHeader.sequenceNumber = 0;
 		txPointer = 0;
 
 		// Kick off a new transfer
-		disable_spi();
 		if (transferReadyHigh)
 		{
 			transferReadyHigh = false;
