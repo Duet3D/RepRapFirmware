@@ -115,8 +115,10 @@ namespace CanInterface
 
 	// Misc functions
 	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply)THROWS(GCodeException);
-	GCodeResult ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply)THROWS(GCodeException);
+	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+
+	void EnterTestMode(CanAddress address) noexcept;
 }
 
 // Members of template class CanDriversData

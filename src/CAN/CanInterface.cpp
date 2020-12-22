@@ -1277,6 +1277,13 @@ GCodeResult CanInterface::DeleteFilamentMonitor(DriverId driver, GCodeBuffer* gb
 	}
 }
 
+// Enter test mode, called in response to a command from the ATE
+void CanInterface::EnterTestMode(CanAddress address) noexcept
+{
+	myAddress = address;
+	inTestMode = true;
+}
+
 #endif
 
 // End

@@ -23,6 +23,14 @@ constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for read
 char sbcFirmwareChunk[MaxFileChunkSize];
 #endif
 
+// Enter test mode
+static void EnterTestMode(const CanMessageEnterTestMode& msg) noexcept
+{
+	if (msg.passwd == CanMessageEnterTestMode::Passwd)
+	{
+		CanInterface::EnterTestMode(msg.address & CanId::BoardAddressMask);
+	}
+}
 
 // Handle a firmware update request
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
@@ -298,6 +306,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 		case CanMessageType::filamentMonitorsStatusReport:
 			FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
+			break;
+
+		case CanMessageType::enterTestMode:
+			EnterTestMode(buf->msg.enterTestMode);
 			break;
 
 		case CanMessageType::driversStatusReport:	// not handled yet
