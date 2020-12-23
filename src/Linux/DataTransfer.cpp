@@ -913,17 +913,23 @@ bool DataTransfer::IsReady() noexcept
 		disable_spi();
 		ExchangeHeader();
 	}
-	else if (!IsConnected())
+	else if (!IsConnected() && lastTransferNumber != 0)
 	{
 		// The Linux interface is no longer connected...
-		rxHeader.sequenceNumber = 0;
+		disable_spi();
 
-		// The SBC expects a high transfer ready pin level when it establishes a new connection
-		if (!transferReadyHigh)
+		// Reset the sequence numbers and clear the data to send
+		lastTransferNumber = 0;
+		rxHeader.sequenceNumber = 0;
+		txHeader.sequenceNumber = 0;
+		txPointer = 0;
+
+		// Kick off a new transfer
+		if (transferReadyHigh)
 		{
-			transferReadyHigh = true;
-			digitalWrite(SbcTfrReadyPin, true);
+			transferReadyHigh = false;
 		}
+		StartNextTransfer();
 	}
 	return false;
 }
