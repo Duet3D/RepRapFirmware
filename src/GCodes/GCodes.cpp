@@ -2603,9 +2603,13 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 		{
 			if (reportMissing)
 			{
-				platform.MessageF(WarningMessage, "Macro file %s not found\n", fileName);
+				MessageType mt = (gb.IsBinary() && codeRunning >= 0)
+						? (MessageType)(gb.GetResponseMessageType() | WarningMessageFlag | PushFlag)
+							: WarningMessage;
+				platform.MessageF(mt, "Macro file %s not found\n", fileName);
 				return true;
 			}
+
 			return false;
 		}
 
