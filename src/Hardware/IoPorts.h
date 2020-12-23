@@ -12,6 +12,7 @@
 
 #if SAME5x
 # include <Interrupts.h>
+# include <AnalogIn.h>
 #endif
 
 // Class to represent a port
@@ -40,6 +41,7 @@ public:
 	bool ReadDigital() const noexcept;
 	bool AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept;
 	void DetachInterrupt() const noexcept;
+	bool SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept;
 
 	uint16_t ReadAnalog() const noexcept;
 

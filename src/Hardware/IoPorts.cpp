@@ -181,6 +181,11 @@ void IoPort::DetachInterrupt() const noexcept
 	}
 }
 
+bool IoPort::SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept
+{
+	return AnalogIn::SetCallback(GetAnalogChannel(), fn, cbp, ticksPerCall, false);
+}
+
 // Allocate the specified logical pin, returning true if successful
 bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
 {

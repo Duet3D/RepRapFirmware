@@ -18,6 +18,7 @@
 
 #ifndef DUET3_ATE
 # include <Movement/Move.h>
+# include <InputMonitors/InputMonitor.h>
 # include <Version.h>
 
 # if SUPPORT_TMC2660
@@ -431,26 +432,24 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			case CanMessageType::createInputMonitor:
 				requestId = buf->msg.createInputMonitor.requestId;
-				rslt = InputMonitor::EutCreate(buf->msg.createInputMonitor, buf->dataLength, replyRef, extra);
+				rslt = InputMonitor::Create(buf->msg.createInputMonitor, buf->dataLength, replyRef, extra);
 				break;
 
 			case CanMessageType::changeInputMonitor:
 				requestId = buf->msg.changeInputMonitor.requestId;
-				rslt = InputMonitor::EutChange(buf->msg.changeInputMonitor, replyRef, extra);
+				rslt = InputMonitor::Change(buf->msg.changeInputMonitor, replyRef, extra);
 				break;
 
 			case CanMessageType::readInputsRequest:
 				// This one has its own reply message type
-				InputMonitor::EutReadInputs(buf);
+				InputMonitor::ReadInputs(buf);
 				CanInterface::SendResponseNoFree(buf);
 				return;
 
 			default:
-				if (reprap.Debug(moduleCan))
-				{
-					buf->DebugPrint("Rec: ");
-				}
-				break;
+				requestId = CanRequestIdAcceptAlways;
+				reply.printf("Board %u received unknown msg type %u", CanInterface::GetCanAddress(), (unsigned int)buf->id.MsgType());
+				rslt = GCodeResult::error;
 			}
 
 			// Re-use the message buffer to send a standard reply

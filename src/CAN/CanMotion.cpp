@@ -184,7 +184,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 {
 	hiccupToInsert += numClocks;
-	CanInterface::WakeCanSender();
+	CanInterface::WakeAsyncSenderFromIsr();
 }
 
 void CanMotion::StopDriver(bool isBeingPrepared, DriverId driver) noexcept
@@ -206,7 +206,7 @@ void CanMotion::StopDriver(bool isBeingPrepared, DriverId driver) noexcept
 	else
 	{
 		driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
-		CanInterface::WakeCanSender();
+		CanInterface::WakeAsyncSenderFromIsr();
 	}
 }
 
@@ -234,7 +234,7 @@ void CanMotion::StopAxis(bool isBeingPrepared, size_t axis) noexcept
 				driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
 			}
 		}
-		CanInterface::WakeCanSender();
+		CanInterface::WakeAsyncSenderFromIsr();
 	}
 }
 
@@ -255,7 +255,7 @@ void CanMotion::StopAll(bool isBeingPrepared) noexcept
 	else
 	{
 		stopAllFlag = true;
-		CanInterface::WakeCanSender();
+		CanInterface::WakeAsyncSenderFromIsr();
 	}
 }
 
