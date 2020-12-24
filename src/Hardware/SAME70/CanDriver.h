@@ -534,7 +534,7 @@ enum mcan_nonmatching_frames_action {
 struct mcan_module
 {
 	Mcan *hw;
-	TaskHandle taskWaitingOnFifo[2];
+	volatile TaskHandle taskWaitingOnFifo[2];
 };
 
 /**
@@ -674,7 +674,8 @@ static inline void mcan_get_config_defaults(struct mcan_config *const config) no
 	config->tx_event_fifo_watermark = 0;
 }
 
-void mcan_init(mcan_module *const module_inst, Mcan *hw, mcan_config *config) noexcept;
+void mcan_init_once(mcan_module *const module_inst, Mcan *hw) noexcept;
+void mcan_init(mcan_module *const module_inst, mcan_config *config) noexcept;
 void mcan_start(mcan_module *const module_inst) noexcept;
 void mcan_stop(mcan_module *const module_inst) noexcept;
 void mcan_enable_fd_mode(mcan_module *const module_inst) noexcept;

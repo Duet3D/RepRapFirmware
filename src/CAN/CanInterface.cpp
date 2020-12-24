@@ -181,7 +181,7 @@ static void configure_mcan() noexcept
 {
 	mcan_config config_mcan;
 	mcan_get_config_defaults(&config_mcan);
-	mcan_init(&mcan_instance, MCAN_MODULE, &config_mcan);
+	mcan_init(&mcan_instance, &config_mcan);
 	mcan_enable_fd_mode(&mcan_instance);
 
 	mcan_extended_message_filter_element et_filter;
@@ -210,7 +210,9 @@ static void configure_mcan() noexcept
 	et_filter.F1.bit.EFT = 2;
 	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 2);
 
-	mcan_enable_interrupt(&mcan_instance, (mcan_interrupt_source)(MCAN_FORMAT_ERROR | MCAN_ACKNOWLEDGE_ERROR | MCAN_BUS_OFF | MCAN_RX_FIFO_0_NEW_MESSAGE | MCAN_RX_FIFO_1_NEW_MESSAGE | MCAN_RX_FIFO_0_FULL | MCAN_RX_FIFO_1_FULL));
+	mcan_enable_interrupt(&mcan_instance, (mcan_interrupt_source)(MCAN_FORMAT_ERROR | MCAN_ACKNOWLEDGE_ERROR | MCAN_BUS_OFF
+																		| MCAN_RX_FIFO_0_NEW_MESSAGE | MCAN_RX_FIFO_1_NEW_MESSAGE
+																		| MCAN_RX_FIFO_0_LOST_MESSAGE | MCAN_RX_FIFO_1_MESSAGE_LOST));
 	NVIC_ClearPendingIRQ(MCanIRQn);
 	NVIC_EnableIRQ(MCanIRQn);
 
@@ -249,15 +251,20 @@ extern "C" void MCAN_INT0_Handler() noexcept
 #endif
 	}
 
-	if (status & MCAN_RX_FIFO_0_NEW_MESSAGE)
+	if (status & (MCAN_RX_FIFO_0_LOST_MESSAGE | MCAN_RX_FIFO_1_MESSAGE_LOST))
 	{
-		mcan_clear_interrupt_status(&mcan_instance, MCAN_RX_FIFO_0_NEW_MESSAGE);
+		++messagesLost;
+	}
+
+	if (status & (MCAN_RX_FIFO_0_NEW_MESSAGE | MCAN_RX_FIFO_0_LOST_MESSAGE))
+	{
+		mcan_clear_interrupt_status(&mcan_instance, (mcan_interrupt_source)(MCAN_RX_FIFO_0_NEW_MESSAGE | MCAN_RX_FIFO_0_LOST_MESSAGE));
 		TaskBase::GiveFromISR(mcan_instance.taskWaitingOnFifo[0]);
 	}
 
-	if (status & MCAN_RX_FIFO_1_NEW_MESSAGE)
+	if (status & (MCAN_RX_FIFO_1_NEW_MESSAGE | MCAN_RX_FIFO_1_MESSAGE_LOST))
 	{
-		mcan_clear_interrupt_status(&mcan_instance, MCAN_RX_FIFO_1_NEW_MESSAGE);
+		mcan_clear_interrupt_status(&mcan_instance, (mcan_interrupt_source)(MCAN_RX_FIFO_1_NEW_MESSAGE | MCAN_RX_FIFO_1_MESSAGE_LOST));
 		TaskBase::GiveFromISR(mcan_instance.taskWaitingOnFifo[1]);
 	}
 
@@ -269,12 +276,6 @@ extern "C" void MCAN_INT0_Handler() noexcept
 	if ((status & MCAN_FORMAT_ERROR))
 	{
 		mcan_clear_interrupt_status(&mcan_instance, (mcan_interrupt_source)(MCAN_FORMAT_ERROR));
-	}
-
-	if (status & (MCAN_RX_FIFO_0_FULL | MCAN_RX_FIFO_1_FULL))
-	{
-		mcan_clear_interrupt_status(&mcan_instance, (mcan_interrupt_source)(MCAN_RX_FIFO_0_FULL | MCAN_RX_FIFO_1_FULL));
-		++messagesLost;
 	}
 
 	if (status & MCAN_BUS_OFF)
@@ -350,6 +351,7 @@ void CanInterface::Init() noexcept
 										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
 	can0dev->Enable();
 #else
+	mcan_init_once(&mcan_instance, MCAN_MODULE);
 	configure_mcan();
 #endif
 
@@ -782,26 +784,25 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 // The CanReceiver task
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 {
-	CanMessageBuffer *buf;
-	while ((buf = CanMessageBuffer::Allocate()) == nullptr)
-	{
-		delay(2);
-	}
-
+	CanMessageBuffer buf(nullptr);
 	for (;;)
 	{
 #if USE_NEW_CAN_DRIVER
-		can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, buf);
+		if (can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, &buf))
 #else
-		GetMessageFromFifo(&mcan_instance, buf, RxFifoIndexRequest, TaskBase::TimeoutUnlimited);
-		++messagesReceived;
+		if (GetMessageFromFifo(&mcan_instance, &buf, RxFifoIndexRequest, TaskBase::TimeoutUnlimited))
 #endif
-		if (reprap.Debug(moduleCan))
 		{
-			buf->DebugPrint("Rx0:");
-		}
+#if !USE_NEW_CAN_DRIVER
+			++messagesReceived;
+#endif
+			if (reprap.Debug(moduleCan))
+			{
+				buf.DebugPrint("Rx0:");
+			}
 
-		CommandProcessor::ProcessReceivedMessage(buf);
+			CommandProcessor::ProcessReceivedMessage(&buf);
+		}
 	}
 }
 
