@@ -1,7 +1,8 @@
 RepRapFirmware 3.2RC2
 =====================
 
-Upgrade notes: none since RC1
+Upgrade notes:
+- [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.2RC2 also
 
 New features:
 - Previously there was a minimum reading cutoff at -5C when measuring temperatures using any kind of thermistor. That cutoff is now relaxed when using a low-resistance thermistor, e.g. with resistance 1K or 10K @25C.
@@ -9,6 +10,8 @@ New features:
 Bug fixes:
 - On some systems, DWC reported that it couldn't deserialise the lastStopHeight field of the Z probe because the value was null
 - [Duet 3 expansion and tool boards] Thermostatic fans connected to expansion/tool boards would occasionally blip spuriously
+- [Duet 3 expansion and tool boards] Filament monitors connected to expansoin/tool boards generated excessive CAN traffic
+- [Duet 3 MB6HC + expansion/tool boards] Sometimes the main board would not receive status messages form expansoin and tool boards after power up unless it was reset by M999 or emergency stop
 - [Duet + SBC] The file system mutex was not initialised in SBC configurations, however this did not cause any problems under normal conditions
 - [Duet + SBC] Fixed issues with recovering from SBC disconnections and reconnections
 - [Duet3 Mini + CAN, also EXP3HC] Fixed missing cache invalidate after receiving a CAN message
