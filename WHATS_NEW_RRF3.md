@@ -10,7 +10,7 @@ New features:
 Bug fixes:
 - On some systems, DWC reported that it couldn't deserialise the lastStopHeight field of the Z probe because the value was null
 - [Duet 3 expansion and tool boards] Thermostatic fans connected to expansion/tool boards would occasionally blip spuriously
-- [Duet 3 expansion and tool boards] Filament monitors connected to expansoin/tool boards generated excessive CAN traffic
+- [Duet 3 expansion and tool boards] Filament monitors connected to expansion/tool boards generated excessive CAN traffic
 - [Duet 3 MB6HC + expansion/tool boards] Sometimes the main board would not receive status messages form expansoin and tool boards after power up unless it was reset by M999 or emergency stop
 - [Duet + SBC] The file system mutex was not initialised in SBC configurations, however this did not cause any problems under normal conditions
 - [Duet + SBC] Fixed issues with recovering from SBC disconnections and reconnections
@@ -23,7 +23,7 @@ Upgrade notes:
 - The IAP files for this release have changed. After installing 3.2RC1, the new IAP file will be needed next time you upgrade or downgrade the firmware. The new IAP files all have 'iap32' in the filename where it used to be 'iap', therefore they can coexist in /sys with the old IAP files.
 - [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.2RC1 also
 - [Duet + SBC] The SPI protocol has changed, therefore versions of DCS prior to 3.2RC1 will be unable to communicate with this version of RRF
-- [DWC] If you are running DWC in a development environment (e.g. via `npm run serve`), use [M586 C"*"](https://duet3d.dozuki.com/Wiki/Gcode#Section_M586_Configure_network_protocols) or similar to permit cross-origin HTTP access
+- [DWC] If you are running DWC in a development environment (e.g. via 'npm run serve'), use M586 C"*" or similar to permit cross-origin HTTP access or similar to permit cross-origin HTTP access
 
 Known issues:
 - [Duet + SBC + 12864 display] Menu files are slow to load
