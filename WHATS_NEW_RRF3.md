@@ -1,3 +1,18 @@
+RepRapFirmware 3.2RC2
+=====================
+
+Upgrade notes: none since RC1
+
+New features:
+- Previously there was a minimum reading cutoff at -5C when measuring temperatures using any kind of thermistor. That cutoff is now relaxed when using a low-resistance thermistor, e.g. with resistance 1K or 10K @25C.
+
+Bug fixes:
+- On some systems, DWC reported that it couldn't deserialise the lastStopHeight field of the Z probe because the value was null
+- [Duet 3 expansion and tool boards] Thermostatic fans connected to expansion/tool boards would occasionally blip spuriously
+- [Duet + SBC] The file system mutex was not initialised in SBC configurations, however this did not cause any problems under normal conditions
+- [Duet + SBC] Fixed issues with recovering from SBC disconnections and reconnections
+- [Duet3 Mini + CAN, also EXP3HC] Fixed missing cache invalidate after receiving a CAN message
+
 RepRapFirmware 3.2RC1
 =====================
 
