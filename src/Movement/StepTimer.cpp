@@ -18,6 +18,12 @@
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
 
+#if SUPPORT_CAN_EXPANSION
+volatile uint32_t StepTimer::localTimeOffset = 0;
+volatile uint32_t StepTimer::whenLastSynced;
+volatile bool StepTimer::synced = false;
+#endif
+
 void StepTimer::Init() noexcept
 {
 	// Timer interrupt for stepper motors

@@ -261,6 +261,8 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		endPoint[axis] = positionNow[axis];
 	}
 
+	flags.all = 0;														// set all flags false
+
 	// 1. Compute the new endpoints and the movement vector
 	const Move& move = reprap.GetMove();
 	if (doMotorMapping)
@@ -272,12 +274,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		flags.isDeltaMovement = move.IsDeltaMode()
 							&& (endPoint[X_AXIS] != positionNow[X_AXIS] || endPoint[Y_AXIS] != positionNow[Y_AXIS] || endPoint[Z_AXIS] != positionNow[Z_AXIS]);
 	}
-	else
-	{
-		flags.isDeltaMovement = false;
-	}
 
-	flags.xyMoving = false;
 	bool linearAxesMoving = false;
 	bool rotationalAxesMoving = false;
 	bool extrudersMoving = false;
@@ -370,7 +367,6 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	// 3. Store some values
 	tool = nextMove.tool;
 	flags.checkEndstops = nextMove.checkEndstops;
-	flags.reduceAcceleration = nextMove.reduceAcceleration;
 	filePos = nextMove.filePos;
 	virtualExtruderPosition = nextMove.virtualExtruderPosition;
 	proportionDone = nextMove.proportionDone;
@@ -382,9 +378,6 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	flags.isPrintingMove = flags.xyMoving && forwardExtruding;				// require forward extrusion so that wipe-while-retracting doesn't count
 	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
 	flags.usePressureAdvance = nextMove.usePressureAdvance;
-	flags.hadLookaheadUnderrun = false;
-	flags.isLeadscrewAdjustmentMove = false;
-	flags.goingSlow = false;
 	flags.controlLaser = nextMove.isCoordinated && nextMove.checkEndstops == 0;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
@@ -403,7 +396,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 #endif
 
 	// If it's a Z probing move, limit the Z acceleration to better handle nozzle-contact probes
-	if (flags.reduceAcceleration && accelerations[Z_AXIS] > ZProbeMaxAcceleration)
+	if (nextMove.reduceAcceleration && accelerations[Z_AXIS] > ZProbeMaxAcceleration)
 	{
 		accelerations[Z_AXIS] = ZProbeMaxAcceleration;
 	}
@@ -536,19 +529,8 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	}
 
 	// 3. Store some values
+	flags.all = 0;
 	flags.isLeadscrewAdjustmentMove = true;
-	flags.isDeltaMovement = false;
-	flags.isPrintingMove = false;
-	flags.xyMoving = false;
-	flags.controlLaser = false;
-	flags.checkEndstops = false;
-	flags.reduceAcceleration = false;
-	flags.canPauseAfter = true;
-	flags.usingStandardFeedrate = false;
-	flags.usePressureAdvance = false;
-	flags.hadLookaheadUnderrun = false;
-	flags.goingSlow = false;
-	flags.continuousRotationShortcut = false;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	tool = nullptr;
 	filePos = prev->filePos;
@@ -618,23 +600,10 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	}
 
 	// 3. Store some values
-	flags.isLeadscrewAdjustmentMove = false;
-	flags.isDeltaMovement = false;
-	flags.isPrintingMove = false;
-	flags.xyMoving = false;
-	flags.controlLaser = false;
-	flags.checkEndstops = false;
-	flags.reduceAcceleration = false;
-	flags.canPauseAfter = true;
-	flags.usingStandardFeedrate = false;
-	flags.usePressureAdvance = false;
-	flags.hadLookaheadUnderrun = false;
-	flags.goingSlow = false;
-	flags.continuousRotationShortcut = false;
+	flags.all = 0;
 	virtualExtruderPosition = 0;
 	tool = nullptr;
 	filePos = noFilePosition;
-	flags.endCoordinatesValid = false;
 
 	startSpeed = nextMove.startSpeed;
 	endSpeed = nextMove.endSpeed;
@@ -655,6 +624,121 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 }
 
 #endif
+
+// Set up a remote move. Return true if it represents real movement, else false.
+bool DDA::InitFromRemote(const CanMessageMovement& msg) noexcept
+{
+	afterPrepare.moveStartTime = msg.whenToExecute + StepTimer::GetLocalTimeOffset();
+	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
+	flags.all = 0;
+	flags.isRemote = true;
+	flags.isPrintingMove = (msg.pressureAdvanceDrives != 0);
+
+	// Normalise the move to unit distance and convert time units from step clocks to seconds
+	totalDistance = 1.0;
+
+	topSpeed = (2.0 * StepTimer::StepClockRate)/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
+	startSpeed = topSpeed * msg.initialSpeedFraction;
+	endSpeed = topSpeed * msg.finalSpeedFraction;
+
+	acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction) * StepTimer::StepClockRate)/msg.accelerationClocks;
+	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction) * StepTimer::StepClockRate)/msg.decelClocks;
+
+	beforePrepare.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
+	beforePrepare.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
+
+	PrepParams params;
+	params.decelStartDistance = 1.0 - beforePrepare.decelDistance;
+
+	if (msg.deltaDrives != 0)
+	{
+		afterPrepare.cKc = roundS32(msg.zMovement * DriveMovement::Kc);
+		directionVector[X_AXIS] = msg.finalX - msg.initialX;
+		directionVector[Y_AXIS] = msg.finalY - msg.initialY;
+		directionVector[Z_AXIS] = msg.zMovement;
+		params.a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
+		params.initialX = msg.initialX;
+		params.initialY = msg.initialY;
+		params.dparams = static_cast<const LinearDeltaKinematics*>(&(reprap.GetMove().GetKinematics()));
+	}
+
+	afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32(startSpeed/acceleration);
+	params.topSpeedTimesCdivD = (uint32_t)roundU32(topSpeed/deceleration);
+	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + msg.accelerationClocks + msg.steadyClocks;
+	afterPrepare.extraAccelerationClocks = msg.accelerationClocks - roundS32(beforePrepare.accelDistance/topSpeed);
+	params.compFactor = (topSpeed - startSpeed)/topSpeed;
+
+	activeDMs = nullptr;
+
+	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
+	{
+		endPoint[drive] = prev->endPoint[drive];		// the steps for this move will be added later
+		const int32_t delta = msg.perDrive[drive].steps;
+
+		if (delta != 0)
+		{
+			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
+			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
+			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
+
+			reprap.GetPlatform().EnableDrivers(drive);
+			bool stepsToDo;
+			if ((msg.deltaDrives & (1u << drive)) != 0)
+			{
+				stepsToDo = pdm->PrepareDeltaAxis(*this, params);
+			}
+			else if ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
+			{
+				// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
+				// Pass the speed change to PrepareExtruder - but PrepareExtruder doesn't use it currently, so don't bother
+				float dummy;
+				stepsToDo = pdm->PrepareExtruder(*this, params, dummy, 0.0, true);
+			}
+			else
+			{
+				stepsToDo = pdm->PrepareCartesianAxis(*this, params);
+			}
+
+			// Check for sensible values, print them if they look dubious
+			if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+			{
+				DebugPrintAll("rem");
+			}
+
+			if (stepsToDo)
+			{
+				InsertDM(pdm);
+				const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
+				if (pdm->direction)
+				{
+					endPoint[drive] += netSteps;
+				}
+				else
+				{
+					endPoint[drive] -= netSteps;
+				}
+			}
+			else
+			{
+				DriveMovement::Release(pdm);
+			}
+		}
+	}
+
+	// 2. Throw it away if there's no real movement.
+	if (activeDMs == nullptr)
+	{
+		return false;
+	}
+
+	if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))	// temp show the prepared DDA if debug enabled for both modules
+	{
+		DebugPrintAll("rem");
+	}
+
+	state = frozen;												// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+	return true;
+}
 
 // Return true if this move is or might have been intended to be a deceleration-only move
 // A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error

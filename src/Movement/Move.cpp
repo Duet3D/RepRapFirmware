@@ -1178,7 +1178,7 @@ AsyncMove *Move::LockAuxMove() noexcept
 }
 
 // Release the aux move buffer and optionally signal that it contains a move
-// The caller must have locked the buffer before calling this. If it calls with hasNewMove true, it must have populated the move buffer with the move details
+// The caller must have locked the buffer before calling this. If it calls this with hasNewMove true, it must have populated the move buffer with the move details
 void Move::ReleaseAuxMove(bool hasNewMove) noexcept
 {
 	auxMoveAvailable = hasNewMove;

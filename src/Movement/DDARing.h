@@ -85,8 +85,12 @@ public:
 
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;
 
+#if SUPPORT_CAN_EXPANSION
+	void AddMoveFromRemote(const CanMessageMovement& msg) noexcept;						// add a move from the ATE to the movement queue
+#endif
+
 private:
-	bool StartNextMove(Platform& p, uint32_t startTime) noexcept SPEED_CRITICAL;	// Start the next move, returning true if laser or IObits need to be controlled
+	bool StartNextMove(Platform& p, uint32_t startTime) noexcept SPEED_CRITICAL;		// Start the next move, returning true if laser or IObits need to be controlled
 	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept;
 
 	static void TimerCallback(CallbackParameter p) noexcept;

@@ -391,6 +391,19 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			switch (id)
 			{
+			case CanMessageType::timeSync:
+				//TODO re-implement this as a PLL and use the CAN time stamps for greater accuracy
+				StepTimer::SetLocalTimeOffset(StepTimer::GetTimerTicks() - buf->msg.sync.timeSent);
+#if 0
+				//TODO implement this when we want to support using a main board as an expansion board
+				reprap.GetPlatform().SetPrinting(buf->msg.sync.isPrinting);
+#endif
+				if (buf->dataLength >= 16)				// if real time is included
+				{
+					reprap.GetPlatform().SetDateTime((time_t)buf->msg.sync.realTime);
+				}
+				return;							// no reply needed
+
 			case CanMessageType::movement:
 				reprap.GetMove().AddMoveFromRemote(buf->msg.move);
 				return;							// no reply needed

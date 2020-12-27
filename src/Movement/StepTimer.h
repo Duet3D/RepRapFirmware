@@ -60,16 +60,23 @@ public:
 	static void Interrupt() noexcept;
 
 #if SAME70 || SAME5x
+	// All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 	static constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
 #elif defined(__LPC17xx__)
 	static constexpr uint32_t StepClockRate = 1000000;                          // 1MHz
 #else
-	static constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// just under 1MHz
+	static constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// Duet 2 and Maestro: use just under 1MHz
 #endif
 
 	static constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 	static constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
 	static constexpr uint32_t MinInterruptInterval = 6;							// about 6us
+
+#if SUPPORT_CAN_EXPANSION
+	static uint32_t GetLocalTimeOffset() { return localTimeOffset; }
+	//TODO change this to a PLL
+	static void SetLocalTimeOffset(uint32_t offset) { localTimeOffset = offset; synced = true; whenLastSynced = millis(); }
+#endif
 
 private:
 	static bool ScheduleTimerInterrupt(uint32_t tim) noexcept;					// Schedule an interrupt at the specified clock count, or return true if it has passed already
@@ -80,7 +87,13 @@ private:
 	CallbackParameter cbParam;
 	volatile bool active;
 
-	static StepTimer * volatile pendingList;			// list of pending callbacks, soonest first
+	static StepTimer * volatile pendingList;									// list of pending callbacks, soonest first
+
+#if SUPPORT_CAN_EXPANSION
+	static volatile uint32_t localTimeOffset;									// local time minus master time
+	static volatile uint32_t whenLastSynced;									// the millis tick count when we last synced
+	static volatile bool synced;
+#endif
 };
 
 // Function GetTimerTicks() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined

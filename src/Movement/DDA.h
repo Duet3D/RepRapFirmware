@@ -71,6 +71,7 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	uint32_t InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
+	bool InitFromRemote(const CanMessageMovement& msg) noexcept;
 #else
 	void InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
 #endif
@@ -224,7 +225,8 @@ private:
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
-					 reduceAcceleration : 1;		// True if we should use low acceleration for this move
+					 hadHiccup : 1,	 	 	 		// True if we had a hiccup while executing a move from a remote master
+					 isRemote : 1;					// True if this move was commanded from a remote
 		};
 		uint16_t all;								// so that we can print all the flags at once for debugging
 	} flags;
