@@ -629,13 +629,14 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 	GCodeResult UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept;
-# ifndef DUET3_ATE
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutHandleM950Gpio(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult EutHandleGpioWrite(const CanMessageWriteGpio& msg, const StringRef& reply) noexcept;
 	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
-# endif
 #endif
 
 #if VARIABLE_NUM_DRIVERS

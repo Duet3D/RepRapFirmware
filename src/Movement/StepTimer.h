@@ -72,7 +72,7 @@ public:
 	static constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
 	static constexpr uint32_t MinInterruptInterval = 6;							// about 6us
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_REMOTE_COMMANDS
 	static uint32_t GetLocalTimeOffset() { return localTimeOffset; }
 	//TODO change this to a PLL
 	static void SetLocalTimeOffset(uint32_t offset) { localTimeOffset = offset; synced = true; whenLastSynced = millis(); }
@@ -89,7 +89,7 @@ private:
 
 	static StepTimer * volatile pendingList;									// list of pending callbacks, soonest first
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_REMOTE_COMMANDS
 	static volatile uint32_t localTimeOffset;									// local time minus master time
 	static volatile uint32_t whenLastSynced;									// the millis tick count when we last synced
 	static volatile bool synced;

@@ -625,6 +625,8 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+
 // Set up a remote move. Return true if it represents real movement, else false.
 bool DDA::InitFromRemote(const CanMessageMovement& msg) noexcept
 {
@@ -739,6 +741,8 @@ bool DDA::InitFromRemote(const CanMessageMovement& msg) noexcept
 	state = frozen;												// must do this last so that the ISR doesn't start executing it before we have finished setting it up
 	return true;
 }
+
+#endif
 
 // Return true if this move is or might have been intended to be a deceleration-only move
 // A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error

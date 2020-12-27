@@ -18,7 +18,7 @@
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_REMOTE_COMMANDS
 volatile uint32_t StepTimer::localTimeOffset = 0;
 volatile uint32_t StepTimer::whenLastSynced;
 volatile bool StepTimer::synced = false;

@@ -71,10 +71,14 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	uint32_t InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
-	bool InitFromRemote(const CanMessageMovement& msg) noexcept;
 #else
 	void InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
 #endif
+
+#if SUPPORT_REMOTE_COMMANDS
+	bool InitFromRemote(const CanMessageMovement& msg) noexcept;
+#endif
+
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }

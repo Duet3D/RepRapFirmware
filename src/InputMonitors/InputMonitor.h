@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_REMOTE_COMMANDS
 
 #include <Hardware/IoPorts.h>
 #include <GCodes/GCodeResult.h>

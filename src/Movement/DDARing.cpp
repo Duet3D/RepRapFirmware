@@ -864,7 +864,7 @@ uint32_t DDARing::ManageLaserPower() const noexcept
 
 #endif
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_REMOTE_COMMANDS
 
 // Add a move from the ATE to the movement queue
 void DDARing::AddMoveFromRemote(const CanMessageMovement& msg) noexcept

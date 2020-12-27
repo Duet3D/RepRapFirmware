@@ -199,7 +199,7 @@ public:
 	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
 #endif
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_REMOTE_COMMANDS
 	void AddMoveFromRemote(const CanMessageMovement& msg) noexcept							// add a move from the ATE to the movement queue
 	{
 		mainDDARing.AddMoveFromRemote(msg);

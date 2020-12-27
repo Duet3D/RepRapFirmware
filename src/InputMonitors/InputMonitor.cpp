@@ -7,7 +7,7 @@
 
 #include "InputMonitor.h"
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_REMOTE_COMMANDS
 
 #include <CanMessageFormats.h>
 #include <Hardware/IoPorts.h>

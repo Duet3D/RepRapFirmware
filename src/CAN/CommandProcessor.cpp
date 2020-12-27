@@ -287,7 +287,7 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 	}
 }
 
-#ifndef DUET3_ATE
+#if SUPPORT_REMOTE_COMMANDS
 
 static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
 {
@@ -311,9 +311,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	case CanMessageReturnInfo::typeM408:
 		// For now we ignore the parameter and always return the same set of info
 		// This command is currently only used by the ATE, which needs the board type and the voltages
-		reply.copy("{\"firmwareElectronics\":\"Duet 3 ");
-		reply.cat(BOARD_NAME);
-		reply.cat("\"");
+		reply.printf("{\"firmwareElectronics\":\"Duet 3 %.0s\"", BOARD_NAME);
 #if HAS_VOLTAGE_MONITOR
 		{
 			const MinMaxCurrent voltages = reprap.GetPlatform().GetPowerVoltages();
@@ -380,7 +378,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 	if (buf->id.Src() != CanInterface::GetCanAddress())								// I don't think we should receive our own broadcasts, but in case we do...
 	{
 		const CanMessageType id = buf->id.MsgType();
-#ifndef DUET3_ATE
+#if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InEutMode())
 		{
 			String<StringLength500> reply;
