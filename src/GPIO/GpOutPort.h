@@ -13,6 +13,10 @@
 #include <GCodes/GCodeResult.h>
 #include <ObjectModel/ObjectModel.h>
 
+#if SUPPORT_REMOTE_COMMANDS
+	class CanMessageGenericParser;
+#endif
+
 class GpOutputPort INHERIT_OBJECT_MODEL
 {
 public:
@@ -28,6 +32,11 @@ public:
 	bool IsUnused() const noexcept;
 	GCodeResult WriteAnalog(uint32_t gpioPortNumber, bool isServo, float pwm, const GCodeBuffer& gb, const StringRef& reply) noexcept;
 	GCodeResult Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult AssignFromRemote(uint32_t gpioPortNumber, const CanMessageGenericParser& parser, const StringRef& reply) noexcept;
+	void WriteAnalog(float pwm) noexcept;
+#endif
 
 #ifdef PCCB
 	void Assign(const char *pinName) noexcept;

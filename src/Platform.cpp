@@ -100,6 +100,10 @@ using AnalogIn::AdcBits;
 # include "CAN/CanInterface.h"
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #include <climits>
 #include <utility>					// for std::swap
 
@@ -4601,6 +4605,139 @@ void Platform::TemperatureCalibrationInit() noexcept
 	tempCalF2 = (int32_t)temp_cal_tl * (int32_t)temp_cal_vch - (int32_t)temp_cal_th * (int32_t)temp_cal_vcl;
 	tempCalF3 = (int32_t)temp_cal_vcl - (int32_t)temp_cal_vch;
 	tempCalF4 = (int32_t)temp_cal_vpl - (int32_t)temp_cal_vph;
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult Platform::EutHandleM950Gpio(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	// Get and validate the port number
+	CanMessageGenericParser parser(msg, M950GpioParams);
+	uint16_t gpioNumber;
+	if (!parser.GetUintParam('P', gpioNumber))
+	{
+		reply.copy("Missing port number parameter in M950Gpio message");
+		return GCodeResult::error;
+	}
+	if (gpioNumber >= MaxGpOutPorts)
+	{
+		reply.printf("GPIO port number %u is too high for board %u", gpioNumber, CanInterface::GetCanAddress());
+		return GCodeResult::error;
+	}
+
+	return gpoutPorts[gpioNumber].AssignFromRemote(gpioNumber, parser, reply);
+}
+
+GCodeResult Platform::EutHandleGpioWrite(const CanMessageWriteGpio& msg, const StringRef& reply) noexcept
+{
+	if (msg.portNumber >= MaxGpOutPorts)
+	{
+		reply.printf("GPIO port# %u is too high for this expansion board", msg.portNumber);
+		return GCodeResult::error;
+	}
+
+	gpoutPorts[msg.portNumber].WriteAnalog(msg.pwm);
+	return GCodeResult::ok;
+}
+
+GCodeResult Platform::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+# if HAS_SMART_DRIVERS
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, msg, reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								SetMotorCurrent(driver, msg.values[count], 906, reply);
+							}
+						}
+				   );
+	return rslt;
+# else
+	reply.copy("Setting not available for external drivers");
+	return GCodeResult::error;
+# endif
+}
+
+GCodeResult Platform::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, msg, reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								SetDriveStepsPerUnit(driver, msg.values[count].GetStepsPerUnit(), 0);
+#if HAS_SMART_DRIVERS
+								const uint16_t microstepping = msg.values[count].GetMicrostepping() & 0x03FF;
+								const bool interpolate = (msg.values[count].GetMicrostepping() & 0x8000) != 0;
+								if (!SmartDrivers::SetMicrostepping(driver, microstepping, interpolate))
+								{
+									reply.lcatf("Driver %u.%u does not support x%u microstepping", CanInterface::GetCanAddress(), driver, microstepping);
+									if (interpolate)
+									{
+										reply.cat(" with interpolation");
+									}
+									rslt = GCodeResult::error;
+								}
+#endif
+							}
+						}
+					);
+	return rslt;
+}
+
+GCodeResult Platform::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept
+{
+	//TODO check message is long enough for the number of drivers specified
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	drivers.Iterate([this, msg](unsigned int driver, unsigned int count) -> void
+		{
+			switch (msg.values[count].mode)
+			{
+			case DriverStateControl::driverActive:
+				EnableOneLocalDriver(driver, motorCurrents[driver]);
+				driverState[driver] = DriverStatus::enabled;
+				break;
+
+			case DriverStateControl::driverIdle:
+				UpdateMotorCurrent(driver, motorCurrents[driver] * idleCurrentFactor);
+				driverState[driver] = DriverStatus::idle;
+				break;
+
+			case DriverStateControl::driverDisabled:
+			default:
+				DisableOneLocalDriver(driver);
+				driverState[driver] = DriverStatus::disabled;
+				break;
+			}
+		});
+	return GCodeResult::ok;
 }
 
 #endif

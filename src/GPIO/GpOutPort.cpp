@@ -15,6 +15,10 @@
 # include <CAN/CanMessageGenericConstructor.h>
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
@@ -42,7 +46,7 @@ bool GpOutputPort::IsUnused() const noexcept
 {
 	return
 #if SUPPORT_CAN_EXPANSION
-		boardAddress == CanId::MasterAddress &&
+		boardAddress == CanInterface::GetCanAddress() &&
 #endif
 		!port.IsValid();
 }
@@ -63,7 +67,7 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 
 		// Remove any existing assignment
 #if SUPPORT_CAN_EXPANSION
-		if (boardAddress != CanId::MasterAddress)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			CanMessageGenericConstructor cons(M950GpioParams);
 			cons.AddUParam('P', gpioNumber);
@@ -73,7 +77,7 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 				reprap.GetPlatform().Message(WarningMessage, reply.c_str());
 				reply.Clear();
 			}
-			boardAddress = CanId::MasterAddress;
+			boardAddress = CanInterface::GetCanAddress();
 		}
 #endif
 		port.Release();
@@ -87,7 +91,7 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 
 #if SUPPORT_CAN_EXPANSION
 		boardAddress = IoPort::RemoveBoardAddress(pinName.GetRef());
-		if (boardAddress != CanId::MasterAddress)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			CanMessageGenericConstructor cons(M950GpioParams);
 			cons.AddUParam('P', gpioNumber);
@@ -116,7 +120,7 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 	else if (seenFreq)
 	{
 #if SUPPORT_CAN_EXPANSION
-		if (boardAddress != CanId::MasterAddress)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			CanMessageGenericConstructor cons(M950GpioParams);
 			cons.AddUParam('P', gpioNumber);
@@ -131,7 +135,7 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 	else
 	{
 #if SUPPORT_CAN_EXPANSION
-		if (boardAddress != CanId::MasterAddress)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			CanMessageGenericConstructor cons(M950GpioParams);
 			cons.AddUParam('P', gpioNumber);
@@ -148,7 +152,7 @@ GCodeResult GpOutputPort::WriteAnalog(uint32_t gpioPortNumber, bool isServo, flo
 {
 	lastPwm = pwm;
 #if SUPPORT_CAN_EXPANSION
-	if (boardAddress != CanId::MasterAddress)
+	if (boardAddress != CanInterface::GetCanAddress())
 	{
 		return CanInterface::WriteGpio(boardAddress, gpioPortNumber, pwm, isServo, gb, reply);
 	}
@@ -156,6 +160,67 @@ GCodeResult GpOutputPort::WriteAnalog(uint32_t gpioPortNumber, bool isServo, flo
 	port.WriteAnalog(pwm);
 	return GCodeResult::ok;
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult GpOutputPort::AssignFromRemote(uint32_t gpioPortNumber, const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool isServo;
+	if (!parser.GetBoolParam('S', isServo))
+	{
+		isServo = false;
+	}
+
+	PwmFrequency freq;
+	const bool seenFreq = parser.GetUintParam('Q', freq);
+	if (!seenFreq)
+	{
+		freq = (isServo) ? ServoRefreshFrequency : DefaultPinWritePwmFreq;
+	}
+
+	String<StringLength50> pinName;
+	if (parser.GetStringParam('C', pinName.GetRef()))
+	{
+		// Creating or destroying a port
+		const bool ok = port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpout, (isServo) ? PinAccess::servo : PinAccess::pwm);
+		if (ok && port.IsValid())
+		{
+			port.SetFrequency(freq);
+		}
+		return (ok) ? GCodeResult::ok : GCodeResult::error;
+	}
+	else
+	{
+		// Changing frequency, or reporting on a port
+		if (!port.IsValid())
+		{
+			reply.printf("Board %u does not have GPIO/servo port %" PRIu32, CanInterface::GetCanAddress(), gpioPortNumber);
+			return GCodeResult::error;
+		}
+
+		if (seenFreq)
+		{
+			port.SetFrequency(freq);
+		}
+		else
+		{
+			reply.printf("GPIO/servo port %" PRIu32, gpioPortNumber);
+			port.AppendDetails(reply);
+		}
+		return GCodeResult::ok;
+	}
+}
+
+void GpOutputPort::WriteAnalog(float pwm) noexcept
+{
+	if (boardAddress == CanInterface::GetCanAddress())
+	{
+		lastPwm = pwm;
+		port.WriteAnalog(pwm);
+	}
+}
+
+#endif
 
 #ifdef PCCB
 
