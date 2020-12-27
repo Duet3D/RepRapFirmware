@@ -301,20 +301,9 @@ static void _mcan_enable_peripheral_clock(mcan_module *const module_inst) noexce
 	}
 }
 
-/**
- * \brief initialize can module.
- *
- * \param module_inst  MCAN instance
- * \param hw  Base address of MCAN.
- * \param config default configuration .
- */
-void mcan_init(mcan_module *const module_inst, Mcan *hw, struct mcan_config *config) noexcept
+// One-time initialisation. Do not call this to reset after a bus_off condition.
+void mcan_init_once(mcan_module *const module_inst, Mcan *hw) noexcept
 {
-	/* Sanity check arguments */
-	Assert(module_inst);
-	Assert(hw);
-	Assert(config);
-
 	/* Associate the software module instance with the hardware module */
 	module_inst->hw = hw;
 	module_inst->taskWaitingOnFifo[0] = module_inst->taskWaitingOnFifo[1] = nullptr;
@@ -327,6 +316,18 @@ void mcan_init(mcan_module *const module_inst, Mcan *hw, struct mcan_config *con
 
 	/* Enable peripheral clock */
 	_mcan_enable_peripheral_clock(module_inst);
+}
+
+/**
+ * \brief initialize can module.
+ *
+ * \param module_inst  MCAN instance
+ * \param hw  Base address of MCAN.
+ * \param config default configuration .
+ */
+void mcan_init(mcan_module *const module_inst, struct mcan_config *config) noexcept
+{
+	Mcan * const hw = module_inst->hw;
 
 	/* Configuration Change Enable. */
 	hw->MCAN_CCCR |= MCAN_CCCR_CCE;
@@ -750,11 +751,11 @@ bool GetMessageFromFifo(mcan_module *const module_inst, CanMessageBuffer *buf, u
 			mcan_rx_element elem;
 			if (fifoNumber == 1)
 			{
-				mcan_get_rx_fifo_1_element(module_inst, &elem, getIndex);		// copy the data (TODO use our own driver, avoid double copying)
+				mcan_get_rx_fifo_1_element(module_inst, &elem, getIndex);			// copy the data (TODO use our own driver, avoid double copying)
 			}
 			else
 			{
-				mcan_get_rx_fifo_0_element(module_inst, &elem, getIndex);		// copy the data (TODO use our own driver, avoid double copying)
+				mcan_get_rx_fifo_0_element(module_inst, &elem, getIndex);			// copy the data (TODO use our own driver, avoid double copying)
 			}
 			fifoRegisters[1] = getIndex;											// acknowledge it, release the FIFO entry
 

@@ -324,7 +324,9 @@ void Thermistor::Poll() noexcept
 					const float recipT = shA + shB * logResistance + shC * logResistance * logResistance * logResistance;
 					const float temp =  (recipT > 0.0) ? (1.0/recipT) + ABS_ZERO : BadErrorTemperature;
 
-					if (temp < MinimumConnectedTemperature)
+					// It's hard to distinguish between an open circuit and a cold high-resistance thermistor.
+					// So we treat a temperature below -5C as an open circuit, unless we are using a low-resistance thermistor. The E3D thermistor has a resistance of about 470k @ -5C.
+					if (temp < MinimumConnectedTemperature && resistance > seriesR * 100)
 					{
 						// Assume thermistor is disconnected
 						SetResult(ABS_ZERO, TemperatureError::openCircuit);
