@@ -142,9 +142,10 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	void ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg) noexcept;
 	void ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept;
-# ifndef DUET3_ATE
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-# endif
 #endif
 
 	static ReadWriteLock sensorsLock;							// needs to be public so that the OMT in EndstopsManager can lock it

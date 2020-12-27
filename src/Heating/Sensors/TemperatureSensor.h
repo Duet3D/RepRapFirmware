@@ -8,6 +8,7 @@
 #include <ObjectModel/ObjectModel.h>
 
 class GCodeBuffer;
+class CanMessageGenericParser;
 struct CanSensorReport;
 
 class TemperatureSensor INHERIT_OBJECT_MODEL
@@ -33,6 +34,13 @@ public:
 	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.
 	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed);
+
+#if SUPPORT_REMOTE_COMMANDS
+	// Configure the sensor from M308 parameters.
+	// If we find any parameters, process them and return true. If an error occurs while processing them, return error and write an error message to 'reply.
+	// If we find no relevant parameters, report the current parameters to 'reply' and return ok.
+	virtual GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply);
+#endif
 
 #if SUPPORT_OBJECT_MODEL
 	// Report the sensor type in the form corresponding to the Y parameter of M308.

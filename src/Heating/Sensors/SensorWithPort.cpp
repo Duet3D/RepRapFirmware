@@ -8,6 +8,10 @@
 #include "SensorWithPort.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 SensorWithPort::SensorWithPort(unsigned int sensorNum, const char *type) noexcept
 	: TemperatureSensor(sensorNum, type)
 {
@@ -33,6 +37,27 @@ bool SensorWithPort::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinA
 	reply.copy("Missing port name parameter");
 	return false;
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Try to configure the port
+bool SensorWithPort::ConfigurePort(const CanMessageGenericParser& parser, const StringRef& reply, PinAccess access, bool& seen)
+{
+	String<StringLength20> portName;
+	if (parser.GetStringParam('P', portName.GetRef()))
+	{
+		seen = true;
+		return port.AssignPort(portName.c_str(), reply, PinUsedBy::sensor, access);
+	}
+	if (port.IsValid())
+	{
+		return true;
+	}
+	reply.copy("Missing port name parameter");
+	return false;
+}
+
+#endif
 
 // Copy the basic details to the reply buffer. This hides the version in the base class.
 void SensorWithPort::CopyBasicDetails(const StringRef& reply) const noexcept

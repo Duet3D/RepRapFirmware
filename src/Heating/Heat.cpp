@@ -41,6 +41,10 @@ Licence: GPL
 # include "CAN/CanInterface.h"
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #ifdef DUET3_ATE
 # include <Duet3Ate.h>
 #endif
@@ -1223,6 +1227,62 @@ void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersSta
 									}
 								}
 							);
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult Heat::EutProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M308NewParams);
+	uint16_t sensorNum;
+	if (parser.GetUintParam('S', sensorNum))
+	{
+		if (sensorNum < MaxSensors)
+		{
+			String<StringLength20> sensorTypeName;
+			if (parser.GetStringParam('Y', sensorTypeName.GetRef()))
+			{
+				WriteLocker lock(sensorsLock);
+
+				DeleteSensor(sensorNum);
+
+				TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, CanInterface::GetCanAddress(), sensorTypeName.c_str(), reply);
+				if (newSensor == nullptr)
+				{
+					return GCodeResult::error;
+				}
+
+				const GCodeResult rslt = newSensor->Configure(parser, reply);
+				if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+				{
+					InsertSensor(newSensor);
+				}
+				else
+				{
+					delete newSensor;
+				}
+				return rslt;
+			}
+
+			const auto sensor = FindSensor(sensorNum);
+			if (sensor.IsNull())
+			{
+				reply.printf("Sensor %u does not exist", sensorNum);
+				return GCodeResult::error;
+			}
+			return sensor->Configure(parser, reply);
+		}
+		else
+		{
+			reply.copy("Sensor number out of range");
+			return GCodeResult::error;
+		}
+	}
+
+	reply.copy("Missing sensor number parameter");
+	return GCodeResult::error;
 }
 
 #endif

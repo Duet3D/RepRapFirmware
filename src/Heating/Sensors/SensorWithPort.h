@@ -10,6 +10,8 @@
 
 #include "TemperatureSensor.h"
 
+class CanMessageGenericParser;
+
 class SensorWithPort : public TemperatureSensor
 {
 protected:
@@ -18,6 +20,11 @@ protected:
 
 	// Try to configure the port
 	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinAccess access, bool& seen);
+
+#if SUPPORT_REMOTE_COMMANDS
+	// Try to configure the port
+	bool ConfigurePort(const CanMessageGenericParser& parser, const StringRef& reply, PinAccess access, bool& seen);
+#endif
 
 	// Copy the basic details to the reply buffer. This hides the version in the base class.
 	void CopyBasicDetails(const StringRef& reply) const noexcept;

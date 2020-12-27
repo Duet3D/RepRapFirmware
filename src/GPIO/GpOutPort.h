@@ -13,9 +13,7 @@
 #include <GCodes/GCodeResult.h>
 #include <ObjectModel/ObjectModel.h>
 
-#if SUPPORT_REMOTE_COMMANDS
-	class CanMessageGenericParser;
-#endif
+class CanMessageGenericParser;
 
 class GpOutputPort INHERIT_OBJECT_MODEL
 {
