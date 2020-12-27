@@ -26,6 +26,17 @@ bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply
 	return ret;
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+bool SpiTemperatureSensor::ConfigurePort(const CanMessageGenericParser& parser, const StringRef& reply, bool& seen) noexcept
+{
+	const bool ret = SensorWithPort::ConfigurePort(parser, reply, PinAccess::write1, seen);
+	device.SetCsPin(port.GetPin());
+	return ret;
+}
+
+#endif
+
 void SpiTemperatureSensor::InitSpi() noexcept
 {
 	lastReadingTime = millis();

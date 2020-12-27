@@ -275,7 +275,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 #if SUPPORT_REMOTE_COMMANDS
 
 // Configure the temperature sensor
-GCodeResult Thermistor::Configure(const CanMessageGenericParser& parser, const StringRef& reply)
+GCodeResult Thermistor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
 	bool changed = false;
 	if (!ConfigurePort(parser, reply, PinAccess::readAnalog, changed))

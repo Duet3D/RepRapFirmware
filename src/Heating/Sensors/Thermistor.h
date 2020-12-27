@@ -26,7 +26,7 @@ public:
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException); // configure the sensor from M308 parameters
 
 #if SUPPORT_REMOTE_COMMANDS
-	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) override; // configure the sensor from M308 parameters
+	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override; // configure the sensor from M308 parameters
 #endif
 
 	void Poll() noexcept override;

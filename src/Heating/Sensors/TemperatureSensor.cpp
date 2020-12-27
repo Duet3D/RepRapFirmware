@@ -106,7 +106,7 @@ GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply
 #if SUPPORT_REMOTE_COMMANDS
 
 // Default implementation of Configure, for sensors that have no configurable parameters
-GCodeResult TemperatureSensor::Configure(const CanMessageGenericParser& parser, const StringRef& reply)
+GCodeResult TemperatureSensor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
 	if (!parser.HasParameter('Y'))
 	{
