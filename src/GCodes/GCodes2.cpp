@@ -1544,7 +1544,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('B'))
 				{
 					const uint32_t board = gb.GetUIValue();
-					if (board != CanId::MasterAddress)
+					if (board != CanInterface::GetCanAddress())
 					{
 						result = CanInterface::GetRemoteFirmwareDetails(board, gb, reply);
 						break;
@@ -1767,8 +1767,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				const unsigned int type = (gb.Seen('P')) ? gb.GetIValue() : 0;
 				const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);	// set the Push flag to combine multiple messages into a single OutputBuffer chain
 #if SUPPORT_CAN_EXPANSION
-				const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
-				if (board != CanId::MasterAddress)
+				const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
+				if (board != CanInterface::GetCanAddress())
 				{
 					result = CanInterface::RemoteDiagnostics(mt, board, type, gb, reply);
 					break;
@@ -4392,6 +4392,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+		case 954:	// configure as expansion board
+			{
+				CanAddress addr = gb.GetLimitedUIValue('A', 1, CanId::MaxCanAddress + 1);
+				CanInterface::SwitchToExpansionMode(addr);
+			}
+			break;
+#endif
+
 		case 997:	// Perform firmware update
 			result = UpdateFirmware(gb, reply);
 			break;
@@ -4414,7 +4423,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			if (gb.Seen('B'))
 			{
 				const uint32_t address = gb.GetUIValue();
-				if (address != CanId::MasterAddress)
+				if (address != CanInterface::GetCanAddress())
 				{
 					result = reprap.GetExpansion().ResetRemote(address, gb, reply);
 					break;

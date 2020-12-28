@@ -42,7 +42,7 @@ bool GpInputPort::GetState() const noexcept
 {
 	// Temporary implementation until we use interrupts to track input pin state changes
 #if SUPPORT_CAN_EXPANSION
-	if (boardAddress != CanId::MasterAddress)
+	if (boardAddress != CanInterface::GetCanAddress())
 	{
 		return currentState;
 	}
@@ -55,7 +55,7 @@ bool GpInputPort::IsUnused() const noexcept
 {
 	return
 #if SUPPORT_CAN_EXPANSION
-		boardAddress == CanId::MasterAddress &&
+		boardAddress == CanInterface::GetCanAddress() &&
 #endif
 		!port.IsValid();
 }
@@ -69,7 +69,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 
 		// Remove any existing assignment
 #if SUPPORT_CAN_EXPANSION
-		if (boardAddress != CanId::MasterAddress)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			const GCodeResult rslt = CanInterface::DeleteHandle(boardAddress, handle, reply);
 			if (rslt != GCodeResult::ok)
@@ -79,7 +79,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 				reprap.GetPlatform().Message(mtype, reply.c_str());
 				reply.Clear();
 			}
-			boardAddress = CanId::MasterAddress;
+			boardAddress = CanInterface::GetCanAddress();
 		}
 #endif
 		port.Release();
@@ -89,7 +89,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress newBoard = IoPort::RemoveBoardAddress(pinName.GetRef());
-		if (newBoard != CanId::MasterAddress)
+		if (newBoard != CanInterface::GetCanAddress())
 		{
 			handle.Set(RemoteInputHandle::typeGpIn, gpinNumber, 0);
 			rslt = CanInterface::CreateHandle(newBoard, handle, pinName.c_str(), 0, MinimumGpinReportInterval, currentState, reply);
@@ -123,7 +123,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 	{
 		// Report the pin details
 #if SUPPORT_CAN_EXPANSION
-		if (boardAddress != CanId::MasterAddress)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			const GCodeResult rslt = CanInterface::GetHandlePinName(boardAddress, handle, currentState, reply);
 			if (rslt != GCodeResult::ok)

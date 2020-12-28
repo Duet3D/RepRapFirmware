@@ -77,7 +77,7 @@ void RemoteHeater::SwitchOff() noexcept
 	else
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanId::MasterAddress, boardAddress);
+		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
 		msg->heaterNumber = GetHeaterNumber();
 		msg->setPoint = GetTargetTemperature();
 		msg->command = CanMessageSetHeaterTemperature::commandOff;
@@ -99,7 +99,7 @@ GCodeResult RemoteHeater::ResetFault(const StringRef& reply) noexcept
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanId::MasterAddress, boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
 	msg->setPoint = GetTargetTemperature();
 	msg->command = CanMessageSetHeaterTemperature::commandResetFault;
@@ -150,7 +150,7 @@ void RemoteHeater::Suspend(bool sus) noexcept
 	if (buf != nullptr)
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanId::MasterAddress, boardAddress);
+		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
 		msg->heaterNumber = GetHeaterNumber();
 		msg->setPoint = GetTargetTemperature();
 		msg->command = (sus) ? CanMessageSetHeaterTemperature::commandSuspend : CanMessageSetHeaterTemperature::commandUnsuspend;
@@ -175,7 +175,7 @@ GCodeResult RemoteHeater::SwitchOn(const StringRef& reply) noexcept
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanId::MasterAddress, boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
 	msg->setPoint = GetTargetTemperature();
 	msg->command = CanMessageSetHeaterTemperature::commandOn;

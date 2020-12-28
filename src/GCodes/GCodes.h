@@ -253,6 +253,10 @@ public:
 # endif
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+	void SwitchToExpansionMode() noexcept;
+#endif
+
 	static constexpr const char *AllowedAxisLetters = "XYZUVWABCD";
 
 	// Standard macro filenames

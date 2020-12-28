@@ -1,6 +1,6 @@
 /****************************************************************************************************
 
- RepRapFirmware - Platform: RepRapPro Ormerod with Duet controller
+ RepRapFirmware
 
  Platform contains all the code and definitions to deal with machine-dependent things such as control
  pins, bed area, number of extruders, tolerable accelerations and speeds and so on.

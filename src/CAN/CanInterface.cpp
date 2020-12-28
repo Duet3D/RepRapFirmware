@@ -61,7 +61,16 @@ static uint32_t lastTimeSent = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
-static bool inEutMode = false;
+static CanAddress myAddress =
+#ifdef DUET3ATE
+						CanId::ATEMasterAddress;
+#else
+						CanId::MasterAddress;
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+static bool inExpansionMode = false;
+#endif
 
 //#define CAN_DEBUG
 
@@ -194,7 +203,7 @@ static void configure_mcan() noexcept
 
 	// Set up a filter to receive all request messages addressed to us in FIFO 0
 	mcan_get_extended_message_filter_element_default(&et_filter);
-	et_filter.F0.bit.EFID1 = (CanId::MasterAddress << CanId::DstAddressShift);
+	et_filter.F0.bit.EFID1 = (CanInterface::GetCanAddress() << CanId::DstAddressShift);
 	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF0M_Val;		// RxFifoIndexRequest
 	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit;
 	et_filter.F1.bit.EFT = 2;
@@ -210,11 +219,21 @@ static void configure_mcan() noexcept
 
 	// Set up a filter to receive response messages in FIFO 1
 	mcan_get_extended_message_filter_element_default(&et_filter);
-	et_filter.F0.bit.EFID1 = (CanId::MasterAddress << CanId::DstAddressShift) | CanId::ResponseBit;
+	et_filter.F0.bit.EFID1 = (CanInterface::GetCanAddress() << CanId::DstAddressShift) | CanId::ResponseBit;
 	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF1M_Val;		// RxFifoIndexResponse
 	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit;
 	et_filter.F1.bit.EFT = 2;
 	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 2);
+
+# ifdef DUET3_ATE
+	// Also respond to requests addressed to board 0 so we can update firmware on ATE boards
+	mcan_get_extended_message_filter_element_default(&et_filter);
+	et_filter.F0.bit.EFID1 = (CanId::MasterAddress << CanId::DstAddressShift);
+	et_filter.F0.bit.EFEC = MCAN_EXTENDED_MESSAGE_FILTER_ELEMENT_F0_EFEC_STF0M_Val;		// RxFifoIndexRequest
+	et_filter.F1.bit.EFID2 = (CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit;
+	et_filter.F1.bit.EFT = 2;
+	mcan_set_rx_extended_filter(&mcan_instance, &et_filter, 3);
+# endif
 
 	mcan_enable_interrupt(&mcan_instance, (mcan_interrupt_source)(MCAN_FORMAT_ERROR | MCAN_ACKNOWLEDGE_ERROR | MCAN_BUS_OFF
 																		| MCAN_RX_FIFO_0_NEW_MESSAGE | MCAN_RX_FIFO_1_NEW_MESSAGE
@@ -314,6 +333,50 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
 
+#if SAME5x
+
+static void InitReceiveFilters() noexcept
+{
+	// Set up a filter to receive all request messages addressed to us in FIFO 0
+	can0dev->SetExtendedFilterElement(0, CanDevice::RxBufferNumber::fifo0,
+										CanInterface::GetCanAddress() << CanId::DstAddressShift,
+										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
+
+	// Set up a filter to receive all broadcast messages also in FIFO 0
+	can0dev->SetExtendedFilterElement(1, CanDevice::RxBufferNumber::fifo0,
+										CanId::BroadcastAddress << CanId::DstAddressShift,
+										CanId::BoardAddressMask << CanId::DstAddressShift);
+
+	// Set up a filter to receive response messages in FIFO 1
+	can0dev->SetExtendedFilterElement(2, RxBufferIndexResponse,
+										(CanInterface::GetCanAddress() << CanId::DstAddressShift) | CanId::ResponseBit,
+										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
+# ifdef DUET3_ATE
+	// Also respond to requests addressed to board 0 so we can update firmware on ATE boards
+	can0dev->SetExtendedFilterElement(3, CanDevice::RxBufferNumber::fifo0,
+										CanId::MasterAddress << CanId::DstAddressShift,
+										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
+# endif
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+static void ReInit() noexcept
+{
+#if SAME70
+	mcan_stop(&mcan_instance);
+	configure_mcan();					// this includes initialising the receive filters
+#else
+	can0dev->Disable();
+	InitReceiveFilters();
+	can0dev->Enable();
+#endif
+}
+
+#endif
+
 void CanInterface::Init() noexcept
 {
 	CanMessageBuffer::Init(NumCanBuffers);
@@ -340,27 +403,7 @@ void CanInterface::Init() noexcept
 	CanTiming timing;
 	timing.SetDefaults();
 	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing);
-
-	// Set up a filter to receive all request messages addressed to us in FIFO 0
-	can0dev->SetExtendedFilterElement(0, CanDevice::RxBufferNumber::fifo0,
-										MyAddress << CanId::DstAddressShift,
-										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
-
-	// Set up a filter to receive all broadcast messages also in FIFO 0
-	can0dev->SetExtendedFilterElement(1, CanDevice::RxBufferNumber::fifo0,
-										CanId::BroadcastAddress << CanId::DstAddressShift,
-										CanId::BoardAddressMask << CanId::DstAddressShift);
-
-	// Set up a filter to receive response messages in FIFO 1
-	can0dev->SetExtendedFilterElement(2, RxBufferIndexResponse,
-										(MyAddress << CanId::DstAddressShift) | CanId::ResponseBit,
-										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
-# ifdef DUET3_ATE
-	// Also respond to requests addressed to board 0 so we can update firmware on ATE boards
-	can0dev->SetExtendedFilterElement(3, CanDevice::RxBufferNumber::fifo0,
-										CanId::MasterAddress << CanId::DstAddressShift,
-										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
-# endif
+	InitReceiveFilters();
 	can0dev->Enable();
 #else
 	mcan_init_once(&mcan_instance, MCAN_MODULE);
@@ -396,10 +439,29 @@ void CanInterface::Shutdown() noexcept
 #endif
 }
 
-bool CanInterface::InEutMode() noexcept
+CanAddress CanInterface::GetCanAddress() noexcept
 {
-	return inEutMode;
+	return myAddress;
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+bool CanInterface::InExpansionMode() noexcept
+{
+	return inExpansionMode;
+}
+
+void CanInterface::SwitchToExpansionMode(CanAddress addr) noexcept
+{
+	TaskCriticalSectionLocker lock;
+
+	myAddress = addr;
+	inExpansionMode = true;
+	reprap.GetGCodes().SwitchToExpansionMode();
+	ReInit();										// reset the CAN filters to account for our new CAN address
+}
+
+#endif
 
 // Allocate a CAN request ID
 CanRequestId CanInterface::AllocateRequestId(CanAddress destination) noexcept
@@ -497,7 +559,9 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 
 	for (;;)
 	{
-		if (!inEutMode)
+#if SUPPORT_REMOTE_COMMANDS
+		if (!inExpansionMode)
+#endif
 		{
 			CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
 #if USE_NEW_CAN_DRIVER
@@ -991,7 +1055,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	// It's a diagnostic test
 	CanMessageBuffer * const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	auto const msg = buf->SetupRequestMessage<CanMessageDiagnosticTest>(rid, MyAddress, (CanAddress)boardAddress);
+	auto const msg = buf->SetupRequestMessage<CanMessageDiagnosticTest>(rid, GetCanAddress(), (CanAddress)boardAddress);
 	msg->testType = type;
 	msg->invertedTestType = ~type;
 	if (type == (uint16_t)DiagnosticTestType::AccessMemory)
@@ -1038,7 +1102,7 @@ GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandl
 	}
 
 	const CanRequestId rid = AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitor>(rid, MyAddress, boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitor>(rid, GetCanAddress(), boardAddress);
 	msg->handle = h;
 	msg->threshold = threshold;
 	msg->minInterval = minInterval;
@@ -1113,7 +1177,7 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageReadInputsRequest>(rid, MyAddress, boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageReadInputsRequest>(rid, GetCanAddress(), boardAddress);
 	msg->mask = mask;
 	msg->pattern = pattern;
 	const GCodeResult rslt = SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::readInputsReply,
@@ -1150,7 +1214,7 @@ GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber,
 {
 	CanMessageBuffer * const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageWriteGpio>(rid, MyAddress, boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageWriteGpio>(rid, GetCanAddress(), boardAddress);
 	msg->portNumber = portNumber;
 	msg->pwm = pwm;
 	msg->isServo = isServo;
@@ -1222,7 +1286,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 
 	CanMessageBufferHandle buf(AllocateBuffer(&gb));
 	const CanRequestId rid = CanInterface::AllocateRequestId((uint8_t)oldAddress);
-	auto msg = buf.Access()->SetupRequestMessage<CanMessageSetAddressAndNormalTiming>(rid, MyAddress, (uint8_t)oldAddress);
+	auto msg = buf.Access()->SetupRequestMessage<CanMessageSetAddressAndNormalTiming>(rid, GetCanAddress(), (uint8_t)oldAddress);
 	msg->oldAddress = (uint8_t)oldAddress;
 
 	if (gb.Seen('A'))
@@ -1255,7 +1319,7 @@ GCodeResult CanInterface::CreateFilamentMonitor(DriverId driver, uint8_t type, c
 	{
 		CanMessageBuffer* const buf = AllocateBuffer(&gb);
 		const CanRequestId rid = CanInterface::AllocateRequestId(driver.boardAddress);
-		auto msg = buf->SetupRequestMessage<CanMessageCreateFilamentMonitor>(rid, MyAddress, driver.boardAddress);
+		auto msg = buf->SetupRequestMessage<CanMessageCreateFilamentMonitor>(rid, GetCanAddress(), driver.boardAddress);
 		msg->driver = driver.localDriver;
 		msg->type = type;
 		return SendRequestAndGetStandardReply(buf, rid, reply);
@@ -1283,7 +1347,7 @@ GCodeResult CanInterface::DeleteFilamentMonitor(DriverId driver, GCodeBuffer* gb
 	{
 		CanMessageBuffer* const buf = AllocateBuffer(gb);
 		const CanRequestId rid = CanInterface::AllocateRequestId(driver.boardAddress);
-		auto msg = buf->SetupRequestMessage<CanMessageDeleteFilamentMonitor>(rid, MyAddress, driver.boardAddress);
+		auto msg = buf->SetupRequestMessage<CanMessageDeleteFilamentMonitor>(rid, GetCanAddress(), driver.boardAddress);
 		msg->driver = driver.localDriver;
 		return SendRequestAndGetStandardReply(buf, rid, reply);
 	}
@@ -1292,14 +1356,6 @@ GCodeResult CanInterface::DeleteFilamentMonitor(DriverId driver, GCodeBuffer* gb
 		ex.GetMessage(reply, gb);
 		return GCodeResult::warning;
 	}
-}
-
-// Enter test mode, called in response to a command from the ATE
-void CanInterface::EnterTestMode(uint32_t param) noexcept
-{
-#ifndef DUET3_ATE
-	inEutMode = true;
-#endif
 }
 
 #endif

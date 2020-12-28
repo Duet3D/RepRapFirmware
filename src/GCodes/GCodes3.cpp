@@ -740,6 +740,24 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	return GCodeResult::ok;
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// Switch the board into expansion mode. We map all drivers to individual axes.
+void GCodes::SwitchToExpansionMode() noexcept
+{
+	numExtruders = 0;
+	numVisibleAxes = numTotalAxes = NumDirectDrivers;
+	memcpy(axisLetters, AllowedAxisLetters, sizeof(axisLetters));
+	for (size_t axis = 0; axis < NumDirectDrivers; ++axis)
+	{
+		DriverId driver;
+		driver.SetLocal(axis);
+		platform.SetAxisDriversConfig(axis, 1, &driver);
+	}
+}
+
+#endif
+
 // Handle G38.[2-5]
 GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -1067,7 +1085,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	if (gb.Seen('B'))
 	{
 		const uint32_t boardNumber = gb.GetUIValue();
-		if (boardNumber != CanId::MasterAddress)
+		if (boardNumber != CanInterface::GetCanAddress())
 		{
 			return reprap.GetExpansion().UpdateRemoteFirmware(boardNumber, gb, reply);
 		}
@@ -1264,7 +1282,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 	gb.MustSee('P');
 	const DriverId id = gb.GetDriverId();
 #if SUPPORT_CAN_EXPANSION
-	if (id.boardAddress != CanId::MasterAddress)
+	if (id.boardAddress != CanInterface::GetCanAddress())
 	{
 		return CanInterface::ConfigureRemoteDriver(id, gb, reply);
 	}

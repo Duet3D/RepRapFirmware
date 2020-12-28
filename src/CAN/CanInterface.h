@@ -62,14 +62,18 @@ private:
 
 namespace CanInterface
 {
+	// Note: GetCanAddress() in this namespace is now declared in RepRapFirmware.h to overcome ordering issues
 	constexpr uint32_t CanResponseTimeout = 1000;
 
 	// Low level functions
 	void Init() noexcept;
 	void Shutdown() noexcept;
 
-	inline CanAddress GetCanAddress() noexcept { return MyAddress; }
-	bool InEutMode() noexcept;
+#if SUPPORT_REMOTE_COMMANDS
+	bool InExpansionMode() noexcept;
+	void SwitchToExpansionMode(CanAddress addr) noexcept;
+#endif
+
 	CanRequestId AllocateRequestId(CanAddress destination) noexcept;
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr) noexcept;
 	GCodeResult SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, std::function<void(const CanMessageBuffer*) /*noexcept*/> callback) noexcept;
@@ -118,8 +122,6 @@ namespace CanInterface
 	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-
-	void EnterTestMode(uint32_t param) noexcept;
 }
 
 // Members of template class CanDriversData

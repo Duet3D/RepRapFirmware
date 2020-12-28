@@ -39,15 +39,6 @@ constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for read
 char sbcFirmwareChunk[MaxFileChunkSize];
 #endif
 
-// Enter test mode
-static void EnterTestMode(const CanMessageEnterTestMode& msg) noexcept
-{
-	if (msg.passwd == CanMessageEnterTestMode::Passwd)
-	{
-		CanInterface::EnterTestMode(msg.parameter);
-	}
-}
-
 // Handle a firmware update request
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
@@ -379,7 +370,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 	{
 		const CanMessageType id = buf->id.MsgType();
 #if SUPPORT_REMOTE_COMMANDS
-		if (CanInterface::InEutMode())
+		if (CanInterface::InExpansionMode())
 		{
 			String<StringLength500> reply;
 			const StringRef& replyRef = reply.GetRef();
@@ -524,10 +515,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
 				break;
 
+#if SUPPORT_REMOTE_COMMANDS
 			case CanMessageType::enterTestMode:
-				EnterTestMode(buf->msg.enterTestMode);
+				if (buf->msg.enterTestMode.passwd == CanMessageEnterTestMode::Passwd)
+				{
+					CanInterface::SwitchToExpansionMode(buf->msg.enterTestMode.address);
+				}
 				break;
-
+#endif
 			case CanMessageType::driversStatusReport:	// not handled yet
 			default:
 				if (reprap.Debug(moduleCan))

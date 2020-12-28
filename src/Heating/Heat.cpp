@@ -499,7 +499,7 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply)
 		const PwmFrequency freq = (gb.Seen('Q')) ? min<PwmFrequency>(gb.GetPwmFrequency(), MaxHeaterPwmFrequency) : DefaultHeaterPwmFreq;
 
 #if SUPPORT_CAN_EXPANSION
-		Heater * const newHeater = (board != CanId::MasterAddress) ? (Heater *)new RemoteHeater(heater, board) : new LocalHeater(heater);
+		Heater * const newHeater = (board != CanInterface::GetCanAddress()) ? (Heater *)new RemoteHeater(heater, board) : new LocalHeater(heater);
 #else
 		Heater * const newHeater = new LocalHeater(heater);
 #endif
@@ -960,7 +960,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 #if SUPPORT_CAN_EXPANSION
 		if (boardAddress == CanId::NoAddress)
 		{
-			boardAddress = CanId::MasterAddress;		// no port name was given, so default to master
+			boardAddress = CanInterface::GetCanAddress();		// no port name was given, so default to local
 		}
 		TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
 #else

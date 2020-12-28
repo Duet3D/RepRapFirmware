@@ -124,15 +124,10 @@ static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logica
 #if SUPPORT_CAN_EXPANSION
 # include <CanId.h>
 
-// We have to declare CanInterface::MyAddress here because CanInterface.h needs to include this file for the declaration of DriverId
+// We have to declare CanInterface::GetCanAddress here because CanInterface.h needs to include this file for the declaration of DriverId
 namespace CanInterface
 {
-constexpr CanAddress MyAddress =
-# ifdef DUET3ATE
-							CanId::ATEMasterAddress;
- #else
-							CanId::MasterAddress;
-# endif
+	CanAddress GetCanAddress() noexcept;
 }
 
 #endif
@@ -167,7 +162,7 @@ struct DriverId
 
 	CanAddress boardAddress;
 
-	DriverId() noexcept : localDriver(0), boardAddress(CanInterface::MyAddress)  { }
+	DriverId() noexcept : localDriver(0), boardAddress(CanInterface::GetCanAddress())  { }
 
 	// Constructor used by ATE configurations
 	DriverId(CanAddress addr, uint8_t drv) noexcept : localDriver(drv), boardAddress(addr) { }
@@ -182,11 +177,11 @@ struct DriverId
 	void SetLocal(unsigned int driver) noexcept
 	{
 		localDriver = (uint8_t)driver;
-		boardAddress = CanId::MasterAddress;
+		boardAddress = CanInterface::GetCanAddress();
 	}
 
-	bool IsLocal() const noexcept { return boardAddress == CanInterface::MyAddress; }
-	bool IsRemote() const noexcept { return boardAddress != CanInterface::MyAddress; }
+	bool IsLocal() const noexcept { return boardAddress == CanInterface::GetCanAddress(); }
+	bool IsRemote() const noexcept { return boardAddress != CanInterface::GetCanAddress(); }
 
 	bool operator<(const DriverId other) const noexcept
 	{

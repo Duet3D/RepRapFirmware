@@ -21,7 +21,7 @@ public:
 	GpOutputPort() noexcept
 		: lastPwm(0.0)
 #if SUPPORT_CAN_EXPANSION
-		, boardAddress(CanId::MasterAddress)
+		, boardAddress(CanInterface::GetCanAddress())
 #endif
 	{ }
 
