@@ -257,7 +257,7 @@ public:
 	void SwitchToExpansionMode() noexcept;
 #endif
 
-	static constexpr const char *AllowedAxisLetters = "XYZUVWABCD";
+	static constexpr const char *AllowedAxisLetters = "XYZUVWABCDabcdefghijkl";
 
 	// Standard macro filenames
 #define DEPLOYPROBE		"deployprobe"

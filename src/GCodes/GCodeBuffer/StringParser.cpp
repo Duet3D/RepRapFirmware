@@ -905,6 +905,13 @@ bool StringParser::IsLastCommand() const noexcept
 bool StringParser::Seen(char c) noexcept
 {
 	bool inQuotes = false;
+	bool escaped = false;
+	bool wantLowerCase = (c >= 'a');
+	if (wantLowerCase)
+	{
+		c = toupper(c);
+	}
+
 	unsigned int inBrackets = 0;
 	for (readPointer = parameterStart; (unsigned int)readPointer < commandEnd; ++readPointer)
 	{
@@ -915,18 +922,30 @@ bool StringParser::Seen(char c) noexcept
 		}
 		else if (!inQuotes)
 		{
-			if (inBrackets == 0 && toupper(b) == c && (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gb.buffer[readPointer - 1])))
+			if (b == '\'' && !escaped)
 			{
-				++readPointer;
-				return true;
+				escaped = true;
 			}
-			if (b == '{')
+			else
 			{
-				++inBrackets;
-			}
-			else if (b == '}' && inBrackets != 0)
-			{
-				--inBrackets;
+				if (   inBrackets == 0
+					&& toupper(b) == c
+					&& escaped == wantLowerCase
+					&& (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gb.buffer[readPointer - 1]))
+				   )
+				{
+					++readPointer;
+					return true;
+				}
+				escaped = false;
+				if (b == '{')
+				{
+					++inBrackets;
+				}
+				else if (b == '}' && inBrackets != 0)
+				{
+					--inBrackets;
+				}
 			}
 		}
 	}
