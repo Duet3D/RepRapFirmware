@@ -4395,7 +4395,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_REMOTE_COMMANDS
 		case 954:	// configure as expansion board
 			{
-				CanAddress addr = gb.GetLimitedUIValue('A', 1, CanId::MaxCanAddress + 1);
+				CanAddress addr = gb.GetLimitedUIValue('A', CanId::MaxCanAddress + 1, 1);
 				CanInterface::SwitchToExpansionMode(addr);
 			}
 			break;
