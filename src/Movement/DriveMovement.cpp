@@ -313,6 +313,84 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	return CalcNextStepTimeCartesian(dda, false);
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// Prepare this DM for an extruder move. The caller has already checked that pressure advance is enabled.
+//TODO are values in the DDA in the correct units for this code?
+bool DriveMovement::PrepareRemoteExtruder(const DDA& dda, const PrepParams& params) noexcept
+{
+	// Calculate the pressure advance parameters
+	const float compensationTime = reprap.GetPlatform().EutGetRemotePressureAdvance(drive);
+	const float compensationClocks = compensationTime * (float)StepTimer::StepClockRate;
+	mp.cart.compensationClocks = roundU32(compensationClocks);
+	mp.cart.accelCompensationClocks = roundU32(compensationClocks * params.compFactor);
+
+	// Recalculate the net total step count to allow for compensation. It may be negative.
+	const float compensationDistance = (dda.endSpeed - dda.startSpeed) * compensationTime;
+	int32_t netSteps = lrintf((1.0 + compensationDistance) * totalSteps);
+
+	// Calculate the acceleration phase parameters
+	const float accelCompensationDistance = compensationTime * (dda.topSpeed - dda.startSpeed);
+	mp.cart.accelStopStep = (uint32_t)((params.accelDistance + accelCompensationDistance) * totalSteps) + 1;
+
+	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)2.0/((double)totalSteps * (double)dda.acceleration));
+	mp.cart.twoCsquaredTimesMmPerStepDivD = roundU64((double)2.0/((double)totalSteps * (double)dda.deceleration));
+
+	// Constant speed phase parameters
+	mp.cart.mmPerStepTimesCKdivtopSpeed = (uint32_t)((float)K1/(totalSteps * dda.topSpeed));
+
+	// Calculate the deceleration and reverse phase parameters and update totalSteps
+	// First check whether there is any deceleration at all, otherwise we may get strange results because of rounding errors
+	if (params.decelDistance * totalSteps < 0.5)		// if less than 1 deceleration step
+	{
+		totalSteps = (uint32_t)max<int32_t>(netSteps, 0);
+		mp.cart.decelStartStep = reverseStartStep = netSteps + 1;
+		mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD = 0;
+		twoDistanceToStopTimesCsquaredDivD = 0;
+	}
+	else
+	{
+		mp.cart.decelStartStep = (uint32_t)((params.decelStartDistance + accelCompensationDistance) * totalSteps) + 1;
+		const int32_t initialDecelSpeedTimesCdivD = (int32_t)params.topSpeedTimesCdivD - (int32_t)mp.cart.compensationClocks;	// signed because it may be negative and we square it
+		const uint64_t initialDecelSpeedTimesCdivDSquared = isquare64(initialDecelSpeedTimesCdivD);
+		twoDistanceToStopTimesCsquaredDivD = initialDecelSpeedTimesCdivDSquared + roundU64(((params.decelStartDistance + accelCompensationDistance) * 2)/dda.deceleration);
+
+		// See whether there is a reverse phase
+		const float compensationSpeedChange = dda.deceleration * compensationTime;
+		const uint32_t stepsBeforeReverse = (compensationSpeedChange > dda.topSpeed)
+											? mp.cart.decelStartStep - 1
+											: twoDistanceToStopTimesCsquaredDivD/mp.cart.twoCsquaredTimesMmPerStepDivD;
+		if (dda.endSpeed < compensationSpeedChange && (int32_t)stepsBeforeReverse > netSteps)
+		{
+			reverseStartStep = stepsBeforeReverse + 1;
+			totalSteps = (uint32_t)((int32_t)(2 * stepsBeforeReverse) - netSteps);
+			mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD =
+					(int64_t)((2 * stepsBeforeReverse) * mp.cart.twoCsquaredTimesMmPerStepDivD) - (int64_t)twoDistanceToStopTimesCsquaredDivD;
+		}
+		else
+		{
+			// There is no reverse phase. Check that we can actually do the last step requested.
+			if (netSteps > (int32_t)stepsBeforeReverse)
+			{
+				netSteps = (int32_t)stepsBeforeReverse;
+			}
+			reverseStartStep = netSteps + 1;
+			totalSteps = (uint32_t)max<int32_t>(netSteps, 0);
+			mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD = 0;
+		}
+	}
+
+	// Prepare for the first step
+	nextStep = 0;
+	nextStepTime = 0;
+	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
+	stepsTillRecalc = 0;							// so that we don't skip the calculation
+	isDelta = false;
+	return CalcNextStepTimeCartesian(dda, false);
+}
+
+#endif
+
 void DriveMovement::DebugPrint() const noexcept
 {
 	char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));

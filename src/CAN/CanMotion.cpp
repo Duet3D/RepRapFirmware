@@ -52,57 +52,53 @@ void CanMotion::StartMovement() noexcept
 // If steps == 0 then the drivers just need to be enabled
 void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
 {
-	// Search for the correct movement buffer
-	CanMessageBuffer* buf = movementBufferList;
-	while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
+	if (canDriver.localDriver < MaxLinearDriversPerCanSlave)
 	{
-		buf = buf->next;
-	}
+		// Search for the correct movement buffer
+		CanMessageBuffer* buf = movementBufferList;
+		while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
+		{
+			buf = buf->next;
+		}
 
-	if (buf == nullptr)
-	{
-		// Allocate a new movement buffer
-		buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
-			return;		//TODO error handling
+			// Allocate a new movement buffer
+			buf = CanMessageBuffer::Allocate();
+			if (buf == nullptr)
+			{
+				reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
+				return;		//TODO error handling
+			}
+
+			buf->next = movementBufferList;
+			movementBufferList = buf;
+
+			const CanRequestId rid = CanInterface::AllocateRequestId(canDriver.boardAddress);
+			auto move = buf->SetupRequestMessage<CanMessageMovementLinear>(rid, CanId::MasterAddress, canDriver.boardAddress);
+
+			// Common parameters
+			move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
+			move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
+			move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
+			move->initialSpeedFraction = params.initialSpeedFraction;
+			move->finalSpeedFraction = params.finalSpeedFraction;
+			move->pressureAdvanceDrives = 0;
+			move->numDrivers = MaxLinearDriversPerCanSlave;
+			move->zero = 0;
+
+			// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
+			for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
+			{
+				move->perDrive[drive].Init();
+			}
 		}
 
-		buf->next = movementBufferList;
-		movementBufferList = buf;
-
-		const CanRequestId rid = CanInterface::AllocateRequestId(canDriver.boardAddress);
-		auto move = buf->SetupRequestMessage<CanMessageMovement>(rid, CanId::MasterAddress, canDriver.boardAddress);
-
-		// Common parameters
-		move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
-		move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
-		move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
-		move->initialSpeedFraction = params.initialSpeedFraction;
-		move->finalSpeedFraction = params.finalSpeedFraction;
-		move->pressureAdvanceDrives = 0;
-		move->deltaDrives = 0;			//TODO
-		move->zero = 0;
-
-		// Additional parameters for delta movements
-		move->initialX = params.initialX;
-		move->finalX = params.finalX;
-		move->initialY = params.initialY;
-		move->finalY = params.finalY;
-		move->zMovement = params.zMovement;
-
-		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
-		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
+		buf->msg.moveLinear.perDrive[canDriver.localDriver].steps = steps;
+		if (usePressureAdvance)
 		{
-			move->perDrive[drive].Init();
+			buf->msg.moveLinear.pressureAdvanceDrives |= 1u << canDriver.localDriver;
 		}
-	}
-
-	buf->msg.move.perDrive[canDriver.localDriver].steps = steps;
-	if (usePressureAdvance)
-	{
-		buf->msg.move.pressureAdvanceDrives |= 1u << canDriver.localDriver;
 	}
 }
 
@@ -115,9 +111,9 @@ void CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 	{
 		movementBufferList = buf->next;
 		boardsActiveInLastMove.SetBit(buf->id.Dst());	//TODO should we set this if there were no steps for drives on the board, just drives to be enabled?
-		buf->msg.move.whenToExecute = moveStartTime;
+		buf->msg.moveLinear.whenToExecute = moveStartTime;
 		uint8_t& seq = nextSeq[buf->id.Dst()];
-		buf->msg.move.seq = seq;
+		buf->msg.moveLinear.seq = seq;
 		seq = (seq + 1) & 7;
 		CanInterface::SendMotion(buf);				// queues the buffer for sending and frees it when done
 	}
@@ -200,7 +196,7 @@ void CanMotion::StopDriver(bool isBeingPrepared, DriverId driver) noexcept
 
 		if (buf != nullptr)
 		{
-			buf->msg.move.perDrive[driver.localDriver].steps = 0;
+			buf->msg.moveLinear.perDrive[driver.localDriver].steps = 0;
 		}
 	}
 	else
@@ -245,10 +241,10 @@ void CanMotion::StopAll(bool isBeingPrepared) noexcept
 		// We still send the messages so that the drives get enabled, but we set the steps to zero
 		for (CanMessageBuffer *buf = movementBufferList; buf != nullptr; buf = buf->next)
 		{
-			buf->msg.move.accelerationClocks = buf->msg.move.decelClocks = buf->msg.move.steadyClocks = 0;
-			for (size_t drive = 0; drive < ARRAY_SIZE(buf->msg.move.perDrive); ++drive)
+			buf->msg.moveLinear.accelerationClocks = buf->msg.moveLinear.decelClocks = buf->msg.moveLinear.steadyClocks = 0;
+			for (size_t drive = 0; drive < ARRAY_SIZE(buf->msg.moveLinear.perDrive); ++drive)
 			{
-				buf->msg.move.perDrive[drive].steps = 0;
+				buf->msg.moveLinear.perDrive[drive].steps = 0;
 			}
 		}
 	}

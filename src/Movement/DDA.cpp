@@ -628,9 +628,9 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 #if SUPPORT_REMOTE_COMMANDS
 
 // Set up a remote move. Return true if it represents real movement, else false.
-bool DDA::InitFromRemote(const CanMessageMovement& msg) noexcept
+bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
-	afterPrepare.moveStartTime = msg.whenToExecute + StepTimer::GetLocalTimeOffset();
+	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
 	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 	flags.all = 0;
 	flags.isRemote = true;
@@ -646,33 +646,20 @@ bool DDA::InitFromRemote(const CanMessageMovement& msg) noexcept
 	acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction) * StepTimer::StepClockRate)/msg.accelerationClocks;
 	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction) * StepTimer::StepClockRate)/msg.decelClocks;
 
-	beforePrepare.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
-	beforePrepare.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
-
 	PrepParams params;
-	params.decelStartDistance = 1.0 - beforePrepare.decelDistance;
-
-	if (msg.deltaDrives != 0)
-	{
-		afterPrepare.cKc = roundS32(msg.zMovement * DriveMovement::Kc);
-		directionVector[X_AXIS] = msg.finalX - msg.initialX;
-		directionVector[Y_AXIS] = msg.finalY - msg.initialY;
-		directionVector[Z_AXIS] = msg.zMovement;
-		params.a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
-		params.initialX = msg.initialX;
-		params.initialY = msg.initialY;
-		params.dparams = static_cast<const LinearDeltaKinematics*>(&(reprap.GetMove().GetKinematics()));
-	}
+	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
+	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
+	params.decelStartDistance = 1.0 - params.decelDistance;
 
 	afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32(startSpeed/acceleration);
 	params.topSpeedTimesCdivD = (uint32_t)roundU32(topSpeed/deceleration);
 	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + msg.accelerationClocks + msg.steadyClocks;
-	afterPrepare.extraAccelerationClocks = msg.accelerationClocks - roundS32(beforePrepare.accelDistance/topSpeed);
+	afterPrepare.extraAccelerationClocks = msg.accelerationClocks - roundS32(params.accelDistance/topSpeed);
 	params.compFactor = (topSpeed - startSpeed)/topSpeed;
 
 	activeDMs = nullptr;
 
-	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
+	for (size_t drive = 0; drive < min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave); drive++)
 	{
 		endPoint[drive] = prev->endPoint[drive];		// the steps for this move will be added later
 		const int32_t delta = msg.perDrive[drive].steps;
@@ -684,29 +671,9 @@ bool DDA::InitFromRemote(const CanMessageMovement& msg) noexcept
 			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 
 			reprap.GetPlatform().EnableDrivers(drive);
-			bool stepsToDo;
-			if ((msg.deltaDrives & (1u << drive)) != 0)
-			{
-				stepsToDo = pdm->PrepareDeltaAxis(*this, params);
-			}
-			else if ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
-			{
-				// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
-				// Pass the speed change to PrepareExtruder - but PrepareExtruder doesn't use it currently, so don't bother
-				float dummy;
-				stepsToDo = pdm->PrepareExtruder(*this, params, dummy, 0.0, true);
-			}
-			else
-			{
-				stepsToDo = pdm->PrepareCartesianAxis(*this, params);
-			}
-
-			// Check for sensible values, print them if they look dubious
-			if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
-			{
-				DebugPrintAll("rem");
-			}
-
+			const bool stepsToDo = ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
+						? pdm->PrepareRemoteExtruder(*this, params)
+							: pdm->PrepareCartesianAxis(*this, params);
 			if (stepsToDo)
 			{
 				InsertDM(pdm);
@@ -719,6 +686,13 @@ bool DDA::InitFromRemote(const CanMessageMovement& msg) noexcept
 				{
 					endPoint[drive] -= netSteps;
 				}
+
+				// Check for sensible values, print them if they look dubious
+				if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+				{
+					DebugPrintAll("rem");
+				}
+
 			}
 			else
 			{

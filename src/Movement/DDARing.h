@@ -86,7 +86,7 @@ public:
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovement& msg) noexcept;						// add a move from the ATE to the movement queue
+	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;						// add a move from the ATE to the movement queue
 #endif
 
 private:

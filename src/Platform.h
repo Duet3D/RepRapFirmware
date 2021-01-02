@@ -475,6 +475,7 @@ public:
 	float AxisMinimum(size_t axis) const noexcept;
 	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisTotalLength(size_t axis) const noexcept;
+
 	float GetPressureAdvance(size_t extruder) const noexcept;
 	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
@@ -637,6 +638,8 @@ public:
 	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
+	float EutGetRemotePressureAdvance(size_t driver) const noexcept;
+	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 #endif
 
 #if VARIABLE_NUM_DRIVERS
@@ -662,6 +665,10 @@ private:
 #else
 	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
 	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+	float remotePressureAdvance[NumDirectDrivers];
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -761,19 +768,7 @@ private:
 	DriversBitmap stalledDrivers, stalledDriversToLog, stalledDriversToPause, stalledDriversToRehome;
 #endif
 
-#if defined(DUET_06_085)
-	// Digipots
-	MCP4461 mcpDuet;
-	MCP4461 mcpExpansion;
-	uint8_t potWipes[8];											// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
-	float senseResistor;
-	float maxStepperDigipotVoltage;
-	float stepperDacVoltageRange, stepperDacVoltageOffset;
-#elif defined(__ALLIGATOR__)
-	Pin spiDacCS[MaxSpiDac];
-	DAC084S085 dacAlligator;
-	DAC084S085 dacPiggy;
-#elif defined(__LPC17xx__)
+#if defined(__LPC17xx__)
 	MCP4461 mcp4451;// works for 5561 (only volatile setting commands)
 #endif
 

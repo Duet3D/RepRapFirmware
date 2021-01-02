@@ -76,7 +76,7 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(const CanMessageMovement& msg) noexcept;
+	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
 #endif
 
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates

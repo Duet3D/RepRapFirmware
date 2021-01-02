@@ -399,8 +399,8 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				}
 				return;							// no reply needed
 
-			case CanMessageType::movement:
-				reprap.GetMove().AddMoveFromRemote(buf->msg.move);
+			case CanMessageType::movementLinear:
+				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
 				return;							// no reply needed
 
 			case CanMessageType::returnInfo:
@@ -436,6 +436,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::setDriverStates:
 				requestId = buf->msg.multipleDrivesRequestUint16.requestId;
 				rslt = reprap.GetPlatform().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, replyRef);
+				break;
+
+			case CanMessageType::setPressureAdvance:
+				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
+				rslt = reprap.GetPlatform().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::createInputMonitor:

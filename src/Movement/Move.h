@@ -200,7 +200,7 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovement& msg) noexcept							// add a move from the ATE to the movement queue
+	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept							// add a move from the ATE to the movement queue
 	{
 		mainDDARing.AddMoveFromRemote(msg);
 	}

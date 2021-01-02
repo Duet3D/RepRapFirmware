@@ -867,7 +867,7 @@ uint32_t DDARing::ManageLaserPower() const noexcept
 #if SUPPORT_REMOTE_COMMANDS
 
 // Add a move from the ATE to the movement queue
-void DDARing::AddMoveFromRemote(const CanMessageMovement& msg) noexcept
+void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
 	if (addPointer->GetState() == DDA::empty)
 	{

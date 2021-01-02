@@ -143,6 +143,11 @@ public:
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) noexcept SPEED_CRITICAL;
+
+#if SUPPORT_REMOTE_COMMANDS
+	bool PrepareRemoteExtruder(const DDA& dda, const PrepParams& params) noexcept;
+#endif
+
 	void ReduceSpeed(uint32_t inverseSpeedFactor) noexcept;
 	void DebugPrint() const noexcept;
 	int32_t GetNetStepsLeft() const noexcept;

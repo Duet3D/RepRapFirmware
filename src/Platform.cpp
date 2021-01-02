@@ -642,6 +642,9 @@ void Platform::Init() noexcept
 		directions[driver] = true;								// drive moves forwards by default
 		enableValues[driver] = 0;								// assume active low enable signal
 
+#if SUPPORT_REMOTE_COMMANDS
+		remotePressureAdvance[driver] = 0.0;
+#endif
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
@@ -4754,6 +4757,37 @@ GCodeResult Platform::EutHandleSetDriverStates(const CanMessageMultipleDrivesReq
 			}
 		});
 	return GCodeResult::ok;
+}
+
+float Platform::EutGetRemotePressureAdvance(size_t driver) const noexcept
+{
+	return (driver < ARRAY_SIZE(remotePressureAdvance)) ? remotePressureAdvance[driver] : 0.0;
+}
+
+GCodeResult Platform::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, msg, reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								remotePressureAdvance[driver] = msg.values[count];
+							}
+						}
+				   );
+	return rslt;
 }
 
 #endif
