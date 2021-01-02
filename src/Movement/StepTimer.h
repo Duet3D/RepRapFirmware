@@ -73,9 +73,15 @@ public:
 	static constexpr uint32_t MinInterruptInterval = 6;							// about 6us
 
 #if SUPPORT_REMOTE_COMMANDS
-	static uint32_t GetLocalTimeOffset() { return localTimeOffset; }
-	//TODO change this to a PLL
-	static void SetLocalTimeOffset(uint32_t offset) { localTimeOffset = offset; synced = true; whenLastSynced = millis(); }
+	static uint32_t GetLocalTimeOffset() noexcept { return localTimeOffset; }
+	static void SetLocalTimeOffset(uint32_t offset) noexcept { localTimeOffset = offset; synced = true; whenLastSynced = millis(); }	//TODO change this to a PLL
+	static uint32_t ConvertToLocalTime(uint32_t masterTime) noexcept { return masterTime + localTimeOffset; }
+	static uint32_t ConvertToMasterTime(uint32_t localTime) noexcept { return localTime - localTimeOffset; }
+	static uint32_t GetMasterTime() noexcept { return ConvertToMasterTime(GetTimerTicks()); }
+
+	static bool IsSynced() noexcept;
+
+	static constexpr uint32_t MinSyncInterval = 1000;							// maximum interval in milliseconds between sync messages for us to remain synced
 #endif
 
 private:

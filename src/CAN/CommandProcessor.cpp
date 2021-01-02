@@ -282,7 +282,7 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 
 static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
 {
-	static constexpr uint8_t LastDiagnosticsPart = 2;				// the last diagnostics part is typeDiagnosticsPart0 + 7
+	static constexpr uint8_t LastDiagnosticsPart = 8;				// the last diagnostics part is typeDiagnosticsPart0 + 8
 
 	switch (msg.type)
 	{
@@ -326,10 +326,16 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		break;
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0 + 1:
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 2:
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 3:
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 4:
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 5:
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 6:
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 7:
+		// We send each driver status in a separate message because we can't fit more than three in one reply
 		extra = LastDiagnosticsPart;
-		for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 		{
-
+			const size_t driver = msg.type - (CanMessageReturnInfo::typeDiagnosticsPart0 + 1);
 			reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
 #if HAS_SMART_DRIVERS
 				", "
@@ -341,7 +347,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		}
 		break;
 
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 2:
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 8:
 		extra = LastDiagnosticsPart;
 		{
 #if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR

@@ -1075,8 +1075,24 @@ void Platform::Spin() noexcept
 	}
 
 #if defined(DUET3) || defined(DUET3MINI) || defined(__LPC17xx__)
-	// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-	digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
+# if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode())
+	{
+		if (StepTimer::IsSynced())
+		{
+			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetMasterTime() & (1u << 19)) != 0);
+		}
+		else
+		{
+			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 17)) != 0);
+		}
+	}
+	else
+# endif
+	{
+		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+		digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
+	}
 #endif
 
 #if HAS_MASS_STORAGE

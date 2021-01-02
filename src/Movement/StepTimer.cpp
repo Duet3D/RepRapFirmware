@@ -194,6 +194,19 @@ void StepTimer::DisableTimerInterrupt() noexcept
 #endif
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+/*static*/ bool StepTimer::IsSynced() noexcept
+{
+	if (synced && millis() - whenLastSynced > MinSyncInterval)
+	{
+		synced = false;
+	}
+	return synced;
+}
+
+#endif
+
 // The guts of the ISR
 /*static*/ void StepTimer::Interrupt() noexcept
 {
