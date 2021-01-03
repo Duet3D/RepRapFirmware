@@ -275,46 +275,56 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 
 		PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
 	}
-	else if (shouldStartMove || waitingForRingToEmpty || !CanAddMove())						// no DDA is executing, so start executing a new one if possible
+	else
 	{
+		// No DDA is executing, so start executing a new one if possible
 		DDA * dda = getPointer;										// capture volatile variable
-		PrepareMoves(dda, 0, 0, simulationMode);
+		if (   shouldStartMove										// if the Move code told us that we should start a move...
+			|| waitingForRingToEmpty								// ...or GCodes is waiting for all moves to finish...
+			|| !CanAddMove()										// ...or the ring is full...
+#if SUPPORT_REMOTE_COMMANDS
+			|| dda->GetState() == DDA::frozen						// ...or the move has already been frozen (it's probably a remote move)
+#endif
+		   )
+		{
+			PrepareMoves(dda, 0, 0, simulationMode);
 
-		if (dda->GetState() == DDA::completed)
-		{
-			// We prepared the move but found there was nothing to do because endstops are already triggered
-			getPointer = dda = dda->GetNext();
-			completedMoves++;
-		}
-		else if (dda->GetState() == DDA::frozen)
-		{
-			if (simulationMode != 0)
+			if (dda->GetState() == DDA::completed)
 			{
-				currentDda = dda;									// pretend we are executing this move
+				// We prepared the move but found there was nothing to do because endstops are already triggered
+				getPointer = dda = dda->GetNext();
+				completedMoves++;
 			}
-			else
+			else if (dda->GetState() == DDA::frozen)
 			{
-				Platform& p = reprap.GetPlatform();
-				SetBasePriority(NvicPriorityStep);					// shut out step interrupt
-				const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
-				if (ScheduleNextStepInterrupt())
+				if (simulationMode != 0)
 				{
-					Interrupt(p);
-				}
-				SetBasePriority(0);
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-				if (wakeLaser)
-				{
-					Move::WakeLaserTask();
+					currentDda = dda;									// pretend we are executing this move
 				}
 				else
 				{
-					p.SetLaserPwm(0);
-				}
+					Platform& p = reprap.GetPlatform();
+					SetBasePriority(NvicPriorityStep);					// shut out step interrupt
+					const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
+					if (ScheduleNextStepInterrupt())
+					{
+						Interrupt(p);
+					}
+					SetBasePriority(0);
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+					if (wakeLaser)
+					{
+						Move::WakeLaserTask();
+					}
+					else
+					{
+						p.SetLaserPwm(0);
+					}
 #else
-				(void)wakeLaser;
+					(void)wakeLaser;
 #endif
+				}
 			}
 		}
 	}

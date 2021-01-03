@@ -1671,7 +1671,7 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 	else
 	{
 		result.localDriver = v1;
-		result.boardAddress = 0;
+		result.boardAddress = CanInterface::GetCanAddress();
 	}
 #else
 	// We now allow driver names of the form "0.x" on boards without CAN expansion
