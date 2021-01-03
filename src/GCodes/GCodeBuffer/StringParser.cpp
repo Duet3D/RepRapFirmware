@@ -749,7 +749,7 @@ void StringParser::DecodeCommand() noexcept
 			}
 		}
 
-		// Find where the end of the command is. We assume that a G or M not inside quotes or { } is the start of a new command.
+		// Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
 		bool inQuotes = false;
 		unsigned int localBraceCount = 0;
 		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
@@ -761,7 +761,6 @@ void StringParser::DecodeCommand() noexcept
 			}
 			else if (!inQuotes)
 			{
-				char c2;
 				if (c == '{')
 				{
 					++localBraceCount;
@@ -773,9 +772,13 @@ void StringParser::DecodeCommand() noexcept
 						--localBraceCount;
 					}
 				}
-				else if ((c2 = toupper(c)) == 'G' || c2 == 'M')
+				else
 				{
-					break;
+					char c2;
+					if (((c2 = toupper(c)) == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
+					{
+						break;
+					}
 				}
 			}
 		}

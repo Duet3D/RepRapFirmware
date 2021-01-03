@@ -4713,11 +4713,12 @@ GCodeResult Platform::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleD
 							{
 								SetDriveStepsPerUnit(driver, msg.values[count].GetStepsPerUnit(), 0);
 #if HAS_SMART_DRIVERS
-								const uint16_t microstepping = msg.values[count].GetMicrostepping() & 0x03FF;
-								const bool interpolate = (msg.values[count].GetMicrostepping() & 0x8000) != 0;
-								if (!SmartDrivers::SetMicrostepping(driver, microstepping, interpolate))
+								microstepping[driver] = msg.values[count].GetMicrostepping();
+								const uint16_t microsteppingOnly = microstepping[driver] & 0x03FF;
+								const bool interpolate = (microstepping[driver] & 0x8000) != 0;
+								if (!SmartDrivers::SetMicrostepping(driver, microsteppingOnly, interpolate))
 								{
-									reply.lcatf("Driver %u.%u does not support x%u microstepping", CanInterface::GetCanAddress(), driver, microstepping);
+									reply.lcatf("Driver %u.%u does not support x%u microstepping", CanInterface::GetCanAddress(), driver, microsteppingOnly);
 									if (interpolate)
 									{
 										reply.cat(" with interpolation");

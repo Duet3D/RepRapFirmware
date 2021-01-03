@@ -642,14 +642,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+			// no break
+		case 17: // Motors on
 			{
 				bool seen = false;
 				for (size_t axis = 0; axis < numTotalAxes; axis++)
 				{
 					if (gb.Seen(axisLetters[axis]))
 					{
-						SetAxisNotHomed(axis);
-						platform.DisableDrivers(axis);
+						if (code == 17)
+						{
+							platform.EnableDrivers(axis);
+						}
+						else
+						{
+							SetAxisNotHomed(axis);
+							platform.DisableDrivers(axis);
+						}
 						seen = true;
 					}
 				}
@@ -668,7 +677,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							result = GCodeResult::error;
 							break;
 						}
-						platform.DisableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+						if (code == 17)
+						{
+							platform.EnableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+						}
+						else
+						{
+							platform.DisableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+						}
 					}
 				}
 
@@ -690,7 +706,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (!seen)
 				{
-					DisableDrives();
+					if (code == 17)
+					{
+						for (size_t axis = 0; axis < numTotalAxes; ++axis)
+						{
+							reprap.GetPlatform().EnableDrivers(axis);
+						}
+						for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+						{
+							reprap.GetPlatform().EnableDrivers(ExtruderToLogicalDrive(extruder));
+						}
+					}
+					else
+					{
+						DisableDrives();
+					}
 				}
 			}
 			break;

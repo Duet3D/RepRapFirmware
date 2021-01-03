@@ -45,6 +45,10 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CAN/CanInterface.h>
+#endif
+
 #if HAS_AUX_DEVICES
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -563,7 +567,11 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		return DoFilePrint(gb, reply);
 	}
-	else if (&gb == daemonGCode)
+	else if (&gb == daemonGCode
+#if SUPPORT_REMOTE_COMMANDS
+			 && !CanInterface::InExpansionMode()			// looking for the daemon.g file increases the loop time too much
+#endif
+			)
 	{
 		// Delay 1 second, then try to open and run daemon.g. No error if it is not found.
 		if (   !reprap.IsProcessingConfig()
