@@ -647,8 +647,8 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction) * StepTimer::StepClockRate)/msg.decelClocks;
 
 	PrepParams params;
-	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
-	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
+	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks/(2 * StepTimer::StepClockRate);
+	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks/(2 * StepTimer::StepClockRate);
 	params.decelStartDistance = 1.0 - params.decelDistance;
 
 	afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32(startSpeed/acceleration);
