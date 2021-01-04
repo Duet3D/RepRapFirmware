@@ -58,7 +58,7 @@ Officially supported board types are:
 | duetethernet10 | Duet Ethernet v1.0 ||
 | duetethernet102 | Duet Ethernet v1.02 ||
 | duetmaestro100 | Duet Maestro v1.0 ||
-| duet3mb6hc | Duet 3 v0.6 ||
+| duet3mb6hc | Duet 3 v0.6, v1.0, v1.01 ||
 
 ## GET /rr_disconnect
 
