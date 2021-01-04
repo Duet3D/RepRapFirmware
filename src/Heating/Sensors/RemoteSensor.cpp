@@ -22,10 +22,14 @@ RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress) noe
 
 RemoteSensor::~RemoteSensor()
 {
-	//TODO delete the remote sensor
+	CanMessageGenericConstructor cons(M308NewParams);
+	cons.AddUParam('S', GetSensorNumber());
+	cons.AddStringParam('P', NoPinName);
+	String<StringLength50> dummy;
+	(void)cons.SendAndGetResponse(CanMessageType::m308New, boardAddress, dummy.GetRef());
 }
 
-GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	TryConfigureSensorName(gb, changed);
 	CanMessageGenericConstructor cons(M308NewParams);

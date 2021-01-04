@@ -68,7 +68,7 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress boardAddress = RemoveBoardAddress(pn.GetRef());
-		if (boardAddress != 0)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			reply.lcat("Remote ports are not supported by this command");
 #else
