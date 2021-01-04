@@ -52,57 +52,60 @@ void CanMotion::StartMovement() noexcept
 // If steps == 0 then the drivers just need to be enabled
 void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
 {
-	// Search for the correct movement buffer
-	CanMessageBuffer* buf = movementBufferList;
-	while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
+	if (canDriver.localDriver < MaxDriversPerCanSlave)
 	{
-		buf = buf->next;
-	}
+		// Search for the correct movement buffer
+		CanMessageBuffer* buf = movementBufferList;
+		while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
+		{
+			buf = buf->next;
+		}
 
-	if (buf == nullptr)
-	{
-		// Allocate a new movement buffer
-		buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
-			return;		//TODO error handling
+			// Allocate a new movement buffer
+			buf = CanMessageBuffer::Allocate();
+			if (buf == nullptr)
+			{
+				reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
+				return;		//TODO error handling
+			}
+
+			buf->next = movementBufferList;
+			movementBufferList = buf;
+
+			const CanRequestId rid = CanInterface::AllocateRequestId(canDriver.boardAddress);
+			auto move = buf->SetupRequestMessage<CanMessageMovement>(rid, CanId::MasterAddress, canDriver.boardAddress);
+
+			// Common parameters
+			move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
+			move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
+			move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
+			move->initialSpeedFraction = params.initialSpeedFraction;
+			move->finalSpeedFraction = params.finalSpeedFraction;
+			move->pressureAdvanceDrives = 0;
+			move->deltaDrives = 0;			//TODO
+			move->zero = 0;
+
+			// Additional parameters for delta movements
+			move->initialX = params.initialX;
+			move->finalX = params.finalX;
+			move->initialY = params.initialY;
+			move->finalY = params.finalY;
+			move->zMovement = params.zMovement;
+
+			// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
+			for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
+			{
+				move->perDrive[drive].Init();
+			}
 		}
 
-		buf->next = movementBufferList;
-		movementBufferList = buf;
-
-		const CanRequestId rid = CanInterface::AllocateRequestId(canDriver.boardAddress);
-		auto move = buf->SetupRequestMessage<CanMessageMovement>(rid, CanId::MasterAddress, canDriver.boardAddress);
-
-		// Common parameters
-		move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
-		move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
-		move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
-		move->initialSpeedFraction = params.initialSpeedFraction;
-		move->finalSpeedFraction = params.finalSpeedFraction;
-		move->pressureAdvanceDrives = 0;
-		move->deltaDrives = 0;			//TODO
-		move->zero = 0;
-
-		// Additional parameters for delta movements
-		move->initialX = params.initialX;
-		move->finalX = params.finalX;
-		move->initialY = params.initialY;
-		move->finalY = params.finalY;
-		move->zMovement = params.zMovement;
-
-		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
-		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
+		buf->msg.move.perDrive[canDriver.localDriver].steps = steps;
+		if (usePressureAdvance)
 		{
-			move->perDrive[drive].Init();
+			buf->msg.move.pressureAdvanceDrives |= 1u << canDriver.localDriver;
 		}
-	}
-
-	buf->msg.move.perDrive[canDriver.localDriver].steps = steps;
-	if (usePressureAdvance)
-	{
-		buf->msg.move.pressureAdvanceDrives |= 1u << canDriver.localDriver;
 	}
 }
 
