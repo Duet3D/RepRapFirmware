@@ -443,6 +443,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetPlatform().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 				break;
 
+			case CanMessageType::m569:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetPlatform().EutProcessM569(buf->msg.generic, replyRef);
+				break;
+
 			case CanMessageType::createInputMonitor:
 				requestId = buf->msg.createInputMonitor.requestId;
 				rslt = InputMonitor::Create(buf->msg.createInputMonitor, buf->dataLength, replyRef, extra);

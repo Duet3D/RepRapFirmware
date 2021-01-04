@@ -62,7 +62,7 @@ static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
 static CanAddress myAddress =
-#ifdef DUET3ATE
+#ifdef DUET3_ATE
 						CanId::ATEMasterAddress;
 #else
 						CanId::MasterAddress;

@@ -270,7 +270,6 @@ void CanMessageGenericConstructor::AddIParam(char c, int32_t v) THROWS(GCodeExce
 
 	default:
 		throw ConstructParseException("ival wrong parameter type");
-		return;
 	}
 
 	InsertValue(&v, sz, pos);
@@ -317,6 +316,18 @@ void CanMessageGenericConstructor::AddStringParam(char c, const char *v) THROWS(
 	}
 }
 
+void CanMessageGenericConstructor::AddDriverIdParam(char c, DriverId did) THROWS(GCodeException)
+{
+	ParamDescriptor::ParamType t;
+	size_t sz;
+	const unsigned int pos = FindInsertPoint(c, t, sz);
+	if (t != ParamDescriptor::localDriver)
+	{
+		throw ConstructParseException("didval wrong parameter type");
+	}
+
+	InsertValue(&did.localDriver, sz, pos);
+}
 
 GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) noexcept
 {

@@ -4791,6 +4791,221 @@ GCodeResult Platform::EutSetRemotePressureAdvance(const CanMessageMultipleDrives
 	return rslt;
 }
 
+GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M569Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("Missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+
+	if (drive >= NumDirectDrivers)
+	{
+		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
+		return GCodeResult::error;
+	}
+
+	bool seen = false;
+	uint8_t direction;
+	if (parser.GetUintParam('S', direction))
+	{
+		seen = true;
+		SetDirectionValue(drive, direction != 0);
+	}
+	int8_t rValue;
+	if (parser.GetIntParam('R', rValue))
+	{
+		seen = true;
+		SetEnableValue(drive, rValue);
+	}
+
+	float timings[4];
+	size_t numTimings = 4;
+	if (parser.GetFloatArrayParam('T', numTimings, timings))
+	{
+		seen = true;
+		if (numTimings == 1)
+		{
+			timings[1] = timings[2] = timings[3] = timings[0];
+		}
+		else if (numTimings != 4)
+		{
+			reply.copy("bad timing parameter, expected 1 or 4 values");
+			return GCodeResult::error;
+		}
+		SetDriverStepTiming(drive, timings);
+	}
+
+#if HAS_SMART_DRIVERS
+	{
+		uint32_t val;
+		if (parser.GetUintParam('D', val))	// set driver mode
+		{
+			seen = true;
+			if (!SmartDrivers::SetDriverMode(drive, val))
+			{
+				reply.printf("Driver %u.%u does not support mode '%s'", CanInterface::GetCanAddress(), drive, TranslateDriverMode(val));
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('F', val))		// set off time
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, val))
+			{
+				reply.printf("Bad off time for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('B', val))		// set blanking time
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tblank, val))
+			{
+				reply.printf("Bad blanking time for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('V', val))		// set microstep interval for changing from stealthChop to spreadCycle
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tpwmthrs, val))
+			{
+				reply.printf("Bad mode change microstep interval for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+#if SUPPORT_TMC51xx
+		if (parser.GetUintParam('H', val))		// set coolStep threshold
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
+			{
+				reply.printf("Bad high speed microstep interval for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+#endif
+	}
+
+	size_t numHvalues = 3;
+	const uint8_t *hvalues;
+	if (parser.GetArrayParam('Y', ParamDescriptor::ParamType::uint8_array, numHvalues, hvalues))		// set spread cycle hysteresis
+	{
+		seen = true;
+		if (numHvalues == 2 || numHvalues == 3)
+		{
+			// There is a constraint on the sum of HSTRT and HEND, so set HSTART then HEND then HSTART again because one may go up and the other down
+			(void)SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
+			bool ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hend, hvalues[1]);
+			if (ok)
+			{
+				ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
+			}
+			if (ok && numHvalues == 3)
+			{
+				ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hdec, hvalues[2]);
+			}
+			if (!ok)
+			{
+				reply.printf("Bad hysteresis setting for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+		else
+		{
+			reply.copy("Expected 2 or 3 Y values");
+			return GCodeResult::error;
+		}
+	}
+#endif
+	if (!seen)
+	{
+		reply.printf("Driver %u.%u runs %s, active %s enable",
+						CanInterface::GetCanAddress(),
+						drive,
+						(GetDirectionValue(drive)) ? "forwards" : "in reverse",
+						(GetEnableValue(drive)) ? "high" : "low");
+
+		float timings[4];
+		const bool isSlowDriver = GetDriverStepTiming(drive, timings);
+		if (isSlowDriver)
+		{
+			reply.catf(", step timing %.1f:%.1f:%.1f:%.1fus", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
+		}
+		else
+		{
+			reply.cat(", step timing fast");
+		}
+
+#if HAS_SMART_DRIVERS
+		// It's a smart driver, so print the parameters common to all modes, except for the position
+		reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32,
+				TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::tblank)
+			);
+
+# if SUPPORT_TMC51xx
+		{
+			const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
+			bool bdummy;
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * Platform::DriveStepsPerUnit(drive));
+			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
+		}
+# endif
+
+		// Print the additional parameters that are relevant in the current mode
+		if (SmartDrivers::GetDriverMode(drive) == DriverMode::spreadCycle)
+		{
+			reply.catf(", hstart/hend/hdec %" PRIu32 "/%" PRIu32 "/%" PRIu32,
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hstart),
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hend),
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
+					  );
+		}
+
+# if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+		if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
+		{
+			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
+			bool bdummy;
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * Platform::DriveStepsPerUnit(drive));
+			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
+			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
+			const unsigned int pwmScaleSum = pwmScale & 0xFF;
+			const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
+			const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
+			const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
+			reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
+						tpwmthrs, (double)mmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
+		}
+# endif
+		// Finally, print the microstep position
+		{
+			const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
+			if (mstepPos < 1024)
+			{
+				reply.catf(", pos %" PRIu32, mstepPos);
+			}
+			else
+			{
+				reply.cat(", pos unknown");
+			}
+		}
+#endif
+
+	}
+	return GCodeResult::ok;
+}
+
 #endif
 
 // Process a 1ms tick interrupt

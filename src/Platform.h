@@ -640,6 +640,7 @@ public:
 	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
 	float EutGetRemotePressureAdvance(size_t driver) const noexcept;
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 #endif
 
 #if VARIABLE_NUM_DRIVERS
