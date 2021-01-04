@@ -616,7 +616,8 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 // Do the bed transform AFTER the axis transform
 void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
-	if (!useTaper || xyzPoint[Z_AXIS] < taperHeight)
+	const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);
+	if (!useTaper || toolHeight < taperHeight)
 	{
 		float zCorrection = 0.0;
 		const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -625,6 +626,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 		unsigned int numCorrections = 0;
 
 		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
+		// TODO use Iterate when we have changed it to use inline_function
 		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 		{
 			if (xAxes.IsBitSet(xAxis))
@@ -648,7 +650,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 		}
 
 		zCorrection += zShift;
-		xyzPoint[Z_AXIS] += (useTaper) ? (taperHeight - xyzPoint[Z_AXIS]) * recipTaperHeight * zCorrection : zCorrection;
+		xyzPoint[Z_AXIS] += (useTaper && zCorrection < taperHeight) ? (taperHeight - toolHeight) * recipTaperHeight * zCorrection : zCorrection;
 	}
 }
 
@@ -692,8 +694,9 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 	}
 	else
 	{
-		const float zreq = (xyzPoint[Z_AXIS] - zCorrection)/(1.0 - (zCorrection * recipTaperHeight));
-		if (zreq < taperHeight)
+		const float toolZoffset = Tool::GetOffset(tool, Z_AXIS);
+		const float zreq = (xyzPoint[Z_AXIS] - (taperHeight - toolZoffset) * zCorrection * recipTaperHeight)/(1.0 - zCorrection * recipTaperHeight);
+		if (zreq + toolZoffset < taperHeight)
 		{
 			xyzPoint[Z_AXIS] = zreq;
 		}
