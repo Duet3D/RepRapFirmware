@@ -88,13 +88,13 @@ The value of `type` can be one of:
 - 2: Advanced status response. This also contains fields from the standard status response
 - 3: Print status response. This contains fields from the standard status response as well as information about the current (print) job
 
-See [JSON responses](JSON%20Responses.md) for further information.
+See [JSON responses](https://github.com/Duet3D/RepRapFirmware/blob/v3-dev/JSON%20responses.md) for further information.
 
 ## Get /rr_config
 
 Retrieve the configuration response. This request provides a JSON object with values that are expected to change rarely. 
 
-See [JSON responses](JSON%20Responses.md) for further information.
+See [JSON responses](https://github.com/Duet3D/RepRapFirmware/blob/v3-dev/JSON%20responses.md) for further information.
 
 ## GET /rr__gcode
 
