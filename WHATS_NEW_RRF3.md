@@ -1,320 +1,194 @@
-RepRapFirmware 3.3beta1 (in preparation)
-=======================
-
-Upgrade notes:
-- All extruders must be declared explicitly using M584. In previous firmware versions, one default extruder was assign to driver 3.
-- [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.3beta1 also, otherwise movement will not work
-
-New features:
-- M17 is implemented
-- [Duet 3 Mini only] M954 is partially implemented. A Duet 3 Mini used as an expansion board can support axis motors, extruder motors (but may not work if nonzero pressure advance is used), thermistor, PT100 and thermocouple temperature sensors, GpIn and GpOut pins (including servos). Heaters, fans, filament monitors, endstop switches, Z probes and other types of temperature sensor are not yet supported.
-- The maximum number of axes supported on Duet 3 MB6HC is increased to 15. Axis letters abcdefghijkl may be used in addition to XYZUVWABCD. Because GCode is normally case insensitive, these must be prefixed with a single quote character in GCode commands. For example, M584 'A1.2 would assign axis 'a' to driver 1.2, and G1 'A10 would move the 'a' axis to the 10mm or 10 degree position.
-
-RepRapFirmware 3.2 (in preparation)
+RepRapFirmware 3.2
 ==================
 
-TODO
-
-RepRapFirmware 3.2RC2
-=====================
-
-Upgrade notes:
-- [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.2RC2 also
-
-New features:
-- Previously there was a minimum reading cutoff at -5C when measuring temperatures using any kind of thermistor. That cutoff is now relaxed when using a low-resistance thermistor, e.g. with resistance 1K or 10K @25C.
-
-Bug fixes:
-- On some systems, DWC reported that it couldn't deserialise the lastStopHeight field of the Z probe because the value was null
-- [Duet 3 expansion and tool boards] Thermostatic fans connected to expansion/tool boards would occasionally blip spuriously
-- [Duet 3 expansion and tool boards] Filament monitors connected to expansion/tool boards generated excessive CAN traffic
-- [Duet 3 MB6HC + expansion/tool boards] Sometimes the main board would not receive status messages form expansoin and tool boards after power up unless it was reset by M999 or emergency stop
-- [Duet + SBC] The file system mutex was not initialised in SBC configurations, however this did not cause any problems under normal conditions
-- [Duet + SBC] Fixed issues with recovering from SBC disconnections and reconnections
-- [Duet3 Mini + CAN, also EXP3HC] Fixed missing cache invalidate after receiving a CAN message
-
-RepRapFirmware 3.2RC1
-=====================
-
-Upgrade notes:
-- The IAP files for this release have changed. After installing 3.2RC1, the new IAP file will be needed next time you upgrade or downgrade the firmware. The new IAP files all have 'iap32' in the filename where it used to be 'iap', therefore they can coexist in /sys with the old IAP files.
-- [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.2RC1 also
-- [Duet + SBC] The SPI protocol has changed, therefore versions of DCS prior to 3.2RC1 will be unable to communicate with this version of RRF
+Upgrade notes (see also Object Model Changes if you use conditional GCode):
+- Default thermistor parameters for all builds of RRF3 are now: T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old default, which had B4388 C0. In the unlikely event that your M308 line had a C parameter but no B parameter, you will need to add B4388 to get the previous behaviour.
+- If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber + 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based. We plan to remove workspaceNumber in a future release.
+- If you are using the M453 command to configure spindle motors and switch the firmware into CNC mode, you will need to change this command because the parameters have changed.
+- If you configure a Z probe using multiple M558 commands instead of a single one, you must make sure that only the first one has a P parameter. This is because M558 with a P parameter now sets default values before processing the other parameters of the M558 command.
+- In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
+- It is no longer permitted to create a filament monitor using M591 and subsequently to use M584 to change the driver that the extruder is mapped to
+- The IAP files for this release have changed. After installing 3.2, the new IAP file will be needed next time you upgrade or downgrade the firmware. The new IAP files all have 'iap32' in the filename where it used to be 'iap', therefore they can coexist in /sys with the old IAP files.
+- The M307 heater model parameters have changed, however existing M307 commands will continue to work. See https://duet3d.dozuki.com/Wiki/Gcode?
+- When new axes are created using M584, if no R parameter is specified then the default for axes ABCD is now rotational. Use the R0 parameter if you want them to be linear.
 - [DWC] If you are running DWC in a development environment (e.g. via 'npm run serve'), use M586 C"*" or similar to permit cross-origin HTTP access or similar to permit cross-origin HTTP access
+- [Duet + SBC] The SPI protocol has changed, therefore versions of DCS prior to 3.2RC1 will be unable to communicate with RRF 3.2
+- [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to version 3.2 also
+- [Duet 3 MB6HC] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
 
 Known issues:
 - [Duet + SBC + 12864 display] Menu files are slow to load
 
 New features:
-- New M595 command is provided to allow the movement queue to be lengthened and optionally to pre-allocate DriveMovement objects
-- The number of DriveMovement objects pre-allocated is reduced to save memory. If the system runs out of DriveMovement objects, it will try to allocate new ones dynamically.
-- The amount of free RAM has been increased. This should be sufficient to allow 12864 displays to be supported on Duet WiFi/Ethernet.
-- M591 may now be used to delete a filament monitor using the syntax M591 D# P0 where # is the extruder number
-- CORS headers are only sent in HTTP responses if explicitly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
-- Added aux port diagnostics (overrun and framing errors) to M122 report
-- When an unexpected software reset occurs, a stack usage check is performed and the result added to the software reset data
-- [Duet 3 Mini] Stall homing is now supported
-- [Duet 3 Mini] Added data cache hit count to M122 report
-- [Duet + SBC] 12864 displays are now supported. Note, the 'files' menu item type is not supported in SBC mode.
-- [Duet 3 MBHC] Significant performance improvements, for example the maximum step rate is greatly increased
-
-Bug fixes:
-- Fixed crash that occurred on some systems when M918 was used to configure a 12864 display but no SD card was present
-- After updating PanelDue firmware with M997 S4 the PanelDue did not always reset automatically
-- If M997 S4 was used but no aux port was configured, the firmware could reset after 20 seconds
-- Laser and magnetic filament monitors paused the print even when disabled if no data was received or the sensor reported an error
-- In M122 reports, queued GCodes were printed with spurious characters after each command
-- M669 K5 reported that the kinematics matrix was invalid
-- In beta4 the minimum allowed heater gain was too low
-- [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
-- [Duet 3 MB6HC] The second aux port using the IO_1 connector did not work
-
-RepRapFirmware 3.2-beta4.1
-==========================
-
-Upgrade notes:
-- **Update 2012-12-03**: the binaries for the tool and expansion boards have been updated to version 3.2beta4.1, to fix a stack overflow when a heater fault occurs on a Duet 3 tool or expansion board
-- ~~Only the main board binaries have changed since beta4. Tool/expansion board binaries,~~ DuetWiFiServer and DWC are the same as in beta4.
-- [Duet 3 + expansion/tool boards] You must update expansion/tool board firmware to the ~~3.2beta4~~ **3.2beta4.1** binaries, which are included in this release
-
-Known issues:
-- [Duet 2 + 12864 display] There is insufficient free RAM to run Duet WiFi/Ethernet with 12864 display
-
-New features:
-- Version 3 PanelDue boards (including all PanelDue 5i/7i) can now be updated from the Duet using M997 S4
-- The heater tuning algorithm has been improved for the case where the heating system had a large thermal reservoir that was somewhat decoupled from the temperature sensor (e.g. silicone bed heaters with built-in thermistors)
-- The M203 command now supports an optional S1 parameter which changes the units to mm/sec. The default is still mm/min.
-- [Duet 2 Ethernet/WiFi/Maestro] Duet 2 builds now permit port names to have a "0." prefix, e.g. "0.e0heat". The "0." prefix is ignored.
-- [Duet 3 Mini only] If M918 P1 is used then the pin labelled A0 is now uses as the chip select (CS) pin instead of pin SPI2_CS3
-
-Bug fixes:
-- When a GCode file included very short moves, sometimes the print paused for a time (sometimes a very long time) at that point
-- M918 P0 reported an error instead of just deleting any existing display
-- [Duet 3 + SBC + tool/expansion boards] It was not possible to update tool or expansion board firmware when a SBC was connected
-- [Duet 3 + SBC] When file daemon.g was requested, spurious warning messages could be displayed
-
-RepRapFirmware 3.2-beta4
-========================
-
-Upgrade notes:
-- [Duet 3 + expansion/tool boards] You must update expansion/tool board firmware to 3.2beta4 as well
-
-Known issues:
-- [Duet 2 + 12864 display] There is insufficient free RAM to run Duet WiFi/Ethernet with 12864 display
-- [Duet 3 + tool/expansion boards] If you update tool or expansion board firmware, or reboot a tool or expansion board using M999 B#, you must restart the system afterwards so that the updated or reset board(s) get re-initialised from the commands in config.g
-
-New features:
-- WiFi diagnostics now include the WiFi connection mode (needs DuetWiFiServer 1.25beta0)
-- [Duet 3 tool boards] Stepper driver diagnostics now include the PWM_AUTO register (main board diagnostics did already)
-- [Duet 3] CAN diagnostics on both main and tool/expansion boards provide more data
-- M308 S# H999 and L999 are now supported on those Duet 3 expansion/tool boards that have the required hardware support
-- The order in which you use M307, M140, M141 and M143 is now immaterial
-
-Bug fixes:
-- Tool and expansion board firmware was likely to crash if a sensor or heater fault occurred (new bug in 3.2beta3 and beta3.2)
-- The heater tuning algorithm could fail to properly measure the dead time if it was very low (thanks Andy)
-- M226, M600 and M601 got stuck in state "Pausing" (new bug in 3.2beta3)
-- If a TMC22xx driver received two commands to enable/disable the drive or change microstepping twice in very quick succession, the second one was sometimes lost
-- In Marlin mode, "ok" was returned per-command instead of per line of GCode
-- M118 P0 didn't append newline when the message was sent to USB and Telnet
-- Incorrect M307 default parameters were used for bed and chamber heaters
-- At the very end of a print job, RRF sometimes briefly reported a bad file position, which caused DWC to report a very high % completed
-- [Duet 3] CAN diagnostics incorrectly reported most transmissions as having timed out
-- [Duet 3 MB6HC] A watchdog timeout didn't save any software reset data
-- [Duet 3 expansion/tool boards] If a filament monitor was configured, the expansion/tool board sent a continuous stream of status messages to the main board after the first change in filament monitor status (e.g. when the first data packet was received from a Duet3D laser or magnetic filament monitor). This had a detrimental effect on print quality.
-- [Duet 3 expansion/tool boards] CAN diagnostics incorrectly reported a large number of messages lost
-
-Other improvements:
-- Efficiency improvements to TMC2208/2209/2224 drivers for both main and tool boards
-- Calls to debugPrintf use less stack than before
-- Changes to expansion and tool board firmware to better support ATE
-- Improvements to the SBC interface to resolve issues when Duet + SBC is used
-
-RepRapFirmware 3.2-beta3.2
-==========================
-
-Upgrade notes:
-- [Duet 3 + expansion/tool boards] You must also update expansion and tool board firmwares to 3.2beta3.2, otherwise heaters on expansion/tool boards will not work properly
-- There have been no changes to DCS or DWC since release 3.2beta3, therefore those components will still report versoin 3.2beta3
-- See also the Known Issues
-
-Known issues:
-- If you do not have a M307 command for a bed or chamber heater in your config.g file, you may get a "Temperature increasing too slowly" fault when you try to use that heater. Workaround: either tune that heater, or add the following command (with # replaced by the heater number) to config.g to restore the old behaviour: M307 H# A90 C700 D10
-
-New features/changed behaviour:
-- The M303 heater tuning algorithm and parameters have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M303_Run_heater_tuning.
-- The M307 heater model parameters have changed, however existing M307 commands will continue to work. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M307_Set_or_report_heating_process_parameters.
-
-Bug fixes:
-- PanelDue was not updated while the firmware was waiting for a heating or delay command to complete
-- A M591 command with the C parameter not followed by a port name string caused the firmware to reset
-- [Duet3 + expansion/tool boards] Errors when reading temperature sensors on expansion and tool boards sometimes caused the expansion or tool board to reset
-- [Duet + SBC] Fixed issues with SBC communications
-
-RepRapFirmware 3.2-beta3
-========================
-
-Upgrade notes:
-- It is no longer permitted to create a filament monitor using M591 and subsequently to use M584 to change the driver that the extruder is mapped to
-- [Duet 3 + expansion/tool boards] Changes have been made to the CAN message protocols, therefore you must upgrade tool and expansion boards to firmware 3.2beta3
-- [Duet+SBC] Changes have been made to the DCS message protocols, therefore you must upgrade DSF to version 3.2beta3
-- When new axes are created using M584, if no R parameter is specified then the default for axes ABCD is now rotational. Use the R0 parameter if you want them to be linear.
-
-Known issues:
-- PanelDue with firmware version 3.2.0 does not update the homed status wheh used with this RRF release. This will be fixed in a future PanelDueFirmware release.
-- When running with attached SBC, any output generated from inside a while-loop in a GCode file or macro (e.g. from a GCode command or from an echo command) will not be shown until the while-loop has completed
-- The original binary for Duet 3 EXP3HC expansion board in this release did not allow thermistors or PT1000 sensors to be configured on those boards. This release now has an updated binary (version 3.2beta3.1) that fixes this.
-- If you use a M591 command with a C parameter that is not a quoted string, the firmware resets with a "Terminate called" software reset reason
-
-New features/changed behaviour:
-- When new axes are created using M584, if no R parameter is specified then the default for axes ABCD is now rotational. Use the R0 parameter if you want them to be linear.
-- M584 has a new S parameter which specifies whether new axes created in the command are to be treated as linear (S0) or rotational (S1) for the purpose of feedrate calculation. This is separate from the R parameter, which specifies whether new axes are rotational or not. The default is to treat linear axes as linear and rotational axes as rotational. You only need to provide the S parameter if you want to change the way that the feed rate is applied.
-- If a filament monitor is configured for an extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
-- If a filament error occurs, RepRapFirmware now tries to run file sys/filament-error#.g where # is the extruder number in minimum-width format; or if that file is not found then file sys/filament-error.g. If neither file is found then it falls back to running sys/pause.g.
-- [Duet+PanelDue] Status messages are sent to an attached PanelDue running firmware 3.2 during homing, heating tools etc.
-- It is no longer necessary to separate multiple G- or M-commands on a single line with a space or tab character
-- If the system runs out of memory, it will now reset and the Last Software Reset Reason reported by M122 will be "OutOfMemory"
-- The M122 P102 and M122 P103 timing functions are more accurate and give more consistent results than in previous firmware versions
-- M122 for expansion and tool boards now reports the bootloader version, if available
-- Logging to file now has four log levels
-    * 0: off (as previously no logging)
-    * 1: warn (all previous logged messages are in this category)
-    * 2: info (M117, M291, M292 and G10 fall into this category) and
-    * 3: debug (everything else that generates output)
-- M929 now takes values for the Snnn parameter from 0 (no logging) to 3 (maximum logging)
-- M118 has a new Lnnn parameter to specify at which log level the message will be logged (default: DEBUG). Using L0 will prevent a message being copied to the log file.
-- The speed of processing of GCodes received from USB has been improved, to match the speed of processing GCodes read from the SD card
-- M453 and M452 no longer report the new machine mode. Use M450 after these commands if you want the machine mode to be reported.
-- If a tool change is requested but changing tool would cause the Z max limit to be exceeded because of the changed tool Z offset, the tool change is now aborted
-- [Duet 3 + expansion/tool boards] Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
-- [Duet 3 + expansion/tool boards] Expansion and tool boards can now have their bootloaders updated via CAN using the command M997 B# S3 where # is the board address. The bootloader file is Duet3Bootloader-SAME5x.bin for the EXP3HC board, Duet3Bootloader-SAMC21.bin for the other expansion boards by Duet3D, and Duet3Bootloader-SAMMYC21.bin for the Sammy-C21 development board. These files are available at https://github.com/Duet3D/Duet3Bootloader/releases.
-- [Duet + SBC] RepRapFirmware no longer goes into SBC mode if a SD card is inserted but can't be mounted, or if config.g is not found. This is to make diagnosis of SD card interface faults easier.
-
-Object model changes:
-- All types of filament monitors have a new field "status". The value is one of "noMonitor", "ok", "noDataReceived", "noFilament", "tooLittleMovement", "tooMuchMovement", "sensorError".
-- Field "filamentPresent" is removed from those types of filament monitor that previously supported it. Use "status" instead.
-- Laser, rotating magnet and pulsed filament still support the "calibrated" fields, but only for filament monitors connected to the main board
-- Field "supports12864" in boards[0] has been renamed to "supportsDirectDisplay"
-- Field "move.axes[].homed" is no longer flagged live, and it now remains the true homed status during a simulation
-
-Bug fixes:
-- M701 and M702 commands crashed the firmware with an assertion failure (new bug in 3.2beta2)
-- G92 commands incremented seqs.move when they didn't need to (old bug)
-- G92 Znn didn't clear zDatumSetByProbing (old bug)
-- Some types of underrun in the movement queue were not reported
-- The handling of out-of-buffer situations has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
-- In RepRapFirmware mode, empty responses to commands were not suppressed. They are now suppressed except when the command came from HTTP or SBC.
-- Feed rate calculations did not confirm to the NIST standard when the Z axis and one or more rotational axes were moving, but not X or Y. This affected CNC machines with rotational axes, and OpenPnP.
-- When the machine was executing resume.g, the 'resuming' status was not reported in the object model
-- [Duet 3] When using a LinearAnalog sensor, the readings returned were too high above the minimum reading by a factor of 4
-- [Duet 3 + expansion/tool boards] The idle timeout was not always applied to remote drives, in particular to extruder drives
-- [LPC/STM port, might affect Duets in rare situations] If hiccups occurred frequently and there was other activity in the system causing frequent high-priority interrupts, a watchdog timeout could occur
-- [Duet+SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
-- [Duet+SBC] When nested macros were used, commands were sometimes executed out-of-order
-
-RepRapFirmware 3.2-beta2
-========================
-
-Upgrade notes: none since 3.2-beta1
-
-New features/changed behaviour:
-- Supports Duet 3 Mini version 0.4 prototypes including CAN expansion. There are separate builds for version 0.2 and version 0.4 prototypes.
-- Supports ST7567-based 12864 displays on Duet Maestro and Duet WiFi (thanks to SchmartMaker for writing the ST7567 driver code)
-- Supports PanelDue 3.2 better, in particular updating of displayed data while waiting for heating etc.
-- Any attempt to use G28 within a homing file now results in a specific error message
-- Improved the instructions displayed when M303 heater tuning finishes
-- M571 command accepts Q as an alternative to F for the PWM frequency
-- M584 commands are now checked for out-of-range driver numbers
-- M150 commands are now queued to sync them with movement commands
-- M111 supports CAN module debug
-
-Object model changes:
-- Variable boards[n] for expansion boards now includes the maxMotors value
-- Added state.msUpTime. This is the milliseconds part of upTime. When using the HTTP rr_model call or the M409 command, if the response includes both state.upTime and state.msUpTime then these two values both relate to the same instant when the command started searching the object model.
-
-Internal changes:
-- A separate task is used to communicate with an attached Single Board Computer. This is expected to resolve a number of issues.
-
-Bug fixes:
-- G2 and G3 commands with R parameter always drew the longer of the two possible arcs. Now they draw the shorter one if the R parameter is positive, or the longer one if it is negative.
-- Duet 3 Mini only: certain types of error accessing the SD card would cause the firmware to reset due to "Stuck in spin loop".
-- The Error Status word was incorrectly prefixed by 0x02 in beta1 instead of just 0x
-- If M918 was run multiple times, available RAM was lost because of a memory leak
-- When doing a simple G30 command the the probe type was BLTouch, the deploy and retract macro files were each run twice
-- A layer change was detected incorrectly if a travel move at an unusual height included retraction
-- [Duet 2 or 3 with attached SBC only] The height map parameters passed by the SBC were not range-checked
-
-RepRapFirmware 3.2-beta1
-========================
-
-Upgrade notes:
-- In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
-- If you are using the M453 command to configure spindle motors and switch the firmware into CNC mode, you will need to change this command because the parameters have changed.
-- If you are using object model field move.workspaceNumber in conditional GCode, you should preferably replace it by (move.workplaceNumber + 1). Note the different name, and that the new workplaceNumber is 0-based (so it can be used to index the workplaceOffsets arrays directly) whereas workspaceNumber was 1-based. We plan to remove workspaceNumber in a future release.
-- If you are using object model field sensors.zprobes[].temperatureCoefficient in conditional GCode, you should preferably replace it by temperatureCoefficients[0]. We plan to remove temperatureCoefficient in a future release.
-- Default thermistor parameters for all builds of RRF3 are now: T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old default, which had B4388 C0. In the unlikely event that your M308 line had a C parameter but no B parameter, you will need to add B4388 to get the previous behaviour.
-- If you configure a Z probe using multiple M558 commands instead of a single one, you must make sure that oonly the first one has a P parameter. This is because M558 with a P parameter now sets default values before processing the other parameters of the M558 command.
-- [Duet 3] if using an attached DotStar LED strip then you now need to use M150 with the X parameter to specify the LED strip type. This is because the default type is now Neopixel.
-
-New features/changed behaviour:
-- Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using separate firmware build
 - A default filename is no longer provided in the M559 and M560 commands, so the P parameter must always be used
-- Numeric literals in GCode meta commands and in expressions enclosed by { } can now be in hex (0x prefix) or binary (0b prefix)
-- The minimum value for the P parameter of M584 is reduced from 3 to 2 so that the Z axis can be hidden
-- M906, M913 and M918 commands now wait for movement to stop, except when they are used in the power fail script
-- G29 with no S parameter now runs file sys/mesh.g if it exists; otherwise it behaves like G29 S0 as before
-- Drivers number of the form 0.# where # represents one or more decimal digits are now supported even on board that don't support CAN
-- The resurrect.g file now records which objects on the build plate have been cancelled
-- Duet 3 Mini 5+ WiFi and Ethernet prototype boards v0.2 are now supported
 - Added L (calibration factor) parameter to laser filament monitor configuration
-- Increased the number of stack words displayed in the software reset data. The number of wear-levelling slots stored is reduced from 4 to 3.
 - Added M584 R parameter to indicate whether newly created axes are continuous rotation axes or not
-- M486 now confirms when an object is cancelled or resumed
+- Added aux port diagnostics (overrun and framing errors) to M122 report
+- Any attempt to use G28 within a homing file now results in a specific error message
+- CORS headers are only sent in HTTP responses if explicitly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
 - Default thermistor parameters for all builds of RRF3 are now T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old defaults.
-- The parameters for M453 have changed. The frequency parameter is now Q (to match M950) instead of F. You can configure up to 3 ports to control each spindle. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M453_in_RepRapFirmware_3_2_and_later.
+- Drivers number of the form 0.# where # represents one or more decimal digits are now supported even on board that don't support CAN
+- Duet 3 Mini 5+ WiFi and Ethernet prototype boards v0.2 are now supported
+- Duet 3 Mini boards are supported (PCB revisions 0.4 and later)
+- G29 with no S parameter now runs file sys/mesh.g if it exists; otherwise it behaves like G29 S0 as before
+- If a filament error occurs, RepRapFirmware now tries to run file sys/filament-error#.g where # is the extruder number in minimum-width format; or if that file is not found then file sys/filament-error.g. If neither file is found then it falls back to running sys/pause.g.
+- If a filament monitor is configured for an extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
+- If a tool change is requested but changing tool would cause the Z max limit to be exceeded because of the changed tool Z offset, the tool change is now aborted
+- If the system runs out of memory, it will now reset and the Last Software Reset Reason reported by M122 will be "OutOfMemory"
+- Improved the instructions displayed when M303 heater tuning finishes
 - In the M122 report, unused stack for each task is now reported in dwords, not bytes
-- Z probe trigger height second order temperature compensation is now supported. To use it, specify a 2-element array as the temperature coefficient, e.g. "M558 ... C0.01:0.0005".
+- Increased the number of stack words displayed in the software reset data. The number of wear-levelling slots stored is reduced from 4 to 3.
+- It is no longer necessary to separate multiple G- or M-commands on a single line with a space or tab character
+- Logging to file now has four log levels: 0=off (as previously no logging), 1=warn (all previous logged messages are in this category), 2=info (M117, M291, M292 and G10 fall into this category), 3=debug (everything else that generates output)
+- M111 supports CAN module debug
+- M118 has a new Lnnn parameter to specify at which log level the message will be logged (default: DEBUG). Using L0 will prevent a message being copied to the log file.
+- M122 for expansion and tool boards now reports the bootloader version, if available
+- M150 commands are now queued to sync them with movement commands
+- M308 S# H999 and L999 are now supported on those Duet 3 expansion/tool boards that have the required hardware support
+- M453 and M452 no longer report the new machine mode. Use M450 after these commands if you want the machine mode to be reported.
+- M486 now confirms when an object is cancelled or resumed
 - M558 with a P parameter now always creates a new Z probe object, which means that all the other M558 values are set to default values before processing the other M558 parameters
+- M571 command accepts Q as an alternative to F for the PWM frequency
 - M581 trigger condition parameter now supports a new value R2 which means trigger only if not printing from SD card
-- [Duet Maestro] M308 L and H parameters are now supported.
-- [Duet Maestro and Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory. See https://duet3d.dozuki.com/Wiki/Calibrating_thermistor_and_PT1000_readings.
+- M584 commands are now checked for out-of-range driver numbers
+- M584 has a new S parameter which specifies whether new axes created in the command are to be treated as linear (S0) or rotational (S1) for the purpose of feedrate calculation. This is separate from the R parameter, which specifies whether new axes are rotational or not. The default is to treat linear axes as linear and rotational axes as rotational. You only need to provide the S parameter if you want to change the way that the feed rate is applied.
+- M591 may now be used to delete a filament monitor using the syntax M591 D# P0 where # is the extruder number
+- M906, M913 and M918 commands now wait for movement to stop, except when they are used in the power fail script
+- M929 now takes values for the Snnn parameter from 0 (no logging) to 3 (maximum logging)
+- New M595 command is provided to allow the movement queue to be lengthened and optionally to pre-allocate DriveMovement objects
+- Numeric literals in GCode meta commands and in expressions enclosed by { } can now be in hex (0x prefix) or binary (0b prefix)
+- Previously there was a minimum reading cutoff at -5C when measuring temperatures using any kind of thermistor. That cutoff is now relaxed when using a low-resistance thermistor, e.g. with resistance 1K or 10K @25C.
+- Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using separate firmware build
+- Supports PanelDue 3.2 better, in particular updating of displayed data while waiting for heating etc.
+- Supports ST7567-based 12864 displays on Duet Maestro and Duet WiFi (thanks to SchmartMaker for writing the ST7567 driver code)
+- The M122 P102 and M122 P103 timing functions are more accurate and give more consistent results than in previous firmware versions
+- The M203 command now supports an optional S1 parameter which changes the units to mm/sec. The default is still mm/min.
+- The amount of free RAM has been increased. This should be sufficient to allow 12864 displays to be supported on Duet WiFi/Ethernet.
+- The minimum value for the P parameter of M584 is reduced from 3 to 2 so that the Z axis can be hidden
+- The number of DriveMovement objects pre-allocated is reduced to save memory. If the system runs out of DriveMovement objects, it will try to allocate new ones dynamically.
+- The order in which you use M307, M140, M141 and M143 is now immaterial
+- The parameters for M453 have changed. The frequency parameter is now Q (to match M950) instead of F. You can configure up to 3 ports to control each spindle. See https://duet3d.dozuki.com/Wiki/Gcode#Section_M453_in_RepRapFirmware_3_2_and_later.
+- The resurrect.g file now records which objects on the build plate have been cancelled
+- The speed of processing of GCodes received from USB has been improved, to match the speed of processing GCodes read from the SD card
+- Version 3 PanelDue boards (including all PanelDue 5i/7i) can now be updated from the Duet using M997 S4
+- When an unexpected software reset occurs, a stack usage check is performed and the result added to the software reset data
+- When new axes are created using M584, if no R parameter is specified then the default for axes ABCD is now rotational. Use the R0 parameter if you want them to be linear.
+- WiFi diagnostics now include the WiFi connection mode (needs DuetWiFiServer 1.25beta0)
+- Z probe trigger height second order temperature compensation is now supported. To use it, specify a 2-element array as the temperature coefficient, e.g. "M558 ... C0.01:0.0005".
+- [Duet + SBC] 12864 displays are now supported. Note, the 'files' menu item type is not supported in SBC mode.
+- [Duet + SBC] RepRapFirmware no longer goes into SBC mode if a SD card is inserted but can't be mounted, or if config.g is not found. This is to make diagnosis of SD card interface faults easier.
+- [Duet 2 Ethernet/WiFi/Maestro] Duet 2 builds now permit port names to have a "0." prefix, e.g. "0.e0heat". The "0." prefix is ignored.
+- [Duet 3 + expansion/tool boards] Expansion and tool boards can now have their bootloaders updated via CAN using the command M997 B# S3 where # is the board address. The bootloader file is Duet3Bootloader-SAME5x.bin for the EXP3HC board, Duet3Bootloader-SAMC21.bin for the other expansion boards by Duet3D, and Duet3Bootloader-SAMMYC21.bin for the Sammy-C21 development board. These files are available at https://github.com/Duet3D/Duet3Bootloader/releases.
+- [Duet 3 + expansion/tool boards] Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
+- [Duet 3 Mini only] If M918 P1 is used then the pin labelled A0 is now uses as the chip select (CS) pin instead of pin SPI2_CS3
+- [Duet 3 expansion and tool boards] Added M122 P102, P1005 and P1006 functions
+- [Duet 3 expansion and tool boards] Increased performance, in particular the maximum step rate is higher than before
+- [Duet 3 expansion and tool boards] Software reset data is now stored in NVRAM and reported by M122
+- [Duet 3 tool boards] Stepper driver diagnostics now include the PWM_AUTO register (main board diagnostics did already)
 - [Duet 3] Added support for second UART (using the IO_1 pins) on Duet 3 MB6HC. New message type (P5) added to M118 command.
+- [Duet 3] CAN diagnostics on both main and tool/expansion boards provide more data
 - [Duet 3] Default LED strip type is now Neopixel not DotStar
 - [Duet 3] M915 with just P and/or axis parameters now reports the belt speed in mm/sec that corresponds to the coolStep threshold
 - [Duet 3] Z probing is now abandoned if the probe is remote and cannot be contacted
+- [Duet Maestro and Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory. See https://duet3d.dozuki.com/Wiki/Calibrating_thermistor_and_PT1000_readings.
+- [Duet Maestro] M308 L and H parameters are now supported.
+- [Duet+PanelDue] Status messages are sent to an attached PanelDue running firmware 3.2 during homing, heating tools etc.
 - [in progress] Support for ST7567-based 12864 displays on Duet Maestro
 - [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
-- [Duet 3 expansion and tool boards] Increased performance, in particular the maximum step rate is higher than before
-- [Duet 3 expansion and tool boards] Software reset data is now stored in NVRAM and reported by M122
-- [Duet 3 expansion and tool boards] Added M122 P102, P1005 and P1006 functions
 
-Object model and expression evaluation changes:
-- Added move.workplaceNumber to the object model. This is intended to repace move.workspaceNumber, but is 0-based instead of 1-based.
-- Added temperatureCoefficients array to the Z probe object model. For backwards compatibility, temperatureCoefficient is still supported for the time being and is equivalent to temperatureCoefficients[0].
-- Added minRpm to the spindle object model
-- Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Now they are reported as integers.
-- Added lastStopHeight to the Z probe object model
+Object model changes:
 - Added calibrationFactor to the laser filament monitor object model
-- Support comparing a value of any type that has no literals (DateTime, IPAddress, MAC address, DriverID) with a string
+- Added lastStopHeight to the Z probe object model
+- Added minRpm to the spindle object model
+- Added move.workplaceNumber to the object model. This is intended to replace move.workspaceNumber, but is 0-based instead of 1-based.
+- Added random(nn) function
+- Added state.msUpTime. This is the milliseconds part of upTime. When using the HTTP rr_model call or the M409 command, if the response includes both state.upTime and state.msUpTime then these two values both relate to the same instant when the command started searching the object model.
+- Added temperatureCoefficients array to the Z probe object model. For backwards compatibility, temperatureCoefficient is still supported for the time being and is equivalent to temperatureCoefficients[0]. We plan to remove temperatureCoefficient in a future release.
+- All types of filament monitors have a new field "status". The value is one of "noMonitor", "ok", "noDataReceived", "noFilament", "tooLittleMovement", "tooMuchMovement", "sensorError".
+- Field "filamentPresent" is removed from those types of filament monitor that previously supported it. Use "status" instead.
+- Field "move.axes[].homed" is no longer flagged live, and it now remains the true homed status during a simulation
+- Field "supports12864" in boards[0] has been renamed to "supportsDirectDisplay"
+- Laser, rotating magnet and pulsed filament still support the "calibrated" fields, but only for filament monitors connected to the main board
+- Spindle current/configured/max RPM were being output to 7 decimal places in object model queries. Now they are reported as integers.
 - Support DateTime - DateTime, DateTime + int, DateTime - int
 - Support T{expression} commands
-- Added random(nn) function
+- Support comparing a value of any type that has no literals (DateTime, IPAddress, MAC address, DriverID) with a string
+- Variable boards[n] for expansion boards now includes the maxMotors value
 
 Bug fixes:
-- Fixed issue with G29 S1 on Duet 3 with attached SBC causing the print to fail if any if the probe points had been unreachable when the height map was probed
+- A M591 command with the C parameter not followed by a port name string caused the firmware to reset
+- A layer change was detected incorrectly if a travel move at an unusual height included retraction
+- After updating PanelDue firmware with M997 S4 the PanelDue did not always reset automatically
+- At the very end of a print job, RRF sometimes briefly reported a bad file position, which caused DWC to report a very high % completed
+- Duet 3 Mini only: certain types of error accessing the SD card would cause the firmware to reset due to "Stuck in spin loop".
+- Feed rate calculations did not confirm to the NIST standard when the Z axis and one or more rotational axes were moving, but not X or Y. This affected CNC machines with rotational axes, and OpenPnP.
 - Fixed a buffer overflow when the number of filaments reported by PrusaSlic3r exceeds the maximum number of supported extruders
 - Fixed bug in GetProportionDone that might have caused an incorrect extrusion amount for the first move after restarting a print following a power failure
-- The output from M207 without parameters was truncated when there were 4 or more tools
+- Fixed crash that occurred on some systems when M918 was used to configure a 12864 display but no SD card was present
+- Fixed issue with G29 S1 on Duet 3 with attached SBC causing the print to fail if any if the probe points had been unreachable when the height map was probed
+- G2 and G3 commands with R parameter always drew the longer of the two possible arcs. Now they draw the shorter one if the R parameter is positive, or the longer one if it is negative.
+- G92 Znn didn't clear zDatumSetByProbing
+- G92 commands incremented seqs.move when they didn't need to
+- If M918 was run multiple times, available RAM was lost because of a memory leak
+- If M997 S4 was used but no aux port was configured, the firmware could reset after 20 seconds
 - If a G31 command defined new values in terms of existing G31 values from the object model, then incorrect values could be set due to the new values being computed and stored multiple times
-- The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":-1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
-- Object model variable seqs.spindles was not updated when the configuredRpm of a spindle was changed
+- If a TMC22xx driver received two commands to enable/disable the drive or change microstepping twice in very quick succession, the second one was sometimes lost
+- If bed compensation taper (M376) was used, bed compensation was not applied correctly if the tool had a Z offset
+- In M122 reports, queued GCodes were printed with spurious characters after each command
+- In Marlin mode, "ok" was returned per-command instead of per line of GCode
+- In RepRapFirmware mode, empty responses to commands were not suppressed. They are now suppressed except when the command came from HTTP or SBC.
+- Incorrect M307 default parameters were used for bed and chamber heaters
+- Laser and magnetic filament monitors paused the print even when disabled if no data was received or the sensor reported an error
 - Loading IAP during a firmware upgrade might fail on Duet 2 if a filament monitor or fan tacho was active
+- M118 P0 didn't append newline when the message was sent to USB and Telnet
+- M669 K5 reported that the kinematics matrix was invalid
+- M918 P0 reported an error instead of just deleting any existing display
+- Object model variable seqs.spindles was not updated when the configuredRpm of a spindle was changed
+- PanelDue was not updated while the firmware was waiting for a heating or delay command to complete
+- Some types of underrun in the movement queue were not reported
+- The Error Status word was incorrectly prefixed by 0x02 in beta1 instead of just 0x
+- The M303 heater tuning algorithm and parameters have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M303_Run_heater_tuning.
+- The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":-1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
 - The PWM frequency for heaters was supposed to be limited to 1KHz but this check was no longer being performed
+- The handling of out-of-buffer situations has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
+- The output from M207 without parameters was truncated when there were 4 or more tools
+- When a GCode file included very short moves, sometimes the print paused for a time (sometimes a very long time) at that point
+- When doing a simple G30 command the the probe type was BLTouch, the deploy and retract macro files were each run twice
+- When the machine was executing resume.g, the 'resuming' status was not reported in the object model
+- [Duet + SBC] Fixed issues with SBC communications
+- [Duet + SBC] Fixed issues with communication between the Duet and the SBC
+- [Duet + SBC] The file system mutex was not initialised in SBC configurations, however this did not cause any problems under normal conditions
+- [Duet 2 or 3 with attached SBC only] The height map parameters passed by the SBC were not range-checked
+- [Duet 3 + SBC + tool/expansion boards] It was not possible to update tool or expansion board firmware when a SBC was connected
+- [Duet 3 + SBC] When file daemon.g was requested, spurious warning messages could be displayed
+- [Duet 3 + expansion/tool boards] The idle timeout was not always applied to remote drives, in particular to extruder drives
+- [Duet 3 MB6HC + expansion/tool boards] Sometimes the main board would not receive status messages form expansion and tool boards after power up unless it was reset by M999 or emergency stop
+- [Duet 3 MB6HC] A watchdog timeout didn't save any software reset data
+- [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
+- [Duet 3 MB6HC] The second aux port using the IO_1 connector did not work
+- [Duet 3 MBHC] Significant performance improvements, for example the maximum step rate is greatly increased
+- [Duet 3 Mini] Added data cache hit count to M122 report
+- [Duet 3 Mini] Stall homing is now supported
+- [Duet 3 expansion and tool boards] Filament monitors connected to expansion/tool boards generated excessive CAN traffic
+- [Duet 3 expansion and tool boards] Thermostatic fans connected to expansion/tool boards would occasionally blip spuriously
+- [Duet 3 expansion/tool boards] CAN diagnostics incorrectly reported a large number of messages lost
+- [Duet 3 expansion/tool boards] If a filament monitor was configured, the expansion/tool board sent a continuous stream of status messages to the main board after the first change in filament monitor status (e.g. when the first data packet was received from a Duet3D laser or magnetic filament monitor). This had a detrimental effect on print quality.
 - [Duet 3 with attached SBC] When an array parameter (e.g. M92 E value) had more than one element but less than the maximum number, the last element was replicated to fill the array. This was inconsistent with non-SBC behaviour, which only pads the array when a single element is provided.
-- [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
-- [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
-- [Duet 3] M915 with just P and/or axis parameters did not report the coolStep threshold (T parameter) correctly
+- [Duet 3] CAN diagnostics incorrectly reported most transmissions as having timed out
 - [Duet 3] DHCP requests were being made made much too often when the DHCP lease time was long e.g. 1 hour or more
+- [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
+- [Duet 3] M915 with just P and/or axis parameters did not report the coolStep threshold (T parameter) correctly
+- [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
+- [Duet 3] When using a LinearAnalog sensor, the readings returned were too high above the minimum reading by a factor of 4
+- [Duet+SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
+- [Duet+SBC] When nested macros were used, commands were sometimes executed out-of-order
+- [Duet3 Mini + CAN, also EXP3HC] Fixed missing cache invalidate after receiving a CAN message
+- [LPC/STM port, might affect Duets in rare situations] If hiccups occurred frequently and there was other activity in the system causing frequent high-priority interrupts, a watchdog timeout could occur
+
+Other improvements:
+- Calls to debugPrintf use less stack than before
+- Efficiency improvements to TMC2208/2209/2224 drivers for both main and tool boards
+- Substantial performance improvements and much higher maximum step rates on Duet 3 MB6HC, EXP3HC and TOOL1LC boards
 
 RepRapFirmware 3.1.1
 ====================
