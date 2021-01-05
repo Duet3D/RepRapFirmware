@@ -28,18 +28,15 @@ New features:
 - CORS headers are only sent in HTTP responses if explicitly configured via M586. The M586 command now accepts a C parameter to specify the allowed cross-origin site.
 - Default thermistor parameters for all builds of RRF3 are now T100000 B4725 C7.06e-8. These match the thermistor used by E3D better than the old defaults.
 - Drivers number of the form 0.# where # represents one or more decimal digits are now supported even on board that don't support CAN
-- Duet 3 Mini 5+ WiFi and Ethernet prototype boards v0.2 are now supported
-- Duet 3 Mini boards are supported (PCB revisions 0.4 and later)
+- Duet 3 Mini 5+ WiFi and Ethernet boards are supported (PCB revisions 0.4 and later)
 - G29 with no S parameter now runs file sys/mesh.g if it exists; otherwise it behaves like G29 S0 as before
 - If a filament error occurs, RepRapFirmware now tries to run file sys/filament-error#.g where # is the extruder number in minimum-width format; or if that file is not found then file sys/filament-error.g. If neither file is found then it falls back to running sys/pause.g.
 - If a filament monitor is configured for an extruder, and subsequently M584 is used to assign that extruder to a different driver, then the filament monitor will be deleted automatically and a warning issued
 - If a tool change is requested but changing tool would cause the Z max limit to be exceeded because of the changed tool Z offset, the tool change is now aborted
 - If the system runs out of memory, it will now reset and the Last Software Reset Reason reported by M122 will be "OutOfMemory"
 - Improved the instructions displayed when M303 heater tuning finishes
-- In the M122 report, unused stack for each task is now reported in dwords, not bytes
 - Increased the number of stack words displayed in the software reset data. The number of wear-levelling slots stored is reduced from 4 to 3.
 - It is no longer necessary to separate multiple G- or M-commands on a single line with a space or tab character
-- Logging to file now has four log levels: 0=off (as previously no logging), 1=warn (all previous logged messages are in this category), 2=info (M117, M291, M292 and G10 fall into this category), 3=debug (everything else that generates output)
 - M111 supports CAN module debug
 - M118 has a new Lnnn parameter to specify at which log level the message will be logged (default: DEBUG). Using L0 will prevent a message being copied to the log file.
 - M122 for expansion and tool boards now reports the bootloader version, if available
@@ -54,13 +51,14 @@ New features:
 - M584 has a new S parameter which specifies whether new axes created in the command are to be treated as linear (S0) or rotational (S1) for the purpose of feedrate calculation. This is separate from the R parameter, which specifies whether new axes are rotational or not. The default is to treat linear axes as linear and rotational axes as rotational. You only need to provide the S parameter if you want to change the way that the feed rate is applied.
 - M591 may now be used to delete a filament monitor using the syntax M591 D# P0 where # is the extruder number
 - M906, M913 and M918 commands now wait for movement to stop, except when they are used in the power fail script
-- M929 now takes values for the Snnn parameter from 0 (no logging) to 3 (maximum logging)
+- M929 now uses the S parameter to specify a logging level: 0=off (as previously no logging), 1=warn (all previous logged messages are in this category), 2=info (M117, M291, M292 and G10 fall into this category), 3=debug (everything else that generates output)
 - New M595 command is provided to allow the movement queue to be lengthened and optionally to pre-allocate DriveMovement objects
 - Numeric literals in GCode meta commands and in expressions enclosed by { } can now be in hex (0x prefix) or binary (0b prefix)
 - Previously there was a minimum reading cutoff at -5C when measuring temperatures using any kind of thermistor. That cutoff is now relaxed when using a low-resistance thermistor, e.g. with resistance 1K or 10K @25C.
-- Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using separate firmware build
+- Support for connecting the Ethernet adapter socket of Duet Ethernet to SBC instead, using a separate firmware build
+- Support for ST7567-based 12864 displays on Duet Maestro and Duet WiFi (thanks to SchmartMaker for writing the ST7567 driver code)
+- Support for ST7920-based 12864 displays on Duet WiFi/Ethernet
 - Supports PanelDue 3.2 better, in particular updating of displayed data while waiting for heating etc.
-- Supports ST7567-based 12864 displays on Duet Maestro and Duet WiFi (thanks to SchmartMaker for writing the ST7567 driver code)
 - The M122 P102 and M122 P103 timing functions are more accurate and give more consistent results than in previous firmware versions
 - The M203 command now supports an optional S1 parameter which changes the units to mm/sec. The default is still mm/min.
 - The amount of free RAM has been increased. This should be sufficient to allow 12864 displays to be supported on Duet WiFi/Ethernet.
@@ -80,7 +78,6 @@ New features:
 - [Duet 2 Ethernet/WiFi/Maestro] Duet 2 builds now permit port names to have a "0." prefix, e.g. "0.e0heat". The "0." prefix is ignored.
 - [Duet 3 + expansion/tool boards] Expansion and tool boards can now have their bootloaders updated via CAN using the command M997 B# S3 where # is the board address. The bootloader file is Duet3Bootloader-SAME5x.bin for the EXP3HC board, Duet3Bootloader-SAMC21.bin for the other expansion boards by Duet3D, and Duet3Bootloader-SAMMYC21.bin for the Sammy-C21 development board. These files are available at https://github.com/Duet3D/Duet3Bootloader/releases.
 - [Duet 3 + expansion/tool boards] Filament monitors are now supported on Duet 3 expansion and tool boards. A filament monitor must be connected to the board that drives the extruder that it monitors.
-- [Duet 3 Mini only] If M918 P1 is used then the pin labelled A0 is now uses as the chip select (CS) pin instead of pin SPI2_CS3
 - [Duet 3 expansion and tool boards] Added M122 P102, P1005 and P1006 functions
 - [Duet 3 expansion and tool boards] Increased performance, in particular the maximum step rate is higher than before
 - [Duet 3 expansion and tool boards] Software reset data is now stored in NVRAM and reported by M122
@@ -93,8 +90,6 @@ New features:
 - [Duet Maestro and Duet 3] Added M308 S# H999 for open-circuit thermistor input calibration, and M308 S# L999 for short-circuit calibration. The calibration values are stored in non-volatile memory. See https://duet3d.dozuki.com/Wiki/Calibrating_thermistor_and_PT1000_readings.
 - [Duet Maestro] M308 L and H parameters are now supported.
 - [Duet+PanelDue] Status messages are sent to an attached PanelDue running firmware 3.2 during homing, heating tools etc.
-- [in progress] Support for ST7567-based 12864 displays on Duet Maestro
-- [in progress] Support for ST7567-based 12864 displays on Duet WiFi/Ethernet
 
 Object model changes:
 - Added calibrationFactor to the laser filament monitor object model
@@ -150,45 +145,37 @@ Bug fixes:
 - The M303 heater tuning algorithm and parameters have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M303_Run_heater_tuning.
 - The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":-1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
 - The PWM frequency for heaters was supposed to be limited to 1KHz but this check was no longer being performed
-- The handling of out-of-buffer situations has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
+- The handling of out-of-buffer situations when generating HTP responses has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
 - The output from M207 without parameters was truncated when there were 4 or more tools
 - When a GCode file included very short moves, sometimes the print paused for a time (sometimes a very long time) at that point
 - When doing a simple G30 command the the probe type was BLTouch, the deploy and retract macro files were each run twice
 - When the machine was executing resume.g, the 'resuming' status was not reported in the object model
-- [Duet + SBC] Fixed issues with SBC communications
-- [Duet + SBC] Fixed issues with communication between the Duet and the SBC
-- [Duet + SBC] The file system mutex was not initialised in SBC configurations, however this did not cause any problems under normal conditions
+- [Duet + SBC] Fixed several issues with communication between the Duet and the SBC
 - [Duet 2 or 3 with attached SBC only] The height map parameters passed by the SBC were not range-checked
-- [Duet 3 + SBC + tool/expansion boards] It was not possible to update tool or expansion board firmware when a SBC was connected
 - [Duet 3 + SBC] When file daemon.g was requested, spurious warning messages could be displayed
 - [Duet 3 + expansion/tool boards] The idle timeout was not always applied to remote drives, in particular to extruder drives
-- [Duet 3 MB6HC + expansion/tool boards] Sometimes the main board would not receive status messages form expansion and tool boards after power up unless it was reset by M999 or emergency stop
+- [Duet 3 MB6HC + expansion/tool boards] Sometimes the main board would not receive status messages from expansion and tool boards after power up unless it was reset by M999 or emergency stop
 - [Duet 3 MB6HC] A watchdog timeout didn't save any software reset data
 - [Duet 3 MB6HC] Fixed an issue that very occasionally caused a MemoryProtectionFault from the Ethernet task
 - [Duet 3 MB6HC] The second aux port using the IO_1 connector did not work
-- [Duet 3 MBHC] Significant performance improvements, for example the maximum step rate is greatly increased
-- [Duet 3 Mini] Added data cache hit count to M122 report
-- [Duet 3 Mini] Stall homing is now supported
-- [Duet 3 expansion and tool boards] Filament monitors connected to expansion/tool boards generated excessive CAN traffic
 - [Duet 3 expansion and tool boards] Thermostatic fans connected to expansion/tool boards would occasionally blip spuriously
-- [Duet 3 expansion/tool boards] CAN diagnostics incorrectly reported a large number of messages lost
-- [Duet 3 expansion/tool boards] If a filament monitor was configured, the expansion/tool board sent a continuous stream of status messages to the main board after the first change in filament monitor status (e.g. when the first data packet was received from a Duet3D laser or magnetic filament monitor). This had a detrimental effect on print quality.
 - [Duet 3 with attached SBC] When an array parameter (e.g. M92 E value) had more than one element but less than the maximum number, the last element was replicated to fill the array. This was inconsistent with non-SBC behaviour, which only pads the array when a single element is provided.
-- [Duet 3] CAN diagnostics incorrectly reported most transmissions as having timed out
 - [Duet 3] DHCP requests were being made made much too often when the DHCP lease time was long e.g. 1 hour or more
 - [Duet 3] Fixed a bug that caused strange behaviour during homing in some configurations when axis motors were connected to expansion boards
 - [Duet 3] M915 with just P and/or axis parameters did not report the coolStep threshold (T parameter) correctly
-- [Duet 3] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
 - [Duet 3] When using a LinearAnalog sensor, the readings returned were too high above the minimum reading by a factor of 4
-- [Duet+SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
-- [Duet+SBC] When nested macros were used, commands were sometimes executed out-of-order
-- [Duet3 Mini + CAN, also EXP3HC] Fixed missing cache invalidate after receiving a CAN message
+- [Duet 3 Mini + CAN, also EXP3HC] Fixed missing cache invalidate after receiving a CAN message
+- [Duet 3 + SBC] When attached to a SBC, M29 commands received locally are now sent to the SBC for processing
+- [Duet + SBC] A buffer overflow might occur in the SBC interface code under conditions of heavy traffic
+- [Duet + SBC] When nested macros were used, commands were sometimes executed out-of-order
 - [LPC/STM port, might affect Duets in rare situations] If hiccups occurred frequently and there was other activity in the system causing frequent high-priority interrupts, a watchdog timeout could occur
 
-Other improvements:
+Other improvements and changes:
 - Calls to debugPrintf use less stack than before
 - Efficiency improvements to TMC2208/2209/2224 drivers for both main and tool boards
 - Substantial performance improvements and much higher maximum step rates on Duet 3 MB6HC, EXP3HC and TOOL1LC boards
+- In the M122 report, unused stack for each task is now reported in dwords, not bytes
+- [Duet 3] CAN diagnostics have been improved
 
 RepRapFirmware 3.1.1
 ====================
