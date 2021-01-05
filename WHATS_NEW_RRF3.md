@@ -9,6 +9,7 @@ Upgrade notes (see also Object Model Changes if you use conditional GCode):
 - In GCode commands, numeric parameters of the form "0xdddd" where dddd are hex digits are no longer supported. Use {0xdddd} instead.
 - It is no longer permitted to create a filament monitor using M591 and subsequently to use M584 to change the driver that the extruder is mapped to
 - The IAP files for this release have changed. After installing 3.2, the new IAP file will be needed next time you upgrade or downgrade the firmware. The new IAP files all have 'iap32' in the filename where it used to be 'iap', therefore they can coexist in /sys with the old IAP files.
+- The M303 heater tuning algorithm and parameters have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M303_Run_heater_tuning.
 - The M307 heater model parameters have changed, however existing M307 commands will continue to work. See https://duet3d.dozuki.com/Wiki/Gcode?
 - When new axes are created using M584, if no R parameter is specified then the default for axes ABCD is now rotational. Use the R0 parameter if you want them to be linear.
 - [DWC] If you are running DWC in a development environment (e.g. via 'npm run serve'), use M586 C"*" or similar to permit cross-origin HTTP access or similar to permit cross-origin HTTP access
@@ -142,7 +143,6 @@ Bug fixes:
 - PanelDue was not updated while the firmware was waiting for a heating or delay command to complete
 - Some types of underrun in the movement queue were not reported
 - The Error Status word was incorrectly prefixed by 0x02 in beta1 instead of just 0x
-- The M303 heater tuning algorithm and parameters have changed. See https://duet3d.dozuki.com/Wiki/Gcode?revisionid=HEAD#Section_M303_Run_heater_tuning.
 - The M409 response didn't end in newline and was invalid JSON if RRF ran out of output buffers. Now RRF returns {"err":-1} if it runs out of buffers, and the response is always terminated by newline to help clients recover from errors.
 - The PWM frequency for heaters was supposed to be limited to 1KHz but this check was no longer being performed
 - The handling of out-of-buffer situations when generating HTP responses has been improved. Where a JSON response was expected, RRF will generally now return {"err":-1} if there was insufficient buffer space to satisfy the request.
