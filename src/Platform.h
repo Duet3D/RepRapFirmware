@@ -185,6 +185,7 @@ enum class DiagnosticTestType : unsigned int
 	PrintObjectSizes = 105,			// print the sizes of various objects
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
+	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 
 #ifdef __LPC17xx__
 	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board

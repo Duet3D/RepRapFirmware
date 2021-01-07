@@ -229,7 +229,11 @@ constexpr size_t StringLength256 = 256;
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
 constexpr size_t FormatStringLength = StringLength256;
+#ifdef DUET3_ATE
+constexpr size_t GCodeReplyLength = StringLength500;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer (ATE codes can generate long replies)
+#else
 constexpr size_t GCodeReplyLength = StringLength256;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
+#endif
 constexpr size_t MachineNameLength = StringLength50;
 constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;

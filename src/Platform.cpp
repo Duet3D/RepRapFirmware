@@ -2329,6 +2329,27 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		}
 		break;
 
+	case (unsigned int)DiagnosticTestType::TimeGetTimerTicks:
+		{
+			unsigned int i = 100;
+			cpu_irq_disable();
+			asm volatile("":::"memory");
+			uint32_t now1 = SysTick->VAL;
+			do
+			{
+				--i;
+				(void)StepTimer::GetTimerTicks();
+			} while (i != 0);
+			uint32_t now2 = SysTick->VAL;
+			asm volatile("":::"memory");
+			cpu_irq_enable();
+			now1 &= 0x00FFFFFF;
+			now2 &= 0x00FFFFFF;
+			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+			reply.printf("Reading step timer 100 times took %.2fus", (double)((1'000'000.0f * (float)tim1)/(float)SystemCoreClock));
+		}
+		break;
+
 #ifdef DUET_NG
 	case (unsigned int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());
@@ -3435,10 +3456,23 @@ void Platform::Message(MessageType type, const char *message) noexcept
 	}
 	else
 	{
-		String<FormatStringLength> formatString;
-		formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
-		formatString.cat(message);
-		RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
+#ifdef DUET3_ATE
+		// FormatStringLength is too short for some ATE replies
+		OutputBuffer *buf;
+		if (OutputBuffer::Allocate(buf))
+		{
+			buf->copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
+			buf->cat(message);
+			Message(type, buf);
+		}
+		else
+#endif
+		{
+			String<FormatStringLength> formatString;
+			formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
+			formatString.cat(message);
+			RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
+		}
 	}
 }
 

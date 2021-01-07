@@ -141,7 +141,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 		}
 		UpdateBoardState(src, BoardState::running);
 	}
-	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanId::MasterAddress, src);
+	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanInterface::GetCanAddress(), src);
 	CanInterface::SendResponseNoFree(buf);
 }
 
@@ -166,7 +166,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	// Ask the board for its type and check we have the firmware file for it
 	CanMessageBuffer * const buf1 = CanInterface::AllocateBuffer(&gb);
 	CanRequestId rid1 = CanInterface::AllocateRequestId(boardAddress);
-	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanId::MasterAddress, (CanAddress)boardAddress);
+	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanInterface::GetCanAddress(), (CanAddress)boardAddress);
 
 	msg1->type = (moduleNumber == (unsigned int)FirmwareModule::bootloader) ? CanMessageReturnInfo::typeBootloaderName : CanMessageReturnInfo::typeBoardName;
 	{
@@ -201,7 +201,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 
 	CanMessageBuffer * const buf2 = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid2 = CanInterface::AllocateRequestId(boardAddress);
-	auto msg2 = buf2->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid2, CanId::MasterAddress, (CanAddress)boardAddress);
+	auto msg2 = buf2->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid2, CanInterface::GetCanAddress(), (CanAddress)boardAddress);
 	msg2->boardId = (uint8_t)boardAddress;
 	msg2->invertedBoardId = (uint8_t)~boardAddress;
 	msg2->module = moduleNumber;
