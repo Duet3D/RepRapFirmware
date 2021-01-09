@@ -573,43 +573,77 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 	switch (seenParameter->type)
 	{
 	case DataType::Int:
-		arr[0] = seenParameter->intValue;
+		arr[0] = (T)seenParameter->intValue;
 		lastIndex = 0;
 		break;
+
 	case DataType::UInt:
 	case DataType::DriverId:
-		arr[0] = seenParameter->uintValue;
+		arr[0] = (T)seenParameter->uintValue;
 		lastIndex = 0;
 		break;
+
 	case DataType::Float:
-		arr[0] = seenParameter->floatValue;
+		arr[0] = (T)seenParameter->floatValue;
 		lastIndex = 0;
 		break;
+
 	case DataType::IntArray:
 		CheckArrayLength(length);
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
-			arr[i] = reinterpret_cast<const int32_t*>(seenParameterValue)[i];
+			arr[i] = (T)reinterpret_cast<const int32_t*>(seenParameterValue)[i];
 		}
 		lastIndex = seenParameter->intValue - 1;
 		break;
+
 	case DataType::DriverIdArray:
 	case DataType::UIntArray:
 		CheckArrayLength(length);
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
-			arr[i] = reinterpret_cast<const uint32_t*>(seenParameterValue)[i];
+			arr[i] = (T)reinterpret_cast<const uint32_t*>(seenParameterValue)[i];
 		}
 		lastIndex = seenParameter->intValue - 1;
 		break;
+
 	case DataType::FloatArray:
 		CheckArrayLength(length);
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
-			arr[i] = reinterpret_cast<const float*>(seenParameterValue)[i];
+			arr[i] = (T)reinterpret_cast<const float*>(seenParameterValue)[i];
 		}
 		lastIndex = seenParameter->intValue - 1;
 		break;
+
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			const ExpressionValue val = parser.Parse();
+			switch ((TypeCode)val.type)
+			{
+			case TypeCode::Int32:
+				arr[0] = (T)val.iVal;
+				lastIndex = 0;
+				break;
+
+			case TypeCode::Float:
+				arr[0] = (T)val.fVal;
+				lastIndex = 0;
+				break;
+
+			case TypeCode::Uint32:
+				arr[0] = (T)val.uVal;
+				lastIndex = 0;
+				break;
+
+			default:
+				throw ConstructParseException("invalid expression type");
+			}
+			parser.CheckForExtraCharacters();
+		}
+		break;
+
 	default:
 		length = 0;
 		return;
