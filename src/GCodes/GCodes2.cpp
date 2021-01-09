@@ -1594,7 +1594,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.catf(" + %s", additionalExpansionName);
 				}
 #endif
-				reply.catf(" FIRMWARE_DATE: %s", DATE);
+				reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
 			}
 			break;
 
