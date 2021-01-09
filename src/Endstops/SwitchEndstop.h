@@ -19,7 +19,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<SwitchEndstop>(p); }
 	~SwitchEndstop() noexcept override;
 
-	SwitchEndstop(uint8_t axis, EndStopPosition pos) noexcept;
+	SwitchEndstop(uint8_t p_axis, EndStopPosition pos) noexcept;
 
 	EndStopType GetEndstopType() const noexcept override;
 	EndStopHit Stopped() const noexcept override;

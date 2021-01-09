@@ -44,7 +44,10 @@
 #ifndef CC_H_INCLUDED
 #define CC_H_INCLUDED
 
+#if 0	// DC this pulls in declarations that we don't want, e.g. snprintf
 #include <stdio.h>
+#endif
+
 #include <stdint.h>
 
 #if 0	// chrishamm - already defined

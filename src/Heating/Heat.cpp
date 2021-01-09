@@ -935,24 +935,28 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 
 #if SUPPORT_CAN_EXPANSION
 	// Set boardAddress to the board number that the port is on, or NoAddress if the port was not given
-	CanAddress boardAddress;
-	String<StringLength20> portName;
-	if (gb.Seen('P'))
-	{
-		gb.GetReducedString(portName.GetRef());
-		boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
-	}
-	else
-	{
-		boardAddress = CanId::NoAddress;
-	}
+	CanAddress boardAddress = CanId::NoAddress;
 #endif
 
-	if (portName.EqualsIgnoreCase(NoPinName))					// if deleting this sensor
+	if (gb.Seen('P'))
 	{
-		WriteLocker lock(sensorsLock);
-		DeleteSensor(sensorNum);
-		return GCodeResult::ok;
+		String<StringLength20> portName;
+		gb.GetReducedString(portName.GetRef());
+#if SUPPORT_CAN_EXPANSION
+		boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
+#else
+		if (!IoPort::RemoveBoardAddress(portName.GetRef()))
+		{
+			reply.lcat("Board address of port must be 0");
+			return GCodeResult::error;
+		}
+#endif
+		if (portName.EqualsIgnoreCase(NoPinName))					// if deleting this sensor
+		{
+			WriteLocker lock(sensorsLock);
+			DeleteSensor(sensorNum);
+			return GCodeResult::ok;
+		}
 	}
 
 	if (gb.Seen('Y'))

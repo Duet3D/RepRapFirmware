@@ -8,7 +8,6 @@
 #ifndef SRC_NETWORKING_NETWORKDEFS_H_
 #define SRC_NETWORKING_NETWORKDEFS_H_
 
-#include <RepRapFirmware.h>
 #include <General/IPAddress.h>
 
 class NetworkBuffer;

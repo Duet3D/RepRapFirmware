@@ -8,8 +8,8 @@
 #ifndef SRC_NETWORK_NETWORK_H_
 #define SRC_NETWORK_NETWORK_H_
 
-#include "NetworkDefs.h"
 #include <RepRapFirmware.h>
+#include "NetworkDefs.h"
 #include <MessageType.h>
 #include <GCodes/GCodeResult.h>
 #include <RTOSIface/RTOSIface.h>

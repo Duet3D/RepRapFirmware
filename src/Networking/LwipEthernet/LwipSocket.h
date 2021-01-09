@@ -8,10 +8,10 @@
 #ifndef SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_
 #define SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_
 
+#include <RepRapFirmware.h>
 #include "LwipEthernetInterface.h"
 #include "Networking/NetworkDefs.h"
 #include "Networking/Socket.h"
-
 
 typedef int8_t err_t;
 struct tcp_pcb;

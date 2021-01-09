@@ -20,7 +20,7 @@
 #endif
 
 // Switch endstop
-SwitchEndstop::SwitchEndstop(uint8_t axis, EndStopPosition pos) noexcept : Endstop(axis, pos), numPortsUsed(0)
+SwitchEndstop::SwitchEndstop(uint8_t p_axis, EndStopPosition pos) noexcept : Endstop(p_axis, pos), numPortsUsed(0)
 {
 	// ports will be initialised automatically by the IoPort default constructor
 }
