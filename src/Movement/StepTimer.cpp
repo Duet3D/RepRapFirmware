@@ -7,7 +7,11 @@
 
 #include "StepTimer.h"
 #include <RTOSIface/RTOSIface.h>
-#include "Move.h"
+#include <CanMessageFormats.h>
+#include <CAN/CanInterface.h>
+#include <RepRap.h>
+#include <Platform.h>
+#include <GCodes/GCodes.h>
 
 #if SAME5x
 # include <CoreIO.h>
@@ -22,6 +26,9 @@ StepTimer * volatile StepTimer::pendingList = nullptr;
 volatile uint32_t StepTimer::localTimeOffset = 0;
 volatile uint32_t StepTimer::whenLastSynced;
 volatile bool StepTimer::synced = false;
+uint32_t StepTimer::peakJitter = 0;
+uint32_t StepTimer::peakTimeStampDelay = 0;
+unsigned int StepTimer::numResyncs = 0;
 #endif
 
 void StepTimer::Init() noexcept
@@ -205,6 +212,66 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	return synced;
 }
 
+/*static*/ void StepTimer::ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept
+{
+
+#if SAME70
+	// On the SAME70 the timestamp counter is the lower 16 bits of the step counter
+	const uint32_t localTimeNow = StepTimer::GetTimerTicks();
+	const uint32_t timeStampDelay = (uint32_t)((localTimeNow - timeStamp) & 0xFFFF);
+#else
+	uint32_t localTimeNow;
+	uint16_t timeStampNow;
+	{
+		AtomicCriticalSectionLocker lock;							// there must be no delay between calling GetTimerTicks and GetTimeStampCounter
+		localTimeNow = StepTimer::GetTimerTicks();
+		timeStampNow = CanInterface::GetTimeStampCounter();
+	}
+
+	// The time stamp counter runs at the CAN normal bit rate, but the step clock runs at 48MHz/64. Calculate the delay to in step clocks.
+# if SAMC21
+	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0x7FFF) * CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 15 bits on SAMC21
+# else
+	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 16 bits on SAME5x
+# endif
+#endif
+
+	// Save the peak timestamp delay for diagnostic purposes
+	if (timeStampDelay > peakTimeStampDelay)
+	{
+		peakTimeStampDelay = timeStampDelay;
+	}
+
+	const uint32_t masterTimeNow = msg.timeSent + timeStampDelay;
+	const uint32_t newOffset = localTimeNow - masterTimeNow;
+	const uint32_t oldOffset = localTimeOffset;
+
+	//TODO convert this to a PLL
+	localTimeOffset = newOffset;
+	const uint32_t diff = abs((int32_t)(newOffset - oldOffset));
+	if (diff > MaxSyncJitter)
+	{
+		synced = false;
+		++numResyncs;
+	}
+	else
+	{
+		synced = true;
+		whenLastSynced = millis();
+		if (diff > peakJitter)
+		{
+			peakJitter = diff;
+		}
+	}
+
+	reprap.GetGCodes().SetRemotePrinting(msg.isPrinting);
+
+	if (msgLen >= 16)												// if real time is included
+	{
+		reprap.GetPlatform().SetDateTime(msg.realTime);
+	}
+}
+
 #endif
 
 // The guts of the ISR
@@ -363,5 +430,34 @@ void StepTimer::CancelCallback() noexcept
 	CancelCallbackFromIsr();
 	RestoreBasePriority(baseprio);
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Remote diagnostics
+/*static*/ void StepTimer::Diagnostics(const StringRef& reply) noexcept
+{
+	reply.lcatf("Peak sync jitter %" PRIu32 ", peak timestamp delay %" PRIu32 ", resyncs %u, ", peakJitter, peakTimeStampDelay, numResyncs);
+	peakJitter = 0;
+	numResyncs = 0;
+	peakTimeStampDelay = 0;
+
+	StepTimer *pst = pendingList;
+	if (pst == nullptr)
+	{
+		reply.cat("no step interrupt scheduled");
+	}
+	else
+	{
+		reply.catf("next step interrupt due in %" PRIu32 " ticks, %s",
+					pst->whenDue - GetTimerTicks(),
+					((StepTc->INTENSET.reg & TC_INTFLAG_MC0) == 0) ? "disabled" : "enabled");
+		if (StepTc->CC[0].reg != pst->whenDue)
+		{
+			reply.cat(", CC0 mismatch!!");
+		}
+	}
+}
+
+#endif
 
 // End

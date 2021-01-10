@@ -754,6 +754,7 @@ void GCodes::SwitchToExpansionMode() noexcept
 		driver.SetLocal(axis);
 		platform.SetAxisDriversConfig(axis, 1, &driver);
 	}
+	isRemotePrinting = false;
 }
 
 #endif

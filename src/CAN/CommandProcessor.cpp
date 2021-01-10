@@ -282,13 +282,13 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 
 static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
 {
-	static constexpr uint8_t LastDiagnosticsPart = 8;				// the last diagnostics part is typeDiagnosticsPart0 + 8
+	static constexpr uint8_t LastDiagnosticsPart = 9;				// the last diagnostics part is typeDiagnosticsPart0 + 9
 
 	switch (msg.type)
 	{
 	case CanMessageReturnInfo::typeFirmwareVersion:
 	default:
-		reply.printf("%s (%s)", VERSION, DATE);
+		reply.printf("%s (%s%s)", VERSION, DATE, TIME_SUFFIX);
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
@@ -322,7 +322,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0:
 		extra = LastDiagnosticsPart;
-		reply.lcatf("%s (%s)", VERSION, DATE);
+		reply.lcatf("%s (%s%s)", VERSION, DATE, TIME_SUFFIX);
 		break;
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0 + 1:
@@ -351,19 +351,24 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		extra = LastDiagnosticsPart;
 		{
 #if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
-			reply.catf("VIN: %.1fV, V12: %.1fV\n", (double)reprap.GetPlatform().GetCurrentPowerVoltage(), (double)reprap.GetPlatform().GetCurrentV12Voltage());
+			reply.catf("VIN: %.1fV, V12: %.1fV", (double)reprap.GetPlatform().GetCurrentPowerVoltage(), (double)reprap.GetPlatform().GetCurrentV12Voltage());
 #elif HAS_VOLTAGE_MONITOR
-			reply.catf("VIN: %.1fV\n", (double)reprap.GetPlatform().GetCurrentPowerVoltage());
+			reply.catf("VIN: %.1fV", (double)reprap.GetPlatform().GetCurrentPowerVoltage());
 #elif HAS_12V_MONITOR
-			reply.catf("V12: %.1fV\n", (double)reprap.GetPlatform().GetCurrentV12Voltage());
+			reply.catf("V12: %.1fn", (double)reprap.GetPlatform().GetCurrentV12Voltage());
 #endif
 #if HAS_CPU_TEMP_SENSOR
 			const MinMaxCurrent temps = reprap.GetPlatform().GetMcuTemperatures();
-			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC\n", (double)temps.min, (double)temps.current, (double)temps.max);
+			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.min, (double)temps.current, (double)temps.max);
 #endif
 		}
 		break;
-	}
+
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 9:
+		extra = LastDiagnosticsPart;
+		StepTimer::Diagnostics(reply);
+		break;
+}
 	return GCodeResult::ok;
 }
 
@@ -387,16 +392,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			switch (id)
 			{
 			case CanMessageType::timeSync:
-				//TODO re-implement this as a PLL and use the CAN time stamps for greater accuracy
-				StepTimer::SetLocalTimeOffset(StepTimer::GetTimerTicks() - buf->msg.sync.timeSent);
-#if 0
-				//TODO implement this when we want to support using a main board as an expansion board
-				reprap.GetPlatform().SetPrinting(buf->msg.sync.isPrinting);
-#endif
-				if (buf->dataLength >= 16)				// if real time is included
-				{
-					reprap.GetPlatform().SetDateTime((time_t)buf->msg.sync.realTime);
-				}
+				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
 				return;							// no reply needed
 
 			case CanMessageType::movementLinear:

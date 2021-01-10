@@ -255,6 +255,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	void SwitchToExpansionMode() noexcept;
+	void SetRemotePrinting(bool isPrinting) noexcept { isRemotePrinting = isPrinting; }
 #endif
 
 	static constexpr const char *AllowedAxisLetters = "XYZUVWABCDabcdefghijkl";
@@ -676,6 +677,10 @@ private:
 	uint32_t timingBytesRequested;				// how many bytes we were asked to write
 	uint32_t timingBytesWritten;				// how many timing bytes we have written so far
 	uint32_t timingStartMillis;
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+	bool isRemotePrinting;
 #endif
 
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue

@@ -10,6 +10,8 @@
 
 #include "RepRapFirmware.h"
 
+class CanMessageTimeSync;
+
 // Class to implement a software timer with a few microseconds resolution
 // Important! In systems that use 16-bit timers, callbacks may take place at multiples of 65536 ticks before they are actually due.
 // In order to achieve the maximum step rate possible, the timer code doesn't check for this, because the step generation code checks which drivers are due steps anyway.
@@ -74,12 +76,13 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	static uint32_t GetLocalTimeOffset() noexcept { return localTimeOffset; }
-	static void SetLocalTimeOffset(uint32_t offset) noexcept { localTimeOffset = offset; synced = true; whenLastSynced = millis(); }	//TODO change this to a PLL
+	static void ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept;
 	static uint32_t ConvertToLocalTime(uint32_t masterTime) noexcept { return masterTime + localTimeOffset; }
 	static uint32_t ConvertToMasterTime(uint32_t localTime) noexcept { return localTime - localTimeOffset; }
 	static uint32_t GetMasterTime() noexcept { return ConvertToMasterTime(GetTimerTicks()); }
 
 	static bool IsSynced() noexcept;
+	static void Diagnostics(const StringRef& reply) noexcept;
 
 	static constexpr uint32_t MinSyncInterval = 1000;							// maximum interval in milliseconds between sync messages for us to remain synced
 #endif
@@ -99,6 +102,11 @@ private:
 	static volatile uint32_t localTimeOffset;									// local time minus master time
 	static volatile uint32_t whenLastSynced;									// the millis tick count when we last synced
 	static volatile bool synced;
+	static uint32_t peakJitter;
+	static uint32_t peakTimeStampDelay;
+	static unsigned int numResyncs;
+
+	static constexpr uint32_t MaxSyncJitter = StepClockRate/100;				// 10ms
 #endif
 };
 

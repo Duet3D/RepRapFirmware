@@ -1078,9 +1078,17 @@ void GCodes::CheckForDeferredPause(GCodeBuffer& gb) noexcept
 }
 
 // Return true if we are printing from SD card and not pausing, paused or resuming
+// Called by the filament monitor code to see whether we need to activate the filament monitors, and from other places
 // TODO make this independent of PrintMonitor
 bool GCodes::IsReallyPrinting() const noexcept
 {
+#if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode())
+	{
+		return isRemotePrinting;
+	}
+#endif
+
 	return reprap.GetPrintMonitor().IsPrinting() && pauseState == PauseState::notPaused;
 }
 

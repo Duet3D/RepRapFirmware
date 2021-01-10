@@ -493,6 +493,20 @@ void CanInterface::CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THRO
 	}
 }
 
+#if !SAME70
+
+uint16_t CanInterface::GetTimeStampCounter() noexcept
+{
+	return can0dev->ReadTimeStampCounter();
+}
+
+uint16_t CanInterface::GetTimeStampPeriod() noexcept
+{
+	return can0dev->GetTimeStampPeriod();
+}
+
+#endif
+
 //TODO can we get rid of the CanSender task if we send movement messages via the Tx FIFO?
 // This task picks up motion messages and sends them
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
