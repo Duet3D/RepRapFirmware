@@ -61,6 +61,10 @@ static uint32_t lastTimeSent = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
+#if !SAME70
+static uint16_t lastTimeSyncTxPreparedStamp;
+#endif
+
 static CanAddress myAddress =
 #ifdef DUET3_ATE
 						CanId::ATEMasterAddress;
@@ -100,6 +104,17 @@ static_assert(Can0Config.IsValid());
 static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
 
 static CanDevice *can0dev = nullptr;
+
+// Time sync and transmit message markers
+enum TxMarkerType : uint8_t
+{
+	MarkerNone = 0,					// default marker, we don't get callbacks for Tx messages with this marker
+	MarkerTimeSync					// marker for time sync messages
+};
+
+static uint32_t peakTimeSyncTxDelay = 0;
+static volatile uint16_t timeSyncTxTimeStamp;
+static volatile bool gotTimeSyncTxTimeStamp = false;
 
 #if SAME70
 
@@ -377,6 +392,20 @@ static void ReInit() noexcept
 
 #endif
 
+#if USE_NEW_CAN_DRIVER
+
+// This is the function called by the transmit event handler when the message marker is nonzero
+void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
+{
+	if (marker == MarkerTimeSync)
+	{
+		timeSyncTxTimeStamp = timeStamp;
+		gotTimeSyncTxTimeStamp = true;
+	}
+}
+
+#endif
+
 void CanInterface::Init() noexcept
 {
 	CanMessageBuffer::Init(NumCanBuffers);
@@ -402,7 +431,7 @@ void CanInterface::Init() noexcept
 #if USE_NEW_CAN_DRIVER
 	CanTiming timing;
 	timing.SetDefaults();
-	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing);
+	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, TxCallback);
 	InitReceiveFilters();
 	can0dev->Enable();
 #else
@@ -579,6 +608,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		{
 			CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
 #if USE_NEW_CAN_DRIVER
+			buf.marker = MarkerTimeSync;
 			can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);
 #else
 			if (WaitForTxBufferFree(&mcan_instance, TxBufferIndexTimeSync, MaxTimeSyncSendWait))	// make sure we can send immediately
@@ -587,9 +617,37 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			}
 #endif
 			msg->lastTimeSent = lastTimeSent;
-			msg->lastTimeAcknowledgeDelay = 0;														// TODO set lastTimeAcknowledgeDelay correctly
+#if USE_NEW_CAN_DRIVER
+			if (gotTimeSyncTxTimeStamp)
+			{
+# if SAME70
+				const uint32_t timeSyncTxDelay = ((timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
+# else
+				const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
+# endif
+				if (timeSyncTxDelay > peakTimeSyncTxDelay)
+				{
+					peakTimeSyncTxDelay = timeSyncTxDelay;
+				}
+				msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
+				gotTimeSyncTxTimeStamp = false;
+			}
+			else
+#endif
+			{
+				msg->lastTimeAcknowledgeDelay = 0;													// TODO set lastTimeAcknowledgeDelay correctly
+			}
 			msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
-			msg->timeSent = lastTimeSent = StepTimer::GetTimerTicks();
+#if SAME70
+			lastTimeSent = StepTimer::GetTimerTicks();
+#else
+			{
+				AtomicCriticalSectionLocker lock;
+				lastTimeSent = StepTimer::GetTimerTicks();
+				lastTimeSyncTxPreparedStamp = CanInterface::GetTimeStampCounter();
+			}
+#endif
+			msg->timeSent = lastTimeSent;
 			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();							// TODO save CAN bandwidth by sending this just once per second
 #if USE_NEW_CAN_DRIVER
 			can0dev->SendMessage(TxBufferIndexTimeSync, 0, &buf);
@@ -1213,10 +1271,21 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount);
 #endif
 
-	reprap.GetPlatform().MessageF(mtype, "=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u, free buffers %u\n",
-									messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType, CanMessageBuffer::FreeBuffers());
+	reprap.GetPlatform().MessageF(mtype,
+				"=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
+#if USE_NEW_CAN_DRIVER
+				", peak Tx sync delay %" PRIu32
+#endif
+				", free buffers %u\n",
+					messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
+#if USE_NEW_CAN_DRIVER
+					peakTimeSyncTxDelay,
+#endif
+					CanMessageBuffer::FreeBuffers());
 
-#if !USE_NEW_CAN_DRIVER
+#if USE_NEW_CAN_DRIVER
+	peakTimeSyncTxDelay = 0;
+#else
 	messagesQueuedForSending = messagesReceived = txTimeouts = messagesLost = busOffCount = 0;
 #endif
 
