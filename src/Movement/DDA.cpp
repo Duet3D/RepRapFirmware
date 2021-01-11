@@ -659,7 +659,8 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 	activeDMs = nullptr;
 
-	for (size_t drive = 0; drive < min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave); drive++)
+	const size_t numDrivers = min<size_t>(msg.numDrivers, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
+	for (size_t drive = 0; drive < numDrivers; drive++)
 	{
 		endPoint[drive] = prev->endPoint[drive];		// the steps for this move will be added later
 		const int32_t delta = msg.perDrive[drive].steps;

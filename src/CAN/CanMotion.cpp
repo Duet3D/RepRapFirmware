@@ -84,7 +84,7 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 			move->initialSpeedFraction = params.initialSpeedFraction;
 			move->finalSpeedFraction = params.finalSpeedFraction;
 			move->pressureAdvanceDrives = 0;
-			move->numDrivers = MaxLinearDriversPerCanSlave;
+			move->numDrivers = canDriver.localDriver + 1;
 			move->zero = 0;
 
 			// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
@@ -92,6 +92,10 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 			{
 				move->perDrive[drive].Init();
 			}
+		}
+		else if (canDriver.localDriver >= buf->msg.moveLinear.numDrivers)
+		{
+			buf->msg.moveLinear.numDrivers = canDriver.localDriver + 1;
 		}
 
 		buf->msg.moveLinear.perDrive[canDriver.localDriver].steps = steps;
@@ -115,7 +119,8 @@ void CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 		uint8_t& seq = nextSeq[buf->id.Dst()];
 		buf->msg.moveLinear.seq = seq;
 		seq = (seq + 1) & 7;
-		CanInterface::SendMotion(buf);				// queues the buffer for sending and frees it when done
+		buf->dataLength = buf->msg.moveLinear.GetActualDataLength();
+		CanInterface::SendMotion(buf);					// queues the buffer for sending and frees it when done
 	}
 }
 
