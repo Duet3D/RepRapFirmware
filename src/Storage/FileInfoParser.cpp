@@ -773,6 +773,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 		" estimated printing time (normal mode)",	// slic3r PE later versions	"; estimated printing time (normal mode) = 1h 5m 24s"
 		" estimated printing time",					// slic3r PE older versions	"; estimated printing time = 1h 5m 24s"
 		";TIME",									// Cura						";TIME:38846"
+		";Print Time",									// IdeaMaker						";Print Time: 38846"
 		" Build time",								// S3D						";   Build time: 0 hours 42 minutes"
 		" Build Time"								// KISSlicer				"; Estimated Build Time:   332.83 minutes"
 													// also KISSSlicer 2 alpha	"; Calculated-during-export Build Time: 130.62 minutes"
