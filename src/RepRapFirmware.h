@@ -62,7 +62,7 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # define __nocache		// nothing
 #endif
 
-#if SAME5x
+#if SAME5x || SAME70
 
 # include <CoreIO.h>
 # include <Devices.h>

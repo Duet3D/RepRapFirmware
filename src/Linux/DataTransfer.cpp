@@ -51,6 +51,10 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 # include <DmacManager.h>
 #endif
 
+#if SAME70
+# include <spi/spi.h>
+#endif
+
 #include "RepRapFirmware.h"
 #include "GCodes/GCodeMachineState.h"
 #include "Movement/Move.h"

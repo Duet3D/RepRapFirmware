@@ -29,6 +29,7 @@ static inline const Move& GetMoveInstance() noexcept { return *moveInstance; }
 
 #elif SAME70
 
+#include <pmc/pmc.h>
 #include <sam/drivers/xdmac/xdmac.h>
 
 # define TMC51xx_USES_SERCOM	0
@@ -1112,7 +1113,7 @@ static inline void EnableEndOfTransferInterrupt() noexcept
 }
 
 // DMA complete callback
-void RxDmaCompleteCallback(CallbackParameter param) noexcept
+void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) noexcept
 {
 #if SAME70
 	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);

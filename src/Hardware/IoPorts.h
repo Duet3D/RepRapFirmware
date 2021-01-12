@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SAME5x
+#if SAME5x || SAME70
 # include <Interrupts.h>
 # include <AnalogIn.h>
 #endif
