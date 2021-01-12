@@ -23,12 +23,16 @@
 StepTimer * volatile StepTimer::pendingList = nullptr;
 
 #if SUPPORT_REMOTE_COMMANDS
+
 volatile uint32_t StepTimer::localTimeOffset = 0;
 volatile uint32_t StepTimer::whenLastSynced;
-volatile bool StepTimer::synced = false;
+uint32_t StepTimer::prevMasterTime;												// the previous master time received
+uint32_t StepTimer::prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
 uint32_t StepTimer::peakJitter = 0;
-uint32_t StepTimer::peakTimeStampDelay = 0;
+uint32_t StepTimer::peakReceiveDelay = 0;
+volatile unsigned int StepTimer::syncCount = 0;
 unsigned int StepTimer::numResyncs = 0;
+
 #endif
 
 void StepTimer::Init() noexcept
@@ -205,11 +209,11 @@ void StepTimer::DisableTimerInterrupt() noexcept
 
 /*static*/ bool StepTimer::IsSynced() noexcept
 {
-	if (synced && millis() - whenLastSynced > MinSyncInterval)
+	if (syncCount == MaxSyncCount && millis() - whenLastSynced > MinSyncInterval)
 	{
-		synced = false;
+		syncCount = 0;
 	}
-	return synced;
+	return syncCount == MaxSyncCount;
 }
 
 /*static*/ void StepTimer::ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept
@@ -229,46 +233,66 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	}
 
 	// The time stamp counter runs at the CAN normal bit rate, but the step clock runs at 48MHz/64. Calculate the delay to in step clocks.
-# if SAMC21
-	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0x7FFF) * CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 15 bits on SAMC21
-# else
-	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 16 bits on SAME5x
-# endif
+	// Datasheet suggests that on the SAMC21 only 15 bits of timestamp counter are readable, but Microchip confirmed this is a documentation error (case 00625843)
+	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 16 bits
 #endif
 
 	// Save the peak timestamp delay for diagnostic purposes
-	if (timeStampDelay > peakTimeStampDelay)
+	if (timeStampDelay > peakReceiveDelay)
 	{
-		peakTimeStampDelay = timeStampDelay;
+		peakReceiveDelay = timeStampDelay;
 	}
 
-	const uint32_t masterTimeNow = msg.timeSent + timeStampDelay;
-	const uint32_t newOffset = localTimeNow - masterTimeNow;
-	const uint32_t oldOffset = localTimeOffset;
+	const uint32_t oldLocalTime = prevLocalTime;					// save the previous values
+	const uint32_t oldMasterTime = prevMasterTime;
 
-	//TODO convert this to a PLL
-	localTimeOffset = newOffset;
-	const uint32_t diff = abs((int32_t)(newOffset - oldOffset));
-	if (diff > MaxSyncJitter)
+	prevLocalTime = localTimeNow - timeStampDelay;
+	prevMasterTime = msg.timeSent;
+
+	const unsigned int locSyncCount = syncCount;					// capture volatile variable
+	if (locSyncCount == 0)											// we can't sync until we have previous message details
 	{
-		synced = false;
-		++numResyncs;
+		syncCount = 1;
+	}
+	else if (msg.lastTimeSent == oldMasterTime)
+	{
+		// We have the previous message details and now we have the transmit delay for that message
+		const uint32_t correctedMasterTime = oldMasterTime + msg.lastTimeAcknowledgeDelay;
+		const uint32_t newOffset = oldLocalTime - correctedMasterTime;
+
+		//TODO convert this to a PLL
+		const uint32_t oldOffset = localTimeOffset;
+		localTimeOffset = newOffset;
+		const uint32_t diff = abs((int32_t)(newOffset - oldOffset));
+		if (diff > MaxSyncJitter && locSyncCount > 1)
+		{
+			syncCount = 0;
+			++numResyncs;
+		}
+		else
+		{
+			whenLastSynced = millis();
+			if (locSyncCount == MaxSyncCount)
+			{
+				if (diff > peakJitter)
+				{
+					peakJitter = diff;
+				}
+				reprap.GetGCodes().SetRemotePrinting(msg.isPrinting);
+				if (msgLen >= 16)										// if real time is included
+				{
+					reprap.GetPlatform().SetDateTime(msg.realTime);
+				}
+			}
+			else
+			{
+				syncCount = locSyncCount + 1;
+			}
+		}
 	}
 	else
 	{
-		synced = true;
-		whenLastSynced = millis();
-		if (diff > peakJitter)
-		{
-			peakJitter = diff;
-		}
-	}
-
-	reprap.GetGCodes().SetRemotePrinting(msg.isPrinting);
-
-	if (msgLen >= 16)												// if real time is included
-	{
-		reprap.GetPlatform().SetDateTime(msg.realTime);
+		// Looks like we missed a time sync message. Ignore it.
 	}
 }
 
@@ -436,10 +460,10 @@ void StepTimer::CancelCallback() noexcept
 // Remote diagnostics
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply) noexcept
 {
-	reply.lcatf("Peak sync jitter %" PRIu32 ", peak timestamp delay %" PRIu32 ", resyncs %u, ", peakJitter, peakTimeStampDelay, numResyncs);
+	reply.lcatf("Peak sync jitter %" PRIu32 ", peak Rx sync delay %" PRIu32 ", resyncs %u, ", peakJitter, peakReceiveDelay, numResyncs);
 	peakJitter = 0;
 	numResyncs = 0;
-	peakTimeStampDelay = 0;
+	peakReceiveDelay = 0;
 
 	StepTimer *pst = pendingList;
 	if (pst == nullptr)

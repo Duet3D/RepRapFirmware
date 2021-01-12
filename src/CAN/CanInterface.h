@@ -84,8 +84,9 @@ namespace CanInterface
 	CanMessageBuffer *AllocateBuffer(const GCodeBuffer* gb) THROWS(GCodeException);
 	void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS(GCodeException);
 
-#if !SAME70
 	uint16_t GetTimeStampCounter() noexcept;
+
+#if !SAME70
 	uint16_t GetTimeStampPeriod() noexcept;
 #endif
 

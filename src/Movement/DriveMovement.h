@@ -250,6 +250,16 @@ inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live) 
 #if EVEN_STEPS
 			nextStepTime += stepInterval;
 #endif
+#if SAME70
+			// Without any extra delays, the step pulse width is only 83ns. Need to increase that to at least 100ns for TMC5160.
+			// With 8 NOPs it's 118ns, so about 4.5ns per NOP.
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+#endif
 			return true;
 		}
 		return CalcNextStepTimeCartesianFull(dda, live);
@@ -272,6 +282,15 @@ inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live) noex
 			--stepsTillRecalc;			// we are doing double or quad stepping
 #if EVEN_STEPS
 			nextStepTime += stepInterval;
+#endif
+#if SAME70
+			// Without any extra delays, the step pulse width is only 83ns. Need to increase that to at least 100ns for TMC5160.
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
 #endif
 			return true;
 		}

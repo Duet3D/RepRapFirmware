@@ -101,12 +101,15 @@ private:
 #if SUPPORT_REMOTE_COMMANDS
 	static volatile uint32_t localTimeOffset;									// local time minus master time
 	static volatile uint32_t whenLastSynced;									// the millis tick count when we last synced
-	static volatile bool synced;
-	static uint32_t peakJitter;
-	static uint32_t peakTimeStampDelay;
+	static uint32_t prevMasterTime;												// the previous master time received
+	static uint32_t prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
+	static uint32_t peakJitter;													// the maximum correction we made to local time offset while synced
+	static uint32_t peakReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
+	static volatile unsigned int syncCount;										// the number of messages we have received since starting sync
 	static unsigned int numResyncs;
 
 	static constexpr uint32_t MaxSyncJitter = StepClockRate/100;				// 10ms
+	static constexpr unsigned int MaxSyncCount = 10;
 #endif
 };
 
@@ -117,7 +120,7 @@ inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks(
 {
 # if SAME5x
 	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
-	// On the EXP3HC board it isn't enough just to wait for SYNCBUSY.COUNT here
+	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
 	while (StepTc->CTRLBSET.bit.CMD != 0) { }
 	while (StepTc->SYNCBUSY.bit.COUNT) { }
 	return StepTc->COUNT.reg;

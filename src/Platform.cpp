@@ -52,7 +52,7 @@ static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA chan
 #elif SAME5x
 # include <AnalogIn.h>
 # include <DmacManager.h>
-using AnalogIn::AdcBits;
+using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
 #elif defined(__LPC17xx__)
 # include "LPC/BoardConfig.h"
 #else
@@ -89,7 +89,7 @@ using AnalogIn::AdcBits;
 # include "Linux/DataTransfer.h"
 #endif
 
-#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+#if HAS_NETWORKING
 # include "Networking/HttpResponder.h"
 # include "Networking/FtpResponder.h"
 # include "Networking/TelnetResponder.h"
@@ -2164,7 +2164,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		DDA::PrintMoves();
 		break;
 
-	case (unsigned int)DiagnosticTestType::TimeSquareRoot:		// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
+	case (unsigned int)DiagnosticTestType::TimeCalculations:	// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			bool ok1 = true;
 			uint32_t tim1 = 0;
@@ -2197,9 +2197,8 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 					(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
 							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR");
 		}
-		break;
 
-	case (unsigned int)DiagnosticTestType::TimeSinCos:			// Show the sin/cosine calculation time. Caution: may disable interrupt for several tens of microseconds.
+		// We now also time sine and cosine in the same test
 		{
 			uint32_t tim1 = 0;
 			constexpr uint32_t iterations = 100;				// use a value that divides into one million
@@ -2220,7 +2219,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 
 			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			reply.printf("Sine + cosine: float %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
+			reply.lcatf("Sine + cosine: float %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
 		}
 		break;
 
@@ -2235,11 +2234,11 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
 				"DDA %u, DM %u, Tool %u, GCodeBuffer %u, heater %u"
-#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+#if HAS_NETWORKING
 				", HTTP resp %u, FTP resp %u, Telnet resp %u"
 #endif
 				, sizeof(DDA), sizeof(DriveMovement), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater)
-#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+#if HAS_NETWORKING
 				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
 #endif
 			);
@@ -2348,6 +2347,31 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
 			reply.printf("Reading step timer 100 times took %.2fus", (double)((1'000'000.0f * (float)tim1)/(float)SystemCoreClock));
 		}
+
+#if SUPPORT_CAN_EXPANSION
+		// Also check the correspondence between the CAN timestamp timer and the step clock
+		{
+			uint32_t startClocks, endClocks;
+			uint16_t startTimeStamp, endTimeStamp;
+			{
+				AtomicCriticalSectionLocker lock;
+				startClocks = StepTimer::GetTimerTicks();
+				startTimeStamp = CanInterface::GetTimeStampCounter();
+			}
+			delay(2);
+			{
+				AtomicCriticalSectionLocker lock;
+				endClocks = StepTimer::GetTimerTicks();
+				endTimeStamp = CanInterface::GetTimeStampCounter();
+			}
+# if SAME70
+			const uint32_t tsDiff = (endTimeStamp - startTimeStamp) & 0xFFFF;
+# else
+			const uint32_t tsDiff = (((endTimeStamp - startTimeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
+# endif
+			reply.lcatf("Clock diff %" PRIu32 ", ts diff %" PRIu32, endClocks - startClocks, tsDiff);
+		}
+#endif
 		break;
 
 #ifdef DUET_NG

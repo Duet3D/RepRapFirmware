@@ -179,8 +179,8 @@ enum class DiagnosticTestType : unsigned int
 #ifdef DUET_NG
 	PrintExpanderStatus = 101,		// print DueXn expander status
 #endif
-	TimeSquareRoot = 102,			// do a timing test on the square root function
-	TimeSinCos = 103,				// do a timing test on the trig functions
+	TimeCalculations = 102,			// do a timing test on the square root function and sine/cosine
+	unused1 = 103,					// was TimeSinCos
 	TimeSDWrite = 104,				// do a write timing test on the SD card
 	PrintObjectSizes = 105,			// print the sizes of various objects
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects

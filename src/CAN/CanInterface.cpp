@@ -522,12 +522,16 @@ void CanInterface::CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THRO
 	}
 }
 
-#if !SAME70
-
 uint16_t CanInterface::GetTimeStampCounter() noexcept
 {
+#if USE_NEW_CAN_DRIVER
 	return can0dev->ReadTimeStampCounter();
+#else
+	return MCAN_MODULE->MCAN_TSCV;
+#endif
 }
+
+#if !SAME70
 
 uint16_t CanInterface::GetTimeStampPeriod() noexcept
 {
@@ -637,7 +641,10 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			{
 				msg->lastTimeAcknowledgeDelay = 0;													// TODO set lastTimeAcknowledgeDelay correctly
 			}
+
+			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();							// TODO save CAN bandwidth by sending this just once per second
 			msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
+
 #if SAME70
 			lastTimeSent = StepTimer::GetTimerTicks();
 #else
@@ -648,7 +655,6 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			}
 #endif
 			msg->timeSent = lastTimeSent;
-			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();							// TODO save CAN bandwidth by sending this just once per second
 #if USE_NEW_CAN_DRIVER
 			can0dev->SendMessage(TxBufferIndexTimeSync, 0, &buf);
 #else
