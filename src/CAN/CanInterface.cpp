@@ -61,6 +61,17 @@ static uint32_t lastTimeSent = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
+// Time sync and transmit message markers
+enum TxMarkerType : uint8_t
+{
+	MarkerNone = 0,					// default marker, we don't get callbacks for Tx messages with this marker
+	MarkerTimeSync					// marker for time sync messages
+};
+
+static uint32_t peakTimeSyncTxDelay = 0;
+static volatile uint16_t timeSyncTxTimeStamp;
+static volatile bool gotTimeSyncTxTimeStamp = false;
+
 #if !SAME70
 static uint16_t lastTimeSyncTxPreparedStamp;
 #endif
@@ -95,7 +106,7 @@ constexpr CanDevice::Config Can0Config =
 # else
 	.numExtendedFilterElements = 3,
 # endif
-	.txEventFifoSize = 2
+	.txEventFifoSize = 16
 };
 
 static_assert(Can0Config.IsValid());
@@ -104,17 +115,6 @@ static_assert(Can0Config.IsValid());
 static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
 
 static CanDevice *can0dev = nullptr;
-
-// Time sync and transmit message markers
-enum TxMarkerType : uint8_t
-{
-	MarkerNone = 0,					// default marker, we don't get callbacks for Tx messages with this marker
-	MarkerTimeSync					// marker for time sync messages
-};
-
-static uint32_t peakTimeSyncTxDelay = 0;
-static volatile uint16_t timeSyncTxTimeStamp;
-static volatile bool gotTimeSyncTxTimeStamp = false;
 
 #if SAME70
 
@@ -128,7 +128,7 @@ constexpr CanDevice::Config Can1Config =
 	.rxFifo1Size = 16,
 	.numShortFilterElements = 0,
 	.numExtendedFilterElements = 3,
-	.txEventFifoSize = 2
+	.txEventFifoSize = 16
 };
 
 static_assert(Can1Config.IsValid());
@@ -197,14 +197,15 @@ constexpr IRQn MCanIRQn = MCAN1_INT0_IRQn;
 static mcan_module mcan_instance;
 
 // Send extended CAN message in FD mode
-static status_code mcan_fd_send_ext_message(mcan_module *const module_inst, uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, uint32_t maxWait, bool bitRateSwitch) noexcept
+static status_code mcan_fd_send_ext_message(mcan_module *const module_inst, uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, uint32_t maxWait,
+	bool bitRateSwitch, uint8_t marker) noexcept
 {
 	if (WaitForTxBufferFree(module_inst, whichTxBuffer, maxWait))
 	{
 		++txTimeouts;
 	}
 	++messagesQueuedForSending;
-	return mcan_fd_send_ext_message_no_wait(module_inst, id_value, data, dataLength, whichTxBuffer, bitRateSwitch);
+	return mcan_fd_send_ext_message_no_wait(module_inst, id_value, data, dataLength, whichTxBuffer, bitRateSwitch, marker);
 }
 
 static void configure_mcan() noexcept
@@ -392,8 +393,6 @@ static void ReInit() noexcept
 
 #endif
 
-#if USE_NEW_CAN_DRIVER
-
 // This is the function called by the transmit event handler when the message marker is nonzero
 void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 {
@@ -403,8 +402,6 @@ void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 		gotTimeSyncTxTimeStamp = true;
 	}
 }
-
-#endif
 
 void CanInterface::Init() noexcept
 {
@@ -540,6 +537,33 @@ uint16_t CanInterface::GetTimeStampPeriod() noexcept
 
 #endif
 
+#if !USE_NEW_CAN_DRIVER
+
+typedef void (*TxEventCallbackFunction)(uint8_t marker, CanId id, uint16_t timeStamp) noexcept;
+
+// Drain the Tx event fifo. Can use this instead of supplying a Tx event callback in Init() if we don't expect many events.
+static void PollTxEventFifo(TxEventCallbackFunction p_txCallback) noexcept
+{
+	uint32_t txefs;
+	while (((txefs = MCAN_MODULE->MCAN_TXEFS) & MCAN_TXEFS_EFFL_Msk) != 0)
+	{
+		const uint32_t index = (txefs & MCAN_TXEFS_EFGI_Msk) >> MCAN_TXEFS_EFGI_Pos;
+		mcan_tx_event_element elem;
+		if (mcan_get_tx_event_fifo_element(&mcan_instance, &elem, index) == STATUS_OK)
+		{
+			if (elem.E1.bit.ET == 1)
+			{
+				CanId id;
+				id.SetReceivedId(elem.E0.bit.ID);
+				p_txCallback(elem.E1.bit.MM, id, elem.E1.bit.TXTS);
+			}
+		}
+		MCAN_MODULE->MCAN_TXEFA = index;
+	}
+}
+
+#endif
+
 //TODO can we get rid of the CanSender task if we send movement messages via the Tx FIFO?
 // This task picks up motion messages and sends them
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
@@ -555,7 +579,8 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 #if USE_NEW_CAN_DRIVER
 				can0dev->SendMessage(TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
 #else
-				mcan_fd_send_ext_message(&mcan_instance, urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength, TxBufferIndexUrgent, MaxUrgentSendWait, false);
+				mcan_fd_send_ext_message(&mcan_instance, urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength,
+											TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage->useBrs, urgentMessage->marker);
 #endif
 			}
 			else if (pendingBuffers != nullptr)
@@ -574,7 +599,8 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 #if USE_NEW_CAN_DRIVER
 				can0dev->SendMessage(TxBufferIndexMotion, MaxMotionSendWait, buf);
 #else
-				mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion, MaxMotionSendWait, false);
+				mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion,
+											MaxMotionSendWait, buf->useBrs, buf->marker);
 #endif
 
 #ifdef CAN_DEBUG
@@ -611,8 +637,8 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #endif
 		{
 			CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
-#if USE_NEW_CAN_DRIVER
 			buf.marker = MarkerTimeSync;
+#if USE_NEW_CAN_DRIVER
 			can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);
 #else
 			if (WaitForTxBufferFree(&mcan_instance, TxBufferIndexTimeSync, MaxTimeSyncSendWait))	// make sure we can send immediately
@@ -621,11 +647,14 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			}
 #endif
 			msg->lastTimeSent = lastTimeSent;
-#if USE_NEW_CAN_DRIVER
+
+#if !USE_NEW_CAN_DRIVER
+			PollTxEventFifo(TxCallback);
+#endif
 			if (gotTimeSyncTxTimeStamp)
 			{
 # if SAME70
-				const uint32_t timeSyncTxDelay = ((timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
+				const uint32_t timeSyncTxDelay = (timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
 # else
 				const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
 # endif
@@ -637,9 +666,8 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 				gotTimeSyncTxTimeStamp = false;
 			}
 			else
-#endif
 			{
-				msg->lastTimeAcknowledgeDelay = 0;													// TODO set lastTimeAcknowledgeDelay correctly
+				msg->lastTimeAcknowledgeDelay = 0;
 			}
 
 			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();							// TODO save CAN bandwidth by sending this just once per second
@@ -658,7 +686,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #if USE_NEW_CAN_DRIVER
 			can0dev->SendMessage(TxBufferIndexTimeSync, 0, &buf);
 #else
-			mcan_fd_send_ext_message_no_wait(&mcan_instance, buf.id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf.msg)), buf.dataLength, TxBufferIndexTimeSync, false);
+			mcan_fd_send_ext_message_no_wait(&mcan_instance, buf.id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf.msg)), buf.dataLength, TxBufferIndexTimeSync, buf.useBrs, buf.marker);
 #endif
 		}
 		// Delay until it is time again
@@ -819,7 +847,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 #if USE_NEW_CAN_DRIVER
 	can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
 #else
-	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait, false);
+	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait, buf->useBrs, buf->marker);
 #endif
 	const uint32_t whenStartedWaiting = millis();
 	unsigned int fragmentsReceived = 0;
@@ -903,7 +931,7 @@ void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 #if USE_NEW_CAN_DRIVER
 	can0dev->SendMessage(TxBufferIndexResponse, MaxResponseSendWait, buf);
 #else
-	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexResponse, MaxResponseSendWait, false);
+	mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexResponse, MaxResponseSendWait, buf->useBrs, buf->marker);
 #endif
 }
 
@@ -918,7 +946,7 @@ void CanInterface::SendBroadcastNoFree(CanMessageBuffer *buf) noexcept
 #else
 	if (mcan_instance.hw != nullptr)
 	{
-		mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
+		mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, buf->useBrs, buf->marker);
 	}
 #endif
 }
@@ -934,7 +962,7 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 #else
 	if (mcan_instance.hw != nullptr)
 	{
-		mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, false);
+		mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexBroadcast, MaxResponseSendWait, buf->useBrs, buf->marker);
 	}
 #endif
 }
@@ -1279,19 +1307,13 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 
 	reprap.GetPlatform().MessageF(mtype,
 				"=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
-#if USE_NEW_CAN_DRIVER
 				", peak Tx sync delay %" PRIu32
-#endif
 				", free buffers %u\n",
 					messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
-#if USE_NEW_CAN_DRIVER
 					peakTimeSyncTxDelay,
-#endif
 					CanMessageBuffer::FreeBuffers());
 
-#if USE_NEW_CAN_DRIVER
-	peakTimeSyncTxDelay = 0;
-#else
+#if !USE_NEW_CAN_DRIVER
 	messagesQueuedForSending = messagesReceived = txTimeouts = messagesLost = busOffCount = 0;
 #endif
 

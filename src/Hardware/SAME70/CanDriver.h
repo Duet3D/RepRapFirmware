@@ -691,7 +691,7 @@ void mcan_enable_test_mode(mcan_module *const module_inst) noexcept;
 void mcan_disable_test_mode(mcan_module *const module_inst) noexcept;
 
 // Send extended CAN message in FD mode using a dedicated transmit buffer. The transmit buffer must already be free.
-status_code mcan_fd_send_ext_message_no_wait(mcan_module *const module_inst, uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, bool bitRateSwitch) noexcept;
+status_code mcan_fd_send_ext_message_no_wait(mcan_module *const module_inst, uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, bool bitRateSwitch, uint8_t marker) noexcept;
 
 // Wait for a specified buffer to become free. If it's still not free after the timeout, cancel the pending transmission.
 // Return true if we cancelled the pending transmission.

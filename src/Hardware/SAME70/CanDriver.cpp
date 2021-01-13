@@ -58,7 +58,7 @@
 /** Range: 1..16 */
 #define CONF_MCAN0_TX_FIFO_QUEUE_NUM     8
 /** Range: 1..32 */
-#define CONF_MCAN0_TX_EVENT_FIFO         8
+#define CONF_MCAN0_TX_EVENT_FIFO         16
 /** Range: 1..128 */
 #define CONF_MCAN0_RX_STANDARD_ID_FILTER_NUM     1
 /** Range: 1..64 */
@@ -74,7 +74,7 @@
 /** Range: 1..16 */
 #define CONF_MCAN1_TX_FIFO_QUEUE_NUM     8
 /** Range: 1..32 */
-#define CONF_MCAN1_TX_EVENT_FIFO         8
+#define CONF_MCAN1_TX_EVENT_FIFO         16
 /** Range: 1..128 */
 #define CONF_MCAN1_RX_STANDARD_ID_FILTER_NUM     1
 /** Range: 1..64 */
@@ -250,8 +250,12 @@ static void _mcan_set_configuration(Mcan *hw, mcan_config *config) noexcept
 		hw->MCAN_CCCR |= MCAN_CCCR_CSR;
 	}
 
+#if 1	// DC
+	hw->MCAN_TSCC = MCAN_TSCC_TSS_EXT_TIMESTAMP;					// use external timestamp counter
+#else
 	hw->MCAN_TSCC = MCAN_TSCC_TCP(config->timestamp_prescaler) |
 			MCAN_TSCC_TSS_TCP_INC;
+#endif
 
 	hw->MCAN_TOCC = MCAN_TOCC_TOP(config->timeout_period) |
 			config->timeout_mode | config->timeout_enable;
@@ -682,7 +686,7 @@ status_code mcan_get_tx_event_fifo_element(struct mcan_module *const module_inst
 }
 
 // Send extended CAN message in FD mode using a dedicated transmit buffer. The transmit buffer must already be free.
-status_code mcan_fd_send_ext_message_no_wait(mcan_module *const module_inst, uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, bool bitRateSwitch) noexcept
+status_code mcan_fd_send_ext_message_no_wait(mcan_module *const module_inst, uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, bool bitRateSwitch, uint8_t marker) noexcept
 {
 	const uint32_t dlc = (dataLength <= 8) ? dataLength
 							: (dataLength <= 24) ? ((dataLength + 3) >> 2) + 6
@@ -692,7 +696,9 @@ status_code mcan_fd_send_ext_message_no_wait(mcan_module *const module_inst, uin
 	tx_element.T1.reg = MCAN_TX_ELEMENT_T1_DLC(dlc)
 						| MCAN_TX_ELEMENT_T1_EFC
 						| MCAN_TX_ELEMENT_T1_FDF
-						| ((bitRateSwitch) ? MCAN_TX_ELEMENT_T1_BRS : 0);
+						| MCAN_TX_ELEMENT_T1_MM(marker)
+						| ((bitRateSwitch) ? MCAN_TX_ELEMENT_T1_BRS : 0)
+						| ((marker != 0) ? MCAN_TX_ELEMENT_T1_EFC : 0);
 
 	memcpy(tx_element.data, data, dataLength);
 
