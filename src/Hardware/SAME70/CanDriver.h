@@ -666,9 +666,9 @@ static inline void mcan_get_config_defaults(struct mcan_config *const config) no
 	config->remote_frames_standard_reject = true;
 	config->remote_frames_extended_reject = true;
 	config->extended_id_mask = 0x1FFFFFFF;
-	config->rx_fifo_0_overwrite = true;
+	config->rx_fifo_0_overwrite = false;
 	config->rx_fifo_0_watermark = 0;
-	config->rx_fifo_1_overwrite = true;
+	config->rx_fifo_1_overwrite = false;
 	config->rx_fifo_1_watermark = 0;
 	config->tx_queue_mode = false;
 	config->tx_event_fifo_watermark = 0;

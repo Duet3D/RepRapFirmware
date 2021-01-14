@@ -7,11 +7,14 @@
 
 #include "StepTimer.h"
 #include <RTOSIface/RTOSIface.h>
-#include <CanMessageFormats.h>
-#include <CAN/CanInterface.h>
 #include <RepRap.h>
 #include <Platform.h>
 #include <GCodes/GCodes.h>
+
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageFormats.h>
+# include <CAN/CanInterface.h>
+#endif
 
 #if SAME5x
 # include <CoreIO.h>

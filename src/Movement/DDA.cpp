@@ -677,6 +677,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 							: pdm->PrepareCartesianAxis(*this, params);
 			if (stepsToDo)
 			{
+				pdm->directionChanged = false;
 				InsertDM(pdm);
 				const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
 				if (pdm->direction)
@@ -1356,6 +1357,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 							pdm->direction = (delta >= 0);
 							if (pdm->PrepareCartesianAxis(*this, params))
 							{
+								pdm->directionChanged = false;
 								// Check for sensible values, print them if they look dubious
 								if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 								{
@@ -1385,6 +1387,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					pdm->direction = (delta >= 0);
 					if (pdm->PrepareDeltaAxis(*this, params))
 					{
+						pdm->directionChanged = false;
 						// Check for sensible values, print them if they look dubious
 						if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 						{
@@ -1442,6 +1445,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 						pdm->direction = (delta >= 0);
 						if (pdm->PrepareCartesianAxis(*this, params))
 						{
+							pdm->directionChanged = false;
 							// Check for sensible values, print them if they look dubious
 							if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 							{
@@ -1512,6 +1516,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 
 						if (stepsToDo)
 						{
+							pdm->directionChanged = false;
 							// Check for sensible values, print them if they look dubious
 							if (   reprap.Debug(moduleDda)
 								&& (   pdm->totalSteps > 1000000
@@ -1944,7 +1949,7 @@ uint32_t DDA::lastDirChangeTime = 0;
 // Sets the status to 'completed' if the move is complete and the next move should be started
 void DDA::StepDrivers(Platform& p) noexcept
 {
-	// 1. Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
+	// Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
 	if (flags.checkEndstops)		// if any homing switches or the Z probe is enabled in this move
 	{
 		CheckEndstops(p);			// call out to a separate function because this may help cache usage in the more common case where we don't call it
@@ -1965,42 +1970,57 @@ void DDA::StepDrivers(Platform& p) noexcept
 	}
 
 	driversStepping &= p.GetSteppingEnabledDrivers();
-	if ((driversStepping & p.GetSlowDriversBitmap()) == 0)			// if not using any slow drivers
+#if 1	// if supporting slow drivers
+	if ((driversStepping & p.GetSlowDriversBitmap()) != 0)			// if using some slow drivers
 	{
-		// 3. Step the drivers
-		StepPins::StepDriversHigh(driversStepping);					// generate the steps
-	}
-	else
-	{
-		// 3. Step the drivers
+		// Wait until step low and direction setup time have elapsed
 		uint32_t lastStepPulseTime = lastStepLowTime;
 		while (now - lastStepPulseTime < p.GetSlowDriverStepLowClocks() || now - lastDirChangeTime < p.GetSlowDriverDirSetupClocks())
 		{
 			now = StepTimer::GetTimerTicks();
 		}
-		StepPins::StepDriversHigh(driversStepping);					// generate the steps
+
+		StepPins::StepDriversHigh(driversStepping);					// step drivers high
 		lastStepPulseTime = StepTimer::GetTimerTicks();
 
-		// 3a. Reset all step pins low. Do this now because some external drivers don't like the direction pins being changed before the end of the step pulse.
+		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+		{
+			(void)dm2->CalcNextStepTime(*this);						// calculate next step times
+		}
+
 		while (StepTimer::GetTimerTicks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
-		StepPins::StepDriversLow(driversStepping);					// set the step pins low
+		StepPins::StepDriversLow(driversStepping);					// step drivers low
 		lastStepLowTime = StepTimer::GetTimerTicks();
 	}
+	else
+#endif
+	{
+		StepPins::StepDriversHigh(driversStepping);					// step drivers high
+#if SAME70
+		__DSB();													// without this the step pulse can be far too short
+#endif
+		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+		{
+			(void)dm2->CalcNextStepTime(*this);						// calculate next step times
+		}
 
-	// 4. Remove those drives from the list, calculate the next step times, update the direction pins where necessary,
-	//    and re-insert them so as to keep the list in step-time order.
-	//    Note that the call to CalcNextStepTime may change the state of Direction pin.
+		StepPins::StepDriversLow(driversStepping);					// step drivers low
+	}
+
+	// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
 	DriveMovement *dmToInsert = activeDMs;							// head of the chain we need to re-insert
 	activeDMs = dm;													// remove the chain from the list
 	while (dmToInsert != dm)										// note that both of these may be nullptr
 	{
-		const bool hasMoreSteps = (dmToInsert->isDelta)
-				? dmToInsert->CalcNextStepTimeDelta(*this, true)
-				: dmToInsert->CalcNextStepTimeCartesian(*this, true);
 		DriveMovement * const nextToInsert = dmToInsert->nextDM;
-		if (hasMoreSteps)
+		if (dmToInsert->state == DMState::moving)
 		{
 			InsertDM(dmToInsert);
+			if (dmToInsert->directionChanged)
+			{
+				dmToInsert->directionChanged = false;
+				reprap.GetPlatform().SetDirection(dmToInsert->drive, dmToInsert->direction);
+			}
 		}
 		else
 		{
@@ -2010,10 +2030,7 @@ void DDA::StepDrivers(Platform& p) noexcept
 		dmToInsert = nextToInsert;
 	}
 
-	// 5. Reset all step pins low. We already did this if we are using any external drivers, but doing it again does no harm.
-	StepPins::StepDriversLow(driversStepping);						// set the step pins low
-
-	// 6. If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
+	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
 	if (activeDMs == nullptr)
 	{
 		// We set a move as current up to MovementStartDelayClocks (about 10ms) before it is due to start.

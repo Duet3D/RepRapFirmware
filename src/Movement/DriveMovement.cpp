@@ -90,7 +90,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	isDelta = false;
-	return CalcNextStepTimeCartesian(dda, false);
+	return CalcNextStepTime(dda);
 }
 
 // Prepare this DM for a Delta axis move, returning true if there are steps to do
@@ -181,7 +181,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	isDelta = true;
-	return CalcNextStepTimeDelta(dda, false);
+	return CalcNextStepTime(dda);
 }
 
 // Prepare this DM for an extruder move, returning true if there are steps to do
@@ -310,7 +310,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	isDelta = false;
-	return CalcNextStepTimeCartesian(dda, false);
+	return CalcNextStepTime(dda);
 }
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -386,7 +386,7 @@ bool DriveMovement::PrepareRemoteExtruder(const DDA& dda, const PrepParams& para
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	isDelta = false;
-	return CalcNextStepTimeCartesian(dda, false);
+	return CalcNextStepTime(dda);
 }
 
 #endif
@@ -427,7 +427,7 @@ void DriveMovement::DebugPrint() const noexcept
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do.
 // This is also used for extruders on delta machines.
-bool DriveMovement::CalcNextStepTimeCartesianFull(const DDA &dda, bool live) noexcept
+bool DriveMovement::CalcNextStepTimeCartesianFull(const DDA &dda) noexcept
 pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
@@ -487,10 +487,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		if (nextCalcStep == reverseStartStep)
 		{
 			direction = !direction;
-			if (live)
-			{
-				reprap.GetPlatform().SetDirection(drive, direction);
-			}
+			directionChanged = true;
 		}
 		const uint32_t adjustedTopSpeedTimesCdivDPlusDecelStartClocks = dda.afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks - mp.cart.compensationClocks;
 		nextCalcStepTime = adjustedTopSpeedTimesCdivDPlusDecelStartClocks
@@ -530,7 +527,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 
 // Calculate the time since the start of the move when the next step for the specified DriveMovement is due
 // Return true if there are more steps to do
-bool DriveMovement::CalcNextStepTimeDeltaFull(const DDA &dda, bool live) noexcept
+bool DriveMovement::CalcNextStepTimeDeltaFull(const DDA &dda) noexcept
 pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
@@ -566,10 +563,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	if (nextStep == reverseStartStep)
 	{
 		direction = false;
-		if (live)
-		{
-			reprap.GetPlatform().SetDirection(drive, false);	// going down now
-		}
+		directionChanged = true;
 	}
 
 	// Calculate d*s*K as an integer, where d = distance the head has travelled, s = steps/mm for this drive, K = a power of 2 to reduce the rounding errors

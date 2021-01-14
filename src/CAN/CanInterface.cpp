@@ -592,15 +592,12 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 					pendingBuffers = buf->next;
 				}
 
-#if 0
-				buf->msg.move.DebugPrint();
-#endif
 				// Send the message
 #if USE_NEW_CAN_DRIVER
 				can0dev->SendMessage(TxBufferIndexMotion, MaxMotionSendWait, buf);
 #else
-				mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion,
-											MaxMotionSendWait, buf->useBrs, buf->marker);
+				mcan_fd_send_ext_message(&mcan_instance, buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength,
+											TxBufferIndexMotion, MaxMotionSendWait, buf->useBrs, buf->marker);
 #endif
 
 #ifdef CAN_DEBUG
@@ -611,8 +608,6 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 				delay(50);
 				debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
 							MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
-#else
-				delay(2);		// until we have the transmit fifo working, we need to delay to allow the message to be sent
 #endif
 				// Free the message buffer.
 				CanMessageBuffer::Free(buf);
