@@ -64,7 +64,7 @@ public:
 
 private:
     Samba& _samba;
-    Flash* _flash;
+    BossaFlash* _flash;
     FlasherObserver& _observer;
 
     uint32_t pageNum;

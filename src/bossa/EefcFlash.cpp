@@ -68,7 +68,7 @@ EefcFlash::EefcFlash(Samba& samba,
                      uint32_t stack,
                      uint32_t regs,
                      bool canBrownout) THROWS(GCodeException)
-    : Flash(samba, name, addr, pages, size, planes, lockRegions, user, stack),
+    : BossaFlash(samba, name, addr, pages, size, planes, lockRegions, user, stack),
       _regs(regs), _canBrownout(canBrownout), _eraseAuto(true)
 {
 

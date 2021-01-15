@@ -33,7 +33,7 @@
 
 #include "Flash.h"
 
-class EefcFlash : public Flash
+class EefcFlash : public BossaFlash
 {
 public:
     EefcFlash(Samba& samba,

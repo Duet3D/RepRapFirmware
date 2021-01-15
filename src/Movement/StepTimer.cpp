@@ -21,6 +21,9 @@
 # include <hri_tc_e54.h>
 #elif !defined(__LPC17xx__)
 # include <sam/drivers/tc/tc.h>
+# if SAME70
+#  include <pmc/pmc.h>
+# endif
 #endif
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
@@ -98,7 +101,7 @@ void StepTimer::Init() noexcept
 
 #  if SAME70
 	// Step clock runs at 48MHz/64 for compatibility with the Tool board
-	constexpr uint32_t divisor = (64ull * VARIANT_MCK)/(48000000u);
+	constexpr uint32_t divisor = (64ull * (SystemCoreClockFreq/2))/(48000000u);
 	static_assert(divisor <= 256 && divisor >= 100);
 
 	// TC0 can use either PCLK6 or PCLK7 depending on the setting in the bus matrix Peripheral Clock Configuration Register. Default is PCLK6.

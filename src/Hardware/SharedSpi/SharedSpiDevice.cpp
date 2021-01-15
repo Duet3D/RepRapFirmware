@@ -15,6 +15,7 @@
 # include <peripheral_clk_config.h>
 # include <hri_sercom_e54.h>
 #elif USART_SPI
+# include <pmc/pmc.h>
 # include <usart/usart.h>
 #else
 # include <spi/spi.h>
@@ -344,9 +345,9 @@ void SharedSpiDevice::Init() noexcept
 	SetPinFunction(SharedSpiSclkPin, SharedSpiPinFunction);
 	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiSercomNumber);
 #elif USART_SPI
-	ConfigurePin(APIN_USART_SSPI_SCK);
-	ConfigurePin(APIN_USART_SSPI_MOSI);
-	ConfigurePin(APIN_USART_SSPI_MISO);
+	SetPinFunction(APIN_USART_SSPI_SCK, USARTSSPIPeriphMode);
+	SetPinFunction(APIN_USART_SSPI_MOSI, USARTSSPIPeriphMode);
+	SetPinFunction(APIN_USART_SSPI_MISO, USARTSSPIPeriphMode);
 	mainSharedSpiDevice = new SharedSpiDevice(0);
 #else
 	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_SCK]);

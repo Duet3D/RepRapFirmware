@@ -27,13 +27,13 @@
 
 #include <memory>
 
-#if SAME5x
+#if SAME5x || SAME70
 # define USE_NEW_CAN_DRIVER		1		// use the new CAN driver in CoreN2G
 # define SUPPORT_CAN		1			// needed by CanDevice.h
 # include <CanDevice.h>
-#elif SAME70
-# define USE_NEW_CAN_DRIVER		0		// Use the CAN driver in Hardware/SAME70
-# include <CanDriver.h>
+# if SAME70
+#  include <pmc/pmc.h>
+# endif
 #endif
 
 const unsigned int NumCanBuffers = 2 * MaxCanBoards + 10;
@@ -349,7 +349,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
 
-#if SAME5x
+#if SAME5x || SAME70
 
 static void InitReceiveFilters() noexcept
 {
@@ -410,11 +410,11 @@ void CanInterface::Init() noexcept
 
 #if SAME70
 # ifdef USE_CAN0
-	ConfigurePin(APIN_CAN0_TX);
-	ConfigurePin(APIN_CAN0_RX);
+	SetPinFunction(APIN_CAN0_TX, CAN0PinPeriphMode);
+	SetPinFunction(APIN_CAN0_RX, CAN0PinPeriphMode);
 # else
-	ConfigurePin(APIN_CAN1_TX);
-	ConfigurePin(APIN_CAN1_RX);
+	SetPinFunction(APIN_CAN1_TX, CAN1TXPinPeriphMode);
+	SetPinFunction(APIN_CAN1_RX, CAN1RXPinPeriphMode);
 # endif
 	pmc_enable_upll_clock();			// configure_mcan sets up PCLK5 to be the UPLL divided by something, so make sure the UPLL is running
 #elif SAME5x

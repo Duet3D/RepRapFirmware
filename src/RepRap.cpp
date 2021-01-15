@@ -98,7 +98,7 @@ extern "C" void HSMCI_Handler() noexcept
 #if SAME70
 
 // HSMCI DMA complete callback
-void HsmciDmaCallback(CallbackParameter cp) noexcept
+void HsmciDmaCallback(CallbackParameter cb, DmaCallbackReason reason) noexcept
 {
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
@@ -2835,7 +2835,7 @@ void RepRap::StartIap() noexcept
 	WatchdogReset();								// kick the watchdog one last time
 
 #if SAM4E || SAME70
-	rswdt_restart(RSWDT);							// kick the secondary watchdog
+	WatchdogResetSecondary();							// kick the secondary watchdog
 #endif
 
 	// Modify vector table location

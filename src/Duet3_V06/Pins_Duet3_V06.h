@@ -87,6 +87,12 @@ constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels n
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_AUX2_DEVICE Serial1
 
+// Shared SPI (USART 1)
+constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);
+constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);
+constexpr Pin APIN_USART_SSPI_MISO = PortBPin(0);
+constexpr GpioPinFunction USARTSSPIPeriphMode = GpioPinFunction::C;
+
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
 // Drivers
@@ -107,8 +113,11 @@ constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
 #define TMC51xx_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
 
 constexpr Pin TMC51xxMosiPin = PortBPin(4);
+constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::D;	// FIXME: Check if this is the correct periph
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
+constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::A;	// FIXME: Check if this is the correct periph
 constexpr Pin TMC51xxSclkPin = PortAPin(23);
+constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::A;	// FIXME: Check if this is the correct periph
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 
@@ -152,6 +161,7 @@ constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 
 constexpr Pin DotStarMosiPin = PortAPin(13);
 constexpr Pin DotStarSclkPin = PortAPin(14);
+constexpr GpioPinFunction DotStarPinMode = GpioPinFunction::A;
 constexpr uint32_t DotStarClockId = ID_QSPI;
 constexpr IRQn DotStarIRQn = QSPI_IRQn;
 
@@ -273,10 +283,23 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noe
 #define SBC_SPI_IRQn			SPI1_IRQn
 #define SBC_SPI_HANDLER			SPI1_Handler
 
-constexpr Pin APIN_SPI1_MOSI = PortCPin(27);
-constexpr Pin APIN_SPI1_MISO = PortCPin(26);
-constexpr Pin APIN_SPI1_SCK = PortCPin(24);
-constexpr Pin APIN_SPI1_SS0 = PortCPin(25);
+constexpr Pin APIN_SBC_SPI_MOSI = PortCPin(27);
+constexpr Pin APIN_SBC_SPI_MISO = PortCPin(26);
+constexpr Pin APIN_SBC_SPI_SCK = PortCPin(24);
+constexpr Pin APIN_SBC_SPI_SS0 = PortCPin(25);
+constexpr GpioPinFunction SBCPinPeriphMode = GpioPinFunction::C;
+
+// CAN
+constexpr Pin APIN_CAN0_RX = PortBPin(3);
+constexpr Pin APIN_CAN0_TX = PortBPin(2);
+constexpr GpioPinFunction CAN0PinPeriphMode = GpioPinFunction::A;
+
+constexpr Pin APIN_CAN1_RX = PortCPin(12);
+constexpr GpioPinFunction CAN1RXPinPeriphMode = GpioPinFunction::C;
+constexpr Pin APIN_CAN1_TX = PortDPin(12);
+constexpr GpioPinFunction CAN1TXPinPeriphMode = GpioPinFunction::B;
+
+constexpr unsigned int CanDeviceNumber = 1;							// we use CAN1
 
 constexpr Pin SbcTfrReadyPin = PortEPin(2);
 // Note, the DMAC peripheral IDs are hard-coded in DataTransfer

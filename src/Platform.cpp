@@ -47,7 +47,9 @@
 #endif
 
 #if SAME70
+# include <AnalogIn.h>
 # include <DmacManager.h>
+using LegacyAnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
 static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA channels in CoreNG");
 #elif SAME5x
 # include <AnalogIn.h>
@@ -805,7 +807,11 @@ void Platform::Init() noexcept
 	AnalogIn::EnableTemperatureSensor(1, tcFilter.CallbackFeedIntoFilter, &tcFilter, 1, 0);
 	TemperatureCalibrationInit();
 # else
-	filteredAdcChannels[CpuTempFilterIndex] = GetTemperatureAdcChannel();
+	filteredAdcChannels[CpuTempFilterIndex] =
+#if SAME70
+			LegacyAnalogIn::
+#endif
+			GetTemperatureAdcChannel();
 # endif
 #endif
 
@@ -870,13 +876,13 @@ void Platform::ReadUniqueId()
 	memset(uniqueId, 0, sizeof(uniqueId));
 
 	const bool cacheWasEnabled = Cache::Disable();
-	const uint32_t rc = flash_read_unique_id(uniqueId);
+	const bool success = Flash::ReadUniqueId(uniqueId);
 	if (cacheWasEnabled)
 	{
 		Cache::Enable();
 	}
 
-	if (rc == 0)
+	if (success)
 	{
 # endif
 		// Put the checksum at the end
@@ -5078,6 +5084,9 @@ GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringR
 void Platform::Tick() noexcept
 {
 #if !SAME5x
+# if SAME70
+	LegacyAnalogIn::
+# endif
 	AnalogInFinaliseConversion();
 #endif
 
@@ -5195,7 +5204,7 @@ void Platform::Tick() noexcept
 	// On Duet 3, AFEC1 is used only for thermistors and associated Vref/Vssa monitoring. AFEC0 is used for everything else.
 	// To reduce noise, we use x16 hardware averaging on AFEC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
 	// There is enough time to convert all AFEC0 channels in one tick, but only one AFEC1 channel because of the higher averaging.
-	AnalogInStartConversion(0x0FFF | (1u << filteredAdcChannels[currentFilterNumber]));
+	LegacyAnalogIn::AnalogInStartConversion(0x0FFF | (1u << (uint8_t) filteredAdcChannels[currentFilterNumber]));
 #elif !SAME5x
 	AnalogInStartConversion();
 #endif

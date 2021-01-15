@@ -102,7 +102,7 @@ extern "C" void ReleaseMallocMutex() noexcept
 }
 
 // Application entry point
-#if SAME5x		// if using CoreN2G
+#if SAME5x || SAME70		// if using CoreN2G
 [[noreturn]] void AppMain() noexcept
 #else			// using CoreNG
 extern "C" [[noreturn]] void AppMain() noexcept

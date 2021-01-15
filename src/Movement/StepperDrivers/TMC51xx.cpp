@@ -1239,9 +1239,9 @@ void SmartDrivers::Init() noexcept
 	Serial::EnableSercomClock(SERCOM_TMC51xx_NUMBER);
 #else
 	// The pins are already set up for SPI in the pins table
-	ConfigurePin(TMC51xxMosiPin);
-	ConfigurePin(TMC51xxMisoPin);
-	ConfigurePin(TMC51xxSclkPin);
+	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
+	SetPinFunction(TMC51xxMisoPin, TMC51xxMosiPinPeriphMode);
+	SetPinFunction(TMC51xxSclkPin, TMC51xxMisoPinPeriphMode);
 
 	// Enable the clock to the USART or SPI
 	pmc_enable_periph_clk(ID_TMC51xx_SPI);

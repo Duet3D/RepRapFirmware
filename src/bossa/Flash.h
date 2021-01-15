@@ -60,10 +60,10 @@ private:
     bool _dirty;
 };
 
-class Flash
+class BossaFlash	// manuel: required to rename to avoid clash with CoreN2G namespace Flash
 {
 public:
-    Flash(Samba& samba,
+	BossaFlash(Samba& samba,
           const char* name,
           uint32_t addr,                 // Flash base address
           uint32_t pages,                // Number of pages
@@ -72,7 +72,7 @@ public:
           uint32_t lockRegions,          // Number of flash lock regions
           uint32_t user,                 // Address in SRAM where the applet and buffers will be placed
           uint32_t stack) THROWS(GCodeException);               // Address in SRAM where the applet stack will be placed
-    virtual ~Flash() {}
+    virtual ~BossaFlash() {}
 
     const char* name() noexcept { return _name; }
 

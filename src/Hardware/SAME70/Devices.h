@@ -10,13 +10,15 @@
 
 #include <AsyncSerial.h>
 typedef AsyncSerial UARTClass;
+#include <USARTClass.h>
 
-extern AsyncSerial serialUart0, serialUart1;
+extern AsyncSerial Serial;
+extern USARTClass Serial1;
 
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include "SerialCDC.h"
 
-extern SerialCDC serialUSB;
+extern SerialCDC SerialUSB;
 
 void DeviceInit() noexcept;
 

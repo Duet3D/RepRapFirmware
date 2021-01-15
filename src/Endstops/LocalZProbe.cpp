@@ -11,9 +11,13 @@
 #include "RepRap.h"
 #include "Platform.h"
 
-#if SAME5x
+#if SAME5x || SAME70		// if using CoreN2G
 # include <AnalogIn.h>
+# if SAME5x
 using AnalogIn::AdcBits;
+# elif SAME70
+using LegacyAnalogIn::AdcBits;
+# endif
 #endif
 
 // Members of class LocalZProbe

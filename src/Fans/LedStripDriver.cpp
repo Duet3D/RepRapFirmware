@@ -24,6 +24,7 @@
 #  include <hri_mclk_e54.h>
 # elif SAME70
 #  include <sam/drivers/xdmac/xdmac.h>
+#  include <pmc/pmc.h>
 # endif
 #endif
 
@@ -374,8 +375,8 @@ void LedStripDriver::Init() noexcept
 	hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
 #else
 	// Set up the USART or QSPI pins for SPI mode. The pins are already set up for SPI in the pins table
-	ConfigurePin(DotStarMosiPin);
-	ConfigurePin(DotStarSclkPin);
+	SetPinFunction(DotStarMosiPin, DotStarPinMode);
+	SetPinFunction(DotStarSclkPin, DotStarPinMode);
 
 	// Enable the clock to the USART or SPI peripheral
 	pmc_enable_periph_clk(DotStarClockId);

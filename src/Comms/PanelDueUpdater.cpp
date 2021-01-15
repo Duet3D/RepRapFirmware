@@ -234,7 +234,7 @@ void PanelDueUpdater::Spin() noexcept
 		case FlashState::bossaWriteOptions:
 			{
 				reprap.GetPlatform().Message(GenericMessage, "Writing PanelDue flash options\n");
-				Flash* flash = device->getFlash();
+				BossaFlash* flash = device->getFlash();
 				flash->setBootFlash(true);
 				flash->writeOptions();
 				state = FlashState::bossaReset;

@@ -10,6 +10,9 @@
 #include <Platform.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Cache.h>
+#if SAME70 || SAM4S || SAM4E
+# include <Reset.h>
+#endif
 
 // Perform a software reset. 'stk' points to the exception stack (r0 r1 r2 r3 r12 lr pc xPSR) if the cause is an exception, otherwise it is nullptr.
 [[noreturn]] void SoftwareReset(SoftwareResetReason initialReason, const uint32_t *stk) noexcept
@@ -18,7 +21,7 @@
 	WatchdogReset();							// kick the watchdog
 
 #if SAM4E || SAME70
-	rswdt_restart(RSWDT);						// kick the secondary watchdog
+	WatchdogResetSecondary();						// kick the secondary watchdog
 #endif
 
 	Cache::Disable();
