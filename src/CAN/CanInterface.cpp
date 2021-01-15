@@ -428,7 +428,7 @@ void CanInterface::Init() noexcept
 #if USE_NEW_CAN_DRIVER
 	CanTiming timing;
 	timing.SetDefaults();
-	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, TxCallback);
+	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, nullptr);
 	InitReceiveFilters();
 	can0dev->Enable();
 #else
@@ -643,7 +643,9 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #endif
 			msg->lastTimeSent = lastTimeSent;
 
-#if !USE_NEW_CAN_DRIVER
+#if USE_NEW_CAN_DRIVER
+			CanDriver::PollTxEventFifo(TxCallback);
+#else
 			PollTxEventFifo(TxCallback);
 #endif
 			if (gotTimeSyncTxTimeStamp)
