@@ -644,7 +644,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			msg->lastTimeSent = lastTimeSent;
 
 #if USE_NEW_CAN_DRIVER
-			CanDriver::PollTxEventFifo(TxCallback);
+			can0dev->PollTxEventFifo(TxCallback);
 #else
 			PollTxEventFifo(TxCallback);
 #endif
