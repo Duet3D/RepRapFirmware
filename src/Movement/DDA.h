@@ -42,6 +42,8 @@ public:
 
 	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
 	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
+	void operator delete(void* ptr) noexcept {}
+	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
 	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept  SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxDriversPerAxis]) noexcept;		// Set up a leadscrew motor move

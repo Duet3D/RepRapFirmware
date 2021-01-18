@@ -336,4 +336,16 @@ extern "C" void __tz_lock() noexcept { }
 extern "C" void __tz_unlock() noexcept { }
 extern "C" void _tzset_unlocked() noexcept { }
 
+#if SUPPORT_CAN_EXPANSION
+
+// Functions called by CanMessageBuffer in CANlib
+void *MessageBufferAlloc(size_t sz, std::align_val_t align) noexcept
+{
+	return Tasks::AllocPermanent(sz, align);
+}
+
+void MessageBufferDelete(void *ptr, std::align_val_t align) noexcept { }
+
+#endif
+
 // End
