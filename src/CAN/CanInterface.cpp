@@ -624,6 +624,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 {
 	CanMessageBuffer buf(nullptr);
 	uint32_t lastWakeTime = xTaskGetTickCount();
+	uint32_t lastRealTimeSent = 0;
 
 	for (;;)
 	{
@@ -666,9 +667,19 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			{
 				msg->lastTimeAcknowledgeDelay = 0;
 			}
-
-			msg->realTime = (uint32_t)reprap.GetPlatform().GetDateTime();							// TODO save CAN bandwidth by sending this just once per second
 			msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
+
+			// Send the real time just once a second
+			const uint32_t realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
+			if (realTime != lastRealTimeSent)
+			{
+				msg->realTime = realTime;
+				lastRealTimeSent = realTime;
+			}
+			else
+			{
+				buf.dataLength = CanMessageTimeSync::SizeWithoutRealTime;		// send a short message to save CAN bandwidth
+			}
 
 #if SAME70
 			lastTimeSent = StepTimer::GetTimerTicks();
@@ -686,6 +697,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			mcan_fd_send_ext_message_no_wait(&mcan_instance, buf.id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf.msg)), buf.dataLength, TxBufferIndexTimeSync, buf.useBrs, buf.marker);
 #endif
 		}
+
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
 	}
