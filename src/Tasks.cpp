@@ -246,14 +246,9 @@ const char* Tasks::GetHeapTop() noexcept
 void *Tasks::AllocPermanent(size_t sz, std::align_val_t align) noexcept
 {
 	GetMallocMutex();
-	char *newHeapLimit = reinterpret_cast<char *>(reinterpret_cast<uint32_t>(heapLimit - sz) & ~((uint32_t)align - 1));
-	if (newHeapLimit < heapTop)
-	{
-		OutOfMemoryHandler();
-	}
-	heapLimit = newHeapLimit;
+	void * const ret = CoreAllocPermanent(sz, align);
 	ReleaseMallocMutex();
-	return newHeapLimit;
+	return ret;
 }
 
 // Write data about the current task
