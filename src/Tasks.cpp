@@ -102,11 +102,7 @@ extern "C" void ReleaseMallocMutex() noexcept
 }
 
 // Application entry point
-#if SAME5x || SAME70		// if using CoreN2G
 [[noreturn]] void AppMain() noexcept
-#else			// using CoreNG
-extern "C" [[noreturn]] void AppMain() noexcept
-#endif
 {
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);	// set up diag LED for debugging and turn it off
 
@@ -162,10 +158,10 @@ extern "C" [[noreturn]] void AppMain() noexcept
 			}
 		}
 	}
+#endif
 
 	CoreInit();
 	DeviceInit();
-#endif
 
 	// Trap integer divide-by-zero.
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
