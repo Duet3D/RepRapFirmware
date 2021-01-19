@@ -116,7 +116,7 @@ static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (
 
 static CanDevice *can0dev = nullptr;
 
-#if SAME70
+#if SAME70 && defined(DUAL_CAN)
 
 constexpr CanDevice::Config Can1Config =
 {
