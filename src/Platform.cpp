@@ -876,7 +876,11 @@ void Platform::ReadUniqueId()
 	memset(uniqueId, 0, sizeof(uniqueId));
 
 	const bool cacheWasEnabled = Cache::Disable();
+#if SAME70
 	const bool success = Flash::ReadUniqueId(uniqueId);
+#else
+	const bool success = flash_read_unique_id(uniqueId) == 0;
+#endif
 	if (cacheWasEnabled)
 	{
 		Cache::Enable();
