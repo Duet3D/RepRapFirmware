@@ -28,43 +28,9 @@ void UART2_Handler(void) noexcept
 	Serial.IrqHandler();
 }
 
-
 void USART2_Handler(void) noexcept
 {
 	Serial1.IrqHandler();
-}
-
-// Callback glue functions, all called from the USB ISR
-
-// This is called when we are plugged in and connect to a host
-extern "C" bool core_cdc_enable(uint8_t port) noexcept
-{
-	SerialUSB.cdcSetConnected(true);
-	return true;
-}
-
-// This is called when we get disconnected from the host
-extern "C" void core_cdc_disable(uint8_t port) noexcept
-{
-	SerialUSB.cdcSetConnected(false);
-}
-
-// This is called when data has been received
-extern "C" void core_cdc_rx_notify(uint8_t port) noexcept
-{
-	SerialUSB.cdcRxNotify();
-}
-
-// This is called when the transmit buffer has been emptied
-extern "C" void core_cdc_tx_empty_notify(uint8_t port) noexcept
-{
-	SerialUSB.cdcTxEmptyNotify();
-}
-
-// On the SAM4E and SAM4S we use a GPIO pin available to monitor the VBUS state
-void core_vbus_off(CallbackParameter) noexcept
-{
-	SerialUSB.cdcSetConnected(false);
 }
 
 void SerialInit() noexcept
@@ -86,7 +52,6 @@ void SdhcInit() noexcept
 		SetPinFunction(p, HsmciOtherkPinsFunction);
 	}
 }
-
 
 // Device initialisation
 void DeviceInit() noexcept
