@@ -1,6 +1,8 @@
 #ifndef PINS_DUET3_V06_H__
 #define PINS_DUET3_V06_H__
 
+#include <PinDescription.h>
+
 #define BOARD_SHORT_NAME		"MB6HC"
 #define BOARD_NAME				"Duet 3 MB6HC"
 #define DEFAULT_BOARD_TYPE		BoardType::Auto
@@ -174,49 +176,161 @@ constexpr Pin EthernetPhyResetPin = PortDPin(11);
 #define USART_SSPI		USART0
 #define ID_SSPI			ID_USART0
 
-// Enum to represent allowed types of pin access
-// We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
-enum class PinCapability: uint8_t
-{
-	// Individual capabilities
-	read = 1,
-	ain = 2,
-	write = 4,
-	pwm = 8,
-
-	// Combinations
-	ainr = 1|2,
-	rw = 1|4,
-	wpwm = 4|8,
-	rwpwm = 1|4|8,
-	ainrw = 1|2|4,
-	ainrwpwm = 1|2|4|8
-};
-
-constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexcept
-{
-	return (PinCapability)((uint8_t)a | (uint8_t)b);
-}
-
-// Struct to represent a pin that can be assigned to various functions
-// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
-struct PinEntry
-{
-	Pin GetPin() const noexcept { return pin; }
-	PinCapability GetCapability() const noexcept { return cap; }
-	const char* GetNames() const noexcept { return names; }
-
-	Pin pin;
-	PinCapability cap;
-	const char *names;
-};
-
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
 // Aliases are separate by the , character.
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
 //TODO change the table below for the V0.6 board
+constexpr PinDescription PinTable[] =
+{
+	//	TC					PWM					ADC				Capability				PinNames
+	// Port A
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io6.out"			},	// PA00
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out6.tach"			},	// PA01
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA02
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io3.out"			},	// PA03
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA04
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs0,serial3.rx"},	// PA05
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs1,serial3.tx"},	// PA06
+	{ TcOutput::none,	PwmOutput::pwm0h3_c,AdcInput::none,		PinCapability::wpwm,	"out0"				},	// PA07
+	{ TcOutput::none,	PwmOutput::pwm1h3_c,AdcInput::none,		PinCapability::wpwm,	"out6"				},	// PA08
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA09
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"pson"				},	// PA10
+	{ TcOutput::none,	PwmOutput::pwm0h0_c,AdcInput::none,		PinCapability::wpwm,	"out3"				},	// PA11
+	{ TcOutput::none,	PwmOutput::pwm1h0_c,AdcInput::none,		PinCapability::wpwm,	"out9,laser,vfd"	},	// PA12
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA13
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA14
+	{ TcOutput::tioa1,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out4"				},	// PA15
+	{ TcOutput::none,	PwmOutput::pwm0l2_c,AdcInput::none,		PinCapability::wpwm,	"out2"				},	// PA16
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_6,	PinCapability::ainr,	"io7.in"			},	// PA17
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_7,	PinCapability::ainr,	"io6.in"			},	// PA18
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_8,	PinCapability::ainr,	"io5.in"			},	// PA19
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::none,	nullptr				},	// PA20
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_1,	PinCapability::none,	nullptr				},	// PA21
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA22
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA23
+	{ TcOutput::none,	PwmOutput::pwm0h1_c,AdcInput::none,		PinCapability::wpwm,	"out1"				},	// PA24
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA25
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA26
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA27
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA28
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA29
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA30
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA31
+
+	// Port B
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB00
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB01
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB02
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_2,	PinCapability::none,	nullptr				},	// PB03
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB04
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB05
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB06
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB07
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB08	Chrystal
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB09 Chrystal
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB10 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB11 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB12 Erase
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB13
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB14 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB15 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB16 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB17 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB18 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB19 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB20 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB21 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB22 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB23 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB24 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB25 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB26 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB27 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB28 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB29 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB30 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB31 not on chip
+
+	// Port C
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_9,	PinCapability::none,	nullptr				},	// PC00
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC01
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC02
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC03
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC04
+	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out5"				},	// PC05
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC06
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"			},	// PC07
+	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out8"				},	// PC08
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC09
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC10
+	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"				},	// PC11
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_3,	PinCapability::none,	nullptr				},	// PC12
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr				},	// PC13
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC14
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_2,	PinCapability::ainr,	"temp0"				},	// PC15
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC16
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC17
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC18
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC19
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC20
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC21
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs3"			},	// PC22
+	{ TcOutput::tioa3,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io7.out"			},	// PC23
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC24
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC25
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC26
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC27
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC28
+	{ TcOutput::tioa5,	PwmOutput::none,	AdcInput::adc1_4,	PinCapability::ainr,	"temp1"				},	// PC29
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_5,	PinCapability::ainr,	"temp2"				},	// PC30
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_6,	PinCapability::ainr,	"temp3"				},	// PC31
+
+	// PORT D
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD00
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD01
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD02
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD03
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD04
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD05
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD06
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD07
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD08
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD09
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD10
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD11
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD12
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD13
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD14
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io1.in,serial1.rx"	},	// PD15
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io1.out,serial1.tx"},	// PD16
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD17
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD18
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD19
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs2"			},	// PD20
+	{ TcOutput::tioa11,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io5.out"			},	// PD21
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD22
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out5.tach"			},	// PD23
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD24
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io0.in,serial0.rx"	},	// PD25
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io0.out,serial0.tx"},	// PD26
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io2.out,i2c0.dat"	},	// PD27
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io2.in,i2c0.clk"	},	// PD28
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD29
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_0,	PinCapability::ainr,	"io4.in"			},	// PD30
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD31
+
+	// Port E
+	{ TcOutput::tioa9,	PwmOutput::none,	AdcInput::adc1_11,	PinCapability::rwpwm,	"io4.out"			},	// PE00
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io8.out"			},	// PE01
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PE02
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_10,	PinCapability::read,	"io8.in"			},	// PE03 analog in not usable because it is on the wrong ADC
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_4,	PinCapability::none,	nullptr				},	// PE04
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"io3.in"			},	// PE05
+};
+
+#if 0
 constexpr PinEntry PinTable[] =
 {
 	// Output connectors
@@ -271,6 +385,7 @@ constexpr PinEntry PinTable[] =
 	{ PortDPin(20),	PinCapability::rw,		"spi.cs2" },
 	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" }
 };
+#endif
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 

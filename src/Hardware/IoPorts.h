@@ -79,7 +79,7 @@ protected:
 	// Get the physical pin without checking the validity of the logical pin
 	Pin GetPinNoCheck() const noexcept
 	{
-#if SAME5x
+#if SAME5x || SAME70
 		// New-style pin table is indexed by pin number
 		return logicalPin;
 #else
