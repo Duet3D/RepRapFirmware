@@ -254,7 +254,7 @@ void debugPrintf(const char* fmt, ...) noexcept
 	}
 }
 
-#if !SAME5x		// CoreN2G defines these functions so they are not needed for the SAME5x build
+#if !SAME5x && !SAME70		// CoreN2G defines these functions so they are not needed for the SAME5x build
 
 void delay(uint32_t ms) noexcept
 {

@@ -172,7 +172,7 @@ void IoPort::Release() noexcept
 }
 
 // Attach an interrupt to the pin. Nor permitted if we allocated the pin in shared input mode.
-bool IoPort::AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const noexcept
+bool IoPort::AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept
 {
 	return IsValid() && !isSharedInput && attachInterrupt(GetPinNoCheck(), callback, mode, param);
 }

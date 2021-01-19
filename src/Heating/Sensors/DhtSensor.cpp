@@ -20,7 +20,7 @@ constexpr uint8_t  MinimumOneBitLength = 50;		// microseconds
 constexpr uint32_t MinimumOneBitStepClocks = (StepTimer::StepClockRate * MinimumOneBitLength)/1000000;
 
 // Pulse ISR
-extern "C" void DhtDataTransition(CallbackParameter cp) noexcept
+void DhtDataTransition(CallbackParameter cp) noexcept
 {
 	static_cast<DhtTemperatureSensor*>(cp.vp)->Interrupt();
 }
