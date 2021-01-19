@@ -134,7 +134,7 @@ static bool hsmci_select_device_glue(uint8_t slot, uint32_t clock, uint8_t bus_w
 # endif
 
 static const struct DriverInterface hsmciInterface = {
-# ifdef __SAME54P20A__
+# if SAME5x
 	.select_device = hsmci_select_device,
 # else
 	.select_device = hsmci_select_device_glue,
@@ -146,7 +146,7 @@ static const struct DriverInterface hsmciInterface = {
 	.send_cmd = hsmci_send_cmd,
 	.get_response = hsmci_get_response,
 	.get_response_128 = hsmci_get_response_128,
-# ifdef __SAME54P20A__
+# if SAME5x
 	.adtc_start = hsmci_adtc_start,
 # else
 	.adtc_start = hsmci_adtc_start_glue,
@@ -1548,11 +1548,13 @@ static bool sd_mmc_mci_card_init(void)
 			return false;
 		}
 	}
-	if ((4 <= sd_mmc_card->iface->get_bus_width(sd_mmc_card->slot))) {
+	if ((4 <= sd_mmc_card->iface->get_bus_width(sd_mmc_card->slot)))
+	{
 		// TRY to enable 4-bit mode
 		if (IS_SDIO())
 		{
-			if (!sdio_cmd52_set_bus_width()) {
+			if (!sdio_cmd52_set_bus_width())
+			{
 				return false;
 			}
 		}
