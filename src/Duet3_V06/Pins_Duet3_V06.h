@@ -115,11 +115,11 @@ constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
 #define TMC51xx_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
 
 constexpr Pin TMC51xxMosiPin = PortBPin(4);
-constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::D;	// FIXME: Check if this is the correct periph
+constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
-constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::A;	// FIXME: Check if this is the correct periph
+constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::A;
 constexpr Pin TMC51xxSclkPin = PortAPin(23);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::A;	// FIXME: Check if this is the correct periph
+constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::A;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 
@@ -329,63 +329,6 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_4,	PinCapability::none,	nullptr				},	// PE04 V12 detect
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"io3.in"			},	// PE05
 };
-
-#if 0
-constexpr PinEntry PinTable[] =
-{
-	// Output connectors
-	{ PortAPin(7),	PinCapability::wpwm,	"out0" },
-	{ PortAPin(24), PinCapability::wpwm,	"out1" },
-	{ PortAPin(16),	PinCapability::wpwm,	"out2" },
-	{ PortAPin(11),	PinCapability::wpwm,	"out3" },
-	{ PortAPin(15),	PinCapability::wpwm,	"out4" },
-	{ PortCPin(5),	PinCapability::wpwm,	"out5" },
-	{ PortAPin(8),	PinCapability::wpwm,	"out6" },
-	{ PortCPin(11),	PinCapability::wpwm,	"out7" },
-	{ PortCPin(8),	PinCapability::wpwm,	"out8" },
-	{ PortAPin(12),	PinCapability::wpwm,	"out9,laser,vfd" },
-	{ PortAPin(10),	PinCapability::write,	"pson" },
-
-	// Tacho inputs associated with outputs 4-6
-	{ PortCPin(7),	PinCapability::read,	"out4.tach" },
-	{ PortDPin(23),	PinCapability::read,	"out5.tach" },
-	{ PortAPin(1),	PinCapability::read,	"out6.tach" },
-
-	// IO connector inputs
-	{ PortDPin(25),	PinCapability::read,	"io0.in,serial0.rx" },
-	{ PortDPin(15),	PinCapability::read,	"io1.in,serial1.rx" },
-	{ PortDPin(28),	PinCapability::read,	"io2.in,i2c0.clk" },
-	{ PortEPin(5),	PinCapability::ainr,	"io3.in" },
-	{ PortDPin(30),	PinCapability::ainr,	"io4.in" },
-	{ PortAPin(19),	PinCapability::ainr,	"io5.in" },
-	{ PortAPin(18),	PinCapability::ainr,	"io6.in" },
-	{ PortAPin(17),	PinCapability::ainr,	"io7.in" },
-	{ PortEPin(3),	PinCapability::read,	"io8.in" },		// analog in not usable because it is on the wrong ADC
-
-	// IO connector outputs
-	{ PortDPin(26),	PinCapability::rw,		"io0.out,serial0.tx" },
-	{ PortDPin(16),	PinCapability::rw,		"io1.out,serial1.tx" },
-	{ PortDPin(27),	PinCapability::rw,		"io2.out,i2c0.dat" },
-	{ PortAPin(3),	PinCapability::rw,		"io3.out" },
-	{ PortEPin(0),	PinCapability::rwpwm,	"io4.out" },
-	{ PortDPin(21),	PinCapability::rwpwm,	"io5.out" },
-	{ PortAPin(0),	PinCapability::rw,		"io6.out" },
-	{ PortCPin(23),	PinCapability::rwpwm,	"io7.out" },
-	{ PortEPin(1),	PinCapability::rw,		"io8.out" },	// this pin could be PWM capable but shares the TC with io7.out, so the PWM frequencies are not independent
-
-	// Thermistor inputs
-	{ PortCPin(15), PinCapability::ainr,	"temp0" },
-	{ PortCPin(29),	PinCapability::ainr,	"temp1" },
-	{ PortCPin(30), PinCapability::ainr,	"temp2" },
-	{ PortCPin(31), PinCapability::ainr,	"temp3" },
-
-	// Misc
-	{ PortAPin(5),	PinCapability::rw,		"spi.cs0,serial3.rx" },
-	{ PortAPin(6),	PinCapability::rw,		"spi.cs1,serial3.tx" },
-	{ PortDPin(20),	PinCapability::rw,		"spi.cs2" },
-	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" }
-};
-#endif
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 32+32+32+32+6);
