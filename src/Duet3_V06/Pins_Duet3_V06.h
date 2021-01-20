@@ -117,9 +117,9 @@ constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
 constexpr Pin TMC51xxMosiPin = PortBPin(4);
 constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::D;	// FIXME: Check if this is the correct periph
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::A;	// FIXME: Check if this is the correct periph
-constexpr Pin TMC51xxSclkPin = PortAPin(23);
 constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::A;	// FIXME: Check if this is the correct periph
+constexpr Pin TMC51xxSclkPin = PortAPin(23);
+constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::A;	// FIXME: Check if this is the correct periph
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 
@@ -206,8 +206,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_6,	PinCapability::ainr,	"io7.in"			},	// PA17
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_7,	PinCapability::ainr,	"io6.in"			},	// PA18
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_8,	PinCapability::ainr,	"io5.in"			},	// PA19
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::none,	nullptr				},	// PA20
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_1,	PinCapability::none,	nullptr				},	// PA21
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::none,	nullptr				},	// PA20 VIN detect
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA21
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA22
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA23
 	{ TcOutput::none,	PwmOutput::pwm0h1_c,AdcInput::none,		PinCapability::wpwm,	"out1"				},	// PA24
@@ -223,13 +223,13 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB00
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB01
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB02
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_2,	PinCapability::none,	nullptr				},	// PB03
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB03
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB04
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB05
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB06
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB07
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB08	Chrystal
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB09 Chrystal
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB08	Crystal
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB09 Crystal
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB10 not on chip
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB11 not on chip
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB12 Erase
@@ -254,7 +254,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB31 not on chip
 
 	// Port C
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_9,	PinCapability::none,	nullptr				},	// PC00
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC00
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC01
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC02
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC03
@@ -266,8 +266,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC09
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC10
 	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"				},	// PC11
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_3,	PinCapability::none,	nullptr				},	// PC12
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr				},	// PC13
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC12
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC13
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC14
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_2,	PinCapability::ainr,	"temp0"				},	// PC15
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC16
@@ -326,7 +326,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io8.out"			},	// PE01
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PE02
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_10,	PinCapability::read,	"io8.in"			},	// PE03 analog in not usable because it is on the wrong ADC
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_4,	PinCapability::none,	nullptr				},	// PE04
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_4,	PinCapability::none,	nullptr				},	// PE04 V12 detect
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"io3.in"			},	// PE05
 };
 

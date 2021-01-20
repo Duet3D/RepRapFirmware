@@ -1240,8 +1240,8 @@ void SmartDrivers::Init() noexcept
 #else
 	// The pins are already set up for SPI in the pins table
 	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
-	SetPinFunction(TMC51xxMisoPin, TMC51xxMosiPinPeriphMode);
-	SetPinFunction(TMC51xxSclkPin, TMC51xxMisoPinPeriphMode);
+	SetPinFunction(TMC51xxMisoPin, TMC51xxMisoPinPeriphMode);
+	SetPinFunction(TMC51xxSclkPin, TMC51xxSclkPinPeriphMode);
 
 	// Enable the clock to the USART or SPI
 	pmc_enable_periph_clk(ID_TMC51xx_SPI);
