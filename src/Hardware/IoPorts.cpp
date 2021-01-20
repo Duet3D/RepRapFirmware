@@ -626,7 +626,7 @@ uint16_t IoPort::ReadAnalog() const noexcept
 	}
 	else
 	{
-		AnalogOut(pin, pwm, freq);
+		AnalogOut::Write(pin, pwm, freq);
 	}
 #else
 	AnalogOut(pin, pwm, freq);

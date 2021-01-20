@@ -10,10 +10,8 @@
 
 #include <RepRapFirmware.h>
 
-#if SAME5x || SAME70
-# include <Interrupts.h>
-# include <AnalogIn.h>
-#endif
+#include <Interrupts.h>
+#include <AnalogIn.h>
 
 // Class to represent a port
 class IoPort
@@ -79,12 +77,8 @@ protected:
 	// Get the physical pin without checking the validity of the logical pin
 	Pin GetPinNoCheck() const noexcept
 	{
-#if SAME5x || SAME70
 		// New-style pin table is indexed by pin number
 		return logicalPin;
-#else
-		return PinTable[logicalPin].pin;
-#endif
 	}
 
 	static const char* TranslatePinAccess(PinAccess access) noexcept;
