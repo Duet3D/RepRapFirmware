@@ -24,7 +24,7 @@
 using
 #if SAME5x
 	AnalogIn
-#elif SAME70
+#else
 	LegacyAnalogIn
 #endif
 	::AdcBits;
