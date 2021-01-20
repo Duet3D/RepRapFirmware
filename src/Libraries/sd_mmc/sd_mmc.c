@@ -112,7 +112,7 @@ struct DriverInterface
 
 driverIdleFunc_t hsmci_set_idle_func(driverIdleFunc_t func) noexcept
 {
-	//TODO
+	// This is not called when we use the SAME5x SDMMC driver
 	return NULL;
 }
 
