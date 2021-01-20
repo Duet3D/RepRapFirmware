@@ -388,6 +388,7 @@ constexpr PinEntry PinTable[] =
 #endif
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
+static_assert(NumNamedPins == 32+32+32+32+6);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
