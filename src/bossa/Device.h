@@ -30,8 +30,7 @@
 #define _DEVICE_H
 
 #include "Samba.h"
-#include "Flash.h"
-
+#include "BossaFlash.h"
 #include "GCodes/GCodeException.h"
 
 typedef GCodeException DeviceUnsupportedError;

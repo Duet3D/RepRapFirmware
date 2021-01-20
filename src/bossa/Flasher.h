@@ -30,7 +30,7 @@
 #define _FLASHER_H
 
 #include "Device.h"
-#include "Flash.h"
+#include "BossaFlash.h"
 #include "Samba.h"
 
 #include "GCodes/GCodeException.h"

@@ -31,7 +31,7 @@
 
 #include <cstdint>
 
-#include "Flash.h"
+#include "BossaFlash.h"
 
 class EefcFlash : public BossaFlash
 {

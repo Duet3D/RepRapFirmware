@@ -2832,9 +2832,7 @@ void RepRap::StartIap() noexcept
 
 	WatchdogReset();								// kick the watchdog one last time
 
-#if SAM4E
-	rswdt_restart(RSWDT);							// kick the secondary watchdog
-#elif SAME70
+#if SAM4E || SAME70
 	WatchdogResetSecondary();						// kick the secondary watchdog
 #endif
 

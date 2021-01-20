@@ -617,20 +617,16 @@ uint16_t IoPort::ReadAnalog() const noexcept
 
 /*static*/ void IoPort::WriteAnalog(Pin pin, float pwm, uint16_t freq) noexcept
 {
-#if SAME5x || SAME70
-	AnalogOut::Write(pin, pwm, freq);
-#elif defined(DUET_NG)
+#if defined(DUET_NG)
 	if (pin >= DueXnExpansionStart)
 	{
 		DuetExpansion::AnalogOut(pin, pwm);
 	}
 	else
+#endif
 	{
 		AnalogOut::Write(pin, pwm, freq);
 	}
-#else
-	AnalogOut(pin, pwm, freq);
-#endif
 }
 
 // Members of class PwmPort

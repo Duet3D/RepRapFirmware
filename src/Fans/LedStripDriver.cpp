@@ -374,7 +374,6 @@ void LedStripDriver::Init() noexcept
 	hri_mclk_clear_AHBMASK_QSPI_2X_bit(MCLK);			// we don't need the 2x clock
 	hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
 #else
-	// Set up the USART or QSPI pins for SPI mode. The pins are already set up for SPI in the pins table
 	SetPinFunction(DotStarMosiPin, DotStarPinMode);
 	SetPinFunction(DotStarSclkPin, DotStarPinMode);
 

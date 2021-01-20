@@ -100,7 +100,7 @@ extern "C" void ReleaseMallocMutex() noexcept
 	}
 }
 
-// Application entry point// Application entry point
+// Application entry point
 [[noreturn]] void AppMain() noexcept
 {
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);	// set up diag LED for debugging and turn it off

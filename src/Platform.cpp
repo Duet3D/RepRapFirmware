@@ -46,10 +46,10 @@
 # include <Flash.h>		// for flash_read_unique_id()
 #endif
 
-#if SAME70
+#if SAM4E || SAM4S || SAME70
 # include <AnalogIn.h>
 # include <DmacManager.h>
-using LegacyAnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
+using LegacyAnalogIn::AdcBits;
 static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA channels in CoreNG");
 #elif SAME5x
 # include <AnalogIn.h>
@@ -808,7 +808,7 @@ void Platform::Init() noexcept
 	TemperatureCalibrationInit();
 # else
 	filteredAdcChannels[CpuTempFilterIndex] =
-#if SAME70
+#if SAM4E || SAM4S || SAME70
 			LegacyAnalogIn::
 #endif
 			GetTemperatureAdcChannel();
@@ -876,7 +876,7 @@ void Platform::ReadUniqueId()
 	memset(uniqueId, 0, sizeof(uniqueId));
 
 	const bool cacheWasEnabled = Cache::Disable();
-#if SAME70
+#if SAM4E || SAM4S || SAME70
 	const bool success = Flash::ReadUniqueId(uniqueId);
 #else
 	const bool success = flash_read_unique_id(uniqueId) == 0;

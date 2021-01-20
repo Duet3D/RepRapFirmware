@@ -20,9 +20,7 @@
 	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
 	WatchdogReset();							// kick the watchdog
 
-#if SAM4E
-	rswdt_restart(RSWDT);						// kick the secondary watchdog
-#elif SAME70
+#if SAME70 || SAM4E
 	WatchdogResetSecondary();					// kick the secondary watchdog
 #endif
 

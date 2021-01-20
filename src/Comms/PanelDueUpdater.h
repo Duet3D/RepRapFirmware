@@ -14,14 +14,7 @@
 
 #include <General/NamedEnum.h>
 
-#ifdef DUET3MINI			// if using CoreN2G
-# include <AsyncSerial.h>
-#elif defined(DUET3_V06)
-# include <AsyncSerial.h>
-#else						// using CoreNG
-# include <UARTClass.h>
-typedef UARTClass AsyncSerial;
-#endif
+#include <AsyncSerial.h>
 
 #include <bossa/Samba.h>
 #include <bossa/Device.h>
