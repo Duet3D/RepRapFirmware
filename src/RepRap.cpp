@@ -857,12 +857,6 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	move->Diagnostics(mtype);
 	heat->Diagnostics(mtype);
 	gCodes->Diagnostics(mtype);
-#if HAS_LINUX_INTERFACE
-	if (!usingLinuxInterface)
-#endif
-	{
-		network->Diagnostics(mtype);
-	}
 	FilamentMonitor::Diagnostics(mtype);
 #ifdef DUET_NG
 	DuetExpansion::Diagnostics(mtype);
@@ -875,7 +869,12 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	{
 		linuxInterface->Diagnostics(mtype);
 	}
+	else
 #endif
+	{
+		network->Diagnostics(mtype);
+	}
+
 	justSentDiagnostics = true;
 }
 

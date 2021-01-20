@@ -15,6 +15,7 @@
 
 static CanMessageBuffer *movementBufferList = nullptr;
 static CanMessageBuffer *urgentMessageBuffer = nullptr;
+static uint32_t currentMoveClocks;
 
 static volatile uint32_t hiccupToInsert = 0;
 static CanDriversList driversToStop[2];
@@ -77,9 +78,21 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 			auto move = buf->SetupRequestMessage<CanMessageMovementLinear>(0, CanId::MasterAddress, canDriver.boardAddress);
 
 			// Common parameters
-			move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
-			move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
-			move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
+			if (buf->next == nullptr)
+			{
+				// This is the first CAN-connected board for this movement
+				move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
+				move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
+				move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
+				currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
+			}
+			else
+			{
+				// Save some maths by using the values from the previous buffer
+				move->accelerationClocks = buf->next->msg.moveLinear.accelerationClocks;
+				move->steadyClocks = buf->next->msg.moveLinear.steadyClocks;
+				move->decelClocks = buf->next->msg.moveLinear.decelClocks;
+			}
 			move->initialSpeedFraction = params.initialSpeedFraction;
 			move->finalSpeedFraction = params.finalSpeedFraction;
 			move->pressureAdvanceDrives = 0;
@@ -105,27 +118,36 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 	}
 }
 
-// This is called by DDA::Prepare when all DMs for CAN drives have been processed
-void CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
+// This is called by DDA::Prepare when all DMs for CAN drives have been processed. Return the calculated move time in steps, or 0 if there are no CAN moves
+uint32_t CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 {
 	boardsActiveInLastMove.ClearAll();
-	CanMessageBuffer *buf;
-	while ((buf = movementBufferList) != nullptr)
+	CanMessageBuffer *buf = movementBufferList;
+	if (buf == nullptr)
 	{
-		movementBufferList = buf->next;
-		boardsActiveInLastMove.SetBit(buf->id.Dst());	//TODO should we set this if there were no steps for drives on the board, just drives to be enabled?
+		return 0;
+	}
+
+	do
+	{
+		boardsActiveInLastMove.SetBit(buf->id.Dst());					//TODO should we set this if there were no steps for drives on the board, just drives to be enabled?
 		buf->msg.moveLinear.whenToExecute = moveStartTime;
 		uint8_t& seq = nextSeq[buf->id.Dst()];
 		buf->msg.moveLinear.seq = seq;
 		seq = (seq + 1) & 7;
 		buf->dataLength = buf->msg.moveLinear.GetActualDataLength();
-		CanInterface::SendMotion(buf);					// queues the buffer for sending and frees it when done
-	}
+		CanMessageBuffer * const nextBuffer = buf->next;				// must get this before sending the buffer, because sending the buffer releases it
+		CanInterface::SendMotion(buf);									// queues the buffer for sending and frees it when done
+		buf = nextBuffer;
+	} while (buf != nullptr);
+
+	movementBufferList = nullptr;
+	return currentMoveClocks;
 }
 
 bool CanMotion::CanPrepareMove() noexcept
 {
-	return CanMessageBuffer::FreeBuffers() >= MaxCanBoards;
+	return CanMessageBuffer::GetFreeBuffers() >= MaxCanBoards;
 }
 
 // This is called by the CanSender task to check if we have any urgent messages to send

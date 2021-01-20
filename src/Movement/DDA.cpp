@@ -1299,7 +1299,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #if SUPPORT_CAN_EXPANSION
 		params.accelTime = accelStopTime;
 		params.steadyTime = steadyTime;
-		params.decelTime = (topSpeed - endSpeed)/acceleration;
+		params.decelTime = (topSpeed - endSpeed)/deceleration;
 		params.initialSpeedFraction = startSpeed/topSpeed;
 		params.finalSpeedFraction = endSpeed/topSpeed;
 		params.compFactor = 1.0 - params.initialSpeedFraction;
@@ -1578,7 +1578,13 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		CanMotion::FinishMovement(afterPrepare.moveStartTime);
+		const uint32_t canClocksNeeded = CanMotion::FinishMovement(afterPrepare.moveStartTime);
+		if (canClocksNeeded > clocksNeeded)
+		{
+			// Due to rounding error in the calculations, we quite often calculate the CAN move as being longer than our previously-calculated value, normally by just one clock.
+			// Extend our move time in this case so that the expansion boards don't need to catch up.
+			clocksNeeded = canClocksNeeded;
+		}
 #endif
 		if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))		// temp show the prepared DDA if debug enabled for both modules
 		{
