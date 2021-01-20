@@ -6,6 +6,8 @@
  */
 
 #include "Devices.h"
+#include <AnalogIn.h>
+#include <AnalogOut.h>
 
 AsyncSerial Serial(UART2, UART2_IRQn, ID_UART2, 512, 512, 		[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
 USARTClass Serial1(USART2, USART2_IRQn, ID_USART2, 512, 512,	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
@@ -58,6 +60,9 @@ void DeviceInit() noexcept
 {
 	SerialInit();
 	SdhcInit();
+
+	LegacyAnalogIn::AnalogInInit();
+	AnalogOut::Init();
 }
 
 void StopAnalogTask() noexcept
