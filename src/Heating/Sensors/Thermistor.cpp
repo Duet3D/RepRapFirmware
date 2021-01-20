@@ -20,14 +20,14 @@
 # include <CanMessageGenericParser.h>
 #endif
 
-#if SAME5x || SAME70		// if using CoreN2G
-# include <AnalogIn.h>
-# if SAME5x
-using AnalogIn::AdcBits;
-# elif SAME70
-using LegacyAnalogIn::AdcBits;
-# endif
+#include <AnalogIn.h>
+using
+#if SAME5x
+	AnalogIn
+#elif SAME70
+	LegacyAnalogIn
 #endif
+	::AdcBits;
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 static constexpr unsigned int AdcOversampleBits = 2;							// we use 2-bit oversampling

@@ -17,10 +17,10 @@ AuxDevice::AuxDevice() noexcept : uart(nullptr), seq(0), enabled(false), raw(tru
 void AuxDevice::Init(UARTClass *p_uart) noexcept
 {
 	uart = p_uart;
-# if SAME5x
-	uart->setInterruptPriority(NvicPriorityPanelDueUartRx, NvicPriorityPanelDueUartTx);
-# else
-	uart->setInterruptPriority(NvicPriorityPanelDueUart);
+#if SAME5x
+	uart->setInterruptPriority(NvicPriorityAuxUartRx, NvicPriorityAuxUartTx);
+#else
+	uart->setInterruptPriority(NvicPriorityAuxUart);
 #endif
 	mutex.Create("Aux");
 }

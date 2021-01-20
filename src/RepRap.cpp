@@ -2758,9 +2758,7 @@ void RepRap::PrepareToLoadIap() noexcept
 #ifdef DUET_NG
 	DuetExpansion::Exit();					// stop the DueX polling task
 #endif
-#if SAME5x	// CoreNG uses a separate analog input task, so stop that
 	StopAnalogTask();
-#endif
 
 	Cache::Disable();						// disable the cache because it interferes with flash memory access
 

@@ -95,10 +95,10 @@ GCodes::GCodes(Platform& p) noexcept :
 
 #if defined(SERIAL_MAIN_DEVICE)
 # if SAME5x
-	// CoreN2G already uses an efficient buffer for receiving data from USB
+	// SAME5x USB driver already uses an efficient buffer for receiving data from USB
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 # else
-	// CoreNG USB driver is inefficient when read in single-character mode
+	// Old USB driver is inefficient when read in single-character mode
 	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_MAIN_DEVICE);
 # endif
 	usbGCode = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);

@@ -5088,10 +5088,7 @@ GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringR
 void Platform::Tick() noexcept
 {
 #if !SAME5x
-# if SAME70
-	LegacyAnalogIn::
-# endif
-	AnalogInFinaliseConversion();
+	LegacyAnalogIn::AnalogInFinaliseConversion();
 #endif
 
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR

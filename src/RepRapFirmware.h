@@ -62,17 +62,8 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # define __nocache		// nothing
 #endif
 
-#if SAME5x || SAME70
-
 # include <CoreIO.h>
 # include <Devices.h>
-
-#else
-
-// Functions needed for builds that use CoreNG. Not needed when using CoreN2G.
-void delay(uint32_t ms) noexcept;
-
-#endif
 
 #define SPEED_CRITICAL	__attribute__((optimize("O2")))
 
@@ -505,13 +496,13 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 
 #if SAME5x
-const NvicPriority NvicPriorityPanelDueUartRx = 1;	// UART used to receive data from PanelDue or other serial input
-const NvicPriority NvicPriorityPanelDueUartTx = 3;	// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
+const NvicPriority NvicPriorityAuxUartRx = 1;		// UART used to receive data from PanelDue or other serial input
+const NvicPriority NvicPriorityAuxUartTx = 3;		// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
 const NvicPriority NvicPriorityWiFiUartRx = 2;		// UART used to receive debug data from the WiFi module
 const NvicPriority NvicPriorityWiFiUartTx = 3;		// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
 const NvicPriority NvicPriorityDriverDiag = 4;
 #else
-const NvicPriority NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const NvicPriority NvicPriorityAuxUart = 1;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const NvicPriority NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
 #endif
 
@@ -538,7 +529,7 @@ const NvicPriority NvicPrioritySpi = 6;				// SPI is used for network transfers 
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 
-const NvicPriority NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const NvicPriority NvicPriorityAuxUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 
 # if defined(__LPC17xx__)
 constexpr NvicPriority NvicPriorityTimerPWM = 4;

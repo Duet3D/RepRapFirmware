@@ -27,11 +27,7 @@ void NonVolatileMemory::EnsureRead() noexcept
 # error		//TODO
 #elif SAM4E || SAM4S || SAME70
 		const bool cacheEnabled = Cache::Disable();
-# if SAME70
 		Flash::ReadUserSignature(reinterpret_cast<uint32_t*>(&buffer), sizeof(buffer)/sizeof(uint32_t));
-# else
-		flash_read_user_signature(reinterpret_cast<uint32_t*>(&buffer), sizeof(buffer)/sizeof(uint32_t));
-# endif
 		if (cacheEnabled)
 		{
 			Cache::Enable();
@@ -70,11 +66,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 	{
 		// Erase the page
 # if SAM4E || SAM4S || SAME70
-#  if SAME70
 		Flash::EraseUserSignature();
-#  else
-		flash_erase_user_signature();
-#  endif
 # elif defined(__LPC17xx__)
 		LPC_EraseSoftwareResetDataSlots();	// erase the last flash sector
 # endif
@@ -85,11 +77,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 	{
 # if SAM4E || SAM4S || SAME70
 		const bool cacheEnabled = Cache::Disable();
-#  if SAME70
 		Flash::WriteUserSignature(reinterpret_cast<const uint32_t*>(&buffer));
-#  else
-		flash_write_user_signature(reinterpret_cast<const uint32_t*>(&buffer));
-#  endif
 		if (cacheEnabled)
 		{
 			Cache::Enable();

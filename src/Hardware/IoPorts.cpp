@@ -15,16 +15,16 @@
 # include "DuetNG/DueXn.h"
 #endif
 
-#if SAME5x || SAME70		// if using CoreN2G
-# include <AnalogIn.h>
-# include <AnalogOut.h>
-# include <Interrupts.h>
-# if SAME5x
-using AnalogIn::AdcBits;
-# elif SAME70
-using LegacyAnalogIn::AdcBits;
-# endif
+#include <AnalogOut.h>
+#include <Interrupts.h>
+#include <AnalogIn.h>
+using
+#if SAME5x
+	AnalogIn
+#elif SAME70
+	LegacyAnalogIn
 #endif
+	::AdcBits;
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanId.h>
@@ -617,7 +617,7 @@ uint16_t IoPort::ReadAnalog() const noexcept
 
 /*static*/ void IoPort::WriteAnalog(Pin pin, float pwm, uint16_t freq) noexcept
 {
-#if SAME5x
+#if SAME5x || SAME70
 	AnalogOut::Write(pin, pwm, freq);
 #elif defined(DUET_NG)
 	if (pin >= DueXnExpansionStart)
@@ -628,8 +628,6 @@ uint16_t IoPort::ReadAnalog() const noexcept
 	{
 		AnalogOut(pin, pwm, freq);
 	}
-#elif SAME70
-	AnalogOut::Write(pin, pwm, freq);
 #else
 	AnalogOut(pin, pwm, freq);
 #endif

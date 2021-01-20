@@ -60,4 +60,8 @@ void DeviceInit() noexcept
 	SdhcInit();
 }
 
+void StopAnalogTask() noexcept
+{
+}
+
 // End

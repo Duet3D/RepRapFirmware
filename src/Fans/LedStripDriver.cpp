@@ -23,7 +23,7 @@
 #  include <Hardware/IoPorts.h>
 #  include <hri_mclk_e54.h>
 # elif SAME70
-#  include <sam/drivers/xdmac/xdmac.h>
+#  include <xdmac/xdmac.h>
 #  include <pmc/pmc.h>
 # endif
 #endif

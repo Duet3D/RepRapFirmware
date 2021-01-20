@@ -21,5 +21,6 @@ extern USARTClass Serial1;
 extern SerialCDC SerialUSB;
 
 void DeviceInit() noexcept;
+void StopAnalogTask() noexcept;
 
 #endif /* SRC_HARDWARE_SAME70_DEVICES_H_ */
