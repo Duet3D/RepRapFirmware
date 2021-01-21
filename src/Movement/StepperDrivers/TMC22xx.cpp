@@ -1023,7 +1023,9 @@ pre(!driversPowered)
 
 void TmcDriverState::SetStallDetectThreshold(int sgThreshold) noexcept
 {
-	const uint32_t sgthrs = (uint32_t)(constrain<int>(sgThreshold, -64, 63) + 64);
+	// M915 was originally defined for Stallguard 2, which uses values of -64 (most sensitive) to +63 (least sensitive)
+	// Stallguard 4 on the TMC2209 uses 0 (least sensitive) to 255 (most sensitive). So we map values -128..+127 to 255..0
+	const uint32_t sgthrs = (uint32_t)(127 - constrain<int>(sgThreshold, -128, 127));
 	UpdateRegister(WriteSgthrs, sgthrs);
 }
 
@@ -1034,7 +1036,8 @@ void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) 
 
 void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 {
-	const int threshold = (int)(writeRegisters[WriteSgthrs] - 64);
+	// Map stall sensitivity value 0..255 to 128..-128
+	const int threshold = 127 - (int)writeRegisters[WriteSgthrs];
 	reply.catf("stall threshold %d, steps/sec %" PRIu32 ", coolstep %" PRIx32,
 				threshold, 12000000 / (256 * writeRegisters[WriteTcoolthrs]), writeRegisters[WriteCoolconf] & 0xFFFF);
 }

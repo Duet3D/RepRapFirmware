@@ -1022,10 +1022,10 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	reprap.GetPlatform().MessageF(mtype,
 				"=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
 				", peak Tx sync delay %" PRIu32
-				", free buffers %u\n",
+				", free buffers %u (min %u)\n",
 					messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
 					peakTimeSyncTxDelay,
-					CanMessageBuffer::FreeBuffers());
+					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers());
 
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;

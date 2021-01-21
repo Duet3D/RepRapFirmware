@@ -223,7 +223,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 		compensationTime = reprap.GetPlatform().GetPressureAdvance(extruder);
 		const float compensationClocks = compensationTime * (float)StepTimer::StepClockRate;
 		mp.cart.compensationClocks = roundU32(compensationClocks);
-		mp.cart.accelCompensationClocks = roundU32(compensationClocks * params.compFactor);
+		mp.cart.accelCompensationClocks = roundU32(compensationClocks * params.accelCompFactor);
 
 #ifdef COMPENSATE_SPEED_CHANGES
 		// If there is a speed change at the start of the move, theoretically we should instantly advance or retard the filament by the associated compensation amount.
@@ -267,7 +267,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	if (params.decelDistance * effectiveStepsPerMm < 0.5)		// if less than 1 deceleration step
 	{
 		totalSteps = (uint32_t)max<int32_t>(netSteps, 0);
-		mp.cart.decelStartStep = reverseStartStep = netSteps + 1;
+		mp.cart.decelStartStep = reverseStartStep = totalSteps + 1;
 		mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD = 0;
 		twoDistanceToStopTimesCsquaredDivD = 0;
 	}
@@ -298,8 +298,8 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 			{
 				netSteps = (int32_t)stepsBeforeReverse;
 			}
-			reverseStartStep = netSteps + 1;
 			totalSteps = (uint32_t)max<int32_t>(netSteps, 0);
+			reverseStartStep = totalSteps + 1;
 			mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD = 0;
 		}
 	}
@@ -323,7 +323,7 @@ bool DriveMovement::PrepareRemoteExtruder(const DDA& dda, const PrepParams& para
 	const float compensationTime = reprap.GetPlatform().EutGetRemotePressureAdvance(drive);
 	const float compensationClocks = compensationTime * (float)StepTimer::StepClockRate;
 	mp.cart.compensationClocks = roundU32(compensationClocks);
-	mp.cart.accelCompensationClocks = roundU32(compensationClocks * params.compFactor);
+	mp.cart.accelCompensationClocks = roundU32(compensationClocks * params.accelCompFactor);
 
 	// Recalculate the net total step count to allow for compensation. It may be negative.
 	const float compensationDistance = (dda.endSpeed - dda.startSpeed) * compensationTime;

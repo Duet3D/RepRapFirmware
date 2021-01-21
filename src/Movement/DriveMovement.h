@@ -102,7 +102,7 @@ struct PrepParams
 	uint32_t topSpeedTimesCdivD;
 
 	// Parameters used only for extruders
-	float compFactor;
+	float accelCompFactor;
 
 #if SUPPORT_CAN_EXPANSION
 	// Parameters used by CAN expansion
