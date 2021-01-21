@@ -22,5 +22,6 @@ Bug fixes:
 - When a sensor was configured on a CAN expansion board and M308 was subsequently used to create a sensor with the same number on a different board, the old sensor was not deleted
 - [Duet 3] At high step fates, in RRF 3.2 the step pulses sent to stepper drivers did not always meet the minimum pulse width specified for the TMC5160. This might have resulted in lost steps.
 - [Duet + SBC] It was not possible to use an expression as a parameter where the parameter accepts multiple values. It is now possible to use an expression if only one value needs to be passed.
-- [Duet 3 expansion/tool boards] Under certain conditions, moves could be omitted. We have only been able to reproeucdes when using high step pulse rates.
+- [Duet 3 expansion/tool boards] Under certain conditions, moves could be omitted. We have only been able to reproduce this when using high step pulse rates.
 - [Duet 3 expansion/tool boards] Under conditions of heavy load (e.g. a series of short moves at high step pulse rates), the board could stop responding to CAN commands and lose CAN sync
+- [Duet 3 with expansion/tool boards] When DAA ie enabled, expansion and tool boards would sometimes get out of sync and skip moves
