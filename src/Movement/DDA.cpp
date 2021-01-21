@@ -655,7 +655,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	params.topSpeedTimesCdivD = (uint32_t)roundU32(topSpeed/deceleration);
 	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + msg.accelerationClocks + msg.steadyClocks;
 	afterPrepare.extraAccelerationClocks = msg.accelerationClocks - roundS32(params.accelDistance/topSpeed);
-	params.compFactor = (topSpeed - startSpeed)/topSpeed;
+	params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
 
 	activeDMs = nullptr;
 
@@ -1302,9 +1302,9 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		params.decelTime = (topSpeed - endSpeed)/deceleration;
 		params.initialSpeedFraction = startSpeed/topSpeed;
 		params.finalSpeedFraction = endSpeed/topSpeed;
-		params.compFactor = 1.0 - params.initialSpeedFraction;
+		params.accelCompFactor = 1.0 - params.initialSpeedFraction;
 #else
-		params.compFactor = (topSpeed - startSpeed)/topSpeed;
+		params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
 #endif
 		const float decelStartTime = accelStopTime + steadyTime;
 		afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32((startSpeed * StepTimer::StepClockRate)/acceleration);
