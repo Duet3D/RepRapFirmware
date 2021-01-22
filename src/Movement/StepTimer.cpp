@@ -20,8 +20,8 @@
 # include <CoreIO.h>
 # include <hri_tc_e54.h>
 #elif !defined(__LPC17xx__)
-# include <sam/drivers/tc/tc.h>
-# if SAME70
+# include <tc/tc.h>
+# if SAME70 || SAM4E
 #  include <pmc/pmc.h>
 # endif
 #endif

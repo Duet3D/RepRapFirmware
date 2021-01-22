@@ -50,7 +50,9 @@
 # include <AnalogIn.h>
 # include <DmacManager.h>
 using LegacyAnalogIn::AdcBits;
+# if SAME70
 static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA channels in CoreNG");
+# endif
 #elif SAME5x
 # include <AnalogIn.h>
 # include <DmacManager.h>
@@ -5201,7 +5203,7 @@ void Platform::Tick() noexcept
 		break;
 	}
 
-#if SAME70
+#if SAME70 || SAM4E || SAM4S
 	// On Duet 3, AFEC1 is used only for thermistors and associated Vref/Vssa monitoring. AFEC0 is used for everything else.
 	// To reduce noise, we use x16 hardware averaging on AFEC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
 	// There is enough time to convert all AFEC0 channels in one tick, but only one AFEC1 channel because of the higher averaging.

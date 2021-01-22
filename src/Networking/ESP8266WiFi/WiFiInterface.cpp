@@ -24,6 +24,9 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 
 #if defined(DUET_NG)
 
+# include <pmc/pmc.h>
+# include <spi/spi.h>
+
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
 # define USE_PDC			0		// use SAM4 peripheral DMA controller
 # define USE_DMAC			1		// use SAM4 general DMA controller
@@ -222,7 +225,7 @@ static void EspTransferRequestIsr(CallbackParameter) noexcept
 
 static inline void EnableEspInterrupt() noexcept
 {
-	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, INTERRUPT_MODE_RISING, nullptr);
+	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, InterruptMode::rising, nullptr);
 }
 
 static inline void DisableEspInterrupt() noexcept
@@ -1686,10 +1689,10 @@ void WiFiInterface::SetupSpi() noexcept
 
 	Serial::EnableSercomClock(WiFiSpiSercomNumber);
 #else
-	ConfigurePin(APIN_ESP_SPI_SCK);
-	ConfigurePin(APIN_ESP_SPI_MOSI);
-	ConfigurePin(APIN_ESP_SPI_MISO);
-	ConfigurePin(APIN_ESP_SPI_SS0);
+	SetPinFunction(APIN_ESP_SPI_SCK, SPIPeriphMode);
+	SetPinFunction(APIN_ESP_SPI_MOSI, SPIPeriphMode);
+	SetPinFunction(APIN_ESP_SPI_MISO, SPIPeriphMode);
+	SetPinFunction(APIN_ESP_SPI_SS0, SPIPeriphMode);
 
 	pmc_enable_periph_clk(ESP_SPI_INTERFACE_ID);
 #endif
@@ -2015,7 +2018,8 @@ void WiFiInterface::StartWiFi() noexcept
 #endif
 
 #if !SAME5x && !defined(__LPC17xx__)
-	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
+	SetPinFunction(APIN_Serial1_TXD, Serial1PeriphMode);				// connect the pins to the UART
+	SetPinFunction(APIN_Serial1_RXD, Serial1PeriphMode);				// connect the pins to the UART
 #endif
 	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
 	debugMessageChars = 0;
@@ -2092,7 +2096,8 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	else
 	{
 #if !SAME5x && !defined(__LPC17xx__)
-		ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to the UART
+		SetPinFunction(APIN_Serial1_TXD, Serial1PeriphMode);				// connect the pins to the UART
+		SetPinFunction(APIN_Serial1_RXD, Serial1PeriphMode);				// connect the pins to the UART
 #endif
 	}
 

@@ -1,6 +1,8 @@
 #ifndef PINS_DUETNG_H__
 #define PINS_DUETNG_H__
 
+#include <PinDescription.h>
+
 // Pins definition file for Duet 2 WiFi/Ethernet
 // This file is normally #included by #including RepRapFirmware.h, which includes this file
 
@@ -187,6 +189,7 @@ constexpr IRQn TMC2660_SPI_IRQn = USART1_IRQn;
 constexpr Pin TMC2660MosiPin = PortAPin(22);
 constexpr Pin TMC2660MisoPin = PortAPin(21);
 constexpr Pin TMC2660SclkPin = PortAPin(23);
+constexpr GpioPinFunction TMC2660PeriphMode = GpioPinFunction::A;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 100;					// it's not adjustable on Duet 2
 
@@ -265,6 +268,17 @@ constexpr Pin LcdBeepPin = PortDPin(21);		// connlcd.10	-> exp1.10
 #define USART_SPI		1
 #define USART_SSPI		USART0
 #define ID_SSPI			ID_USART0
+
+// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
+// The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
+// Aliases are separate by the , character.
+// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
+// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
+constexpr PinDescription PinTable[] =
+{
+};
+
+#if 0
 
 // Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
@@ -396,11 +410,49 @@ constexpr PinEntry PinTable[] =
 	{ 234,			PinCapability::rwpwm,	"sx1509b.14" },
 	{ 235,			PinCapability::rwpwm,	"sx1509b.15" }
 };
+#endif
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
+
+// USARTs used for SPI
+constexpr Pin APIN_USART_SSPI_MOSI = PortAPin(27);
+constexpr Pin APIN_USART_SSPI_MISO = PortAPin(26);
+constexpr Pin APIN_USART_SSPI_SCK = PortAPin(30);
+constexpr GpioPinFunction USARTSSPIPeriphMode = GpioPinFunction::C;
+
+constexpr Pin APIN_USART1_MOSI = PortAPin(22);
+constexpr Pin APIN_USART1_MISO = PortAPin(21);
+constexpr Pin APIN_USART1_SCK = PortAPin(23);
+constexpr GpioPinFunction USART1SSPIPeriphMode = GpioPinFunction::A;
+
+// SD Card
+constexpr Pin HsmciPins[] = { PortAPin(26), PortAPin(27), PortAPin(28), PortAPin(29), PortAPin(30), PortAPin(31) };
+constexpr auto HsmciPinsFunction = GpioPinFunction::C;
+
+/*
+ * TWI Interfaces
+ */
+constexpr Pin TWI_Data = PortAPin(3);
+constexpr Pin TWI_CK = PortAPin(4);
+constexpr GpioPinFunction TWIPeriphMode = GpioPinFunction::A;
+
+#define WIRE_INTERFACE		TWI0
+#define WIRE_INTERFACE_ID	ID_TWI0
+#define WIRE_ISR_HANDLER	TWI0_Handler
+#define WIRE_ISR_ID			TWI0_IRQn
+
+// Serial
+constexpr Pin APIN_Serial0_RXD = PortAPin(9);
+constexpr Pin APIN_Serial0_TXD = PortAPin(10);
+constexpr GpioPinFunction Serial0PeriphMode = GpioPinFunction::A;
+
+// Serial1
+constexpr Pin APIN_Serial1_RXD = PortAPin(5);
+constexpr Pin APIN_Serial1_TXD = PortAPin(6);
+constexpr GpioPinFunction Serial1PeriphMode = GpioPinFunction::C;
 
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
 #define ESP_SPI					SPI
@@ -412,10 +464,16 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noe
 const uint32_t DMA_HW_ID_SPI_TX = 1;
 const uint32_t DMA_HW_ID_SPI_RX = 2;
 
-constexpr Pin APIN_ESP_SPI_MOSI = APIN_SPI_MOSI;
-constexpr Pin APIN_ESP_SPI_MISO = APIN_SPI_MISO;
-constexpr Pin APIN_ESP_SPI_SCK = APIN_SPI_SCK;
-constexpr Pin APIN_ESP_SPI_SS0 = APIN_SPI_SS0;
+constexpr Pin SPI_MOSI = PortAPin(13);
+constexpr Pin SPI_MISO = PortAPin(12);
+constexpr Pin SPI_SCK  = PortAPin(14);
+constexpr Pin SPI_SS0  = PortAPin(11);
+constexpr GpioPinFunction SPIPeriphMode = GpioPinFunction::A;
+
+constexpr Pin APIN_ESP_SPI_MOSI = SPI_MOSI;
+constexpr Pin APIN_ESP_SPI_MISO = SPI_MISO;
+constexpr Pin APIN_ESP_SPI_SCK  = SPI_SCK;
+constexpr Pin APIN_ESP_SPI_SS0  = SPI_SS0;
 
 constexpr Pin EspResetPin = PortEPin(4);			// Low on this in holds the WiFi module in reset (ESP_RESET)
 constexpr Pin EspEnablePin = PortEPin(5);			// High to enable the WiFi module, low to power it down (ESP_CH_PD)
@@ -429,10 +487,10 @@ constexpr Pin SamCsPin = PortAPin(11);				// SPI NPCS pin, input from WiFi modul
 #define W5500_SPI_IRQn			SPI_IRQn
 #define W5500_SPI_HANDLER		SPI_Handler
 
-constexpr Pin APIN_W5500_SPI_MOSI = APIN_SPI_MOSI;
-constexpr Pin APIN_W5500_SPI_MISO = APIN_SPI_MISO;
-constexpr Pin APIN_W5500_SPI_SCK = APIN_SPI_SCK;
-constexpr Pin APIN_W5500_SPI_SS0 = APIN_SPI_SS0;
+constexpr Pin APIN_W5500_SPI_MOSI = SPI_MOSI;
+constexpr Pin APIN_W5500_SPI_MISO = SPI_MISO;
+constexpr Pin APIN_W5500_SPI_SCK  = SPI_SCK;
+constexpr Pin APIN_W5500_SPI_SS0  = SPI_SS0;
 
 constexpr Pin W5500ResetPin = PortEPin(4);			// Low on this in holds the W5500 module in reset (ESP_RESET)
 constexpr Pin W5500InterruptPin = PortDPin(31);		// W5500 interrupt output, active low
@@ -444,10 +502,10 @@ constexpr Pin W5500SsPin = PortAPin(11);			// SPI NPCS pin, input from W5500 mod
 #define SBC_SPI_INTERFACE_ID	ID_SPI
 #define SBC_SPI_IRQn			SPI_IRQn
 #define SBC_SPI_HANDLER			SPI_Handler
-constexpr Pin APIN_SBC_SPI_MOSI = 13;
-constexpr Pin APIN_SBC_SPI_MISO = 12;
-constexpr Pin APIN_SBC_SPI_SCK = 14;
-constexpr Pin APIN_SBC_SPI_SS0 = 11;
+constexpr Pin APIN_SBC_SPI_MOSI = SPI_MOSI;
+constexpr Pin APIN_SBC_SPI_MISO = SPI_MISO;
+constexpr Pin APIN_SBC_SPI_SCK  = SPI_SCK;
+constexpr Pin APIN_SBC_SPI_SS0  = SPI_SS0;
 
 constexpr Pin SbcTfrReadyPin = PortDPin(31);
 
@@ -483,7 +541,7 @@ namespace StepPins
 	static inline uint32_t CalcDriverBitmap(size_t driver) noexcept
 	{
 		return (driver < NumDirectDrivers)
-				? g_APinDescription[STEP_PINS[driver]].ulPin
+				? 1u << (STEP_PINS[driver] & 0x1Fu)
 				: 0;
 	}
 

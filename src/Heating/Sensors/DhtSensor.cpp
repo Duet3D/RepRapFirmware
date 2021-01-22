@@ -156,7 +156,7 @@ void DhtTemperatureSensor::TakeReading() noexcept
 		// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
 		// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.
 		numPulses = ARRAY_SIZE(pulses);		// tell the ISR not to collect data yet
-		port.AttachInterrupt(DhtDataTransition, INTERRUPT_MODE_CHANGE, this);
+		port.AttachInterrupt(DhtDataTransition, InterruptMode::change, this);
 		lastPulseTime = 0;
 		numPulses = 0;						// tell the ISR to collect data
 	}

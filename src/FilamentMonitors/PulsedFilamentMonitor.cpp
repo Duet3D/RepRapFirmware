@@ -99,7 +99,7 @@ float PulsedFilamentMonitor::MeasuredSensitivity() const noexcept
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
 GCodeResult PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException)
 {
-	const GCodeResult rslt = CommonConfigure(gb, reply, INTERRUPT_MODE_RISING, seen);
+	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::rising, seen);
 	if (rslt <= GCodeResult::warning)
 	{
 		gb.TryGetFValue('L', mmPerPulse, seen);

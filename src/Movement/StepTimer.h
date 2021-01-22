@@ -67,7 +67,7 @@ public:
 #elif defined(__LPC17xx__)
 	static constexpr uint32_t StepClockRate = 1000000;                          // 1MHz
 #else
-	static constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// Duet 2 and Maestro: use just under 1MHz
+	static constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
 #endif
 
 	static constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;

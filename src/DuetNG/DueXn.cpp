@@ -12,6 +12,7 @@
 #include "Wire.h"
 #include "Hardware/I2C.h"
 #include <TaskPriorities.h>
+#include <Interrupts.h>
 
 namespace DuetExpansion
 {
@@ -135,7 +136,7 @@ ExpansionBoardType DuetExpansion::DueXnInit() noexcept
 		const uint16_t stopBits = (dueXnBoardType == ExpansionBoardType::DueX5) ? AllStopBitsX5 : AllStopBitsX2;	// I am assuming that the X0 has 2 endstop inputs
 		dueXnExpander.pinModeMultiple(stopBits | AllGpioBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
 		dueXnInputMask = stopBits | AllGpioBits;
-		dueXnExpander.enableInterruptMultiple(dueXnInputMask, INTERRUPT_MODE_CHANGE);
+		dueXnExpander.enableInterruptMultiple(dueXnInputMask, InterruptMode::change);
 	}
 
 	return dueXnBoardType;
@@ -148,7 +149,7 @@ void DuetExpansion::DueXnTaskInit() noexcept
 	if (dueXnBoardType != ExpansionBoardType::none)
 	{
 		// Set up the interrupt on any input change
-		attachInterrupt(DueX_INT, DueXIrq, InterruptMode::INTERRUPT_MODE_FALLING, nullptr);
+		attachInterrupt(DueX_INT, DueXIrq, InterruptMode::falling, nullptr);
 
 		// Clear any initial interrupts
 		(void)dueXnExpander.interruptSourceAndClear();

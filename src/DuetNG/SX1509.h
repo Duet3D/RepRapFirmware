@@ -24,7 +24,8 @@ Distributed as-is; no warranty is given.
 #ifndef SX1509_H
 #define SX1509_H
 
-#include "Core.h"
+#include "CoreIO.h"
+#include <Interrupts.h>
 
 const int ReceiveTimeout = 1000;			// Timeout for I2C receive
 const uint8_t DefaultOscDivider = 5;		// a clock divider of 2 ^ (5 - 1) = 16 gives a PWM frequency of 2MHz / (16 * 255) = 488Hz
@@ -205,7 +206,7 @@ public:
 	//	Note: This function does not set up a pin as an input, or configure	its
 	//		pull-up/down resistors! Do that before (or after).
 	// -----------------------------------------------------------------------------
-	void enableInterrupt(uint8_t pin, uint8_t riseFall) noexcept;
+	void enableInterrupt(uint8_t pin, InterruptMode riseFall) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// enableInterruptMultiple(uint16_t pins, uint8_t riseFall): This function sets up an interrupt
@@ -224,7 +225,7 @@ public:
 	//	Note: This function does not set up a pin as an input, or configure	its
 	//		pull-up/down resistors! Do that before (or after).
 	// -----------------------------------------------------------------------------
-	void enableInterruptMultiple(uint16_t pins, uint8_t riseFall) noexcept;
+	void enableInterruptMultiple(uint16_t pins, InterruptMode riseFall) noexcept;
 
 	// -----------------------------------------------------------------------------
 	// interruptSource(void): Returns an unsigned int representing which pin caused

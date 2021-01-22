@@ -17,13 +17,14 @@
 #include <Cache.h>
 
 # if SAME70
-#  include "sam/drivers/xdmac/xdmac.h"
-#  include "DmacManager.h"
+#  include <xdmac/xdmac.h>
+#  include <DmacManager.h>
 # else
-#  include "sam/drivers/pdc/pdc.h"
+#  include <pmc/pmc.h>
+#  include <pdc/pdc.h>
 # endif
 
-#include "sam/drivers/usart/usart.h"
+#include <usart/usart.h>
 
 constexpr float MaximumMotorCurrent = 2500.0;
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
@@ -905,9 +906,9 @@ namespace SmartDrivers
 		pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 
 		// The pins are already set up for SPI in the pins table
-		ConfigurePin(TMC2660MosiPin);
-		ConfigurePin(TMC2660MisoPin);
-		ConfigurePin(TMC2660SclkPin);
+		SetPinFunction(TMC2660MosiPin, TMC2660PeriphMode);
+		SetPinFunction(TMC2660MisoPin, TMC2660PeriphMode);
+		SetPinFunction(TMC2660SclkPin, TMC2660PeriphMode);
 
 		// Enable the clock to the USART or SPI
 		pmc_enable_periph_clk(ID_TMC2660_SPI);
@@ -922,7 +923,7 @@ namespace SmartDrivers
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		USART_TMC2660->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;		// set SPI clock frequency
+		USART_TMC2660->US_BRGR = SystemCoreClockFreq/DriversSpiClockFrequency;		// set SPI clock frequency
 		USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
 		// We need a few microseconds of delay here for the USART to sort itself out before we send any data,

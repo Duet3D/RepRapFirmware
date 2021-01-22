@@ -200,7 +200,7 @@ bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply) noexcep
 	// Tacho initialisation
 	if (tachoPort.IsValid())
 	{
-		tachoPort.AttachInterrupt(FanInterrupt, INTERRUPT_MODE_FALLING, this);
+		tachoPort.AttachInterrupt(FanInterrupt, InterruptMode::falling, this);
 	}
 
 	InternalRefresh(true);

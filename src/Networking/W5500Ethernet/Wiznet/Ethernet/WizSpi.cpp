@@ -6,7 +6,6 @@
  */
 
 #include "WizSpi.h"
-#include "variant.h"
 #include "Pins.h"
 
 // Define exactly one of the following as 1, the other as zero
@@ -20,6 +19,8 @@
 #if USE_DMAC
 #include "dmac/dmac.h"
 #endif
+
+#include <pmc/pmc.h>
 
 #include "matrix/matrix.h"
 
@@ -192,9 +193,9 @@ namespace WizSpi
 #endif
 
 		// Set up the SPI pins
-		ConfigurePin(APIN_W5500_SPI_SCK);
-		ConfigurePin(APIN_W5500_SPI_MOSI);
-		ConfigurePin(APIN_W5500_SPI_MISO);
+		SetPinFunction(APIN_W5500_SPI_SCK, SPIPeriphMode);
+		SetPinFunction(APIN_W5500_SPI_MOSI, SPIPeriphMode);
+		SetPinFunction(APIN_W5500_SPI_MISO, SPIPeriphMode);
 		pinMode(APIN_W5500_SPI_SS0, OUTPUT_HIGH);			// use manual SS control
 
 		pmc_enable_periph_clk(W5500_SPI_INTERFACE_ID);
