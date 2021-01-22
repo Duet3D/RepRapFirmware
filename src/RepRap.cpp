@@ -49,6 +49,10 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
+#ifdef DUET3_ATE
+# include <Duet3Ate.h>
+#endif
+
 #if HAS_HIGH_SPEED_SD
 
 # if !SAME5x	// if not using CoreN2G
@@ -505,6 +509,9 @@ void RepRap::Init() noexcept
 #endif
 #if SUPPORT_12864_LCD
 	display->Init();
+#endif
+#ifdef DUET3_ATE
+	Duet3Ate::Init();
 #endif
 	// linuxInterface is not initialised until we know we are using it, to prevent a disconnected SBC interface generating interrupts and DMA
 
