@@ -32,21 +32,25 @@ namespace FirmwareUpdater
 	GCodeResult CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, GCodeBuffer& gb, const StringRef& reply, const size_t serialChannel) noexcept
 	{
 #if HAS_WIFI_NETWORKING
-		GCodeResult result;
-		if (!reprap.GetGCodes().CheckNetworkCommandAllowed(gb, reply, result))
+		if (		(moduleMap & (1 << WifiExternalFirmwareModule)) != 0
+				||  (moduleMap & (1 << WifiFirmwareModule))			!= 0)
 		{
-			return result;
-		}
-		if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & (1 << WifiFirmwareModule)) != 0)
-		{
-			reply.copy("Invalid combination of firmware update modules");
-			return GCodeResult::error;
-		}
-		if ((moduleMap & (1 << WifiFirmwareModule)) != 0
-				&& !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, WIFI_FIRMWARE_FILE))
-		{
-			reply.printf("File %s not found", WIFI_FIRMWARE_FILE);
-			return GCodeResult::error;
+			GCodeResult result;
+			if (!reprap.GetGCodes().CheckNetworkCommandAllowed(gb, reply, result))
+			{
+				return result;
+			}
+			if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & (1 << WifiFirmwareModule)) != 0)
+			{
+				reply.copy("Invalid combination of firmware update modules");
+				return GCodeResult::error;
+			}
+			if ((moduleMap & (1 << WifiFirmwareModule)) != 0
+					&& !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, WIFI_FIRMWARE_FILE))
+			{
+				reply.printf("File %s not found", WIFI_FIRMWARE_FILE);
+				return GCodeResult::error;
+			}
 		}
 #endif
 #if HAS_AUX_DEVICES
