@@ -170,6 +170,11 @@ constexpr IRQn DotStarIRQn = QSPI_IRQn;
 // Ethernet
 constexpr Pin EthernetPhyInterruptPin = PortCPin(6);
 constexpr Pin EthernetPhyResetPin = PortDPin(11);
+constexpr Pin EthernetPhyOtherPins[] = {
+		PortDPin(0), PortDPin(1), PortDPin(2), PortDPin(3), PortDPin(4),
+		PortDPin(5), PortDPin(6), PortDPin(7), PortDPin(8), PortDPin(9)
+};
+constexpr auto EthernetPhyOtherPinsFunction = GpioPinFunction::A;
 
 // Shared SPI definitions
 #define USART_SPI		1

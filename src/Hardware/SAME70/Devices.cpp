@@ -9,6 +9,7 @@
 #include <RepRapFirmware.h>
 #include <AnalogIn.h>
 #include <AnalogOut.h>
+#include <matrix/matrix.h>
 
 AsyncSerial Serial(UART2, UART2_IRQn, ID_UART2, 512, 512, 		[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
 USARTClass Serial1(USART2, USART2_IRQn, ID_USART2, 512, 512,	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
@@ -44,14 +45,28 @@ void SdhcInit() noexcept
 	}
 }
 
+void EthernetInit() noexcept
+{
+	// Initialize Ethernet pins
+	pinMode(EthernetPhyInterruptPin, INPUT_PULLUP);
+	for (Pin p : EthernetPhyOtherPins)
+	{
+		SetPinFunction(p, EthernetPhyOtherPinsFunction);
+	}
+}
+
 // Device initialisation
 void DeviceInit() noexcept
 {
-	SerialInit();
-	SdhcInit();
-
 	LegacyAnalogIn::AnalogInInit();
 	AnalogOut::Init();
+
+	SerialInit();
+	SdhcInit();
+	EthernetInit();
+
+	// Set up PB4..PB5 as normal I/O, not JTAG
+	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5);
 }
 
 void StopAnalogTask() noexcept
