@@ -17,13 +17,13 @@ GCodeMachineState::GCodeMachineState() noexcept
 	  fileId(NoFileId),
 #endif
 	  lineNumber(0),
-	  drivesRelative(false), axesRelative(false),
-#if HAS_LINUX_INTERFACE
-	  lastCodeFromSbc(false), macroStartedByCode(false), fileFinished(false),
-#endif
+	  selectedPlane(0), drivesRelative(false), axesRelative(false),
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
 	  waitingForAcknowledgement(false), messageAcknowledged(false),
+#if HAS_LINUX_INTERFACE
+	  lastCodeFromSbc(false), macroStartedByCode(false), fileFinished(false),
+#endif
 	  compatibility(Compatibility::RepRapFirmware), blockNesting(0),
 	  previous(nullptr), errorMessage(nullptr),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
@@ -43,12 +43,12 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  lockedResources(prev.lockedResources),
 	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
 	  drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
-#if HAS_LINUX_INTERFACE
-	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
-#endif
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
 	  waitingForAcknowledgement(false), messageAcknowledged(false),
+#if HAS_LINUX_INTERFACE
+	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
+#endif
 	  compatibility(prev.compatibility), blockNesting((withinSameFile) ? prev.blockNesting : 0),
 	  previous(&prev), errorMessage(nullptr),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
@@ -149,6 +149,7 @@ void GCodeMachineState::WaitForAcknowledgement() noexcept
 
 void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 {
+	selectedPlane = other.selectedPlane;
 	drivesRelative = other.drivesRelative;
 	axesRelative = other.axesRelative;
 	feedRate = other.feedRate;

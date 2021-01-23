@@ -94,6 +94,7 @@ public:
 	ReadLockedPointer<Tool> GetFirstTool() const noexcept;										// Return the lowest-numbered tool
 	AxesBitmap GetCurrentXAxes() const noexcept;												// Get the current axes used as X axes
 	AxesBitmap GetCurrentYAxes() const noexcept;												// Get the current axes used as Y axes
+	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
 	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
 	unsigned int GetNumberOfContiguousTools() const noexcept;
 	void ReportAllToolTemperatures(const StringRef& reply) const noexcept;

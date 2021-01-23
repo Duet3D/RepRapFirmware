@@ -1200,16 +1200,22 @@ GCodeResult RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringR
 	return rslt;
 }
 
-// Get the current axes used as X axes
+// Get the current axes used as X axis
 AxesBitmap RepRap::GetCurrentXAxes() const noexcept
 {
 	return Tool::GetXAxes(currentTool);
 }
 
-// Get the current axes used as Y axes
+// Get the current axes used as Y axis
 AxesBitmap RepRap::GetCurrentYAxes() const noexcept
 {
 	return Tool::GetYAxes(currentTool);
+}
+
+// Get the current axes used as the specified axis
+AxesBitmap RepRap::GetCurrentAxisMapping(unsigned int axis) const noexcept
+{
+	return Tool::GetAxisMapping(currentTool, axis);
 }
 
 // Set the previous tool number. Inline because it is only called from one place.

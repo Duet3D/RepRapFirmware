@@ -56,6 +56,7 @@ public:
 	static void Delete(Tool *t) noexcept { delete t; }
 	static AxesBitmap GetXAxes(const Tool *tool) noexcept;
 	static AxesBitmap GetYAxes(const Tool *tool) noexcept;
+	static AxesBitmap GetAxisMapping(const Tool *tool, unsigned int axis) noexcept;
 	static float GetOffset(const Tool *tool, size_t axis) noexcept pre(axis < MaxAxes);
 
 	float GetOffset(size_t axis) const noexcept pre(axis < MaxAxes);

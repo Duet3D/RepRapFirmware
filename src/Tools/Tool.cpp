@@ -240,6 +240,11 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	return (tool == nullptr) ? DefaultYAxisMapping : tool->axisMapping[1];
 }
 
+/*static*/ AxesBitmap Tool::GetAxisMapping(const Tool *tool, unsigned int axis) noexcept
+{
+	return (tool != nullptr && axis < ARRAY_SIZE(tool->axisMapping)) ? tool->axisMapping[axis] : AxesBitmap::MakeFromBits(axis);
+}
+
 /*static*/ float Tool::GetOffset(const Tool *tool, size_t axis) noexcept
 {
 	return (tool == nullptr) ? 0.0 : tool->offset[axis];
