@@ -18,7 +18,7 @@
 #include <CanMessageBuffer.h>
 
 RemoteHeater::RemoteHeater(unsigned int num, CanAddress board) noexcept
-	: Heater(num), boardAddress(board), lastMode(HeaterMode::offline), averagePwm(0), lastTemperature(0.0), whenLastStatusReceived(0)
+	: Heater(num), boardAddress(board), lastMode(HeaterMode::offline), averagePwm(0), tuningState(TuningState::notTuning), lastTemperature(0.0), whenLastStatusReceived(0)
 {
 }
 
@@ -33,12 +33,41 @@ RemoteHeater::~RemoteHeater() noexcept
 
 void RemoteHeater::Spin() noexcept
 {
-	// Nothing needed here unless we want to copy the sensor temperature across. For now we don't store the temperature locally.
+	switch (tuningState)
+	{
+	case TuningState::notTuning:
+		break;
+
+	case TuningState::stabilising:
+		//TODO wait for temp to stabilise
+		{
+			String<StringLength100> reply;
+			if (SendTuningCommand(reply.GetRef(), true) != GCodeResult::ok)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Heater tuning cancelled: %s\n", reply.c_str());
+				SwitchOff();
+				tuningState = TuningState::notTuning;
+			}
+		}
+		break;
+
+	case TuningState::heatingUp:
+		//TODO
+		break;
+
+	case TuningState::cyclingFanOff:
+		//TODO
+		break;
+
+	case TuningState::cyclingFanOn:
+		//TODO
+		break;
+	}
 }
 
 void RemoteHeater::ResetHeater() noexcept
 {
-	//TODO
+	// This is only called by UpdateModel. Nothing needed here.
 }
 
 GCodeResult RemoteHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
@@ -128,10 +157,43 @@ float RemoteHeater::GetAccumulator() const noexcept
 	return 0.0;		// not supported
 }
 
-GCodeResult RemoteHeater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException)
+GCodeResult RemoteHeater::StartAutoTune(const StringRef& reply, FansBitmap fans, float targetTemp, float pwm, bool seenA, float ambientTemp) noexcept
 {
-	reply.copy("remote heater auto tune not implemented");
-	return GCodeResult::error;
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	tuningFans = fans;
+	reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
+
+	tuningPwm = pwm;
+	tuningTargetTemp = targetTemp;
+	tuningStartTemp.Clear();
+	tuningBeginTime = millis();
+	tuningPhase = 0;
+	tuned = false;					// assume failure
+
+	if (seenA)
+	{
+		tuningStartTemp.Add(ambientTemp);
+		ClearCounters();
+		timeSetHeating = millis();
+		GCodeResult rslt = SendTuningCommand(reply, true);
+		if (rslt != GCodeResult::ok)
+		{
+			return rslt;
+		}
+		tuningState = TuningState::heatingUp;
+	}
+	else
+	{
+		tuningState = TuningState::stabilising;
+	}
+
+	return GCodeResult::ok;
 }
 
 void RemoteHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
@@ -247,6 +309,26 @@ void RemoteHeater::UpdateRemoteStatus(CanAddress src, const CanHeaterReport& rep
 		lastTemperature = report.temperature;
 		whenLastStatusReceived = millis();
 	}
+}
+
+GCodeResult RemoteHeater::SendTuningCommand(const StringRef& reply, bool on) noexcept
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageHeaterTuningCommand>(rid, CanInterface::GetCanAddress(), boardAddress);
+	msg->heaterNumber = GetHeaterNumber();
+	msg->on = on;
+	msg->highTemp = tuningTargetTemp;
+	msg->lowTemp = tuningTargetTemp - TuningHysteresis;
+	msg->pwm = tuningPwm;
+	msg->peakTempDrop = TuningPeakTempDrop;
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
 #endif

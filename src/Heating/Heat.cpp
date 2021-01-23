@@ -1092,13 +1092,6 @@ size_t Heat::GetNumSensorsToReport() const noexcept
 	return s->GetSensorNumber() + 1;
 }
 
-// Get the temperature of a heater
-float Heat::GetHeaterTemperature(size_t heater) const noexcept
-{
-	const auto h = FindHeater(heater);
-	return (h.IsNull()) ? ABS_ZERO : h->GetTemperature();
-}
-
 // Suspend the heaters to conserve power or while doing Z probing
 void Heat::SuspendHeaters(bool sus) noexcept
 {

@@ -16,48 +16,11 @@
 
 #define TUNE_WITH_HALF_FAN	0
 
-// Private constants
-const uint32_t InitialTuningReadingInterval = 250;	// the initial reading interval in milliseconds
-const uint32_t TempSettleTimeout = 20000;			// how long we allow the initial temperature to settle
-
-// Variables used during heater tuning
-static float tuningPwm;									// the PWM to use, 0..1
-static float tuningTargetTemp;							// the target temperature
-static DeviationAccumulator tuningStartTemp;			// the temperature when we turned on the heater
-static uint32_t tuningBeginTime;						// when we started the tuning process
-static DeviationAccumulator dHigh;
-static DeviationAccumulator dLow;
-static DeviationAccumulator tOn;
-static DeviationAccumulator tOff;
-static DeviationAccumulator heatingRate;
-static DeviationAccumulator coolingRate;
-static uint32_t lastOffTime;
-static uint32_t lastOnTime;
-static float peakTemp;									// max or min temperature
-static uint32_t peakTime;								// the time at which we recorded peakTemp
-static float afterPeakTemp;								// temperature after max from which we start timing the cooling rate
-static uint32_t afterPeakTime;							// the time at which we recorded afterPeakTemp
-static float lastCoolingRate;
-static FansBitmap tuningFans;
-static unsigned int tuningPhase;
-static uint8_t idleCyclesDone;
-
 static LocalHeater::HeaterParameters fanOffParams, fanOnParams;
 
 #if HAS_VOLTAGE_MONITOR
 static DeviationAccumulator tuningVoltage;				// sum of the voltage readings we take during the heating phase
 #endif
-
-// Clear all the counters except tuning voltage and start temperature
-static void ClearCounters() noexcept
-{
-	dHigh.Clear();
-	dLow.Clear();
-	tOn.Clear();
-	tOff.Clear();
-	heatingRate.Clear();
-	coolingRate.Clear();
-}
 
 // Member functions and constructors
 
@@ -99,7 +62,6 @@ void LocalHeater::ResetHeater() noexcept
 	previousTemperatureIndex = 0;
 	iAccumulator = 0.0;
 	badTemperatureCount = 0;
-	tuned = false;
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
 	temperature = BadErrorTemperature;
@@ -478,60 +440,18 @@ float LocalHeater::GetExpectedHeatingRate() const noexcept
 }
 
 // Auto tune this heater. The caller has already checked that on other heater is being tuned.
-GCodeResult LocalHeater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException)
+GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, FansBitmap fans, float targetTemp, float pwm, bool seenA, float ambientTemp) noexcept
 {
-	// Get the target temperature (required)
-	gb.MustSee('S');
-	const float targetTemp = gb.GetFValue();
-
-	// Get the optional PWM
-	const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : GetModel().GetMaxPwm();
-	if (maxPwm < 0.1 || maxPwm > 1.0)
-	{
-		reply.copy("Invalid PWM value");
-		return GCodeResult::error;
-	}
-
-	if (!GetModel().IsEnabled())
-	{
-		reply.printf("heater %u cannot be auto tuned while it is disabled", GetHeaterNumber());
-		return GCodeResult::error;
-	}
-
 	if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
 	{
 		reply.printf("heater %u must be off and cold before auto tuning it", GetHeaterNumber());
 		return GCodeResult::error;
 	}
 
-	const float limit = GetHighestTemperatureLimit();
-	if (targetTemp >= limit)
-	{
-		reply.printf("heater %u target temperature must be below the temperature limit for this heater (%.1fC)", GetHeaterNumber(), (double)limit);
-		return GCodeResult::error;
-	}
-
-	const TemperatureError err = ReadTemperature();
-	if (err != TemperatureError::success)
-	{
-		reply.printf("heater %u reported error '%s' at start of auto tuning", GetHeaterNumber(), TemperatureErrorString(err));
-		return GCodeResult::error;
-	}
-
-	const bool seenA = gb.Seen('A');
-	const float ambientTemp = (seenA) ? gb.GetFValue() : temperature;
-	if (ambientTemp + 20 >= targetTemp)
-	{
-		reply.printf("Target temperature must be at least 20C above ambient temperature");
-	}
-
-	reply.printf("Auto tuning heater %u using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended",
-					GetHeaterNumber(), (double)targetTemp, (double)maxPwm);
-
 	tuningFans = fans;
 	reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
 
-	tuningPwm = maxPwm;
+	tuningPwm = pwm;
 	tuningTargetTemp = targetTemp;
 	tuningStartTemp.Clear();
 	tuningBeginTime = millis();

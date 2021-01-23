@@ -60,8 +60,42 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
 #endif
 
+// Static members of class Heater
+
+float Heater::tuningPwm;								// the PWM to use, 0..1
+float Heater::tuningTargetTemp;							// the target temperature
+DeviationAccumulator Heater::tuningStartTemp;			// the temperature when we turned on the heater
+uint32_t Heater::tuningBeginTime;						// when we started the tuning process
+DeviationAccumulator Heater::dHigh;
+DeviationAccumulator Heater::dLow;
+DeviationAccumulator Heater::tOn;
+DeviationAccumulator Heater::tOff;
+DeviationAccumulator Heater::heatingRate;
+DeviationAccumulator Heater::coolingRate;
+uint32_t Heater::lastOffTime;
+uint32_t Heater::lastOnTime;
+float Heater::peakTemp;									// max or min temperature
+uint32_t Heater::peakTime;								// the time at which we recorded peakTemp
+float Heater::afterPeakTemp;							// temperature after max from which we start timing the cooling rate
+uint32_t Heater::afterPeakTime;							// the time at which we recorded afterPeakTemp
+float Heater::lastCoolingRate;
+FansBitmap Heater::tuningFans;
+unsigned int Heater::tuningPhase;
+uint8_t Heater::idleCyclesDone;
+
+// Clear all the counters except tuning voltage and start temperature
+/*static*/ void Heater::ClearCounters() noexcept
+{
+	dHigh.Clear();
+	dLow.Clear();
+	tOn.Clear();
+	tOff.Clear();
+	heatingRate.Clear();
+	coolingRate.Clear();
+}
+
 Heater::Heater(unsigned int num) noexcept
-	: heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
+	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
 	  active(false), modelSetByUser(false), monitorsSetByUser(false)
 {
@@ -170,17 +204,17 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 }
 
 // Set the process model returning true if successful
-GCodeResult Heater::SetModel(float heatingRate, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	GCodeResult rslt;
-	if (model.SetParameters(heatingRate, coolingRateFanOff, coolingRateFanOn, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
+	if (model.SetParameters(hr, coolingRateFanOff, coolingRateFanOn, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
 	{
 		if (model.IsEnabled())
 		{
 			rslt = UpdateModel(reply);
 			if (rslt == GCodeResult::ok)
 			{
-				const float predictedMaxTemp = heatingRate/coolingRateFanOff + NormalAmbientTemperature;
+				const float predictedMaxTemp = hr/coolingRateFanOff + NormalAmbientTemperature;
 				const float noWarnTemp = (GetHighestTemperatureLimit() - NormalAmbientTemperature) * 1.5 + 50.0;		// allow 50% extra power plus enough for an extra 50C
 				if (predictedMaxTemp > noWarnTemp)
 				{
@@ -192,6 +226,7 @@ GCodeResult Heater::SetModel(float heatingRate, float coolingRateFanOff, float c
 		else
 		{
 			ResetHeater();
+			tuned = false;
 			rslt = GCodeResult::ok;
 		}
 	}
@@ -202,6 +237,58 @@ GCodeResult Heater::SetModel(float heatingRate, float coolingRateFanOff, float c
 	}
 
 	reprap.HeatUpdated();
+	return rslt;
+}
+
+// Start an auto tune cycle for this heater
+GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException)
+{
+	// Get the target temperature (required)
+	gb.MustSee('S');
+	const float targetTemp = gb.GetFValue();
+
+	// Get the optional PWM
+	const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : GetModel().GetMaxPwm();
+	if (maxPwm < 0.1 || maxPwm > 1.0)
+	{
+		reply.copy("Invalid PWM value");
+		return GCodeResult::error;
+	}
+
+	if (!GetModel().IsEnabled())
+	{
+		reply.printf("heater %u cannot be auto tuned while it is disabled", GetHeaterNumber());
+		return GCodeResult::error;
+	}
+
+	const float limit = GetHighestTemperatureLimit();
+	if (targetTemp >= limit)
+	{
+		reply.printf("heater %u target temperature must be below the temperature limit for this heater (%.1fC)", GetHeaterNumber(), (double)limit);
+		return GCodeResult::error;
+	}
+
+	TemperatureError err;
+	const float currentTemp = reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);
+	if (err != TemperatureError::success)
+	{
+		reply.printf("heater %u reported error '%s' at start of auto tuning", GetHeaterNumber(), TemperatureErrorString(err));
+		return GCodeResult::error;
+	}
+
+	const bool seenA = gb.Seen('A');
+	const float ambientTemp = (seenA) ? gb.GetFValue() : currentTemp;
+	if (ambientTemp + 20 >= targetTemp)
+	{
+		reply.printf("Target temperature must be at least 20C above ambient temperature");
+	}
+
+	const GCodeResult rslt = StartAutoTune(reply, fans, targetTemp, maxPwm, seenA, ambientTemp);
+	if (rslt == GCodeResult::ok)
+	{
+		reply.printf("Auto tuning heater %u using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended",
+						GetHeaterNumber(), (double)targetTemp, (double)maxPwm);
+	}
 	return rslt;
 }
 
