@@ -130,7 +130,7 @@ public:
 	GCodeResult Activate(int heater, const StringRef& reply) noexcept;	// Turn on a heater
 	void Standby(int heater, const Tool* tool) noexcept;				// Set a heater to standby
 	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
-	void PrintCoolingFanPwmChanged(unsigned int heater, float pwmChange) const noexcept;
+	void FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept;
 
 #if HAS_MASS_STORAGE
 	bool WriteModelParameters(FileStore *f) const noexcept;				// Write heater model parameters to file returning true if no error
@@ -140,6 +140,7 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	void ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg) noexcept;
 	void ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept;
+	void ProcessRemoteHeaterTuningReport(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

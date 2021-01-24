@@ -622,7 +622,7 @@ void Tool::SetFansPwm(float f) const noexcept
 	const float pwmChange = reprap.GetFansManager().SetFansValue(fanMapping, f);
 	if (pwmChange != 0.0)
 	{
-		IterateHeaters([pwmChange](unsigned int heater) { reprap.GetHeat().PrintCoolingFanPwmChanged(heater, pwmChange); });
+		IterateHeaters([pwmChange](unsigned int heater) { reprap.GetHeat().FeedForwardAdjustment(heater, pwmChange, 0.0); });
 	}
 }
 

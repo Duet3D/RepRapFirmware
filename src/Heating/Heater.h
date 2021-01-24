@@ -20,7 +20,10 @@
 # include "CanId.h"
 #endif
 
+#define TUNE_WITH_HALF_FAN	0
+
 class HeaterMonitor;
+struct CanMessageHeaterTuningReport;
 struct CanHeaterReport;
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
@@ -43,13 +46,13 @@ public:
 	virtual GCodeResult ResetFault(const StringRef& reply) noexcept = 0;	// Reset a fault condition - only call this if you know what you are doing
 	virtual void SwitchOff() noexcept = 0;
 	virtual void Spin() noexcept = 0;
-	virtual void GetAutoTuneStatus(const StringRef& reply) const noexcept = 0;	// Get the auto tune status or last result
 	virtual void Suspend(bool sus) noexcept = 0;						// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const noexcept = 0;					// Get the inertial term accumulator
-	virtual void PrintCoolingFanPwmChanged(float pwmChange) noexcept = 0;
+	virtual void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept = 0;
 
 #if SUPPORT_CAN_EXPANSION
 	virtual void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept = 0;
+	virtual void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept = 0;
 #endif
 
 	HeaterStatus GetStatus() const noexcept;							// Get the status of the heater
@@ -61,6 +64,7 @@ public:
 	GCodeResult Activate(const StringRef& reply) noexcept;				// Switch from idle to active
 	void Standby() noexcept;											// Switch from active to idle
 	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException);	// Start an auto tune cycle for this heater
+	void GetAutoTuneStatus(const StringRef& reply) const noexcept;		// Get the auto tune status or last result
 
 	void GetFaultDetectionParameters(float& pMaxTempExcursion, float& pMaxFaultTime) const noexcept
 		{ pMaxTempExcursion = maxTempExcursion; pMaxFaultTime = maxHeatingFaultTime; }
@@ -107,7 +111,14 @@ protected:
 		lastTuningMode = tuning3
 	};
 
-protected:
+	struct HeaterParameters
+	{
+		float heatingRate;
+		float coolingRate;
+		float deadTime;
+		unsigned int numCycles;
+	};
+
 	virtual void ResetHeater() noexcept = 0;
 	virtual HeaterMode GetMode() const noexcept = 0;
 	virtual GCodeResult SwitchOn(const StringRef& reply) noexcept = 0;
@@ -121,7 +132,10 @@ protected:
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
-	GCodeResult SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;	// Set the process model
+	GCodeResult SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
+															// set the process model
+	void CalculateModel(HeaterParameters& params) noexcept;	// calculate G, td and tc from the accumulated readings
+	void SetAndReportModel(bool usingFans) noexcept;
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];			// embedding them in the Heater uses less memory than dynamic allocation
 	bool tuned;												// true if tuning was successful
@@ -148,6 +162,8 @@ protected:
 	static DeviationAccumulator tOff;
 	static DeviationAccumulator heatingRate;
 	static DeviationAccumulator coolingRate;
+	static DeviationAccumulator tuningVoltage;				// sum of the voltage readings we take during the heating phase
+
 	static uint32_t lastOffTime;
 	static uint32_t lastOnTime;
 	static float peakTemp;									// max or min temperature
@@ -158,6 +174,8 @@ protected:
 	static FansBitmap tuningFans;
 	static unsigned int tuningPhase;
 	static uint8_t idleCyclesDone;
+
+	static HeaterParameters fanOffParams, fanOnParams;
 
 	static void ClearCounters() noexcept;
 

@@ -28,10 +28,10 @@ public:
 	float GetTemperature() const noexcept override;							// Get the latest temperature
 	float GetAveragePWM() const noexcept override;							// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
-	void GetAutoTuneStatus(const StringRef& reply) const noexcept override;	// Get the auto tune status or last result
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
-	void PrintCoolingFanPwmChanged(float pwmChange) noexcept override;
+	void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept override;
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override;
+	void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept override;
 
 protected:
 	void ResetHeater() noexcept override;
@@ -48,11 +48,16 @@ private:
 		notTuning = 0,
 		stabilising,
 		heatingUp,
+		idleCycles,
 		cyclingFanOff,
+#if TUNE_WITH_HALF_FAN
+		cyclingHalfFan,
+#endif
 		cyclingFanOn
 	};
 
 	GCodeResult SendTuningCommand(const StringRef& reply, bool on) noexcept;
+	void StopTuning() noexcept;
 
 	static constexpr uint32_t RemoteStatusTimeout = 2000;
 
@@ -62,7 +67,12 @@ private:
 	TuningState tuningState;
 	float lastTemperature;
 	uint32_t whenLastStatusReceived;
-	uint32_t timeSetHeating;												// When we turned on the heater at the start of auto tuning
+
+	// Variables used only during tuning
+	static uint32_t timeSetHeating;											// When we turned on the heater at the start of auto tuning
+	static float currentCoolingRate;
+	static unsigned int tuningCyclesDone;
+	static bool newTuningResult;
 };
 
 #endif

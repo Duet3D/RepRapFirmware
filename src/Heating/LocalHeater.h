@@ -25,14 +25,6 @@ class LocalHeater : public Heater
 	static const size_t NumPreviousTemperatures = 4;		// How many samples we average the temperature derivative over
 
 public:
-	struct HeaterParameters
-	{
-		float heatingRate;
-		float coolingRate;
-		float deadTime;
-		unsigned int numCycles;
-	};
-
 	LocalHeater(unsigned int heaterNum) noexcept;
 	~LocalHeater() noexcept;
 
@@ -46,12 +38,12 @@ public:
 	float GetTemperature() const noexcept override;							// Get the latest temperature
 	float GetAveragePWM() const noexcept override;							// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
-	void GetAutoTuneStatus(const StringRef& reply) const noexcept override;	// Get the auto tune status or last result
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
-	void PrintCoolingFanPwmChanged(float pwmChange) noexcept override;
+	void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept override;
 
 #if SUPPORT_CAN_EXPANSION
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override { }
+	void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept override { }
 #endif
 
 protected:
@@ -67,8 +59,6 @@ private:
 	void SetHeater(float power) const noexcept;				// Power is a fraction in [0,1]
 	TemperatureError ReadTemperature() noexcept;			// Read and store the temperature of this heater
 	void DoTuningStep() noexcept;							// Called on each temperature sample when auto tuning
-	void CalculateModel(HeaterParameters& params) noexcept;	// Calculate G, td and tc from the accumulated readings
-	void SetAndReportModel(bool usingFans) noexcept;
 	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
 	void RaiseHeaterFault(const char *format, ...) noexcept;
 
