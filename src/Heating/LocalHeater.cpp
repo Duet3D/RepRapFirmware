@@ -447,7 +447,6 @@ GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, FansBitmap fans, 
 	tuningTargetTemp = targetTemp;
 	tuningStartTemp.Clear();
 	tuningBeginTime = millis();
-	tuningPhase = 0;
 	tuned = false;					// assume failure
 
 	if (seenA)
@@ -456,10 +455,13 @@ GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, FansBitmap fans, 
 		ClearCounters();
 		timeSetHeating = millis();
 		lastPwm = tuningPwm;										// turn on heater at specified power
+		tuningPhase = 1;
 		mode = HeaterMode::tuning1;
+		ReportTuningUpdate();
 	}
 	else
 	{
+		tuningPhase = 0;
 		mode = HeaterMode::tuning0;
 	}
 
@@ -582,7 +584,7 @@ void LocalHeater::DoTuningStep() noexcept
 				idleCyclesDone = 0;
 				mode = HeaterMode::tuning2;
 				tuningPhase = 2;
-				reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 2, heater settling\n");
+				ReportTuningUpdate();
 			}
 		}
 		return;
@@ -612,7 +614,7 @@ void LocalHeater::DoTuningStep() noexcept
 				if (idleCyclesDone == TuningHeaterMaxIdleCycles || (idleCyclesDone >= TuningHeaterMinIdleCycles && currentCoolingRate >= lastCoolingRate * HeaterSettledCoolingTimeRatio))
 				{
 					tuningPhase = 3;
-					reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan off\n");
+					ReportTuningUpdate();
 				}
 				else
 				{
@@ -648,11 +650,10 @@ void LocalHeater::DoTuningStep() noexcept
 							ClearCounters();
 #if TUNE_WITH_HALF_FAN
 							reprap.GetFansManager().SetFansValue(tuningFans, 0.5);		// turn fans on at half PWM
-							reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan 50%\n");
 #else
 							reprap.GetFansManager().SetFansValue(tuningFans, 1.0);		// turn fans on at full PWM
-							reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan on\n");
 #endif
+							ReportTuningUpdate();
 						}
 					}
 #if TUNE_WITH_HALF_FAN
@@ -662,7 +663,7 @@ void LocalHeater::DoTuningStep() noexcept
 						tuningPhase = 5;
 						ClearCounters();
 						reprap.GetFansManager().SetFansValue(tuningFans, 1.0);			// turn fans fully on
-						reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 4, fan 100%\n");
+						ReportTuningUpdate();
 					}
 #endif
 					else

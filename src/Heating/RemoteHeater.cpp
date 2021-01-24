@@ -60,7 +60,7 @@ void RemoteHeater::Spin() noexcept
 			{
 				tuningState = TuningState::heatingUp;
 				tuningPhase = 1;
-				reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 1, heater on\n");
+				ReportTuningUpdate();
 			}
 			else
 			{
@@ -105,7 +105,7 @@ void RemoteHeater::Spin() noexcept
 				newTuningResult = false;
 				tuningState = TuningState::idleCycles;
 				tuningPhase = 2;
-				reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 2, heater settling\n");
+				ReportTuningUpdate();
 			}
 		}
 		break;
@@ -117,8 +117,8 @@ void RemoteHeater::Spin() noexcept
 			if (idleCyclesDone == TuningHeaterMaxIdleCycles || (idleCyclesDone >= TuningHeaterMinIdleCycles && currentCoolingRate >= lastCoolingRate * HeaterSettledCoolingTimeRatio))
 			{
 				tuningPhase = 3;
-				tuningState = TuningState::cyclingFanOff;
-				reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan off\n");
+				tuningState = TuningState::cycling;
+				ReportTuningUpdate();
 			}
 			else
 			{
@@ -130,11 +130,7 @@ void RemoteHeater::Spin() noexcept
 		}
 		break;
 
-	case TuningState::cyclingFanOff:
-#if TUNE_WITH_HALF_FAN
-	case TuningState::cyclingHalfFan:
-#endif
-	case TuningState::cyclingFanOn:
+	case TuningState::cycling:
 		if (newTuningResult)
 		{
 			if (coolingRate.GetNumSamples() >= MinTuningHeaterCycles)
@@ -150,12 +146,13 @@ void RemoteHeater::Spin() noexcept
 						reprap.GetPlatform().Message(WarningMessage, "heater behaviour was not consistent during tuning\n");
 					}
 
-					if (tuningState == TuningState::cyclingFanOff)
+					if (tuningPhase == 3)
 					{
 						CalculateModel(fanOffParams);
 						if (tuningFans.IsEmpty())
 						{
 							SetAndReportModel(false);
+							StopTuning();
 							break;
 						}
 						else
@@ -163,25 +160,21 @@ void RemoteHeater::Spin() noexcept
 							tuningPhase = 4;
 							ClearCounters();
 #if TUNE_WITH_HALF_FAN
-							tuningState = TuningState::cyclingFanHalf;
 							reprap.GetFansManager().SetFansValue(tuningFans, 0.5);		// turn fans on at half PWM
-							reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan 50%\n");
 #else
-							tuningState = TuningState::cyclingFanOn;
 							reprap.GetFansManager().SetFansValue(tuningFans, 1.0);		// turn fans on at full PWM
-							reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 3, fan on\n");
 #endif
+							ReportTuningUpdate();
 						}
 					}
 #if TUNE_WITH_HALF_FAN
-					else if (tuningState == TuningState::cyclingFanHalf)
+					else if (tuningPhase == 4)
 					{
 						CalculateModel(fanOnParams);
 						tuningPhase = 5;
-						tuningState = TuningState::cyclingFanOn;
 						ClearCounters();
 						reprap.GetFansManager().SetFansValue(tuningFans, 1.0);			// turn fans fully on
-						reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 4, fan 100%\n");
+						ReportTuningUpdate();
 					}
 #endif
 					else
@@ -189,6 +182,7 @@ void RemoteHeater::Spin() noexcept
 						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);			// turn fans off
 						CalculateModel(fanOnParams);
 						SetAndReportModel(true);
+						StopTuning();
 						break;
 					}
 				}
@@ -322,6 +316,7 @@ GCodeResult RemoteHeater::StartAutoTune(const StringRef& reply, FansBitmap fans,
 		}
 		tuningState = TuningState::heatingUp;
 		tuningPhase = 1;
+		ReportTuningUpdate();
 	}
 	else
 	{
@@ -372,7 +367,9 @@ void RemoteHeater::Suspend(bool sus) noexcept
 
 Heater::HeaterMode RemoteHeater::GetMode() const noexcept
 {
-	return (millis() - whenLastStatusReceived < RemoteStatusTimeout) ? lastMode : HeaterMode::offline;
+	return (tuningState != TuningState::notTuning) ? HeaterMode::tuning0
+		: (millis() - whenLastStatusReceived < RemoteStatusTimeout) ? lastMode
+			: HeaterMode::offline;
 }
 
 // This isn't just called to turn the heater on, it is called when the temperature needs to be updated

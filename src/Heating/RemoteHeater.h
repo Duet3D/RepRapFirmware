@@ -49,11 +49,7 @@ private:
 		stabilising,
 		heatingUp,
 		idleCycles,
-		cyclingFanOff,
-#if TUNE_WITH_HALF_FAN
-		cyclingHalfFan,
-#endif
-		cyclingFanOn
+		cycling
 	};
 
 	GCodeResult SendTuningCommand(const StringRef& reply, bool on) noexcept;

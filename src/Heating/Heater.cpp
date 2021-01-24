@@ -298,19 +298,26 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	return rslt;
 }
 
+const char *const Heater::TuningPhaseText[] =
+{
+	"checking temperature is stable",
+	"heating up",
+	"heating system settling",
+	"tuning with fan off",
+#if TUNE_WITH_HALF_FAN
+	"tuning with 50% fan",
+#endif
+	"tuning with fan on"
+};
+
 // Get the auto tune status or last result
 void Heater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 {
 	if (GetStatus() == HeaterStatus::tuning)
 	{
 		// Phases are: 1 = stabilising, 2 = heating, 3 = settling, 4 = cycling with fan off, 5 = cycling with fan on
-		const unsigned int numPhases = (tuningFans.IsEmpty()) ? 4
-#if TUNE_WITH_HALF_FAN
-				: 6;
-#else
-				: 5;
-#endif
-		reply.printf("Heater %u is being tuned, phase %u of %u", GetHeaterNumber(), tuningPhase, numPhases);
+		const unsigned int numPhases = (tuningFans.IsEmpty()) ? 4 : ARRAY_SIZE(TuningPhaseText);
+		reply.printf("Heater %u is being tuned, phase %u of %u, %s", GetHeaterNumber(), tuningPhase + 1, numPhases, TuningPhaseText[tuningPhase]);
 	}
 	else if (tuned)
 	{
@@ -319,6 +326,15 @@ void Heater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 	else
 	{
 		reply.printf("Heater %u tuning failed", GetHeaterNumber());
+	}
+}
+
+// Tell the user what's happening, called after the tuning phase has been updated
+void Heater::ReportTuningUpdate() noexcept
+{
+	if (tuningPhase < ARRAY_SIZE(TuningPhaseText))
+	{
+		reprap.GetPlatform().MessageF(GenericMessage, "Auto tune starting phase %u, %s\n", tuningPhase + 1, TuningPhaseText[tuningPhase]);
 	}
 }
 

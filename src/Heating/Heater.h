@@ -134,6 +134,7 @@ protected:
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
 	GCodeResult SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
 															// set the process model
+	void ReportTuningUpdate() noexcept;						// tell the user what's happening
 	void CalculateModel(HeaterParameters& params) noexcept;	// calculate G, td and tc from the accumulated readings
 	void SetAndReportModel(bool usingFans) noexcept;
 
@@ -180,6 +181,8 @@ protected:
 	static void ClearCounters() noexcept;
 
 private:
+	static const char* const TuningPhaseText[];
+
 	FopDt model;
 	unsigned int heaterNumber;
 	int sensorNumber;								// the sensor number used by this heater
