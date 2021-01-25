@@ -166,7 +166,7 @@ int debugLine = 0;
 // Urgent initialisation function
 // This is called before general init has been done, and before constructors for C++ static data have been called.
 // Therefore, be very careful what you do here!
-extern "C" void UrgentInit()
+extern "C" void AppUrgentInit()
 {
 #if defined(DUET_NG)
 	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
@@ -5203,11 +5203,13 @@ void Platform::Tick() noexcept
 		break;
 	}
 
-#if SAME70 || SAM4E || SAM4S
+#if SAME70
 	// On Duet 3, AFEC1 is used only for thermistors and associated Vref/Vssa monitoring. AFEC0 is used for everything else.
 	// To reduce noise, we use x16 hardware averaging on AFEC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
 	// There is enough time to convert all AFEC0 channels in one tick, but only one AFEC1 channel because of the higher averaging.
 	LegacyAnalogIn::AnalogInStartConversion(0x0FFF | (1u << (uint8_t) filteredAdcChannels[currentFilterNumber]));
+#elif SAM4E || SAM4S
+	LegacyAnalogIn::AnalogInStartConversion();
 #elif !SAME5x
 	AnalogInStartConversion();
 #endif

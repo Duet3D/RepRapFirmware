@@ -318,7 +318,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB04 TDI
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB05 TDO
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"exp.pb6,exp.29,duex.pb6"					},	// PB06 (was SWDIO)
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB07 SWCLK
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB07 VssaSensePin (was SWCLK)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB08 Crystal
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB09 Crystal
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB10 USB DDM
@@ -352,7 +352,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_7,	PinCapability::none,	nullptr										},	// PC04 PWR_FAIL_DET2 Vin power fail detect
 	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"exp.heater4,exp.13,!duex.e3heat,!duex.pwm2"},	// PC05 Heater 4
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC06 ENN GlobalTmc2660EnablePin
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.encb,connlcd.3"					},	// PC07  Endstop 10 (was LCD ENC_B)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.encb,connlcd.3"					},	// PC07 Endstop 10 (was LCD ENC_B)
 	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"exp.heater5,exp.18,!duex.e4heat,!duex.pwm3"},	// PC08 Heater 5
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC09 Y_EN
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC10 Z_EN
@@ -458,6 +458,7 @@ constexpr PinDescription PinTable[] =
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
+static_assert(NumNamedPins == 32+32+32+32+6+16+16);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
