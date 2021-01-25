@@ -119,7 +119,12 @@ constexpr size_t MaxExtrudersPerTool = 5;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and one auxiliary UART)
+# ifdef DUET3_ATE
+constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART) - reserve the second UART for ATE use
+#else
+constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
+#endif
+
 #define SERIAL_MAIN_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
 #define SERIAL_AUX2_DEVICE (serialUart1)

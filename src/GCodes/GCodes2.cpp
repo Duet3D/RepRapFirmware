@@ -248,11 +248,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		break;
 
 	case 17:	// Select XY plane for G2/G3
-		break;	// we only support the XY plane, so this is a NOP
-
 	case 18:	// Select XZ plane
 	case 19:	// Select YZ plane
-		result = GCodeResult::errorNotSupported;
+		if (!LockMovementAndWaitForStandstill(gb))			// do this in case a G2 or G3 command is in progress
+		{
+			return false;
+		}
+
+		gb.MachineState().selectedPlane = code - 17;
 		break;
 
 	case 20: // Inches (which century are we living in, here?)
@@ -989,12 +992,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				pausePending = true;
 				if (&gb != fileGCode)
 				{
-					return false;						// wait for the current macro to finish
+					return false;								// wait for the current macro to finish
 				}
 			}
 			else
 			{
-				if (!LockMovement(gb))					// lock movement before calling DoPause
+				if (!LockMovement(gb))							// lock movement before calling DoPause
 				{
 					return false;
 				}
@@ -1008,8 +1011,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			gb.MustSee('S');
 			fileOffsetToPrint = (FilePosition)gb.GetUIValue();
 			restartMoveFractionDone = (gb.Seen('P')) ? constrain<float>(gb.GetFValue(), 0.0, 1.0) : 0.0;
-			restartInitialUserX = (gb.Seen('X')) ? gb.GetFValue() : 0.0;
-			restartInitialUserY = (gb.Seen('Y')) ? gb.GetFValue() : 0.0;
+			{
+				const unsigned int selectedPlane = gb.MachineState().selectedPlane;
+				const char c0 = (selectedPlane == 2) ? 'Y' : 'X';
+				const char c1 = (selectedPlane == 0) ? 'Y' : 'Z';
+				restartInitialUserC0 = (gb.Seen(c0)) ? gb.GetFValue() : 0.0;
+				restartInitialUserC1 = (gb.Seen(c1)) ? gb.GetFValue() : 0.0;
+			}
 			break;
 
 		case 27: // Report print status - Deprecated

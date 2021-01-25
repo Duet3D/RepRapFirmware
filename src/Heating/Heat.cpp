@@ -750,12 +750,12 @@ void Heat::Standby(int heater, const Tool *tool) noexcept
 	}
 }
 
-void Heat::PrintCoolingFanPwmChanged(unsigned int heater, float pwmChange) const noexcept
+void Heat::FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
-		h->PrintCoolingFanPwmChanged(pwmChange);
+		h->FeedForwardAdjustment(fanPwmChange, extrusionChange);
 	}
 }
 
@@ -1092,13 +1092,6 @@ size_t Heat::GetNumSensorsToReport() const noexcept
 	return s->GetSensorNumber() + 1;
 }
 
-// Get the temperature of a heater
-float Heat::GetHeaterTemperature(size_t heater) const noexcept
-{
-	const auto h = FindHeater(heater);
-	return (h.IsNull()) ? ABS_ZERO : h->GetTemperature();
-}
-
 // Suspend the heaters to conserve power or while doing Z probing
 void Heat::SuspendHeaters(bool sus) noexcept
 {
@@ -1239,6 +1232,15 @@ void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersSta
 									}
 								}
 							);
+}
+
+void Heat::ProcessRemoteHeaterTuningReport(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept
+{
+	const auto h = FindHeater(msg.heater);
+	if (h.IsNotNull())
+	{
+		h->UpdateHeaterTuning(src, msg);
+	}
 }
 
 #endif

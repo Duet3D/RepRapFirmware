@@ -544,13 +544,14 @@ private:
 	float firstSegmentFractionToSkip;
 
 	float restartMoveFractionDone;				// how much of the next move was printed before the pause or power failure (from M26)
-	float restartInitialUserX;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
-	float restartInitialUserY;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
+	float restartInitialUserC0;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
+	float restartInitialUserC1;					// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
 
 	float arcCentre[MaxAxes];
 	float arcRadius;
 	float arcCurrentAngle;
 	float arcAngleIncrement;
+	unsigned int arcAxis0, arcAxis1;
 	bool doingArcMove;
 
 	enum class SegmentedMoveState : uint8_t

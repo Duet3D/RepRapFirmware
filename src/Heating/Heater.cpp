@@ -11,6 +11,7 @@
 #include "Heat.h"
 #include "HeaterMonitor.h"
 #include "Sensors/TemperatureSensor.h"
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <GCodes/GCodeException.h>
 
@@ -60,8 +61,47 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
 #endif
 
+// Static members of class Heater
+
+float Heater::tuningPwm;								// the PWM to use, 0..1
+float Heater::tuningTargetTemp;							// the target temperature
+
+DeviationAccumulator Heater::tuningStartTemp;			// the temperature when we turned on the heater
+DeviationAccumulator Heater::dHigh;
+DeviationAccumulator Heater::dLow;
+DeviationAccumulator Heater::tOn;
+DeviationAccumulator Heater::tOff;
+DeviationAccumulator Heater::heatingRate;
+DeviationAccumulator Heater::coolingRate;
+DeviationAccumulator Heater::tuningVoltage;				// sum of the voltage readings we take during the heating phase
+
+uint32_t Heater::tuningBeginTime;						// when we started the tuning process
+uint32_t Heater::lastOffTime;
+uint32_t Heater::lastOnTime;
+float Heater::peakTemp;									// max or min temperature
+uint32_t Heater::peakTime;								// the time at which we recorded peakTemp
+float Heater::afterPeakTemp;							// temperature after max from which we start timing the cooling rate
+uint32_t Heater::afterPeakTime;							// the time at which we recorded afterPeakTemp
+float Heater::lastCoolingRate;
+FansBitmap Heater::tuningFans;
+unsigned int Heater::tuningPhase;
+uint8_t Heater::idleCyclesDone;
+
+Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
+
+// Clear all the counters except tuning voltage and start temperature
+/*static*/ void Heater::ClearCounters() noexcept
+{
+	dHigh.Clear();
+	dLow.Clear();
+	tOn.Clear();
+	tOff.Clear();
+	heatingRate.Clear();
+	coolingRate.Clear();
+}
+
 Heater::Heater(unsigned int num) noexcept
-	: heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
+	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
 	  active(false), modelSetByUser(false), monitorsSetByUser(false)
 {
@@ -170,17 +210,17 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 }
 
 // Set the process model returning true if successful
-GCodeResult Heater::SetModel(float heatingRate, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	GCodeResult rslt;
-	if (model.SetParameters(heatingRate, coolingRateFanOff, coolingRateFanOn, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
+	if (model.SetParameters(hr, coolingRateFanOff, coolingRateFanOn, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
 	{
 		if (model.IsEnabled())
 		{
 			rslt = UpdateModel(reply);
 			if (rslt == GCodeResult::ok)
 			{
-				const float predictedMaxTemp = heatingRate/coolingRateFanOff + NormalAmbientTemperature;
+				const float predictedMaxTemp = hr/coolingRateFanOff + NormalAmbientTemperature;
 				const float noWarnTemp = (GetHighestTemperatureLimit() - NormalAmbientTemperature) * 1.5 + 50.0;		// allow 50% extra power plus enough for an extra 50C
 				if (predictedMaxTemp > noWarnTemp)
 				{
@@ -192,6 +232,7 @@ GCodeResult Heater::SetModel(float heatingRate, float coolingRateFanOff, float c
 		else
 		{
 			ResetHeater();
+			tuned = false;
 			rslt = GCodeResult::ok;
 		}
 	}
@@ -203,6 +244,184 @@ GCodeResult Heater::SetModel(float heatingRate, float coolingRateFanOff, float c
 
 	reprap.HeatUpdated();
 	return rslt;
+}
+
+// Start an auto tune cycle for this heater
+GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException)
+{
+	// Get the target temperature (required)
+	gb.MustSee('S');
+	const float targetTemp = gb.GetFValue();
+
+	// Get the optional PWM
+	const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : GetModel().GetMaxPwm();
+	if (maxPwm < 0.1 || maxPwm > 1.0)
+	{
+		reply.copy("Invalid PWM value");
+		return GCodeResult::error;
+	}
+
+	if (!GetModel().IsEnabled())
+	{
+		reply.printf("heater %u cannot be auto tuned while it is disabled", GetHeaterNumber());
+		return GCodeResult::error;
+	}
+
+	const float limit = GetHighestTemperatureLimit();
+	if (targetTemp >= limit)
+	{
+		reply.printf("heater %u target temperature must be below the temperature limit for this heater (%.1fC)", GetHeaterNumber(), (double)limit);
+		return GCodeResult::error;
+	}
+
+	TemperatureError err;
+	const float currentTemp = reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);
+	if (err != TemperatureError::success)
+	{
+		reply.printf("heater %u reported error '%s' at start of auto tuning", GetHeaterNumber(), TemperatureErrorString(err));
+		return GCodeResult::error;
+	}
+
+	const bool seenA = gb.Seen('A');
+	const float ambientTemp = (seenA) ? gb.GetFValue() : currentTemp;
+	if (ambientTemp + 20 >= targetTemp)
+	{
+		reply.printf("Target temperature must be at least 20C above ambient temperature");
+	}
+
+	const GCodeResult rslt = StartAutoTune(reply, fans, targetTemp, maxPwm, seenA, ambientTemp);
+	if (rslt == GCodeResult::ok)
+	{
+		reply.printf("Auto tuning heater %u using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended",
+						GetHeaterNumber(), (double)targetTemp, (double)maxPwm);
+	}
+	return rslt;
+}
+
+const char *const Heater::TuningPhaseText[] =
+{
+	"checking temperature is stable",
+	"heating up",
+	"heating system settling",
+	"tuning with fan off",
+#if TUNE_WITH_HALF_FAN
+	"tuning with 50% fan",
+#endif
+	"tuning with fan on"
+};
+
+// Get the auto tune status or last result
+void Heater::GetAutoTuneStatus(const StringRef& reply) const noexcept
+{
+	if (GetStatus() == HeaterStatus::tuning)
+	{
+		// Phases are: 1 = stabilising, 2 = heating, 3 = settling, 4 = cycling with fan off, 5 = cycling with fan on
+		const unsigned int numPhases = (tuningFans.IsEmpty()) ? 4 : ARRAY_SIZE(TuningPhaseText);
+		reply.printf("Heater %u is being tuned, phase %u of %u, %s", GetHeaterNumber(), tuningPhase + 1, numPhases, TuningPhaseText[tuningPhase]);
+	}
+	else if (tuned)
+	{
+		reply.printf("Heater %u tuning succeeded, use M307 H%u to see result", GetHeaterNumber(), GetHeaterNumber());
+	}
+	else
+	{
+		reply.printf("Heater %u tuning failed", GetHeaterNumber());
+	}
+}
+
+// Tell the user what's happening, called after the tuning phase has been updated
+void Heater::ReportTuningUpdate() noexcept
+{
+	if (tuningPhase < ARRAY_SIZE(TuningPhaseText))
+	{
+		reprap.GetPlatform().MessageF(GenericMessage, "Auto tune starting phase %u, %s\n", tuningPhase + 1, TuningPhaseText[tuningPhase]);
+	}
+}
+
+void Heater::CalculateModel(HeaterParameters& params) noexcept
+{
+	if (reprap.Debug(moduleHeat))
+	{
+#define PLUS_OR_MINUS "\xC2\xB1"
+		reprap.GetPlatform().MessageF(GenericMessage,
+										"tOn %ld" PLUS_OR_MINUS "%ld, tOff %ld" PLUS_OR_MINUS "%ld,"
+										" dHigh %ld" PLUS_OR_MINUS "%ld, dLow %ld" PLUS_OR_MINUS "%ld,"
+										" R %.3f" PLUS_OR_MINUS "%.3f, C %.3f" PLUS_OR_MINUS "%.3f,"
+#if HAS_VOLTAGE_MONITOR
+										" V %.1f" PLUS_OR_MINUS "%.1f,"
+#endif
+										" cycles %u\n",
+										lrintf(tOn.GetMean()), lrintf(tOn.GetDeviation()),
+										lrintf(tOff.GetMean()), lrintf(tOff.GetDeviation()),
+										lrintf(dHigh.GetMean()), lrintf(dHigh.GetDeviation()),
+										lrintf(dLow.GetMean()), lrintf(dLow.GetDeviation()),
+										(double)heatingRate.GetMean(), (double)heatingRate.GetDeviation(),
+										(double)coolingRate.GetMean(), (double)coolingRate.GetDeviation(),
+#if HAS_VOLTAGE_MONITOR
+										(double)tuningVoltage.GetMean(), (double)tuningVoltage.GetDeviation(),
+#endif
+										coolingRate.GetNumSamples()
+									 );
+	}
+
+	const float cycleTime = tOn.GetMean() + tOff.GetMean();		// in milliseconds
+	const float averageTemperatureRiseHeating = tuningTargetTemp - 0.5 * (TuningHysteresis - TuningPeakTempDrop) - tuningStartTemp.GetMean();
+	const float averageTemperatureRiseCooling = tuningTargetTemp - TuningPeakTempDrop - 0.5 * TuningHysteresis - tuningStartTemp.GetMean();
+	params.deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * MillisToSeconds)/cycleTime;	// in seconds
+	params.coolingRate = coolingRate.GetMean()/averageTemperatureRiseCooling;			// in seconds
+	params.heatingRate = (heatingRate.GetMean() + (coolingRate.GetMean() * averageTemperatureRiseHeating/averageTemperatureRiseCooling)) / tuningPwm;
+	params.numCycles = dHigh.GetNumSamples();
+}
+
+void Heater::SetAndReportModel(bool usingFans) noexcept
+{
+	const float hRate = (usingFans) ? (fanOffParams.heatingRate + fanOnParams.heatingRate) * 0.5 : fanOffParams.heatingRate;
+	const float deadTime = (usingFans) ? (fanOffParams.deadTime + fanOnParams.deadTime) * 0.5 : fanOffParams.deadTime;
+	const float fanOnCoolingRate = (usingFans) ? fanOnParams.coolingRate : fanOffParams.coolingRate;
+	String<StringLength256> str;
+	const GCodeResult rslt = SetModel(	hRate,
+										fanOffParams.coolingRate, fanOnCoolingRate,
+										deadTime,
+										tuningPwm,
+#if HAS_VOLTAGE_MONITOR
+										tuningVoltage.GetMean(),
+#else
+										0.0,
+#endif
+										true, false, str.GetRef());
+	if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+	{
+		tuned = true;
+		str.printf("Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n"
+					" M307 H%u R%.3f C%.1f",
+					GetHeaterNumber(),
+					idleCyclesDone,
+					(usingFans) ? fanOffParams.numCycles + fanOnParams.numCycles : fanOffParams.numCycles,
+					(millis() - tuningBeginTime)/(uint32_t)SecondsToMillis,
+					GetHeaterNumber(), (double)GetModel().GetHeatingRate(), (double)(1.0/GetModel().GetCoolingRateFanOff())
+				  );
+		if (usingFans)
+		{
+			str.catf(":%.1f", (double)(1.0/GetModel().GetCoolingRateFanOn()));
+		}
+		str.catf(" D%.2f S%.2f V%.1f\n", (double)GetModel().GetDeadTime(), (double)GetModel().GetMaxPwm(), (double)GetModel().GetVoltage());
+		reprap.GetPlatform().Message(LoggedGenericMessage, str.c_str());
+		if (reprap.GetGCodes().SawM501InConfigFile())
+		{
+			reprap.GetPlatform().Message(GenericMessage, "Send M500 to save this command in config-override.g\n");
+		}
+		else
+		{
+			reprap.GetPlatform().MessageF(GenericMessage, "Edit the M307 H%u command in config.g to match this. Omit the V parameter if the heater is not powered from VIN.\n", GetHeaterNumber());
+		}
+	}
+	else
+	{
+		reprap.GetPlatform().MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (R=%.3f, 1/C=%.4f:%.4f, D=%.1f)\n",
+										GetHeaterNumber(), (double)hRate,
+										(double)fanOffParams.coolingRate, (double)fanOnCoolingRate,
+										(double)fanOffParams.deadTime);
+	}
 }
 
 GCodeResult Heater::SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime, const StringRef& reply) noexcept

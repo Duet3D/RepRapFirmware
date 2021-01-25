@@ -370,8 +370,8 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	filePos = nextMove.filePos;
 	virtualExtruderPosition = nextMove.virtualExtruderPosition;
 	proportionDone = nextMove.proportionDone;
-	initialUserX = nextMove.initialUserX;
-	initialUserY = nextMove.initialUserY;
+	initialUserC0 = nextMove.initialUserC0;
+	initialUserC1 = nextMove.initialUserC1;
 
 	flags.canPauseAfter = nextMove.canPauseAfter;
 	flags.usingStandardFeedrate = nextMove.usingStandardFeedrate;

@@ -49,6 +49,10 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
+#ifdef DUET3_ATE
+# include <Duet3Ate.h>
+#endif
+
 #if HAS_HIGH_SPEED_SD
 
 # if !SAME5x	// if not using CoreN2G
@@ -505,6 +509,9 @@ void RepRap::Init() noexcept
 #endif
 #if SUPPORT_12864_LCD
 	display->Init();
+#endif
+#ifdef DUET3_ATE
+	Duet3Ate::Init();
 #endif
 	// linuxInterface is not initialised until we know we are using it, to prevent a disconnected SBC interface generating interrupts and DMA
 
@@ -1193,16 +1200,22 @@ GCodeResult RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringR
 	return rslt;
 }
 
-// Get the current axes used as X axes
+// Get the current axes used as X axis
 AxesBitmap RepRap::GetCurrentXAxes() const noexcept
 {
 	return Tool::GetXAxes(currentTool);
 }
 
-// Get the current axes used as Y axes
+// Get the current axes used as Y axis
 AxesBitmap RepRap::GetCurrentYAxes() const noexcept
 {
 	return Tool::GetYAxes(currentTool);
+}
+
+// Get the current axes used as the specified axis
+AxesBitmap RepRap::GetCurrentAxisMapping(unsigned int axis) const noexcept
+{
+	return Tool::GetAxisMapping(currentTool, axis);
 }
 
 // Set the previous tool number. Inline because it is only called from one place.
