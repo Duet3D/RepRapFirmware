@@ -166,7 +166,7 @@ int debugLine = 0;
 // Urgent initialisation function
 // This is called before general init has been done, and before constructors for C++ static data have been called.
 // Therefore, be very careful what you do here!
-extern "C" void UrgentInit()
+extern "C" void AppUrgentInit()
 {
 #if defined(DUET_NG)
 	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
