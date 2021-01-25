@@ -197,14 +197,9 @@ static void InitReceiveFilters() noexcept
 
 static void ReInit() noexcept
 {
-#if SAME70
-	mcan_stop(&mcan_instance);
-	configure_mcan();					// this includes initialising the receive filters
-#else
 	can0dev->Disable();
 	InitReceiveFilters();
 	can0dev->Enable();
-#endif
 }
 
 #endif
@@ -403,8 +398,10 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			if (gotTimeSyncTxTimeStamp)
 			{
 # if SAME70
+				// On the SAME70 the step clock is also the external time stamp counter
 				const uint32_t timeSyncTxDelay = (timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
 # else
+				// On the SAME5x the time stamp counter counts CAN but times divided by 64
 				const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
 # endif
 				if (timeSyncTxDelay > peakTimeSyncTxDelay)
