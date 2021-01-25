@@ -146,8 +146,8 @@ constexpr Pin UsbVBusPin = PortCPin(22);			// Pin used to monitor VBUS on USB po
 #define I2C_IFACE	Wire							// Which TWI interface we use
 #define I2C_IRQn	WIRE_ISR_ID						// The interrupt number it uses
 
-constexpr Pin DueXnExpansionStart = 200;			// Pin numbers 200-215 are on the I/O expander
-constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on the additional I/O expander
+constexpr Pin DueXnExpansionStart = 32*4+6;								// Pin numbers 134-149 are on the I/O expander
+constexpr Pin AdditionalIoExpansionStart = DueXnExpansionStart+16;		// Pin numbers 150-166 are on the additional I/O expander
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -275,142 +275,187 @@ constexpr Pin LcdBeepPin = PortDPin(21);		// connlcd.10	-> exp1.10
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
 constexpr PinDescription PinTable[] =
-{
+{	//	TC					PWM					ADC				Capability				PinNames
+	// Port A
+	{ TcOutput::tioa0,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"fan2"										},	// PA00 Fan 2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA01 E0_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"ystop"										},	// PA02 Y_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA03 TWD0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA04 TWCK0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA05 URXD1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA06 UTXD1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connsd.encsw,connsd.7"						},	// PA07 ENC_SW
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.enca,connlcd.4"					},	// PA08 Endstop 11 (was LCD ENC_A)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"urxd0"										},	// PA09 URXD0 PanelDue Dout
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"utxd0"										},	// PA10 PanelDue Din
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA11 NPCS0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA12 MISO
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA13 MOSI
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA14 SPCK
+	{ TcOutput::tioa1,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"exp.heater7,exp.31,!duex.e6heat,!duex.pwm5"},	// PA15 Heater 7
+	{ TcOutput::none,	PwmOutput::pwm0l2_c,AdcInput::none,		PinCapability::wpwm,	"!e1heat"									},	// PA16 Heater 2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_0,	PinCapability::rw,		"exp.e6stop,exp.24"							},	// PA17 E6_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_1,	PinCapability::ainr,	"e6temp,duex.e6temp,exp.thermistor7,exp.39"	},	// PA18
+	{ TcOutput::none,	PwmOutput::pwm0l0_b,AdcInput::none,		PinCapability::wpwm,	"!bedheat"									},	// PA19 Heater 0
+	{ TcOutput::none,	PwmOutput::pwm0l1_b,AdcInput::none,		PinCapability::wpwm,	"!e0heat"									},	// PA20 Heater 1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA21 SPI bus 1 MISO
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA22 SPI bus 1 MOSI
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA23 SPI bus 1 SPCK
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs5,duex.cs5,exp.50"					},	// PA24 SPI bus 0 CS5
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA25 DIR_11 (was LCD_E)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA26 HSMCI MCDA2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA27 HSMCI MCDA3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA28 HSMCI MCCDA
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA29 HSMCI MCCK
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA30 HSMCI MCDA0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA31 HSMCI MCDA1
+
+	// Port B
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB00 SPI0 MISO
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB01 SPI0 MOSI
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs1"									},	// PB02 SPI0 CS1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr										},	// PB03 PWR_FAIL_DET1 Power fail detect 5V regulator input
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB04 TDI
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB05 TDO
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"exp.pb6,exp.29,duex.pb6"					},	// PB06 (was SWDIO)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB07 SWCLK
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB08 Crystal
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB09 Crystal
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB10 USB DDM
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB11 USB DDP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB12 Erase
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB13 SPI0 SPCK
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::dac1,		PinCapability::none,	nullptr										},	// PB14 DAC 1 (E1 motor current)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB15 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB16 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB17 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB18 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB19 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB20 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB21 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB22 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB23 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB24 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB25 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB26 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB27 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB28 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB29 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB30 Not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PB31 Not on chip
+
+	// Port C
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_14,	PinCapability::none,	nullptr										},	// PC00 E6_DIR
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_4,	PinCapability::ainr,	"zprobe.in"									},	// PC01 Z probe analog in
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"zprobe.mod"								},	// PC02 Z_PROBE_MOD Z probe mod and LED
+	{ TcOutput::none,	PwmOutput::pwm0l3_b,AdcInput::none,		PinCapability::wpwm,	"exp.heater3,exp.8,!duex.e2heat,!duex.pwm1"	},	// PC03 Heater 3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_7,	PinCapability::none,	nullptr										},	// PC04 PWR_FAIL_DET2 Vin power fail detect
+	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"exp.heater4,exp.13,!duex.e3heat,!duex.pwm2"},	// PC05 Heater 4
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC06 ENN GlobalTmc2660EnablePin
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.encb,connlcd.3"					},	// PC07  Endstop 10 (was LCD ENC_B)
+	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"exp.heater5,exp.18,!duex.e4heat,!duex.pwm3"},	// PC08 Heater 5
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC09 Y_EN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC10 Z_EN
+	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"exp.heater6,exp.23,!duex.e5heat,!duex.pwm4"},	// PC11 Heater 6
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_8,	PinCapability::ainr,	"e1temp"									},	// PC12 Thermistor 2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_6,	PinCapability::ainr,	"bedtemp"									},	// PC13 Thermistor 0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"xstop"										},	// PC14 X_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_7,	PinCapability::ainr,	"e0temp"									},	// PC15 Thermistor 1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"e1stop"									},	// PC16 E1_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC17 E0_EN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs2"									},	// PC18 SPI0_CS2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs3"									},	// PC19 SPI0 CS3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs4"									},	// PC20 SPI0 CS4
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC21 SD_CD
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC22 USB_PWR_MON
+	{ TcOutput::tioa3,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"fan0"										},	// PC23 Fan 0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC24 SPI0_CS0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC25 E1_EN
+	{ TcOutput::tioa4,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"fan1"										},	// PC26 Fan 1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_13,	PinCapability::ainr,	"e5temp,duex.e5temp,exp.thermistor6,exp.38"	},	// PC27 Thermistor 6
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC28 EN_11 (was LCD_RS)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::ainr,	"e2temp,duex.e2temp,exp.thermistor3,exp.35"	},	// PC29 Thermistor 3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_10,	PinCapability::ainr,	"e3temp,duex.e3temp,exp.thermistor4,exp.36"	},	// PC30 Thermistor 4
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_11,	PinCapability::ainr,	"e4temp,duex.e4temp,exp.thermistor5,exp.37"	},	// PC31 Thermistor 5
+
+	// PORT D
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD00 E4_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD01 E3_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD02 E2_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD03 E5_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD04 E1_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD05 E0_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD06 X_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD07 Y_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD08 Z_STEP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD09 E1_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"e0stop"									},	// PD10 E0_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD11 X_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD12 Y_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD13 Z_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD14 X_EN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"pson"										},	// PD15 PS_ON
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD16 E4_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD17 E5_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD18 EN_10 (was LCD DB7)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD19 DIR_10 (was LCD DB6)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD20 STEP 10 (was LCD DB5)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD21 STEP_11 (was LCD DB4)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD22 E3_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD23 E2_EN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD24 E3_EN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD25 E4_EN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD26 E5_EN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD27 E6_STEP Expansion PD27
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD28 E2_Dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"zstop"										},	// PD29 Z_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD30 SAM_TFR_RDY
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD31 ESP_DATA_RDY
+
+	// Port E
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"exp.e2stop,exp.4"							},	// PE00 E2_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"exp.e3stop,exp.9,spi.cs6,duex.cs6"			},	// PE01 E3_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"exp.e4stop,exp.14,spi.cs7,duex.cs7"		},	// PE02 E4_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"exp.e5stop,exp.19,spi.cs8,duex.cs8"		},	// PE03 E5_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PE04 ESP_RST
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PE05 ESP_EN
+
+	// Expansion Header 134-149
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"duex.e2stop" 								}, // E2_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"duex.e5stop"								}, // E5_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"duex.e4stop" 								}, // E4_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"duex.e3stop" 								}, // E3_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"duex.fan7"									}, // Fan 7
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"duex.fan6" 								}, // Fan 6
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"duex.fan5" 								}, // Fan 5
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"duex.fan4" 								}, // Fan 4
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"duex.gp4" 									}, // DueX GP4
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"duex.gp3" 									}, // DueX GP3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"duex.gp2" 									}, // DueX GP2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"duex.gp1" 									}, // DueX GP1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"duex.fan3" 								}, // Fan 3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"duex.e6stop" 								}, // E6_STOP
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr 									}, // DUMMY 214
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"duex.fan8" 								}, // Fan 8
+
+	// SX1509B 150-166
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.0" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.1" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.2" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.3" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.4" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.5" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.6" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.7" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.8" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.9" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.10" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.11" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.12" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.13" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.14" 								},
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.15" 								},
 };
-
-#if 0
-
-// Enum to represent allowed types of pin access
-// We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
-enum class PinCapability: uint8_t
-{
-	// Individual capabilities
-	read = 1,
-	ain = 2,
-	write = 4,
-	pwm = 8,
-
-	// Combinations
-	ainr = 1|2,
-	rw = 1|4,
-	wpwm = 4|8,
-	rwpwm = 1|4|8,
-	ainrw = 1|2|4,
-	ainrwpwm = 1|2|4|8
-};
-
-constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexcept
-{
-	return (PinCapability)((uint8_t)a | (uint8_t)b);
-}
-
-// Struct to represent a pin that can be assigned to various functions
-// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
-struct PinEntry
-{
-	Pin GetPin() const noexcept { return pin; }
-	PinCapability GetCapability() const noexcept { return cap; }
-	const char* GetNames() const noexcept { return names; }
-
-	Pin pin;
-	PinCapability cap;
-	const char *names;
-};
-
-// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
-// The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
-// Aliases are separate by the , character.
-// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
-// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
-constexpr PinEntry PinTable[] =
-{
-	// Duet 2 and DueX heater outputs
-	{ PortAPin(19),	PinCapability::wpwm,	"!bedheat" },
-	{ PortAPin(20), PinCapability::wpwm,	"!e0heat" },
-	{ PortAPin(16), PinCapability::wpwm,	"!e1heat" },
-	{ PortCPin(3),	PinCapability::wpwm,	"exp.heater3,exp.8,!duex.e2heat,!duex.pwm1" },
-	{ PortCPin(5),	PinCapability::wpwm,	"exp.heater4,exp.13,!duex.e3heat,!duex.pwm2" },
-	{ PortCPin(8),	PinCapability::wpwm,	"exp.heater5,exp.18,!duex.e4heat,!duex.pwm3" },
-	{ PortCPin(11),	PinCapability::wpwm,	"exp.heater6,exp.23,!duex.e5heat,!duex.pwm4" },
-	{ PortAPin(15),	PinCapability::wpwm,	"exp.heater7,exp.31,!duex.e6heat,!duex.pwm5" },
-
-	// Duet 2 and DueX fan outputs
-	{ PortCPin(23),	PinCapability::wpwm,	"fan0" },
-	{ PortCPin(26),	PinCapability::wpwm,	"fan1" },
-	{ PortAPin(0),	PinCapability::wpwm,	"fan2" },
-	{ 212,			PinCapability::wpwm,	"duex.fan3" },
-	{ 207,			PinCapability::wpwm,	"duex.fan4" },
-	{ 206,			PinCapability::wpwm,	"duex.fan5" },
-	{ 205,			PinCapability::wpwm,	"duex.fan6" },
-	{ 204,			PinCapability::wpwm,	"duex.fan7" },
-	{ 215,			PinCapability::wpwm,	"duex.fan8" },
-
-	// Endstop inputs
-	{ PortCPin(14),	PinCapability::read,	"xstop" },
-	{ PortAPin(02),	PinCapability::read,	"ystop" },
-	{ PortDPin(29),	PinCapability::read,	"zstop" },
-	{ PortDPin(10),	PinCapability::read,	"e0stop" },
-	{ PortCPin(16),	PinCapability::read,	"e1stop" },
-	{ PortEPin(0),	PinCapability::rw,		"exp.e2stop,exp.4" },
-	{ PortEPin(1),	PinCapability::rw,		"exp.e3stop,exp.9,spi.cs6,duex.cs6" },
-	{ PortEPin(2),	PinCapability::rw,		"exp.e4stop,exp.14,spi.cs7,duex.cs7" },
-	{ PortEPin(3),	PinCapability::rw,		"exp.e5stop,exp.19,spi.cs8,duex.cs8" },
-	{ PortAPin(17),	PinCapability::rw,		"exp.e6stop,exp.24" },
-	{ 200,			PinCapability::read,	"duex.e2stop" },
-	{ 203,			PinCapability::read,	"duex.e3stop" },
-	{ 202,			PinCapability::read,	"duex.e4stop" },
-	{ 201,			PinCapability::read,	"duex.e5stop" },
-	{ 213,			PinCapability::read,	"duex.e6stop" },
-
-	// Thermistor inputs
-	{ PortCPin(13),	PinCapability::ainr,	"bedtemp" },
-	{ PortCPin(15),	PinCapability::ainr,	"e0temp" },
-	{ PortCPin(12),	PinCapability::ainr,	"e1temp" },
-	{ PortCPin(29),	PinCapability::ainr,	"e2temp,duex.e2temp,exp.thermistor3,exp.35" },
-	{ PortCPin(30),	PinCapability::ainr,	"e3temp,duex.e3temp,exp.thermistor4,exp.36" },
-	{ PortCPin(31),	PinCapability::ainr,	"e4temp,duex.e4temp,exp.thermistor5,exp.37" },
-	{ PortCPin(27),	PinCapability::ainr,	"e5temp,duex.e5temp,exp.thermistor6,exp.38" },
-	{ PortAPin(18),	PinCapability::ainr,	"e6temp,duex.e6temp,exp.thermistor7,exp.39" },
-
-	// SPI CS pins
-	{ PortBPin(2),	PinCapability::rw,		"spi.cs1" },
-	{ PortCPin(18),	PinCapability::rw,		"spi.cs2" },
-	{ PortCPin(19),	PinCapability::rw,		"spi.cs3" },
-	{ PortCPin(20),	PinCapability::rw,		"spi.cs4" },
-	{ PortAPin(24),	PinCapability::rw,		"spi.cs5,duex.cs5,exp.50" },
-
-	// Misc
-	{ Z_PROBE_PIN,	PinCapability::ainr,	"zprobe.in" },
-	{ Z_PROBE_MOD_PIN, PinCapability::write, "zprobe.mod" },
-	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
-	{ PortCPin(7),	PinCapability::rw,		"connlcd.encb,connlcd.3" },
-	{ PortAPin(8),	PinCapability::rw,		"connlcd.enca,connlcd.4" },
-	{ PortAPin(7),	PinCapability::rw,		"connsd.encsw,connsd.7" },
-	{ PortAPin(9),	PinCapability::rw,		"urxd0" },
-	{ PortAPin(10),	PinCapability::rw,		"utxd0" },
-	{ PortBPin(6),	PinCapability::rw,		"exp.pb6,exp.29,duex.pb6" },
-	{ 211,			PinCapability::rwpwm,	"duex.gp1" },
-	{ 210,			PinCapability::rwpwm,	"duex.gp2" },
-	{ 209,			PinCapability::rwpwm,	"duex.gp3" },
-	{ 208,			PinCapability::rwpwm,	"duex.gp4" },
-	{ 220,			PinCapability::rwpwm,	"sx1509b.0" },
-	{ 221,			PinCapability::rwpwm,	"sx1509b.1" },
-	{ 222,			PinCapability::rwpwm,	"sx1509b.2" },
-	{ 223,			PinCapability::rwpwm,	"sx1509b.3" },
-	{ 224,			PinCapability::rwpwm,	"sx1509b.4" },
-	{ 225,			PinCapability::rwpwm,	"sx1509b.5" },
-	{ 226,			PinCapability::rwpwm,	"sx1509b.6" },
-	{ 227,			PinCapability::rwpwm,	"sx1509b.7" },
-	{ 228,			PinCapability::rwpwm,	"sx1509b.8" },
-	{ 229,			PinCapability::rwpwm,	"sx1509b.9" },
-	{ 230,			PinCapability::rwpwm,	"sx1509b.10" },
-	{ 231,			PinCapability::rwpwm,	"sx1509b.11" },
-	{ 232,			PinCapability::rwpwm,	"sx1509b.12" },
-	{ 233,			PinCapability::rwpwm,	"sx1509b.13" },
-	{ 234,			PinCapability::rwpwm,	"sx1509b.14" },
-	{ 235,			PinCapability::rwpwm,	"sx1509b.15" }
-};
-#endif
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
