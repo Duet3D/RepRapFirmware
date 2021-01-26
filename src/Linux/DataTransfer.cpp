@@ -39,12 +39,14 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 #endif
 
 #if USE_DMAC
-# include "dmac/dmac.h"
-# include "matrix/matrix.h"
+# include <dmac/dmac.h>
+# include <matrix/matrix.h>
+# include <pmc/pmc.h>
+# include <spi/spi.h>
 #endif
 
 #if USE_XDMAC
-# include "xdmac/xdmac.h"
+# include <xdmac/xdmac.h>
 #endif
 
 #if USE_DMAC_MANAGER || SAME70

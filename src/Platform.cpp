@@ -163,36 +163,6 @@ int debugLine = 0;
 
 // Global functions
 
-// Urgent initialisation function
-// This is called before general init has been done, and before constructors for C++ static data have been called.
-// Therefore, be very careful what you do here!
-extern "C" void AppUrgentInit()
-{
-#if defined(DUET_NG)
-	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
-	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the pins that control the drivers early here.
-	// On the production boards the ENN line is pulled high by an external pullup resistor and that prevents motor movements.
-	for (size_t drive = 0; drive < MaxSmartDrivers; ++drive)
-	{
-		pinMode(STEP_PINS[drive], OUTPUT_LOW);
-		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
-		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);
-	}
-#endif
-
-#if defined(DUET_M)
-	// The prototype boards don't have a pulldown on LCD_BEEP, which causes a hissing sound from the beeper on the 12864 display until the pin is initialised
-	pinMode(LcdBeepPin, OUTPUT_LOW);
-
-	// Set the 12864 display CS pin low to prevent it from receiving garbage due to other SPI traffic
-	pinMode(LcdCSPin, OUTPUT_LOW);
-
-	// On the prototype boards the stepper driver expansion ports don't have external pullup resistors on their enable pins
-	pinMode(ENABLE_PINS[5], OUTPUT_HIGH);
-	pinMode(ENABLE_PINS[6], OUTPUT_HIGH);
-#endif
-}
-
 DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 {
 	DriversBitmap rslt;
@@ -5208,10 +5178,8 @@ void Platform::Tick() noexcept
 	// To reduce noise, we use x16 hardware averaging on AFEC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
 	// There is enough time to convert all AFEC0 channels in one tick, but only one AFEC1 channel because of the higher averaging.
 	LegacyAnalogIn::AnalogInStartConversion(0x0FFF | (1u << (uint8_t) filteredAdcChannels[currentFilterNumber]));
-#elif SAM4E || SAM4S
-	LegacyAnalogIn::AnalogInStartConversion();
 #elif !SAME5x
-	AnalogInStartConversion();
+	LegacyAnalogIn::AnalogInStartConversion();
 #endif
 }
 

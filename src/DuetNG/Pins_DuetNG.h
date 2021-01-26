@@ -552,6 +552,7 @@ constexpr Pin APIN_SBC_SPI_MOSI = SPI_MOSI;
 constexpr Pin APIN_SBC_SPI_MISO = SPI_MISO;
 constexpr Pin APIN_SBC_SPI_SCK  = SPI_SCK;
 constexpr Pin APIN_SBC_SPI_SS0  = SPI_SS0;
+constexpr GpioPinFunction SBCPinPeriphMode = SPIPeriphMode;
 
 constexpr Pin SbcTfrReadyPin = PortDPin(31);
 

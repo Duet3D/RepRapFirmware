@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_HARDWARE_SAM4E_PINDESCRIPTION_H_
-#define SRC_HARDWARE_SAM4E_PINDESCRIPTION_H_
+#ifndef SRC_HARDWARE_SAM4S_PINDESCRIPTION_H_
+#define SRC_HARDWARE_SAM4S_PINDESCRIPTION_H_
 
 #include <CoreIO.h>
 
@@ -46,4 +46,4 @@ struct PinDescription : public PinDescriptionBase
 	const char* GetNames() const noexcept { return pinNames; }
 };
 
-#endif /* SRC_HARDWARE_SAM4E_PINDESCRIPTION_H_ */
+#endif /* SRC_HARDWARE_SAM4S_PINDESCRIPTION_H_ */
