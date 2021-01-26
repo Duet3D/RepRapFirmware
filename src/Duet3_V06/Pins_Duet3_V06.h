@@ -91,9 +91,11 @@ constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels n
 
 // Shared SPI (USART 1)
 constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);
+constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;
 constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);
+constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::C;
 constexpr Pin APIN_USART_SSPI_MISO = PortBPin(0);
-constexpr GpioPinFunction USARTSSPIPeriphMode = GpioPinFunction::C;
+constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
 
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 

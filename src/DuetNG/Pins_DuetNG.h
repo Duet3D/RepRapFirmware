@@ -465,9 +465,11 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noe
 
 // USARTs used for SPI
 constexpr Pin APIN_USART_SSPI_MOSI = PortAPin(27);
+constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;
 constexpr Pin APIN_USART_SSPI_MISO = PortAPin(26);
+constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::C;
 constexpr Pin APIN_USART_SSPI_SCK = PortAPin(30);
-constexpr GpioPinFunction USARTSSPIPeriphMode = GpioPinFunction::C;
+constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
 
 constexpr Pin APIN_USART1_MOSI = PortAPin(22);
 constexpr Pin APIN_USART1_MISO = PortAPin(21);
