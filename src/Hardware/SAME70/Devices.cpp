@@ -42,6 +42,7 @@ void SdhcInit() noexcept
 	for (Pin p : HsmciOtherPins)
 	{
 		SetPinFunction(p, HsmciOtherPinsFunction);
+		SetPullup(p, true);
 	}
 }
 

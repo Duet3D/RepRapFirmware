@@ -475,7 +475,8 @@ constexpr Pin APIN_USART1_SCK = PortAPin(23);
 constexpr GpioPinFunction USART1SSPIPeriphMode = GpioPinFunction::A;
 
 // SD Card
-constexpr Pin HsmciPins[] = { PortAPin(26), PortAPin(27), PortAPin(28), PortAPin(29), PortAPin(30), PortAPin(31) };
+constexpr Pin HsmciClockPin = PortAPin(29);
+constexpr Pin HsmciOtherPins[] = { PortAPin(26), PortAPin(27), PortAPin(28), PortAPin(30), PortAPin(31) };
 constexpr auto HsmciPinsFunction = GpioPinFunction::C;
 
 /*

@@ -38,9 +38,11 @@ void SerialInit() noexcept
 
 void SdhcInit() noexcept
 {
-	for (Pin p : HsmciPins)
+	SetPinFunction(HsmciClockPin, HsmciPinsFunction);
+	for (Pin p : HsmciOtherPins)
 	{
 		SetPinFunction(p, HsmciPinsFunction);
+		SetPullup(p, true);
 	}
 }
 
