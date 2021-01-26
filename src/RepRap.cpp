@@ -55,9 +55,9 @@
 
 #if HAS_HIGH_SPEED_SD
 
-# if !SAME5x	// if not using CoreN2G
-#  include "sam/drivers/hsmci/hsmci.h"
-#  include "conf_sd_mmc.h"
+# if !SAME5x
+#  include <hsmci/hsmci.h>
+#  include <conf_sd_mmc.h>
 # endif
 
 # if SAME70
@@ -77,6 +77,10 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 
 #if SAME70
 # include <DmacManager.h>
+#endif
+
+#if SAM4S
+# include <wdt/wdt.h>
 #endif
 
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true

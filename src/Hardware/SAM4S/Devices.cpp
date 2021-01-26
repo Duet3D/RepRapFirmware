@@ -10,37 +10,31 @@
 #include <AnalogIn.h>
 #include <AnalogOut.h>
 #include <pmc/pmc.h>
+#include <matrix/matrix.h>
 
-AsyncSerial Serial (UART0, UART0_IRQn, ID_UART0, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
-AsyncSerial Serial1(UART1, UART1_IRQn, ID_UART1, 512, 512,	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
+AsyncSerial Serial (UART1, UART1_IRQn, ID_UART1, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
 SerialCDC SerialUSB;
 
-void UART0_Handler(void) noexcept
+void UART1_Handler(void) noexcept
 {
 	Serial.IrqHandler();
 }
 
-void UART1_Handler(void) noexcept
-{
-	Serial1.IrqHandler();
-}
 
 void SerialInit() noexcept
 {
 	SetPinFunction(APIN_Serial0_RXD, Serial0PeriphMode);
 	SetPinFunction(APIN_Serial0_TXD, Serial0PeriphMode);
 	SetPullup(APIN_Serial0_RXD, true);
-
-	SetPinFunction(APIN_Serial1_RXD, Serial1PeriphMode);
-	SetPinFunction(APIN_Serial1_TXD, Serial1PeriphMode);
-	SetPullup(APIN_Serial1_RXD, true);
 }
 
 void SdhcInit() noexcept
 {
-	for (Pin p : HsmciPins)
+	SetPinFunction(HsmciClockPin, HsmciPinsFunction);
+	for (Pin p : HsmciOtherPins)
 	{
 		SetPinFunction(p, HsmciPinsFunction);
+		SetPullup(p, true);
 	}
 }
 
@@ -65,6 +59,9 @@ void DeviceInit() noexcept
 
 	SerialInit();
 	SdhcInit();
+
+	// Set up PB4..PB7 as normal I/O, not JTAG
+	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5 | CCFG_SYSIO_SYSIO6 | CCFG_SYSIO_SYSIO7);
 }
 
 void StopAnalogTask() noexcept

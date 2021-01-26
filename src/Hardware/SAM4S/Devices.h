@@ -13,7 +13,6 @@ typedef AsyncSerial UARTClass;
 #include <USARTClass.h>
 
 extern AsyncSerial Serial;
-extern AsyncSerial Serial1;
 
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC.h>

@@ -21,7 +21,7 @@
 # include <hri_tc_e54.h>
 #elif !defined(__LPC17xx__)
 # include <tc/tc.h>
-# if SAME70 || SAM4E
+# if SAME70 || SAM4E || SAM4S
 #  include <pmc/pmc.h>
 # endif
 #endif

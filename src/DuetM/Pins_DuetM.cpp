@@ -9,9 +9,15 @@
 
 // Hardware-dependent pins functions
 
-// Function to look up a pin name pass back the corresponding index into the pin table
+// Return a pointer to the pin description entry. Declared in and called from CoreN2G.
+const PinDescriptionBase *AppGetPinDescription(Pin p) noexcept
+{
+	return (p < ARRAY_SIZE(PinTable)) ? &PinTable[p] : nullptr;
+}
+
+// Function to look up a pin name and pass back the corresponding index into the pin table
 // On this platform, the mapping from pin names to pins is fixed, so this is a simple lookup
-bool LookupPinName(const char*pn, LogicalPin& lpin, bool& hardwareInverted) noexcept
+bool LookupPinName(const char *pn, LogicalPin &lpin, bool &hardwareInverted) noexcept
 {
 	if (StringEqualsIgnoreCase(pn, NoPinName))
 	{
@@ -22,7 +28,11 @@ bool LookupPinName(const char*pn, LogicalPin& lpin, bool& hardwareInverted) noex
 
 	for (size_t lp = 0; lp < ARRAY_SIZE(PinTable); ++lp)
 	{
-		const char *q = PinTable[lp].names;
+		const char *q = PinTable[lp].pinNames;
+		if (q == nullptr)
+		{
+			continue;
+		}
 		while (*q != 0)
 		{
 			// Try the next alias in the list of names for this pin

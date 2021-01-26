@@ -49,8 +49,9 @@
 # include <Serial.h>
 # include <component/sercom.h>
 #else
-# include <sam/drivers/pdc/pdc.h>
-# include <sam/drivers/uart/uart.h>
+# include <pdc/pdc.h>
+# include <pmc/pmc.h>
+# include <uart/uart.h>
 #endif
 
 #if HAS_STALL_DETECT
@@ -1856,7 +1857,9 @@ void SmartDrivers::Init() noexcept
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, TransferCompleteCallback, CallbackParameter(0));
 # else
 	// Set up the single UART that communicates with all TMC22xx drivers
-	ConfigurePin(TMC22xx_UART_PINS);									// the pins are already set up for UART use in the pins table
+	SetPinFunction(TMC22xxUartTxPin, TMC22xxUartPeriphMode);
+	SetPinFunction(TMC22xxUartRxPin, TMC22xxUartPeriphMode);
+	SetPullup(TMC22xxUartRxPin, true);
 
 	// Enable the clock to the UART
 	pmc_enable_periph_clk(ID_TMC22xx_UART);
