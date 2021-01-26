@@ -1577,6 +1577,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 			response->cat("\"None\"");
 		}
 
+		// Screw Mapping
+		response->catf(",\"screwMap\":%s", move->GetScrewMap().GetEnabledString());
+
 		// Controllable Fans
 		FansBitmap controllableFans;
 		for (size_t fan = 0; fan < MaxFans; fan++)

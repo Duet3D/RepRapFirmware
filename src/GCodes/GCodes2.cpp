@@ -4139,7 +4139,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			result = GCodeResult::error;
 			break;
 #endif
-
+		case 800:	// enable/disable screwmap
+			{
+				result = reprap.GetMove().GetScrewMap().ParseEnable(gb, reply);
+			}
+			break;
+		case 801:	// define an axis map R:src 
+			{
+				result = reprap.GetMove().GetScrewMap().ParseCreate(gb, reply);
+			}
+			break;
+		case 802:	// set map table data R:src_axis [XYZABC]:d1:d2:d3...
+			{
+				result = reprap.GetMove().GetScrewMap().ParseTable(gb, reply, outBuf);
+			}
+			break;
+		case 810: // run screwmap self-test
+			{
+				reprap.GetMove().GetScrewMap().RunSelfTest();
+			}
+			break;
 		case 851: // Set Z probe offset, only for Marlin compatibility
 			{
 				auto zp = platform.GetZProbeOrDefault(0);
