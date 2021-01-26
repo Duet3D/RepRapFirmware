@@ -8,11 +8,13 @@
 #ifndef SRC_HARDWARE_SAM4S_DEVICES_H_
 #define SRC_HARDWARE_SAM4S_DEVICES_H_
 
-#include <AsyncSerial.h>
+#ifndef PCCB
+# include <AsyncSerial.h>
 typedef AsyncSerial UARTClass;
-#include <USARTClass.h>
+# include <USARTClass.h>
 
 extern AsyncSerial Serial;
+#endif
 
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC.h>

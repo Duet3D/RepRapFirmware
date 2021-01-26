@@ -15,8 +15,9 @@
 #include <GCodes/GCodes.h>
 
 #if LEDSTRIP_USES_USART
-# include <sam/drivers/pdc/pdc.h>
-# include <sam/drivers/usart/usart.h>
+# include <pdc/pdc.h>
+# include <pmc/pmc.h>
+# include <usart/usart.h>
 #else
 # include <DmacManager.h>
 # if SAME5x

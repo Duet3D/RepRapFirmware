@@ -7,6 +7,7 @@
 
 #include "AuxDevice.h"
 
+#if HAS_AUX_DEVICES
 #include <RepRap.h>
 #include <Platform.h>
 
@@ -153,5 +154,7 @@ void AuxDevice::Diagnostics(MessageType mt, unsigned int index) noexcept
 	const UARTClass::Errors errs = uart->GetAndClearErrors();
 	reprap.GetPlatform().MessageF(mt, "Aux%u errors %u,%u,%u\n", index, (unsigned int)errs.uartOverrun, (unsigned int)errs.bufferOverrun, (unsigned int)errs.framing);
 }
+
+#endif
 
 // End

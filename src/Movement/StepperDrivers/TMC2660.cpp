@@ -24,7 +24,11 @@
 #  include <pdc/pdc.h>
 # endif
 
-#include <usart/usart.h>
+#if TMC2660_USES_USART
+# include <usart/usart.h>
+#else
+# include <spi/spi.h>
+#endif
 
 constexpr float MaximumMotorCurrent = 2500.0;
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously

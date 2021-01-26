@@ -12,14 +12,13 @@
 #include <pmc/pmc.h>
 #include <matrix/matrix.h>
 
+#ifndef PCCB
 AsyncSerial Serial (UART1, UART1_IRQn, ID_UART1, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
-SerialCDC SerialUSB;
 
 void UART1_Handler(void) noexcept
 {
 	Serial.IrqHandler();
 }
-
 
 void SerialInit() noexcept
 {
@@ -27,6 +26,9 @@ void SerialInit() noexcept
 	SetPinFunction(APIN_Serial0_TXD, Serial0PeriphMode);
 	SetPullup(APIN_Serial0_RXD, true);
 }
+#endif
+
+SerialCDC SerialUSB;
 
 void SdhcInit() noexcept
 {
@@ -57,11 +59,15 @@ void DeviceInit() noexcept
 	LegacyAnalogIn::AnalogInInit();
 	AnalogOut::Init();
 
+#ifndef PCCB
 	SerialInit();
+#endif
 	SdhcInit();
 
+#ifndef PCCB
 	// Set up PB4..PB7 as normal I/O, not JTAG
 	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5 | CCFG_SYSIO_SYSIO6 | CCFG_SYSIO_SYSIO7);
+#endif
 }
 
 void StopAnalogTask() noexcept
