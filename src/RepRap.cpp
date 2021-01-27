@@ -57,7 +57,7 @@
 
 # if !SAME5x
 #  include <hsmci/hsmci.h>
-#  include <conf_sd_mmc.h>
+#  include <Libraries/sd_mmc/conf_sd_mmc.h>
 # endif
 
 # if SAME70

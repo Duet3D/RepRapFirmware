@@ -464,17 +464,12 @@ static_assert(NumNamedPins == 32+32+32+32+6+16+16);
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 // USARTs used for SPI
-constexpr Pin APIN_USART_SSPI_MOSI = PortAPin(27);
-constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MISO = PortAPin(26);
-constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_SCK = PortAPin(30);
-constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
-
-constexpr Pin APIN_USART1_MOSI = PortAPin(22);
-constexpr Pin APIN_USART1_MISO = PortAPin(21);
-constexpr Pin APIN_USART1_SCK = PortAPin(23);
-constexpr GpioPinFunction USART1SSPIPeriphMode = GpioPinFunction::A;
+constexpr Pin APIN_USART_SSPI_MOSI = PortAPin(22);
+constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::A;
+constexpr Pin APIN_USART_SSPI_MISO = PortAPin(21);
+constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::A;
+constexpr Pin APIN_USART_SSPI_SCK = PortAPin(23);
+constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::A;
 
 // SD Card
 constexpr Pin HsmciClockPin = PortAPin(29);
