@@ -4142,16 +4142,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 800:	// enable/disable screwmap
 			{
 				result = reprap.GetMove().GetScrewMap().ParseEnable(gb, reply);
+				UpdateCurrentUserPosition();
 			}
 			break;
 		case 801:	// define an axis map R:src 
 			{
 				result = reprap.GetMove().GetScrewMap().ParseCreate(gb, reply);
+				UpdateCurrentUserPosition();
 			}
 			break;
 		case 802:	// set map table data R:src_axis [XYZABC]:d1:d2:d3...
 			{
 				result = reprap.GetMove().GetScrewMap().ParseTable(gb, reply, outBuf);
+				UpdateCurrentUserPosition();
 			}
 			break;
 		case 810: // run screwmap self-test

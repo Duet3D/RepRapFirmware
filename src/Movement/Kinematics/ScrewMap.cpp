@@ -6,6 +6,7 @@
  */
 #include "ScrewMap.h"
 #include "GCodes/GCodes.h"
+#include "../Move.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 /* Screw Mapping is a well-known adjustment mechanism for screw nonlinearities in axes
@@ -555,8 +556,12 @@ static void printDebugCoord(const char* msg, const float* xyzCoord)
 // without moving the head
 void ScrewMap::UpdatePositions() noexcept
 {
-	// i have no idea what to do here
-	// reprap.MoveUpdated();
+	// this seems to work...along with the UpdateCurrentUserPosition call in GCodes2
+	// Adjust the motor endpoints to allow for the change to endstop adjustments
+	float vs[MaxAxes] = {0.0f};
+	InvalidateCache();
+	reprap.GetMove().AdjustMotorPositions(vs, MaxAxes);	// steps -> machine pos
+	reprap.MoveUpdated();	// ? does this help
 }
 
 // transform the coordinates for all axes
