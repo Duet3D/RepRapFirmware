@@ -228,7 +228,7 @@ GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb
 	CanInterface::CheckCanAddress(boardAddress, gb);
 	CanMessageBuffer * const buf = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	buf->SetupRequestMessage<CanMessageReset>(rid, CanId::MasterAddress, (uint8_t)boardAddress);
+	buf->SetupRequestMessage<CanMessageReset>(rid, CanInterface::GetCanAddress(), (uint8_t)boardAddress);
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
@@ -278,14 +278,14 @@ void ExpansionManager::EmergencyStop() noexcept
 	{
 		if (boards[addr].state == BoardState::running)
 		{
-			buf->SetupRequestMessage<CanMessageEmergencyStop>(0, CanId::MasterAddress, addr);
+			buf->SetupRequestMessage<CanMessageEmergencyStop>(0, CanInterface::GetCanAddress(), addr);
 			CanInterface::SendMessageNoReplyNoFree(buf);
 		}
 	}
 //	debugPrintf("sent individual messages\n");
 
 	// Finally, send a broadcast message in case we missed any, and free the buffer
-	buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanId::MasterAddress);
+	buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanInterface::GetCanAddress());
 	CanInterface::SendBroadcastNoFree(buf);
 
 	CanMessageBuffer::Free(buf);
