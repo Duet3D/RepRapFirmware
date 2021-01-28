@@ -160,10 +160,17 @@ constexpr Pin ENABLE_PINS[NumDirectDrivers] =		{ NoPin,		NoPin,		  PortBPin(14),
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin( 4), PortCPin( 7), PortCPin(24), PortCPin( 2), PortCPin(22), PortCPin(20), PortCPin(10), PortCPin(14) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortAPin( 8), PortAPin(11), PortAPin(17), PortCPin(21), PortCPin(18), PortCPin(13), PortAPin( 1), PortCPin(17) };
 
+constexpr Pin APIN_UART0_RXD = PortAPin(9);
+constexpr Pin APIN_UART0_TXD = PortAPin(10);
+constexpr GpioPinFunction UART0PeriphMode = GpioPinFunction::A;
+constexpr Pin APIN_UART1_RXD = PortBPin(2);
+constexpr Pin APIN_UART1_TXD = PortBPin(3);
+constexpr GpioPinFunction UART1PeriphMode = GpioPinFunction::A;
+
 Uart * const TMC22xxUarts[MaxSmartDrivers] = { UART0, UART1 };
 constexpr uint32_t TMC22xxUartIds[MaxSmartDrivers] = { ID_UART0, ID_UART1 };
 constexpr IRQn TMC22xxUartIRQns[MaxSmartDrivers] = { UART0_IRQn, UART1_IRQn };
-constexpr Pin TMC22xxUartPins[MaxSmartDrivers] = { APINS_UART0, APINS_UART1 };
+constexpr Pin TMC22xxUartPins[MaxSmartDrivers] = { APIN_UART0_RXD, APIN_UART0_TXD, APIN_UART1_RXD, APIN_UART1_TXD };
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
@@ -343,66 +350,6 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_14,	PinCapability::read,	"fan5b.tach"		},	// PC30 Fan 5b tach
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC31 E2 step
 };
-
-#if 0
-// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
-// The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
-// Aliases are separate by the , character.
-// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
-// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
-constexpr PinEntry PinTable[] =
-{
-	// LED outputs
-	{ PortCPin(0),	PinCapability::wpwm,	"led" },
-	{ PortCPin(23),	PinCapability::wpwm,	"!leddim" },
-
-#if defined(PCCB_10)
-	// Fan outputs
-	{ PortAPin(16),	PinCapability::wpwm,	"fan0" },
-	{ PortAPin(15),	PinCapability::wpwm,	"fan1" },
-	{ PortCPin(3),	PinCapability::wpwm,	"fan2" },
-	{ PortBPin(2),	PinCapability::write,	"fan3" },
-	{ PortBPin(3),	PinCapability::write,	"fan4" },
-	{ PortCPin(1),	PinCapability::wpwm,	"fan5" },
-
-	// Tacho inputs
-	{ PortBPin(0),	PinCapability::read,	"fan5a.tach" },
-	{ PortCPin(30),	PinCapability::read,	"fan5b.tach" },
-#else
-	// Fan outputs
-	{ PortAPin(16),	PinCapability::wpwm,	"fan0" },
-	{ PortCPin(3),	PinCapability::wpwm,	"fan1" },
-	{ PortAPin(15),	PinCapability::wpwm,	"fan2" },
-	{ PortCPin(1),	PinCapability::wpwm,	"fan3" },
-
-	// Tacho inputs
-	{ PortBPin(0),	PinCapability::read,	"fan3a.tach" },
-	{ PortCPin(30),	PinCapability::read,	"fan3b.tach" },
-#endif
-
-	// Endstop inputs
-#if defined(PCCB_10)
-	{ PortAPin(24),	PinCapability::read,	"stop0" },
-	{ PortAPin(25),	PinCapability::read,	"stop1" },
-	{ PortCPin(6),	PinCapability::read,	"stop2" },
-#else
-	{ PortAPin(24),	PinCapability::read,	"stop0" },
-	{ PortAPin(25),	PinCapability::read,	"stop1" },
-	{ PortCPin(31),	PinCapability::read,	"stop2" },
-#endif
-
-	// Thermistor inputs
-	{ PortAPin(20),	PinCapability::ainr,	"temp0" },
-	{ PortCPin(13),	PinCapability::ainr,	"temp1" },
-
-	// Misc expansion
-	{ PortAPin(18), PinCapability::ainrw,	"exp.pa18,exp.35" },
-	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21,exp.36" },
-	{ PortCPin(26),	PinCapability::rwpwm,	"exp.pc26,exp.13,duex.heater4" },
-	{ PortCPin(27),	PinCapability::rw,		"exp.pc27,exp.9,spi.cs6,stop3"},
-	{ PortCPin(29),	PinCapability::rwpwm,	"exp.pc29,exp.8,duex.heater3" }
-};
-#endif
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 3*32);

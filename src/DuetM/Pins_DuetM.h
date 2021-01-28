@@ -110,11 +110,11 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortCPin(18), PortAPin(8), Po
 // UART0 used by TMC drivers
 constexpr Pin APIN_UART0_RXD = PortAPin(9);
 constexpr Pin APIN_UART0_TXD = PortAPin(10);
-constexpr GpioPinFunction USART0PeriphMode = GpioPinFunction::A;
+constexpr GpioPinFunction UART0PeriphMode = GpioPinFunction::A;
 
 // Serial0 uses UART1
-constexpr Pin APIN_Serial0_RXD = PortAPin(2);
-constexpr Pin APIN_Serial0_TXD = PortAPin(3);
+constexpr Pin APIN_Serial0_RXD = PortBPin(2);
+constexpr Pin APIN_Serial0_TXD = PortBPin(3);
 constexpr GpioPinFunction Serial0PeriphMode = GpioPinFunction::A;
 
 // UART interface to stepper drivers
@@ -123,7 +123,7 @@ constexpr IRQn TMC22xx_UART_IRQn = UART0_IRQn;
 constexpr uint32_t ID_TMC22xx_UART = ID_UART0;
 constexpr Pin TMC22xxUartRxPin = APIN_UART0_RXD;
 constexpr Pin TMC22xxUartTxPin = APIN_UART0_TXD;
-constexpr GpioPinFunction TMC22xxUartPeriphMode = USART0PeriphMode;
+constexpr GpioPinFunction TMC22xxUartPeriphMode = UART0PeriphMode;
 
 #define TMC22xx_UART_Handler			UART0_Handler
 
