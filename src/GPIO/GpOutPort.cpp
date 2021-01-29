@@ -154,7 +154,7 @@ GCodeResult GpOutputPort::WriteAnalog(uint32_t gpioPortNumber, bool isServo, flo
 #if SUPPORT_CAN_EXPANSION
 	if (boardAddress != CanInterface::GetCanAddress())
 	{
-		return CanInterface::WriteGpio(boardAddress, gpioPortNumber, pwm, isServo, gb, reply);
+		return CanInterface::WriteGpio(boardAddress, gpioPortNumber, pwm, isServo, &gb, reply);
 	}
 #endif
 	port.WriteAnalog(pwm);
@@ -182,6 +182,7 @@ GCodeResult GpOutputPort::AssignFromRemote(uint32_t gpioPortNumber, const CanMes
 	if (parser.GetStringParam('C', pinName.GetRef()))
 	{
 		// Creating or destroying a port
+		boardAddress = CanInterface::GetCanAddress();
 		const bool ok = port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpout, (isServo) ? PinAccess::servo : PinAccess::pwm);
 		if (ok && port.IsValid())
 		{
@@ -192,7 +193,7 @@ GCodeResult GpOutputPort::AssignFromRemote(uint32_t gpioPortNumber, const CanMes
 	else
 	{
 		// Changing frequency, or reporting on a port
-		if (!port.IsValid())
+		if (!port.IsValid() || boardAddress != CanInterface::GetCanAddress())
 		{
 			reply.printf("Board %u does not have GPIO/servo port %" PRIu32, CanInterface::GetCanAddress(), gpioPortNumber);
 			return GCodeResult::error;

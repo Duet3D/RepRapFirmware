@@ -1330,9 +1330,9 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	longestWaitMessageType = 0;
 }
 
-GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
+GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) THROWS(GCodeException)
 {
-	CanMessageBuffer * const buf = AllocateBuffer(&gb);
+	CanMessageBuffer * const buf = AllocateBuffer(gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 	auto msg = buf->SetupRequestMessage<CanMessageWriteGpio>(rid, GetCanAddress(), boardAddress);
 	msg->portNumber = portNumber;

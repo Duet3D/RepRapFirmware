@@ -292,7 +292,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
-		reply.copy(BOARD_NAME);
+		reply.copy(BOARD_SHORT_NAME);
 		break;
 
 	case CanMessageReturnInfo::typeBootloaderName:
@@ -301,7 +301,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 
 	case CanMessageReturnInfo::typeM408:
 		// For now we ignore the parameter and always return the same set of info
-		// This command is currently only used by the ATE, which needs the board type and the voltages
+		// This command is only used by the old ATE, which needs the board type and the voltages
 		reply.printf("{\"firmwareElectronics\":\"Duet 3 %.0s\"", BOARD_NAME);
 #if HAS_VOLTAGE_MONITOR
 		{
