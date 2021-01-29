@@ -535,7 +535,23 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::enterTestMode:
 				if (buf->msg.enterTestMode.passwd == CanMessageEnterTestMode::Passwd)
 				{
-					CanInterface::SwitchToExpansionMode(buf->msg.enterTestMode.address);
+					const CanAddress newAddress = buf->msg.enterTestMode.address;
+
+					// Send a standard response before we switch
+					const CanAddress srcAddress = buf->id.Src();
+					const CanRequestId requestId = buf->msg.enterTestMode.requestId;
+
+					CanMessageStandardReply *msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+					msg->resultCode = (uint16_t)GCodeResult::ok;
+					msg->extra = 0;
+					msg->text[0] = 0;
+					buf->dataLength = msg->GetActualDataLength(0);
+					msg->fragmentNumber = 0;
+					msg->moreFollows = false;
+					CanInterface::SendResponseNoFree(buf);
+
+					delay(25);							// allow time for the response to be sent before we re-initialise CAN
+					CanInterface::SwitchToExpansionMode(newAddress);
 				}
 				break;
 #endif
