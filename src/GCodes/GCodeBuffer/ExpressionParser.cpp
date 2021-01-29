@@ -528,7 +528,7 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 
 /*static*/ bool ExpressionParser::TypeHasNoLiterals(TypeCode t) noexcept
 {
-	return t == TypeCode::DateTime || t == TypeCode::IPAddress || t == TypeCode::MacAddress || t == TypeCode::DriverId;
+	return t == TypeCode::Char || t == TypeCode::DateTime || t == TypeCode::IPAddress || t == TypeCode::MacAddress || t == TypeCode::DriverId;
 }
 
 // Balance types for a comparison operator
