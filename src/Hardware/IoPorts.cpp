@@ -26,6 +26,10 @@ using AnalogIn::AdcBits;
 # include <CanId.h>
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CAN/CanInterface.h>
+#endif
+
 // Read a port name parameter and assign some ports. Caller must call gb.Seen() with the appropriate letter and get 'true' returned before calling this.
 // Return the number of ports allocated, or 0 if there was an error with the error message in 'reply'.
 /*static*/ size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[]) THROWS(GCodeException)
@@ -412,6 +416,12 @@ void IoPort::AppendPinName(const StringRef& str) const noexcept
 {
 	if (IsValid())
 	{
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			str.catf("%u.", CanInterface::GetCanAddress());
+		}
+#endif
 		if (GetInvert())
 		{
 			str.cat('!');

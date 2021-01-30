@@ -1605,6 +1605,20 @@ float Platform::GetCpuTemperature() const noexcept
 //*****************************************************************************************************************
 // Interrupts
 
+#if SAME5x
+// Set a contiguous range of interrupts to the specified priority
+static void SetInterruptPriority(IRQn base, unsigned int num, uint32_t prio)
+{
+	do
+	{
+		NVIC_SetPriority(base, prio);
+		base = (IRQn)(base + 1);
+		--num;
+	}
+	while (num != 0);
+}
+#endif
+
 void Platform::InitialiseInterrupts() noexcept
 {
 	// Watchdog interrupt priority if applicable has already been set up in RepRap::Init
@@ -1639,11 +1653,7 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 
 #if SAME5x
-	// SAME5x DMAC has 5 contiguous IRQ numbers
-	for (unsigned int i = 0; i < 5; i++)
-	{
-		NVIC_SetPriority((IRQn)(DMAC_0_IRQn + i), NvicPriorityDMA);
-	}
+	SetInterruptPriority(DMAC_0_IRQn, 5, NvicPriorityDMA);				// SAME5x DMAC has 5 contiguous IRQ numbers
 #elif SAME70
 	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 #endif
@@ -1651,7 +1661,9 @@ void Platform::InitialiseInterrupts() noexcept
 #ifdef __LPC17xx__
 	// Interrupt for GPIO pins. Only port 0 and 2 support interrupts and both share EINT3
 	NVIC_SetPriority(EINT3_IRQn, NvicPriorityPins);
-#elif !SAME5x
+#elif SAME5x
+	SetInterruptPriority(EIC_0_IRQn, 16, NvicPriorityPins);				// SAME5x EXINT has 16 contiguous IRQ numbers
+#else
 	NVIC_SetPriority(PIOA_IRQn, NvicPriorityPins);
 	NVIC_SetPriority(PIOB_IRQn, NvicPriorityPins);
 	NVIC_SetPriority(PIOC_IRQn, NvicPriorityPins);
@@ -1664,10 +1676,7 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 
 #if SAME5x
-	NVIC_SetPriority(USB_0_IRQn, NvicPriorityUSB);
-	NVIC_SetPriority(USB_1_IRQn, NvicPriorityUSB);
-	NVIC_SetPriority(USB_2_IRQn, NvicPriorityUSB);
-	NVIC_SetPriority(USB_3_IRQn, NvicPriorityUSB);
+	SetInterruptPriority(USB_0_IRQn, 4, NvicPriorityUSB);				// SAME5x USB has 4 contiguous IRQ numbers
 #elif SAME70
 	NVIC_SetPriority(USBHS_IRQn, NvicPriorityUSB);
 #elif SAM4E || SAM4S
@@ -4711,7 +4720,7 @@ GCodeResult Platform::EutHandleGpioWrite(const CanMessageWriteGpio& msg, const S
 {
 	if (msg.portNumber >= MaxGpOutPorts)
 	{
-		reply.printf("GPIO port# %u is too high for this expansion board", msg.portNumber);
+		reply.printf("GPIO port# %u is too high for this board", msg.portNumber);
 		return GCodeResult::error;
 	}
 
