@@ -171,7 +171,8 @@ GCodeResult ThermocoupleSensor31856::FinishConfiguring(bool changed, const Strin
 
 		if (rslt != TemperatureError::success)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise thermocouple: %s\n", TemperatureErrorString(rslt));
+			reply.printf("Failed to initialise thermocouple: %s", TemperatureErrorString(rslt));
+			return GCodeResult::error;
 		}
 	}
 	else

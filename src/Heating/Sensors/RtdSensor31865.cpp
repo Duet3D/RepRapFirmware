@@ -162,7 +162,8 @@ GCodeResult RtdSensor31865::FinishConfiguring(bool changed, const StringRef& rep
 
 		if (rslt != TemperatureError::success)
 		{
-			reply.printf("Failed to initialise RTD: %s\n", TemperatureErrorString(rslt));
+			reply.printf("Failed to initialise RTD: %s", TemperatureErrorString(rslt));
+			return GCodeResult::error;
 		}
 	}
 	else
@@ -213,7 +214,7 @@ void RtdSensor31865::Poll() noexcept
 		   )
 		{
 			static const uint8_t faultDataOut[2] = {0x07, 0x55};
-			if (DoSpiTransaction(faultDataOut, ARRAY_SIZE(faultDataOut), rawVal)== TemperatureError::success)	// read the fault register
+			if (DoSpiTransaction(faultDataOut, ARRAY_SIZE(faultDataOut), rawVal) == TemperatureError::success)	// read the fault register
 			{
 				sts = (rawVal & 0x04) ? TemperatureError::overOrUnderVoltage
 							: (rawVal & 0x18) ? TemperatureError::openCircuit
