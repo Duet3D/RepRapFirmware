@@ -18,7 +18,7 @@ InputMonitor * volatile InputMonitor::monitorsList = nullptr;
 InputMonitor * volatile InputMonitor::freeList = nullptr;
 ReadWriteLock InputMonitor::listLock;
 
-bool InputMonitor::Activate() noexcept
+bool InputMonitor::Activate(bool useInterrupt) noexcept
 {
 	bool ok = true;
 	if (!active)
@@ -27,7 +27,7 @@ bool InputMonitor::Activate() noexcept
 		{
 			// Digital input
 			const irqflags_t flags = cpu_irq_save();
-			ok = port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::change, CallbackParameter(this));
+			ok = !useInterrupt || port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::change, CallbackParameter(this));
 			state = port.ReadDigital();
 			cpu_irq_restore(flags);
 		}
@@ -170,7 +170,8 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	{
 		newMonitor->next = monitorsList;
 		monitorsList = newMonitor;
-		const bool ok = newMonitor->Activate();
+		// Pins used only by the ATE may not have interrupts, and the ATE doesn't need interrupts from them
+		const bool ok = newMonitor->Activate(msg.handle.u.parts.type != RemoteInputHandle::typeAte);
 		extra = (newMonitor->state) ? 1 : 0;
 		if (!ok)
 		{
@@ -211,7 +212,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	switch (msg.action)
 	{
 	case CanMessageChangeInputMonitor::actionDoMonitor:
-		rslt = (m->Activate()) ? GCodeResult::ok : GCodeResult::error;
+		rslt = (m->Activate(true)) ? GCodeResult::ok : GCodeResult::error;
 		break;
 
 	case CanMessageChangeInputMonitor::actionDontMonitor:
