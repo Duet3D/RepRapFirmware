@@ -20,8 +20,11 @@ New features:
 Bug fixes:
 - It was not possible to delete a temperature sensor using M308 S# P"nil"
 - When a sensor was configured on a CAN expansion board and M308 was subsequently used to create a sensor with the same number on a different board, the old sensor was not deleted
-- [Duet 3] At high step fates, in RRF 3.2 the step pulses sent to stepper drivers did not always meet the minimum pulse width specified for the TMC5160. This might have resulted in lost steps.
+- It was not possible to compare an object model value of character type (e.g. move.axes[N]) with a string
+- [Duet 3] At high step rates, in RRF 3.2 the step pulses sent to stepper drivers did not always meet the minimum pulse width specified for the TMC5160. This might have resulted in lost steps; however we have not observed this and have no reports of it happening.
 - [Duet + SBC] It was not possible to use an expression as a parameter where the parameter accepts multiple values. It is now possible to use an expression if only one value needs to be passed.
 - [Duet 3 expansion/tool boards] Under certain conditions, moves could be omitted. We have only been able to reproduce this when using high step pulse rates.
 - [Duet 3 expansion/tool boards] Under conditions of heavy load (e.g. a series of short moves at high step pulse rates), the board could stop responding to CAN commands and lose CAN sync
 - [Duet 3 with expansion/tool boards] When DAA ie enabled, expansion and tool boards would sometimes get out of sync and skip moves
+- [Duet 3 expansion/tool boards] If a filament monitor was connected to a tool or expansion board, any F parameter in the M591 command used to configure it was ignored
+- [Duet 3 expansion/tool boards] A small number of EXP3HC boards took a long time to start up when power was applied
