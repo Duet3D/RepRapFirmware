@@ -19,6 +19,9 @@ Upgrade notes (see also Object Model Changes if you use conditional GCode):
 
 Known issues:
 - [Duet + SBC + 12864 display] Menu files are slow to load
+- [Duet 3 + expansion/tool boards] A small number of EXP3HC expansion boards and even fewer TOOL1LC boards take a long time to start up after power up when running 3.2 firmware. The most common symptom is that some of the configuration commands for them in config.g fail. In rare cases, the status light may remain off for some time before it starts flashing to indicate CAN sync (slow flash) or lack of sync (fast flash). As a workaround until we produce a fix that works in all cases, we recommend (1) use a G4 S1 delay command in config.g before the first command that refers to a motor or port on any expansion board, and (2) if in any doubt, run M98 P"config.g" from the console after power up and check there are no error messages.
+- [Duet 3 + expansion/tool boards] If you use DAA (M593 command) and you have any extruders connected to expansion boards then steps may be lost on the motors connected to those expansion boards. This issue is also present in previous firmware revisions and is fixed in 3.3beta firmware.
+- [Duet 3 + expansion/tool boards] When high step rates are demanded from motors connected to expansion and tool boards, the motors may get out of sync with the main board. This issue is also present in previous firmware revisions and is fixed in 3.3beta firmware.
 
 New features:
 - A default filename is no longer provided in the M559 and M560 commands, so the P parameter must always be used
