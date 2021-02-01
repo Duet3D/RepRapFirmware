@@ -292,7 +292,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
-		reply.copy(BOARD_NAME);
+		reply.copy(BOARD_SHORT_NAME);
 		break;
 
 	case CanMessageReturnInfo::typeBootloaderName:
@@ -301,7 +301,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 
 	case CanMessageReturnInfo::typeM408:
 		// For now we ignore the parameter and always return the same set of info
-		// This command is currently only used by the ATE, which needs the board type and the voltages
+		// This command is only used by the old ATE, which needs the board type and the voltages
 		reply.printf("{\"firmwareElectronics\":\"Duet 3 %.0s\"", BOARD_NAME);
 #if HAS_VOLTAGE_MONITOR
 		{
@@ -535,7 +535,23 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::enterTestMode:
 				if (buf->msg.enterTestMode.passwd == CanMessageEnterTestMode::Passwd)
 				{
-					CanInterface::SwitchToExpansionMode(buf->msg.enterTestMode.address);
+					const CanAddress newAddress = buf->msg.enterTestMode.address;
+
+					// Send a standard response before we switch
+					const CanAddress srcAddress = buf->id.Src();
+					const CanRequestId requestId = buf->msg.enterTestMode.requestId;
+
+					CanMessageStandardReply *msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+					msg->resultCode = (uint16_t)GCodeResult::ok;
+					msg->extra = 0;
+					msg->text[0] = 0;
+					buf->dataLength = msg->GetActualDataLength(0);
+					msg->fragmentNumber = 0;
+					msg->moreFollows = false;
+					CanInterface::SendResponseNoFree(buf);
+
+					delay(25);							// allow time for the response to be sent before we re-initialise CAN
+					CanInterface::SwitchToExpansionMode(newAddress);
 				}
 				break;
 #endif

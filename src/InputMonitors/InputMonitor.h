@@ -38,7 +38,7 @@ public:
 	static void CommonAnalogPortInterrupt(CallbackParameter cbp, uint16_t reading) noexcept;
 
 private:
-	bool Activate() noexcept;
+	bool Activate(bool useInterrupt) noexcept;
 	void Deactivate() noexcept;
 	void DigitalInterrupt() noexcept;
 	void AnalogInterrupt(uint16_t reading) noexcept;

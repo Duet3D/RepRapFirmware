@@ -54,6 +54,8 @@ constexpr float MinJumpWidth = 0.05;
 constexpr float MaxJumpWidth = 0.5;
 constexpr float DefaultJumpWidth = 0.25;
 
+constexpr const char *NoCanBufferMessage = "no CAN buffer available";
+
 static uint32_t lastTimeSent = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
@@ -304,7 +306,7 @@ CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer* gb) THROWS(GCo
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		throw GCodeException((gb == nullptr) ? -1 : gb->GetLineNumber(), -1, "no CAN buffer");
+		throw GCodeException((gb == nullptr) ? -1 : gb->GetLineNumber(), -1, NoCanBufferMessage);
 	}
 	return buf;
 }
@@ -508,7 +510,7 @@ template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<
 		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			reply.lcat("No CAN buffer available");
+			reply.lcat(NoCanBufferMessage);
 			return GCodeResult::error;
 		}
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
@@ -540,7 +542,7 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			reply.lcat("No CAN buffer available");
+			reply.lcat(NoCanBufferMessage);
 			return GCodeResult::error;
 		}
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
@@ -824,7 +826,7 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy("No CAN buffer available");
+		reply.copy(NoCanBufferMessage);
 		return GCodeResult::error;
 	}
 
@@ -916,7 +918,7 @@ GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandl
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy("No CAN buffer");
+		reply.copy(NoCanBufferMessage);
 		return GCodeResult::error;
 	}
 
@@ -948,7 +950,7 @@ static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy("No CAN buffer");
+		reply.copy(NoCanBufferMessage);
 		return GCodeResult::error;
 	}
 
@@ -988,10 +990,10 @@ GCodeResult CanInterface::ChangeHandleResponseTime(CanAddress boardAddress, Remo
 
 GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInputHandle mask, RemoteInputHandle pattern, ReadHandlesCallbackFunction callback, const StringRef &reply) noexcept
 {
-	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy("No CAN buffer");
+		reply.copy(NoCanBufferMessage);
 		return GCodeResult::error;
 	}
 
@@ -1028,9 +1030,15 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	longestWaitMessageType = 0;
 }
 
-GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
+GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) noexcept
 {
-	CanMessageBuffer * const buf = AllocateBuffer(&gb);
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy(NoCanBufferMessage);
+		return GCodeResult::error;
+	}
+
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 	auto msg = buf->SetupRequestMessage<CanMessageWriteGpio>(rid, GetCanAddress(), boardAddress);
 	msg->portNumber = portNumber;
