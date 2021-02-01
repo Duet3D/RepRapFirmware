@@ -195,6 +195,7 @@ void Move::Init() noexcept
 	moveState = MoveState::idle;
 	lastStateChangeTime = millis();
 	idleCount = 0;
+	idleStartTime = lastStateChangeTime;
 
 	simulationMode = 0;
 	longestGcodeWaitInterval = 0;
@@ -284,11 +285,12 @@ void Move::Spin() noexcept
 
 					if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 					{
+						const uint32_t now = millis();
 						idleCount = 0;
+						idleStartTime = now;
 						if (moveState == MoveState::idle || moveState == MoveState::timing)
 						{
 							moveState = MoveState::collecting;
-							const uint32_t now = millis();
 							const uint32_t timeWaiting = now - lastStateChangeTime;
 							if (timeWaiting > longestGcodeWaitInterval)
 							{
@@ -302,7 +304,9 @@ void Move::Spin() noexcept
 		}
 	}
 
-	mainDDARing.Spin(simulationMode, idleCount > 10);	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount.
+	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
+	const uint32_t idleTime = millis() - idleStartTime;
+	mainDDARing.Spin(simulationMode, idleCount > 10 && idleTime >= mainDDARing.GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 	if (auxMoveAvailable && auxDDARing.CanAddMove())

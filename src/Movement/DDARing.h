@@ -31,6 +31,7 @@ public:
 
 	void Spin(uint8_t simulationMode, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
+	uint32_t GetGracePeriod() const noexcept;											// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
@@ -106,6 +107,7 @@ private:
 	volatile int32_t liveEndPoints[MaxAxesPlusExtruders];						// The XYZ endpoints of the last completed move in motor coordinates
 
 	unsigned int numDdasInRing;
+	uint32_t gracePeriod;														// The minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
 	uint32_t scheduledMoves;													// Move counters for the code queue
 	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile
