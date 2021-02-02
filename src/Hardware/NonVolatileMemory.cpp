@@ -154,7 +154,7 @@ void NonVolatileMemory::SetThermistorHighCalibration(unsigned int inputNumber, i
 int8_t NonVolatileMemory::GetThermistorCalibration(unsigned int inputNumber, uint8_t *calibArray) noexcept
 {
 	EnsureRead();
-	return (inputNumber >= MaxCalibratedThermistors || calibArray[inputNumber] == 0xFF) ? 0 : calibArray[inputNumber] - 0x7F;
+	return (inputNumber >= MaxCalibratedThermistors || calibArray[inputNumber] == 0xFF) ? 0 : (int)calibArray[inputNumber] - (int)0x7F;
 }
 
 void NonVolatileMemory::SetThermistorCalibration(unsigned int inputNumber, int8_t val, uint8_t *calibArray) noexcept
