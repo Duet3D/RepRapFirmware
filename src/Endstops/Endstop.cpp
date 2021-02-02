@@ -25,11 +25,12 @@ constexpr ObjectModelTableEntry Endstop::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Endstop members
+	{ "highEnd",	OBJECT_MODEL_FUNC(self->GetAtHighEnd()),		 					ObjectModelEntryFlags::none },
 	{ "triggered",	OBJECT_MODEL_FUNC(self->Stopped() == EndStopHit::atStop),		 	ObjectModelEntryFlags::live },
 	{ "type",		OBJECT_MODEL_FUNC(self->GetEndstopType().ToString()), 				ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Endstop::objectModelTableDescriptor[] = { 1, 2 };
+constexpr uint8_t Endstop::objectModelTableDescriptor[] = { 1, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Endstop)
 
