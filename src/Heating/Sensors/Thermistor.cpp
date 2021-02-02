@@ -106,7 +106,7 @@ bool Thermistor::ConfigureHParam(int hVal, const StringRef& reply) noexcept
 			}
 			else
 			{
-				reply.copy("Computed correction is not valid. Check that you have disconnected the thermistor.");
+				reply.printf("Computed correction H%" PRIi32 " is out of range. Check that you have disconnected the thermistor.", computedCorrection);
 				return false;
 			}
 		}
@@ -157,7 +157,7 @@ bool Thermistor::ConfigureLParam(int lVal, const StringRef& reply) noexcept
 			}
 			else
 			{
-				reply.copy("Computed correction is not valid. Check that you have placed a jumper across the thermistor input.");
+				reply.printf("Computed correction L%" PRIi32 " is out of range. Check that you have placed a jumper across the thermistor input.", computedCorrection);
 				return false;
 			}
 		}

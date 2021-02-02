@@ -39,7 +39,7 @@ using
 /*static*/ size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[]) THROWS(GCodeException)
 {
 	// Get the full port names string
-	String<StringLength50> portNames;
+	String<StringLength100> portNames;				// 50 characters wasn't always enough when passing 4 duex endstop input names in a M574 command
 	gb.GetReducedString(portNames.GetRef());
 	return AssignPorts(portNames.c_str(), reply, neededFor, numPorts, ports, access);
 }
