@@ -44,6 +44,9 @@
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 
+// 2021-02-03: MC and DC converted this to be re-entrant, provided that only one task uses each interface.
+// Currently all RRF configurations for Duets support at most one HSMCI and one SPI card, and there is a mutex for each volume, so this is the case.
+
 #include <Core.h>		// for digitalRead() and pinMode()
 #include <string.h>
 
@@ -112,7 +115,7 @@ struct DriverInterface
 
 driverIdleFunc_t hsmci_set_idle_func(driverIdleFunc_t func) noexcept
 {
-	//TODO
+	// This function is used on the SAME5x because the low-level driver is FreeRTOS-aware
 	return NULL;
 }
 
@@ -232,16 +235,10 @@ struct sd_mmc_card {
 //DC added __nocache for SAME70 because 'csd' is read by DMA
 static __nocache struct sd_mmc_card sd_mmc_cards[SD_MMC_MEM_CNT];
 
-#if 0 // wil: these should not be static
-//! Index of current slot selected
-static uint8_t sd_mmc_slot_sel;
-//! Pointer on current slot selected
-static struct sd_mmc_card *sd_mmc_card;
-#endif
 //! Number of block to read or write on the current transfer
-static uint16_t sd_mmc_nb_block_to_tranfer[SD_MMC_MEM_CNT] = {0, 0};
+static uint16_t sd_mmc_nb_block_to_tranfer[SD_MMC_MEM_CNT] = { 0 };
 //! Number of block remaining to read or write on the current transfer
-static uint16_t sd_mmc_nb_block_remaining[SD_MMC_MEM_CNT] = {0, 0};
+static uint16_t sd_mmc_nb_block_remaining[SD_MMC_MEM_CNT] = { 0 };
 
 //! SD/MMC transfer rate unit codes (10K) list
 const uint32_t sd_mmc_trans_units[7] = {
@@ -754,7 +751,8 @@ static bool sd_cm6_set_high_speed(uint8_t slot)
 {
 
 #if SAME70
-	static __nocache uint8_t switch_status[SD_SW_STATUS_BSIZE];
+	static __nocache uint8_t switch_status_array[SD_MMC_MEM_CNT][SD_SW_STATUS_BSIZE];
+	uint8_t * const switch_status = switch_status_array[slot];
 #else
 	uint8_t switch_status[SD_SW_STATUS_BSIZE];
 #endif
@@ -1241,7 +1239,8 @@ static bool sd_acmd6(uint8_t slot)
 static bool sd_acmd51(uint8_t slot)
 {
 #if SAME70
-	static __nocache uint8_t scr[SD_SCR_REG_BSIZE];
+	static __nocache uint8_t scr_array[SD_MMC_MEM_CNT][SD_SCR_REG_BSIZE];
+	uint8_t * const scr = scr_array[slot];
 #else
 	uint8_t scr[SD_SCR_REG_BSIZE];
 #endif
