@@ -313,7 +313,7 @@ static bool sd_mmc_mci_install_mmc(uint8_t slot);
 static bool mmc_spi_op_cond(uint8_t slot)
 {
 	uint32_t retry, resp;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	/*
 	 * Timeout 1s = 400KHz / ((6+1)*8) cylces = 7150 retry
@@ -361,7 +361,7 @@ static bool mmc_spi_op_cond(uint8_t slot)
 static bool mmc_mci_op_cond(uint8_t slot)
 {
 	uint32_t retry, resp;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	/*
 	 * Timeout 1s = 400KHz / ((6+6)*8) cylces = 4200 retry
@@ -406,7 +406,7 @@ static bool mmc_mci_op_cond(uint8_t slot)
 static bool sd_spi_op_cond(uint8_t v2, uint8_t slot)
 {
 	uint32_t arg, retry, resp;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	/*
 	 * Timeout 1s = 400KHz / ((6+1)*8) cylces = 7150 retry
@@ -467,7 +467,7 @@ static bool sd_spi_op_cond(uint8_t v2, uint8_t slot)
 static bool sd_mci_op_cond(uint8_t v2, uint8_t slot)
 {
 	uint32_t arg, retry, resp;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	/*
 	 * Timeout 1s = 400KHz / ((6+6+6+6)*8) cylces = 2100 retry
@@ -759,7 +759,7 @@ static bool sd_cm6_set_high_speed(uint8_t slot)
 	uint8_t switch_status[SD_SW_STATUS_BSIZE];
 #endif
 
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->adtc_start(SD_CMD6_SWITCH_FUNC,
 			SD_CMD6_MODE_SWITCH
 			| SD_CMD6_GRP6_NO_INFLUENCE
@@ -830,7 +830,7 @@ static bool mmc_cmd6_set_bus_width(uint8_t bus_width, uint8_t slot)
 				| MMC_CMD6_VALUE_BUS_WIDTH_1BIT;
 		break;
 	}
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->send_cmd(MMC_CMD6_SWITCH, arg)) {
 		return false;
 	}
@@ -855,7 +855,7 @@ static bool mmc_cmd6_set_bus_width(uint8_t bus_width, uint8_t slot)
  */
 static bool mmc_cmd6_set_high_speed(uint8_t slot)
 {
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->send_cmd(MMC_CMD6_SWITCH,
 			MMC_CMD6_ACCESS_WRITE_BYTE
 			| MMC_CMD6_INDEX_HS_TIMING
@@ -888,7 +888,7 @@ static bool mmc_cmd6_set_high_speed(uint8_t slot)
 static bool sd_cmd8(uint8_t * v2, uint8_t slot)
 {
 	uint32_t resp;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	*v2 = 0;
 	// Test for SD version 2
@@ -926,7 +926,7 @@ static bool mmc_cmd8(uint8_t *b_authorize_high_speed, uint8_t slot)
 	uint16_t i;
 	uint32_t ext_csd;
 	uint32_t sec_count;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	if (!sd_mmc_card->iface->adtc_start(MMC_CMD8_SEND_EXT_CSD, 0, EXT_CSD_BSIZE, 1, false)) {
 		return false;
@@ -970,7 +970,7 @@ static bool mmc_cmd8(uint8_t *b_authorize_high_speed, uint8_t slot)
  */
 static bool sd_mmc_cmd9_spi(uint8_t slot)
 {
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->adtc_start(SDMMC_SPI_CMD9_SEND_CSD, (uint32_t)sd_mmc_card->rca << 16, CSD_REG_BSIZE, 1, sd_mmc_card->csd)) {
 		return false;
 	}
@@ -988,7 +988,7 @@ static bool sd_mmc_cmd9_spi(uint8_t slot)
  */
 static bool sd_mmc_cmd9_mci(uint8_t slot)
 {
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->send_cmd(SDMMC_MCI_CMD9_SEND_CSD, (uint32_t)sd_mmc_card->rca << 16)) {
 		return false;
 	}
@@ -1004,7 +1004,7 @@ static void mmc_decode_csd(uint8_t slot)
  	uint32_t unit;
 	uint32_t mul;
 	uint32_t tran_speed;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	// Get MMC System Specification version supported by the card
 	switch (MMC_CSD_SPEC_VERS(sd_mmc_card->csd)) {
@@ -1065,7 +1065,7 @@ static void sd_decode_csd(uint8_t slot)
  	uint32_t unit;
 	uint32_t mul;
 	uint32_t tran_speed;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	// Get SD memory maximum transfer speed in Hz.
 	tran_speed = CSD_TRAN_SPEED(sd_mmc_card->csd);
@@ -1108,7 +1108,7 @@ static void sd_decode_csd(uint8_t slot)
 static bool sd_mmc_cmd13(uint8_t slot)
 {
 	uint32_t nec_timeout;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	/* Wait for data ready status.
 	 * Nec timing: 0 to unlimited
@@ -1212,7 +1212,7 @@ static bool sdio_cmd53(uint8_t rw_flag, uint8_t func_nb, uint32_t reg_addr,
  */
 static bool sd_acmd6(uint8_t slot)
 {
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	// CMD55 - Indicate to the card that the next command is an
 	// application specific command rather than a standard command.
 	if (!sd_mmc_card->iface->send_cmd(SDMMC_CMD55_APP_CMD, (uint32_t)sd_mmc_card->rca << 16)) {
@@ -1245,7 +1245,7 @@ static bool sd_acmd51(uint8_t slot)
 #else
 	uint8_t scr[SD_SCR_REG_BSIZE];
 #endif
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	// CMD55 - Indicate to the card that the next command is an
 	// application specific command rather than a standard command.
@@ -1369,7 +1369,7 @@ static sd_mmc_err_t sd_mmc_select_slot(uint8_t slot)
  */
 static __attribute__((warn_unused_result)) bool sd_mmc_configure_slot(uint8_t slot)
 {
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	return sd_mmc_card->iface->select_device(sd_mmc_card->slot, sd_mmc_card->clock, sd_mmc_card->bus_width, sd_mmc_card->high_speed);
 }
 
@@ -1378,7 +1378,7 @@ static __attribute__((warn_unused_result)) bool sd_mmc_configure_slot(uint8_t sl
  */
 static void sd_mmc_deselect_slot(uint8_t slot)
 {
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (slot < SD_MMC_MEM_CNT) {
 		sd_mmc_card->iface->deselect_device(sd_mmc_card->slot);
 //		sd_mmc_slot_sel = 0xFF;					// No slot selected FIXME
@@ -1398,7 +1398,7 @@ static void sd_mmc_deselect_slot(uint8_t slot)
 static bool sd_mmc_spi_card_init(uint8_t slot)
 {
 	uint8_t v2 = 0;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	// In first, try to install SD/SDIO card
 	sd_mmc_card->type = CARD_TYPE_SD;
@@ -1487,7 +1487,7 @@ static bool sd_mmc_spi_card_init(uint8_t slot)
 static bool sd_mmc_mci_card_init(uint8_t slot)
 {
 	uint8_t v2 = 0;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	// In first, try to install SD/SDIO card
 	sd_mmc_card->type = CARD_TYPE_SD;
@@ -1641,7 +1641,7 @@ static bool sd_mmc_mci_card_init(uint8_t slot)
 static bool sd_mmc_spi_install_mmc(uint8_t slot)
 {
 	uint8_t b_authorize_high_speed;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	// CMD0 - Reset all cards to idle state.
 	if (!sd_mmc_card->iface->send_cmd(SDMMC_SPI_CMD0_GO_IDLE_STATE, 0)) {
@@ -1694,7 +1694,7 @@ static bool sd_mmc_spi_install_mmc(uint8_t slot)
 static bool sd_mmc_mci_install_mmc(uint8_t slot)
 {
 	uint8_t b_authorize_high_speed;
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	// CMD0 - Reset all cards to idle state.
 	if (!sd_mmc_card->iface->send_cmd(SDMMC_MCI_CMD0_GO_IDLE_STATE, 0))
@@ -1847,7 +1847,7 @@ sd_mmc_err_t sd_mmc_check(uint8_t slot)
 	}
 
 	// Initialization of the card requested
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (sd_mmc_card->iface->is_spi ? sd_mmc_spi_card_init(slot) : sd_mmc_mci_card_init(slot)) {
 		sd_mmc_debug("SD/MMC card ready\n\r");
 		sd_mmc_card->state = SD_MMC_CARD_STATE_READY;
@@ -1935,7 +1935,7 @@ sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_b
 		cmd = SDMMC_CMD17_READ_SINGLE_BLOCK;
 	}
 
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	/*
 	 * SDSC Card (CCS=0) uses byte unit address,
@@ -1973,7 +1973,7 @@ sd_mmc_err_t sd_mmc_start_read_blocks(void *dest, uint16_t nb_block, uint8_t slo
 {
 	Assert(sd_mmc_nb_block_remaining >= nb_block);
 
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->start_read_blocks(dest, nb_block)) {
 		sd_mmc_nb_block_remaining[slot] = 0;
 		sd_mmc_deselect_slot(slot);
@@ -1988,7 +1988,7 @@ sd_mmc_err_t sd_mmc_start_read_blocks(void *dest, uint16_t nb_block, uint8_t slo
 // On return it is not selected
 sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort, uint8_t slot)
 {
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->wait_end_of_read_blocks()) {
 		sd_mmc_deselect_slot(slot);
 		return SD_MMC_ERR_COMM;
@@ -2039,7 +2039,7 @@ sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_
 		cmd = SDMMC_CMD24_WRITE_BLOCK;
 	}
 
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
 	/*
 	 * SDSC Card (CCS=0) uses byte unit address,
@@ -2075,7 +2075,7 @@ sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_
 sd_mmc_err_t sd_mmc_start_write_blocks(const void *src, uint16_t nb_block, uint8_t slot)
 {
 	Assert(sd_mmc_nb_block_remaining >= nb_block);
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->start_write_blocks(src, nb_block)) {
 		sd_mmc_nb_block_remaining[slot] = 0;
 		sd_mmc_deselect_slot(slot);
@@ -2090,7 +2090,7 @@ sd_mmc_err_t sd_mmc_start_write_blocks(const void *src, uint16_t nb_block, uint8
 // On return it is not selected
 sd_mmc_err_t sd_mmc_wait_end_of_write_blocks(bool abort, uint8_t slot)
 {
-	struct sd_mmc_card *sd_mmc_card = &sd_mmc_cards[slot];
+	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->wait_end_of_write_blocks()) {
 		sd_mmc_deselect_slot(slot);
 		return SD_MMC_ERR_COMM;
