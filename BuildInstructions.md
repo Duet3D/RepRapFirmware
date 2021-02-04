@@ -19,7 +19,7 @@ To build RepRapFirmware v3.1.1, use the following tags:
 
  >**Note**: CoreNG, FreeRTOS, RRFLibraries do not have v3.1.1 tags because the  3.1.0 tagged releases are the base for v3.1.1 (no changes in the dependencies, only in RepRapFirmware) 
 
-To build RepRapFirmware from the latest development sources, use the following branches:
+To build RepRapFirmware 3.2 from the latest development sources, use the following branches:
 
 | project | branch | notes | 
 | :-- | --: | --- |
@@ -29,6 +29,18 @@ To build RepRapFirmware from the latest development sources, use the following b
 |[CoreN2G](https://github.com/Duet3D/CoreN2G)| master | _only needed for Duet 3 Mini5+_ |
 |[FreeRTOS](https://github.com/Duet3D/FreeRTOS)| dev ||
 |[RRFLibraries](https://github.com/Duet3D/RRFLibraries)| dev ||
+|[DuetWiFiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer)| dev ||
+
+To build RepRapFirmware 3.3 from the latest development sources, use the following branches:
+
+| project | branch | notes | 
+| :-- | --: | --- |
+|[RepRapFirmware](https://github.com/Duet3D/RepRapFirmware)| v3.3-dev||
+|[CANlib](https://github.com/Duet3D/CANlib)| v3.3-dev | _only needed for Duet 3_ |
+|[CoreNG](https://github.com/Duet3D/CoreNG)| dev | _not needed for Duet 3 Mini5+_ |
+|[CoreN2G](https://github.com/Duet3D/CoreN2G)| v3.3-dev | _only needed for Duet 3 Mini5+_ |
+|[FreeRTOS](https://github.com/Duet3D/FreeRTOS)| dev ||
+|[RRFLibraries](https://github.com/Duet3D/RRFLibraries)| v3.3-dev ||
 |[DuetWiFiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer)| dev ||
 
 ## Additional Tools
