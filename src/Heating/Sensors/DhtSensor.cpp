@@ -147,7 +147,8 @@ void DhtTemperatureSensor::TakeReading() noexcept
 
 		// End the start signal by setting data line high. the sensor will respond with the start bit in 20 to 40us.
 		// We need only force the data line high long enough to charge the line capacitance, after that the pullup resistor keeps it high.
-		port.WriteDigital(true);		// this will generate an interrupt, but we will ignore it
+		numPulses = ARRAY_SIZE(pulses);		// tell the ISR not to collect data yet
+		port.WriteDigital(true);			// this may generate an interrupt, but we will ignore it
 		delayMicroseconds(3);
 
 		// Now start reading the data line to get the value from the DHT sensor
@@ -155,8 +156,8 @@ void DhtTemperatureSensor::TakeReading() noexcept
 
 		// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
 		// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.
-		numPulses = ARRAY_SIZE(pulses);		// tell the ISR not to collect data yet
 		port.AttachInterrupt(DhtDataTransition, INTERRUPT_MODE_CHANGE, this);
+		delayMicroseconds(2);				// give the interrupt time to occur
 		lastPulseTime = 0;
 		numPulses = 0;						// tell the ISR to collect data
 	}
