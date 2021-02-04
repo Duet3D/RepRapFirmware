@@ -44,8 +44,8 @@
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 
-#ifndef CONF_SD_MMC_H_INCLUDED
-#define CONF_SD_MMC_H_INCLUDED
+#ifndef SD_MMC_CONF_SD_MMC_H_INCLUDED
+#define SD_MMC_CONF_SD_MMC_H_INCLUDED
 
 // Define this to enable the SPI mode instead of Multimedia Card interface mode
 //#define SD_MMC_SPI_MODE
@@ -61,6 +61,11 @@
  * The GPIO and MCI/HSMCI connections of the SD/MMC Connector must be added
  * in board.h file.
  */
+
+// Include the version of this file for ASF to ensure we get consistent definitions, and to get the definition of CONF_HSMCI_XDMAC_CHANNEL
+#if SAM4E || SAM4S || SAME70
+# include <asf/conf_sd_mmc.h>
+#endif
 
 // SD card configuration for Duet and Duet WiFi
 #define SD_MMC_ENABLE
@@ -110,5 +115,5 @@
 
 #define SD_MMC_MEM_CNT				(SD_MMC_HSMCI_MEM_CNT + SD_MMC_SPI_MEM_CNT)
 
-#endif /* CONF_SD_MMC_H_INCLUDED */
+#endif /* SD_MMC_CONF_SD_MMC_H_INCLUDED */
 
