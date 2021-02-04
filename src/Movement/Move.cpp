@@ -305,8 +305,7 @@ void Move::Spin() noexcept
 	}
 
 	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-	const uint32_t idleTime = millis() - idleStartTime;
-	mainDDARing.Spin(simulationMode, idleCount > 10 && idleTime >= mainDDARing.GetGracePeriod());
+	mainDDARing.Spin(simulationMode, idleCount > 10 && millis() - idleStartTime >= mainDDARing.GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 	if (auxMoveAvailable && auxDDARing.CanAddMove())

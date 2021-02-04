@@ -96,13 +96,11 @@ void DDARing::Exit() noexcept
 GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	bool seen = false;
-	bool seenR = false;
 	uint32_t numDdasWanted = 0, numDMsWanted = 0;
-	uint32_t gracePeriodWanted = 0;
 	gb.TryGetUIValue('P', numDdasWanted, seen);
 	gb.TryGetUIValue('S', numDMsWanted, seen);
-	gb.TryGetUIValue('R', gracePeriodWanted, seenR);
-	if (seen || seenR)
+	gb.TryGetUIValue('R', gracePeriod, seen);
+	if (seen)
 	{
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
 		{
@@ -143,14 +141,10 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 			// Allocate the extra DMs
 			DriveMovement::InitialAllocate(numDMsWanted);		// this will only create any extra ones wanted
 		}
-		if (seenR)
-		{
-			gracePeriod = gracePeriodWanted;
-		}
 	}
 	else
 	{
-		reply.printf("DDAs %u, DMs %u, GracePeriod %lu", numDdasInRing, DriveMovement::NumCreated(), (unsigned long)gracePeriod);
+		reply.printf("DDAs %u, DMs %u, GracePeriod %" PRIu32, numDdasInRing, DriveMovement::NumCreated(), gracePeriod);
 	}
 	return GCodeResult::ok;
 }
