@@ -358,11 +358,6 @@ bool DDARing::IsIdle() const noexcept
 	return currentDda == nullptr && getPointer->GetState() == DDA::empty;
 }
 
-uint32_t DDARing::GetGracePeriod() const noexcept
-{
-	return gracePeriod;
-}
-
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
 float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 {
