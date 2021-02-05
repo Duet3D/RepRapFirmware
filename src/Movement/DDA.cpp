@@ -1235,7 +1235,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #if SUPPORT_CAN_EXPANSION
 		params.accelTime = accelStopTime;
 		params.steadyTime = steadyTime;
-		params.decelTime = (topSpeed - endSpeed)/acceleration;
+		params.decelTime = (topSpeed - endSpeed)/deceleration;
 		params.initialSpeedFraction = startSpeed/topSpeed;
 		params.finalSpeedFraction = endSpeed/topSpeed;
 		params.compFactor = 1.0 - params.initialSpeedFraction;
