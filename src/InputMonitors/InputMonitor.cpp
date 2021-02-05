@@ -35,7 +35,12 @@ bool InputMonitor::Activate(bool useInterrupt) noexcept
 		{
 			// Analog port
 			state = port.ReadAnalog() >= threshold;
-			ok = port.SetAnalogCallback(CommonAnalogPortInterrupt, CallbackParameter(this), 1);
+			ok =
+#if SAME5x
+				!useInterrupt || port.SetAnalogCallback(CommonAnalogPortInterrupt, CallbackParameter(this), 1);
+#else
+				true;			// SAME70 doesn't support SetAnalogCallback yet
+#endif
 		}
 		active = true;
 		whenLastSent = millis();

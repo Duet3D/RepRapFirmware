@@ -199,6 +199,6 @@
 
 // Define SUPPORT_REMOTE_COMMANDS according to whether this hardware accepts commands over CAN
 // For now we exclude Duet 3 MB6HC because CoreNG doesn't support analog callbacks
-#define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE) && !defined(DUET3_V06))
+#define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE))
 
 #endif // PINS_H__

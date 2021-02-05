@@ -189,7 +189,7 @@ void IoPort::DetachInterrupt() const noexcept
 	}
 }
 
-#if SUPPORT_REMOTE_COMMANDS
+#if SAME5x
 
 bool IoPort::SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept
 {

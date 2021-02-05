@@ -480,8 +480,17 @@ void StepTimer::CancelCallback() noexcept
 	{
 		reply.catf("next step interrupt due in %" PRIu32 " ticks, %s",
 					pst->whenDue - GetTimerTicks(),
-					((StepTc->INTENSET.reg & TC_INTFLAG_MC0) == 0) ? "disabled" : "enabled");
+# if SAME5x
+					((StepTc->INTENSET.reg & TC_INTFLAG_MC0) == 0)
+# elif SAME70
+					((STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER & TC_IER_CPBS) == 0)
+# endif
+						? "disabled" : "enabled");
+# if SAME5x
 		if (StepTc->CC[0].reg != pst->whenDue)
+# elif SAME70
+		if (STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB != (uint16_t)pst->whenDue)
+# endif
 		{
 			reply.cat(", CC0 mismatch!!");
 		}
