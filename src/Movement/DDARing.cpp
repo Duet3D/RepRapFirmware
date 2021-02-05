@@ -18,7 +18,7 @@
 constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
 constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		// 50ms
 
-DDARing::DDARing() noexcept : scheduledMoves(0), completedMoves(0), numHiccups(0)
+DDARing::DDARing() noexcept : gracePeriod(0), scheduledMoves(0), completedMoves(0), numHiccups(0)
 {
 }
 
@@ -99,6 +99,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 	uint32_t numDdasWanted = 0, numDMsWanted = 0;
 	gb.TryGetUIValue('P', numDdasWanted, seen);
 	gb.TryGetUIValue('S', numDMsWanted, seen);
+	gb.TryGetUIValue('R', gracePeriod, seen);
 	if (seen)
 	{
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
@@ -143,7 +144,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 	}
 	else
 	{
-		reply.printf("DDAs %u, DMs %u", numDdasInRing, DriveMovement::NumCreated());
+		reply.printf("DDAs %u, DMs %u, GracePeriod %" PRIu32, numDdasInRing, DriveMovement::NumCreated(), gracePeriod);
 	}
 	return GCodeResult::ok;
 }
@@ -355,6 +356,11 @@ void DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsig
 bool DDARing::IsIdle() const noexcept
 {
 	return currentDda == nullptr && getPointer->GetState() == DDA::empty;
+}
+
+uint32_t DDARing::GetGracePeriod() const noexcept
+{
+	return gracePeriod;
 }
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
