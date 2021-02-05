@@ -2018,27 +2018,19 @@
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="refreshScope" versionNumber="2">
-		<configuration configurationName="Duet3ATE"/>
 		<configuration configurationName="Duet2"/>
-		<configuration configurationName="Duet3"/>
-		<configuration configurationName="Duet3_Debug"/>
-		<configuration configurationName="Duet3_Mini5plus_v02_Debug"/>
-		<configuration configurationName="Duet3_V06"/>
-		<configuration configurationName="Duet3Mini5plus"/>
-		<configuration configurationName="DuetMaestro"/>
 		<configuration configurationName="Duet2_SBC"/>
-		<configuration configurationName="Duet3Mini5plus_v04"/>
-		<configuration configurationName="Duet3MiniATE"/>
-		<configuration configurationName="Duet3Mini5plus_Debug"/>
-		<configuration configurationName="Duet3_V06_Debug"/>
-		<configuration configurationName="Duet3Mini5plus_v04_Debug"/>
-		<configuration configurationName="Duet3_Mini5plus_v02"/>
-		<configuration configurationName="Duet3_V06_CAN0"/>
-		<configuration configurationName="Duet2_RTOS"/>
-		<configuration configurationName="PCCB_10"/>
-		<configuration configurationName="Duet3_Mini5plus"/>
-		<configuration configurationName="Duet3_Mini5plus_Debug"/>
+		<configuration configurationName="DuetMaestro"/>
+		<configuration configurationName="Duet3"/>
 		<configuration configurationName="Duet3_CAN0"/>
+		<configuration configurationName="Duet3_Debug"/>
+		<configuration configurationName="Duet3ATE"/>
+		<configuration configurationName="Duet3Mini5plus"/>
+		<configuration configurationName="Duet3Mini5plus_Debug"/>
+		<configuration configurationName="Duet3MiniATE"/>
+		<configuration configurationName="Duet3_Mini5plus_v02_Debug"/>
+		<configuration configurationName="Duet3_Mini5plus_v02"/>
+		<configuration configurationName="PCCB_10"/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
