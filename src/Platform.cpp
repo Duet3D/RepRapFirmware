@@ -4517,7 +4517,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 {
 	// Exactly one of FHJPS is allowed
 	unsigned int charsPresent = 0;
-	for (char c : (const char[]){'J', 'F', 'H', 'P', 'S'})
+	for (char c : (const char[]){'R', 'J', 'F', 'H', 'P', 'S'})
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
@@ -4551,9 +4551,14 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			const uint32_t gpinNumber = gb.GetLimitedUIValue('J', MaxGpInPorts);
 			return gpinPorts[gpinNumber].Configure(gpinNumber, gb, reply);
 		}
+	case 32:
+		{
+			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
+			return spindles[slot].Configure(gb, reply);
+		}
 
 	default:
-		reply.copy("exactly one of FHJPS must be given");
+		reply.copy("exactly one of FHJPSR must be given");
 		return GCodeResult::error;
 	}
 }

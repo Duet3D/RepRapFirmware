@@ -106,6 +106,8 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "offsets",			OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 				ObjectModelEntryFlags::none },
 	{ "offsetsProbed",		OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),	ObjectModelEntryFlags::none },
 	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),										ObjectModelEntryFlags::none },
+	{ "spindle",			OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),				ObjectModelEntryFlags::none },
+	{ "spindleRpm",			OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),					ObjectModelEntryFlags::none },
 	{ "standby",			OBJECT_MODEL_FUNC_NOSELF(&standbyTempsArrayDescriptor), 		ObjectModelEntryFlags::live },
 	{ "state",				OBJECT_MODEL_FUNC(self->state.ToString()), 						ObjectModelEntryFlags::live },
 
@@ -117,14 +119,14 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "zHop",				OBJECT_MODEL_FUNC(self->retractHop, 2),							ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 14, 5 };
+constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 16, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
 #endif
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply) noexcept
+/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, int8_t spindleNo, const StringRef& reply) noexcept
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -201,6 +203,14 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	t->retractHop = 0.0;
 	t->retractSpeed = t->unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	t->isRetracted = false;
+
+	if (spindleNo > -1 && !reprap.GetPlatform().AccessSpindle(spindleNo).IsConfigured())
+	{
+		reply.copy("Tool creation: unconfigured spindle");
+		return nullptr;
+	}
+	t->spindleNumber = spindleNo;
+	t->spindleRpm = 0;
 
 	for (size_t axis = 0; axis < MaxAxes; axis++)
 	{
@@ -321,6 +331,15 @@ void Tool::Print(const StringRef& reply) const noexcept
 		}
 	}
 
+	if (spindleNumber == -1)
+	{
+		reply.cat("; no spindle");
+	}
+	else
+	{
+		reply.catf("; spindle: %d@%" PRIi32 "RPM", spindleNumber, spindleRpm);
+	}
+
 	reply.catf("; status: %s", (state == ToolState::active) ? "selected" : (state == ToolState::standby) ? "standby" : "off");
 }
 
@@ -401,6 +420,16 @@ void Tool::Activate() noexcept
 		String<1> dummy;
 		(void)reprap.GetHeat().Activate(heaters[heater], dummy.GetRef());
 	}
+	if (spindleNumber > -1)
+	{
+		Spindle& spindle = reprap.GetPlatform().AccessSpindle(spindleNumber);
+
+		// NIST Standard M6 says "When the tool change is complete: * The spindle will be stopped. [...]"
+		spindle.SetState(SpindleState::stopped);
+
+		// Restore the configured RPM of this tool only after we made sure the spindle is not running
+		spindle.SetConfiguredRpm(spindleRpm, false);
+	}
 	state = ToolState::active;
 }
 
@@ -424,6 +453,15 @@ void Tool::Standby() noexcept
 				reprap.GetPlatform().Message(ErrorMessage, message.c_str());
 			}
 		}
+	}
+
+	// NIST Standard M6 says "When the tool change is complete: * The spindle will be stopped. [...]"
+	// We don't have M6 but Tn already does tool change so we need
+	// to make sure the spindle is off
+	if (spindleNumber > -1)
+	{
+		Spindle& spindle = reprap.GetPlatform().AccessSpindle(spindleNumber);
+		spindle.SetState(SpindleState::stopped);
 	}
 	state = ToolState::standby;
 }
@@ -598,6 +636,33 @@ void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THRO
 				reprap.GetHeat().SetStandbyTemperature(heater, temp);
 			}
 		}
+	}
+}
+
+void Tool::SetSpindleRpm(uint32_t rpm) THROWS(GCodeException)
+{
+	if (spindleNumber > -1)
+	{
+		Spindle& spindle = reprap.GetPlatform().AccessSpindle(spindleNumber);
+		if (rpm == 0)
+		{
+			spindleRpm = 0;
+			spindle.SetState(SpindleState::stopped);
+			spindle.SetConfiguredRpm(spindleRpm, false);
+		}
+		else if (!spindle.IsValidRpm(rpm))
+		{
+			throw GCodeException(-1, -1, "Requested spindle RPM out of range");
+		}
+		else
+		{
+			spindleRpm = rpm;
+			if (reprap.GetCurrentTool() == this)
+			{
+				spindle.SetConfiguredRpm(spindleRpm, true);
+			}
+		}
+		reprap.ToolsUpdated();
 	}
 }
 

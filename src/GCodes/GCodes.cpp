@@ -909,10 +909,6 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 		// Pausing a file print via another input source or for some other reason
 		pauseRestorePoint.feedRate = fileGCode->MachineState().feedRate;				// set up the default
 
-		// Save the spindle speeds if we are in CNC mode
-		//TODO if we have to execute some more moves, there might be a pending M3 command in the GCodeQueue and we should allow for that
-		SaveSpindleSpeeds(pauseRestorePoint);
-
 		const bool movesSkipped = reprap.GetMove().PausePrint(pauseRestorePoint);		// tell Move we wish to pause the current print
 		if (movesSkipped)
 		{
@@ -3198,7 +3194,7 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 }
 
 // Set offset, working and standby temperatures for a tool. I.e. handle a G10.
-GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, int code) THROWS(GCodeException)
 {
 	int32_t toolNumber = 0;
 	bool seenP = false;
@@ -3270,7 +3266,20 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply) 
 		}
 	}
 
-	if (!settingOffset && !settingTemps)
+	bool settingSpindleRpm = false;
+	if (tool->GetSpindleNumber() > -1)
+	{
+		if (gb.Seen('F'))
+		{
+			settingSpindleRpm = true;
+			if (simulationMode == 0)
+			{
+				tool->SetSpindleRpm(gb.GetUIValue());
+			}
+		}
+	}
+
+	if (!settingOffset && !settingTemps && !settingSpindleRpm)
 	{
 		// Print offsets and temperatures
 		reply.printf("Tool %d offsets:", tool->Number());
@@ -3292,6 +3301,15 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply) 
 		String<StringLengthLoggedCommand> scratch;
 		gb.AppendFullCommand(scratch.GetRef());
 		platform.Message(MessageType::LogInfo, scratch.c_str());
+	}
+	if (code == 10)
+	{
+		if (reply.strlen() > 0)
+		{
+			reply.cat('\n');
+		}
+		reply.cat("Tool settings (offsets, heater temps, spindle RPM) have been moved to M568");
+		return GCodeResult::warning;
 	}
 	return GCodeResult::ok;
 }
@@ -3389,6 +3407,14 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		fanMap.SetBit(0);							// by default map fan 0 to fan 0
 	}
 
+	// Check for a spindle to attach
+	int8_t spindleNumber = -1;
+	if (gb.Seen('R'))
+	{
+		seen = true;
+		spindleNumber = gb.GetLimitedUIValue('R', MaxSpindles);
+	}
+
 	if (seen)
 	{
 		if (!LockMovementAndWaitForStandstill(gb))
@@ -3404,14 +3430,14 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		// Add or delete tool, so start by deleting the old one with this number, if any
 		reprap.DeleteTool(toolNumber);
 
-		// M563 P# D-1 H-1 removes an existing tool
-		if (dCount == 1 && hCount == 1 && drives[0] == -1 && heaters[0] == -1)
+		// M563 P# D-1 H-1 R-1 removes an existing tool
+		if (dCount == 1 && hCount == 1 && drives[0] == -1 && heaters[0] == -1 && spindleNumber == -1)
 		{
 			// nothing more to do
 		}
 		else
 		{
-			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, filamentDrive, reply);
+			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, filamentDrive, spindleNumber, reply);
 			if (tool == nullptr)
 			{
 				return GCodeResult::error;
@@ -3961,7 +3987,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 			case MachineType::cnc:
 				for (size_t i = 0; i < MaxSpindles; i++)
 				{
-					platform.AccessSpindle(i).TurnOff();
+					platform.AccessSpindle(i).SetState(SpindleState::stopped);
 				}
 				break;
 
@@ -4048,23 +4074,9 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcep
 	rp.virtualExtruderPosition = virtualExtruderPosition;
 	rp.filePos = gb.GetFilePosition();
 
-	SaveSpindleSpeeds(rp);
-
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
-}
-
-// Save spindle speeds to a restore point
-void GCodes::SaveSpindleSpeeds(RestorePoint& rp) const noexcept
-{
-	if (machineType == MachineType::cnc)
-	{
-		for (unsigned int i = 0; i < MaxSpindles; ++i)
-		{
-			rp.spindleSpeeds[i] = platform.AccessSpindle(i).GetRpm();
-		}
-	}
 }
 
 // Restore user position from a restore point. Also restore the laser power, but not the spindle speed (the user must do that explicitly).

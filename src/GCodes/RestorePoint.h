@@ -21,7 +21,6 @@ public:
 	FilePosition filePos;					// The file position that this move was read from
 	float initialUserC0, initialUserC1;		// If we paused during an arc move and proportionDone is nonzero, the X and Y user coordinates at the start of the move
 	int toolNumber;							// The tool number that was active
-	int32_t spindleSpeeds[MaxSpindles];		// The spindle RPMs that were set, negative if anticlockwise direction
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;		// The output port bits setting for this move, or the laser power

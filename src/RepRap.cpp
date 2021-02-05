@@ -902,7 +902,7 @@ void RepRap::EmergencyStop() noexcept
 	case MachineType::cnc:
 		for (size_t i = 0; i < MaxSpindles; i++)
 		{
-			platform->AccessSpindle(i).TurnOff();
+			platform->AccessSpindle(i).SetState(SpindleState::stopped);
 		}
 		break;
 
@@ -1539,7 +1539,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
 	{
 		size_t numSpindles = MaxSpindles;
-		while (numSpindles != 0 && platform->AccessSpindle(numSpindles - 1).GetToolNumber() == -1)
+		while (numSpindles != 0 && !platform->AccessSpindle(numSpindles - 1).IsConfigured())
 		{
 			--numSpindles;
 		}
@@ -1555,15 +1555,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				}
 
 				const Spindle& spindle = platform->AccessSpindle(i);
-				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32, spindle.GetCurrentRpm(), spindle.GetRpm());
-				if (type == 2)
-				{
-					response->catf(",\"tool\":%d}", spindle.GetToolNumber());
-				}
-				else
-				{
-					response->cat('}');
-				}
+				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32 ",\"state\":\"%s\"}", spindle.GetCurrentRpm(), spindle.GetRpm(), spindle.GetState().ToString());
 			}
 			response->cat(']');
 		}
@@ -1707,6 +1699,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				if (tool->GetFilament() != nullptr)
 				{
 					response->catf(",\"filament\":\"%.s\"", tool->GetFilament()->GetName());
+				}
+
+				// Spindle (if configured)
+				if (tool->spindleNumber > -1)
+				{
+					response->catf(",\"spindle\":%d,\"spindleRpm\":%" PRIi32, tool->spindleNumber, tool->spindleRpm);
 				}
 
 				// Offsets

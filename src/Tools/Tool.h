@@ -52,7 +52,17 @@ public:
 
 	~Tool() override { delete name; }
 
-	static Tool *Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply) noexcept;
+	static Tool *Create(
+			unsigned int toolNumber,
+			const char *toolName,
+			int32_t d[], size_t dCount,
+			int32_t h[], size_t hCount,
+			AxesBitmap xMap,
+			AxesBitmap yMap,
+			FansBitmap fanMap,
+			int filamentDrive,
+			int8_t spindleNo,
+			const StringRef& reply) noexcept;
 	static void Delete(Tool *t) noexcept { delete t; }
 	static AxesBitmap GetXAxes(const Tool *tool) noexcept;
 	static AxesBitmap GetYAxes(const Tool *tool) noexcept;
@@ -87,6 +97,8 @@ public:
 	float GetRetractSpeed() const noexcept { return retractSpeed; }
 	float GetUnRetractSpeed() const noexcept { return unRetractSpeed; }
 	void SetRetracted(bool b) noexcept { isRetracted = b; }
+	int8_t GetSpindleNumber() const noexcept { return spindleNumber; }
+	void SetSpindleRpm(uint32_t rpm) THROWS(GCodeException);
 
 #if HAS_MASS_STORAGE
 	bool WriteSettings(FileStore *f) const noexcept;							// write the tool's settings to file
@@ -156,6 +168,9 @@ private:
 
 	uint8_t drives[MaxExtrudersPerTool];
 	int8_t heaters[MaxHeatersPerTool];
+
+	int8_t spindleNumber;
+	uint32_t spindleRpm;
 
 	ToolState state;
 	bool heaterFault;
