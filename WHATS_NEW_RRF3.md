@@ -1,3 +1,17 @@
+RepRapFirmware 3.2.1 (in preparation)
+====================
+
+Upgrade notes: none since 3.2
+
+Bug fixes:
+- The pin name string in M574 commands was truncated to 50 characters if it was longer, which was too short to allow four DueX endstop pins to be used. This has now been increased to 100 characters.
+- The M109 command caused a "Homing failed" message if it was used in a homing file and that homing file also called another macro file
+- In GCode expressions it was not possible to compare a value with character type (e.g. move.axes[nn].letter) with a string literal
+- [Duet 3 + expansion/tool boards] If DAA (M593) was used then motors connected to expansion or tool boards might lose steps
+- [Duet 3 + expansion/tool boards] The M591 E parameter was ignored for filament monitors connected to expansion or tool boards
+- [Duet 3 MB6HC] (regression in 3.2) DHT sensors did not work 
+- [Duet 3 MB6HC] (regression in 3.2) The minimum step pulse width time of the TMC5160 was not always met. This could lead to missed steps.
+
 RepRapFirmware 3.2
 ==================
 
