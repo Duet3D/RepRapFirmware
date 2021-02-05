@@ -245,12 +245,28 @@ inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live) 
 #if EVEN_STEPS
 			nextStepTime += stepInterval;
 #endif
+#if SAME70
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+#endif
 			return true;
 		}
 		return CalcNextStepTimeCartesianFull(dda, live);
 	}
 
 	state = DMState::idle;
+#if SAME70
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+			asm volatile("nop");
+#endif
 	return false;
 }
 
