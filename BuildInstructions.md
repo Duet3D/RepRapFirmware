@@ -36,8 +36,8 @@ To build RepRapFirmware 3.3 from the latest development sources, use the followi
 | project | branch | notes | 
 | :-- | --: | --- |
 |[RepRapFirmware](https://github.com/Duet3D/RepRapFirmware)| 3.3-dev||
-|[CANlib](https://github.com/Duet3D/CANlib)| v3.3-dev | _only needed for Duet 3_ |
-|[CoreN2G](https://github.com/Duet3D/CoreN2G)| v3.3-dev ||
+|[CANlib](https://github.com/Duet3D/CANlib)| 3.3-dev | _only needed for Duet 3_ |
+|[CoreN2G](https://github.com/Duet3D/CoreN2G)| 3.3-dev ||
 |[FreeRTOS](https://github.com/Duet3D/FreeRTOS)| 3.3-dev ||
 |[RRFLibraries](https://github.com/Duet3D/RRFLibraries)| 3.3-dev ||
 |[DuetWiFiSocketServer](https://github.com/Duet3D/DuetWifiSocketServer)| dev ||
