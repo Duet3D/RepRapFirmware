@@ -617,6 +617,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		break;
 
 	case DataType::Expression:
+		//TODO need a way to pass multi-element array-valued expressions. For now we support only single-element expressions.
 		{
 			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			const ExpressionValue val = parser.Parse();
@@ -633,6 +634,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 				break;
 
 			case TypeCode::Uint32:
+			case TypeCode::DriverId:
 				arr[0] = (T)val.uVal;
 				lastIndex = 0;
 				break;
