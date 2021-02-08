@@ -320,6 +320,10 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		reply.cat('}');
 		break;
 
+	case CanMessageReturnInfo::typeBoardUniqueId:
+		reply.copy(reprap.GetPlatform().GetUniqueIdString());
+		break;
+
 	case CanMessageReturnInfo::typeDiagnosticsPart0:
 		extra = LastDiagnosticsPart;
 		reply.lcatf("%s (%s%s)", VERSION, DATE, TIME_SUFFIX);

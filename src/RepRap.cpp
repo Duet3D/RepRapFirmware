@@ -1234,8 +1234,9 @@ void RepRap::Tick() noexcept
 	if (active)
 	{
 		WatchdogReset();														// kick the watchdog
+
 #if SAM4E || SAME70
-		RSWDT->RSWDT_CR = RSWDT_CR_KEY_PASSWD | RSWDT_CR_WDRSTT;				// kick the secondary watchdog
+		WatchdogResetSecondary();												// kick the secondary watchdog
 #endif
 
 		if (!stopped)

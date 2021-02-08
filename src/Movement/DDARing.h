@@ -31,13 +31,14 @@ public:
 
 	void Spin(uint8_t simulationMode, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
+	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
-	void Interrupt(Platform& p) noexcept SPEED_CRITICAL;				// Check endstops, generate step pulses
+	void Interrupt(Platform& p) noexcept SPEED_CRITICAL;								// Check endstops, generate step pulses
 	void OnMoveCompleted(DDA *cdda, Platform& p) noexcept;								// called when the state has been set to 'completed'
-	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;			// Schedule the next step interrupt, returning true if we failed because it is due immediately
-	void CurrentMoveCompleted() noexcept SPEED_CRITICAL;				// Signal that the current move has just been completed
+	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;							// Schedule the next step interrupt, returning true if we failed because it is due immediately
+	void CurrentMoveCompleted() noexcept SPEED_CRITICAL;								// Signal that the current move has just been completed
 
 	uint32_t ExtruderPrintingSince() const noexcept { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
 	int32_t GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting) noexcept;
@@ -86,7 +87,7 @@ public:
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;						// add a move from the ATE to the movement queue
+	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue
 #endif
 
 private:
@@ -106,6 +107,7 @@ private:
 	volatile int32_t liveEndPoints[MaxAxesPlusExtruders];						// The XYZ endpoints of the last completed move in motor coordinates
 
 	unsigned int numDdasInRing;
+	uint32_t gracePeriod;														// The minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
 	uint32_t scheduledMoves;													// Move counters for the code queue
 	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile
