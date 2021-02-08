@@ -4457,9 +4457,12 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 		{
 			// In Marlin emulation mode we should return a standard temperature report every second
 			GenerateTemperatureReport(reply);
-			reply.cat('\n');
-			platform.Message(UsbMessage, reply.c_str());
-			reply.Clear();
+			if (reply.strlen() > 0)
+			{
+				reply.cat('\n');
+				platform.Message(UsbMessage, reply.c_str());
+				reply.Clear();
+			}
 		}
 	}
 	else if (&gb == auxGCode)
