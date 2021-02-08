@@ -35,23 +35,23 @@
 
 	-- Enable/disable all screw mapping. Does not clear tables.
 	-- if no S prints report
-	M800 S[0|1] 
+	M640 S[0|1]
 
 	-- create a screw table for srcaxis with one row per destaxis
 	-- if no count prints report
-	M801 R"srcaxis" A"destaxes" Sstart Iinterval Ncount
+	M641 R"srcaxis" A"destaxes" Sstart Iinterval Ncount
 
 	-- set table entries (may be called multiple times for shorter gcode lines)
 	-- offset value lets a subset of the table be set
 	-- if no data prints contents of table
-	M802 R"srcaxis" [Ooffset] Xf0:f1:f2:f3... Yf0:f1:f2...
+	M642 R"srcaxis" [Ooffset] Xf0:f1:f2:f3... Yf0:f1:f2...
 
 	-- selftest (for debugging)
-	M810
+	[M643]
 */
 
 // set this to zero to not include the selftest code, though M810 is still mapped in gcodes
-#define TESTING_SCREW_MAP 1
+#define TESTING_SCREW_MAP 0
 
 static float* FindTableRow(const ScrewMapInfo& smi, unsigned int findAxis) noexcept;
 
@@ -799,7 +799,7 @@ void ScrewMap::TestScrewMap() noexcept
 	ClearScrewMaps();
 }
 #else
-void ScrewMap::TestScrewMap()
+void ScrewMap::TestScrewMap() noexcept
 {
 }
 #endif
