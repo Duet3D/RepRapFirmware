@@ -44,8 +44,8 @@
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 
-#ifndef CONF_SD_MMC_H_INCLUDED
-#define CONF_SD_MMC_H_INCLUDED
+#ifndef SD_MMC_CONF_SD_MMC_H_INCLUDED
+#define SD_MMC_CONF_SD_MMC_H_INCLUDED
 
 // Define this to enable the SPI mode instead of Multimedia Card interface mode
 //#define SD_MMC_SPI_MODE
@@ -110,5 +110,5 @@
 
 #define SD_MMC_MEM_CNT				(SD_MMC_HSMCI_MEM_CNT + SD_MMC_SPI_MEM_CNT)
 
-#endif /* CONF_SD_MMC_H_INCLUDED */
+#endif /* SD_MMC_CONF_SD_MMC_H_INCLUDED */
 

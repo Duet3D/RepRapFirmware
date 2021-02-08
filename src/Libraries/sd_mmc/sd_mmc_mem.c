@@ -107,10 +107,10 @@ Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram, uint32_t nu
 	default:
 		return CTRL_FAIL;
 	}
-	if (SD_MMC_OK != sd_mmc_start_read_blocks(ram, numBlocks)) {
+	if (SD_MMC_OK != sd_mmc_start_read_blocks(ram, numBlocks, slot)) {
 		return CTRL_FAIL;
 	}
-	if (SD_MMC_OK != sd_mmc_wait_end_of_read_blocks(false)) {
+	if (SD_MMC_OK != sd_mmc_wait_end_of_read_blocks(false, slot)) {
 		return CTRL_FAIL;
 	}
 	return CTRL_GOOD;
@@ -126,10 +126,10 @@ Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram, uint3
 	default:
 		return CTRL_FAIL;
 	}
-	if (SD_MMC_OK != sd_mmc_start_write_blocks(ram, numBlocks)) {
+	if (SD_MMC_OK != sd_mmc_start_write_blocks(ram, numBlocks, slot)) {
 		return CTRL_FAIL;
 	}
-	if (SD_MMC_OK != sd_mmc_wait_end_of_write_blocks(false)) {
+	if (SD_MMC_OK != sd_mmc_wait_end_of_write_blocks(false, slot)) {
 		return CTRL_FAIL;
 	}
 	return CTRL_GOOD;
