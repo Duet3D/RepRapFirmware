@@ -2151,18 +2151,30 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		const float deltaY = newY - moveBuffer.initialUserY;
 
 		const float dSquared = fsquare(deltaX) + fsquare(deltaY);	// square of the distance between start and end points
-		const float hSquared = fsquare(rParam) - dSquared/4;		// square of the length of the perpendicular from the mid point to the arc centre
 
-		// The distance between start and end points must not be zero, and the perpendicular must have a real length (possibly zero)
-		if (dSquared == 0.0 || hSquared < 0.0)
+		// The distance between start and end points must not be zero
+		constexpr const char *badArcParametersMessage = "G2/G3: radius is too small to reach endpoint";
+		if (dSquared == 0.0)
 		{
-			err = "G2/G3: bad combination of parameter values";
+			err = badArcParametersMessage;
 			return true;
 		}
 
+		// The perpendicular must have a real length (possibly zero)
+		const float hSquared = fsquare(rParam) - dSquared/4;		// square of the length of the perpendicular from the mid point to the arc centre
 		float hDivD = sqrtf(hSquared/dSquared);
+		if (hDivD < 0.0)
+		{
+			// When the arc is exactly 180deg, rounding error may make hDivD slightly negative instead of zero
+			if (hDivD < -0.001)
+			{
+				err = badArcParametersMessage;
+				return true;
+			}
+			hDivD = 0.0;													// this has the effect of increasing the radius slightly do that the maths works
+		}
 
-		// There are two possible positions for the arc centre, giving a short arc (less than 180deg) or a long arc (more than 180deg).
+		// If hDivD is nonzero then there are two possible positions for the arc centre, giving a short arc (less than 180deg) or a long arc (more than 180deg).
 		// According to https://www.cnccookbook.com/cnc-g-code-arc-circle-g02-g03/ we should choose the shorter arc if the radius is positive, the longer one if it is negative.
 		// If the arc is clockwise then a positive value of h/d gives the smaller arc. If the arc is anticlockwise then it's the other way round.
 		if ((clockwise && rParam < 0.0) || (!clockwise && rParam > 0.0))
@@ -2274,11 +2286,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	{
 		if (xAxes.IsBitSet(axis))
 		{
-			arcCentre[axis] = (userArcCentreX * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), X_AXIS);
+			arcCentre[axis] = (userArcCentreX * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
 		}
 		else if (yAxes.IsBitSet(axis))
 		{
-			arcCentre[axis] = (userArcCentreY * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), Y_AXIS);
+			arcCentre[axis] = (userArcCentreY * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
 		}
 	}
 
