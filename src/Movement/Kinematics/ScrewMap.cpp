@@ -142,11 +142,11 @@ GCodeResult ScrewMap::ParseCreate(GCodeBuffer& gb, const StringRef& reply) THROW
 		gb.GetReducedString(axis);
 		if (gb.Seen('S'))
 		{
-			start = gb.GetFValue();
+			start = gb.ConvertDistance(gb.GetFValue());
 		}
 		if (gb.Seen('I'))
-		{
-			increment = gb.GetFValue();
+		{	// if we're in a different unit of measure we need to convert
+			increment = gb.ConvertDistance(gb.GetFValue());
 		}
 		if (gb.Seen('N'))
 		{
@@ -177,7 +177,8 @@ GCodeResult ScrewMap::ParseCreate(GCodeBuffer& gb, const StringRef& reply) THROW
 						axisList[counter] = reprap.GetGCodes().GetAxisLetters()[subaxis];
 					});
 					outLine.printf(" %c - start=%f increment=%f count=%d dest axes=%s\n",
-							drv, (double)smi.start, (double)smi.increment, smi.count, axisList );
+							drv, (double)gb.InverseConvertDistance(smi.start), 
+							(double)gb.InverseConvertDistance(smi.increment), smi.count, axisList );
 				}
 				else
 				{
@@ -247,8 +248,8 @@ GCodeResult ScrewMap::ParseCreate(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	reply.printf ("Creating screw map axis '%c'[%d], start %f, increment %f, count %d, dest axes '%s'[%s]",
 		axis[0], srcAxis,
-		(double)start, (double)increment, count,
-		destlist.c_str(), destnumbers.c_str());
+		(double)gb.InverseConvertDistance(start), (double)gb.InverseConvertDistance(increment),
+		count, destlist.c_str(), destnumbers.c_str());
 
 	return GCodeResult::ok;
 }
