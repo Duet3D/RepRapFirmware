@@ -1883,11 +1883,22 @@ card_version_t sd_mmc_get_version(uint8_t slot)
 
 uint32_t sd_mmc_get_capacity(uint8_t slot)
 {
+#if 1 // This will only check for already present data. The old code below is unsafe if another task is accessing data already.
+	if (slot < SD_MMC_MEM_CNT && sd_mmc_cards[slot].state == SD_MMC_CARD_STATE_READY)
+	{
+		return sd_mmc_cards[slot].capacity;
+	}
+	else
+	{
+		return 0;
+	}
+#else
 	if (SD_MMC_OK != sd_mmc_select_slot(slot)) {
 		return 0;
 	}
 	sd_mmc_deselect_slot(slot);
 	return sd_mmc_cards[slot].capacity;
+#endif
 }
 
 bool sd_mmc_is_write_protected(uint8_t slot)
