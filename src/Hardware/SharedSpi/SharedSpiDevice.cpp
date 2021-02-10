@@ -321,7 +321,11 @@ bool SharedSpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data,
 	if (rx_data == nullptr)
 	{
 #if SAME5x
-		(void)hardware->SPI.DATA.reg;
+		// The SAME5x seems to buffer more than one received character
+		while (hardware->SPI.INTFLAG.bit.RXC)
+		{
+			(void)hardware->SPI.DATA.reg;
+		}
 #elif USART_SPI
 		(void)hardware->US_RHR;
 #else

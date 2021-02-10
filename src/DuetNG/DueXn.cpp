@@ -33,7 +33,6 @@ namespace DuetExpansion
 	static volatile uint32_t dueXnReadCount = 0;
 	static uint32_t dueXnReadCountResetMillis = 0;
 	static volatile bool taskWaiting = false;
-	static volatile bool inputsChanged = false;
 
 	Task<DueXTaskStackWords> *dueXTask = nullptr;
 
@@ -71,7 +70,6 @@ namespace DuetExpansion
 	// Otherwise we might wake it prematurely when it is waiting for an I2C transaction to be completed.
 	static void DueXIrq(CallbackParameter p) noexcept
 	{
-		inputsChanged = true;
 		if (taskWaiting)
 		{
 			taskWaiting = false;
@@ -84,14 +82,12 @@ namespace DuetExpansion
 	{
 		for (;;)
 		{
-			inputsChanged = false;
-			taskWaiting = false;
+			taskWaiting = false;						// make sure we are not notified while we do the I2C transaction
 			TaskBase::ClearNotifyCount();
 			dueXnInputBits = dueXnExpander.digitalReadAll();
 			taskWaiting = true;
 			++dueXnReadCount;
-			__DSB();
-			if (!inputsChanged)
+			if (digitalRead(DueX_INT))
 			{
 				(void)TaskBase::Take();
 			}

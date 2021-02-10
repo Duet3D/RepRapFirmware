@@ -2172,9 +2172,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		const float deltaAxis1 = newAxis1Pos - moveBuffer.initialUserC1;
 
 		const float dSquared = fsquare(deltaAxis0) + fsquare(deltaAxis1);	// square of the distance between start and end points
-		const float hSquared = fsquare(rParam) - dSquared/4;				// square of the length of the perpendicular from the mid point to the arc centre
 
-		// The distance between start and end points must not be zero, and the perpendicular must have a real length (possibly zero)
+		// The distance between start and end points must not be zero
 		constexpr const char *badArcParametersMessage = "G2/G3: radius is too small to reach endpoint";
 		if (dSquared == 0.0)
 		{
@@ -2182,6 +2181,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 			return true;
 		}
 
+		// The perpendicular must have a real length (possibly zero)
+		const float hSquared = fsquare(rParam) - dSquared/4;				// square of the length of the perpendicular from the mid point to the arc centre
 		float hDivD = sqrtf(hSquared/dSquared);
 		if (hDivD < 0.0)
 		{
@@ -2308,11 +2309,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	{
 		if (axis0Mapping.IsBitSet(axis))
 		{
-			arcCentre[axis] = (userArcCentreAxis0 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis0);
+			arcCentre[axis] = (userArcCentreAxis0 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
 		}
 		else if (axis1Mapping.IsBitSet(axis))
 		{
-			arcCentre[axis] = (userArcCentreAxis1 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis1);
+			arcCentre[axis] = (userArcCentreAxis1 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
 		}
 	}
 
@@ -3561,7 +3562,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 
 	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued
 	// Also check that this response was triggered by a gcode
-	if (reply[0] == 0 && (&gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || gb.IsDoingFileMacro()))
+	if (reply[0] == 0 && (&gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || &gb == daemonGCode || gb.IsDoingFileMacro()))
 	{
 		return;
 	}
