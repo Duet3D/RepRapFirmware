@@ -58,8 +58,9 @@
 #include <General/Portability.h>
 
 // Enable debug information for SD/MMC SPI module
+//#define SD_MMC_SPI_DEBUG
 #ifdef SD_MMC_SPI_DEBUG
-extern void debugPrintf(const char* fmt, ...);
+extern void debugPrintf(const char* fmt, ...) noexcept;
 #define sd_mmc_spi_debug(...)      debugPrintf(__VA_ARGS__)
 #else
 #define sd_mmc_spi_debug(...)

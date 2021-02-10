@@ -1983,7 +1983,7 @@ sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_b
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
 sd_mmc_err_t sd_mmc_start_read_blocks(void *dest, uint16_t nb_block, uint8_t slot)
 {
-	Assert(sd_mmc_nb_block_remaining >= nb_block);
+	Assert(sd_mmc_nb_block_remaining[slot] >= nb_block);
 
 	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->start_read_blocks(dest, nb_block)) {
@@ -2086,7 +2086,7 @@ sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
 sd_mmc_err_t sd_mmc_start_write_blocks(const void *src, uint16_t nb_block, uint8_t slot)
 {
-	Assert(sd_mmc_nb_block_remaining >= nb_block);
+	Assert(sd_mmc_nb_block_remaining[slot] >= nb_block);
 	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->start_write_blocks(src, nb_block)) {
 		sd_mmc_nb_block_remaining[slot] = 0;
