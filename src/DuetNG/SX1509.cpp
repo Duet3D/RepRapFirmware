@@ -55,7 +55,7 @@ bool SX1509::begin(uint8_t address) noexcept
 	{
 		clock(DefaultOscDivider);
 		writeWord(REG_HIGH_INPUT_B, 0xFFFF);						// set all inputs to be 5V-tolerant
-		writeByte(REG_DEBOUNCE_CONFIG, 0);							// debounce time set to minimum (0.5ms)
+		writeByte(REG_DEBOUNCE_CONFIG, 1);							// debounce time set to 1ms
 	}
 
 	return ok;
