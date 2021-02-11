@@ -3536,7 +3536,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 
 	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued
 	// Also check that this response was triggered by a gcode
-	if (reply[0] == 0 && (&gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || gb.IsDoingFileMacro()))
+	if (reply[0] == 0 && (&gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || &gb == daemonGCode || gb.IsDoingFileMacro()))
 	{
 		return;
 	}
