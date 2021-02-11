@@ -545,7 +545,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 					const CanAddress srcAddress = buf->id.Src();
 					const CanRequestId requestId = buf->msg.enterTestMode.requestId;
 
-					CanMessageStandardReply *msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+					CanMessageStandardReply * const msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
 					msg->resultCode = (uint16_t)GCodeResult::ok;
 					msg->extra = 0;
 					msg->text[0] = 0;
