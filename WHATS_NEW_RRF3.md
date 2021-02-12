@@ -1,11 +1,11 @@
-RepRapFirmware 3.2.2 (in preparation)
+RepRapFirmware 3.2.2
 ====================
 
 Upgrade notes: none since 3.2
 
 Bug fixes:
 - Using an external SD card could result in the firmware crashing if there was concurrent access to the Duet from DWC or another network client. [This is an old bug, however changes in firmware 3.1 and later made it much more likely to happen.]
-- If two DueX endstop inputs changed state approximately 2.2ms from each other, the second one might not be detected by the firmware
+- If two DueX endstop inputs changed state approximately 2.2ms from each other, the second one might not be detected by the firmware. [This was a regression in 3.2]
 - The pin name string in M574 commands was truncated to 50 characters if it was longer, which was too short to allow four DueX endstop pins to be used. This has now been increased to 100 characters.
 - The M109 command caused a "Homing failed" message if it was used in a homing file and that homing file also called another macro file
 - In GCode expressions it was not possible to compare a value with character type (e.g. move.axes[nn].letter) with a string literal
