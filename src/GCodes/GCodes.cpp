@@ -2924,7 +2924,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 
 	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
 	ClearBedMapping();
-	gridXindex = gridYindex = 0;
+	gridAxis0index = gridAxis1index = 0;
 
 	gb.SetState(GCodeState::gridProbing1);
 	if (zp->GetProbeType() != ZProbeType::blTouch)
@@ -4727,6 +4727,18 @@ float GCodes::GetExtrusionFactor(size_t extruder) noexcept
 	return (extruder < numExtruders) ? extrusionFactors[extruder] : 0.0;
 }
 
+size_t GCodes::GetAxisNumberForLetter(const char axisLetter) const noexcept
+{
+	for (size_t i = 0; i < numTotalAxes; ++i)
+	{
+		if (axisLetters[i] == axisLetter)
+		{
+			return i;
+		}
+	}
+	return MaxAxes;
+}
+
 Pwm_t GCodes::ConvertLaserPwm(float reqVal) const noexcept
 {
 	return (uint16_t)constrain<long>(lrintf((reqVal * 65535)/laserMaxPower), 0, 65535);
@@ -4744,9 +4756,9 @@ bool GCodes::GetLastPrintingHeight(float& height) const noexcept
 }
 
 // Assign the heightmap using the given parameters, returning true if they were valid
-bool GCodes::AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]) noexcept
+bool GCodes::AssignGrid(const uint8_t axesNumbers[2], const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept
 {
-	const bool ok = defaultGrid.Set(xRange, yRange, radius, spacing);
+	const bool ok = defaultGrid.Set(axesNumbers, axesLetters, axis0Range, axis1Range, radius, spacing);
 	if (ok)
 	{
 		reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);

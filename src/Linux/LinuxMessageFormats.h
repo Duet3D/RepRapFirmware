@@ -19,7 +19,7 @@ constexpr uint8_t LinuxFormatCode = 0x5F;			// standard format code for RRF SPI 
 constexpr uint8_t LiunxFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode
 constexpr uint8_t InvalidFormatCode = 0xC9;			// must be different from any other format code
 
-constexpr uint16_t LinuxProtocolVersion = 4;
+constexpr uint16_t LinuxProtocolVersion = 5;
 
 constexpr size_t LinuxTransferBufferSize = 8192;	// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
 static_assert(LinuxTransferBufferSize % sizeof(uint32_t) == 0, "LinuxTransferBufferSize must be a whole number of dwords");
@@ -59,15 +59,19 @@ struct CodeChannelHeader
 
 struct HeightMapHeader
 {
-	float xMin;
-	float xMax;
-	float xSpacing;
-	float yMin;
-	float yMax;
-	float ySpacing;
+	float axis0Min;
+	float axis0Max;
+	float axis0Spacing;
+	float axis1Min;
+	float axis1Max;
+	float axis1Spacing;
 	float radius;
-	uint16_t numX;
-	uint16_t numY;
+	uint16_t numAxis0;
+	uint16_t numAxis1;
+	uint8_t axis0Number;
+	uint8_t axis1Number;
+	char axis0Letter;
+	char axis1Letter;
 };
 
 struct MessageHeader

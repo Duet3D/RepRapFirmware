@@ -257,9 +257,15 @@ bool RotaryDeltaKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 #endif
 
 // Return true if the specified XY position is reachable by the print head reference point.
-bool RotaryDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
+bool RotaryDeltaKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept
 {
-	return fsquare(x) + fsquare(y) < printRadiusSquared;
+	if (axes.IsBitSet(X_AXIS) && axes.IsBitSet(Y_AXIS) && (fsquare(axesCoords[X_AXIS]) + fsquare(axesCoords[Y_AXIS]) >= printRadiusSquared))
+	{
+		return false;
+	}
+	axes.ClearBit(X_AXIS);
+	axes.ClearBit(Y_AXIS);
+	return Kinematics::IsReachable(axesCoords, axes, isCoordinated);
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position

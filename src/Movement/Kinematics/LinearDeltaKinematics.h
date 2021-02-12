@@ -32,7 +32,7 @@ public:
 #endif
 
 	float GetTiltCorrection(size_t axis) const noexcept override;
-	bool IsReachable(float x, float y, bool isCoordinated) const noexcept override;
+	bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept override;
 	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept override;
 	AxesBitmap AxesToHomeBeforeProbing() const noexcept override { return XyzAxes; }

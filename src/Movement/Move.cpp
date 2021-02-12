@@ -396,15 +396,16 @@ bool Move::IsRawMotorMove(uint8_t moveType) const noexcept
 }
 
 // Return true if the specified point is accessible to the Z probe
-bool Move::IsAccessibleProbePoint(float x, float y) const noexcept
+bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
 	const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(reprap.GetGCodes().GetCurrentZProbeNumber());
 	if (zp.IsNotNull())
 	{
-		x -= zp->GetXOffset();
-		y -= zp->GetYOffset();
+		axes.Iterate([axesCoords, &zp](unsigned int axis, unsigned int) {
+			axesCoords[axis] -= zp->GetOffset(axis);
+		});
 	}
-	return kinematics->IsReachable(x, y, false);
+	return kinematics->IsReachable(axesCoords, axes, false);
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
@@ -585,9 +586,9 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 }
 
 // Get the height error at a bed XY position
-float Move::GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept
+float Move::GetInterpolatedHeightError(float axis0Coord, float axis1Coord) const noexcept
 {
-	return (usingMesh) ? heightMap.GetInterpolatedHeightError(xCoord, yCoord) : probePoints.GetInterpolatedHeightError(xCoord, yCoord);
+	return (usingMesh) ? heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord) : probePoints.GetInterpolatedHeightError(axis0Coord, axis1Coord);
 }
 
 // Invert the Axis transform AFTER the bed transform
@@ -624,23 +625,24 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 	{
 		float zCorrection = 0.0;
 		const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-		const AxesBitmap xAxes = Tool::GetXAxes(tool);
-		const AxesBitmap yAxes = Tool::GetYAxes(tool);
+		const GridDefinition& grid = GetGrid();
+		const AxesBitmap axis0Axes = Tool::GetAxisMapping(tool, grid.GetAxis0Number());
+		const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetAxis1Number());
 		unsigned int numCorrections = 0;
 
 		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
 		// TODO use Iterate when we have changed it to use inline_function
-		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
+		for (uint32_t axis0Axis = 0; axis0Axis < numAxes; ++axis0Axis)
 		{
-			if (xAxes.IsBitSet(xAxis))
+			if (axis0Axes.IsBitSet(axis0Axis))
 			{
-				const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
-				for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
+				const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
+				for (uint32_t axis1Axis = 0; axis1Axis < numAxes; ++axis1Axis)
 				{
-					if (yAxes.IsBitSet(yAxis))
+					if (axis1Axes.IsBitSet(axis1Axis))
 					{
-						const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
-						zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
+						const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
+						zCorrection += GetInterpolatedHeightError(axis0Coord, axis1Coord);
 						++numCorrections;
 					}
 				}
@@ -662,21 +664,22 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 {
 	float zCorrection = 0.0;
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-	const AxesBitmap xAxes = Tool::GetXAxes(tool);
-	const AxesBitmap yAxes = Tool::GetYAxes(tool);
+	const GridDefinition& grid = GetGrid();
+	const AxesBitmap axis0Axes = Tool::GetAxisMapping(tool, grid.GetAxis0Number());
+	const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetAxis1Number());
 	unsigned int numCorrections = 0;
 
 	// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-	for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
+	for (uint32_t axis0Axis = 0; axis0Axis < numAxes; ++axis0Axis)
 	{
-		if (xAxes.IsBitSet(xAxis))
+		if (axis0Axes.IsBitSet(axis0Axis))
 		{
-			const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
-			for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
+			const float xCoord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
+			for (uint32_t axis1Axis = 0; axis1Axis < numAxes; ++axis1Axis)
 			{
-				if (yAxes.IsBitSet(yAxis))
+				if (axis1Axes.IsBitSet(axis1Axis))
 				{
-					const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
+					const float yCoord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
 					zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
 					++numCorrections;
 				}
@@ -712,7 +715,8 @@ void Move::SetZeroHeightError(const float coords[MaxAxes]) noexcept
 	float tempCoords[MaxAxes];
 	memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
 	AxisTransform(tempCoords, nullptr);
-	zShift = -GetInterpolatedHeightError(tempCoords[X_AXIS], tempCoords[Y_AXIS]);
+	const GridDefinition& grid = GetGrid();
+	zShift = -GetInterpolatedHeightError(tempCoords[grid.GetAxis0Number()], tempCoords[grid.GetAxis1Number()]);
 }
 
 void Move::SetIdentityTransform() noexcept
@@ -920,8 +924,8 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 		const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(reprap.GetGCodes().GetCurrentZProbeNumber());
 		if (zp.IsNotNull())
 		{
-			x -= zp->GetXOffset();
-			y -= zp->GetYOffset();
+			x -= zp->GetOffset(X_AXIS);
+			y -= zp->GetOffset(Y_AXIS);
 		}
 	}
 	return probePoints.GetZHeight(count);

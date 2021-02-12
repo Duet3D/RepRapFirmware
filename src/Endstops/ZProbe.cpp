@@ -24,10 +24,9 @@
 
 constexpr ObjectModelArrayDescriptor ZProbe::offsetsArrayDescriptor =
 {
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue((context.GetLastIndex() == 0) ? ((const ZProbe*)self)->xOffset : ((const ZProbe*)self)->yOffset, 1); }
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ZProbe*)self)->offsets[context.GetLastIndex()], 2); }
 };
 
 constexpr ObjectModelArrayDescriptor ZProbe::valueArrayDescriptor =
@@ -90,7 +89,10 @@ ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe()
 void ZProbe::SetDefaults() noexcept
 {
 	adcValue = DefaultZProbeADValue;
-	xOffset = yOffset = 0.0;
+	for (float& offset : offsets)
+	{
+		offset = 0.0;
+	}
 	triggerHeight = DefaultZProbeTriggerHeight;
 	calibTemperature = DefaultZProbeTemperature;
 	for (float& tc : temperatureCoefficients)
@@ -127,8 +129,15 @@ float ZProbe::GetActualTriggerHeight() const noexcept
 
 bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept
 {
-	String<StringLength100> scratchString;
-	scratchString.printf("G31 K%u P%d X%.1f Y%.1f Z%.2f\n", probeNumber, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight);
+	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+	String<StringLength256> scratchString;
+	scratchString.printf("G31 K%u P%d", probeNumber, adcValue);
+	for (size_t i = 0; i < numTotalAxes; ++i)
+	{
+		scratchString.catf(" %c%.1f", axisLetters[i], (double)offsets[i]);
+	}
+	scratchString.catf(" Z%.2f\n", (double)triggerHeight);
 	return f->Write(scratchString.c_str());
 }
 
@@ -261,7 +270,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		newSensor = sensor;
 	}
 
-	if (gb.Seen('C'))
+	if (gb.Seen('T'))
 	{
 		seen = true;
 		for (float& tc : temperatureCoefficients)
@@ -310,8 +319,15 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	// After this we don't return notFinished, so it is safe to amend values directly
 	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
-	gb.TryGetFValue(axisLetters[X_AXIS], xOffset, seen);
-	gb.TryGetFValue(axisLetters[Y_AXIS], yOffset, seen);
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+	for (size_t i = 0; i < numTotalAxes; ++i)
+	{
+		if (axisLetters[i] == 'Z')
+		{
+			continue;
+		}
+		gb.TryGetFValue(axisLetters[i], offsets[i], seen);
+	}
 	gb.TryGetFValue(axisLetters[Z_AXIS], triggerHeight, seen);
 
 	if (gb.Seen('P'))
@@ -344,7 +360,11 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficients [%.1f/" DEGREE_SYMBOL "C, %.1f/" DEGREE_SYMBOL "C^2]",
 						(double)calibTemperature, (double)temperatureCoefficients[0], (double)temperatureCoefficients[1]);
 		}
-		reply.catf(", offsets X%.1f Y%.1f", (double)xOffset, (double)yOffset);
+		reply.cat(", offsets");
+		for (size_t i = 0; i < numTotalAxes; ++i)
+		{
+			reply.catf(" %c%.1f", axisLetters[i], (double)offsets[i]);
+		}
 	}
 	return err;
 }
