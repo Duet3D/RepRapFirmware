@@ -88,7 +88,6 @@ static bool inExpansionMode = false;
 
 //#define CAN_DEBUG
 
-
 // Define the memory configuration we want to use
 constexpr CanDevice::Config Can0Config =
 {
@@ -664,7 +663,6 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 	return GCodeResult::error;
 }
 
-// Send a request to an expansion board and get a single reply into the same buffer. Caller must free the buffer whether a response was received or not.
 // Send a response to an expansion board and free the buffer
 void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 {

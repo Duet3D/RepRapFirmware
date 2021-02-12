@@ -319,7 +319,7 @@ constexpr PinDescription PinTable[] =
 	// Port C
 	{ TcOutput::none,	PwmOutput::pwm0l0_b,AdcInput::none,		PinCapability::wpwm,	"led"				},	// PC00 LED
 	{ TcOutput::none,	PwmOutput::pwm0l1_b,AdcInput::none,		PinCapability::wpwm,	"fan5"				},	// PC01 Fan 5
-	{ TcOutput::none,	PwmOutput::pwm0l2_b,AdcInput::none,		PinCapability::none,	nullptr				},	// PC02 Y step
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC02 Y step
 	{ TcOutput::none,	PwmOutput::pwm0l3_b,AdcInput::none,		PinCapability::wpwm,	"fan2"				},	// PC03 Fan 2
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC04 E0 step
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC05 E1 step

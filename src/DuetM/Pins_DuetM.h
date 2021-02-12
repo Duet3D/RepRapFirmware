@@ -282,7 +282,7 @@ constexpr PinDescription PinTable[] =
 	// Port C
 	{ TcOutput::none,	PwmOutput::pwm0l0_b,AdcInput::none,		PinCapability::wpwm,	"!bedheat"			},	// PC00 Heater 0
 	{ TcOutput::none,	PwmOutput::pwm0l1_b,AdcInput::none,		PinCapability::wpwm,	"!e0heat"			},	// PC01 Heater 1
-	{ TcOutput::none,	PwmOutput::pwm0l2_b,AdcInput::none,		PinCapability::none,	nullptr				},	// PC02 Y step
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC02 Y step
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC03 ENC_B
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC04 E0 step
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC05 E1 step
