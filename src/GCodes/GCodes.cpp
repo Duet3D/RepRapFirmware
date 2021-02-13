@@ -2524,7 +2524,7 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 		m.proportionDone = 1.0;
 		if (doingArcMove)
 		{
-			m.canPauseAfter = true;			// we can pause after the final segment of an arc move
+			m.canPauseAfter = true;					// we can pause after the final segment of an arc move
 		}
 		ClearMove();
 	}
@@ -2532,23 +2532,26 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 	{
 		// This move needs to be divided into 2 or more segments
 		// Do the axes
-		float sine = 0.0, cosine = 0.0;
+		float sine = 0.0, cosine = 0.0;				// initialised to avoid gcc warning
+		AxesBitmap axisMap0, axisMap1;
 		if (doingArcMove)
 		{
 			arcCurrentAngle += arcAngleIncrement;
 			// Calculate sine and cosine just once for IDEX machines
 			sine = sinf(arcCurrentAngle);
 			cosine = cosf(arcCurrentAngle);
+			axisMap0 = Tool::GetAxisMapping(moveBuffer.tool, arcAxis0);
+			axisMap1 = Tool::GetAxisMapping(moveBuffer.tool, arcAxis1);
 		}
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
 		{
-			if (doingArcMove && Tool::GetAxisMapping(moveBuffer.tool, arcAxis1).IsBitSet(drive))
+			if (doingArcMove && axisMap1.IsBitSet(drive))
 			{
 				// Axis1 or a substitute in the selected plane
 				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * sine;
 			}
-			else if (doingArcMove && Tool::GetAxisMapping(moveBuffer.tool, arcAxis0).IsBitSet(drive))
+			else if (doingArcMove && axisMap0.IsBitSet(drive))
 			{
 				// Axis0 or a substitute in the selected plane
 				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * cosine;
