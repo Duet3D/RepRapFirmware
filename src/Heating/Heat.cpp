@@ -49,7 +49,12 @@ Licence: GPL
 # include <Duet3Ate.h>
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+constexpr uint32_t HeaterTaskStackWords = 420;			// task stack size in dwords, must be large enough for auto tuning and a local CAN buffer
+#else
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
+#endif
+
 static Task<HeaterTaskStackWords> heaterTask;
 
 extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
@@ -285,26 +290,44 @@ void Heat::Exit() noexcept
 
 [[noreturn]] void Heat::HeaterTask() noexcept
 {
-#if SUPPORT_CAN_EXPANSION
-	CanMessageBuffer * buf;
-	while ((buf = CanMessageBuffer::Allocate()) == nullptr)
-	{
-		delay(1);
-	}
-#endif
-
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
-		// Walk the sensor list and poll all sensors
+		// Walk the sensor list and poll all sensors. The list is in increasing sensor number order.
 		{
-			ReadLocker lock(sensorsLock);
-			TemperatureSensor *currentSensor = sensorsRoot;
-			while (currentSensor != nullptr)
+#if SUPPORT_CAN_EXPANSION
+			// Set up to broadcast our sensor temperatures
+			CanMessageBuffer buf(nullptr);
+			CanMessageSensorTemperatures * const msg = buf.SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
+			msg->whichSensors = 0;
+			unsigned int sensorsFound = 0;
+#endif
 			{
-				currentSensor->Poll();
-				currentSensor = currentSensor->GetNext();
+				ReadLocker lock(sensorsLock);
+				TemperatureSensor *currentSensor = sensorsRoot;
+				while (currentSensor != nullptr)
+				{
+					currentSensor->Poll();
+#if SUPPORT_CAN_EXPANSION
+					if (currentSensor->GetBoardAddress() == CanInterface::GetCanAddress())
+					{
+						msg->whichSensors |= (uint64_t)1u << currentSensor->GetSensorNumber();
+						float temperature;
+						msg->temperatureReports[sensorsFound].errorCode = (uint8_t)currentSensor->GetLatestTemperature(temperature);
+						msg->temperatureReports[sensorsFound].SetTemperature(temperature);
+						++sensorsFound;
+					}
+#endif
+					currentSensor = currentSensor->GetNext();
+				}
 			}
+#if SUPPORT_CAN_EXPANSION
+			if (sensorsFound != 0)							// don't send an empty report
+			{
+				buf.dataLength = msg->GetActualDataLength(sensorsFound);
+				CanInterface::SendBroadcastNoFree(&buf);
+			}
+#endif
 		}
 
 		// Spin the heaters
@@ -332,37 +355,6 @@ void Heat::Exit() noexcept
 
 		reprap.KickHeatTaskWatchdog();
 
-#if SUPPORT_CAN_EXPANSION
-		// Broadcast our sensor temperatures
-		CanMessageSensorTemperatures * const msg = buf->SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
-		msg->whichSensors = 0;
-		unsigned int sensorsFound = 0;
-		unsigned int currentSensorNumber = 0;
-		for (;;)
-		{
-			const auto sensor = FindSensorAtOrAbove(currentSensorNumber);
-			if (sensor.IsNull())
-			{
-				break;
-			}
-			const unsigned int sn = sensor->GetSensorNumber();
-			if (sensor->GetBoardAddress() == CanInterface::GetCanAddress())
-			{
-				msg->whichSensors |= (uint64_t)1u << sn;
-				float temperature;
-				msg->temperatureReports[sensorsFound].errorCode = (uint8_t)sensor->GetLatestTemperature(temperature);
-				msg->temperatureReports[sensorsFound].SetTemperature(temperature);
-				++sensorsFound;
-			}
-			currentSensorNumber = (unsigned int)sn + 1u;
-		}
-
-		if (sensorsFound != 0)							// don't send an empty report
-		{
-			buf->dataLength = msg->GetActualDataLength(sensorsFound);
-			CanInterface::SendBroadcastNoFree(buf);
-		}
-#endif
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
 	}
@@ -1135,7 +1127,7 @@ void Heat::DeleteSensor(unsigned int sn) noexcept
 	}
 }
 
-// Insert a sensor. Must write-lock the sensors lock before calling this.
+// Insert a sensor. Must write-lock the sensors lock before calling this. The sensors list is kept in order of increasing sensor number.
 void Heat::InsertSensor(TemperatureSensor *newSensor) noexcept
 {
 	TemperatureSensor *prev = nullptr;

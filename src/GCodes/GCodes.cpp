@@ -2532,9 +2532,13 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 	{
 		// This move needs to be divided into 2 or more segments
 		// Do the axes
+		float sine = 0.0, cosine = 0.0;
 		if (doingArcMove)
 		{
 			arcCurrentAngle += arcAngleIncrement;
+			// Calculate sine and cosine just once for IDEX machines
+			sine = sinf(arcCurrentAngle);
+			cosine = cosf(arcCurrentAngle);
 		}
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
@@ -2542,12 +2546,12 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 			if (doingArcMove && Tool::GetAxisMapping(moveBuffer.tool, arcAxis1).IsBitSet(drive))
 			{
 				// Axis1 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * sinf(arcCurrentAngle);
+				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * sine;
 			}
 			else if (doingArcMove && Tool::GetAxisMapping(moveBuffer.tool, arcAxis0).IsBitSet(drive))
 			{
 				// Axis0 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * cosf(arcCurrentAngle);
+				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * cosine;
 			}
 			else
 			{
