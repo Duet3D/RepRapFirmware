@@ -7,6 +7,7 @@ Upgrade notes:
 
 New features:
 - M17 is implemented
+- Print time in GCode files sliced by Ideamaker is now recognised
 - [Duet WiFi/Ethernet] When using extended step timings (M569 T parameter), maximum step pulse rates should be improved a little
 - [Duet 3 Mini] M954 is partially implemented. A Duet 3 Mini used as an expansion board can support axis motors, extruder motors (but extruders with nonzero pressure advance has not been tested), thermistor, PT100 and thermocouple temperature sensors, GpIn and GpOut pins (including servos). Heaters, fans, filament monitors, endstop switches, Z probes and other types of temperature sensor are not yet supported.
 - [Duet 3 MB6HC] The maximum number of axes supported on Duet 3 MB6HC is increased to 15. Axis letters abcdefghijkl may be used in addition to XYZUVWABCD. Because GCode is normally case insensitive, these must be prefixed with a single quote character in GCode commands. For example, M584 'A1.2 would assign axis 'a' to driver 1.2, and G1 'A10 would move the 'a' axis to the 10mm or 10 degree position (or by 10mm or 10 degrees if in relative mode).
