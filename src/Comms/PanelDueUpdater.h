@@ -37,7 +37,7 @@ public:
 	bool Idle() const noexcept { return state == FlashState::idle; }
 
     // For now fix the filename here
-    constexpr static const char* const firmwareFilename = DEFAULT_SYS_DIR PANEL_DUE_FIRMWARE_FILE;
+    constexpr static const char* const firmwareFilename = FIRMWARE_DIRECTORY PANEL_DUE_FIRMWARE_FILE;
 
 private:
 	NamedEnum(FlashState, uint8_t,

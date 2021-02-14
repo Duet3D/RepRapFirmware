@@ -356,7 +356,7 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 #define MACRO_DIR "0:/macros/"						// Ditto - Macro files
 #define SCANS_DIRECTORY "0:/scans/"					// Directory for uploaded 3D scans
 #define FILAMENTS_DIRECTORY "0:/filaments/"			// Directory for filament configurations
-#define FIRMWARE_DIRECTORY "0:/sys/"				// Directory for firmware and IAP files
+#define FIRMWARE_DIRECTORY "0:/firmware/"			// Directory for firmware and IAP files
 #define MENU_DIR "0:/menu/"							// Directory for menu files
 
 // MaxExpectedWebDirFilenameLength is the maximum length of a filename that we can accept in a HTTP request without rejecting it out of hand
