@@ -3686,6 +3686,31 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		// For cases 600 and 601, see 226
 
+		// Screw Mapping M-Codes
+		case 640:	// enable/disable screwmap
+			{
+				result = reprap.GetMove().GetScrewMap().ParseEnable(gb, reply);
+				UpdateCurrentUserPosition();
+			}
+			break;
+		case 641:	// define an axis map R:src 
+			{
+				result = reprap.GetMove().GetScrewMap().ParseCreate(gb, reply);
+				UpdateCurrentUserPosition();
+			}
+			break;
+		case 642:	// set map table data R:src_axis [XYZABC]:d1:d2:d3...
+			{
+				result = reprap.GetMove().GetScrewMap().ParseTable(gb, reply, outBuf);
+				UpdateCurrentUserPosition();
+			}
+			break;
+		case 643: // run screwmap self-test
+			{
+				reprap.GetMove().GetScrewMap().RunSelfTest();
+			}
+			break;
+
 		// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
 
 		case 665: // Set delta configuration
@@ -4185,7 +4210,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			result = GCodeResult::error;
 			break;
 #endif
-
 		case 851: // Set Z probe offset, only for Marlin compatibility
 			{
 				auto zp = platform.GetZProbeOrDefault(0);

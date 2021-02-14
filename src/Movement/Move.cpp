@@ -131,6 +131,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 #endif
 	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 8),											ObjectModelEntryFlags::none },
 	{ "probeGrid",				OBJECT_MODEL_FUNC_NOSELF((const GridDefinition *)&reprap.GetGCodes().GetDefaultGrid()),	ObjectModelEntryFlags::none },
+	{ "screwMap",				OBJECT_MODEL_FUNC(self->GetScrewMap().IsEnabled()),										ObjectModelEntryFlags::none },
 	{ "skew",					OBJECT_MODEL_FUNC(self, 9),																ObjectModelEntryFlags::none },
 	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),									ObjectModelEntryFlags::none },
 
@@ -145,7 +146,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),														ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 10, 14, 3, 2, 4 + SUPPORT_LASER, 3, 2, 2, 5 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 10, 14, 3, 2, 4 + SUPPORT_LASER, 3, 2, 2, 6 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -443,6 +444,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype, "=== Move ===\nDMs created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
 						DriveMovement::NumCreated(), longestGcodeWaitInterval, bedCompString.c_str(), (double)zShift);
+	p.MessageF(mtype, "Screw Map: %s", GetScrewMap().GetEnabledString());
 	longestGcodeWaitInterval = 0;
 
 #if DDA_LOG_PROBE_CHANGES
@@ -550,10 +552,12 @@ void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool, bool u
 	{
 		BedTransform(xyzPoint, tool);
 	}
+	screwMap.ScrewMapTransform(xyzPoint);
 }
 
 void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
+	screwMap.ScrewMapInverseTransform(xyzPoint);
 	InverseBedTransform(xyzPoint, tool);
 	InverseAxisTransform(xyzPoint, tool);
 }
