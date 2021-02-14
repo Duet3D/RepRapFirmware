@@ -55,7 +55,7 @@ public:
 	// Initialise static data
 	static void Init() noexcept;
 
-	static void AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]) noexcept;
+	static void AppendPinNames(const StringRef& str, size_t numPorts, const IoPort * const ports[]) noexcept;
 
 #if SUPPORT_CAN_EXPANSION
 	// Remove the board address if present and return it, else return the default address
