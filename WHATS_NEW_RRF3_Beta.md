@@ -10,6 +10,8 @@ Compatible firmware versions (all the same as in the RepRapFirmware 3.2.2 releas
 
 Upgrade notes:
 - All extruders must be declared explicitly using M584. In previous firmware versions, one default extruder was assign to driver 3.
+- Firmware files are now stored in folder /firmware of the SD card instead of /sys
+- Unless you are running with an attached SBC, you must also upload the new Duetx_SDiap32_xxx.bin file for your board. Until you do, you will not be able to upgrade/downgrade from 3.3beta1 firmware to other versions. The new IAP files have the same names as the previous IAP files for RRF3.2 and 3.2.2 and will also work with those versions of RRF.
 - [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.3beta1 also, otherwise movement and some other functions will not work. If you accidentally end up with firmware 3.3beta on a tool or expansion board and 3.2.x on the main board then the tool/expansoin board will not achieve CAN sync with the main board; however it will still respond to some commands including M115, M122 and M997.
 
 New features:
