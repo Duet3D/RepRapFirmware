@@ -3,9 +3,14 @@ RepRapFirmware 3.3beta1
 
 Changes listed here are since version 3.2.2. Changes that were originally listed here but were back-ported to release 3.2.2 are no longer described here.
 
+Compatible firmware versions (all the same as in the RepRapFirmware 3.2.2 release):
+- Duet Web Control 3.2.2
+- Duet Software Framework 3.2.2 (for users with attached Single Board Computer)
+- DuetWiFiServer 1.25
+
 Upgrade notes:
 - All extruders must be declared explicitly using M584. In previous firmware versions, one default extruder was assign to driver 3.
-- [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.3beta1 also, otherwise movement will not work
+- [Duet 3 + expansion/tool boards] You must update the expansion and/or tool board firmware to 3.3beta1 also, otherwise movement and some other functions will not work. If you accidentally end up with firmware 3.3beta on a tool or expansion board and 3.2.x on the main board then the tool/expansoin board will not achieve CAN sync with the main board; however it will still respond to some commands including M115, M122 and M997.
 
 New features:
 - M17 is implemented
