@@ -320,6 +320,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 					mutexName = m->GetName();
 					break;
 				}
+				m = m->GetNext();
 			}
 		}
 
