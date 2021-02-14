@@ -42,7 +42,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 #endif
 	  lockedResources(prev.lockedResources),
 	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
-	  drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
+	  selectedPlane(prev.selectedPlane), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
 	  waitingForAcknowledgement(false), messageAcknowledged(false),

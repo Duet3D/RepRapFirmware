@@ -26,8 +26,8 @@ void DhtDataTransition(CallbackParameter cp) noexcept
 }
 
 // Class DhtTemperatureSensor members
-DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType type) noexcept
-	: SensorWithPort(sensorNum, "DHT-temperature"), type(type), lastReadTime(0)
+DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept
+	: SensorWithPort(sensorNum, "DHT-temperature"), type(t), lastReadTime(0)
 {
 }
 
@@ -48,10 +48,39 @@ const char *DhtTemperatureSensor::GetShortSensorType() const noexcept
 
 GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	if (!ConfigurePort(gb, reply, PinAccess::write0, changed))
+#if SAME5x
+	// SAME5x needs two ports because the output ports don't support interrupts
+	if (gb.Seen('P'))
+	{
+		IoPort* const portAddrs[] = { &port, &interruptPort };
+		PinAccess const accessModes[] = { PinAccess::write1, PinAccess::read };
+		switch (IoPort::AssignPorts(gb, reply, PinUsedBy::sensor, 2, portAddrs, accessModes))
+		{
+		case 2:
+			break;										// success
+
+		case 0:
+			return GCodeResult::error;					// error message has already been written to 'reply'
+
+		default:
+			reply.copy("on this board, this sensor type needs one output and one input port");
+			return GCodeResult::error;
+		}
+
+		numPulses = ARRAY_SIZE(pulses);					// tell the ISR not to collect data yet
+		if (!interruptPort.AttachInterrupt(DhtDataTransition, InterruptMode::change, this))
+		{
+			reply.copy("failed to attach interrupt to port ");
+			interruptPort.AppendPinName(reply);
+			return GCodeResult::error;
+		}
+	}
+#else
+	if (!ConfigurePort(gb, reply, PinAccess::write1, changed))
 	{
 		return GCodeResult::error;
 	}
+#endif
 
 	TryConfigureSensorName(gb, changed);
 
@@ -65,7 +94,19 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 
 	if (!changed)
 	{
+#if SAME5x
+		reply.printf("Sensor %u", GetSensorNumber());
+		if (GetSensorName() != nullptr)
+		{
+			reply.catf(" (%s)", GetSensorName());
+		}
+		reply.catf(" type %s using pins ", GetSensorType());
+		const IoPort* const portAddrs[] = { &port, &interruptPort };
+		IoPort::AppendPinNames(reply, 2, portAddrs);
+		reply.catf(", reading %.1f, last error: %s", (double)GetStoredReading(), TemperatureErrorString(GetLastError()));
+#else
 		CopyBasicDetails(reply);
+#endif
 
 		const char *sensorTypeString;
 		switch (type)
@@ -138,6 +179,13 @@ bool DhtTemperatureSensor::PollInTask() noexcept
 
 void DhtTemperatureSensor::TakeReading() noexcept
 {
+	const IoPort& irqPort =
+#if SAME5x
+		interruptPort;
+#else
+		port;
+#endif
+
 	// Send the start bit. This must be at least 18ms for the DHT11, 0.8ms for the DHT21, and 1ms long for the DHT22.
 	port.SetMode(PinAccess::write0);
 	delay(20);
@@ -156,7 +204,7 @@ void DhtTemperatureSensor::TakeReading() noexcept
 
 		// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
 		// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.
-		port.AttachInterrupt(DhtDataTransition, InterruptMode::change, this);
+		irqPort.AttachInterrupt(DhtDataTransition, InterruptMode::change, this);
 		delayMicroseconds(2);				// give the interrupt time to occur
 		lastPulseTime = 0;
 		numPulses = 0;						// tell the ISR to collect data
@@ -167,7 +215,7 @@ void DhtTemperatureSensor::TakeReading() noexcept
 	// So we just delay for long enough for the data to have been sent. It takes typically 4 to 5ms.
 	delay(MaximumReadTime);
 
-	port.DetachInterrupt();
+	irqPort.DetachInterrupt();
 
 	// Attempt to convert the signal into temp+RH values
 	float t;

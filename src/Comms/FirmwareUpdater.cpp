@@ -46,9 +46,9 @@ namespace FirmwareUpdater
 				return GCodeResult::error;
 			}
 			if ((moduleMap & (1 << WifiFirmwareModule)) != 0
-					&& !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, WIFI_FIRMWARE_FILE))
+					&& !reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, WIFI_FIRMWARE_FILE))
 			{
-				reply.printf("File %s not found", WIFI_FIRMWARE_FILE);
+				reply.printf("File %s not found", FIRMWARE_DIRECTORY WIFI_FIRMWARE_FILE);
 				return GCodeResult::error;
 			}
 		}
@@ -61,7 +61,7 @@ namespace FirmwareUpdater
 				reply.printf("Aux port %d is not enabled or not in PanelDue mode", serialChannel-1);
 				return GCodeResult::error;
 			}
-			if (!reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, PANEL_DUE_FIRMWARE_FILE))
+			if (!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, PANEL_DUE_FIRMWARE_FILE))
 			{
 				reply.printf("File %s not found", PanelDueUpdater::firmwareFilename);
 				return GCodeResult::error;
@@ -111,7 +111,7 @@ namespace FirmwareUpdater
 				WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
 				if (uploader != nullptr)
 				{
-					uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, DEFAULT_SYS_DIR, WifiFirmwareUploader::FirmwareAddress);
+					uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, FIRMWARE_DIRECTORY, WifiFirmwareUploader::FirmwareAddress);
 				}
 			}
 			break;

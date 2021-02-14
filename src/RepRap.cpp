@@ -2685,10 +2685,10 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 {
 #if HAS_MASS_STORAGE
-	FileStore * const firmwareFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_FIRMWARE_FILE, OpenMode::read);
+	FileStore * const firmwareFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_FIRMWARE_FILE, OpenMode::read);
 	if (firmwareFile == nullptr)
 	{
-		reply.printf("Firmware binary \"%s\" not found", IAP_FIRMWARE_FILE);
+		reply.printf("Firmware binary \"%s\" not found", FIRMWARE_DIRECTORY IAP_FIRMWARE_FILE);
 		return false;
 	}
 
@@ -2712,13 +2712,13 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 #endif
 			)
 	{
-		reply.printf("Firmware binary \"%s\" is not valid for this electronics", IAP_FIRMWARE_FILE);
+		reply.printf("Firmware binary \"%s\" is not valid for this electronics", FIRMWARE_DIRECTORY IAP_FIRMWARE_FILE);
 		return false;
 	}
 
-	if (!platform->FileExists(DEFAULT_SYS_DIR, IAP_UPDATE_FILE))
+	if (!platform->FileExists(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE))
 	{
-		reply.printf("In-application programming binary \"%s\" not found", IAP_UPDATE_FILE);
+		reply.printf("In-application programming binary \"%s\" not found", FIRMWARE_DIRECTORY IAP_UPDATE_FILE);
 		return false;
 	}
 #endif
@@ -2730,10 +2730,10 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 void RepRap::UpdateFirmware() noexcept
 {
 #if HAS_MASS_STORAGE
-	FileStore * const iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
+	FileStore * const iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		platform->Message(FirmwareUpdateMessage, "IAP file '" IAP_UPDATE_FILE "' not found\n");
+		platform->Message(FirmwareUpdateMessage, "IAP file '" FIRMWARE_DIRECTORY IAP_UPDATE_FILE "' not found\n");
 		return;
 	}
 
@@ -2826,8 +2826,8 @@ void RepRap::StartIap() noexcept
 #endif
 
 #if HAS_MASS_STORAGE
-	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
-	static const char filename[] = DEFAULT_SYS_DIR IAP_FIRMWARE_FILE;
+	// Newer versions of IAP reserve space above the stack for us to pass the firmware filename
+	static const char filename[] = FIRMWARE_DIRECTORY IAP_FIRMWARE_FILE;
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
 	if (topOfStack + sizeof(filename) <=
 # if SAME5x
