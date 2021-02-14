@@ -56,9 +56,16 @@ const char * const GridDefinition::HeightMapLabelLines[] =
 
 // Initialise the grid to be invalid
 GridDefinition::GridDefinition() noexcept
-	: axis0Number(X_AXIS), axis1Number(Y_AXIS), axis0Letter('X'), axis1Letter('Y'), axis0Min(0.0), axis0Max(-1.0), axis1Min(0.0), axis1Max(-1.0), radius(-1.0), axis0Spacing(0.0), axis1Spacing(0.0)
+	: axis0Number(X_AXIS), axis1Number(Y_AXIS),
+	  axis0Letter('X'), axis1Letter('Y'),
+	  axis0Min(0.0), axis0Max(-1.0),
+	  axis1Min(0.0), axis1Max(-1.0),
+	  radius(-1.0),
+	  axis0Spacing(0.0), axis1Spacing(0.0),
+	  numAxis0(0), numAxis1(0),
+	  recipAxis0spacing(0.0), recipAxis1spacing(0.0),
+	  isValid(false)
 {
-	CheckValidity();		// will flag the grid as invalid
 }
 
 // Set the grid parameters ands return true if it is now valid
@@ -90,7 +97,6 @@ void GridDefinition::CheckValidity() noexcept
 	const size_t axis1NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(axis1Letter);
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 
-	// TODO: possibly check for hidden axes
 	isValid = NumPoints() != 0 && NumPoints() <= MaxGridProbePoints
 			&& (radius < 0.0 || radius >= 1.0)
 			&& NumAxis0points() <= MaxAxis0GridPoints
