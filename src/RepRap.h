@@ -168,10 +168,10 @@ public:
 	bool IsProcessingConfig() const noexcept { return processingConfig; }
 
 	// Firmware update operations
-	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept;
-	void UpdateFirmware() noexcept;
+	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept;
+	void UpdateFirmware(const StringRef& filenameRef) noexcept;
 	void PrepareToLoadIap() noexcept;
-	[[noreturn]] void StartIap() noexcept;
+	[[noreturn]] void StartIap(const StringRef& filenameRef) noexcept;
 
 	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error
 

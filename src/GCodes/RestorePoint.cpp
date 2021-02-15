@@ -27,14 +27,6 @@ constexpr ObjectModelArrayDescriptor RestorePoint::coordinatesArrayDescriptor =
 																			{ return ExpressionValue(((const RestorePoint*)self)->moveCoords[context.GetLastIndex()], 3); }
 };
 
-constexpr ObjectModelArrayDescriptor RestorePoint::spindleSpeedsArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxSpindles; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																			{ return ExpressionValue(((const RestorePoint*)self)->spindleSpeeds[context.GetLastIndex()]); }
-};
-
 constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
@@ -50,11 +42,10 @@ constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 	{ "laserPwm",			OBJECT_MODEL_FUNC_IF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
 													(float)self->laserPwmOrIoBits.laserPwm/65535.0, 2),			ObjectModelEntryFlags::none },
 #endif
-	{ "spindleSpeeds",		OBJECT_MODEL_FUNC_NOSELF(&spindleSpeedsArrayDescriptor), 							ObjectModelEntryFlags::none },
 	{ "toolNumber",			OBJECT_MODEL_FUNC((int32_t)self->toolNumber),										ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RestorePoint::objectModelTableDescriptor[] = { 1, 5 + SUPPORT_LASER + SUPPORT_IOBITS };
+constexpr uint8_t RestorePoint::objectModelTableDescriptor[] = { 1, 4 + SUPPORT_LASER + SUPPORT_IOBITS };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RestorePoint)
 
@@ -78,11 +69,6 @@ void RestorePoint::Init() noexcept
 	proportionDone = 0.0;
 	initialUserC0 = initialUserC1 = 0.0;
 	toolNumber = -1;
-
-	for (size_t i = 0; i < MaxSpindles; ++i)
-	{
-		spindleSpeeds[i] = 0;
-	}
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();

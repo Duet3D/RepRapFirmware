@@ -902,7 +902,7 @@ void RepRap::EmergencyStop() noexcept
 	case MachineType::cnc:
 		for (size_t i = 0; i < MaxSpindles; i++)
 		{
-			platform->AccessSpindle(i).TurnOff();
+			platform->AccessSpindle(i).SetState(SpindleState::stopped);
 		}
 		break;
 
@@ -1540,7 +1540,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
 	{
 		size_t numSpindles = MaxSpindles;
-		while (numSpindles != 0 && platform->AccessSpindle(numSpindles - 1).GetToolNumber() == -1)
+		while (numSpindles != 0 && !platform->AccessSpindle(numSpindles - 1).IsConfigured())
 		{
 			--numSpindles;
 		}
@@ -1556,15 +1556,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				}
 
 				const Spindle& spindle = platform->AccessSpindle(i);
-				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32, spindle.GetCurrentRpm(), spindle.GetRpm());
-				if (type == 2)
-				{
-					response->catf(",\"tool\":%d}", spindle.GetToolNumber());
-				}
-				else
-				{
-					response->cat('}');
-				}
+				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32 ",\"state\":\"%s\"}", spindle.GetCurrentRpm(), spindle.GetRpm(), spindle.GetState().ToString());
 			}
 			response->cat(']');
 		}
@@ -1704,6 +1696,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				if (tool->GetFilament() != nullptr)
 				{
 					response->catf(",\"filament\":\"%.s\"", tool->GetFilament()->GetName());
+				}
+
+				// Spindle (if configured)
+				if (tool->spindleNumber > -1)
+				{
+					response->catf(",\"spindle\":%d,\"spindleRpm\":%" PRIi32, tool->spindleNumber, tool->spindleRpm);
 				}
 
 				// Offsets
@@ -2678,13 +2676,15 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 #else
 
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
-bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
+bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept
 {
 #if HAS_MASS_STORAGE
-	FileStore * const firmwareFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_FIRMWARE_FILE, OpenMode::read);
+	FileStore * const firmwareFile = platform->OpenFile(FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str(), OpenMode::read);
 	if (firmwareFile == nullptr)
 	{
-		reply.printf("Firmware binary \"%s\" not found", FIRMWARE_DIRECTORY IAP_FIRMWARE_FILE);
+		String<MaxFilenameLength> firmwareBinaryLocation;
+		MassStorage::CombineName(firmwareBinaryLocation.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str());
+		reply.printf("Firmware binary \"%s\" not found", firmwareBinaryLocation.c_str());
 		return false;
 	}
 
@@ -2696,7 +2696,7 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 		firmwareFile->Seek(32) &&
 #endif
 
-		firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
+	firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
 #if SAME5x
@@ -2723,7 +2723,7 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 }
 
 // Update the firmware. Prerequisites should be checked before calling this.
-void RepRap::UpdateFirmware() noexcept
+void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 {
 #if HAS_MASS_STORAGE
 	FileStore * const iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE, OpenMode::read);
@@ -2733,12 +2733,13 @@ void RepRap::UpdateFirmware() noexcept
 		return;
 	}
 
+
 	PrepareToLoadIap();
 
 	// Use RAM-based IAP
 	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
 	iapFile->Close();
-	StartIap();
+	StartIap(filenameRef);
 #endif
 }
 
@@ -2794,7 +2795,7 @@ void RepRap::PrepareToLoadIap() noexcept
 	#endif
 }
 
-void RepRap::StartIap() noexcept
+void RepRap::StartIap(const StringRef& filenameRef) noexcept
 {
 	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
 	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
@@ -2823,7 +2824,9 @@ void RepRap::StartIap() noexcept
 
 #if HAS_MASS_STORAGE
 	// Newer versions of IAP reserve space above the stack for us to pass the firmware filename
-	static const char filename[] = FIRMWARE_DIRECTORY IAP_FIRMWARE_FILE;
+	String<MaxFilenameLength> firmwareFileLocation;
+	MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str());
+	const char* filename = firmwareFileLocation.c_str();
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
 	if (topOfStack + sizeof(filename) <=
 # if SAME5x
@@ -2835,7 +2838,7 @@ void RepRap::StartIap() noexcept
 # endif
 	   )
 	{
-		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
+		strcpy(reinterpret_cast<char*>(topOfStack), filename);
 	}
 #endif
 

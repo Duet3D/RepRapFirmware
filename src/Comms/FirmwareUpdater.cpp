@@ -29,41 +29,51 @@ namespace FirmwareUpdater
 
 	// Check that the prerequisites are satisfied.
 	// Return true if yes, else print a message and return false.
-	GCodeResult CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, GCodeBuffer& gb, const StringRef& reply, const size_t serialChannel) noexcept
+	GCodeResult CheckFirmwareUpdatePrerequisites(
+			Bitmap<uint8_t> moduleMap,
+			GCodeBuffer& gb,
+			const StringRef& reply,
+			const size_t serialChannel,
+			const StringRef& filenameRef) noexcept
 	{
 #if HAS_WIFI_NETWORKING
-		if (		(moduleMap & (1 << WifiExternalFirmwareModule)) != 0
-				||  (moduleMap & (1 << WifiFirmwareModule))			!= 0)
+		if (moduleMap.IsBitSet(WifiExternalFirmwareModule) || moduleMap.IsBitSet(WifiFirmwareModule))
 		{
 			GCodeResult result;
 			if (!reprap.GetGCodes().CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				return result;
 			}
-			if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & (1 << WifiFirmwareModule)) != 0)
+			if (moduleMap.IsBitSet(WifiExternalFirmwareModule) && moduleMap.IsBitSet(WifiFirmwareModule))
 			{
 				reply.copy("Invalid combination of firmware update modules");
 				return GCodeResult::error;
 			}
-			if ((moduleMap & (1 << WifiFirmwareModule)) != 0
-					&& !reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, WIFI_FIRMWARE_FILE))
+			if (moduleMap.IsBitSet(WifiFirmwareModule))
 			{
-				reply.printf("File %s not found", FIRMWARE_DIRECTORY WIFI_FIRMWARE_FILE);
-				return GCodeResult::error;
+				String<MaxFilenameLength> location;
+				if (!MassStorage::CombineName(location.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? WIFI_FIRMWARE_FILE : filenameRef.c_str())
+						|| !MassStorage::FileExists(location.c_str()))
+				{
+					reply.printf("File %s not found", location.c_str());
+					return GCodeResult::error;
+				}
 			}
 		}
 #endif
 #if HAS_AUX_DEVICES
-		if ((moduleMap & (1 << PanelDueFirmwareModule)) != 0)
+		if (moduleMap.IsBitSet(PanelDueFirmwareModule))
 		{
 			if (!reprap.GetPlatform().IsAuxEnabled(serialChannel-1) || reprap.GetPlatform().IsAuxRaw(serialChannel-1))
 			{
 				reply.printf("Aux port %d is not enabled or not in PanelDue mode", serialChannel-1);
 				return GCodeResult::error;
 			}
-			if (!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, PANEL_DUE_FIRMWARE_FILE))
+			String<MaxFilenameLength> location;
+			if (!MassStorage::CombineName(location.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? PANEL_DUE_FIRMWARE_FILE : filenameRef.c_str())
+					|| !MassStorage::FileExists(location.c_str()))
 			{
-				reply.printf("File %s not found", PanelDueUpdater::firmwareFilename);
+				reply.printf("File %s not found", location.c_str());
 				return GCodeResult::error;
 			}
 		}
@@ -88,7 +98,7 @@ namespace FirmwareUpdater
 		return true;
 	}
 
-	void UpdateModule(unsigned int module, const size_t serialChannel) noexcept
+	void UpdateModule(unsigned int module, const size_t serialChannel, const StringRef& filenameRef) noexcept
 	{
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 		switch(module)
@@ -111,7 +121,8 @@ namespace FirmwareUpdater
 				WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
 				if (uploader != nullptr)
 				{
-					uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, FIRMWARE_DIRECTORY, WifiFirmwareUploader::FirmwareAddress);
+					const char* binaryFilename = filenameRef.IsEmpty() ? WIFI_FIRMWARE_FILE : filenameRef.c_str();
+					uploader->SendUpdateFile(binaryFilename, FIRMWARE_DIRECTORY, WifiFirmwareUploader::FirmwareAddress);
 				}
 			}
 			break;
@@ -124,7 +135,7 @@ namespace FirmwareUpdater
 				{
 					platform.InitPanelDueUpdater();
 				}
-				platform.GetPanelDueUpdater()->Start(serialChannel);
+				platform.GetPanelDueUpdater()->Start(filenameRef, serialChannel);
 			}
 # endif
 		}
