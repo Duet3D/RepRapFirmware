@@ -103,6 +103,7 @@ private:
 	int32_t ReadIValue() THROWS(GCodeException);
 	DriverId ReadDriverIdValue() THROWS(GCodeException);
 	void CheckArrayLength(size_t actualLength, size_t maxLength) THROWS(GCodeException);
+	void CheckNumberFound(const char *endptr) THROWS(GCodeException);
 
 	void CheckForMixedSpacesAndTabs() noexcept;
 	bool ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile) THROWS(GCodeException);
