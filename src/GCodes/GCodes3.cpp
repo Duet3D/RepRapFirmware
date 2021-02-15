@@ -1102,7 +1102,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off because the main loop may get suspended
 	DisableDrives();									// all motors off
 
-	if (firmwareUpdateModuleMap == 0)					// have we worked out which modules to update?
+	if (firmwareUpdateModuleMap.IsEmpty())					// have we worked out which modules to update?
 	{
 		// Find out which modules we have been asked to update
 		if (gb.Seen('S'))
@@ -1116,21 +1116,33 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 				if (t >= NumFirmwareUpdateModules)
 				{
 					reply.printf("Invalid module number '%" PRIu32 "'\n", t);
-					firmwareUpdateModuleMap = 0;
+					firmwareUpdateModuleMap.Clear();
 					return GCodeResult::error;
 					break;
 				}
-				firmwareUpdateModuleMap |= (1u << t);
+				firmwareUpdateModuleMap.SetBit(t);
 			}
 		}
 		else
 		{
-			firmwareUpdateModuleMap = (1u << 0);		// no modules specified, so update module 0 to match old behaviour
+			firmwareUpdateModuleMap.SetBit(0);		// no modules specified, so update module 0 to match old behaviour
 		}
 
-		if (firmwareUpdateModuleMap == 0)
+		if (firmwareUpdateModuleMap.IsEmpty())
 		{
 			return GCodeResult::ok;						// nothing to update
+		}
+
+		filenameString.Clear();
+		if (gb.Seen('P'))
+		{
+			if (firmwareUpdateModuleMap.CountSetBits() > 1)
+			{
+				reply.copy("Filename can only be provided when updating excactly one module\n");
+				firmwareUpdateModuleMap.Clear();
+				return GCodeResult::error;
+			}
+			gb.GetQuotedString(filenameString.GetRef());
 		}
 
 		// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
@@ -1138,20 +1150,20 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		const auto result = FirmwareUpdater::CheckFirmwareUpdatePrerequisites(
 				firmwareUpdateModuleMap, gb, reply,
 # if HAS_AUX_DEVICES
-				serialChannelForPanelDueFlashing
+				serialChannelForPanelDueFlashing,
 #else
-				0
+				0,
 #endif
-				);
+				filenameString.GetRef());
 		if (result != GCodeResult::ok)
 		{
-			firmwareUpdateModuleMap = 0;
+			firmwareUpdateModuleMap.Clear();
 			return result;
 		}
 #endif
-		if ((firmwareUpdateModuleMap & 1) != 0 && !reprap.CheckFirmwareUpdatePrerequisites(reply))
+		if (firmwareUpdateModuleMap.IsBitSet(0) && !reprap.CheckFirmwareUpdatePrerequisites(reply, filenameString.GetRef()))
 		{
-			firmwareUpdateModuleMap = 0;
+			firmwareUpdateModuleMap.Clear();
 			return GCodeResult::error;
 		}
 	}

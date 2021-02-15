@@ -58,8 +58,8 @@ public:
     virtual ~Flasher() {}
 
     void erase(uint32_t foffset) THROWS(GCodeException);
-    bool write(const char* filename, uint32_t& foffset) THROWS(GCodeException);
-    bool verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException);
+    bool write(const char* filename, const char* dir, uint32_t& foffset) THROWS(GCodeException);
+    bool verify(const char* filename, const char* dir, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException);
     void lock(/* std::string& regionArg, */ bool enable) THROWS(GCodeException);
 
 private:

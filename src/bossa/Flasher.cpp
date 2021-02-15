@@ -44,7 +44,7 @@ void Flasher::erase(uint32_t foffset) THROWS(GCodeException)
     _flash->eraseAuto(false);
 }
 
-bool Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeException)
+bool Flasher::write(const char* filename, const char* dir, uint32_t& foffset) THROWS(GCodeException)
 {
     uint32_t pageSize = _flash->pageSize();
     uint32_t numPages;
@@ -54,7 +54,7 @@ bool Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeExcepti
     {
     	pageNum = 0;
     	Platform& platform = reprap.GetPlatform();
-		infile = MassStorage::OpenFile(filename, OpenMode::read, 0);
+		infile = platform.OpenFile(dir, filename, OpenMode::read);
 		if (infile == nullptr)
 		{
 			platform.MessageF(ErrorMessage, "Failed to open file %s\n", filename);
@@ -111,7 +111,7 @@ bool Flasher::write(const char* filename, uint32_t& foffset) THROWS(GCodeExcepti
     return true;
 }
 
-bool Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException)
+bool Flasher::verify(const char* filename, const char* dir, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException)
 {
     uint32_t pageSize = _flash->pageSize();
     uint8_t bufferA[pageSize];
@@ -134,7 +134,7 @@ bool Flasher::verify(const char* filename, uint32_t& pageErrors, uint32_t& total
     	// Note that we can skip all checks for file validity here since
     	// we would not get here from write() if any of these failed
 
-		infile = MassStorage::OpenFile(filename, OpenMode::read, 0);
+		infile = reprap.GetPlatform().OpenFile(dir, filename, OpenMode::read);
     }
 
     try

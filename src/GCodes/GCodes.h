@@ -635,7 +635,8 @@ private:
 	TriggerNumbersBitmap triggersPending;		// Bitmap of triggers pending but not yet executed
 
 	// Firmware update
-	uint8_t firmwareUpdateModuleMap;			// Bitmap of firmware modules to be updated
+	Bitmap<uint8_t> firmwareUpdateModuleMap;	// Bitmap of firmware modules to be updated
+	String<MaxFilenameLength> filenameString;	// Filename for the current update
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
 

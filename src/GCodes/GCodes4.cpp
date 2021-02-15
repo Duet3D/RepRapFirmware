@@ -471,10 +471,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			bool updating = false;
 			for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
 			{
-				if ((firmwareUpdateModuleMap & (1u << module)) != 0)
+				if (firmwareUpdateModuleMap.IsBitSet(module))
 				{
-					firmwareUpdateModuleMap &= ~(1u << module);
-					FirmwareUpdater::UpdateModule(module, serialChannelForPanelDueFlashing);
+					firmwareUpdateModuleMap.ClearBit(module);
+					FirmwareUpdater::UpdateModule(module, serialChannelForPanelDueFlashing, filenameString.GetRef());
 					updating = true;
 					isFlashingPanelDue = (module == FirmwareUpdater::PanelDueFirmwareModule);
 					break;
@@ -502,11 +502,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::flashing2:
-		if ((firmwareUpdateModuleMap & 1) != 0)
+		if (firmwareUpdateModuleMap.IsBitSet(0))
 		{
 			// Update main firmware
-			firmwareUpdateModuleMap = 0;
-			reprap.UpdateFirmware();
+			firmwareUpdateModuleMap.Clear();
+			reprap.UpdateFirmware(filenameString.GetRef());
 			// The above call does not return unless an error occurred
 		}
 		isFlashing = false;
