@@ -2826,9 +2826,8 @@ void RepRap::StartIap(const StringRef& filenameRef) noexcept
 	// Newer versions of IAP reserve space above the stack for us to pass the firmware filename
 	String<MaxFilenameLength> firmwareFileLocation;
 	MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str());
-	const char* filename = firmwareFileLocation.c_str();
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
-	if (topOfStack + sizeof(filename) <=
+	if (topOfStack + firmwareFileLocation.strlen() + 1 <=
 # if SAME5x
 						HSRAM_ADDR + HSRAM_SIZE
 # elif SAM3XA
@@ -2838,7 +2837,7 @@ void RepRap::StartIap(const StringRef& filenameRef) noexcept
 # endif
 	   )
 	{
-		strcpy(reinterpret_cast<char*>(topOfStack), filename);
+		strcpy(reinterpret_cast<char*>(topOfStack), firmwareFileLocation.c_str());
 	}
 #endif
 
