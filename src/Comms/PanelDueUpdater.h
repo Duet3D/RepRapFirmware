@@ -62,7 +62,7 @@ private:
 	uint32_t offset;
 	uint32_t erasedAndResetAt;
 	FlashState state;
-	const char* filename;
+	FileStore *firmwareFile;
 
 	UARTClass* GetAuxPort() noexcept;
 };

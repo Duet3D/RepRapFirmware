@@ -1133,7 +1133,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 			return GCodeResult::ok;						// nothing to update
 		}
 
-		filenameString.Clear();
+		String<MaxFilenameLength> filenameString;
 		if (gb.Seen('P'))
 		{
 			if (firmwareUpdateModuleMap.CountSetBits() > 1)

@@ -469,6 +469,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (FirmwareUpdater::IsReady())
 		{
 			bool updating = false;
+			String<MaxFilenameLength> filenameString;
+			bool dummy;
+			gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
 			for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
 			{
 				if (firmwareUpdateModuleMap.IsBitSet(module))
@@ -506,6 +509,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// Update main firmware
 			firmwareUpdateModuleMap.Clear();
+			String<MaxFilenameLength> filenameString;
+			bool dummy;
+			gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
 			reprap.UpdateFirmware(filenameString.GetRef());
 			// The above call does not return unless an error occurred
 		}

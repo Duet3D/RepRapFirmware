@@ -108,7 +108,7 @@ PanelDueUpdater::PanelDueUpdater() noexcept
 		, offset(0)
 		, erasedAndResetAt(0)
 		, state(FlashState::idle)
-		, filename(nullptr)
+		, firmwareFile(nullptr)
 {
 }
 
@@ -128,7 +128,7 @@ void PanelDueUpdater::Start(const StringRef& filenameRef, const uint32_t serialC
 		return;
 	}
 	serialChannel = serialChan;
-	filename = filenameRef.IsEmpty() ? PANEL_DUE_FIRMWARE_FILE : filenameRef.c_str();
+	firmwareFile = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? PANEL_DUE_FIRMWARE_FILE : filenameRef.c_str(), OpenMode::read);
 	state = FlashState::eraseAndReset;
 }
 
@@ -206,10 +206,11 @@ void PanelDueUpdater::Spin() noexcept
 
 		case FlashState::bossaWrite:
 			{
-				bool done = flasher->write(filename, FIRMWARE_DIRECTORY, offset);
+				bool done = flasher->write(firmwareFile, offset);
 				if (done)
 				{
 					offset = 0;						// Reset it for verification
+					firmwareFile->Seek(offset);
 					state = FlashState::bossaVerify;
 					flasherObserver->Reset();
 				}
@@ -220,7 +221,7 @@ void PanelDueUpdater::Spin() noexcept
 			{
 				uint32_t pageErrors;
 				uint32_t totalErrors;
-				bool done = flasher->verify(filename, FIRMWARE_DIRECTORY, pageErrors, totalErrors, offset);
+				bool done = flasher->verify(firmwareFile, pageErrors, totalErrors, offset);
 				if (done && pageErrors == 0)
 				{
 					state = FlashState::bossaWriteOptions;
@@ -286,7 +287,11 @@ void PanelDueUpdater::Spin() noexcept
 				offset = 0;
 				erasedAndResetAt = 0;
 
-				filename = nullptr;
+				if (firmwareFile != nullptr)
+				{
+					firmwareFile->Close();
+					firmwareFile = nullptr;
+				}
 
 				state = FlashState::idle;
 			}

@@ -297,7 +297,6 @@ void GCodes::Reset() noexcept
 	pausePending = filamentChangePausePending = false;
 	moveBuffer.filePos = noFilePosition;
 	firmwareUpdateModuleMap.Clear();
-	filenameString.Clear();
 	isFlashing = false;
 	isFlashingPanelDue = false;
 	lastFilamentError = FilamentSensorStatus::ok;
