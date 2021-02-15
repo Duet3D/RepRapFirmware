@@ -86,7 +86,6 @@ public:
 	void SetTaperHeight(float h) noexcept;
 	bool UseMesh(bool b) noexcept;											// Try to enable mesh bed compensation and report the final state
 	bool IsUsingMesh() const noexcept { return usingMesh; }					// Return true if we are using mesh compensation
-	unsigned int GetNumProbePoints() const noexcept;						// Return the number of currently used probe points
 	unsigned int GetNumProbedProbePoints() const noexcept;					// Return the number of actually probed probe points
 	void SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept;
 	void SetInitialCalibrationDeviation(const Deviation& d) noexcept;
@@ -222,11 +221,8 @@ private:
 	void InverseBedTransform(float move[MaxAxes],const  Tool *tool) const noexcept;		// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;	// Go from an axis transformed point back to user coordinates
-	float GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept;		// Get the height error at an XY position on the bed
 
-#if SUPPORT_OBJECT_MODEL
 	const char *GetCompensationTypeString() const noexcept;
-#endif
 
 	DDARing mainDDARing;								// The DDA ring used for regular moves
 

@@ -1590,10 +1590,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		{
 			response->cat("\"Mesh\"");
 		}
-		else if (move->GetNumProbePoints() > 0)
-		{
-			response->catf("\"%u Point\"", move->GetNumProbePoints());
-		}
 		else
 		{
 			response->cat("\"None\"");

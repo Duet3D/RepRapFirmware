@@ -351,12 +351,6 @@ bool Move::WaitingForAllMovesFinished() noexcept
 	return mainDDARing.SetWaitingToEmpty();
 }
 
-// Return the number of currently used probe points
-unsigned int Move::GetNumProbePoints() const noexcept
-{
-	return probePoints.GetNumBedCompensationPoints();
-}
-
 // Return the number of actually probed probe points
 unsigned int Move::GetNumProbedProbePoints() const noexcept
 {
@@ -427,18 +421,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 {
 	// Get the type of bed compensation in use
 	String<StringLength50> bedCompString;
-	if (usingMesh)
-	{
-		bedCompString.copy("mesh");
-	}
-	else if (probePoints.GetNumBedCompensationPoints() != 0)
-	{
-		bedCompString.printf("%d point", probePoints.GetNumBedCompensationPoints());
-	}
-	else
-	{
-		bedCompString.copy("none");
-	}
+	bedCompString.copy(GetCompensationTypeString());
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype, "=== Move ===\nDMs created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
@@ -584,12 +567,6 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 	}
 }
 
-// Get the height error at a bed XY position
-float Move::GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept
-{
-	return (usingMesh) ? heightMap.GetInterpolatedHeightError(xCoord, yCoord) : probePoints.GetInterpolatedHeightError(xCoord, yCoord);
-}
-
 // Invert the Axis transform AFTER the bed transform
 void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
@@ -619,8 +596,51 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 // Do the bed transform AFTER the axis transform
 void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
-	const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);
-	if (!useTaper || toolHeight < taperHeight)
+	if (usingMesh)
+	{
+		const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);
+		if (!useTaper || toolHeight < taperHeight)
+		{
+			float zCorrection = 0.0;
+			const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
+			const AxesBitmap xAxes = Tool::GetXAxes(tool);
+			const AxesBitmap yAxes = Tool::GetYAxes(tool);
+			unsigned int numCorrections = 0;
+
+			// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
+			// TODO use Iterate when we have changed it to use inline_function
+			for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
+			{
+				if (xAxes.IsBitSet(xAxis))
+				{
+					const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
+					for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
+					{
+						if (yAxes.IsBitSet(yAxis))
+						{
+							const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
+							zCorrection += heightMap.GetInterpolatedHeightError(xCoord, yCoord);
+							++numCorrections;
+						}
+					}
+				}
+			}
+
+			if (numCorrections > 1)
+			{
+				zCorrection /= numCorrections;			// take an average
+			}
+
+			zCorrection += zShift;
+			xyzPoint[Z_AXIS] += (useTaper && zCorrection < taperHeight) ? (taperHeight - toolHeight) * recipTaperHeight * zCorrection : zCorrection;
+		}
+	}
+}
+
+// Invert the bed transform BEFORE the axis transform
+void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
+{
+	if (usingMesh)
 	{
 		float zCorrection = 0.0;
 		const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -629,7 +649,6 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 		unsigned int numCorrections = 0;
 
 		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-		// TODO use Iterate when we have changed it to use inline_function
 		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 		{
 			if (xAxes.IsBitSet(xAxis))
@@ -640,7 +659,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 					if (yAxes.IsBitSet(yAxis))
 					{
 						const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
-						zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
+						zCorrection += heightMap.GetInterpolatedHeightError(xCoord, yCoord);
 						++numCorrections;
 					}
 				}
@@ -649,59 +668,23 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 
 		if (numCorrections > 1)
 		{
-			zCorrection /= numCorrections;			// take an average
+			zCorrection /= numCorrections;				// take an average
 		}
 
 		zCorrection += zShift;
-		xyzPoint[Z_AXIS] += (useTaper && zCorrection < taperHeight) ? (taperHeight - toolHeight) * recipTaperHeight * zCorrection : zCorrection;
-	}
-}
 
-// Invert the bed transform BEFORE the axis transform
-void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
-{
-	float zCorrection = 0.0;
-	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-	const AxesBitmap xAxes = Tool::GetXAxes(tool);
-	const AxesBitmap yAxes = Tool::GetYAxes(tool);
-	unsigned int numCorrections = 0;
-
-	// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-	for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
-	{
-		if (xAxes.IsBitSet(xAxis))
+		if (!useTaper || zCorrection >= taperHeight)	// need check on zCorrection to avoid possible divide by zero
 		{
-			const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
-			for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
-			{
-				if (yAxes.IsBitSet(yAxis))
-				{
-					const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
-					zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
-					++numCorrections;
-				}
-			}
+			xyzPoint[Z_AXIS] -= zCorrection;
 		}
-	}
-
-	if (numCorrections > 1)
-	{
-		zCorrection /= numCorrections;				// take an average
-	}
-
-	zCorrection += zShift;
-
-	if (!useTaper || zCorrection >= taperHeight)	// need check on zCorrection to avoid possible divide by zero
-	{
-		xyzPoint[Z_AXIS] -= zCorrection;
-	}
-	else
-	{
-		const float toolZoffset = Tool::GetOffset(tool, Z_AXIS);
-		const float zreq = (xyzPoint[Z_AXIS] - (taperHeight - toolZoffset) * zCorrection * recipTaperHeight)/(1.0 - zCorrection * recipTaperHeight);
-		if (zreq + toolZoffset < taperHeight)
+		else
 		{
-			xyzPoint[Z_AXIS] = zreq;
+			const float toolZoffset = Tool::GetOffset(tool, Z_AXIS);
+			const float zreq = (xyzPoint[Z_AXIS] - (taperHeight - toolZoffset) * zCorrection * recipTaperHeight)/(1.0 - zCorrection * recipTaperHeight);
+			if (zreq + toolZoffset < taperHeight)
+			{
+				xyzPoint[Z_AXIS] = zreq;
+			}
 		}
 	}
 }
@@ -709,10 +692,17 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 // Normalise the bed transform to have zero height error at these bed coordinates
 void Move::SetZeroHeightError(const float coords[MaxAxes]) noexcept
 {
-	float tempCoords[MaxAxes];
-	memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
-	AxisTransform(tempCoords, nullptr);
-	zShift = -GetInterpolatedHeightError(tempCoords[X_AXIS], tempCoords[Y_AXIS]);
+	if (usingMesh)
+	{
+		float tempCoords[MaxAxes];
+		memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
+		AxisTransform(tempCoords, nullptr);
+		zShift = -heightMap.GetInterpolatedHeightError(tempCoords[X_AXIS], tempCoords[Y_AXIS]);
+	}
+	else
+	{
+		zShift = 0.0;
+	}
 }
 
 void Move::SetIdentityTransform() noexcept
@@ -846,7 +836,8 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 		}
 		else
 		{
-			error = probePoints.SetProbedBedEquation(sParam, reply);
+			reply.copy("This kinematics does not support auto-calibration");
+			error = true;
 		}
 	}
 
@@ -1083,16 +1074,10 @@ void Move::SetLatestMeshDeviation(const Deviation& d) noexcept
 	latestMeshDeviation = d; reprap.MoveUpdated();
 }
 
-#if SUPPORT_OBJECT_MODEL
-
 const char *Move::GetCompensationTypeString() const noexcept
 {
-	return (usingMesh) ? "mesh"
-			: (probePoints.GetNumBedCompensationPoints() != 0) ? "legacy"
-				: "none";
+	return (usingMesh) ? "mesh" : "none";
 }
-
-#endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 
