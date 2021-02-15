@@ -38,3 +38,4 @@ Bug fixes:
 - [Duet 3 Mini] DHT sensors did not work. DHT sensors on the Duet 3 Mini now require both an output pin and an input pin. Note, support for DHT11 is likely to be removed soon.
 - [Duet 3 expansion/tool boards] Under certain conditions, moves could be omitted. We have only been able to reproduce this when using high step pulse rates.
 - [Duet 3 expansion/tool boards] Under conditions of heavy load (e.g. a series of short moves at high step pulse rates), the board could stop responding to CAN commands and lose CAN sync
+- [Duet + SBC] It was not possible to update PaneDue firmware using M997 S4
