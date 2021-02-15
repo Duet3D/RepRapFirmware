@@ -322,7 +322,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	if (!axesSeen && !seenR)
 	{
 		// Must have given just the S or P parameter
-		reply.copy("specify at least radius or two axes ranges in M557");
+		reply.copy("specify at least radius or two axis ranges in M557");
 		return GCodeResult::error;
 	}
 

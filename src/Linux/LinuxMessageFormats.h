@@ -72,6 +72,7 @@ struct HeightMapHeader
 	uint8_t axis1Number;
 	char axis0Letter;
 	char axis1Letter;
+	uint8_t version;
 };
 
 struct MessageHeader

@@ -133,9 +133,13 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexc
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	String<StringLength256> scratchString;
 	scratchString.printf("G31 K%u P%d", probeNumber, adcValue);
+	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
 	for (size_t i = 0; i < numTotalAxes; ++i)
 	{
-		scratchString.catf(" %c%.1f", axisLetters[i], (double)offsets[i]);
+		if (axisLetters[i] != 'Z')
+		{
+			scratchString.catf(" %c%.1f", axisLetters[i], (double)offsets[i]);
+		}
 	}
 	scratchString.catf(" Z%.2f\n", (double)triggerHeight);
 	return f->Write(scratchString.c_str());
@@ -322,11 +326,10 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	for (size_t i = 0; i < numTotalAxes; ++i)
 	{
-		if (axisLetters[i] == 'Z')
+		if (axisLetters[i] != 'Z')
 		{
-			continue;
+			gb.TryGetFValue(axisLetters[i], offsets[i], seen);
 		}
-		gb.TryGetFValue(axisLetters[i], offsets[i], seen);
 	}
 	gb.TryGetFValue(axisLetters[Z_AXIS], triggerHeight, seen);
 
@@ -363,7 +366,10 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		reply.cat(", offsets");
 		for (size_t i = 0; i < numTotalAxes; ++i)
 		{
-			reply.catf(" %c%.1f", axisLetters[i], (double)offsets[i]);
+			if (axisLetters[i] != 'Z')
+			{
+				reply.catf(" %c%.1f", axisLetters[i], (double)offsets[i]);
+			}
 		}
 	}
 	return err;
