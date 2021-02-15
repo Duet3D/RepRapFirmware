@@ -1606,6 +1606,16 @@ bool StringParser::FileEnded() noexcept
 
 #endif
 
+// Check that a number was found. If it was, advance readPointer past it. Otherwise throw an exception.
+void StringParser::CheckNumberFound(const char *endptr) THROWS(GCodeException)
+{
+	if (endptr == gb.buffer + readPointer)
+	{
+		throw ConstructParseException("expected number after '%c'", (uint32_t)gb.buffer[readPointer - 1]);
+	}
+	readPointer = endptr - gb.buffer;
+}
+
 // Functions to read values from lines of GCode, allowing for expressions and variable substitution
 float StringParser::ReadFloatValue() THROWS(GCodeException)
 {
@@ -1619,7 +1629,7 @@ float StringParser::ReadFloatValue() THROWS(GCodeException)
 
 	const char *endptr;
 	const float rslt = SafeStrtof(gb.buffer + readPointer, &endptr);
-	readPointer = endptr - gb.buffer;
+	CheckNumberFound(endptr);
 	return rslt;
 }
 
@@ -1636,7 +1646,7 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits. We could stop supporting this because we already support {0xNNNN}.
 	const char *endptr;
 	const uint32_t rslt = StrToU32(gb.buffer + readPointer, &endptr);
-	readPointer = endptr - gb.buffer;
+	CheckNumberFound(endptr);
 	return rslt;
 }
 
@@ -1652,7 +1662,7 @@ int32_t StringParser::ReadIValue() THROWS(GCodeException)
 
 	const char *endptr;
 	const int32_t rslt = StrToI32(gb.buffer + readPointer, &endptr);
-	readPointer = endptr - gb.buffer;
+	CheckNumberFound(endptr);
 	return rslt;
 }
 
