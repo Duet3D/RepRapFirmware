@@ -9,10 +9,10 @@
 #define LINEARDELTAKINEMATICS_H_
 
 #include "RepRapFirmware.h"
-#include "Kinematics.h"
+#include "RoundBedKinematics.h"
 
 // Class to hold the parameter for a delta machine.
-class LinearDeltaKinematics : public Kinematics
+class LinearDeltaKinematics : public RoundBedKinematics
 {
 public:
 	// Constructors
@@ -32,7 +32,6 @@ public:
 #endif
 
 	float GetTiltCorrection(size_t axis) const noexcept override;
-	bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept override;
 	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept override;
 	AxesBitmap AxesToHomeBeforeProbing() const noexcept override { return XyzAxes; }
@@ -49,7 +48,6 @@ public:
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
 
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
 	AxesBitmap GetLinearAxes() const noexcept override;
 
     // Public functions specific to this class
@@ -99,7 +97,6 @@ private:
 	// Derived values
 	float towerX[MaxTowers];							// The X coordinate of each tower
 	float towerY[MaxTowers];							// The Y coordinate of each tower
-	float printRadiusSquared;
 	float homedCarriageHeights[MaxTowers];
 	float Xbc, Xca, Xab, Ybc, Yca, Yab;
 	float coreKa, coreKb, coreKc;

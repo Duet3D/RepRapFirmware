@@ -55,7 +55,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LinearDeltaKinematics)
 
 #endif
 
-LinearDeltaKinematics::LinearDeltaKinematics() noexcept : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true), numTowers(UsualNumTowers)
+LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::linearDelta, -1.0, 0.0, true), numTowers(UsualNumTowers)
 {
 	Init();
 }
@@ -238,18 +238,6 @@ void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 	{
 		machinePos[drive] = motorPos[drive]/stepsPerMm[drive];
 	}
-}
-
-// Return true if the specified XY position is reachable by the print head reference point.
-bool LinearDeltaKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept
-{
-	if (axes.IsBitSet(X_AXIS) && axes.IsBitSet(Y_AXIS) && (fsquare(axesCoords[X_AXIS]) + fsquare(axesCoords[Y_AXIS]) >= printRadiusSquared))
-	{
-		return false;
-	}
-	axes.ClearBit(X_AXIS);
-	axes.ClearBit(Y_AXIS);
-	return Kinematics::IsReachable(axesCoords, axes, isCoordinated);
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
@@ -1037,21 +1025,6 @@ void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 		// Assume that any additional axes are linear
 		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-	}
-}
-
-// Limit the speed and acceleration of a move to values that the mechanics can handle.
-// The speeds in Cartesian space have already been limited.
-void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
-{
-	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
-	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
-	if (xyFactor > 0.01)
-	{
-		const Platform& platform = reprap.GetPlatform();
-		const float maxSpeed = min<float>(platform.MaxFeedrate(X_AXIS), platform.MaxFeedrate(Y_AXIS));
-		const float maxAcceleration = min<float>(platform.Acceleration(X_AXIS), platform.Acceleration(Y_AXIS));
-		dda.LimitSpeedAndAcceleration(maxSpeed/xyFactor, maxAcceleration/xyFactor);
 	}
 }
 

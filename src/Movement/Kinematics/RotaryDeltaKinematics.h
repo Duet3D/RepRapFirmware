@@ -8,9 +8,9 @@
 #ifndef SRC_MOVEMENT_KINEMATICS_ROTARYDELTAKINEMATICS_H_
 #define SRC_MOVEMENT_KINEMATICS_ROTARYDELTAKINEMATICS_H_
 
-#include "Kinematics.h"
+#include "RoundBedKinematics.h"
 
-class RotaryDeltaKinematics : public Kinematics
+class RotaryDeltaKinematics : public RoundBedKinematics
 {
 public:
 	// Constructors
@@ -27,7 +27,6 @@ public:
 #if HAS_MASS_STORAGE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
 #endif
-	bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept override;
 	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept override;
 	AxesBitmap AxesToHomeBeforeProbing() const noexcept override { return XyzAxes; }
@@ -41,8 +40,6 @@ public:
 #if HAS_MASS_STORAGE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
-	AxesBitmap GetLinearAxes() const noexcept override;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -90,7 +87,6 @@ private:
 	float twiceU[DELTA_AXES];
 	float rodSquared[DELTA_AXES];
 	float rodSquaredMinusArmSquared[DELTA_AXES];
-	float printRadiusSquared;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_ROTARYDELTAKINEMATICS_H_ */
