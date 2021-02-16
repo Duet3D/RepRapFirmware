@@ -171,7 +171,7 @@ public:
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept;
 	void UpdateFirmware(const StringRef& filenameRef) noexcept;
 	void PrepareToLoadIap() noexcept;
-	[[noreturn]] void StartIap(const StringRef& filenameRef) noexcept;
+	[[noreturn]] void StartIap(const char *filename) noexcept;
 
 	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error
 
