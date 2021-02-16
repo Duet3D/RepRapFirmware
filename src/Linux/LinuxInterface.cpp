@@ -449,7 +449,7 @@ void LinuxInterface::Init() noexcept
 
 				// Launch the IAP binary
 				case LinuxRequest::StartIap:
-					reprap.StartIap();
+					reprap.StartIap(nullptr);
 					break;
 
 				// Assign filament

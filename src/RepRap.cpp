@@ -2739,7 +2739,7 @@ void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 	// Use RAM-based IAP
 	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
 	iapFile->Close();
-	StartIap(filenameRef);
+	StartIap(filenameRef.c_str());
 #endif
 }
 
@@ -2795,7 +2795,7 @@ void RepRap::PrepareToLoadIap() noexcept
 	#endif
 }
 
-void RepRap::StartIap(const StringRef& filenameRef) noexcept
+void RepRap::StartIap(const char *filename) noexcept
 {
 	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
 	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
@@ -2823,11 +2823,13 @@ void RepRap::StartIap(const StringRef& filenameRef) noexcept
 #endif
 
 #if HAS_MASS_STORAGE
-	// Newer versions of IAP reserve space above the stack for us to pass the firmware filename
-	String<MaxFilenameLength> firmwareFileLocation;
-	MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str());
-	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
-	if (topOfStack + firmwareFileLocation.strlen() + 1 <=
+	if (filename != nullptr)
+	{
+		// Newer versions of IAP reserve space above the stack for us to pass the firmware filename
+		String<MaxFilenameLength> firmwareFileLocation;
+		MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filename[0] == 0 ? IAP_FIRMWARE_FILE : filename);
+		const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
+		if (topOfStack + firmwareFileLocation.strlen() + 1 <=
 # if SAME5x
 						HSRAM_ADDR + HSRAM_SIZE
 # elif SAM3XA
@@ -2835,9 +2837,10 @@ void RepRap::StartIap(const StringRef& filenameRef) noexcept
 # else
 						IRAM_ADDR + IRAM_SIZE
 # endif
-	   )
-	{
-		strcpy(reinterpret_cast<char*>(topOfStack), firmwareFileLocation.c_str());
+		   )
+		{
+			strcpy(reinterpret_cast<char*>(topOfStack), firmwareFileLocation.c_str());
+		}
 	}
 #endif
 
