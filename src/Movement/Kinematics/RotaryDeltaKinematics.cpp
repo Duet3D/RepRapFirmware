@@ -6,10 +6,12 @@
  */
 
 #include "RotaryDeltaKinematics.h"
+
+#include "Movement/Move.h"
 #include "RepRap.h"
-#include "Platform.h"
-#include "Movement/DDA.h"
+#include "Storage/FileStore.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Math/Deviation.h>
 
 const float RotaryDeltaKinematics::NormalTowerAngles[DELTA_AXES] = { -150.0, -30.0, 90.0 };
 
@@ -48,6 +50,7 @@ void RotaryDeltaKinematics::Init() noexcept
 	printRadius = DefaultPrintRadius;
 	minArmAngle = DefaultMinArmAngle;
 	maxArmAngle = DefaultMaxArmAngle;
+    doneAutoCalibration = false;
 
 	for (size_t axis = 0; axis < DELTA_AXES; ++axis)
 	{
@@ -239,19 +242,359 @@ void RotaryDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 	}
 }
 
+// Compute the derivative of height with respect to a parameter at a set of motor endpoints
+// Compute the derivative of height with respect to a parameter at the specified motor endpoints.
+// 'deriv' indicates the parameter as follows:
+// 0, 1, 2 = X, Y, Z tower homing switch adjustments
+// 3 = bed height
+// 4 = delta radius
+// 5, 6 = X, Y tower corrections
+floatc_t RotaryDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, float hb, float hc) const noexcept
+{
+	const float perturb = 0.2;			// perturbation amount in mm or degrees
+	RotaryDeltaKinematics hiParams(*this), loParams(*this);
+	switch(deriv)
+	{
+	case 0:
+	case 1:
+	case 2:
+		// Endstop corrections
+		break;
+
+	case 3:
+		for (unsigned int i = 0; i < DELTA_AXES; ++i)
+		{
+			hiParams.bearingHeights[i] += perturb;
+			loParams.bearingHeights[i] -= perturb;
+		}
+		hiParams.Recalc();
+		loParams.Recalc();
+		break;
+
+	case 4:
+		hiParams.radius += perturb;
+		loParams.radius -= perturb;
+		hiParams.Recalc();
+		loParams.Recalc();
+		break;
+
+	case 5:
+		hiParams.angleCorrections[DELTA_A_AXIS] += perturb;
+		loParams.angleCorrections[DELTA_A_AXIS] -= perturb;
+		hiParams.Recalc();
+		loParams.Recalc();
+		break;
+
+	case 6:
+		hiParams.angleCorrections[DELTA_B_AXIS] += perturb;
+		loParams.angleCorrections[DELTA_B_AXIS] -= perturb;
+		hiParams.Recalc();
+		loParams.Recalc();
+		break;
+	}
+
+	float newPos[XYZ_AXES];
+	hiParams.ForwardTransform((deriv == 0) ? ha + perturb : ha, (deriv == 1) ? hb + perturb : hb, (deriv == 2) ? hc + perturb : hc, newPos);
+	const float zHi = newPos[Z_AXIS];
+
+	loParams.ForwardTransform((deriv == 0) ? ha - perturb : ha, (deriv == 1) ? hb - perturb : hb, (deriv == 2) ? hc - perturb : hc, newPos);
+	const float zLo = newPos[Z_AXIS];
+
+	return ((floatc_t)zHi - (floatc_t)zLo)/(floatc_t)(2 * perturb);
+}
+
 // Perform auto calibration. Caller already owns the movement lock.
 // Return true if an error occurred.
 bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
-	return true;	// auto calibration not implemented yet
+	constexpr size_t NumDeltaFactors = 7;		// maximum number of rotary delta machine factors we can adjust
+
+	if (numFactors < 3 || numFactors > NumDeltaFactors || numFactors == 6)
+	{
+		reply.printf("Rotary delta calibration with %d factors requested but only 3, 4, 5 and 7 supported", numFactors);
+		return true;
+	}
+
+	if (reprap.Debug(moduleMove))
+	{
+		String<StringLength256> scratchString;
+		PrintParameters(scratchString.GetRef());
+		debugPrintf("%s\n", scratchString.c_str());
+	}
+
+	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
+	FixedMatrix<floatc_t, MaxCalibrationPoints, DELTA_AXES> probeMotorPositions;
+	floatc_t corrections[MaxCalibrationPoints];
+	Deviation initialDeviation;
+	const size_t numPoints = probePoints.NumberOfProbePoints();
+
+	{
+		floatc_t initialSum = 0.0, initialSumOfSquares = 0.0;
+		for (size_t i = 0; i < numPoints; ++i)
+		{
+			corrections[i] = 0.0;
+			float machinePos[XYZ_AXES];
+			const floatc_t zp = reprap.GetMove().GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], probePoints.PointWasCorrected(i));
+			machinePos[Z_AXIS] = 0.0;
+
+			probeMotorPositions(i, DELTA_A_AXIS) = Transform(machinePos, DELTA_A_AXIS);
+			probeMotorPositions(i, DELTA_B_AXIS) = Transform(machinePos, DELTA_B_AXIS);
+			probeMotorPositions(i, DELTA_C_AXIS) = Transform(machinePos, DELTA_C_AXIS);
+
+			initialSum += zp;
+			initialSumOfSquares += fcsquare(zp);
+		}
+		initialDeviation.Set(initialSumOfSquares, initialSum, numPoints);
+	}
+
+	// Do 1 or more Newton-Raphson iterations
+	Deviation finalDeviation;
+	unsigned int iteration = 0;
+	for (;;)
+	{
+		// Build a Nx9 matrix of derivatives with respect to xa, xb, yc, za, zb, zc, diagonal.
+		FixedMatrix<floatc_t, MaxCalibrationPoints, NumDeltaFactors> derivativeMatrix;
+		for (size_t i = 0; i < numPoints; ++i)
+		{
+			for (size_t j = 0; j < numFactors; ++j)
+			{
+				const size_t adjustedJ = (numFactors == 8 && j >= 6) ? j + 1 : j;		// skip diagonal rod length if doing 8-factor calibration
+				const floatc_t d =
+					ComputeDerivative(adjustedJ, probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS));
+				if (std::isnan(d))			// a couple of users have reported getting Nans in the derivative, probably due to points being unreachable
+				{
+					reply.printf("Auto calibration failed because probe point P%u was unreachable using the current delta parameters. Try a smaller probing radius.", i);
+					return true;
+				}
+				derivativeMatrix(i, j) = d;
+			}
+		}
+
+		if (reprap.Debug(moduleMove))
+		{
+			PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
+		}
+
+		// Now build the normal equations for least squares fitting
+		FixedMatrix<floatc_t, NumDeltaFactors, NumDeltaFactors + 1> normalMatrix;
+		for (size_t i = 0; i < numFactors; ++i)
+		{
+			for (size_t j = 0; j < numFactors; ++j)
+			{
+				floatc_t temp = derivativeMatrix(0, i) * derivativeMatrix(0, j);
+				for (size_t k = 1; k < numPoints; ++k)
+				{
+					temp += derivativeMatrix(k, i) * derivativeMatrix(k, j);
+				}
+				normalMatrix(i, j) = temp;
+			}
+			floatc_t temp = derivativeMatrix(0, i) * -((floatc_t)probePoints.GetZHeight(0) + corrections[0]);
+			for (size_t k = 1; k < numPoints; ++k)
+			{
+				temp += derivativeMatrix(k, i) * -((floatc_t)probePoints.GetZHeight(k) + corrections[k]);
+			}
+			normalMatrix(i, numFactors) = temp;
+		}
+
+		if (reprap.Debug(moduleMove))
+		{
+			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
+		}
+
+		if (!normalMatrix.GaussJordan(numFactors, numFactors + 1))
+		{
+			reply.copy("Unable to calculate calibration parameters. Please choose different probe points.");
+			return true;
+		}
+
+		floatc_t solution[NumDeltaFactors];
+		for (size_t i = 0; i < numFactors; ++i)
+		{
+			solution[i] = normalMatrix(i, numFactors);
+		}
+
+		if (reprap.Debug(moduleMove))
+		{
+			PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
+			PrintVector("Solution", solution, numFactors);
+
+			// Calculate and display the residuals
+			// Save a little stack by not allocating a residuals vector, because stack for it doesn't only get reserved when debug is enabled.
+			debugPrintf("Residuals:");
+			for (size_t i = 0; i < numPoints; ++i)
+			{
+				floatc_t residual = probePoints.GetZHeight(i);
+				for (size_t j = 0; j < numFactors; ++j)
+				{
+					residual += solution[j] * derivativeMatrix(i, j);
+				}
+				debugPrintf(" %7.4f", (double)residual);
+			}
+
+			debugPrintf("\n");
+		}
+
+		{
+			Adjust(numFactors, solution);	// adjust the delta parameters
+
+			// Adjust the motor endpoints to allow for the change to endstop adjustments
+			float heightAdjust[DELTA_AXES];
+			for (size_t drive = 0; drive < DELTA_AXES; ++drive)
+			{
+				heightAdjust[drive] = solution[drive];
+			}
+			reprap.GetMove().AdjustMotorPositions(heightAdjust, DELTA_AXES);
+		}
+
+		// Calculate the expected probe heights using the new parameters
+		{
+			floatc_t expectedResiduals[MaxCalibrationPoints];
+			floatc_t finalSum = 0.0, finalSumOfSquares = 0.0;
+			for (size_t i = 0; i < numPoints; ++i)
+			{
+				for (size_t axis = 0; axis < DELTA_AXES; ++axis)
+				{
+					probeMotorPositions(i, axis) += solution[axis];
+				}
+				float newPosition[XYZ_AXES];
+				ForwardTransform(probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS), newPosition);
+				corrections[i] = newPosition[Z_AXIS];
+				expectedResiduals[i] = probePoints.GetZHeight(i) + newPosition[Z_AXIS];
+				finalSum += expectedResiduals[i];
+				finalSumOfSquares += fcsquare(expectedResiduals[i]);
+			}
+
+			finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
+
+			if (reprap.Debug(moduleMove))
+			{
+				PrintVector("Expected probe error", expectedResiduals, numPoints);
+			}
+		}
+
+		// Decide whether to do another iteration. Two is slightly better than one, but three doesn't improve things.
+		// Alternatively, we could stop when the expected RMS error is only slightly worse than the RMS of the residuals.
+		++iteration;
+		if (iteration == 2)
+		{
+			break;
+		}
+	}
+
+	// Print out the calculation time
+	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
+	if (reprap.Debug(moduleMove))
+	{
+		String<StringLength256> scratchString;
+		PrintParameters(scratchString.GetRef());
+		debugPrintf("%s\n", scratchString.c_str());
+	}
+
+	reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
+	reprap.GetMove().SetLatestCalibrationDeviation(finalDeviation, numFactors);
+
+	reply.printf("Calibrated %d factors using %d points, (mean, deviation) before (%.3f, %.3f) after (%.3f, %.3f)",
+			numFactors, numPoints,
+			(double)initialDeviation.GetMean(), (double)initialDeviation.GetDeviationFromMean(),
+			(double)finalDeviation.GetMean(), (double)finalDeviation.GetDeviationFromMean());
+
+	// We don't want to call MessageF(LogMessage, "%s\n", reply.c_str()) here because that will allocate a buffer within MessageF, which adds to our stack usage.
+	// Better to allocate the buffer here so that it uses the same stack space as the arrays that we have finished with
+	{
+		String<StringLength256> scratchString;
+		scratchString.printf("%s\n", reply.c_str());
+		reprap.GetPlatform().Message(LogWarn, scratchString.c_str());
+	}
+
+    doneAutoCalibration = true;
+    return false;
+}
+
+// Perform 3, 4, 5 or 7-factor adjustment.
+// The input vector contains the following parameters in this order:
+//  X, Y and Z endstop adjustments
+//  Bearing heights adjustment
+//  Delta radius
+//  X tower position adjustment
+//  Y tower position adjustment
+void RotaryDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[]) noexcept
+{
+	// Update endstop adjustments and bearing heights
+	for (size_t tower = 0; tower < DELTA_AXES; ++tower)
+	{
+		endstopAdjustments[tower] += (float)v[tower];
+		if (numFactors >= 4)
+		{
+			bearingHeights[tower] += v[3];
+		}
+	}
+
+	// Update the delta radius
+	if (numFactors >= 5)
+	{
+		radius += (float)v[4];
+	}
+
+	// Update the tower position corrections
+	if (numFactors == 7)
+	{
+		angleCorrections[DELTA_A_AXIS] += (float)v[5];
+		angleCorrections[DELTA_B_AXIS] += (float)v[6];
+	}
+
+	Recalc();
+}
+
+// Print all the parameters for debugging
+void RotaryDeltaKinematics::PrintParameters(const StringRef& reply) const noexcept
+{
+	reply.printf("Stops X%.3f Y%.3f Z%.3f bearing heights", (double)endstopAdjustments[DELTA_A_AXIS], (double)endstopAdjustments[DELTA_B_AXIS], (double)endstopAdjustments[DELTA_C_AXIS]);
+	for (size_t tower = 0; tower < DELTA_AXES; ++tower)
+	{
+		reply.catf("%c%.3f", (tower == 0) ? ' ' : ':', (double)bearingHeights[tower]);
+	}
+	reply.catf(" radius %.3f xcorr %.2f ycorr %.2f zcorr %.2f\n",
+		(double)radius,
+		(double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS]);
 }
 
 #if HAS_MASS_STORAGE
 
+// Add a space, character, and 3-element vector to the string
+static void CatVector3(const StringRef& str, char c, const float vec[3]) noexcept
+{
+	str.catf(" %c%.2f:%.2f:%.2f", c, (double)vec[0], (double)vec[1], (double)vec[2]);
+}
+
 // Write the parameters that are set by auto calibration to a file, returning true if success
 bool RotaryDeltaKinematics::WriteCalibrationParameters(FileStore *f) const noexcept
 {
-	return true;	// auto calibration not implemented yet
+	bool ok = f->Write("; Rotary delta parameters\n");
+	if (ok)
+	{
+		String<StringLength256> scratchString;
+		scratchString.printf("M669 K10 R%.2f B%.1f A%.2f:%.2f X%.2f Y%.2f Z%.2f",
+								(double)radius, (double)printRadius, (double)minArmAngle, (double)maxArmAngle,
+								(double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS]);
+		CatVector3(scratchString.GetRef(), 'U', armLengths);
+		CatVector3(scratchString.GetRef(), 'L', rodLengths);
+		CatVector3(scratchString.GetRef(), 'H', bearingHeights);
+		scratchString.cat('\n');
+		ok = f->Write(scratchString.c_str());
+
+		if (ok)
+		{
+			scratchString.printf("M666 X%.3f Y%.3f Z%.3f\n", (double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS]);
+			ok = f->Write(scratchString.c_str());
+		}
+	}
+	return ok;
+}
+
+// Write any calibration data that we need to resume a print after power fail, returning true if successful
+bool RotaryDeltaKinematics::WriteResumeSettings(FileStore *f) const noexcept
+{
+	return !doneAutoCalibration || WriteCalibrationParameters(f);
 }
 
 #endif
@@ -368,17 +711,6 @@ void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
 }
-
-#if HAS_MASS_STORAGE
-
-// Write any calibration data that we need to resume a print after power fail, returning true if successful
-bool RotaryDeltaKinematics::WriteResumeSettings(FileStore *f) const noexcept
-{
-//	return !doneAutoCalibration || WriteCalibrationParameters(f);
-	return true;	// auto calibration not implemented yet
-}
-
-#endif
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.
 // If we first transform the XY coordinates so that +X is along the direction of the arm, then we need to solve this equation:
