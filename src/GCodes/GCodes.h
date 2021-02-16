@@ -202,7 +202,7 @@ public:
 	bool AtxPowerControlled() const noexcept { return atxPowerControlled; }
 
 	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };		// Get the default grid definition
-	bool AssignGrid(const uint8_t axesNumbers[2], const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
+	bool AssignGrid(const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
 	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
 
 	int GetNewToolNumber() const noexcept { return newToolNumber; }

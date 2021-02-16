@@ -4777,9 +4777,9 @@ bool GCodes::GetLastPrintingHeight(float& height) const noexcept
 }
 
 // Assign the heightmap using the given parameters, returning true if they were valid
-bool GCodes::AssignGrid(const uint8_t axesNumbers[2], const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept
+bool GCodes::AssignGrid(const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept
 {
-	const bool ok = defaultGrid.Set(axesNumbers, axesLetters, axis0Range, axis1Range, radius, spacing);
+	const bool ok = defaultGrid.Set(axesLetters, axis0Range, axis1Range, radius, spacing);
 	if (ok)
 	{
 		reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);

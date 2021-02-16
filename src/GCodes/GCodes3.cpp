@@ -242,7 +242,6 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	}
 
 	bool seenR = false, seenP = false, seenS = false;
-	uint8_t axesNumbers[2] = { X_AXIS, Y_AXIS };
 	char axesLetters[2] = { 'X', 'Y'};
 	float axis0Values[2];
 	float axis1Values[2];
@@ -260,7 +259,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 			}
 			else if (axesSeenCount > 2)
 			{
-				reply.copy("Mesh leveling expects exactly two axes.");
+				reply.copy("Mesh leveling expects exactly two axes");
 				return GCodeResult::error;
 			}
 			bool dummy;
@@ -274,7 +273,6 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 			{
 				return GCodeResult::error;
 			}
-			axesNumbers[axesSeenCount] = axis;
 			axesLetters[axesSeenCount] = axisLetters[axis];
 			++axesSeenCount;
 		}
@@ -388,7 +386,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	}
 
 	WriteLocker locker(reprap.GetMove().heightMapLock);
-	const bool ok = defaultGrid.Set(axesNumbers, axesLetters, axis0Values, axis1Values, radius, spacings);
+	const bool ok = defaultGrid.Set(axesLetters, axis0Values, axis1Values, radius, spacings);
 	reprap.MoveUpdated();
 	if (ok)
 	{

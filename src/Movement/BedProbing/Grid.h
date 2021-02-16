@@ -23,19 +23,19 @@ public:
 
 	GridDefinition() noexcept;
 
-	uint32_t NumAxis0points() const noexcept { return numAxis0; }
-	uint32_t NumAxis1points() const noexcept { return numAxis1; }
-	uint32_t NumPoints() const noexcept { return numAxis0 * numAxis1; }
-	uint8_t GetAxis0Letter() const noexcept { return axis0Letter; }
-	uint8_t GetAxis1Letter() const noexcept { return axis1Letter; }
-	uint8_t GetAxis0Number() const noexcept { return axis0Number; }
-	uint8_t GetAxis1Number() const noexcept { return axis1Number; }
-	float GetAxis0Coordinate(unsigned int axis0Index) const noexcept;
-	float GetAxis1Coordinate(unsigned int axis1Index) const noexcept;
+	uint32_t NumAxis0points() const noexcept { return num0; }
+	uint32_t NumAxis1points() const noexcept { return num1; }
+	uint32_t NumPoints() const noexcept { return num0 * num1; }
+	uint8_t GetLetter0() const noexcept { return letter0; }
+	uint8_t GetLetter1() const noexcept { return letter1; }
+	uint8_t GetNumber0() const noexcept { return axis0Number; }
+	uint8_t GetNumber1() const noexcept { return axis1Number; }
+	float GetCoordinate0(unsigned int axis0Index) const noexcept;
+	float GetCoordinate1(unsigned int axis1Index) const noexcept;
 	bool IsInRadius(float x, float y) const noexcept;
 	bool IsValid() const noexcept { return isValid; }
 
-	bool Set(const uint8_t axesNumbers[2], const char axesLetter[2], const float axis0Range[2], const float axis1Range[2], float pRadius, const float pSpacings[2]) noexcept;
+	bool Set(const char axesLetter[2], const float axis0Range[2], const float axis1Range[2], float pRadius, const float pSpacings[2]) noexcept;
 	void PrintParameters(const StringRef& r) const noexcept;
 	void WriteHeadingAndParameters(const StringRef& r) const noexcept;
 	static int CheckHeading(const StringRef& s) noexcept;
@@ -55,14 +55,14 @@ private:
 	static const char * const HeightMapLabelLines[];				// The line we write to the height map file listing the parameter names
 
 	// Primary parameters
-	uint8_t axis0Number, axis1Number;								// Axes numbers for this grid
-	char axis0Letter, axis1Letter;									// Axes letters for this grid
-	float axis0Min, axis0Max, axis1Min, axis1Max;					// The edges of the grid for G29 probing
+	char letter0, letter1;											// Axes letters for this grid
+	float min0, max0, min1, max1;									// The edges of the grid for G29 probing
 	float radius;													// The grid radius to probe
-	float axis0Spacing, axis1Spacing;								// The spacing of the grid probe points
+	float spacing0, spacing1;										// The spacing of the grid probe points
 
 	// Derived parameters
-	uint32_t numAxis0, numAxis1;
+	uint8_t axis0Number, axis1Number;								// Axes numbers for this grid
+	uint32_t num0, num1;
 	float recipAxis0spacing, recipAxis1spacing;
 	bool isValid;
 };

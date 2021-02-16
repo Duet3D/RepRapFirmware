@@ -591,12 +591,11 @@ bool DataTransfer::ReadHeightMap() noexcept
 {
 	// Read height map header
 	const HeightMapHeader * const header = ReadDataHeader<HeightMapHeader>();
-	uint8_t axesNumbers[2]	= { X_AXIS, Y_AXIS };
 	char axesLetter[2] 		= { 'X', 'Y' };
 	float axis0Range[2]		= { header->xMin, header->xMax };
 	float axis1Range[2]		= { header->yMin, header->yMax };
 	float spacing[2]		= { header->xSpacing, header->ySpacing };
-	const bool ok = reprap.GetGCodes().AssignGrid(axesNumbers, axesLetter, axis0Range, axis1Range, header->radius, spacing);
+	const bool ok = reprap.GetGCodes().AssignGrid(axesLetter, axis0Range, axis1Range, header->radius, spacing);
 	if (ok)
 	{
 		// Read Z coordinates
@@ -1145,7 +1144,7 @@ bool DataTransfer::WriteHeightMap() noexcept
 	const GridDefinition& grid = reprap.GetMove().GetGrid();
 
 	// TODO: Remove this check once DCS is aware of the new format
-	if (!(grid.axis0Letter == 'X' && grid.axis0Number == X_AXIS && grid.axis1Letter == 'Y' && grid.axis1Number == Y_AXIS))
+	if (!(grid.letter0 == 'X' && grid.letter1 == 'Y'))
 	{
 		return false;
 	}
@@ -1162,15 +1161,15 @@ bool DataTransfer::WriteHeightMap() noexcept
 
 	// Write heightmap header
 	HeightMapHeader *header = WriteDataHeader<HeightMapHeader>();
-	header->xMin = grid.axis0Min;
-	header->xMax = grid.axis0Max;
-	header->xSpacing = grid.axis0Spacing;
-	header->yMin = grid.axis1Min;
-	header->yMax = grid.axis1Max;
-	header->ySpacing = grid.axis1Spacing;
+	header->xMin = grid.min0;
+	header->xMax = grid.max0;
+	header->xSpacing = grid.spacing0;
+	header->yMin = grid.min1;
+	header->yMax = grid.max1;
+	header->ySpacing = grid.spacing1;
 	header->radius = grid.radius;
-	header->numX = grid.numAxis0;
-	header->numY = grid.numAxis1;
+	header->numX = grid.num0;
+	header->numY = grid.num1;
 
 	// Write Z points
 	if (numPoints != 0)

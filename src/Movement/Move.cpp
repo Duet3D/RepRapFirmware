@@ -646,8 +646,8 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 		float zCorrection = 0.0;
 		const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
 		const GridDefinition& grid = GetGrid();
-		const AxesBitmap axis0Axes = Tool::GetAxisMapping(tool, grid.GetAxis0Number());
-		const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetAxis1Number());
+		const AxesBitmap axis0Axes = Tool::GetAxisMapping(tool, grid.GetNumber0());
+		const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetNumber1());
 		unsigned int numCorrections = 0;
 
 		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
@@ -700,7 +700,7 @@ void Move::SetZeroHeightError(const float coords[MaxAxes]) noexcept
 		memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
 		AxisTransform(tempCoords, nullptr);
 		const GridDefinition& grid = GetGrid();
-		zShift = -heightMap.GetInterpolatedHeightError(tempCoords[grid.GetAxis0Number()], tempCoords[grid.GetAxis1Number()]);
+		zShift = -heightMap.GetInterpolatedHeightError(tempCoords[grid.GetNumber0()], tempCoords[grid.GetNumber1()]);
 	}
 	else
 	{
