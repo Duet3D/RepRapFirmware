@@ -472,7 +472,7 @@ void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 	const float Db2 = fsquare(posBX) + fsquare(posBY) + fsquare(posBZ);
 	const float Dc2 = fsquare(posCX) + fsquare(posCY) + fsquare(posCZ);
 
-	// Calculate PQRST such that x = (Qz + S)/P, y = (Rz + T)/P.
+	// Calculate PQRST such that x = (Qz + S)/P, y = -(Rz + T)/P.
 	const float P = (posBX * posCY - posAX * posCY - posCX * posBY + posAX * posBY + posCX * posAY - posBX * posAY) * 2;
 	const float Q = ((posBY - posAY) * posCZ + (posAY - posCY) * posBZ + (posCY - posBY) * posAZ) * 2;
 	const float R = ((posBX - posAX) * posCZ + (posAX - posCX) * posBZ + (posCX - posBX) * posAZ) * 2;
@@ -495,7 +495,7 @@ void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 
 	// Substitute back for X and Y
 	machinePos[X_AXIS] = (Q * z + S)/P;
-	machinePos[Y_AXIS] = (R * z + T)/P;
+	machinePos[Y_AXIS] = -(R * z + T)/P;
 	machinePos[Z_AXIS] = z;
 
 	if (reprap.Debug(moduleMove))
