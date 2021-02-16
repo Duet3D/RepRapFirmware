@@ -723,8 +723,8 @@ void Move::SetIdentityTransform() noexcept
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
 bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
 {
-	const bool ret = heightMap.LoadFromFile(f, fname, r);
-	if (ret)
+	const bool err = heightMap.LoadFromFile(f, fname, r);
+	if (err)
 	{
 		heightMap.ClearGridHeights();							// make sure we don't end up with a partial height map
 	}
@@ -733,7 +733,7 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRe
 		zShift = 0.0;
 	}
 	reprap.MoveUpdated();
-	return ret;
+	return err;
 }
 
 // Save the height map to a file returning true if an error occurred

@@ -31,17 +31,15 @@ constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 	{ "axis0Letter",	OBJECT_MODEL_FUNC(self->axis0Letter),			ObjectModelEntryFlags::none },
 	{ "axis0Max",		OBJECT_MODEL_FUNC(self->axis0Max, 1),			ObjectModelEntryFlags::none },
 	{ "axis0Min",		OBJECT_MODEL_FUNC(self->axis0Min, 1),			ObjectModelEntryFlags::none },
-	{ "axis0Number",	OBJECT_MODEL_FUNC(self->axis0Number, 1),		ObjectModelEntryFlags::none },
 	{ "axis0Spacing",	OBJECT_MODEL_FUNC(self->axis0Spacing, 1),		ObjectModelEntryFlags::none },
 	{ "axis1Letter",	OBJECT_MODEL_FUNC(self->axis1Letter),			ObjectModelEntryFlags::none },
 	{ "axis1Max",		OBJECT_MODEL_FUNC(self->axis1Max, 1),			ObjectModelEntryFlags::none },
 	{ "axis1Min",		OBJECT_MODEL_FUNC(self->axis1Min, 1),			ObjectModelEntryFlags::none },
-	{ "axis1Number",	OBJECT_MODEL_FUNC(self->axis1Number, 1),		ObjectModelEntryFlags::none },
 	{ "axis1Spacing",	OBJECT_MODEL_FUNC(self->axis1Spacing, 1),		ObjectModelEntryFlags::none },
 	{ "radius",			OBJECT_MODEL_FUNC(self->radius, 1),				ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 11 };
+constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 9 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 
@@ -50,8 +48,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 const char * const GridDefinition::HeightMapLabelLines[] =
 {
 	"xmin,xmax,ymin,ymax,radius,spacing,xnum,ynum",																		// old version label line
-	"xmin,xmax,ymin,ymax,radius,xspacing,yspacing,xnum,ynum",															// label line until 3.2
-	"axis0Number,axis0Letter,axis0letter,axis1letter,axis0min,axis0max,axis1min,axis1max,radius,axis0spacing,axis1spacing,axis0num,axis1num",	// label line from 3.3
+	"xmin,xmax,ymin,ymax,radius,xspacing,yspacing,xnum,ynum",															// label line until 3.3-beta1
+	"axis0Number,axis0Letter,axis0letter,axis1letter,axis0min,axis0max,axis1min,axis1max,radius,axis0spacing,axis1spacing,axis0num,axis1num",	// label line from 3.3-beta2
 };
 
 // Initialise the grid to be invalid
@@ -308,8 +306,9 @@ void GridDefinition::PrintError(float originalAxis0range, float originalAxis1ran
 	}
 }
 
-// Increase the version number in the following string whenever we change the format of the height map file.
-const char * const HeightMap::HeightMapComment = "RepRapFirmware height map file v3";
+// Increase the version number in the following string whenever we change the format of the height map file significantly.
+// Adding more fields to the header row can be handled in GridDefinition::ReadParameters(), though.
+const char * const HeightMap::HeightMapComment = "RepRapFirmware height map file v2";
 
 HeightMap::HeightMap() noexcept : useMap(false) { }
 
