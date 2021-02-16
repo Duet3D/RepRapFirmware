@@ -133,7 +133,6 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexc
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	String<StringLength256> scratchString;
 	scratchString.printf("G31 K%u P%d", probeNumber, adcValue);
-	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
 	for (size_t i = 0; i < numTotalAxes; ++i)
 	{
 		if (axisLetters[i] != 'Z')

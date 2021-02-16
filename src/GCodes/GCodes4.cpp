@@ -567,7 +567,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else
 				{
-					platform.MessageF(WarningMessage, "Skipping grid point %c=%.1f, %c=%.1f because Z probe cannot reach it\n", grid.GetAxis0Letter, (double)axis0Coord, grid.GetAxis1Letter, (double)axis1Coord);
+					platform.MessageF(WarningMessage, "Skipping grid point %c=%.1f, %c=%.1f because Z probe cannot reach it\n", grid.GetAxis0Letter(), (double)axis0Coord, grid.GetAxis1Letter(), (double)axis1Coord);
 					gb.SetState(GCodeState::gridProbing6);
 				}
 			}
