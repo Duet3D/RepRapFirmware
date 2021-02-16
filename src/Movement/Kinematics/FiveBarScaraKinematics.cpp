@@ -826,10 +826,19 @@ void FiveBarScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], con
 }
 
 // Return true if the specified XY position is reachable by the print head reference point.
-bool FiveBarScaraKinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
+bool FiveBarScaraKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept
 {
-	float coords[2] = {x, y};
-	return constraintsOk(coords);
+	if (axes.IsBitSet(X_AXIS) && axes.IsBitSet(Y_AXIS))
+	{
+		float coords[2] = {axesCoords[X_AXIS], axesCoords[Y_AXIS]};
+		if (!constraintsOk(coords))
+		{
+			return false;
+		}
+	}
+	axes.ClearBit(X_AXIS);
+	axes.ClearBit(Y_AXIS);
+	return Kinematics::IsReachable(axesCoords, axes, isCoordinated);
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics

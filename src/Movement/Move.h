@@ -116,7 +116,7 @@ public:
 	void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const noexcept;
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment
 	const char* GetGeometryString() const noexcept { return kinematics->GetName(true); }
-	bool IsAccessibleProbePoint(float x, float y) const noexcept;
+	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	// Temporary kinematics functions
 	bool IsDeltaMode() const noexcept { return kinematics->GetKinematicsType() == KinematicsType::linearDelta; }

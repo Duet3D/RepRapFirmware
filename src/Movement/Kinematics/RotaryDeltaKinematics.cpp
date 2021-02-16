@@ -38,7 +38,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RotaryDeltaKinematics)
 #endif
 
 // Constructor
-RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : Kinematics(KinematicsType::rotaryDelta, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false)
+RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::rotaryDelta, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false)
 {
 	Init();
 }
@@ -599,12 +599,6 @@ bool RotaryDeltaKinematics::WriteResumeSettings(FileStore *f) const noexcept
 
 #endif
 
-// Return true if the specified XY position is reachable by the print head reference point.
-bool RotaryDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
-{
-	return fsquare(x) + fsquare(y) < printRadiusSquared;
-}
-
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
 LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
 															size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
@@ -716,28 +710,6 @@ void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
-}
-
-// Limit the speed and acceleration of a move to values that the mechanics can handle.
-// The speeds in Cartesian space have already been limited.
-void RotaryDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
-{
-	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
-	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
-	if (xyFactor > 0.01)
-	{
-		const Platform& platform = reprap.GetPlatform();
-		const float maxSpeed = min<float>(platform.MaxFeedrate(X_AXIS), platform.MaxFeedrate(Y_AXIS));
-		const float maxAcceleration = min<float>(platform.Acceleration(X_AXIS), platform.Acceleration(Y_AXIS));
-		dda.LimitSpeedAndAcceleration(maxSpeed/xyFactor, maxAcceleration/xyFactor);
-	}
-}
-
-// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
-// This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap RotaryDeltaKinematics::GetLinearAxes() const noexcept
-{
-	return AxesBitmap();
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.

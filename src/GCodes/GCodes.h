@@ -181,6 +181,7 @@ public:
 #endif
 
 	const char *GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
+	size_t GetAxisNumberForLetter(const char axisLetter) const noexcept;
 	MachineType GetMachineType() const noexcept { return machineType; }
 	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept;			// Lock movement and wait for pending moves to finish
 
@@ -201,7 +202,7 @@ public:
 	bool AtxPowerControlled() const noexcept { return atxPowerControlled; }
 
 	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };		// Get the default grid definition
-	bool AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
+	bool AssignGrid(const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
 	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
 
 	int GetNewToolNumber() const noexcept { return newToolNumber; }
@@ -615,7 +616,7 @@ private:
 	float g30zHeightErrorLowestDiff;			// the lowest difference we have seen between consecutive readings
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
-	size_t gridXindex, gridYindex;				// Which grid probe point is next
+	size_t gridAxis0index, gridAxis1index;		// Which grid probe point is next
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92

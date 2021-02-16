@@ -537,16 +537,24 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// Move to the current probe point
 			Move& move = reprap.GetMove();
 			const GridDefinition& grid = move.AccessHeightMap().GetGrid();
-			const float x = grid.GetXCoordinate(gridXindex);
-			const float y = grid.GetYCoordinate(gridYindex);
-			if (grid.IsInRadius(x, y))
+			const float axis0Coord = grid.GetCoordinate0(gridAxis0index);
+			const float axis1Coord = grid.GetCoordinate1(gridAxis1index);
+			if (grid.IsInRadius(axis0Coord, axis1Coord))
 			{
-				if (move.IsAccessibleProbePoint(x, y))
+				const size_t axis0Num = grid.GetNumber0();
+				const size_t axis1Num = grid.GetNumber1();
+				AxesBitmap axes;
+				axes.SetBit(axis0Num);
+				axes.SetBit(axis1Num);
+				float axesCoords[MaxAxes];
+				axesCoords[axis0Num] = axis0Coord;
+				axesCoords[axis1Num] = axis1Coord;
+				if (move.IsAccessibleProbePoint(axesCoords, axes))
 				{
 					SetMoveBufferDefaults();
 					const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-					moveBuffer.coords[X_AXIS] = x - zp->GetXOffset();
-					moveBuffer.coords[Y_AXIS] = y - zp->GetYOffset();
+					moveBuffer.coords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
+					moveBuffer.coords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
 					moveBuffer.coords[Z_AXIS] = zp->GetStartingHeight();
 					moveBuffer.feedRate = zp->GetTravelSpeed();
 					NewMoveAvailable(1);
@@ -559,7 +567,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else
 				{
-					platform.MessageF(WarningMessage, "Skipping grid point (%.1f, %.1f) because Z probe cannot reach it\n", (double)x, (double)y);
+					platform.MessageF(WarningMessage, "Skipping grid point %c=%.1f, %c=%.1f because Z probe cannot reach it\n", grid.GetLetter0(), (double)axis0Coord, grid.GetLetter1(), (double)axis1Coord);
 					gb.SetState(GCodeState::gridProbing6);
 				}
 			}
@@ -719,7 +727,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			if (acceptReading)
 			{
-				reprap.GetMove().AccessHeightMap().SetGridHeight(gridXindex, gridYindex, g30zHeightError);
+				reprap.GetMove().AccessHeightMap().SetGridHeight(gridAxis0index, gridAxis1index, g30zHeightError);
 				gb.AdvanceState();
 			}
 			else if (tapsDone < zp->GetMaxTaps())
@@ -742,32 +750,32 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::gridProbing6:	// ready to compute the next probe point
 		{
 			const HeightMap& hm = reprap.GetMove().AccessHeightMap();
-			if (gridYindex & 1)
+			if (gridAxis1index & 1)
 			{
 				// Odd row, so decreasing X
-				if (gridXindex == 0)
+				if (gridAxis0index == 0)
 				{
-					++gridYindex;
+					++gridAxis1index;
 				}
 				else
 				{
-					--gridXindex;
+					--gridAxis0index;
 				}
 			}
 			else
 			{
 				// Even row, so increasing X
-				if (gridXindex + 1 == hm.GetGrid().NumXpoints())
+				if (gridAxis0index + 1 == hm.GetGrid().NumAxis0points())
 				{
-					++gridYindex;
+					++gridAxis1index;
 				}
 				else
 				{
-					++gridXindex;
+					++gridAxis0index;
 				}
 			}
 
-			if (gridYindex == hm.GetGrid().NumYpoints())
+			if (gridAxis1index == hm.GetGrid().NumAxis1points())
 			{
 				// Done all the points
 				gb.AdvanceState();
@@ -989,8 +997,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					// Find the coordinates of the Z probe to pass to SetZeroHeightError
 					float tempCoords[MaxAxes];
 					memcpyf(tempCoords, moveBuffer.coords, ARRAY_SIZE(tempCoords));
-					tempCoords[X_AXIS] += zp->GetXOffset();
-					tempCoords[Y_AXIS] += zp->GetYOffset();
+					tempCoords[X_AXIS] += zp->GetOffset(X_AXIS);
+					tempCoords[Y_AXIS] += zp->GetOffset(Y_AXIS);
 					reprap.GetMove().SetZeroHeightError(tempCoords);
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 
@@ -1073,8 +1081,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// Find the coordinates of the Z probe to pass to SetZeroHeightError
 				float tempCoords[MaxAxes];
 				memcpyf(tempCoords, moveBuffer.coords, ARRAY_SIZE(tempCoords));
-				tempCoords[X_AXIS] += zp->GetXOffset();
-				tempCoords[Y_AXIS] += zp->GetYOffset();
+				tempCoords[X_AXIS] += zp->GetOffset(X_AXIS);
+				tempCoords[Y_AXIS] += zp->GetOffset(Y_AXIS);
 				reprap.GetMove().SetZeroHeightError(tempCoords);
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}

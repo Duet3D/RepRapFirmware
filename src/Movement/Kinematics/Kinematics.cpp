@@ -49,10 +49,16 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef&
 
 // Return true if the specified XY position is reachable by the print head reference point.
 // This default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 command.
-bool Kinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
+bool Kinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept
 {
 	const Platform& platform = reprap.GetPlatform();
-	return x >= platform.AxisMinimum(X_AXIS) && y >= platform.AxisMinimum(Y_AXIS) && x <= platform.AxisMaximum(X_AXIS) && y <= platform.AxisMaximum(Y_AXIS);
+	return axes.IterateWhile([&platform, axesCoords](unsigned int axis, unsigned int count) -> bool {
+		if (axesCoords[axis] >= platform.AxisMinimum(axis) && axesCoords[axis] <= platform.AxisMaximum(axis))
+		{
+			return true;
+		}
+		return false;
+	});
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed

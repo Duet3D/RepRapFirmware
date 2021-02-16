@@ -241,19 +241,48 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		return GCodeResult::notFinished;
 	}
 
-	bool seenX = false, seenY = false, seenR = false, seenP = false, seenS = false;
-	float xValues[2];
-	float yValues[2];
+	bool seenR = false, seenP = false, seenS = false;
+	char axesLetters[2] = { 'X', 'Y'};
+	float axis0Values[2];
+	float axis1Values[2];
 	float spacings[2] = { DefaultGridSpacing, DefaultGridSpacing };
 
-	if (gb.TryGetFloatArray('X', 2, xValues, reply, seenX, false))
+	size_t axesSeenCount = 0;
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			if (axisLetters[axis] == 'Z')
+			{
+				reply.copy("Z axis is not allowed for mesh leveling");
+				return GCodeResult::error;
+			}
+			else if (axesSeenCount > 2)
+			{
+				reply.copy("Mesh leveling expects exactly two axes");
+				return GCodeResult::error;
+			}
+			bool dummy;
+			if (gb.TryGetFloatArray(
+					axisLetters[axis],
+					2,
+					(axesSeenCount == 0) ? axis0Values : axis1Values,
+					reply,
+					dummy,
+					false))
+			{
+				return GCodeResult::error;
+			}
+			axesLetters[axesSeenCount] = axisLetters[axis];
+			++axesSeenCount;
+		}
+	}
+	if (axesSeenCount == 1)
+	{
+		reply.copy("Specify zero or two axes in M557");
 		return GCodeResult::error;
 	}
-	if (gb.TryGetFloatArray('Y', 2, yValues, reply, seenY, false))
-	{
-		return GCodeResult::error;
-	}
+	const bool axesSeen = axesSeenCount > 0;
 
 	uint32_t numPoints[2];
 	if (gb.TryGetUIArray('P', 2, numPoints, reply, seenP, true))
@@ -271,7 +300,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	float radius = -1.0;
 	gb.TryGetFValue('R', radius, seenR);
 
-	if (!seenX && !seenY && !seenR && !seenS && !seenP)
+	if (!axesSeen && !seenR && !seenS && !seenP)
 	{
 		ReadLocker rlocker(reprap.GetMove().heightMapLock);
 
@@ -288,31 +317,25 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		return GCodeResult::ok;
 	}
 
-	if (seenX != seenY)
-	{
-		reply.copy("specify both or neither of X and Y in M557");
-		return GCodeResult::error;
-	}
-
-	if (!seenX && !seenR)
+	if (!axesSeen && !seenR)
 	{
 		// Must have given just the S or P parameter
-		reply.copy("specify at least radius or X and Y ranges in M557");
+		reply.copy("specify at least radius or two axis ranges in M557");
 		return GCodeResult::error;
 	}
 
-	if (seenX)
+	if (axesSeen)
 	{
-		// Seen both X and Y
+		// Seen both axes
 		if (seenP)
 		{
-			if (spacings[0] >= 2 && xValues[1] > xValues[0])
+			if (spacings[0] >= 2 && axis0Values[1] > axis0Values[0])
 			{
-				spacings[0] = (xValues[1] - xValues[0])/(numPoints[0] - 1);
+				spacings[0] = (axis0Values[1] - axis0Values[0])/(numPoints[0] - 1);
 			}
-			if (spacings[1] >= 2 && yValues[1] > yValues[0])
+			if (spacings[1] >= 2 && axis1Values[1] > axis1Values[0])
 			{
-				spacings[1] = (yValues[1] - yValues[0])/(numPoints[1] - 1);
+				spacings[1] = (axis1Values[1] - axis1Values[0])/(numPoints[1] - 1);
 			}
 		}
 	}
@@ -335,8 +358,8 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 			{
 				effectiveXRadius = floorf((radius - 0.1)/spacings[0]) * spacings[0];
 			}
-			xValues[0] = -effectiveXRadius;
-			xValues[1] =  effectiveXRadius + 0.1;
+			axis0Values[0] = -effectiveXRadius;
+			axis0Values[1] =  effectiveXRadius + 0.1;
 
 			float effectiveYRadius;
 			if (seenP && numPoints[1] >= 2)
@@ -352,8 +375,8 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 			{
 				effectiveYRadius = floorf((radius - 0.1)/spacings[1]) * spacings[1];
 			}
-			yValues[0] = -effectiveYRadius;
-			yValues[1] =  effectiveYRadius + 0.1;
+			axis1Values[0] = -effectiveYRadius;
+			axis1Values[1] =  effectiveYRadius + 0.1;
 		}
 		else
 		{
@@ -363,17 +386,17 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	}
 
 	WriteLocker locker(reprap.GetMove().heightMapLock);
-	const bool ok = defaultGrid.Set(xValues, yValues, radius, spacings);
+	const bool ok = defaultGrid.Set(axesLetters, axis0Values, axis1Values, radius, spacings);
 	reprap.MoveUpdated();
 	if (ok)
 	{
 		return GCodeResult::ok;
 	}
 
-	const float xRange = (seenX) ? xValues[1] - xValues[0] : 2 * radius;
-	const float yRange = (seenX) ? yValues[1] - yValues[0] : 2 * radius;
+	const float axis1Range = axesSeen ? axis0Values[1] - axis0Values[0] : 2 * radius;
+	const float axis2Range = axesSeen ? axis1Values[1] - axis1Values[0] : 2 * radius;
 	reply.copy("bad grid definition: ");
-	defaultGrid.PrintError(xRange, yRange, reply);
+	defaultGrid.PrintError(axis1Range, axis2Range, reply);
 	return GCodeResult::error;
 }
 
