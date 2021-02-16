@@ -591,16 +591,16 @@ bool DataTransfer::ReadHeightMap() noexcept
 {
 	// Read height map header
 	const HeightMapHeader * const header = ReadDataHeader<HeightMapHeader>();
-	uint8_t axesNumbers[2]	= { header->axis0Number, header->axis1Number };
-	char axesLetter[2] 		= { header->axis0Letter, header->axis1Letter };
-	float axis0Range[2]		= { header->axis0Min, header->axis0Max };
-	float axis1Range[2]		= { header->axis1Min, header->axis1Max };
-	float spacing[2]		= { header->axis0Spacing, header->axis1Spacing };
+	uint8_t axesNumbers[2]	= { X_AXIS, Y_AXIS };
+	char axesLetter[2] 		= { 'X', 'Y' };
+	float axis0Range[2]		= { header->xMin, header->xMax };
+	float axis1Range[2]		= { header->yMin, header->yMax };
+	float spacing[2]		= { header->xSpacing, header->ySpacing };
 	const bool ok = reprap.GetGCodes().AssignGrid(axesNumbers, axesLetter, axis0Range, axis1Range, header->radius, spacing);
 	if (ok)
 	{
 		// Read Z coordinates
-		const size_t numPoints = header->numAxis0 * header->numAxis1;
+		const size_t numPoints = header->numX * header->numY;
 		const float *points = reinterpret_cast<const float *>(ReadData(sizeof(float) * numPoints));
 
 		HeightMap& map = reprap.GetMove().AccessHeightMap();
@@ -1155,15 +1155,15 @@ bool DataTransfer::WriteHeightMap() noexcept
 
 	// Write heightmap header
 	HeightMapHeader *header = WriteDataHeader<HeightMapHeader>();
-	header->axis0Min = grid.axis0Min;
-	header->axis0Max = grid.axis0Max;
-	header->axis0Spacing = grid.axis0Spacing;
-	header->axis1Min = grid.axis1Min;
-	header->axis1Max = grid.axis1Max;
-	header->axis1Spacing = grid.axis1Spacing;
+	header->xMin = grid.axis0Min;
+	header->xMax = grid.axis0Max;
+	header->xSpacing = grid.axis0Spacing;
+	header->yMin = grid.axis1Min;
+	header->yMax = grid.axis1Max;
+	header->ySpacing = grid.axis1Spacing;
 	header->radius = grid.radius;
-	header->numAxis0 = grid.numAxis0;
-	header->numAxis1 = grid.numAxis1;
+	header->numX = grid.numAxis0;
+	header->numY = grid.numAxis1;
 
 	// Write Z points
 	if (numPoints != 0)
