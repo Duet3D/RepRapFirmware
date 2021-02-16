@@ -1143,6 +1143,13 @@ bool DataTransfer::WritePrintPaused(FilePosition position, PrintPausedReason rea
 bool DataTransfer::WriteHeightMap() noexcept
 {
 	const GridDefinition& grid = reprap.GetMove().GetGrid();
+
+	// TODO: Remove this check once DCS is aware of the new format
+	if (!(grid.axis0Letter == 'X' && grid.axis0Number == X_AXIS && grid.axis1Letter == 'Y' && grid.axis1Number == Y_AXIS))
+	{
+		return false;
+	}
+
 	size_t numPoints = reprap.GetMove().AccessHeightMap().UsingHeightMap() ? grid.NumPoints() : 0;
 	size_t bytesToWrite = sizeof(HeightMapHeader) + numPoints * sizeof(float);
 	if (!CanWritePacket(bytesToWrite))
