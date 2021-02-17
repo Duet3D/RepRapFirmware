@@ -525,7 +525,7 @@ void RotaryDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[]) noexce
 		endstopAdjustments[tower] += (float)v[tower];
 		if (numFactors >= 4)
 		{
-			bearingHeights[tower] += v[3];
+			bearingHeights[tower] += (float)v[3];
 		}
 	}
 
