@@ -1,4 +1,4 @@
-RepRapFirmware 3.3beta (in preparation)
+RepRapFirmware 3.3beta2 (in preparation)
 =======================
 
 Uprade notes:
@@ -6,10 +6,14 @@ Uprade notes:
 - If you are using `spindles[].active` or `spindles[].current` they will no longer be negative for counter-clockwise RPM but additionally carry a new field `spindle[].state` that will have one of the three values `stopped`, `forward` or `reverse` and need to be interpreted together.
 - `spindles[].tool` has been replaced by `tool[].spindle` and reverses the assignment.
 - G10 has been deprecated (but can still be used) for setting tool temperatures and offsets. Use M568 instead. This is a preparation to restore the original meaning of G10 to set WCS offsets only plus being used for firmware retraction when invoked without parameters.
+- G31 Cnnn (temperature coefficient) has been moved to G31 Tnnn to make C available as an axis (see new features below)
 
 New features:
 - M568 has been repurposed: Set Tool Settings to set tool offsets, tool temperatures and tool spindle RPM. G10 still works to set these values but will issue a warning. This functionality will be removed from G10 in a future version.
 - Spindles can now be assigned to an arbirary number of tools and each tool maintains its own spindle RPM value.
+- M557 has been opened to allow defining a grid between an arbitray axes pair, e.g. X-A and is no longer restricted to X-Y.
+- G31 has been extended to allow setting offsets for all axes (except Z)
+- M997 accepts a new parameter P"filename" to specify the filename to use for a firmware update. This can only be used when exactly one module is to be updated, i.e. it will not work with M997 S1:4
 
 RepRapFirmware 3.3beta1
 =======================
