@@ -4666,7 +4666,7 @@ void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 // Append a list of axes to a string
 void GCodes::AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept
 {
-	axes.Iterate([reply, this](unsigned int axis, unsigned int) noexcept { reply.cat(this->axisLetters[axis]); });
+	axes.Iterate([&reply, this](unsigned int axis, unsigned int) noexcept { reply.cat(this->axisLetters[axis]); });
 }
 
 // Get the name of the current machine mode

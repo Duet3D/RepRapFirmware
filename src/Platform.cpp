@@ -2505,7 +2505,7 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 #if SUPPORT_CAN_EXPANSION
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc, std::function<void(DriverId)> remoteFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t)> localFunc, stdext::inplace_function<void(DriverId)> remoteFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -2539,7 +2539,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)
 #else
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t)> localFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -4726,7 +4726,7 @@ GCodeResult Platform::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<
 	}
 
 	GCodeResult rslt = GCodeResult::ok;
-	drivers.Iterate([this, msg, reply, &rslt](unsigned int driver, unsigned int count) -> void
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
 						{
 							if (driver >= NumDirectDrivers)
 							{
@@ -4756,7 +4756,7 @@ GCodeResult Platform::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleD
 	}
 
 	GCodeResult rslt = GCodeResult::ok;
-	drivers.Iterate([this, msg, reply, &rslt](unsigned int driver, unsigned int count) -> void
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
 						{
 							if (driver >= NumDirectDrivers)
 							{
@@ -4790,7 +4790,7 @@ GCodeResult Platform::EutHandleSetDriverStates(const CanMessageMultipleDrivesReq
 {
 	//TODO check message is long enough for the number of drivers specified
 	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	drivers.Iterate([this, msg](unsigned int driver, unsigned int count) -> void
+	drivers.Iterate([this, &msg](unsigned int driver, unsigned int count) -> void
 		{
 			switch (msg.values[count].mode)
 			{
@@ -4829,7 +4829,7 @@ GCodeResult Platform::EutSetRemotePressureAdvance(const CanMessageMultipleDrives
 	}
 
 	GCodeResult rslt = GCodeResult::ok;
-	drivers.Iterate([this, msg, reply, &rslt](unsigned int driver, unsigned int count) -> void
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
 						{
 							if (driver >= NumDirectDrivers)
 							{

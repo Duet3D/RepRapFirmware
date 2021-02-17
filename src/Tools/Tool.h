@@ -31,10 +31,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <General/FreelistManager.h>
 #include <General/NamedEnum.h>
-
-#undef array
-#include <functional>
-#define array _ecv_array
+#include <General/inplace_function.h>
 
 constexpr size_t ToolNameLength = 32;						// maximum allowed length for tool names
 
@@ -112,8 +109,8 @@ public:
 
 	bool HasTemperatureFault() const noexcept { return heaterFault; }
 
-	void IterateExtruders(std::function<void(unsigned int)> f) const noexcept;
-	void IterateHeaters(std::function<void(int)> f) const noexcept;
+	void IterateExtruders(stdext::inplace_function<void(unsigned int)> f) const noexcept;
+	void IterateHeaters(stdext::inplace_function<void(int)> f) const noexcept;
 	bool UsesHeater(int8_t heater) const noexcept;
 
 	void SetFansPwm(float f) const noexcept;

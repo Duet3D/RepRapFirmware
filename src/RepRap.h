@@ -26,12 +26,11 @@ Licence: GPL
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
 #include "GCodes/GCodeResult.h"
+#include <General/inplace_function.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/ExpansionManager.h>
 #endif
-
-#include <functional>
 
 enum class ResponseSource
 {
@@ -209,9 +208,9 @@ protected:
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
-	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
-	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func) noexcept;
-	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func) noexcept;
+	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
+	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<int(size_t)> func) noexcept;
+	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<const char *(size_t)> func) noexcept;
 
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
