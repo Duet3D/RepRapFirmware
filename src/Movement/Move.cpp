@@ -603,29 +603,24 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 		if (!useTaper || toolHeight < taperHeight)
 		{
 			float zCorrection = 0.0;
-			const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-			const AxesBitmap axis0Axes = Tool::GetXAxes(tool);
-			const AxesBitmap axis1Axes = Tool::GetYAxes(tool);
 			unsigned int numCorrections = 0;
+			const GridDefinition& grid = GetGrid();
+			const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetNumber1());
 
 			// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-			// TODO use Iterate when we have changed it to use inline_function
-			for (uint32_t axis0Axis = 0; axis0Axis < numAxes; ++axis0Axis)
-			{
-				if (axis0Axes.IsBitSet(axis0Axis))
-				{
-					const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
-					for (uint32_t axis1Axis = 0; axis1Axis < numAxes; ++axis1Axis)
-					{
-						if (axis1Axes.IsBitSet(axis1Axis))
-						{
-							const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
-							zCorrection += heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord);
-							++numCorrections;
-						}
-					}
-				}
-			}
+			Tool::GetAxisMapping(tool, grid.GetNumber0())
+				.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int)
+							{
+								const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
+								axis1Axes.Iterate([this, xyzPoint, tool, axis0Coord, &zCorrection, &numCorrections](unsigned int axis1Axis, unsigned int)
+													{
+														const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
+														zCorrection += heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord);
+														++numCorrections;
+													}
+												);
+							}
+						);
 
 			if (numCorrections > 1)
 			{
@@ -644,29 +639,24 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 	if (usingMesh)
 	{
 		float zCorrection = 0.0;
-		const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-		const GridDefinition& grid = GetGrid();
-		const AxesBitmap axis0Axes = Tool::GetAxisMapping(tool, grid.GetNumber0());
-		const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetNumber1());
 		unsigned int numCorrections = 0;
+		const GridDefinition& grid = GetGrid();
+		const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetNumber1());
 
 		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-		for (uint32_t axis0Axis = 0; axis0Axis < numAxes; ++axis0Axis)
-		{
-			if (axis0Axes.IsBitSet(axis0Axis))
-			{
-				const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
-				for (uint32_t axis1Axis = 0; axis1Axis < numAxes; ++axis1Axis)
-				{
-					if (axis1Axes.IsBitSet(axis1Axis))
-					{
-						const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
-						zCorrection += heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord);
-						++numCorrections;
-					}
-				}
-			}
-		}
+		Tool::GetAxisMapping(tool, grid.GetNumber0())
+			.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int)
+						{
+							const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
+							axis1Axes.Iterate([this, xyzPoint, tool, axis0Coord, &zCorrection, &numCorrections](unsigned int axis1Axis, unsigned int)
+												{
+													const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
+													zCorrection += heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord);
+													++numCorrections;
+												}
+											);
+						}
+					);
 
 		if (numCorrections > 1)
 		{
