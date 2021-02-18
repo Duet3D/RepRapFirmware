@@ -3465,8 +3465,8 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		// Add or delete tool, so start by deleting the old one with this number, if any
 		reprap.DeleteTool(toolNumber);
 
-		// M563 P# D-1 H-1 R-1 removes an existing tool
-		if (dCount == 1 && hCount == 1 && sCount == 1 && drives[0] == -1 && heaters[0] == -1 && spindleNumber == -1)
+		// M563 P# D-1 H-1 [R-1] removes an existing tool
+		if (dCount == 1 && hCount == 1 && drives[0] == -1 && heaters[0] == -1 && (sCount == 0 || (sCount == 1 && spindleNumber == -1)))
 		{
 			// nothing more to do
 		}
