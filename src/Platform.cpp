@@ -2210,7 +2210,31 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 
 			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			reply.lcatf("Sine + cosine: float %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
+			reply.lcatf("Float sine + cosine: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
+		}
+
+		// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
+		{
+			uint32_t tim1 = 0;
+			constexpr uint32_t iterations = 100;				// use a value that divides into one million
+			float val = 10000.0;
+			for (unsigned int i = 0; i < iterations; ++i)
+			{
+
+				cpu_irq_disable();
+				asm volatile("":::"memory");
+				uint32_t now1 = SysTick->VAL;
+				val = sqrtf(val);
+				uint32_t now2 = SysTick->VAL;
+				asm volatile("":::"memory");
+				cpu_irq_enable();
+				now1 &= 0x00FFFFFF;
+				now2 &= 0x00FFFFFF;
+				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+			}
+
+			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
+			reply.lcatf("Float sqrt: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
 		}
 		break;
 

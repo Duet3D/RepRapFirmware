@@ -131,13 +131,13 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
 	{
-		reply.copy("Tool creation: too many drives");
+		reply.copy("too many drives");
 		return nullptr;
 	}
 
 	if (hCount > ARRAY_SIZE(Tool::heaters))
 	{
-		reply.copy("Tool creation: too many heaters");
+		reply.copy("too many heaters");
 		return nullptr;
 	}
 
@@ -146,7 +146,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	{
 		if (d[i] < 0 || d[i] >= (int)numExtruders)
 		{
-			reply.copy("Tool creation: bad drive number");
+			reply.copy("bad drive number");
 			return nullptr;
 		}
 	}
@@ -154,7 +154,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	{
 		if (h[i] < 0 || h[i] >= (int)MaxHeaters)
 		{
-			reply.copy("Tool creation: bad heater number");
+			reply.copy("bad heater number");
 			return nullptr;
 		}
 	}
@@ -162,14 +162,14 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	// Check that the spindle - if given - is configured
 	if (sCount > 0 && spindleNo > -1)
 	{
-		if (spindleNo >= MaxSpindles)
+		if (spindleNo >= (int)MaxSpindles)
 		{
-			reply.copy("Tool creation: bad spindle number");
+			reply.copy("bad spindle number");
 			return nullptr;
 		}
 		if (reprap.GetPlatform().AccessSpindle(spindleNo).GetState() == SpindleState::unconfigured)
 		{
-			reply.copy("Tool creation: unconfigured spindle");
+			reply.copy("unconfigured spindle");
 			return nullptr;
 		}
 	}

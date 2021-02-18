@@ -56,6 +56,9 @@ struct ExtendedRawMove : public RawMove
 	float arcCurrentAngle;
 	float arcAngleIncrement;
 	unsigned int arcAxis0, arcAxis1;
+	float angleIncrementSine, angleIncrementCosine;
+	float sine, cosine;
+	unsigned int segmentsTillNextFullCalc;
 	bool doingArcMove;
 	SegmentedMoveState segMoveState;
 

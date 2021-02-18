@@ -2419,6 +2419,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	{
 		moveBuffer.arcAngleIncrement = -moveBuffer.arcAngleIncrement;
 	}
+	moveBuffer.angleIncrementSine = sinf(moveBuffer.arcAngleIncrement);
+	moveBuffer.angleIncrementCosine = cosf(moveBuffer.arcAngleIncrement);
+	moveBuffer.segmentsTillNextFullCalc = 0;
 
 	moveBuffer.arcAxis0 = axis0;
 	moveBuffer.arcAxis1 = axis1;
@@ -2530,16 +2533,29 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 	{
 		// This move needs to be divided into 2 or more segments
 		// Do the axes
-		float sine = 0.0, cosine = 0.0;				// initialised to avoid gcc warning
 		AxesBitmap axisMap0, axisMap1;
 		if (moveBuffer.doingArcMove)
 		{
 			moveBuffer.arcCurrentAngle += moveBuffer.arcAngleIncrement;
-			// Calculate sine and cosine just once for IDEX machines
-			sine = sinf(moveBuffer.arcCurrentAngle);
-			cosine = cosf(moveBuffer.arcCurrentAngle);
+			if (moveBuffer.segmentsTillNextFullCalc == 0)
+			{
+				// Do the full calculation
+				moveBuffer.segmentsTillNextFullCalc = SegmentsPerFulArcCalculation;
+				moveBuffer.sine = sinf(moveBuffer.arcCurrentAngle);
+				moveBuffer.cosine = cosf(moveBuffer.arcCurrentAngle);
+			}
+			else
+			{
+				// Speed up the computation by doing two multiplications and an addition or subtraction instead of a sine or cosine
+				--moveBuffer.segmentsTillNextFullCalc;
+				const float newCosine = moveBuffer.cosine * moveBuffer.angleIncrementCosine - moveBuffer.sine   * moveBuffer.angleIncrementSine;
+				const float newSine   = moveBuffer.sine   * moveBuffer.angleIncrementCosine + moveBuffer.cosine * moveBuffer.angleIncrementSine;
+				moveBuffer.cosine = newCosine;
+				moveBuffer.sine = newSine;
+			}
 			axisMap0 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis0);
 			axisMap1 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis1);
+			moveBuffer.cosXyAngle = 1.0;			// we assume that the angle between segments is small, so no need to adjust the jerk
 		}
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
@@ -2547,12 +2563,12 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 			if (moveBuffer.doingArcMove && axisMap1.IsBitSet(drive))
 			{
 				// Axis1 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * sine;
+				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.sine;
 			}
 			else if (moveBuffer.doingArcMove && axisMap0.IsBitSet(drive))
 			{
 				// Axis0 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * cosine;
+				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.cosine;
 			}
 			else
 			{
