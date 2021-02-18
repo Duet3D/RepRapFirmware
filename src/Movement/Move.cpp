@@ -223,7 +223,7 @@ void Move::Spin() noexcept
 	if (!active)
 	{
 		RawMove nextMove;
-		(void) reprap.GetGCodes().ReadMove(nextMove);			// throw away any move that GCodes tries to pass us
+		(void)reprap.GetGCodes().ReadMove(nextMove);			// throw away any move that GCodes tries to pass us
 		return;
 	}
 
@@ -276,7 +276,7 @@ void Move::Spin() noexcept
 			RawMove nextMove;
 			if (reprap.GetGCodes().ReadMove(nextMove))		// if we have a new move
 			{
-				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
+				if (simulationMode < 2)						// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
 					if (nextMove.moveType == 0)
 					{

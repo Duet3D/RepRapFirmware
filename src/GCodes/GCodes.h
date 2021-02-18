@@ -534,9 +534,7 @@ private:
 
 	// The following contain the details of moves that the Move module fetches
 	// CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
-	RawMove moveBuffer;							// Move details to pass to Move class
-	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
-	unsigned int totalSegments;					// The total number of segments left in the complete move
+	ExtendedRawMove moveBuffer;					// Move details
 	bool updateUserPosition;
 
 	unsigned int segmentsLeftToStartAt;
@@ -546,21 +544,6 @@ private:
 	float restartMoveFractionDone;				// how much of the next move was printed before the pause or power failure (from M26)
 	float restartInitialUserC0;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
 	float restartInitialUserC1;					// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
-
-	float arcCentre[MaxAxes];
-	float arcRadius;
-	float arcCurrentAngle;
-	float arcAngleIncrement;
-	unsigned int arcAxis0, arcAxis1;
-	bool doingArcMove;
-
-	enum class SegmentedMoveState : uint8_t
-	{
-		inactive = 0,
-		active,
-		aborted
-	};
-	SegmentedMoveState segMoveState;
 
 	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
 
@@ -701,18 +684,18 @@ private:
 // then call this function to update SegmentsLeft safely in a multi-threaded environment
 inline void GCodes::NewMoveAvailable(unsigned int sl) noexcept
 {
-	totalSegments = sl;
-	__DMB();					// make sure that all the move details have been written first
-	segmentsLeft = sl;			// set the number of segments to indicate that a move is available to be taken
+	moveBuffer.totalSegments = sl;
+	__DMB();									// make sure that all the move details have been written first
+	moveBuffer.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
 }
 
 // Flag that a new move is available for consumption by the Move subsystem
 // This version is for when totalSegments has already be set up.
 inline void GCodes::NewMoveAvailable() noexcept
 {
-	const unsigned int sl = totalSegments;
-	__DMB();					// make sure that the move details have been written first
-	segmentsLeft = sl;			// set the number of segments to indicate that a move is available to be taken
+	const unsigned int sl = moveBuffer.totalSegments;
+	__DMB();									// make sure that the move details have been written first
+	moveBuffer.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
 }
 
 // Get the total baby stepping offset for an axis

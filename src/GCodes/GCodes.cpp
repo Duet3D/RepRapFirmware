@@ -918,13 +918,13 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 			ToolOffsetInverseTransform(pauseRestorePoint.moveCoords, currentUserPosition);	// transform the returned coordinates to user coordinates
 			ClearMove();
 		}
-		else if (segmentsLeft != 0)
+		else if (moveBuffer.segmentsLeft != 0)
 		{
 			// We were not able to skip any moves, however we can skip the move that is waiting
 			pauseRestorePoint.virtualExtruderPosition = moveBuffer.virtualExtruderPosition;
 			pauseRestorePoint.filePos = moveBuffer.filePos;
 			pauseRestorePoint.feedRate = moveBuffer.feedRate;
-			pauseRestorePoint.proportionDone = (float)(totalSegments - segmentsLeft)/(float)totalSegments;
+			pauseRestorePoint.proportionDone = moveBuffer.GetProportionDone();
 			pauseRestorePoint.initialUserC0 = moveBuffer.initialUserC0;
 			pauseRestorePoint.initialUserC1 = moveBuffer.initialUserC1;
 			ToolOffsetInverseTransform(pauseRestorePoint.moveCoords, currentUserPosition);	// transform the returned coordinates to user coordinates
@@ -1128,14 +1128,14 @@ bool GCodes::DoEmergencyPause() noexcept
 		ToolOffsetInverseTransform(pauseRestorePoint.moveCoords, currentUserPosition);	// transform the returned coordinates to user coordinates
 		ClearMove();
 	}
-	else if (segmentsLeft != 0 && moveBuffer.filePos != noFilePosition)
+	else if (moveBuffer.segmentsLeft != 0 && moveBuffer.filePos != noFilePosition)
 	{
 		// We were not able to skip any moves, however we can skip the remaining segments of this current move
 		ToolOffsetInverseTransform(moveBuffer.initialCoords, currentUserPosition);
 		pauseRestorePoint.feedRate = moveBuffer.feedRate;
 		pauseRestorePoint.virtualExtruderPosition = moveBuffer.virtualExtruderPosition;
 		pauseRestorePoint.filePos = moveBuffer.filePos;
-		pauseRestorePoint.proportionDone = (float)(totalSegments - segmentsLeft)/(float)totalSegments;
+		pauseRestorePoint.proportionDone = moveBuffer.GetProportionDone();
 		pauseRestorePoint.initialUserC0 = moveBuffer.initialUserC0;
 		pauseRestorePoint.initialUserC1 = moveBuffer.initialUserC1;
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -1502,7 +1502,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 void GCodes::Diagnostics(MessageType mtype) noexcept
 {
 	platform.Message(mtype, "=== GCodes ===\n");
-	platform.MessageF(mtype, "Segments left: %u\n", segmentsLeft);
+	platform.MessageF(mtype, "Segments left: %u\n", moveBuffer.segmentsLeft);
 	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
 	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetChannel().ToString());
 
@@ -1528,7 +1528,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 	}
 
 	// Last one gone?
-	if (segmentsLeft != 0)
+	if (moveBuffer.segmentsLeft != 0)
 	{
 		return false;
 	}
@@ -1988,12 +1988,12 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	if (moveBuffer.moveType != 0)
 	{
 		// It's a raw motor move, so do it in a single segment and wait for it to complete
-		totalSegments = 1;
+		moveBuffer.totalSegments = 1;
 		gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 	}
 	else if (axesMentioned.IsEmpty())
 	{
-		totalSegments = 1;
+		moveBuffer.totalSegments = 1;
 	}
 	else
 	{
@@ -2076,21 +2076,21 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 			// We assume that the segments will be smaller than the mesh spacing.
 			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialXY[0]) + fsquare(currentUserPosition[Y_AXIS] - initialXY[1]));
 			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
-			totalSegments = (unsigned int)max<long>(1, min<long>(lrintf(xyLength/kin.GetMinSegmentLength()), lrintf(moveTime * kin.GetSegmentsPerSecond())));
+			moveBuffer.totalSegments = (unsigned int)max<long>(1, min<long>(lrintf(xyLength/kin.GetMinSegmentLength()), lrintf(moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else if (reprap.GetMove().IsUsingMesh() && (moveBuffer.isCoordinated || machineType == MachineType::fff))
 		{
 			ReadLocker locker(reprap.GetMove().heightMapLock);
 			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
-			totalSegments = max<unsigned int>(1, heightMap.GetMinimumSegments(currentUserPosition[X_AXIS] - initialXY[0], currentUserPosition[Y_AXIS] - initialXY[1]));
+			moveBuffer.totalSegments = max<unsigned int>(1, heightMap.GetMinimumSegments(currentUserPosition[X_AXIS] - initialXY[0], currentUserPosition[Y_AXIS] - initialXY[1]));
 		}
 		else
 		{
-			totalSegments = 1;
+			moveBuffer.totalSegments = 1;
 		}
 	}
 
-	doingArcMove = false;
+	moveBuffer.doingArcMove = false;
 	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
 	err = nullptr;
@@ -2311,11 +2311,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	{
 		if (axis0Mapping.IsBitSet(axis))
 		{
-			arcCentre[axis] = (userArcCentreAxis0 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
+			moveBuffer.arcCentre[axis] = (userArcCentreAxis0 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
 		}
 		else if (axis1Mapping.IsBitSet(axis))
 		{
-			arcCentre[axis] = (userArcCentreAxis1 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
+			moveBuffer.arcCentre[axis] = (userArcCentreAxis1 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
 		}
 	}
 
@@ -2386,8 +2386,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 
 	moveBuffer.usePressureAdvance = moveBuffer.hasPositiveExtrusion;
 
-	arcRadius = sqrtf(iParam * iParam + jParam * jParam);
-	arcCurrentAngle = atan2(-jParam, -iParam);
+	moveBuffer.arcRadius = sqrtf(iParam * iParam + jParam * jParam);
+	moveBuffer.arcCurrentAngle = atan2(-jParam, -iParam);
 
 	// Calculate the total angle moved, which depends on which way round we are going
 	float totalArc;
@@ -2397,7 +2397,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	}
 	else
 	{
-		totalArc = (clockwise) ? arcCurrentAngle - finalTheta : finalTheta - arcCurrentAngle;
+		totalArc = (clockwise) ? moveBuffer.arcCurrentAngle - finalTheta : finalTheta - moveBuffer.arcCurrentAngle;
 		if (totalArc < 0.0)
 		{
 			totalArc += TwoPi;
@@ -2409,20 +2409,20 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	// We leave out the square term because it is very small
 	// In CNC applications even very small deviations can be visible, so we use a smaller segment length at low speeds
 	const float arcSegmentLength = constrain<float>
-									(	min<float>(sqrtf(8 * arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
+									(	min<float>(sqrtf(8 * moveBuffer.arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
 										MinArcSegmentLength,
 										MaxArcSegmentLength
 									);
-	totalSegments = max<unsigned int>((unsigned int)((arcRadius * totalArc)/arcSegmentLength + 0.8), 1u);
-	arcAngleIncrement = totalArc/totalSegments;
+	moveBuffer.totalSegments = max<unsigned int>((unsigned int)((moveBuffer.arcRadius * totalArc)/arcSegmentLength + 0.8), 1u);
+	moveBuffer.arcAngleIncrement = totalArc/moveBuffer.totalSegments;
 	if (clockwise)
 	{
-		arcAngleIncrement = -arcAngleIncrement;
+		moveBuffer.arcAngleIncrement = -moveBuffer.arcAngleIncrement;
 	}
 
-	arcAxis0 = axis0;
-	arcAxis1 = axis1;
-	doingArcMove = true;
+	moveBuffer.arcAxis0 = axis0;
+	moveBuffer.arcAxis1 = axis1;
+	moveBuffer.doingArcMove = true;
 	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
@@ -2433,7 +2433,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 // Adjust the move parameters to account for segmentation and/or part of the move having been done already
 void GCodes::FinaliseMove(GCodeBuffer& gb) noexcept
 {
-	moveBuffer.canPauseAfter = !moveBuffer.checkEndstops && !doingArcMove;		// pausing during an arc move isn't safe because the arc centre get recomputed incorrectly when we resume
+	moveBuffer.canPauseAfter = !moveBuffer.checkEndstops && !moveBuffer.doingArcMove;		// pausing during an arc move isn't safe because the arc centre get recomputed incorrectly when we resume
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
 	gb.MotionCommanded();
 
@@ -2448,31 +2448,31 @@ void GCodes::FinaliseMove(GCodeBuffer& gb) noexcept
 	}
 	else
 	{
-		if (totalSegments > 1)
+		if (moveBuffer.totalSegments > 1)
 		{
-			segMoveState = SegmentedMoveState::active;
+			moveBuffer.segMoveState = SegmentedMoveState::active;
 			gb.SetState(GCodeState::waitingForSegmentedMoveToGo);
 
 			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 			{
-				moveBuffer.coords[ExtruderToLogicalDrive(extruder)] /= totalSegments;	// change the extrusion to extrusion per segment
+				moveBuffer.coords[ExtruderToLogicalDrive(extruder)] /= moveBuffer.totalSegments;	// change the extrusion to extrusion per segment
 			}
 
 			if (moveFractionToSkip != 0.0)
 			{
-				const float fseg = floor(totalSegments * moveFractionToSkip);		// round down to the start of a move
-				segmentsLeftToStartAt = totalSegments - (unsigned int)fseg;
-				firstSegmentFractionToSkip = (moveFractionToSkip * totalSegments) - fseg;
+				const float fseg = floor(moveBuffer.totalSegments * moveFractionToSkip);		// round down to the start of a move
+				segmentsLeftToStartAt = moveBuffer.totalSegments - (unsigned int)fseg;
+				firstSegmentFractionToSkip = (moveFractionToSkip * moveBuffer.totalSegments) - fseg;
 				NewMoveAvailable();
 				return;
 			}
 		}
 		else
 		{
-			segMoveState = SegmentedMoveState::inactive;
+			moveBuffer.segMoveState = SegmentedMoveState::inactive;
 		}
 
-		segmentsLeftToStartAt = totalSegments;
+		segmentsLeftToStartAt = moveBuffer.totalSegments;
 		firstSegmentFractionToSkip = moveFractionToSkip;
 
 		NewMoveAvailable();
@@ -2498,17 +2498,17 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	return true;
 }
 
-// The Move class calls this function to find what to do next.
+// The Move class calls this function to find what to do next. It takes its own copy of the move because it adjusts the coordinates.
 bool GCodes::ReadMove(RawMove& m) noexcept
 {
-	if (segmentsLeft == 0)
+	if (moveBuffer.segmentsLeft == 0)
 	{
 		return false;
 	}
 
 	m = moveBuffer;
 
-	if (segmentsLeft == 1)
+	if (moveBuffer.segmentsLeft == 1)
 	{
 		// If there is just 1 segment left, it doesn't matter if it is an arc move or not, just move to the end position
 		if (segmentsLeftToStartAt == 1 && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
@@ -2520,7 +2520,7 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 			}
 		}
 		m.proportionDone = 1.0;
-		if (doingArcMove)
+		if (moveBuffer.doingArcMove)
 		{
 			m.canPauseAfter = true;					// we can pause after the final segment of an arc move
 		}
@@ -2532,54 +2532,54 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 		// Do the axes
 		float sine = 0.0, cosine = 0.0;				// initialised to avoid gcc warning
 		AxesBitmap axisMap0, axisMap1;
-		if (doingArcMove)
+		if (moveBuffer.doingArcMove)
 		{
-			arcCurrentAngle += arcAngleIncrement;
+			moveBuffer.arcCurrentAngle += moveBuffer.arcAngleIncrement;
 			// Calculate sine and cosine just once for IDEX machines
-			sine = sinf(arcCurrentAngle);
-			cosine = cosf(arcCurrentAngle);
-			axisMap0 = Tool::GetAxisMapping(moveBuffer.tool, arcAxis0);
-			axisMap1 = Tool::GetAxisMapping(moveBuffer.tool, arcAxis1);
+			sine = sinf(moveBuffer.arcCurrentAngle);
+			cosine = cosf(moveBuffer.arcCurrentAngle);
+			axisMap0 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis0);
+			axisMap1 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis1);
 		}
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
 		{
-			if (doingArcMove && axisMap1.IsBitSet(drive))
+			if (moveBuffer.doingArcMove && axisMap1.IsBitSet(drive))
 			{
 				// Axis1 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * sine;
+				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * sine;
 			}
-			else if (doingArcMove && axisMap0.IsBitSet(drive))
+			else if (moveBuffer.doingArcMove && axisMap0.IsBitSet(drive))
 			{
 				// Axis0 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * axisScaleFactors[drive] * cosine;
+				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * cosine;
 			}
 			else
 			{
 				// This axis is not moving in an arc
-				const float movementToDo = (moveBuffer.coords[drive] - moveBuffer.initialCoords[drive])/segmentsLeft;
+				const float movementToDo = (moveBuffer.coords[drive] - moveBuffer.initialCoords[drive])/moveBuffer.segmentsLeft;
 				moveBuffer.initialCoords[drive] += movementToDo;
 			}
 			m.coords[drive] = moveBuffer.initialCoords[drive];
 		}
 
-		if (segmentsLeftToStartAt < segmentsLeft)
+		if (segmentsLeftToStartAt < moveBuffer.segmentsLeft)
 		{
 			// We are resuming a print part way through a move and we printed this segment already
-			--segmentsLeft;
+			--moveBuffer.segmentsLeft;
 			return false;
 		}
 
 		// Limit the end position at each segment. This is needed for arc moves on any printer, and for [segmented] straight moves on SCARA printers.
 		if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 		{
-			segMoveState = SegmentedMoveState::aborted;
-			doingArcMove = false;
-			segmentsLeft = 0;
+			moveBuffer.segMoveState = SegmentedMoveState::aborted;
+			moveBuffer.doingArcMove = false;
+			moveBuffer.segmentsLeft = 0;
 			return false;
 		}
 
-		if (segmentsLeftToStartAt == segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
+		if (segmentsLeftToStartAt == moveBuffer.segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
 			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
@@ -2587,9 +2587,9 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 				m.coords[ExtruderToLogicalDrive(extruder)] *= (1.0 - firstSegmentFractionToSkip);
 			}
 		}
-		--segmentsLeft;
+		--moveBuffer.segmentsLeft;
 
-		m.proportionDone = (float)(totalSegments - segmentsLeft)/(float)totalSegments;
+		m.proportionDone = moveBuffer.GetProportionDone();
 	}
 
 	return true;
@@ -2599,9 +2599,9 @@ void GCodes::ClearMove() noexcept
 {
 	TaskCriticalSectionLocker lock;				// make sure that other tasks sees a consistent memory state
 
-	segmentsLeft = 0;
-	segMoveState = SegmentedMoveState::inactive;
-	doingArcMove = false;
+	moveBuffer.segmentsLeft = 0;
+	moveBuffer.segMoveState = SegmentedMoveState::inactive;
+	moveBuffer.doingArcMove = false;
 	moveBuffer.checkEndstops = false;
 	moveBuffer.reduceAcceleration = false;
 	moveBuffer.moveType = 0;
@@ -3756,7 +3756,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				return GCodeResult::notFinished;
 			}
 
-			if (segmentsLeft != 0)
+			if (moveBuffer.segmentsLeft != 0)
 			{
 				return GCodeResult::notFinished;
 			}
@@ -3922,7 +3922,7 @@ bool GCodes::IsCodeQueueIdle() const noexcept
 // This is called from Pid.cpp when there is a heater fault, and from elsewhere in this module.
 void GCodes::StopPrint(StopPrintReason reason) noexcept
 {
-	segmentsLeft = 0;
+	moveBuffer.segmentsLeft = 0;
 	pausePending = filamentChangePausePending = false;
 	pauseState = PauseState::notPaused;
 

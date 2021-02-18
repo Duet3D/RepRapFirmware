@@ -20,10 +20,16 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	hasPositiveExtrusion = false;
 	filePos = noFilePosition;
 	tool = nullptr;
+	cosXyAngle = 1.0;
 	for (size_t drive = firstDriveToZero; drive < MaxAxesPlusExtruders; ++drive)
 	{
 		coords[drive] = 0.0;			// clear extrusion
 	}
+}
+
+float ExtendedRawMove::GetProportionDone() const noexcept
+{
+	return (float)(totalSegments - segmentsLeft)/(float)totalSegments;
 }
 
 #if SUPPORT_ASYNC_MOVES

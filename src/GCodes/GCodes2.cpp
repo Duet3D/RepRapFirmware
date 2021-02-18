@@ -72,12 +72,12 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
 			// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-			if (segmentsLeft != 0)
+			if (moveBuffer.segmentsLeft != 0)
 			{
 				return false;
 			}
 
-			if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + segmentsLeft))
+			if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + moveBuffer.segmentsLeft))
 			{
 				HandleReply(gb, GCodeResult::ok, "");
 				return true;
@@ -140,7 +140,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	{
 	case 0: // Rapid move
 	case 1: // Ordinary move
-		if (segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
+		if (moveBuffer.segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
 		{
 			return false;
 		}
@@ -166,7 +166,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	case 2: // Clockwise arc
 	case 3: // Anti clockwise arc
 		// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
-		if (segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
+		if (moveBuffer.segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
 		{
 			return false;
 		}
@@ -566,7 +566,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 #if SUPPORT_LASER
 					case MachineType::laser:
-						if (segmentsLeft != 0)
+						if (moveBuffer.segmentsLeft != 0)
 						{
 							return false;						// don't modify moves that haven't gone yet
 						}
@@ -664,7 +664,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_LASER
 			case MachineType::laser:
-				if (segmentsLeft != 0)
+				if (moveBuffer.segmentsLeft != 0)
 				{
 					return false;						// don't modify moves that haven't gone yet
 				}
@@ -2290,7 +2290,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (newSpeedFactor >= 0.01)
 				{
 					// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
-					if (segmentsLeft != 0 && moveBuffer.applyM220M221)
+					if (moveBuffer.segmentsLeft != 0 && moveBuffer.applyM220M221)
 					{
 						moveBuffer.feedRate *= newSpeedFactor / speedFactor;
 					}
@@ -2437,7 +2437,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
+					if (haveResidual && moveBuffer.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
 					{
 						// The pipeline is empty, so execute the babystepping move immediately
 						SetMoveBufferDefaults();

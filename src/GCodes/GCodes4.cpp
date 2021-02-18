@@ -61,7 +61,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::waitingForSegmentedMoveToGo:
 		// Wait for all segments of the arc move to go into the movement queue and check whether an error occurred
-		switch (segMoveState)
+		switch (moveBuffer.segMoveState)
 		{
 		case SegmentedMoveState::inactive:					// move completed without error
 			gb.SetState(GCodeState::normal);
@@ -1255,7 +1255,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	// Firmware retraction/un-retraction states
 	case GCodeState::doingFirmwareRetraction:
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
-		if (segmentsLeft == 0)
+		if (moveBuffer.segmentsLeft == 0)
 		{
 			const Tool * const tool = reprap.GetCurrentTool();
 			if (tool != nullptr)
@@ -1276,7 +1276,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::doingFirmwareUnRetraction:
 		// We just undid the Z-hop part of a firmware un-retraction, now we need to do the un-retract
-		if (segmentsLeft == 0)
+		if (moveBuffer.segmentsLeft == 0)
 		{
 			const Tool * const tool = reprap.GetCurrentTool();
 			if (tool != nullptr && tool->DriveCount() != 0)
