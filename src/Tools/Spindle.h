@@ -14,7 +14,7 @@
 #include <GCodes/GCodeResult.h>
 #include <General/NamedEnum.h>
 
-NamedEnum(SpindleState, uint8_t, stopped, forward, reverse);
+NamedEnum(SpindleState, uint8_t, unconfigured, stopped, forward, reverse);
 
 class Spindle INHERIT_OBJECT_MODEL
 {
@@ -25,7 +25,6 @@ private:
 	uint32_t currentRpm, configuredRpm, minRpm, maxRpm;
 	PwmFrequency frequency;
 	SpindleState state;
-	bool configured;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -39,7 +38,6 @@ public:
 	uint32_t GetMinRpm() const noexcept { return minRpm; }
 	uint32_t GetMaxRpm() const noexcept { return maxRpm; }
 	uint32_t GetRpm() const noexcept { return configuredRpm; }
-	bool IsConfigured() const noexcept { return configured; }
 	bool IsValidRpm(const uint32_t rpm) const noexcept { return rpm >= minRpm && rpm <= maxRpm; }
 	void SetConfiguredRpm(const uint32_t rpm, const bool updateCurrentRpm) noexcept;
 	SpindleState GetState() const noexcept { return state; }

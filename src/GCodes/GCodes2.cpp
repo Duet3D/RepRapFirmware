@@ -3413,24 +3413,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					break;
 				}
 
-				bool modifyingTool = gb.Seen('R') || gb.Seen('S') || gb.Seen('F');
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				if (simulationMode != 0)
 				{
-					modifyingTool |= gb.Seen(axisLetters[axis]);
+					break;
 				}
-
-				if (modifyingTool)
-				{
-					if (simulationMode != 0)
-					{
-						break;
-					}
-					result = SetOrReportOffsets(gb, reply, 568);
-				}
-				else
-				{
-					reprap.PrintTool(toolNumber, reply);
-				}
+				result = SetOrReportOffsets(gb, reply, 568);
 			}
 			break;
 

@@ -3236,22 +3236,25 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 	}
 
 	bool settingOffset = false;
-	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	if (code == 10)			// Only G10 can set tool offsets
 	{
-		if (gb.Seen(axisLetters[axis]))
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			if (!LockMovement(gb))
+			if (gb.Seen(axisLetters[axis]))
 			{
-				return GCodeResult::notFinished;
+				if (!LockMovement(gb))
+				{
+					return GCodeResult::notFinished;
+				}
+				settingOffset = true;
+				tool->SetOffset(axis, gb.GetFValue(), gb.MachineState().runningM501);
 			}
-			settingOffset = true;
-			tool->SetOffset(axis, gb.GetFValue(), gb.MachineState().runningM501);
 		}
-	}
 
-	if (settingOffset)
-	{
-		ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect the new tool offset, in case we have this tool selected
+		if (settingOffset)
+		{
+			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect the new tool offset, in case we have this tool selected
+		}
 	}
 
 	// Deal with setting temperatures
@@ -3288,14 +3291,17 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 	}
 
 	bool settingSpindleRpm = false;
-	if (tool->GetSpindleNumber() > -1)
+	if (code == 568)					// Only M568 can set spindle RPM
 	{
-		if (gb.Seen('F'))
+		if (tool->GetSpindleNumber() > -1)
 		{
-			settingSpindleRpm = true;
-			if (simulationMode == 0)
+			if (gb.Seen('F'))
 			{
-				tool->SetSpindleRpm(gb.GetUIValue());
+				settingSpindleRpm = true;
+				if (simulationMode == 0)
+				{
+					tool->SetSpindleRpm(gb.GetUIValue());
+				}
 			}
 		}
 	}
@@ -3316,6 +3322,10 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 				reply.catf(" %.1f/%.1f", (double)tool->GetToolHeaterActiveTemperature(heater), (double)tool->GetToolHeaterStandbyTemperature(heater));
 			}
 		}
+		if (code == 568 && tool->GetSpindleNumber() > -1)
+		{
+			reply.catf(", spindle: %d@%" PRIu32 "RPM", tool->GetSpindleNumber(), tool->GetSpindleRpm());
+		}
 	}
 	else
 	{
@@ -3323,6 +3333,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 		gb.AppendFullCommand(scratch.GetRef());
 		platform.Message(MessageType::LogInfo, scratch.c_str());
 	}
+#if 0 // Do not warn about deprecation for now
 	if (code == 10)
 	{
 		if (reply.strlen() > 0)
@@ -3332,6 +3343,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 		reply.cat("Tool settings (offsets, heater temps, spindle RPM) have been moved to M568");
 		return GCodeResult::warning;
 	}
+#endif
 	return GCodeResult::ok;
 }
 
@@ -3430,10 +3442,12 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 
 	// Check for a spindle to attach
 	int8_t spindleNumber = -1;
+	size_t sCount = 0;
 	if (gb.Seen('R'))
 	{
 		seen = true;
-		spindleNumber = gb.GetLimitedUIValue('R', MaxSpindles);
+		spindleNumber = gb.GetLimitedIValue('R', -1, MaxSpindles);
+		++sCount;
 	}
 
 	if (seen)
@@ -3452,13 +3466,13 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		reprap.DeleteTool(toolNumber);
 
 		// M563 P# D-1 H-1 R-1 removes an existing tool
-		if (dCount == 1 && hCount == 1 && drives[0] == -1 && heaters[0] == -1 && spindleNumber == -1)
+		if (dCount == 1 && hCount == 1 && sCount == 1 && drives[0] == -1 && heaters[0] == -1 && spindleNumber == -1)
 		{
 			// nothing more to do
 		}
 		else
 		{
-			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, filamentDrive, spindleNumber, reply);
+			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, filamentDrive, sCount, spindleNumber, reply);
 			if (tool == nullptr)
 			{
 				return GCodeResult::error;
