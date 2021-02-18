@@ -1540,7 +1540,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
 	{
 		size_t numSpindles = MaxSpindles;
-		while (numSpindles != 0 && !platform->AccessSpindle(numSpindles - 1).IsConfigured())
+		while (numSpindles != 0 && platform->AccessSpindle(numSpindles - 1).GetState() == SpindleState::unconfigured)
 		{
 			--numSpindles;
 		}

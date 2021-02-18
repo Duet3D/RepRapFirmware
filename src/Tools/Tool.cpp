@@ -126,7 +126,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 #endif
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, int8_t spindleNo, const StringRef& reply) noexcept
+/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, size_t sCount, int8_t spindleNo, const StringRef& reply) noexcept
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -155,6 +155,21 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 		if (h[i] < 0 || h[i] >= (int)MaxHeaters)
 		{
 			reply.copy("Tool creation: bad heater number");
+			return nullptr;
+		}
+	}
+
+	// Check that the spindle - if given - is configured
+	if (sCount > 0 && spindleNo > -1)
+	{
+		if (spindleNo >= MaxSpindles)
+		{
+			reply.copy("Tool creation: bad spindle number");
+			return nullptr;
+		}
+		if (reprap.GetPlatform().AccessSpindle(spindleNo).GetState() == SpindleState::unconfigured)
+		{
+			reply.copy("Tool creation: unconfigured spindle");
 			return nullptr;
 		}
 	}
@@ -203,12 +218,6 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	t->retractHop = 0.0;
 	t->retractSpeed = t->unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	t->isRetracted = false;
-
-	if (spindleNo > -1 && !reprap.GetPlatform().AccessSpindle(spindleNo).IsConfigured())
-	{
-		reply.copy("Tool creation: unconfigured spindle");
-		return nullptr;
-	}
 	t->spindleNumber = spindleNo;
 	t->spindleRpm = 0;
 

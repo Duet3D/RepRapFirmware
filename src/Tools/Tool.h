@@ -58,7 +58,7 @@ public:
 			AxesBitmap yMap,
 			FansBitmap fanMap,
 			int filamentDrive,
-			int8_t spindleNo,
+			size_t sCount, int8_t spindleNo,
 			const StringRef& reply) noexcept;
 	static void Delete(Tool *t) noexcept { delete t; }
 	static AxesBitmap GetXAxes(const Tool *tool) noexcept;
@@ -95,6 +95,7 @@ public:
 	float GetUnRetractSpeed() const noexcept { return unRetractSpeed; }
 	void SetRetracted(bool b) noexcept { isRetracted = b; }
 	int8_t GetSpindleNumber() const noexcept { return spindleNumber; }
+	uint32_t GetSpindleRpm() const noexcept { return spindleRpm; }
 	void SetSpindleRpm(uint32_t rpm) THROWS(GCodeException);
 
 #if HAS_MASS_STORAGE

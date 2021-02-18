@@ -24,7 +24,6 @@ constexpr ObjectModelTableEntry Spindle::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Spindle members
 	{ "active",			OBJECT_MODEL_FUNC((int32_t)self->configuredRpm),ObjectModelEntryFlags::none },
-	{ "configured",		OBJECT_MODEL_FUNC(self->configured),			ObjectModelEntryFlags::verbose },
 	{ "current",		OBJECT_MODEL_FUNC((int32_t)self->currentRpm),	ObjectModelEntryFlags::live },
 	{ "frequency",		OBJECT_MODEL_FUNC((int32_t)self->frequency),	ObjectModelEntryFlags::verbose },
 	{ "max",			OBJECT_MODEL_FUNC((int32_t)self->maxRpm),		ObjectModelEntryFlags::verbose },
@@ -32,7 +31,7 @@ constexpr ObjectModelTableEntry Spindle::objectModelTable[] =
 	{ "state",			OBJECT_MODEL_FUNC(self->state.ToString()),		ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Spindle::objectModelTableDescriptor[] = { 1, 7 };
+constexpr uint8_t Spindle::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Spindle)
 
@@ -44,8 +43,7 @@ Spindle::Spindle() noexcept
 	  minRpm(DefaultMinSpindleRpm),
 	  maxRpm(DefaultMaxSpindleRpm),
 	  frequency(0),
-	  state(SpindleState::stopped),
-	  configured(false)
+	  state(SpindleState::unconfigured)
 {
 }
 
@@ -90,7 +88,7 @@ GCodeResult Spindle::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 
 	if (seen)
 	{
-		configured = true;
+		state = SpindleState::stopped;
 		reprap.SpindlesUpdated();
 	}
 	return GCodeResult::ok;
