@@ -2502,6 +2502,7 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 }
 
 // The Move class calls this function to find what to do next. It takes its own copy of the move because it adjusts the coordinates.
+// Returns true if a new move was copied to 'm'.
 bool GCodes::ReadMove(RawMove& m) noexcept
 {
 	if (moveBuffer.segmentsLeft == 0)
@@ -2555,7 +2556,7 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 			}
 			axisMap0 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis0);
 			axisMap1 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis1);
-			moveBuffer.cosXyAngle = 1.0;			// we assume that the angle between segments is small, so no need to adjust the jerk
+			moveBuffer.cosXyAngle = moveBuffer.angleIncrementCosine;
 		}
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
