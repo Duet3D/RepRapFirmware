@@ -152,8 +152,16 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept
 {
 	String<StringLength256> scratchString;
-	scratchString.printf("M307 H%u R%.3f C%.3f:%.3f D%.2f S%.2f V%.1f B%d\n",
-							heater, (double)heatingRate, (double)GetTimeConstantFanOff(), (double)GetTimeConstantFanOn(), (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
+	scratchString.printf("M307 H%u R%.3f C%.3f:%.3f D%.2f S%.2f V%.1f B%d I%d\n",
+							heater,
+							(double)heatingRate,
+							(double)GetTimeConstantFanOff(),
+							(double)GetTimeConstantFanOn(),
+							(double)deadTime,
+							(double)maxPwm,
+							(double)standardVoltage,
+							(usePid) ? 0 : 1,
+							(inverted) ? 1 : 0);
 	bool ok = f->Write(scratchString.c_str());
 	if (ok && pidParametersOverridden)
 	{
