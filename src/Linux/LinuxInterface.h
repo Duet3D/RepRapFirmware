@@ -39,7 +39,7 @@ public:
 	// The Init method must be called prior to calling any of the other methods. Use reprap.UsingLinuxInterface() to guard calls to other members.
 	// OTOH, calling Init when we don't have a SBC connected may cause problems due to noise pickup on the SPI CS and clock inputs
 	void Init() noexcept;
-	void TaskLoop() noexcept;
+	[[noreturn]] void TaskLoop() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 	bool IsConnected() const noexcept { return isConnected; }
 
@@ -76,7 +76,7 @@ private:
 	// Data needed when a CAN expansion board requests a firmware file chunk
 	volatile bool waitingForFileChunk;
 	bool fileChunkRequestSent;
-	String<FILENAME_MAX> requestedFileName;
+	String<MaxFilenameLength> requestedFileName;
 	uint32_t requestedFileOffset, requestedFileLength;
 	BinarySemaphore requestedFileSemaphore;
 	char *requestedFileBuffer;

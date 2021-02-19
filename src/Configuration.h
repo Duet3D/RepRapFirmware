@@ -154,23 +154,23 @@ constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. 
 //   So 32 points using double precision arithmetic need 3584 bytes of stack space.
 #if SAM4E || SAM4S || SAME70 || SAME5x
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
-constexpr size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
+constexpr size_t MaxAxis0GridPoints = 41;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 #elif SAM3XA
 constexpr size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 at 20mm intervals
-constexpr size_t MaxXGridPoints = 21;					// Maximum number of grid points in one X row
+constexpr size_t MaxAxis0GridPoints = 21;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 #elif __LPC17xx__
 # if defined(LPC_NETWORKING)
 constexpr size_t MaxGridProbePoints = 121;    			// 121 allows us to probe 200x200 at 20mm intervals
-constexpr size_t MaxXGridPoints = 21;         			// Maximum number of grid points in one X row
+constexpr size_t MaxAxis0GridPoints = 21;         			// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;       			// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 16; 			// Should a power of 2 for speed
 # else
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
-constexpr size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
+constexpr size_t MaxAxis0GridPoints = 41;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 # endif
@@ -229,7 +229,11 @@ constexpr size_t StringLength256 = 256;
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
 constexpr size_t FormatStringLength = StringLength256;
+#ifdef DUET3_ATE
+constexpr size_t GCodeReplyLength = StringLength500;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer (ATE codes can generate long replies)
+#else
 constexpr size_t GCodeReplyLength = StringLength256;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
+#endif
 constexpr size_t MachineNameLength = StringLength50;
 constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
@@ -274,7 +278,7 @@ constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 // These two definitions are only used if TRACK_OBJECT_NAMES is defined, however that definition isn't available in this file
 #if SAME70 || SAME5x
-constexpr size_t MaxTrackedObjects = 32;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
+constexpr size_t MaxTrackedObjects = 40;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
 constexpr size_t ObjectNamesStringSpace = 1000;			// How much space we reserve for the names of objects on the build plate
 #else
 constexpr size_t MaxTrackedObjects = 20;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
@@ -291,6 +295,7 @@ constexpr float MaxArcDeviation = 0.02;					// maximum deviation from ideal arc 
 constexpr float MinArcSegmentLength = 0.1;				// G2 and G3 arc movement commands get split into segments at least this long
 constexpr float MaxArcSegmentLength = 2.0;				// G2 and G3 arc movement commands get split into segments at most this long
 constexpr float MinArcSegmentsPerSec = 50;
+constexpr float SegmentsPerFulArcCalculation = 8;		// we do the full sine/cosine calculation every this number of segments
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold
@@ -352,7 +357,7 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 #define MACRO_DIR "0:/macros/"						// Ditto - Macro files
 #define SCANS_DIRECTORY "0:/scans/"					// Directory for uploaded 3D scans
 #define FILAMENTS_DIRECTORY "0:/filaments/"			// Directory for filament configurations
-#define FIRMWARE_DIRECTORY "0:/sys/"				// Directory for firmware and IAP files
+#define FIRMWARE_DIRECTORY "0:/firmware/"			// Directory for firmware and IAP files
 #define MENU_DIR "0:/menu/"							// Directory for menu files
 
 // MaxExpectedWebDirFilenameLength is the maximum length of a filename that we can accept in a HTTP request without rejecting it out of hand

@@ -85,7 +85,7 @@ bool RemoteFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber);
-	auto msg = buf->SetupRequestMessage<CanMessageFanParameters>(rid, CanId::MasterAddress, boardNumber);
+	auto msg = buf->SetupRequestMessage<CanMessageFanParameters>(rid, CanInterface::GetCanAddress(), boardNumber);
 	msg->fanNumber = fanNumber;
 	msg->blipTime = blipTime;
 	msg->val = val;
@@ -109,7 +109,7 @@ GCodeResult RemoteFan::Refresh(const StringRef& reply) noexcept
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber);
-	auto msg = buf->SetupRequestMessage<CanMessageSetFanSpeed>(rid, CanId::MasterAddress, boardNumber);
+	auto msg = buf->SetupRequestMessage<CanMessageSetFanSpeed>(rid, CanInterface::GetCanAddress(), boardNumber);
 	msg->fanNumber = fanNumber;
 	msg->pwm = val;
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);

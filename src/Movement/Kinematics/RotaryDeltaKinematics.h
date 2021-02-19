@@ -8,9 +8,9 @@
 #ifndef SRC_MOVEMENT_KINEMATICS_ROTARYDELTAKINEMATICS_H_
 #define SRC_MOVEMENT_KINEMATICS_ROTARYDELTAKINEMATICS_H_
 
-#include "Kinematics.h"
+#include "RoundBedKinematics.h"
 
-class RotaryDeltaKinematics : public Kinematics
+class RotaryDeltaKinematics : public RoundBedKinematics
 {
 public:
 	// Constructors
@@ -21,13 +21,12 @@ public:
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
-	bool SupportsAutoCalibration() const noexcept override { return false; }		// TODO support autocalibration
+	bool SupportsAutoCalibration() const noexcept override { return true; }
 	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
 	void SetCalibrationDefaults() noexcept override { Init(); }
 #if HAS_MASS_STORAGE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
 #endif
-	bool IsReachable(float x, float y, bool isCoordinated) const noexcept override;
 	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept override;
 	AxesBitmap AxesToHomeBeforeProbing() const noexcept override { return XyzAxes; }
@@ -41,8 +40,6 @@ public:
 #if HAS_MASS_STORAGE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
-	AxesBitmap GetLinearAxes() const noexcept override;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -50,8 +47,12 @@ protected:
 private:
 	void Init() noexcept;
 	void Recalc() noexcept;
-    float Transform(const float headPos[], size_t axis) const noexcept;						// Calculate the motor position for a single tower from a Cartesian coordinate
-    void ForwardTransform(float Ha, float Hb, float Hc, float headPos[]) const noexcept;	// Calculate the Cartesian position from the motor positions
+    float Transform(const float headPos[], size_t axis) const noexcept;								// Calculate the motor position for a single tower from a Cartesian coordinate
+    void ForwardTransform(float Ha, float Hb, float Hc, float headPos[]) const noexcept;			// Calculate the Cartesian position from the motor positions
+
+    floatc_t ComputeDerivative(unsigned int deriv, float ha, float hb, float hc) const noexcept;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
+	void Adjust(size_t numFactors, const floatc_t v[]) noexcept;									// Perform 3-, 4- or 6-factor adjustment
+	void PrintParameters(const StringRef& reply) const noexcept;									// Print all the parameters for debugging
 
 	// Axis names used internally
 	static constexpr size_t DELTA_AXES = 3;
@@ -90,7 +91,8 @@ private:
 	float twiceU[DELTA_AXES];
 	float rodSquared[DELTA_AXES];
 	float rodSquaredMinusArmSquared[DELTA_AXES];
-	float printRadiusSquared;
+
+	bool doneAutoCalibration;							// True if we have done auto calibration
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_ROTARYDELTAKINEMATICS_H_ */

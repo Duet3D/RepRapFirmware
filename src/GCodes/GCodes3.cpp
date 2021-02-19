@@ -241,19 +241,48 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		return GCodeResult::notFinished;
 	}
 
-	bool seenX = false, seenY = false, seenR = false, seenP = false, seenS = false;
-	float xValues[2];
-	float yValues[2];
+	bool seenR = false, seenP = false, seenS = false;
+	char axesLetters[2] = { 'X', 'Y'};
+	float axis0Values[2];
+	float axis1Values[2];
 	float spacings[2] = { DefaultGridSpacing, DefaultGridSpacing };
 
-	if (gb.TryGetFloatArray('X', 2, xValues, reply, seenX, false))
+	size_t axesSeenCount = 0;
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			if (axisLetters[axis] == 'Z')
+			{
+				reply.copy("Z axis is not allowed for mesh leveling");
+				return GCodeResult::error;
+			}
+			else if (axesSeenCount > 2)
+			{
+				reply.copy("Mesh leveling expects exactly two axes");
+				return GCodeResult::error;
+			}
+			bool dummy;
+			if (gb.TryGetFloatArray(
+					axisLetters[axis],
+					2,
+					(axesSeenCount == 0) ? axis0Values : axis1Values,
+					reply,
+					dummy,
+					false))
+			{
+				return GCodeResult::error;
+			}
+			axesLetters[axesSeenCount] = axisLetters[axis];
+			++axesSeenCount;
+		}
+	}
+	if (axesSeenCount == 1)
+	{
+		reply.copy("Specify zero or two axes in M557");
 		return GCodeResult::error;
 	}
-	if (gb.TryGetFloatArray('Y', 2, yValues, reply, seenY, false))
-	{
-		return GCodeResult::error;
-	}
+	const bool axesSeen = axesSeenCount > 0;
 
 	uint32_t numPoints[2];
 	if (gb.TryGetUIArray('P', 2, numPoints, reply, seenP, true))
@@ -271,7 +300,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	float radius = -1.0;
 	gb.TryGetFValue('R', radius, seenR);
 
-	if (!seenX && !seenY && !seenR && !seenS && !seenP)
+	if (!axesSeen && !seenR && !seenS && !seenP)
 	{
 		ReadLocker rlocker(reprap.GetMove().heightMapLock);
 
@@ -288,31 +317,25 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		return GCodeResult::ok;
 	}
 
-	if (seenX != seenY)
-	{
-		reply.copy("specify both or neither of X and Y in M557");
-		return GCodeResult::error;
-	}
-
-	if (!seenX && !seenR)
+	if (!axesSeen && !seenR)
 	{
 		// Must have given just the S or P parameter
-		reply.copy("specify at least radius or X and Y ranges in M557");
+		reply.copy("specify at least radius or two axis ranges in M557");
 		return GCodeResult::error;
 	}
 
-	if (seenX)
+	if (axesSeen)
 	{
-		// Seen both X and Y
+		// Seen both axes
 		if (seenP)
 		{
-			if (spacings[0] >= 2 && xValues[1] > xValues[0])
+			if (spacings[0] >= 2 && axis0Values[1] > axis0Values[0])
 			{
-				spacings[0] = (xValues[1] - xValues[0])/(numPoints[0] - 1);
+				spacings[0] = (axis0Values[1] - axis0Values[0])/(numPoints[0] - 1);
 			}
-			if (spacings[1] >= 2 && yValues[1] > yValues[0])
+			if (spacings[1] >= 2 && axis1Values[1] > axis1Values[0])
 			{
-				spacings[1] = (yValues[1] - yValues[0])/(numPoints[1] - 1);
+				spacings[1] = (axis1Values[1] - axis1Values[0])/(numPoints[1] - 1);
 			}
 		}
 	}
@@ -335,8 +358,8 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 			{
 				effectiveXRadius = floorf((radius - 0.1)/spacings[0]) * spacings[0];
 			}
-			xValues[0] = -effectiveXRadius;
-			xValues[1] =  effectiveXRadius + 0.1;
+			axis0Values[0] = -effectiveXRadius;
+			axis0Values[1] =  effectiveXRadius + 0.1;
 
 			float effectiveYRadius;
 			if (seenP && numPoints[1] >= 2)
@@ -352,8 +375,8 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 			{
 				effectiveYRadius = floorf((radius - 0.1)/spacings[1]) * spacings[1];
 			}
-			yValues[0] = -effectiveYRadius;
-			yValues[1] =  effectiveYRadius + 0.1;
+			axis1Values[0] = -effectiveYRadius;
+			axis1Values[1] =  effectiveYRadius + 0.1;
 		}
 		else
 		{
@@ -363,17 +386,17 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	}
 
 	WriteLocker locker(reprap.GetMove().heightMapLock);
-	const bool ok = defaultGrid.Set(xValues, yValues, radius, spacings);
+	const bool ok = defaultGrid.Set(axesLetters, axis0Values, axis1Values, radius, spacings);
 	reprap.MoveUpdated();
 	if (ok)
 	{
 		return GCodeResult::ok;
 	}
 
-	const float xRange = (seenX) ? xValues[1] - xValues[0] : 2 * radius;
-	const float yRange = (seenX) ? yValues[1] - yValues[0] : 2 * radius;
+	const float axis1Range = axesSeen ? axis0Values[1] - axis0Values[0] : 2 * radius;
+	const float axis2Range = axesSeen ? axis1Values[1] - axis1Values[0] : 2 * radius;
 	reply.copy("bad grid definition: ");
-	defaultGrid.PrintError(xRange, yRange, reply);
+	defaultGrid.PrintError(axis1Range, axis2Range, reply);
 	return GCodeResult::error;
 }
 
@@ -740,6 +763,25 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	return GCodeResult::ok;
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// Switch the board into expansion mode. We map all drivers to individual axes.
+void GCodes::SwitchToExpansionMode() noexcept
+{
+	numExtruders = 0;
+	numVisibleAxes = numTotalAxes = NumDirectDrivers;
+	memcpy(axisLetters, AllowedAxisLetters, sizeof(axisLetters));
+	for (size_t axis = 0; axis < NumDirectDrivers; ++axis)
+	{
+		DriverId driver;
+		driver.SetLocal(axis);
+		platform.SetAxisDriversConfig(axis, 1, &driver);
+	}
+	isRemotePrinting = false;
+}
+
+#endif
+
 // Handle G38.[2-5]
 GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -1067,7 +1109,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	if (gb.Seen('B'))
 	{
 		const uint32_t boardNumber = gb.GetUIValue();
-		if (boardNumber != CanId::MasterAddress)
+		if (boardNumber != CanInterface::GetCanAddress())
 		{
 			return reprap.GetExpansion().UpdateRemoteFirmware(boardNumber, gb, reply);
 		}
@@ -1083,7 +1125,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off because the main loop may get suspended
 	DisableDrives();									// all motors off
 
-	if (firmwareUpdateModuleMap == 0)					// have we worked out which modules to update?
+	if (firmwareUpdateModuleMap.IsEmpty())					// have we worked out which modules to update?
 	{
 		// Find out which modules we have been asked to update
 		if (gb.Seen('S'))
@@ -1097,21 +1139,33 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 				if (t >= NumFirmwareUpdateModules)
 				{
 					reply.printf("Invalid module number '%" PRIu32 "'\n", t);
-					firmwareUpdateModuleMap = 0;
+					firmwareUpdateModuleMap.Clear();
 					return GCodeResult::error;
 					break;
 				}
-				firmwareUpdateModuleMap |= (1u << t);
+				firmwareUpdateModuleMap.SetBit(t);
 			}
 		}
 		else
 		{
-			firmwareUpdateModuleMap = (1u << 0);		// no modules specified, so update module 0 to match old behaviour
+			firmwareUpdateModuleMap.SetBit(0);		// no modules specified, so update module 0 to match old behaviour
 		}
 
-		if (firmwareUpdateModuleMap == 0)
+		if (firmwareUpdateModuleMap.IsEmpty())
 		{
 			return GCodeResult::ok;						// nothing to update
+		}
+
+		String<MaxFilenameLength> filenameString;
+		if (gb.Seen('P'))
+		{
+			if (firmwareUpdateModuleMap.CountSetBits() > 1)
+			{
+				reply.copy("Filename can only be provided when updating excactly one module\n");
+				firmwareUpdateModuleMap.Clear();
+				return GCodeResult::error;
+			}
+			gb.GetQuotedString(filenameString.GetRef());
 		}
 
 		// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
@@ -1119,20 +1173,20 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		const auto result = FirmwareUpdater::CheckFirmwareUpdatePrerequisites(
 				firmwareUpdateModuleMap, gb, reply,
 # if HAS_AUX_DEVICES
-				serialChannelForPanelDueFlashing
+				serialChannelForPanelDueFlashing,
 #else
-				0
+				0,
 #endif
-				);
+				filenameString.GetRef());
 		if (result != GCodeResult::ok)
 		{
-			firmwareUpdateModuleMap = 0;
+			firmwareUpdateModuleMap.Clear();
 			return result;
 		}
 #endif
-		if ((firmwareUpdateModuleMap & 1) != 0 && !reprap.CheckFirmwareUpdatePrerequisites(reply))
+		if (firmwareUpdateModuleMap.IsBitSet(0) && !reprap.CheckFirmwareUpdatePrerequisites(reply, filenameString.GetRef()))
 		{
-			firmwareUpdateModuleMap = 0;
+			firmwareUpdateModuleMap.Clear();
 			return GCodeResult::error;
 		}
 	}
@@ -1264,7 +1318,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 	gb.MustSee('P');
 	const DriverId id = gb.GetDriverId();
 #if SUPPORT_CAN_EXPANSION
-	if (id.boardAddress != CanId::MasterAddress)
+	if (id.boardAddress != CanInterface::GetCanAddress())
 	{
 		return CanInterface::ConfigureRemoteDriver(id, gb, reply);
 	}
@@ -1502,7 +1556,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 // Change a live extrusion factor
 void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 {
-	if (segmentsLeft != 0 && moveBuffer.applyM220M221)
+	if (moveBuffer.segmentsLeft != 0 && moveBuffer.applyM220M221)
 	{
 		moveBuffer.coords[ExtruderToLogicalDrive(extruder)] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}

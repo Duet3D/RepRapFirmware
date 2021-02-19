@@ -181,6 +181,7 @@ public:
 #endif
 
 	const char *GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
+	size_t GetAxisNumberForLetter(const char axisLetter) const noexcept;
 	MachineType GetMachineType() const noexcept { return machineType; }
 	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept;			// Lock movement and wait for pending moves to finish
 
@@ -201,7 +202,7 @@ public:
 	bool AtxPowerControlled() const noexcept { return atxPowerControlled; }
 
 	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };		// Get the default grid definition
-	bool AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
+	bool AssignGrid(const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
 	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
 
 	int GetNewToolNumber() const noexcept { return newToolNumber; }
@@ -216,7 +217,6 @@ public:
 #endif
 
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;		// Save position etc. to a restore point
-	void SaveSpindleSpeeds(RestorePoint& rp) const noexcept;						// Save spindle speeds to a restore point
 	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
 
 	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return currentCoordinateSystem + 1; }
@@ -253,7 +253,12 @@ public:
 # endif
 #endif
 
-	static constexpr const char *AllowedAxisLetters = "XYZUVWABCD";
+#if SUPPORT_REMOTE_COMMANDS
+	void SwitchToExpansionMode() noexcept;
+	void SetRemotePrinting(bool isPrinting) noexcept { isRemotePrinting = isPrinting; }
+#endif
+
+	static constexpr const char *AllowedAxisLetters = "XYZUVWABCDabcdefghijkl";
 
 	// Standard macro filenames
 #define DEPLOYPROBE		"deployprobe"
@@ -343,7 +348,7 @@ private:
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);									// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Home some axes
-	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with a G10
+	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply, int code) THROWS(GCodeException);	// Deal with a G10/M568
 	GCodeResult SetPositions(GCodeBuffer& gb) THROWS(GCodeException);								// Deal with a G92
 	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Deal with a G38.x
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Deal with a M584
@@ -529,9 +534,7 @@ private:
 
 	// The following contain the details of moves that the Move module fetches
 	// CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
-	RawMove moveBuffer;							// Move details to pass to Move class
-	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
-	unsigned int totalSegments;					// The total number of segments left in the complete move
+	ExtendedRawMove moveBuffer;					// Move details
 	bool updateUserPosition;
 
 	unsigned int segmentsLeftToStartAt;
@@ -539,22 +542,8 @@ private:
 	float firstSegmentFractionToSkip;
 
 	float restartMoveFractionDone;				// how much of the next move was printed before the pause or power failure (from M26)
-	float restartInitialUserX;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
-	float restartInitialUserY;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
-
-	float arcCentre[MaxAxes];
-	float arcRadius;
-	float arcCurrentAngle;
-	float arcAngleIncrement;
-	bool doingArcMove;
-
-	enum class SegmentedMoveState : uint8_t
-	{
-		inactive = 0,
-		active,
-		aborted
-	};
-	SegmentedMoveState segMoveState;
+	float restartInitialUserC0;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
+	float restartInitialUserC1;					// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
 
 	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
 
@@ -610,7 +599,7 @@ private:
 	float g30zHeightErrorLowestDiff;			// the lowest difference we have seen between consecutive readings
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
-	size_t gridXindex, gridYindex;				// Which grid probe point is next
+	size_t gridAxis0index, gridAxis1index;		// Which grid probe point is next
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
@@ -629,7 +618,7 @@ private:
 	TriggerNumbersBitmap triggersPending;		// Bitmap of triggers pending but not yet executed
 
 	// Firmware update
-	uint8_t firmwareUpdateModuleMap;			// Bitmap of firmware modules to be updated
+	Bitmap<uint8_t> firmwareUpdateModuleMap;	// Bitmap of firmware modules to be updated
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
 
@@ -674,6 +663,10 @@ private:
 	uint32_t timingStartMillis;
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+	bool isRemotePrinting;
+#endif
+
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting
@@ -691,18 +684,18 @@ private:
 // then call this function to update SegmentsLeft safely in a multi-threaded environment
 inline void GCodes::NewMoveAvailable(unsigned int sl) noexcept
 {
-	totalSegments = sl;
-	__DMB();					// make sure that all the move details have been written first
-	segmentsLeft = sl;			// set the number of segments to indicate that a move is available to be taken
+	moveBuffer.totalSegments = sl;
+	__DMB();									// make sure that all the move details have been written first
+	moveBuffer.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
 }
 
 // Flag that a new move is available for consumption by the Move subsystem
 // This version is for when totalSegments has already be set up.
 inline void GCodes::NewMoveAvailable() noexcept
 {
-	const unsigned int sl = totalSegments;
-	__DMB();					// make sure that the move details have been written first
-	segmentsLeft = sl;			// set the number of segments to indicate that a move is available to be taken
+	const unsigned int sl = moveBuffer.totalSegments;
+	__DMB();									// make sure that the move details have been written first
+	moveBuffer.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
 }
 
 // Get the total baby stepping offset for an axis

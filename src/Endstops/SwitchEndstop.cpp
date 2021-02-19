@@ -20,7 +20,7 @@
 #endif
 
 // Switch endstop
-SwitchEndstop::SwitchEndstop(uint8_t axis, EndStopPosition pos) noexcept : Endstop(axis, pos), numPortsUsed(0)
+SwitchEndstop::SwitchEndstop(uint8_t p_axis, EndStopPosition pos) noexcept : Endstop(p_axis, pos), numPortsUsed(0)
 {
 	// ports will be initialised automatically by the IoPort default constructor
 }
@@ -38,7 +38,7 @@ void SwitchEndstop::ReleasePorts() noexcept
 		--numPortsUsed;
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress bn = boardNumbers[numPortsUsed];
-		if (bn != CanId::MasterAddress)
+		if (bn != CanInterface::GetCanAddress())
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
 			String<StringLength100> reply;
@@ -81,7 +81,7 @@ GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& repl
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress boardAddress = IoPort::RemoveBoardAddress(pn.GetRef());
 		boardNumbers[numPortsUsed] = boardAddress;
-		if (boardAddress != CanId::MasterAddress)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
 			const GCodeResult rslt = CanInterface::CreateHandle(boardAddress, h, pn.c_str(), 0, MinimumSwitchReportInterval, states[numPortsUsed], reply);
@@ -237,7 +237,7 @@ void SwitchEndstop::AppendDetails(const StringRef& str) noexcept
 	{
 		str.cat(' ');
 #if SUPPORT_CAN_EXPANSION
-		if (boardNumbers[i] != CanId::MasterAddress)
+		if (boardNumbers[i] != CanInterface::GetCanAddress())
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), i);
 			String<StringLength100> reply;

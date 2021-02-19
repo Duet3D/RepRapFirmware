@@ -41,11 +41,20 @@ Licence: GPL
 # include "CAN/CanInterface.h"
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #ifdef DUET3_ATE
 # include <Duet3Ate.h>
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+constexpr uint32_t HeaterTaskStackWords = 420;			// task stack size in dwords, must be large enough for auto tuning and a local CAN buffer
+#else
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
+#endif
+
 static Task<HeaterTaskStackWords> heaterTask;
 
 extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
@@ -281,26 +290,44 @@ void Heat::Exit() noexcept
 
 [[noreturn]] void Heat::HeaterTask() noexcept
 {
-#if SUPPORT_CAN_EXPANSION
-	CanMessageBuffer * buf;
-	while ((buf = CanMessageBuffer::Allocate()) == nullptr)
-	{
-		delay(1);
-	}
-#endif
-
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
-		// Walk the sensor list and poll all sensors
+		// Walk the sensor list and poll all sensors. The list is in increasing sensor number order.
 		{
-			ReadLocker lock(sensorsLock);
-			TemperatureSensor *currentSensor = sensorsRoot;
-			while (currentSensor != nullptr)
+#if SUPPORT_CAN_EXPANSION
+			// Set up to broadcast our sensor temperatures
+			CanMessageBuffer buf(nullptr);
+			CanMessageSensorTemperatures * const msg = buf.SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
+			msg->whichSensors = 0;
+			unsigned int sensorsFound = 0;
+#endif
 			{
-				currentSensor->Poll();
-				currentSensor = currentSensor->GetNext();
+				ReadLocker lock(sensorsLock);
+				TemperatureSensor *currentSensor = sensorsRoot;
+				while (currentSensor != nullptr)
+				{
+					currentSensor->Poll();
+#if SUPPORT_CAN_EXPANSION
+					if (currentSensor->GetBoardAddress() == CanInterface::GetCanAddress())
+					{
+						msg->whichSensors |= (uint64_t)1u << currentSensor->GetSensorNumber();
+						float temperature;
+						msg->temperatureReports[sensorsFound].errorCode = (uint8_t)currentSensor->GetLatestTemperature(temperature);
+						msg->temperatureReports[sensorsFound].SetTemperature(temperature);
+						++sensorsFound;
+					}
+#endif
+					currentSensor = currentSensor->GetNext();
+				}
 			}
+#if SUPPORT_CAN_EXPANSION
+			if (sensorsFound != 0)							// don't send an empty report
+			{
+				buf.dataLength = msg->GetActualDataLength(sensorsFound);
+				CanInterface::SendBroadcastNoFree(&buf);
+			}
+#endif
 		}
 
 		// Spin the heaters
@@ -328,37 +355,6 @@ void Heat::Exit() noexcept
 
 		reprap.KickHeatTaskWatchdog();
 
-#if SUPPORT_CAN_EXPANSION
-		// Broadcast our sensor temperatures
-		CanMessageSensorTemperatures * const msg = buf->SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
-		msg->whichSensors = 0;
-		unsigned int sensorsFound = 0;
-		unsigned int currentSensorNumber = 0;
-		for (;;)
-		{
-			const auto sensor = FindSensorAtOrAbove(currentSensorNumber);
-			if (sensor.IsNull())
-			{
-				break;
-			}
-			const unsigned int sn = sensor->GetSensorNumber();
-			if (sensor->GetBoardAddress() == CanInterface::GetCanAddress())
-			{
-				msg->whichSensors |= (uint64_t)1u << sn;
-				float temperature;
-				msg->temperatureReports[sensorsFound].errorCode = (uint8_t)sensor->GetLatestTemperature(temperature);
-				msg->temperatureReports[sensorsFound].SetTemperature(temperature);
-				++sensorsFound;
-			}
-			currentSensorNumber = (unsigned int)sn + 1u;
-		}
-
-		if (sensorsFound != 0)							// don't send an empty report
-		{
-			buf->dataLength = msg->GetActualDataLength(sensorsFound);
-			CanInterface::SendBroadcastNoFree(buf);
-		}
-#endif
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
 	}
@@ -495,7 +491,7 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply)
 		const PwmFrequency freq = (gb.Seen('Q')) ? min<PwmFrequency>(gb.GetPwmFrequency(), MaxHeaterPwmFrequency) : DefaultHeaterPwmFreq;
 
 #if SUPPORT_CAN_EXPANSION
-		Heater * const newHeater = (board != CanId::MasterAddress) ? (Heater *)new RemoteHeater(heater, board) : new LocalHeater(heater);
+		Heater * const newHeater = (board != CanInterface::GetCanAddress()) ? (Heater *)new RemoteHeater(heater, board) : new LocalHeater(heater);
 #else
 		Heater * const newHeater = new LocalHeater(heater);
 #endif
@@ -746,12 +742,12 @@ void Heat::Standby(int heater, const Tool *tool) noexcept
 	}
 }
 
-void Heat::PrintCoolingFanPwmChanged(unsigned int heater, float pwmChange) const noexcept
+void Heat::FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
-		h->PrintCoolingFanPwmChanged(pwmChange);
+		h->FeedForwardAdjustment(fanPwmChange, extrusionChange);
 	}
 }
 
@@ -931,18 +927,30 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 
 #if SUPPORT_CAN_EXPANSION
 	// Set boardAddress to the board number that the port is on, or NoAddress if the port was not given
-	CanAddress boardAddress;
-	String<StringLength20> portName;
+	CanAddress boardAddress = CanId::NoAddress;
+#endif
+
 	if (gb.Seen('P'))
 	{
+		String<StringLength20> portName;
 		gb.GetReducedString(portName.GetRef());
+#if SUPPORT_CAN_EXPANSION
 		boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
-	}
-	else
-	{
-		boardAddress = CanId::NoAddress;
-	}
+#else
+		if (!IoPort::RemoveBoardAddress(portName.GetRef()))
+		{
+			reply.lcat("Board address of port must be 0");
+			return GCodeResult::error;
+		}
 #endif
+		if (portName.EqualsIgnoreCase(NoPinName))					// if deleting this sensor
+		{
+			WriteLocker lock(sensorsLock);
+			DeleteSensor(sensorNum);
+			return GCodeResult::ok;
+		}
+	}
+
 	if (gb.Seen('Y'))
 	{
 		// Creating a new sensor
@@ -956,7 +964,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 #if SUPPORT_CAN_EXPANSION
 		if (boardAddress == CanId::NoAddress)
 		{
-			boardAddress = CanId::MasterAddress;		// no port name was given, so default to master
+			boardAddress = CanInterface::GetCanAddress();		// no port name was given, so default to local
 		}
 		TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
 #else
@@ -1076,13 +1084,6 @@ size_t Heat::GetNumSensorsToReport() const noexcept
 	return s->GetSensorNumber() + 1;
 }
 
-// Get the temperature of a heater
-float Heat::GetHeaterTemperature(size_t heater) const noexcept
-{
-	const auto h = FindHeater(heater);
-	return (h.IsNull()) ? ABS_ZERO : h->GetTemperature();
-}
-
 // Suspend the heaters to conserve power or while doing Z probing
 void Heat::SuspendHeaters(bool sus) noexcept
 {
@@ -1126,7 +1127,7 @@ void Heat::DeleteSensor(unsigned int sn) noexcept
 	}
 }
 
-// Insert a sensor. Must write-lock the sensors lock before calling this.
+// Insert a sensor. Must write-lock the sensors lock before calling this. The sensors list is kept in order of increasing sensor number.
 void Heat::InsertSensor(TemperatureSensor *newSensor) noexcept
 {
 	TemperatureSensor *prev = nullptr;
@@ -1187,7 +1188,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const noexcept
 void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg) noexcept
 {
 	Bitmap<uint64_t> sensorsReported(msg.whichSensors);
-	sensorsReported.Iterate([this, src, msg](unsigned int sensor, unsigned int index)
+	sensorsReported.Iterate([this, src, &msg](unsigned int sensor, unsigned int index)
 								{
 									if (index < ARRAY_SIZE(msg.temperatureReports))
 									{
@@ -1211,7 +1212,7 @@ void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemp
 void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept
 {
 	Bitmap<uint64_t> heatersReported(msg.whichHeaters);
-	heatersReported.Iterate([this, src, msg](unsigned int heaterNum, unsigned int index)
+	heatersReported.Iterate([this, src, &msg](unsigned int heaterNum, unsigned int index)
 								{
 									if (index < ARRAY_SIZE(msg.reports))
 									{
@@ -1223,6 +1224,79 @@ void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersSta
 									}
 								}
 							);
+}
+
+void Heat::ProcessRemoteHeaterTuningReport(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept
+{
+	const auto h = FindHeater(msg.heater);
+	if (h.IsNotNull())
+	{
+		h->UpdateHeaterTuning(src, msg);
+	}
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult Heat::EutProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M308NewParams);
+	uint16_t sensorNum;
+	if (parser.GetUintParam('S', sensorNum))
+	{
+		if (sensorNum < MaxSensors)
+		{
+			// Check for deleting the sensor by assigning a null port. Borrow the sensor type name string temporarily for this.
+			String<StringLength20> sensorTypeName;
+			if (parser.GetStringParam('P', sensorTypeName.GetRef()) && sensorTypeName.EqualsIgnoreCase(NoPinName))
+			{
+				WriteLocker lock(sensorsLock);
+				DeleteSensor(sensorNum);
+				return GCodeResult::ok;
+			}
+
+			if (parser.GetStringParam('Y', sensorTypeName.GetRef()))
+			{
+				WriteLocker lock(sensorsLock);
+
+				DeleteSensor(sensorNum);
+
+				TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, CanInterface::GetCanAddress(), sensorTypeName.c_str(), reply);
+				if (newSensor == nullptr)
+				{
+					return GCodeResult::error;
+				}
+
+				const GCodeResult rslt = newSensor->Configure(parser, reply);
+				if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+				{
+					InsertSensor(newSensor);
+				}
+				else
+				{
+					delete newSensor;
+				}
+				return rslt;
+			}
+
+			const auto sensor = FindSensor(sensorNum);
+			if (sensor.IsNull())
+			{
+				reply.printf("Sensor %u does not exist", sensorNum);
+				return GCodeResult::error;
+			}
+			return sensor->Configure(parser, reply);
+		}
+		else
+		{
+			reply.copy("Sensor number out of range");
+			return GCodeResult::error;
+		}
+	}
+
+	reply.copy("Missing sensor number parameter");
+	return GCodeResult::error;
 }
 
 #endif

@@ -110,7 +110,7 @@ GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& repl
 
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
-		if (board != CanId::MasterAddress)
+		if (board != CanInterface::GetCanAddress())
 		{
 			auto *newFan = new RemoteFan(fanNum, board);
 			const GCodeResult rslt = newFan->ConfigurePort(pinName.c_str(), freq, reply);

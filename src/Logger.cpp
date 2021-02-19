@@ -60,7 +60,7 @@ void Logger::LogFirmwareInfo(time_t time) noexcept
 			;
 	char buffer[versionStringLength];
 	StringRef firmwareInfo(buffer, ARRAY_SIZE(buffer));						// This is huge but should accommodate around 20 boards
-	firmwareInfo.printf("Running: %s: %s (%s)", reprap.GetPlatform().GetElectronicsString(), VERSION, DATE);
+	firmwareInfo.printf("Running: %s: %s (%s%s)", reprap.GetPlatform().GetElectronicsString(), VERSION, DATE, TIME_SUFFIX);
 
 #if 0 && SUPPORT_CAN_EXPANSION // TODO this needs some rework - for now the main board is used only
 	for (size_t i = 1; i < reprap.GetExpansion().GetNumExpansionBoards() + 1; ++i)

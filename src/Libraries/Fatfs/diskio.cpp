@@ -210,6 +210,11 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 			break;
 		}
 
+		if (reprap.Debug(moduleStorage))
+		{
+			debugPrintf("SD read error %d\n", (int)ret);
+		}
+
 		++retryNumber;
 		if (retryNumber == MaxSdCardTries)
 		{
@@ -282,6 +287,11 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcep
 		if (ret == CTRL_GOOD)
 		{
 			break;
+		}
+
+		if (reprap.Debug(moduleStorage))
+		{
+			debugPrintf("SD write error %d\n", (int)ret);
 		}
 
 		++retryNumber;

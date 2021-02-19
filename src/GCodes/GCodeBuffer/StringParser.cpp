@@ -749,7 +749,7 @@ void StringParser::DecodeCommand() noexcept
 			}
 		}
 
-		// Find where the end of the command is. We assume that a G or M not inside quotes or { } is the start of a new command.
+		// Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
 		bool inQuotes = false;
 		unsigned int localBraceCount = 0;
 		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
@@ -761,7 +761,6 @@ void StringParser::DecodeCommand() noexcept
 			}
 			else if (!inQuotes)
 			{
-				char c2;
 				if (c == '{')
 				{
 					++localBraceCount;
@@ -773,9 +772,13 @@ void StringParser::DecodeCommand() noexcept
 						--localBraceCount;
 					}
 				}
-				else if ((c2 = toupper(c)) == 'G' || c2 == 'M')
+				else
 				{
-					break;
+					char c2;
+					if (((c2 = toupper(c)) == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
+					{
+						break;
+					}
 				}
 			}
 		}
@@ -905,6 +908,13 @@ bool StringParser::IsLastCommand() const noexcept
 bool StringParser::Seen(char c) noexcept
 {
 	bool inQuotes = false;
+	bool escaped = false;
+	bool wantLowerCase = (c >= 'a');
+	if (wantLowerCase)
+	{
+		c = toupper(c);
+	}
+
 	unsigned int inBrackets = 0;
 	for (readPointer = parameterStart; (unsigned int)readPointer < commandEnd; ++readPointer)
 	{
@@ -915,18 +925,30 @@ bool StringParser::Seen(char c) noexcept
 		}
 		else if (!inQuotes)
 		{
-			if (inBrackets == 0 && toupper(b) == c && (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gb.buffer[readPointer - 1])))
+			if (b == '\'' && !escaped)
 			{
-				++readPointer;
-				return true;
+				escaped = true;
 			}
-			if (b == '{')
+			else
 			{
-				++inBrackets;
-			}
-			else if (b == '}' && inBrackets != 0)
-			{
-				--inBrackets;
+				if (   inBrackets == 0
+					&& toupper(b) == c
+					&& escaped == wantLowerCase
+					&& (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gb.buffer[readPointer - 1]))
+				   )
+				{
+					++readPointer;
+					return true;
+				}
+				escaped = false;
+				if (b == '{')
+				{
+					++inBrackets;
+				}
+				else if (b == '}' && inBrackets != 0)
+				{
+					--inBrackets;
+				}
 			}
 		}
 	}
@@ -1584,6 +1606,16 @@ bool StringParser::FileEnded() noexcept
 
 #endif
 
+// Check that a number was found. If it was, advance readPointer past it. Otherwise throw an exception.
+void StringParser::CheckNumberFound(const char *endptr) THROWS(GCodeException)
+{
+	if (endptr == gb.buffer + readPointer)
+	{
+		throw ConstructParseException("expected number after '%c'", (uint32_t)gb.buffer[readPointer - 1]);
+	}
+	readPointer = endptr - gb.buffer;
+}
+
 // Functions to read values from lines of GCode, allowing for expressions and variable substitution
 float StringParser::ReadFloatValue() THROWS(GCodeException)
 {
@@ -1597,7 +1629,7 @@ float StringParser::ReadFloatValue() THROWS(GCodeException)
 
 	const char *endptr;
 	const float rslt = SafeStrtof(gb.buffer + readPointer, &endptr);
-	readPointer = endptr - gb.buffer;
+	CheckNumberFound(endptr);
 	return rslt;
 }
 
@@ -1614,7 +1646,7 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits. We could stop supporting this because we already support {0xNNNN}.
 	const char *endptr;
 	const uint32_t rslt = StrToU32(gb.buffer + readPointer, &endptr);
-	readPointer = endptr - gb.buffer;
+	CheckNumberFound(endptr);
 	return rslt;
 }
 
@@ -1630,7 +1662,7 @@ int32_t StringParser::ReadIValue() THROWS(GCodeException)
 
 	const char *endptr;
 	const int32_t rslt = StrToI32(gb.buffer + readPointer, &endptr);
-	readPointer = endptr - gb.buffer;
+	CheckNumberFound(endptr);
 	return rslt;
 }
 
@@ -1649,7 +1681,7 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 	else
 	{
 		result.localDriver = v1;
-		result.boardAddress = 0;
+		result.boardAddress = CanInterface::GetCanAddress();
 	}
 #else
 	// We now allow driver names of the form "0.x" on boards without CAN expansion

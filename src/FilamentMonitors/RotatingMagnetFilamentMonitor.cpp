@@ -102,7 +102,7 @@ float RotatingMagnetFilamentMonitor::MeasuredSensitivity() const noexcept
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
 GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException)
 {
-	const GCodeResult rslt = CommonConfigure(gb, reply, INTERRUPT_MODE_CHANGE, seen);
+	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::change, seen);
 	if (rslt <= GCodeResult::warning)
 	{
 		gb.TryGetFValue('L', mmPerRev, seen);

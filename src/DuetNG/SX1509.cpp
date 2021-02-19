@@ -26,6 +26,7 @@ Distributed as-is; no warranty is given.
 #include "SX1509.h"
 #include "SX1509Registers.h"
 #include "Hardware/I2C.h"
+#include <Interrupts.h>
 
 SX1509::SX1509() noexcept : _clkX(0)
 {
@@ -54,7 +55,7 @@ bool SX1509::begin(uint8_t address) noexcept
 	{
 		clock(DefaultOscDivider);
 		writeWord(REG_HIGH_INPUT_B, 0xFFFF);						// set all inputs to be 5V-tolerant
-		writeByte(REG_DEBOUNCE_CONFIG, 0);							// debounce time set to minimum (0.5ms)
+		writeByte(REG_DEBOUNCE_CONFIG, 1);							// debounce time set to 1ms
 	}
 
 	return ok;
@@ -245,12 +246,12 @@ void SX1509::analogWrite(uint8_t pin, uint8_t iOn) noexcept
 	writeByte(REG_I_ON[pin], ~iOn);
 }
 
-void SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall) noexcept
+void SX1509::enableInterrupt(uint8_t pin, InterruptMode riseFall) noexcept
 {
 	enableInterruptMultiple(1u << pin, riseFall);
 }
 
-void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall) noexcept
+void SX1509::enableInterruptMultiple(uint16_t pins, InterruptMode riseFall) noexcept
 {
 	// Set REG_SENSE_XXX
 	// Sensitivity is set as follows:
@@ -261,13 +262,13 @@ void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall) noexcept
 	uint8_t sensitivity;
 	switch (riseFall)
 	{
-	case INTERRUPT_MODE_CHANGE:
+	case InterruptMode::change:
 		sensitivity = 0b11;
 		break;
-	case INTERRUPT_MODE_FALLING:
+	case InterruptMode::falling:
 		sensitivity = 0b10;
 		break;
-	case INTERRUPT_MODE_RISING:
+	case InterruptMode::rising:
 		sensitivity = 0b01;
 		break;
 	default:

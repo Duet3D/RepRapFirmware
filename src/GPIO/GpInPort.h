@@ -22,7 +22,7 @@ class GpInputPort INHERIT_OBJECT_MODEL
 public:
 	GpInputPort() noexcept :
 #if SUPPORT_CAN_EXPANSION
-		boardAddress (CanId::MasterAddress),
+		boardAddress(CanInterface::GetCanAddress()),
 #endif
 		currentState(false) { }
 	GpInputPort(const GpInputPort&) = delete;

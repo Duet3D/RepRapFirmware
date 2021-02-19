@@ -130,7 +130,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "file",					OBJECT_MODEL_FUNC_IF(self->usingMesh, self->heightMap.GetFileName()),					ObjectModelEntryFlags::none },
 #endif
 	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 8),											ObjectModelEntryFlags::none },
-	{ "probeGrid",				OBJECT_MODEL_FUNC_NOSELF((const GridDefinition *)&reprap.GetGCodes().GetDefaultGrid()),	ObjectModelEntryFlags::none },
+	{ "probeGrid",				OBJECT_MODEL_FUNC((const GridDefinition *)&self->GetGrid()),							ObjectModelEntryFlags::none },
 	{ "skew",					OBJECT_MODEL_FUNC(self, 9),																ObjectModelEntryFlags::none },
 	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),									ObjectModelEntryFlags::none },
 
@@ -195,6 +195,7 @@ void Move::Init() noexcept
 	moveState = MoveState::idle;
 	lastStateChangeTime = millis();
 	idleCount = 0;
+	idleStartTime = lastStateChangeTime;
 
 	simulationMode = 0;
 	longestGcodeWaitInterval = 0;
@@ -222,7 +223,7 @@ void Move::Spin() noexcept
 	if (!active)
 	{
 		RawMove nextMove;
-		(void) reprap.GetGCodes().ReadMove(nextMove);			// throw away any move that GCodes tries to pass us
+		(void)reprap.GetGCodes().ReadMove(nextMove);			// throw away any move that GCodes tries to pass us
 		return;
 	}
 
@@ -275,7 +276,7 @@ void Move::Spin() noexcept
 			RawMove nextMove;
 			if (reprap.GetGCodes().ReadMove(nextMove))		// if we have a new move
 			{
-				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
+				if (simulationMode < 2)						// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
 					if (nextMove.moveType == 0)
 					{
@@ -284,11 +285,12 @@ void Move::Spin() noexcept
 
 					if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 					{
+						const uint32_t now = millis();
 						idleCount = 0;
+						idleStartTime = now;
 						if (moveState == MoveState::idle || moveState == MoveState::timing)
 						{
 							moveState = MoveState::collecting;
-							const uint32_t now = millis();
 							const uint32_t timeWaiting = now - lastStateChangeTime;
 							if (timeWaiting > longestGcodeWaitInterval)
 							{
@@ -302,7 +304,8 @@ void Move::Spin() noexcept
 		}
 	}
 
-	mainDDARing.Spin(simulationMode, idleCount > 10);	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount.
+	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
+	mainDDARing.Spin(simulationMode, idleCount > 10 && millis() - idleStartTime >= mainDDARing.GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 	if (auxMoveAvailable && auxDDARing.CanAddMove())
@@ -348,12 +351,6 @@ bool Move::WaitingForAllMovesFinished() noexcept
 	return mainDDARing.SetWaitingToEmpty();
 }
 
-// Return the number of currently used probe points
-unsigned int Move::GetNumProbePoints() const noexcept
-{
-	return probePoints.GetNumBedCompensationPoints();
-}
-
 // Return the number of actually probed probe points
 unsigned int Move::GetNumProbedProbePoints() const noexcept
 {
@@ -393,15 +390,16 @@ bool Move::IsRawMotorMove(uint8_t moveType) const noexcept
 }
 
 // Return true if the specified point is accessible to the Z probe
-bool Move::IsAccessibleProbePoint(float x, float y) const noexcept
+bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
 	const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(reprap.GetGCodes().GetCurrentZProbeNumber());
 	if (zp.IsNotNull())
 	{
-		x -= zp->GetXOffset();
-		y -= zp->GetYOffset();
+		axes.Iterate([axesCoords, &zp](unsigned int axis, unsigned int) {
+			axesCoords[axis] -= zp->GetOffset(axis);
+		});
 	}
-	return kinematics->IsReachable(x, y, false);
+	return kinematics->IsReachable(axesCoords, axes, false);
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
@@ -424,18 +422,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 {
 	// Get the type of bed compensation in use
 	String<StringLength50> bedCompString;
-	if (usingMesh)
-	{
-		bedCompString.copy("mesh");
-	}
-	else if (probePoints.GetNumBedCompensationPoints() != 0)
-	{
-		bedCompString.printf("%d point", probePoints.GetNumBedCompensationPoints());
-	}
-	else
-	{
-		bedCompString.copy("none");
-	}
+	bedCompString.copy(GetCompensationTypeString());
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype, "=== Move ===\nDMs created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
@@ -581,12 +568,6 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 	}
 }
 
-// Get the height error at a bed XY position
-float Move::GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept
-{
-	return (usingMesh) ? heightMap.GetInterpolatedHeightError(xCoord, yCoord) : probePoints.GetInterpolatedHeightError(xCoord, yCoord);
-}
-
 // Invert the Axis transform AFTER the bed transform
 void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
@@ -616,89 +597,86 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 // Do the bed transform AFTER the axis transform
 void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
-	const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);
-	if (!useTaper || toolHeight < taperHeight)
+	if (usingMesh)
 	{
-		float zCorrection = 0.0;
-		const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-		const AxesBitmap xAxes = Tool::GetXAxes(tool);
-		const AxesBitmap yAxes = Tool::GetYAxes(tool);
-		unsigned int numCorrections = 0;
-
-		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-		// TODO use Iterate when we have changed it to use inline_function
-		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
+		const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);
+		if (!useTaper || toolHeight < taperHeight)
 		{
-			if (xAxes.IsBitSet(xAxis))
+			float zCorrection = 0.0;
+			unsigned int numCorrections = 0;
+			const GridDefinition& grid = GetGrid();
+			const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetNumber1());
+
+			// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
+			Tool::GetAxisMapping(tool, grid.GetNumber0())
+				.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int)
+							{
+								const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
+								axis1Axes.Iterate([this, xyzPoint, tool, axis0Coord, &zCorrection, &numCorrections](unsigned int axis1Axis, unsigned int)
+													{
+														const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
+														zCorrection += heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord);
+														++numCorrections;
+													}
+												);
+							}
+						);
+
+			if (numCorrections > 1)
 			{
-				const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
-				for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
-				{
-					if (yAxes.IsBitSet(yAxis))
-					{
-						const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
-						zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
-						++numCorrections;
-					}
-				}
+				zCorrection /= numCorrections;			// take an average
 			}
-		}
 
-		if (numCorrections > 1)
-		{
-			zCorrection /= numCorrections;			// take an average
+			zCorrection += zShift;
+			xyzPoint[Z_AXIS] += (useTaper && zCorrection < taperHeight) ? (taperHeight - toolHeight) * recipTaperHeight * zCorrection : zCorrection;
 		}
-
-		zCorrection += zShift;
-		xyzPoint[Z_AXIS] += (useTaper && zCorrection < taperHeight) ? (taperHeight - toolHeight) * recipTaperHeight * zCorrection : zCorrection;
 	}
 }
 
 // Invert the bed transform BEFORE the axis transform
 void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
-	float zCorrection = 0.0;
-	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-	const AxesBitmap xAxes = Tool::GetXAxes(tool);
-	const AxesBitmap yAxes = Tool::GetYAxes(tool);
-	unsigned int numCorrections = 0;
-
-	// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-	for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
+	if (usingMesh)
 	{
-		if (xAxes.IsBitSet(xAxis))
+		float zCorrection = 0.0;
+		unsigned int numCorrections = 0;
+		const GridDefinition& grid = GetGrid();
+		const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetNumber1());
+
+		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
+		Tool::GetAxisMapping(tool, grid.GetNumber0())
+			.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int)
+						{
+							const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
+							axis1Axes.Iterate([this, xyzPoint, tool, axis0Coord, &zCorrection, &numCorrections](unsigned int axis1Axis, unsigned int)
+												{
+													const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
+													zCorrection += heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord);
+													++numCorrections;
+												}
+											);
+						}
+					);
+
+		if (numCorrections > 1)
 		{
-			const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
-			for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
-			{
-				if (yAxes.IsBitSet(yAxis))
-				{
-					const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
-					zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
-					++numCorrections;
-				}
-			}
+			zCorrection /= numCorrections;				// take an average
 		}
-	}
 
-	if (numCorrections > 1)
-	{
-		zCorrection /= numCorrections;				// take an average
-	}
+		zCorrection += zShift;
 
-	zCorrection += zShift;
-
-	if (!useTaper || zCorrection >= taperHeight)	// need check on zCorrection to avoid possible divide by zero
-	{
-		xyzPoint[Z_AXIS] -= zCorrection;
-	}
-	else
-	{
-		const float toolZoffset = Tool::GetOffset(tool, Z_AXIS);
-		const float zreq = (xyzPoint[Z_AXIS] - (taperHeight - toolZoffset) * zCorrection * recipTaperHeight)/(1.0 - zCorrection * recipTaperHeight);
-		if (zreq + toolZoffset < taperHeight)
+		if (!useTaper || zCorrection >= taperHeight)	// need check on zCorrection to avoid possible divide by zero
 		{
-			xyzPoint[Z_AXIS] = zreq;
+			xyzPoint[Z_AXIS] -= zCorrection;
+		}
+		else
+		{
+			const float toolZoffset = Tool::GetOffset(tool, Z_AXIS);
+			const float zreq = (xyzPoint[Z_AXIS] - (taperHeight - toolZoffset) * zCorrection * recipTaperHeight)/(1.0 - zCorrection * recipTaperHeight);
+			if (zreq + toolZoffset < taperHeight)
+			{
+				xyzPoint[Z_AXIS] = zreq;
+			}
 		}
 	}
 }
@@ -706,10 +684,18 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 // Normalise the bed transform to have zero height error at these bed coordinates
 void Move::SetZeroHeightError(const float coords[MaxAxes]) noexcept
 {
-	float tempCoords[MaxAxes];
-	memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
-	AxisTransform(tempCoords, nullptr);
-	zShift = -GetInterpolatedHeightError(tempCoords[X_AXIS], tempCoords[Y_AXIS]);
+	if (usingMesh)
+	{
+		float tempCoords[MaxAxes];
+		memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
+		AxisTransform(tempCoords, nullptr);
+		const GridDefinition& grid = GetGrid();
+		zShift = -heightMap.GetInterpolatedHeightError(tempCoords[grid.GetNumber0()], tempCoords[grid.GetNumber1()]);
+	}
+	else
+	{
+		zShift = 0.0;
+	}
 }
 
 void Move::SetIdentityTransform() noexcept
@@ -727,8 +713,8 @@ void Move::SetIdentityTransform() noexcept
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
 bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
 {
-	const bool ret = heightMap.LoadFromFile(f, fname, r);
-	if (ret)
+	const bool err = heightMap.LoadFromFile(f, fname, r);
+	if (err)
 	{
 		heightMap.ClearGridHeights();							// make sure we don't end up with a partial height map
 	}
@@ -737,7 +723,7 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRe
 		zShift = 0.0;
 	}
 	reprap.MoveUpdated();
-	return ret;
+	return err;
 }
 
 // Save the height map to a file returning true if an error occurred
@@ -843,7 +829,8 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 		}
 		else
 		{
-			error = probePoints.SetProbedBedEquation(sParam, reply);
+			reply.copy("This kinematics does not support auto-calibration");
+			error = true;
 		}
 	}
 
@@ -917,8 +904,8 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 		const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(reprap.GetGCodes().GetCurrentZProbeNumber());
 		if (zp.IsNotNull())
 		{
-			x -= zp->GetXOffset();
-			y -= zp->GetYOffset();
+			x -= zp->GetOffset(X_AXIS);
+			y -= zp->GetOffset(Y_AXIS);
 		}
 	}
 	return probePoints.GetZHeight(count);
@@ -1080,16 +1067,10 @@ void Move::SetLatestMeshDeviation(const Deviation& d) noexcept
 	latestMeshDeviation = d; reprap.MoveUpdated();
 }
 
-#if SUPPORT_OBJECT_MODEL
-
 const char *Move::GetCompensationTypeString() const noexcept
 {
-	return (usingMesh) ? "mesh"
-			: (probePoints.GetNumBedCompensationPoints() != 0) ? "legacy"
-				: "none";
+	return (usingMesh) ? "mesh" : "none";
 }
-
-#endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 
@@ -1181,7 +1162,7 @@ AsyncMove *Move::LockAuxMove() noexcept
 }
 
 // Release the aux move buffer and optionally signal that it contains a move
-// The caller must have locked the buffer before calling this. If it calls with hasNewMove true, it must have populated the move buffer with the move details
+// The caller must have locked the buffer before calling this. If it calls this with hasNewMove true, it must have populated the move buffer with the move details
 void Move::ReleaseAuxMove(bool hasNewMove) noexcept
 {
 	auxMoveAvailable = hasNewMove;

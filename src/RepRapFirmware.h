@@ -62,17 +62,8 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # define __nocache		// nothing
 #endif
 
-#if SAME5x
-
 # include <CoreIO.h>
 # include <Devices.h>
-
-#else
-
-// Functions needed for builds that use CoreNG. Not needed when using CoreN2G.
-void delay(uint32_t ms) noexcept;
-
-#endif
 
 #define SPEED_CRITICAL	__attribute__((optimize("O2")))
 
@@ -122,7 +113,14 @@ static_assert(MinVisibleAxes <= MinAxes);
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
 #if SUPPORT_CAN_EXPANSION
-# include "CanId.h"				// for type CanAddress
+# include <CanId.h>
+
+// We have to declare CanInterface::GetCanAddress here because CanInterface.h needs to include this file for the declaration of DriverId
+namespace CanInterface
+{
+	CanAddress GetCanAddress() noexcept;
+}
+
 #endif
 
 #include "General/String.h"
@@ -155,7 +153,7 @@ struct DriverId
 
 	CanAddress boardAddress;
 
-	DriverId() noexcept : localDriver(0), boardAddress(CanId::NoAddress)  { }
+	DriverId() noexcept : localDriver(0), boardAddress(CanInterface::GetCanAddress())  { }
 
 	// Constructor used by ATE configurations
 	DriverId(CanAddress addr, uint8_t drv) noexcept : localDriver(drv), boardAddress(addr) { }
@@ -170,11 +168,11 @@ struct DriverId
 	void SetLocal(unsigned int driver) noexcept
 	{
 		localDriver = (uint8_t)driver;
-		boardAddress = CanId::MasterAddress;
+		boardAddress = CanInterface::GetCanAddress();
 	}
 
-	bool IsLocal() const noexcept { return boardAddress == CanId::MasterAddress; }
-	bool IsRemote() const noexcept { return boardAddress != CanId::MasterAddress; }
+	bool IsLocal() const noexcept { return boardAddress == CanInterface::GetCanAddress(); }
+	bool IsRemote() const noexcept { return boardAddress != CanInterface::GetCanAddress(); }
 
 	bool operator<(const DriverId other) const noexcept
 	{
@@ -498,13 +496,13 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 
 #if SAME5x
-const NvicPriority NvicPriorityPanelDueUartRx = 1;	// UART used to receive data from PanelDue or other serial input
-const NvicPriority NvicPriorityPanelDueUartTx = 3;	// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
+const NvicPriority NvicPriorityAuxUartRx = 1;		// UART used to receive data from PanelDue or other serial input
+const NvicPriority NvicPriorityAuxUartTx = 3;		// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
 const NvicPriority NvicPriorityWiFiUartRx = 2;		// UART used to receive debug data from the WiFi module
 const NvicPriority NvicPriorityWiFiUartTx = 3;		// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
 const NvicPriority NvicPriorityDriverDiag = 4;
 #else
-const NvicPriority NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const NvicPriority NvicPriorityAuxUart = 1;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const NvicPriority NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
 #endif
 
@@ -531,7 +529,7 @@ const NvicPriority NvicPrioritySpi = 6;				// SPI is used for network transfers 
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 
-const NvicPriority NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const NvicPriority NvicPriorityAuxUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 
 # if defined(__LPC17xx__)
 constexpr NvicPriority NvicPriorityTimerPWM = 4;

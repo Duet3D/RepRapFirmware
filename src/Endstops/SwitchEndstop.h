@@ -9,7 +9,6 @@
 #define SRC_ENDSTOPS_SWITCHENDSTOP_H_
 
 #include "Endstop.h"
-
 #include "GCodes/GCodeResult.h"
 
 // Switch-type endstop, either on the main board or on a CAN-connected board
@@ -20,7 +19,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<SwitchEndstop>(p); }
 	~SwitchEndstop() noexcept override;
 
-	SwitchEndstop(uint8_t axis, EndStopPosition pos) noexcept;
+	SwitchEndstop(uint8_t p_axis, EndStopPosition pos) noexcept;
 
 	EndStopType GetEndstopType() const noexcept override;
 	EndStopHit Stopped() const noexcept override;
@@ -45,7 +44,7 @@ private:
 	inline bool IsTriggered(size_t index) const noexcept
 	{
 #if SUPPORT_CAN_EXPANSION
-		return (boardNumbers[index] == CanId::MasterAddress) ? ports[index].ReadDigital() : states[index];
+		return (boardNumbers[index] == CanInterface::GetCanAddress()) ? ports[index].ReadDigital() : states[index];
 #else
 		return ports[index].ReadDigital();
 #endif

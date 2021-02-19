@@ -8,8 +8,8 @@
 #ifndef SRC_NETWORKING_WIFIINTERFACE_H_
 #define SRC_NETWORKING_WIFIINTERFACE_H_
 
+#include <RepRapFirmware.h>
 #include "Networking/NetworkDefs.h"
-#include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "Networking/NetworkInterface.h"
 #include "GCodes/GCodeResult.h"

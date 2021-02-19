@@ -242,13 +242,22 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 }
 
 // Return true if the specified XY position is reachable by the print head reference point, ignoring M208 limits.
-bool ScaraKinematics::IsReachable(float x, float y, bool isCoordinated) const noexcept
+bool ScaraKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept
 {
-	// See if we can transform the position
-	float coords[2] = {x, y};
-	float theta, psi;
-	bool armMode = currentArmMode;
-	return CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode);
+	if (axes.IsBitSet(X_AXIS) && axes.IsBitSet(Y_AXIS))
+	{
+		// See if we can transform the position
+		float coords[2] = {axesCoords[X_AXIS], axesCoords[Y_AXIS]};
+		float theta, psi;
+		bool armMode = currentArmMode;
+		if (!CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode))
+		{
+			return false;
+		}
+	}
+	axes.ClearBit(X_AXIS);
+	axes.ClearBit(Y_AXIS);
+	return Kinematics::IsReachable(axesCoords, axes, isCoordinated);
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed

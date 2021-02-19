@@ -25,7 +25,7 @@
 #include <Heating/Sensors/TemperatureSensor.h>
 
 #if SUPPORT_CAN_EXPANSION
-# include "CanMessageBuffer.h"
+# include <CanMessageBuffer.h>
 #endif
 
 ReadWriteLock EndstopsManager::endstopsLock;
@@ -680,7 +680,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 				gb.Seen('C');
 				gb.GetReducedString(pinNames.GetRef());
 				const CanAddress boardAddress = IoPort::RemoveBoardAddress(pinNames.GetRef());
-				if (boardAddress != CanId::MasterAddress)
+				if (boardAddress != CanInterface::GetCanAddress())
 				{
 					RemoteZProbe *newRemoteProbe = new RemoteZProbe(probeNumber, boardAddress, (ZProbeType)probeType);
 					const GCodeResult rslt = newRemoteProbe->Create(pinNames.GetRef(), reply);

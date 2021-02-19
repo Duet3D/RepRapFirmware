@@ -30,8 +30,7 @@
 #define _DEVICE_H
 
 #include "Samba.h"
-#include "Flash.h"
-
+#include "BossaFlash.h"
 #include "GCodes/GCodeException.h"
 
 typedef GCodeException DeviceUnsupportedError;
@@ -84,13 +83,13 @@ public:
 
     Family getFamily() noexcept { return _family; }
 
-    Flash* getFlash() noexcept { return _flash; }
+    BossaFlash* getFlash() noexcept { return _flash; }
 
     void reset() THROWS(GCodeException);
 
 private:
     Samba& _samba;
-    Flash* _flash;
+    BossaFlash* _flash;
     Family _family;
 
 #if ORIGINAL_BOSSA_CODE

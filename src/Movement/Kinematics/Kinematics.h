@@ -121,9 +121,9 @@ public:
 	// Usually this is only relevant if we are auto calibrating the bed tilt, however you can also specify bed tilt manually if you wanted to.
 	virtual float GetTiltCorrection(size_t axis) const noexcept { return 0.0; }
 
-	// Return true if the specified XY position is reachable by the print head reference point.
+	// Return true if the positions specified for the axes in the AxesBitmap are reachable by the print head reference point.
 	// The default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 commands.
-	virtual bool IsReachable(float x, float y, bool isCoordinated) const noexcept;
+	virtual bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept;
 
 	// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.

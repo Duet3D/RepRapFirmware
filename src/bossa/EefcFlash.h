@@ -31,9 +31,9 @@
 
 #include <cstdint>
 
-#include "Flash.h"
+#include "BossaFlash.h"
 
-class EefcFlash : public Flash
+class EefcFlash : public BossaFlash
 {
 public:
     EefcFlash(Samba& samba,

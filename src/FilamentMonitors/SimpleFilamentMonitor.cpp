@@ -41,7 +41,7 @@ SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
 GCodeResult SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException)
 {
-	const GCodeResult rslt = CommonConfigure(gb, reply, INTERRUPT_MODE_NONE, seen);
+	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::none, seen);
 	if (rslt <= GCodeResult::warning)
 	{
 		if (gb.Seen('S'))

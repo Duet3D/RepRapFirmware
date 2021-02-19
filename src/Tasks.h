@@ -24,4 +24,12 @@ namespace Tasks
 	Mutex *GetFilamentsMutex() noexcept;
 }
 
+#if SUPPORT_CAN_EXPANSION
+
+// Functions called by CanMessageBuffer in CANlib
+void *MessageBufferAlloc(size_t sz, std::align_val_t align) noexcept;
+void MessageBufferDelete(void *ptr, std::align_val_t align) noexcept;
+
+#endif
+
 #endif /* SRC_TASKS_H_ */

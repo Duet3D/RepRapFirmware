@@ -10,6 +10,10 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 const uint32_t MAX31856_Frequency = 4000000;	// maximum for MAX31865 is 5MHz
 
 static const char * const TypeLetters = "BEJKNRST";		// MAX31856 mapping of AVGSEWL bits to thermocouple types
@@ -95,6 +99,56 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 		}
 	}
 
+	return FinishConfiguring(changed, reply);
+}
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult ThermocoupleSensor31856::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	if (!ConfigurePort(parser, reply, seen))
+	{
+		return GCodeResult::error;
+	}
+
+	uint8_t paramF;
+	if (parser.GetUintParam('F', paramF))
+	{
+		seen = true;
+		if (paramF == 60)
+		{
+			cr0 &= ~0x01;		// set 60Hz rejection
+		}
+		else
+		{
+			cr0 |= 0x01;		// default to 50Hz rejection
+		}
+	}
+
+	char paramK;
+	if (parser.GetCharParam('K', paramK))
+	{
+		seen = true;
+		const char *p;
+		if ((p = strchr(TypeLetters, toupper(paramK))) != nullptr)
+		{
+			thermocoupleType = p - TypeLetters;
+		}
+		else
+		{
+			reply.copy("Bad thermocouple type letter in M305 command");
+			return GCodeResult::error;
+		}
+	}
+
+	return FinishConfiguring(seen, reply);
+}
+
+#endif
+
+GCodeResult ThermocoupleSensor31856::FinishConfiguring(bool changed, const StringRef& reply) noexcept
+{
 	if (changed)
 	{
 		// Initialise the sensor
@@ -117,9 +171,9 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 
 		if (rslt != TemperatureError::success)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise thermocouple: %s\n", TemperatureErrorString(rslt));
+			reply.printf("Failed to initialise thermocouple: %s", TemperatureErrorString(rslt));
+			return GCodeResult::error;
 		}
-
 	}
 	else
 	{

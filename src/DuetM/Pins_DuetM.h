@@ -8,6 +8,8 @@
 #ifndef SRC_DUETM_PINS_DUETM_H_
 #define SRC_DUETM_PINS_DUETM_H_
 
+#include <PinDescription.h>
+
 #define BOARD_NAME				"Duet 2 Maestro"
 #define BOARD_SHORT_NAME		"2Maestro"
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 2 Maestro"
@@ -73,7 +75,7 @@ constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxExtruders = 4;					// The maximum number of extruders
-constexpr size_t NumDefaultExtruders = 1;			// The number of drivers that we configure as extruders by default
+constexpr size_t NumDefaultExtruders = 0;			// The number of drivers that we configure as extruders by default
 
 constexpr size_t MaxAxesPlusExtruders = 7;
 
@@ -104,11 +106,24 @@ constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPi
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(20), PortCPin(2), PortCPin(28), PortCPin(4), PortCPin(5), PortCPin(31), PortCPin(21) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortCPin(18), PortAPin(8), PortBPin(4), PortBPin(7), PortCPin(6), PortAPin(18), PortCPin(24) };
 
+// Serial
+// UART0 used by TMC drivers
+constexpr Pin APIN_UART0_RXD = PortAPin(9);
+constexpr Pin APIN_UART0_TXD = PortAPin(10);
+constexpr GpioPinFunction UART0PeriphMode = GpioPinFunction::A;
+
+// Serial0 uses UART1
+constexpr Pin APIN_Serial0_RXD = PortBPin(2);
+constexpr Pin APIN_Serial0_TXD = PortBPin(3);
+constexpr GpioPinFunction Serial0PeriphMode = GpioPinFunction::A;
+
 // UART interface to stepper drivers
 Uart * const UART_TMC22xx = UART0;
 constexpr IRQn TMC22xx_UART_IRQn = UART0_IRQn;
 constexpr uint32_t ID_TMC22xx_UART = ID_UART0;
-constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
+constexpr Pin TMC22xxUartRxPin = APIN_UART0_RXD;
+constexpr Pin TMC22xxUartTxPin = APIN_UART0_TXD;
+constexpr GpioPinFunction TMC22xxUartPeriphMode = UART0PeriphMode;
 
 #define TMC22xx_UART_Handler			UART0_Handler
 
@@ -194,93 +209,148 @@ constexpr Pin EncoderPinSw = PortAPin(7);
 #define USART_SSPI		USART0
 #define ID_SSPI			ID_USART0
 
-// Enum to represent allowed types of pin access
-// We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
-enum class PinCapability: uint8_t
-{
-	// Individual capabilities
-	read = 1,
-	ain = 2,
-	write = 4,
-	pwm = 8,
+constexpr PinDescription PinTable[] =
+{	//	TC					PWM					ADC				Capability				PinNames
+	// Port A
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"pson"				},	// PA00 PS_ON
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA01 ENN to all stepper drivers
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA02 SCK0 (daughter boards, external SD card)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"exp.pa3,twd0"		},	// PA03 TWD0 (expansion)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"exp.pa4,twck0"		},	// PA04 TWCK0 (expansion)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA05 RXD0 (daughter boards, external SD card)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA06 TXD0 (daughter boards, external SD card)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA07 LCD ENC_SW
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA08 Y dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA09 Stepper drivers UART
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA10 Stepper drivers UART
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA11 NPCS0 (W5500)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA12 MISO (W5500)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA13 MOSI (W5500)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA14 SPCK (W5500)
+	{ TcOutput::tioa1,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA15 LCD beep
+	{ TcOutput::none,	PwmOutput::pwm0l2_c,AdcInput::none,		PinCapability::wpwm,	"!e1heat"			},	// PA16 Heater 2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_0,	PinCapability::none,	nullptr				},	// PA17 VREF_MON
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_1,	PinCapability::none,	nullptr				},	// PA18 E2 dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_2,	PinCapability::none,	nullptr				},	// PA19 VSSA_MON
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"bedtemp"			},	// PA20 Thermistor 0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_8,	PinCapability::ainrw,	"exp.pa21"			},	// PA21 Analogue, digital or UART expansion
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::ainrw,	"exp.pa22"			},	// PA22 Analogue, digital or UART expansion
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA23 W5500 interrupt
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"xstop"				},	// PA24 X stop
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"e0stop"			},	// PA25 E0 stop
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA26 HSMCI MCDA2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA27 HSMCI MCDA3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA28 HSMCI MCCDA
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA29 HSMCI MCCK
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA30 HSMCI MCDA0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA31 HSMCI MCDA1
 
-	// Combinations
-	ainr = 1|2,
-	rw = 1|4,
-	wpwm = 4|8,
-	rwpwm = 1|4|8,
-	ainrw = 1|2|4,
-	ainrwpwm = 1|2|4|8
-};
+	// Port B
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_4,	PinCapability::ainr,	"e0temp"			},	// PB00 Thermistor 1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_5,	PinCapability::ainr,	"ctemp"				},	// PB01 Thermistor 3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"urxd"				},	// PB02 URXD0 PanelDue Dout
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"utxd"				},	// PB03 UTXD0 PanelDue Din
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB04 Z dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB05 LCD ENC_A
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"ystop"				},	// PB06 Y stop
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB07 E0 dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB08
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB09
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB10
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB11
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB12
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::dac0,		PinCapability::none,	nullptr				},	// PB13 SPI0_CS0 (external SD card)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::dac1,		PinCapability::rw,		"spi.cs1"			},	// PB14 SPI0_CS1 (daughter boards)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB15 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB16 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB17 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB18 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB19 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB20 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB21 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB22 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB23 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB24 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB25 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB26 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB27 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB28 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB29 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB30 not on chip
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB31 not on chip
 
-constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexcept
-{
-	return (PinCapability)((uint8_t)a | (uint8_t)b);
-}
-
-// Struct to represent a pin that can be assigned to various functions
-// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
-struct PinEntry
-{
-	Pin GetPin() const noexcept { return pin; }
-	PinCapability GetCapability() const noexcept { return cap; }
-	const char* GetNames() const noexcept { return names; }
-
-	Pin pin;
-	PinCapability cap;
-	const char *names;
-};
-
-// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
-// The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
-// Aliases are separate by the , character.
-// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
-// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
-constexpr PinEntry PinTable[] =
-{
-	// Heater outputs
-	{ PortCPin(0),	PinCapability::wpwm,	"!bedheat" },
-	{ PortCPin(1),	PinCapability::wpwm,	"!e0heat" },
-	{ PortAPin(16), PinCapability::wpwm,	"!e1heat" },
-
-	// Fan outputs
-	{ PortCPin(23),	PinCapability::wpwm,	"fan0" },
-	{ PortCPin(22),	PinCapability::wpwm,	"fan1" },
-	{ PortCPin(29),	PinCapability::wpwm,	"fan2" },
-
-	// Endstop inputs
-	{ PortAPin(24),	PinCapability::read,	"xstop" },
-	{ PortBPin(6),	PinCapability::read,	"ystop" },
-	{ PortCPin(10),	PinCapability::read,	"zstop" },
-	{ PortAPin(25),	PinCapability::read,	"e0stop" },
-	{ PortCPin(7),	PinCapability::read,	"e1stop" },
-
-	// Thermistor inputs
-	{ PortAPin(20),	PinCapability::ainr,	"bedtemp" },
-	{ PortBPin(0),	PinCapability::ainr,	"e0temp" },
-	{ PortCPin(30), PinCapability::ainr,	"e1temp" },
-	{ PortBPin(1),	PinCapability::ainr,	"ctemp" },
-
-	// SPI CS signals on the daughter board connector
-	{ PortBPin(14),	PinCapability::rw,		"spi.cs1" },
-	{ PortCPin(19),	PinCapability::rw,		"spi.cs2" },
-
-	// Misc
-	{ Z_PROBE_PIN,	PinCapability::ainr,	"zprobe.in" },
-	{ Z_PROBE_MOD_PIN, PinCapability::write, "zprobe.mod,servo" },
-	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
-	{ PortBPin(2),	PinCapability::rw,		"urxd" },
-	{ PortBPin(3),	PinCapability::rw,		"utxd" },
-	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },					// also used by ST7567 LCD controllers
-	{ PortAPin(22), PinCapability::ainrw,	"exp.pa22" },
-	{ PortAPin(3),	PinCapability::rw,		"exp.pa3,twd0" },
-	{ PortAPin(4),	PinCapability::rw,		"exp.pa4,twck0" },
+	// Port C
+	{ TcOutput::none,	PwmOutput::pwm0l0_b,AdcInput::none,		PinCapability::wpwm,	"!bedheat"			},	// PC00 Heater 0
+	{ TcOutput::none,	PwmOutput::pwm0l1_b,AdcInput::none,		PinCapability::wpwm,	"!e0heat"			},	// PC01 Heater 1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC02 Y step
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC03 ENC_B
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC04 E0 step
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC05 E1 step
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC06 E1 dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"e1stop"			},	// PC07 E1 stop
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC08 SD card detect
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC09 LCD CS
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"zstop"				},	// PC10 Z stop
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC11 USB Vbus monitor
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_12,	PinCapability::none,	nullptr				},	// PC12 VIN voltage monitor
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC13 W5500 reset
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC14 MUX0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_11,	PinCapability::ainr,	"zprobe.in"			},	// PC15 Z probe input
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC16 MUX1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC17 MUX2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC18 X dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs2"			},	// PC19 SPI0_CS2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC20 X step
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC21 E3 step
+	{ TcOutput::none,	PwmOutput::pwm0l3_b,AdcInput::none,		PinCapability::wpwm,	"fan1"				},	// PC22 Fan 1
+	{ TcOutput::tioa3,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"fan0"				},	// PC23 Fan 0
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC24 E3 dir
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC25 E3 en
+	{ TcOutput::tioa4,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"zprobe.mod,servo"	},	// PC26 Z probe mod/servo/diag LED
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC27 E2 en
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC28 Z step
+	{ TcOutput::tioa5,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"fan2"				},	// PC29 Fan 2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_14,	PinCapability::ainr,	"e1temp"			},	// PC30 Thermistor 2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC31 E2 step
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
+static_assert(NumNamedPins == 3*32);
 
 // Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
+
+// Wire Interfaces
+#define WIRE_INTERFACES_COUNT (1)		// SAM4S supports two I2C interfaces but we only have the first one available
+
+#define WIRE_INTERFACE		TWI0
+#define WIRE_INTERFACE_ID	ID_TWI0
+#define WIRE_ISR_HANDLER	TWI0_Handler
+#define WIRE_ISR_ID			TWI0_IRQn
+
+constexpr Pin TWI_Data = PortAPin(3);
+constexpr Pin TWI_CK = PortAPin(4);
+constexpr GpioPinFunction TWIPeriphMode = GpioPinFunction::A;
+
+// SD Card
+constexpr Pin HsmciClockPin = PortAPin(29);
+constexpr Pin HsmciOtherPins[] = { PortAPin(28), PortAPin(30), PortAPin(31), PortAPin(26), PortAPin(27) };
+constexpr auto HsmciPinsFunction = GpioPinFunction::C;
+
+// Main SPI interface
+constexpr Pin APIN_SPI_MOSI = PortAPin(13);
+constexpr Pin APIN_SPI_MISO = PortAPin(12);
+constexpr Pin APIN_SPI_SCK = PortAPin(14);
+constexpr Pin APIN_SPI_SS0 = PortAPin(11);
+constexpr GpioPinFunction SPIPeriphMode = GpioPinFunction::A;
+
+// USARTs used for SPI
+constexpr Pin APIN_USART_SSPI_MOSI = PortAPin(6);
+constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::A;
+constexpr Pin APIN_USART_SSPI_MISO = PortAPin(5);
+constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::A;
+constexpr Pin APIN_USART_SSPI_SCK = PortAPin(2);
+constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::B;
 
 // Duet pin numbers to control the W5500 interface
 #define W5500_SPI				SPI
@@ -320,7 +390,7 @@ namespace StepPins
 	static inline uint32_t CalcDriverBitmap(size_t driver) noexcept
 	{
 		return (driver < NumDirectDrivers)
-				? g_APinDescription[STEP_PINS[driver]].ulPin
+				? 1u << (STEP_PINS[driver] & 0x1Fu)
 				: 0;
 	}
 

@@ -49,11 +49,15 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
+#ifdef DUET3_ATE
+# include <Duet3Ate.h>
+#endif
+
 #if HAS_HIGH_SPEED_SD
 
-# if !SAME5x	// if not using CoreN2G
-#  include "sam/drivers/hsmci/hsmci.h"
-#  include "conf_sd_mmc.h"
+# if !SAME5x
+#  include <hsmci/hsmci.h>
+#  include <conf_sd_mmc.h>
 # endif
 
 # if SAME70
@@ -73,6 +77,10 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 
 #if SAME70
 # include <DmacManager.h>
+#endif
+
+#if SAM4S
+# include <wdt/wdt.h>
 #endif
 
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
@@ -98,7 +106,7 @@ extern "C" void HSMCI_Handler() noexcept
 #if SAME70
 
 // HSMCI DMA complete callback
-void HsmciDmaCallback(CallbackParameter cp) noexcept
+void HsmciDmaCallback(CallbackParameter cb, DmaCallbackReason reason) noexcept
 {
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
@@ -506,6 +514,9 @@ void RepRap::Init() noexcept
 #if SUPPORT_12864_LCD
 	display->Init();
 #endif
+#ifdef DUET3_ATE
+	Duet3Ate::Init();
+#endif
 	// linuxInterface is not initialised until we know we are using it, to prevent a disconnected SBC interface generating interrupts and DMA
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
@@ -813,6 +824,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 {
 	platform->Message(mtype, "=== Diagnostics ===\n");
 
+// DEBUG print the module addresses
 //	platform->MessageF(mtype, "platform %" PRIx32 ", network %" PRIx32 ", move %" PRIx32 ", heat %" PRIx32 ", gcodes %" PRIx32 ", scanner %"  PRIx32 ", pm %" PRIx32 ", portc %" PRIx32 "\n",
 //						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
 
@@ -831,7 +843,11 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
 #elif HAS_LINUX_INTERFACE
 	platform->MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
-						(UsingLinuxInterface()) ? "SBC" : "standalone");
+# if SUPPORT_REMOTE_COMMANDS
+						(CanInterface::InExpansionMode()) ? "expansion" :
+# endif
+						(UsingLinuxInterface()) ? "SBC" : "standalone"
+					);
 #else
 	platform->MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
 #endif
@@ -852,12 +868,6 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	move->Diagnostics(mtype);
 	heat->Diagnostics(mtype);
 	gCodes->Diagnostics(mtype);
-#if HAS_LINUX_INTERFACE
-	if (!usingLinuxInterface)
-#endif
-	{
-		network->Diagnostics(mtype);
-	}
 	FilamentMonitor::Diagnostics(mtype);
 #ifdef DUET_NG
 	DuetExpansion::Diagnostics(mtype);
@@ -870,7 +880,12 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	{
 		linuxInterface->Diagnostics(mtype);
 	}
+	else
 #endif
+	{
+		network->Diagnostics(mtype);
+	}
+
 	justSentDiagnostics = true;
 }
 
@@ -887,7 +902,7 @@ void RepRap::EmergencyStop() noexcept
 	case MachineType::cnc:
 		for (size_t i = 0; i < MaxSpindles; i++)
 		{
-			platform->AccessSpindle(i).TurnOff();
+			platform->AccessSpindle(i).SetState(SpindleState::stopped);
 		}
 		break;
 
@@ -1189,16 +1204,22 @@ GCodeResult RepRap::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringR
 	return rslt;
 }
 
-// Get the current axes used as X axes
+// Get the current axes used as X axis
 AxesBitmap RepRap::GetCurrentXAxes() const noexcept
 {
 	return Tool::GetXAxes(currentTool);
 }
 
-// Get the current axes used as Y axes
+// Get the current axes used as Y axis
 AxesBitmap RepRap::GetCurrentYAxes() const noexcept
 {
 	return Tool::GetYAxes(currentTool);
+}
+
+// Get the current axes used as the specified axis
+AxesBitmap RepRap::GetCurrentAxisMapping(unsigned int axis) const noexcept
+{
+	return Tool::GetAxisMapping(currentTool, axis);
 }
 
 // Set the previous tool number. Inline because it is only called from one place.
@@ -1213,8 +1234,9 @@ void RepRap::Tick() noexcept
 	if (active)
 	{
 		WatchdogReset();														// kick the watchdog
+
 #if SAM4E || SAME70
-		RSWDT->RSWDT_CR = RSWDT_CR_KEY_PASSWD | RSWDT_CR_WDRSTT;				// kick the secondary watchdog
+		WatchdogResetSecondary();												// kick the secondary watchdog
 #endif
 
 		if (!stopped)
@@ -1518,7 +1540,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
 	{
 		size_t numSpindles = MaxSpindles;
-		while (numSpindles != 0 && platform->AccessSpindle(numSpindles - 1).GetToolNumber() == -1)
+		while (numSpindles != 0 && platform->AccessSpindle(numSpindles - 1).GetState() == SpindleState::unconfigured)
 		{
 			--numSpindles;
 		}
@@ -1534,15 +1556,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				}
 
 				const Spindle& spindle = platform->AccessSpindle(i);
-				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32, spindle.GetCurrentRpm(), spindle.GetRpm());
-				if (type == 2)
-				{
-					response->catf(",\"tool\":%d}", spindle.GetToolNumber());
-				}
-				else
-				{
-					response->cat('}');
-				}
+				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32 ",\"state\":\"%s\"}", spindle.GetCurrentRpm(), spindle.GetRpm(), spindle.GetState().ToString());
 			}
 			response->cat(']');
 		}
@@ -1567,10 +1581,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		if (move->IsUsingMesh())
 		{
 			response->cat("\"Mesh\"");
-		}
-		else if (move->GetNumProbePoints() > 0)
-		{
-			response->catf("\"%u Point\"", move->GetNumProbePoints());
 		}
 		else
 		{
@@ -1686,6 +1696,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				if (tool->GetFilament() != nullptr)
 				{
 					response->catf(",\"filament\":\"%.s\"", tool->GetFilament()->GetName());
+				}
+
+				// Spindle (if configured)
+				if (tool->spindleNumber > -1)
+				{
+					response->catf(",\"spindle\":%d,\"spindleRpm\":%" PRIi32, tool->spindleNumber, tool->spindleRpm);
 				}
 
 				// Offsets
@@ -2270,7 +2286,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 
 // Helper functions to write JSON arrays
 // Append float array using 1 decimal place
-void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<float(size_t)> func, unsigned int numDecimalDigits) noexcept
+void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<float(size_t)> func, unsigned int numDecimalDigits) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2288,7 +2304,7 @@ void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numVal
 	buf->cat(']');
 }
 
-void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<int(size_t)> func) noexcept
+void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<int(size_t)> func) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2306,7 +2322,7 @@ void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValue
 	buf->cat(']');
 }
 
-void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, std::function<const char *(size_t)> func) noexcept
+void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<const char *(size_t)> func) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2660,13 +2676,15 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 #else
 
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
-bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
+bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept
 {
 #if HAS_MASS_STORAGE
-	FileStore * const firmwareFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_FIRMWARE_FILE, OpenMode::read);
+	FileStore * const firmwareFile = platform->OpenFile(FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str(), OpenMode::read);
 	if (firmwareFile == nullptr)
 	{
-		reply.printf("Firmware binary \"%s\" not found", IAP_FIRMWARE_FILE);
+		String<MaxFilenameLength> firmwareBinaryLocation;
+		MassStorage::CombineName(firmwareBinaryLocation.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str());
+		reply.printf("Firmware binary \"%s\" not found", firmwareBinaryLocation.c_str());
 		return false;
 	}
 
@@ -2678,7 +2696,7 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 		firmwareFile->Seek(32) &&
 #endif
 
-		firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
+	firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
 #if SAME5x
@@ -2690,13 +2708,13 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 #endif
 			)
 	{
-		reply.printf("Firmware binary \"%s\" is not valid for this electronics", IAP_FIRMWARE_FILE);
+		reply.printf("Firmware binary \"%s\" is not valid for this electronics", FIRMWARE_DIRECTORY IAP_FIRMWARE_FILE);
 		return false;
 	}
 
-	if (!platform->FileExists(DEFAULT_SYS_DIR, IAP_UPDATE_FILE))
+	if (!platform->FileExists(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE))
 	{
-		reply.printf("In-application programming binary \"%s\" not found", IAP_UPDATE_FILE);
+		reply.printf("In-application programming binary \"%s\" not found", FIRMWARE_DIRECTORY IAP_UPDATE_FILE);
 		return false;
 	}
 #endif
@@ -2705,22 +2723,23 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 }
 
 // Update the firmware. Prerequisites should be checked before calling this.
-void RepRap::UpdateFirmware() noexcept
+void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 {
 #if HAS_MASS_STORAGE
-	FileStore * const iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
+	FileStore * const iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		platform->Message(FirmwareUpdateMessage, "IAP file '" IAP_UPDATE_FILE "' not found\n");
+		platform->Message(FirmwareUpdateMessage, "IAP file '" FIRMWARE_DIRECTORY IAP_UPDATE_FILE "' not found\n");
 		return;
 	}
+
 
 	PrepareToLoadIap();
 
 	// Use RAM-based IAP
 	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
 	iapFile->Close();
-	StartIap();
+	StartIap(filenameRef.c_str());
 #endif
 }
 
@@ -2753,9 +2772,7 @@ void RepRap::PrepareToLoadIap() noexcept
 #ifdef DUET_NG
 	DuetExpansion::Exit();					// stop the DueX polling task
 #endif
-#if SAME5x	// CoreNG uses a separate analog input task, so stop that
 	StopAnalogTask();
-#endif
 
 	Cache::Disable();						// disable the cache because it interferes with flash memory access
 
@@ -2778,7 +2795,7 @@ void RepRap::PrepareToLoadIap() noexcept
 	#endif
 }
 
-void RepRap::StartIap() noexcept
+void RepRap::StartIap(const char *filename) noexcept
 {
 	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
 	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
@@ -2806,10 +2823,13 @@ void RepRap::StartIap() noexcept
 #endif
 
 #if HAS_MASS_STORAGE
-	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
-	static const char filename[] = DEFAULT_SYS_DIR IAP_FIRMWARE_FILE;
-	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
-	if (topOfStack + sizeof(filename) <=
+	if (filename != nullptr)
+	{
+		// Newer versions of IAP reserve space above the stack for us to pass the firmware filename
+		String<MaxFilenameLength> firmwareFileLocation;
+		MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filename[0] == 0 ? IAP_FIRMWARE_FILE : filename);
+		const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
+		if (topOfStack + firmwareFileLocation.strlen() + 1 <=
 # if SAME5x
 						HSRAM_ADDR + HSRAM_SIZE
 # elif SAM3XA
@@ -2817,9 +2837,10 @@ void RepRap::StartIap() noexcept
 # else
 						IRAM_ADDR + IRAM_SIZE
 # endif
-	   )
-	{
-		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
+		   )
+		{
+			strcpy(reinterpret_cast<char*>(topOfStack), firmwareFileLocation.c_str());
+		}
 	}
 #endif
 
@@ -2830,7 +2851,7 @@ void RepRap::StartIap() noexcept
 	WatchdogReset();								// kick the watchdog one last time
 
 #if SAM4E || SAME70
-	rswdt_restart(RSWDT);							// kick the secondary watchdog
+	WatchdogResetSecondary();						// kick the secondary watchdog
 #endif
 
 	// Modify vector table location

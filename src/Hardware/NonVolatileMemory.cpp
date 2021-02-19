@@ -27,7 +27,7 @@ void NonVolatileMemory::EnsureRead() noexcept
 # error		//TODO
 #elif SAM4E || SAM4S || SAME70
 		const bool cacheEnabled = Cache::Disable();
-		flash_read_user_signature(reinterpret_cast<uint32_t*>(&buffer), sizeof(buffer)/sizeof(uint32_t));
+		Flash::ReadUserSignature(reinterpret_cast<uint32_t*>(&buffer), sizeof(buffer)/sizeof(uint32_t));
 		if (cacheEnabled)
 		{
 			Cache::Enable();
@@ -66,7 +66,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 	{
 		// Erase the page
 # if SAM4E || SAM4S || SAME70
-		flash_erase_user_signature();
+		Flash::EraseUserSignature();
 # elif defined(__LPC17xx__)
 		LPC_EraseSoftwareResetDataSlots();	// erase the last flash sector
 # endif
@@ -77,7 +77,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 	{
 # if SAM4E || SAM4S || SAME70
 		const bool cacheEnabled = Cache::Disable();
-		flash_write_user_signature(reinterpret_cast<const uint32_t*>(&buffer));
+		Flash::WriteUserSignature(reinterpret_cast<const uint32_t*>(&buffer));
 		if (cacheEnabled)
 		{
 			Cache::Enable();
@@ -154,7 +154,7 @@ void NonVolatileMemory::SetThermistorHighCalibration(unsigned int inputNumber, i
 int8_t NonVolatileMemory::GetThermistorCalibration(unsigned int inputNumber, uint8_t *calibArray) noexcept
 {
 	EnsureRead();
-	return (inputNumber >= MaxCalibratedThermistors || calibArray[inputNumber] == 0xFF) ? 0 : calibArray[inputNumber] - 0x7F;
+	return (inputNumber >= MaxCalibratedThermistors || calibArray[inputNumber] == 0xFF) ? 0 : (int)calibArray[inputNumber] - (int)0x7F;
 }
 
 void NonVolatileMemory::SetThermistorCalibration(unsigned int inputNumber, int8_t val, uint8_t *calibArray) noexcept

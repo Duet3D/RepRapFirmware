@@ -15,15 +15,17 @@
 #include <GCodes/GCodes.h>
 
 #if LEDSTRIP_USES_USART
-# include <sam/drivers/pdc/pdc.h>
-# include <sam/drivers/usart/usart.h>
+# include <pdc/pdc.h>
+# include <pmc/pmc.h>
+# include <usart/usart.h>
 #else
 # include <DmacManager.h>
 # if SAME5x
 #  include <Hardware/IoPorts.h>
 #  include <hri_mclk_e54.h>
 # elif SAME70
-#  include <sam/drivers/xdmac/xdmac.h>
+#  include <xdmac/xdmac.h>
+#  include <pmc/pmc.h>
 # endif
 #endif
 
@@ -373,9 +375,8 @@ void LedStripDriver::Init() noexcept
 	hri_mclk_clear_AHBMASK_QSPI_2X_bit(MCLK);			// we don't need the 2x clock
 	hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
 #else
-	// Set up the USART or QSPI pins for SPI mode. The pins are already set up for SPI in the pins table
-	ConfigurePin(DotStarMosiPin);
-	ConfigurePin(DotStarSclkPin);
+	SetPinFunction(DotStarMosiPin, DotStarPinMode);
+	SetPinFunction(DotStarSclkPin, DotStarPinMode);
 
 	// Enable the clock to the USART or SPI peripheral
 	pmc_enable_periph_clk(DotStarClockId);

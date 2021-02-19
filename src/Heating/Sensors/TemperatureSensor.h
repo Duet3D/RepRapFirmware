@@ -8,6 +8,7 @@
 #include <ObjectModel/ObjectModel.h>
 
 class GCodeBuffer;
+class CanMessageGenericParser;
 struct CanSensorReport;
 
 class TemperatureSensor INHERIT_OBJECT_MODEL
@@ -33,6 +34,13 @@ public:
 	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.
 	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed);
+
+#if SUPPORT_REMOTE_COMMANDS
+	// Configure the sensor from M308 parameters.
+	// If we find any parameters, process them and return true. If an error occurs while processing them, return error and write an error message to 'reply.
+	// If we find no relevant parameters, report the current parameters to 'reply' and return ok.
+	virtual GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept;
+#endif
 
 #if SUPPORT_OBJECT_MODEL
 	// Report the sensor type in the form corresponding to the Y parameter of M308.
@@ -86,13 +94,13 @@ public:
 	virtual void Poll() noexcept = 0;
 	virtual bool PollInTask() noexcept { return false; };		// Classes implementing this method need to also call Heat::EnsureSensorsTask() after succesful configuration
 
+	static TemperatureError GetPT100Temperature(float& t, uint16_t ohmsx100) noexcept;		// shared function used by two derived classes and the ATE
+
 protected:
 	DECLARE_OBJECT_MODEL
 
 	void SetResult(float t, TemperatureError rslt) noexcept;
 	void SetResult(TemperatureError rslt) noexcept;
-
-	static TemperatureError GetPT100Temperature(float& t, uint16_t ohmsx100) noexcept;		// shared function used by two derived classes
 
 private:
 	static constexpr uint32_t TemperatureReadingTimeout = 2000;			// any reading older than this number of milliseconds is considered unreliable

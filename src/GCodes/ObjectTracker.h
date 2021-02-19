@@ -69,7 +69,11 @@ protected:
 #endif
 
 private:
+#if SAME70 || SAME5x
+	typedef Bitmap<uint64_t> ObjectCancellationBitmap;	// Type of a bitmap used to represent objects on the build plate that have been cancelled
+#else
 	typedef Bitmap<uint32_t> ObjectCancellationBitmap;	// Type of a bitmap used to represent objects on the build plate that have been cancelled
+#endif
 	static_assert(MaxTrackedObjects <= ObjectCancellationBitmap::MaxBits());
 
 	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;

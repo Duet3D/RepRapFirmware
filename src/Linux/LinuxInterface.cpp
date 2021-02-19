@@ -67,13 +67,13 @@ void LinuxInterface::Init() noexcept
 	transfer.Init();
 	linuxTask = new Task<LinuxTaskStackWords>;
 	linuxTask->Create(LinuxTaskStart, "Linux", nullptr, TaskPriority::SpinPriority);
-	transfer.SetLinuxTask(linuxTask);
-	transfer.StartNextTransfer();
 	iapRamAvailable = &_estack - Tasks::GetHeapTop();
 }
 
 [[noreturn]] void LinuxInterface::TaskLoop() noexcept
 {
+	transfer.SetLinuxTask(linuxTask);
+	transfer.StartNextTransfer();
 	bool writingIap = false, hadReset = false;
 	for (;;)
 	{
@@ -449,7 +449,7 @@ void LinuxInterface::Init() noexcept
 
 				// Launch the IAP binary
 				case LinuxRequest::StartIap:
-					reprap.StartIap();
+					reprap.StartIap(nullptr);
 					break;
 
 				// Assign filament

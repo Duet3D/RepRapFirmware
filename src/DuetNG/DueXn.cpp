@@ -12,6 +12,7 @@
 #include "Wire.h"
 #include "Hardware/I2C.h"
 #include <TaskPriorities.h>
+#include <Interrupts.h>
 
 namespace DuetExpansion
 {
@@ -32,7 +33,6 @@ namespace DuetExpansion
 	static volatile uint32_t dueXnReadCount = 0;
 	static uint32_t dueXnReadCountResetMillis = 0;
 	static volatile bool taskWaiting = false;
-	static volatile bool inputsChanged = false;
 
 	Task<DueXTaskStackWords> *dueXTask = nullptr;
 
@@ -70,7 +70,6 @@ namespace DuetExpansion
 	// Otherwise we might wake it prematurely when it is waiting for an I2C transaction to be completed.
 	static void DueXIrq(CallbackParameter p) noexcept
 	{
-		inputsChanged = true;
 		if (taskWaiting)
 		{
 			taskWaiting = false;
@@ -83,14 +82,12 @@ namespace DuetExpansion
 	{
 		for (;;)
 		{
-			inputsChanged = false;
-			taskWaiting = false;
+			taskWaiting = false;						// make sure we are not notified while we do the I2C transaction
 			TaskBase::ClearNotifyCount();
 			dueXnInputBits = dueXnExpander.digitalReadAll();
 			taskWaiting = true;
 			++dueXnReadCount;
-			__DSB();
-			if (!inputsChanged)
+			if (digitalRead(DueX_INT))
 			{
 				(void)TaskBase::Take();
 			}
@@ -135,7 +132,7 @@ ExpansionBoardType DuetExpansion::DueXnInit() noexcept
 		const uint16_t stopBits = (dueXnBoardType == ExpansionBoardType::DueX5) ? AllStopBitsX5 : AllStopBitsX2;	// I am assuming that the X0 has 2 endstop inputs
 		dueXnExpander.pinModeMultiple(stopBits | AllGpioBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
 		dueXnInputMask = stopBits | AllGpioBits;
-		dueXnExpander.enableInterruptMultiple(dueXnInputMask, INTERRUPT_MODE_CHANGE);
+		dueXnExpander.enableInterruptMultiple(dueXnInputMask, InterruptMode::change);
 	}
 
 	return dueXnBoardType;
@@ -148,7 +145,7 @@ void DuetExpansion::DueXnTaskInit() noexcept
 	if (dueXnBoardType != ExpansionBoardType::none)
 	{
 		// Set up the interrupt on any input change
-		attachInterrupt(DueX_INT, DueXIrq, InterruptMode::INTERRUPT_MODE_FALLING, nullptr);
+		attachInterrupt(DueX_INT, DueXIrq, InterruptMode::falling, nullptr);
 
 		// Clear any initial interrupts
 		(void)dueXnExpander.interruptSourceAndClear();

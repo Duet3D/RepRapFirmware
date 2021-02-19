@@ -131,11 +131,6 @@
 # define HAS_W5500_NETWORKING	0
 #endif
 
-// Boards that support legacy SAM3X Lwip 1 networking must define HAS_LEGACY_NETWORKING in their specific Pins_xxx.h file
-#ifndef HAS_LEGACY_NETWORKING
-# define HAS_LEGACY_NETWORKING	0
-#endif
-
 #ifndef HAS_RTOSPLUSTCP_NETWORKING
 # define HAS_RTOSPLUSTCP_NETWORKING    0
 #endif
@@ -144,7 +139,7 @@
 # define HAS_ESP32_NETWORKING    0
 #endif
 
-#define HAS_NETWORKING			(HAS_LWIP_NETWORKING || HAS_WIFI_NETWORKING || HAS_W5500_NETWORKING || HAS_LEGACY_NETWORKING || HAS_RTOSPLUSTCP_NETWORKING || HAS_ESP32_NETWORKING)
+#define HAS_NETWORKING			(HAS_LWIP_NETWORKING || HAS_WIFI_NETWORKING || HAS_W5500_NETWORKING || HAS_RTOSPLUSTCP_NETWORKING || HAS_ESP32_NETWORKING)
 
 #ifndef SUPPORT_HTTP
 # define SUPPORT_HTTP			HAS_NETWORKING
@@ -201,5 +196,9 @@
 #else
 # define MCU_HAS_TRUERANDOM	0
 #endif
+
+// Define SUPPORT_REMOTE_COMMANDS according to whether this hardware accepts commands over CAN
+// For now we exclude Duet 3 MB6HC because CoreNG doesn't support analog callbacks
+#define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE))
 
 #endif // PINS_H__

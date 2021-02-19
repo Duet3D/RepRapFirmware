@@ -14,12 +14,7 @@
 
 #include <General/NamedEnum.h>
 
-#ifdef DUET3MINI			// if using CoreN2G
-# include <AsyncSerial.h>
-#else						// using CoreNG
-# include <UARTClass.h>
-typedef UARTClass AsyncSerial;
-#endif
+#include <AsyncSerial.h>
 
 #include <bossa/Samba.h>
 #include <bossa/Device.h>
@@ -38,11 +33,8 @@ public:
 	PanelDueUpdater() noexcept;
 	virtual ~PanelDueUpdater() noexcept;
 	void Spin() noexcept;
-	void Start(const uint32_t serialChan = 1) noexcept;
+	void Start(const StringRef& filenameRef, const uint32_t serialChan = 1) noexcept;
 	bool Idle() const noexcept { return state == FlashState::idle; }
-
-    // For now fix the filename here
-    constexpr static const char* const firmwareFilename = DEFAULT_SYS_DIR PANEL_DUE_FIRMWARE_FILE;
 
 private:
 	NamedEnum(FlashState, uint8_t,
@@ -70,6 +62,7 @@ private:
 	uint32_t offset;
 	uint32_t erasedAndResetAt;
 	FlashState state;
+	FileStore *firmwareFile;
 
 	UARTClass* GetAuxPort() noexcept;
 };

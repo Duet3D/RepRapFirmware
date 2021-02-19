@@ -10,6 +10,9 @@
 #include <Platform.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Cache.h>
+#if SAME70 || SAM4S || SAM4E
+# include <Reset.h>
+#endif
 
 // Perform a software reset. 'stk' points to the exception stack (r0 r1 r2 r3 r12 lr pc xPSR) if the cause is an exception, otherwise it is nullptr.
 [[noreturn]] void SoftwareReset(SoftwareResetReason initialReason, const uint32_t *stk) noexcept
@@ -17,8 +20,8 @@
 	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
 	WatchdogReset();							// kick the watchdog
 
-#if SAM4E || SAME70
-	rswdt_restart(RSWDT);						// kick the secondary watchdog
+#if SAME70 || SAM4E
+	WatchdogResetSecondary();					// kick the secondary watchdog
 #endif
 
 	Cache::Disable();
@@ -89,7 +92,7 @@ extern "C" [[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAd
 }
 
 // The fault handler implementation calls a function called hardFaultDispatcher()
-extern "C" [[noreturn]] void HardFault_Handler() noexcept __attribute__((naked));
+extern "C" void HardFault_Handler() noexcept __attribute__((naked));
 void HardFault_Handler() noexcept
 {
 	__asm volatile
@@ -113,7 +116,7 @@ extern "C" [[noreturn]] void memManageDispatcher(const uint32_t *pulFaultStackAd
 }
 
 // The fault handler implementation calls a function called memManageDispatcher()
-extern "C" [[noreturn]] void MemManage_Handler() noexcept __attribute__((naked));
+extern "C" void MemManage_Handler() noexcept __attribute__((naked));
 void MemManage_Handler() noexcept
 {
 	__asm volatile
@@ -137,16 +140,16 @@ extern "C" [[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAdd
 }
 
 #ifdef __LPC17xx__
-extern "C" [[noreturn]] void WDT_IRQHandler() noexcept __attribute__((naked));
+extern "C" void WDT_IRQHandler() noexcept __attribute__((naked));
 void WDT_IRQHandler() noexcept
 {
 	LPC_WDT->MOD &=~((uint32_t)(1<<2)); //SD::clear timout flag before resetting to prevent the Smoothie bootloader going into DFU mode
 #else
 # if SAME70		// SAME70 has a separate interrupt line for the RSWDT
-extern "C" [[noreturn]] void RSWDT_Handler() noexcept __attribute__((naked));
+extern "C" void RSWDT_Handler() noexcept __attribute__((naked));
 void RSWDT_Handler() noexcept
 # else
-extern "C" [[noreturn]] void WDT_Handler() noexcept __attribute__((naked));
+extern "C" void WDT_Handler() noexcept __attribute__((naked));
 void WDT_Handler() noexcept
 # endif
 {
@@ -171,7 +174,7 @@ extern "C" [[noreturn]] void otherFaultDispatcher(const uint32_t *pulFaultStackA
 
 // 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
 // The fault handler implementation calls a function called otherFaultDispatcher()
-extern "C" [[noreturn]] void OtherFault_Handler() noexcept __attribute__((naked));
+extern "C" void OtherFault_Handler() noexcept __attribute__((naked));
 void OtherFault_Handler() noexcept
 {
 	__asm volatile
@@ -189,10 +192,13 @@ void OtherFault_Handler() noexcept
 
 // We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
 // however these exceptions are unlikely to occur, so for now we just report the exception type.
-extern "C" [[noreturn]] void NMI_Handler        () noexcept { SoftwareReset(SoftwareResetReason::NMI); }
-extern "C" [[noreturn]] void UsageFault_Handler () noexcept { SoftwareReset(SoftwareResetReason::usageFault); }
+extern "C" void NMI_Handler		   () noexcept __attribute__((naked));
+extern "C" void UsageFault_Handler () noexcept __attribute__((naked));
+extern "C" void DebugMon_Handler   () noexcept __attribute__((naked));
 
-extern "C" [[noreturn]] void DebugMon_Handler   () noexcept __attribute__ ((alias("OtherFault_Handler")));
+extern "C" void NMI_Handler        () noexcept { SoftwareReset(SoftwareResetReason::NMI); }
+extern "C" void UsageFault_Handler () noexcept { SoftwareReset(SoftwareResetReason::usageFault); }
+extern "C" void DebugMon_Handler   () noexcept __attribute__ ((alias("OtherFault_Handler")));
 
 // FreeRTOS hooks that we need to provide
 extern "C" [[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept

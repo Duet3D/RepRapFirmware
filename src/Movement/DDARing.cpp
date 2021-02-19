@@ -18,7 +18,7 @@
 constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
 constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		// 50ms
 
-DDARing::DDARing() noexcept : scheduledMoves(0), completedMoves(0), numHiccups(0)
+DDARing::DDARing() noexcept : gracePeriod(0), scheduledMoves(0), completedMoves(0), numHiccups(0)
 {
 }
 
@@ -99,6 +99,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 	uint32_t numDdasWanted = 0, numDMsWanted = 0;
 	gb.TryGetUIValue('P', numDdasWanted, seen);
 	gb.TryGetUIValue('S', numDMsWanted, seen);
+	gb.TryGetUIValue('R', gracePeriod, seen);
 	if (seen)
 	{
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
@@ -143,7 +144,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 	}
 	else
 	{
-		reply.printf("DDAs %u, DMs %u", numDdasInRing, DriveMovement::NumCreated());
+		reply.printf("DDAs %u, DMs %u, GracePeriod %" PRIu32, numDdasInRing, DriveMovement::NumCreated(), gracePeriod);
 	}
 	return GCodeResult::ok;
 }
@@ -275,46 +276,56 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 
 		PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
 	}
-	else if (shouldStartMove || waitingForRingToEmpty || !CanAddMove())						// no DDA is executing, so start executing a new one if possible
+	else
 	{
+		// No DDA is executing, so start executing a new one if possible
 		DDA * dda = getPointer;										// capture volatile variable
-		PrepareMoves(dda, 0, 0, simulationMode);
+		if (   shouldStartMove										// if the Move code told us that we should start a move...
+			|| waitingForRingToEmpty								// ...or GCodes is waiting for all moves to finish...
+			|| !CanAddMove()										// ...or the ring is full...
+#if SUPPORT_REMOTE_COMMANDS
+			|| dda->GetState() == DDA::frozen						// ...or the move has already been frozen (it's probably a remote move)
+#endif
+		   )
+		{
+			PrepareMoves(dda, 0, 0, simulationMode);
 
-		if (dda->GetState() == DDA::completed)
-		{
-			// We prepared the move but found there was nothing to do because endstops are already triggered
-			getPointer = dda = dda->GetNext();
-			completedMoves++;
-		}
-		else if (dda->GetState() == DDA::frozen)
-		{
-			if (simulationMode != 0)
+			if (dda->GetState() == DDA::completed)
 			{
-				currentDda = dda;									// pretend we are executing this move
+				// We prepared the move but found there was nothing to do because endstops are already triggered
+				getPointer = dda = dda->GetNext();
+				completedMoves++;
 			}
-			else
+			else if (dda->GetState() == DDA::frozen)
 			{
-				Platform& p = reprap.GetPlatform();
-				SetBasePriority(NvicPriorityStep);					// shut out step interrupt
-				const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
-				if (ScheduleNextStepInterrupt())
+				if (simulationMode != 0)
 				{
-					Interrupt(p);
-				}
-				SetBasePriority(0);
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-				if (wakeLaser)
-				{
-					Move::WakeLaserTask();
+					currentDda = dda;									// pretend we are executing this move
 				}
 				else
 				{
-					p.SetLaserPwm(0);
-				}
+					Platform& p = reprap.GetPlatform();
+					SetBasePriority(NvicPriorityStep);					// shut out step interrupt
+					const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
+					if (ScheduleNextStepInterrupt())
+					{
+						Interrupt(p);
+					}
+					SetBasePriority(0);
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+					if (wakeLaser)
+					{
+						Move::WakeLaserTask();
+					}
+					else
+					{
+						p.SetLaserPwm(0);
+					}
 #else
-				(void)wakeLaser;
+					(void)wakeLaser;
 #endif
+				}
 			}
 		}
 	}
@@ -724,8 +735,8 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 
 	dda = addPointer;
 	rp.proportionDone = dda->GetProportionDone(false);	// get the proportion of the current multi-segment move that has been completed
-	rp.initialUserX = dda->GetInitialUserX();
-	rp.initialUserY = dda->GetInitialUserY();
+	rp.initialUserC0 = dda->GetInitialUserC0();
+	rp.initialUserC1 = dda->GetInitialUserC1();
 	if (dda->UsingStandardFeedrate())
 	{
 		rp.feedRate = dda->GetRequestedSpeed();
@@ -801,8 +812,8 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
 	rp.proportionDone = dda->GetProportionDone(abortedMove);	// store how much of the complete multi-segment move's extrusion has been done
-	rp.initialUserX = dda->GetInitialUserX();
-	rp.initialUserY = dda->GetInitialUserY();
+	rp.initialUserC0 = dda->GetInitialUserC0();
+	rp.initialUserC1 = dda->GetInitialUserC1();
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = dda->GetLaserPwmOrIoBits();
@@ -860,6 +871,23 @@ uint32_t DDARing::ManageLaserPower() const noexcept
 	SetBasePriority(0);
 	reprap.GetPlatform().SetLaserPwm(0);						// turn off the laser
 	return 0;
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Add a move from the ATE to the movement queue
+void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
+{
+	if (addPointer->GetState() == DDA::empty)
+	{
+		if (addPointer->InitFromRemote(msg))
+		{
+			addPointer = addPointer->GetNext();
+			scheduledMoves++;
+		}
+	}
 }
 
 #endif

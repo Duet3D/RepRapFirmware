@@ -86,7 +86,6 @@ public:
 	void SetTaperHeight(float h) noexcept;
 	bool UseMesh(bool b) noexcept;											// Try to enable mesh bed compensation and report the final state
 	bool IsUsingMesh() const noexcept { return usingMesh; }					// Return true if we are using mesh compensation
-	unsigned int GetNumProbePoints() const noexcept;						// Return the number of currently used probe points
 	unsigned int GetNumProbedProbePoints() const noexcept;					// Return the number of actually probed probe points
 	void SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept;
 	void SetInitialCalibrationDeviation(const Deviation& d) noexcept;
@@ -117,7 +116,7 @@ public:
 	void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const noexcept;
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment
 	const char* GetGeometryString() const noexcept { return kinematics->GetName(true); }
-	bool IsAccessibleProbePoint(float x, float y) const noexcept;
+	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	// Temporary kinematics functions
 	bool IsDeltaMode() const noexcept { return kinematics->GetKinematicsType() == KinematicsType::linearDelta; }
@@ -194,9 +193,16 @@ public:
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	void LaserTaskRun() noexcept;
 
-	static void CreateLaserTask() noexcept;						// create the laser task if we haven't already
-	static void WakeLaserTask() noexcept;						// wake up the laser task, called at the start of a new move
-	static void WakeLaserTaskFromISR() noexcept;				// wake up the laser task, called at the start of a new move
+	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
+	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move
+	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept							// add a move from the ATE to the movement queue
+	{
+		mainDDARing.AddMoveFromRemote(msg);
+	}
 #endif
 
 protected:
@@ -215,11 +221,8 @@ private:
 	void InverseBedTransform(float move[MaxAxes],const  Tool *tool) const noexcept;		// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;	// Go from an axis transformed point back to user coordinates
-	float GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept;		// Get the height error at an XY position on the bed
 
-#if SUPPORT_OBJECT_MODEL
 	const char *GetCompensationTypeString() const noexcept;
-#endif
 
 	DDARing mainDDARing;								// The DDA ring used for regular moves
 
@@ -243,6 +246,7 @@ private:
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
+	uint32_t idleStartTime;								// the time when we started to idle
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes

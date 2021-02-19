@@ -10,6 +10,8 @@
 
 #include "RepRapFirmware.h"
 
+class CanMessageTimeSync;
+
 // Class to implement a software timer with a few microseconds resolution
 // Important! In systems that use 16-bit timers, callbacks may take place at multiples of 65536 ticks before they are actually due.
 // In order to achieve the maximum step rate possible, the timer code doesn't check for this, because the step generation code checks which drivers are due steps anyway.
@@ -60,16 +62,30 @@ public:
 	static void Interrupt() noexcept;
 
 #if SAME70 || SAME5x
+	// All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 	static constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
 #elif defined(__LPC17xx__)
 	static constexpr uint32_t StepClockRate = 1000000;                          // 1MHz
 #else
-	static constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// just under 1MHz
+	static constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
 #endif
 
 	static constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 	static constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
 	static constexpr uint32_t MinInterruptInterval = 6;							// about 6us
+
+#if SUPPORT_REMOTE_COMMANDS
+	static uint32_t GetLocalTimeOffset() noexcept { return localTimeOffset; }
+	static void ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept;
+	static uint32_t ConvertToLocalTime(uint32_t masterTime) noexcept { return masterTime + localTimeOffset; }
+	static uint32_t ConvertToMasterTime(uint32_t localTime) noexcept { return localTime - localTimeOffset; }
+	static uint32_t GetMasterTime() noexcept { return ConvertToMasterTime(GetTimerTicks()); }
+
+	static bool IsSynced() noexcept;
+	static void Diagnostics(const StringRef& reply) noexcept;
+
+	static constexpr uint32_t MinSyncInterval = 1000;							// maximum interval in milliseconds between sync messages for us to remain synced
+#endif
 
 private:
 	static bool ScheduleTimerInterrupt(uint32_t tim) noexcept;					// Schedule an interrupt at the specified clock count, or return true if it has passed already
@@ -80,7 +96,21 @@ private:
 	CallbackParameter cbParam;
 	volatile bool active;
 
-	static StepTimer * volatile pendingList;			// list of pending callbacks, soonest first
+	static StepTimer * volatile pendingList;									// list of pending callbacks, soonest first
+
+#if SUPPORT_REMOTE_COMMANDS
+	static volatile uint32_t localTimeOffset;									// local time minus master time
+	static volatile uint32_t whenLastSynced;									// the millis tick count when we last synced
+	static uint32_t prevMasterTime;												// the previous master time received
+	static uint32_t prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
+	static uint32_t peakJitter;													// the maximum correction we made to local time offset while synced
+	static uint32_t peakReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
+	static volatile unsigned int syncCount;										// the number of messages we have received since starting sync
+	static unsigned int numResyncs;
+
+	static constexpr uint32_t MaxSyncJitter = StepClockRate/100;				// 10ms
+	static constexpr unsigned int MaxSyncCount = 10;
+#endif
 };
 
 // Function GetTimerTicks() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined
@@ -90,7 +120,7 @@ inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks(
 {
 # if SAME5x
 	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
-	// On the EXP3HC board it isn't enough just to wait for SYNCBUSY.COUNT here
+	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
 	while (StepTc->CTRLBSET.bit.CMD != 0) { }
 	while (StepTc->SYNCBUSY.bit.COUNT) { }
 	return StepTc->COUNT.reg;

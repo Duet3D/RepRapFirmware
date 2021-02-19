@@ -72,12 +72,12 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
 			// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-			if (segmentsLeft != 0)
+			if (moveBuffer.segmentsLeft != 0)
 			{
 				return false;
 			}
 
-			if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + segmentsLeft))
+			if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + moveBuffer.segmentsLeft))
 			{
 				HandleReply(gb, GCodeResult::ok, "");
 				return true;
@@ -140,7 +140,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	{
 	case 0: // Rapid move
 	case 1: // Ordinary move
-		if (segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
+		if (moveBuffer.segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
 		{
 			return false;
 		}
@@ -166,7 +166,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	case 2: // Clockwise arc
 	case 3: // Anti clockwise arc
 		// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
-		if (segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
+		if (moveBuffer.segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
 		{
 			return false;
 		}
@@ -202,7 +202,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				switch (ival)
 				{
 				case 1:
-					result = SetOrReportOffsets(gb, reply);			// same as G10 with offsets and no L parameter
+					result = SetOrReportOffsets(gb, reply, 10);			// same as G10 with offsets and no L parameter
 					break;
 
 				case 2:
@@ -221,7 +221,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			else
 #endif
 			{
-				bool modifyingTool = gb.Seen('P') || gb.Seen('R') || gb.Seen('S');
+				bool modifyingTool = gb.Seen('P') || gb.Seen('R') || gb.Seen('S') || gb.Seen('F');
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
 					modifyingTool |= gb.Seen(axisLetters[axis]);
@@ -233,7 +233,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						break;
 					}
-					result = SetOrReportOffsets(gb, reply);
+					result = SetOrReportOffsets(gb, reply, 10);
 				}
 				else
 				{
@@ -248,11 +248,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		break;
 
 	case 17:	// Select XY plane for G2/G3
-		break;	// we only support the XY plane, so this is a NOP
-
 	case 18:	// Select XZ plane
 	case 19:	// Select YZ plane
-		result = GCodeResult::errorNotSupported;
+		if (!LockMovementAndWaitForStandstill(gb))			// do this in case a G2 or G3 command is in progress
+		{
+			return false;
+		}
+
+		gb.MachineState().selectedPlane = code - 17;
 		break;
 
 	case 20: // Inches (which century are we living in, here?)
@@ -529,18 +532,41 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 3: // Spin spindle clockwise
 			{
-				const uint32_t slot = gb.Seen('P') ? gb.GetLimitedUIValue('P', MaxSpindles) : 0;
-				if (gb.Seen('S'))
+				if (machineType == MachineType::cnc)
+				{
+					Tool * const currentTool = reprap.GetCurrentTool();
+					if (gb.Seen('S'))
+					{
+						if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1)
+						{
+							currentTool->SetSpindleRpm(gb.GetUIValue());
+							platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::forward);
+						}
+						else
+						{
+							const uint32_t slot = gb.GetLimitedUIValue('P', MaxSpindles);			// Direct spindle speed can only be set when slot is provided as well
+							Spindle& spindle = platform.AccessSpindle(slot);
+							spindle.SetConfiguredRpm(gb.GetIValue(), false);
+							spindle.SetState(SpindleState::forward);
+						}
+					}
+					else if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1)
+					{
+						platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::forward);
+					}
+					else
+					{
+						reply.copy("No spindle selected via P and no active tool with spindle");
+						result = GCodeResult::warning;
+					}
+				}
+				else if (gb.Seen('S'))
 				{
 					switch (machineType)
 					{
-					case MachineType::cnc:
-						platform.AccessSpindle(slot).SetRpm(gb.GetIValue());
-						break;
-
 #if SUPPORT_LASER
 					case MachineType::laser:
-						if (segmentsLeft != 0)
+						if (moveBuffer.segmentsLeft != 0)
 						{
 							return false;						// don't modify moves that haven't gone yet
 						}
@@ -562,18 +588,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						break;
 					}
 				}
-				else if (machineType == MachineType::cnc && gb.Seen('R'))
+				else
 				{
-					const unsigned int rpNumber = gb.GetUIValue();
-					if (rpNumber >= NumRestorePoints)
-					{
-						reply.copy("Invalid restore point number");
-						result = GCodeResult::error;
-					}
-					else
-					{
-						platform.AccessSpindle(slot).SetRpm(numberedRestorePoints[rpNumber].spindleSpeeds[slot]);
-					}
+					result = GCodeResult::notSupportedInCurrentMode;
 				}
 			}
 			break;
@@ -581,9 +598,32 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 4: // Spin spindle counter clockwise
 			if (machineType == MachineType::cnc)
 			{
-				const uint32_t slot = (gb.Seen('P')) ? gb.GetLimitedUIValue('P', MaxSpindles) : 0;
-				gb.MustSee('S');
-				platform.AccessSpindle(slot).SetRpm(-gb.GetIValue());
+				Tool * const currentTool = reprap.GetCurrentTool();
+				if (gb.Seen('S'))
+				{
+					if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1)
+					{
+						currentTool->SetSpindleRpm(gb.GetUIValue());
+						platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::reverse);
+					}
+					else
+					{
+						const uint32_t slot = gb.GetLimitedUIValue('P', MaxSpindles);			// Direct spindle speed can only be set when slot is provided as well
+						Spindle& spindle = platform.AccessSpindle(slot);
+						spindle.SetConfiguredRpm(gb.GetIValue(), false);
+						spindle.SetState(SpindleState::reverse);
+					}
+				}
+				else if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1)
+				{
+					// At this point slot = currentTool->GetSpindleNumber()
+					platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::reverse);
+				}
+				else
+				{
+					reply.copy("No spindle selected via P and no active tool with spindle");
+					result = GCodeResult::warning;
+				}
 			}
 			else
 			{
@@ -595,25 +635,36 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			switch (machineType)
 			{
 			case MachineType::cnc:
-				if (gb.Seen('P'))
 				{
-					// Turn off specific spindle
-					const uint32_t slot = gb.GetLimitedUIValue('P', MaxSpindles);
-					platform.AccessSpindle(slot).TurnOff();
-				}
-				else
-				{
-					// Turn off every spindle if no 'P' parameter is present
-					for (size_t i = 0; i < MaxSpindles; i++)
+					if (gb.Seen('P'))
 					{
-						platform.AccessSpindle(i).TurnOff();
+						// Turn off specific spindle
+						const uint32_t slot = gb.GetLimitedUIValue('P', MaxSpindles);
+						platform.AccessSpindle(slot).SetState(SpindleState::stopped);
+					}
+					else
+					{
+						Tool * const currentTool = reprap.GetCurrentTool();
+						if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1) // Turn off spindle of current tool
+						{
+							platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::stopped);
+						}
+						else
+						{
+							// Turn off every spindle if no 'P' parameter is present and the current tool
+							// does not have a spindle
+							for (size_t i = 0; i < MaxSpindles; i++)
+							{
+								platform.AccessSpindle(i).SetState(SpindleState::stopped);
+							}
+						}
 					}
 				}
 				break;
 
 #if SUPPORT_LASER
 			case MachineType::laser:
-				if (segmentsLeft != 0)
+				if (moveBuffer.segmentsLeft != 0)
 				{
 					return false;						// don't modify moves that haven't gone yet
 				}
@@ -642,14 +693,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+			// no break
+		case 17: // Motors on
 			{
 				bool seen = false;
 				for (size_t axis = 0; axis < numTotalAxes; axis++)
 				{
 					if (gb.Seen(axisLetters[axis]))
 					{
-						SetAxisNotHomed(axis);
-						platform.DisableDrivers(axis);
+						if (code == 17)
+						{
+							platform.EnableDrivers(axis);
+						}
+						else
+						{
+							SetAxisNotHomed(axis);
+							platform.DisableDrivers(axis);
+						}
 						seen = true;
 					}
 				}
@@ -668,7 +728,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							result = GCodeResult::error;
 							break;
 						}
-						platform.DisableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+						if (code == 17)
+						{
+							platform.EnableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+						}
+						else
+						{
+							platform.DisableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+						}
 					}
 				}
 
@@ -690,7 +757,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (!seen)
 				{
-					DisableDrives();
+					if (code == 17)
+					{
+						for (size_t axis = 0; axis < numTotalAxes; ++axis)
+						{
+							reprap.GetPlatform().EnableDrivers(axis);
+						}
+						for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+						{
+							reprap.GetPlatform().EnableDrivers(ExtruderToLogicalDrive(extruder));
+						}
+					}
+					else
+					{
+						DisableDrives();
+					}
 				}
 			}
 			break;
@@ -959,12 +1040,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				pausePending = true;
 				if (&gb != fileGCode)
 				{
-					return false;						// wait for the current macro to finish
+					return false;								// wait for the current macro to finish
 				}
 			}
 			else
 			{
-				if (!LockMovement(gb))					// lock movement before calling DoPause
+				if (!LockMovement(gb))							// lock movement before calling DoPause
 				{
 					return false;
 				}
@@ -978,8 +1059,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			gb.MustSee('S');
 			fileOffsetToPrint = (FilePosition)gb.GetUIValue();
 			restartMoveFractionDone = (gb.Seen('P')) ? constrain<float>(gb.GetFValue(), 0.0, 1.0) : 0.0;
-			restartInitialUserX = (gb.Seen('X')) ? gb.GetFValue() : 0.0;
-			restartInitialUserY = (gb.Seen('Y')) ? gb.GetFValue() : 0.0;
+			{
+				const unsigned int selectedPlane = gb.MachineState().selectedPlane;
+				const char c0 = (selectedPlane == 2) ? 'Y' : 'X';
+				const char c1 = (selectedPlane == 0) ? 'Y' : 'Z';
+				restartInitialUserC0 = (gb.Seen(c0)) ? gb.GetFValue() : 0.0;
+				restartInitialUserC1 = (gb.Seen(c1)) ? gb.GetFValue() : 0.0;
+			}
 			break;
 
 		case 27: // Report print status - Deprecated
@@ -1552,7 +1638,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('B'))
 				{
 					const uint32_t board = gb.GetUIValue();
-					if (board != CanId::MasterAddress)
+					if (board != CanInterface::GetCanAddress())
 					{
 						result = CanInterface::GetRemoteFirmwareDetails(board, gb, reply);
 						break;
@@ -1572,7 +1658,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.catf(" + %s", additionalExpansionName);
 				}
 #endif
-				reply.catf(" FIRMWARE_DATE: %s", DATE);
+				reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
 			}
 			break;
 
@@ -1775,8 +1861,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				const unsigned int type = (gb.Seen('P')) ? gb.GetIValue() : 0;
 				const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);	// set the Push flag to combine multiple messages into a single OutputBuffer chain
 #if SUPPORT_CAN_EXPANSION
-				const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
-				if (board != CanId::MasterAddress)
+				const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
+				if (board != CanInterface::GetCanAddress())
 				{
 					result = CanInterface::RemoteDiagnostics(mt, board, type, gb, reply);
 					break;
@@ -2204,7 +2290,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (newSpeedFactor >= 0.01)
 				{
 					// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
-					if (segmentsLeft != 0 && moveBuffer.applyM220M221)
+					if (moveBuffer.segmentsLeft != 0 && moveBuffer.applyM220M221)
 					{
 						moveBuffer.feedRate *= newSpeedFactor / speedFactor;
 					}
@@ -2351,7 +2437,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
+					if (haveResidual && moveBuffer.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
 					{
 						// The pipeline is empty, so execute the babystepping move immediately
 						SetMoveBufferDefaults();
@@ -2813,9 +2899,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				reprap.StateUpdated();
 			}
 
+			if (gb.Seen('S'))
 			{
-				const uint32_t slot = gb.Seen('S') ? gb.GetLimitedUIValue('S', MaxSpindles) : 0;		// may throw
-				result = platform.AccessSpindle(slot).Configure(gb, reply);								// may throw
+				reply.copy("Spindle management has been moved to M950");
+				result = GCodeResult::error;
 			}
 			break;
 
@@ -3316,8 +3403,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			break;
 
-		case 568: // Turn on/off automatic tool mixing
-			reply.copy("The M568 command is no longer needed");
+		case 568: // Tool Settings
+			{
+				const unsigned int toolNumber = gb.GetLimitedUIValue('P', MaxTools);
+				if (reprap.GetTool(toolNumber).IsNull())
+				{
+					reply.cat("Tool settings can only be set for existing tools");
+					result = GCodeResult::error;
+					break;
+				}
+
+				if (simulationMode != 0)
+				{
+					break;
+				}
+				result = SetOrReportOffsets(gb, reply, 568);
+			}
 			break;
 
 		case 569: // Set/report axis direction
@@ -4400,7 +4501,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+		case 954:	// configure as expansion board
+			{
+				CanAddress addr = gb.GetLimitedUIValue('A', CanId::MaxCanAddress + 1, 1);
+				CanInterface::SwitchToExpansionMode(addr);
+			}
+			break;
+#endif
+
 		case 997:	// Perform firmware update
+#ifdef DUET3_ATE
+			Duet3Ate::PowerOffEUT();
+#endif
 			result = UpdateFirmware(gb, reply);
 			break;
 
@@ -4418,11 +4531,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 999:
+#ifdef DUET3_ATE
+			Duet3Ate::PowerOffEUT();
+#endif
 #if SUPPORT_CAN_EXPANSION
 			if (gb.Seen('B'))
 			{
 				const uint32_t address = gb.GetUIValue();
-				if (address != CanId::MasterAddress)
+				if (address != CanInterface::GetCanAddress())
 				{
 					result = reprap.GetExpansion().ResetRemote(address, gb, reply);
 					break;

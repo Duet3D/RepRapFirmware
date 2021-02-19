@@ -106,20 +106,25 @@ constexpr size_t NumThermistorInputs = 3;
 constexpr size_t NumTmcDriversSenseChannels = 2;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 8;						// The maximum number of movement axes in the machine
+constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxExtruders = 5;					// The maximum number of extruders
-constexpr size_t NumDefaultExtruders = 1;			// The number of drivers that we configure as extruders by default
+constexpr size_t NumDefaultExtruders = 0;			// The number of drivers that we configure as extruders by default
 
-constexpr size_t MaxAxesPlusExtruders = 8;
+constexpr size_t MaxAxesPlusExtruders = 12;
 
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 5;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and one auxiliary UART)
+# ifdef DUET3_ATE
+constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART) - reserve the second UART for ATE use
+#else
+constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
+#endif
+
 #define SERIAL_MAIN_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
 #define SERIAL_AUX2_DEVICE (serialUart1)

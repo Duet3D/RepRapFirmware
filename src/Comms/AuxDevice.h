@@ -9,6 +9,7 @@
 #define SRC_COMMS_AUXDEVICE_H_
 
 #include <RepRapFirmware.h>
+#if HAS_AUX_DEVICES
 #include <OutputMemory.h>
 #include <RTOSIface/RTOSIface.h>
 
@@ -40,5 +41,7 @@ private:
 	bool enabled;							// is it initialised and running?
 	bool raw;								// true if device is in raw mode
 };
+
+#endif
 
 #endif /* SRC_COMMS_AUXDEVICE_H_ */

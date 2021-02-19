@@ -33,6 +33,7 @@ public:
 	void AddFParam(char c, float v) THROWS(GCodeException);
 	void AddCharParam(char c, char v) THROWS(GCodeException);
 	void AddStringParam(char c, const char* v) THROWS(GCodeException);
+	void AddDriverIdParam(char c, DriverId did) THROWS(GCodeException);
 
 	GCodeResult SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) noexcept;
 

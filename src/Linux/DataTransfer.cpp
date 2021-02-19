@@ -39,16 +39,22 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 #endif
 
 #if USE_DMAC
-# include "dmac/dmac.h"
-# include "matrix/matrix.h"
+# include <dmac/dmac.h>
+# include <matrix/matrix.h>
+# include <pmc/pmc.h>
+# include <spi/spi.h>
 #endif
 
 #if USE_XDMAC
-# include "xdmac/xdmac.h"
+# include <xdmac/xdmac.h>
 #endif
 
 #if USE_DMAC_MANAGER || SAME70
 # include <DmacManager.h>
+#endif
+
+#if SAME70
+# include <spi/spi.h>
 #endif
 
 #include "RepRapFirmware.h"
@@ -447,10 +453,10 @@ void DataTransfer::Init() noexcept
 # endif
 #else
 	// Initialize SPI
-	ConfigurePin(APIN_SBC_SPI_MOSI);
-	ConfigurePin(APIN_SBC_SPI_MISO);
-	ConfigurePin(APIN_SBC_SPI_SCK);
-	ConfigurePin(APIN_SBC_SPI_SS0);
+	SetPinFunction(APIN_SBC_SPI_MOSI, SBCPinPeriphMode);
+	SetPinFunction(APIN_SBC_SPI_MISO, SBCPinPeriphMode);
+	SetPinFunction(APIN_SBC_SPI_SCK, SBCPinPeriphMode);
+	SetPinFunction(APIN_SBC_SPI_SS0, SBCPinPeriphMode);
 
 	spi_enable_clock(SBC_SPI);
 	spi_disable(SBC_SPI);
@@ -585,10 +591,11 @@ bool DataTransfer::ReadHeightMap() noexcept
 {
 	// Read height map header
 	const HeightMapHeader * const header = ReadDataHeader<HeightMapHeader>();
-	float xRange[2] = { header->xMin, header->xMax };
-	float yRange[2] = { header->yMin, header->yMax };
-	float spacing[2] = { header->xSpacing, header->ySpacing };
-	const bool ok = reprap.GetGCodes().AssignGrid(xRange, yRange, header->radius, spacing);
+	char axesLetter[2] 		= { 'X', 'Y' };
+	float axis0Range[2]		= { header->xMin, header->xMax };
+	float axis1Range[2]		= { header->yMin, header->yMax };
+	float spacing[2]		= { header->xSpacing, header->ySpacing };
+	const bool ok = reprap.GetGCodes().AssignGrid(axesLetter, axis0Range, axis1Range, header->radius, spacing);
 	if (ok)
 	{
 		// Read Z coordinates
@@ -1135,6 +1142,13 @@ bool DataTransfer::WritePrintPaused(FilePosition position, PrintPausedReason rea
 bool DataTransfer::WriteHeightMap() noexcept
 {
 	const GridDefinition& grid = reprap.GetMove().GetGrid();
+
+	// TODO: Remove this check once DCS is aware of the new format
+	if (!(grid.letter0 == 'X' && grid.letter1 == 'Y'))
+	{
+		return false;
+	}
+
 	size_t numPoints = reprap.GetMove().AccessHeightMap().UsingHeightMap() ? grid.NumPoints() : 0;
 	size_t bytesToWrite = sizeof(HeightMapHeader) + numPoints * sizeof(float);
 	if (!CanWritePacket(bytesToWrite))
@@ -1147,15 +1161,15 @@ bool DataTransfer::WriteHeightMap() noexcept
 
 	// Write heightmap header
 	HeightMapHeader *header = WriteDataHeader<HeightMapHeader>();
-	header->xMin = grid.xMin;
-	header->xMax = grid.xMax;
-	header->xSpacing = grid.xSpacing;
-	header->yMin = grid.yMin;
-	header->yMax = grid.yMax;
-	header->ySpacing = grid.ySpacing;
+	header->xMin = grid.min0;
+	header->xMax = grid.max0;
+	header->xSpacing = grid.spacing0;
+	header->yMin = grid.min1;
+	header->yMax = grid.max1;
+	header->ySpacing = grid.spacing1;
 	header->radius = grid.radius;
-	header->numX = grid.numX;
-	header->numY = grid.numY;
+	header->numX = grid.num0;
+	header->numY = grid.num1;
 
 	// Write Z points
 	if (numPoints != 0)

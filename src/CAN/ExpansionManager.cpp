@@ -141,7 +141,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 		}
 		UpdateBoardState(src, BoardState::running);
 	}
-	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanId::MasterAddress, src);
+	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanInterface::GetCanAddress(), src);
 	CanInterface::SendResponseNoFree(buf);
 }
 
@@ -166,7 +166,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	// Ask the board for its type and check we have the firmware file for it
 	CanMessageBuffer * const buf1 = CanInterface::AllocateBuffer(&gb);
 	CanRequestId rid1 = CanInterface::AllocateRequestId(boardAddress);
-	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanId::MasterAddress, (CanAddress)boardAddress);
+	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanInterface::GetCanAddress(), (CanAddress)boardAddress);
 
 	msg1->type = (moduleNumber == (unsigned int)FirmwareModule::bootloader) ? CanMessageReturnInfo::typeBootloaderName : CanMessageReturnInfo::typeBoardName;
 	{
@@ -201,7 +201,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 
 	CanMessageBuffer * const buf2 = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid2 = CanInterface::AllocateRequestId(boardAddress);
-	auto msg2 = buf2->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid2, CanId::MasterAddress, (CanAddress)boardAddress);
+	auto msg2 = buf2->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid2, CanInterface::GetCanAddress(), (CanAddress)boardAddress);
 	msg2->boardId = (uint8_t)boardAddress;
 	msg2->invertedBoardId = (uint8_t)~boardAddress;
 	msg2->module = moduleNumber;
@@ -228,7 +228,7 @@ GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb
 	CanInterface::CheckCanAddress(boardAddress, gb);
 	CanMessageBuffer * const buf = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-	buf->SetupRequestMessage<CanMessageReset>(rid, CanId::MasterAddress, (uint8_t)boardAddress);
+	buf->SetupRequestMessage<CanMessageReset>(rid, CanInterface::GetCanAddress(), (uint8_t)boardAddress);
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
@@ -278,14 +278,14 @@ void ExpansionManager::EmergencyStop() noexcept
 	{
 		if (boards[addr].state == BoardState::running)
 		{
-			buf->SetupRequestMessage<CanMessageEmergencyStop>(0, CanId::MasterAddress, addr);
+			buf->SetupRequestMessage<CanMessageEmergencyStop>(0, CanInterface::GetCanAddress(), addr);
 			CanInterface::SendMessageNoReplyNoFree(buf);
 		}
 	}
 //	debugPrintf("sent individual messages\n");
 
 	// Finally, send a broadcast message in case we missed any, and free the buffer
-	buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanId::MasterAddress);
+	buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanInterface::GetCanAddress());
 	CanInterface::SendBroadcastNoFree(buf);
 
 	CanMessageBuffer::Free(buf);

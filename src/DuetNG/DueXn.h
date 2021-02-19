@@ -9,7 +9,7 @@
 #define SRC_DUETNG_DUEXN_H_
 
 #include "ecv.h"
-#include "Core.h"
+#include "CoreIO.h"
 #include "MessageType.h"
 
 enum class ExpansionBoardType : uint8_t

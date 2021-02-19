@@ -47,7 +47,7 @@ Device::readChipId(uint32_t& chipId, uint32_t& extChipId)
 void
 Device::create() THROWS(GCodeException)
 {
-    Flash* flashPtr;
+	BossaFlash* flashPtr;
 #if ORIGINAL_BOSSA_CODE
     uint32_t chipId = 0;
     uint32_t cpuId = 0;

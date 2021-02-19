@@ -11,6 +11,7 @@
 #include "Network.h"
 #include <Platform.h>
 #include <RepRap.h>
+
 #if HAS_NETWORKING
 #include "NetworkBuffer.h"
 #include "NetworkInterface.h"

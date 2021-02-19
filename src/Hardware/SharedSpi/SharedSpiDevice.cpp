@@ -15,6 +15,9 @@
 # include <peripheral_clk_config.h>
 # include <hri_sercom_e54.h>
 #elif USART_SPI
+# if SAME70 || SAM4E || SAM4S
+#  include <pmc/pmc.h>
+# endif
 # include <usart/usart.h>
 #else
 # include <spi/spi.h>
@@ -318,7 +321,11 @@ bool SharedSpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data,
 	if (rx_data == nullptr)
 	{
 #if SAME5x
-		(void)hardware->SPI.DATA.reg;
+		// The SAME5x seems to buffer more than one received character
+		while (hardware->SPI.INTFLAG.bit.RXC)
+		{
+			(void)hardware->SPI.DATA.reg;
+		}
 #elif USART_SPI
 		(void)hardware->US_RHR;
 #else
@@ -344,9 +351,9 @@ void SharedSpiDevice::Init() noexcept
 	SetPinFunction(SharedSpiSclkPin, SharedSpiPinFunction);
 	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiSercomNumber);
 #elif USART_SPI
-	ConfigurePin(APIN_USART_SSPI_SCK);
-	ConfigurePin(APIN_USART_SSPI_MOSI);
-	ConfigurePin(APIN_USART_SSPI_MISO);
+	SetPinFunction(APIN_USART_SSPI_SCK, USARTSPISckPeriphMode);
+	SetPinFunction(APIN_USART_SSPI_MOSI, USARTSPIMosiPeriphMode);
+	SetPinFunction(APIN_USART_SSPI_MISO, USARTSPIMisoPeriphMode);
 	mainSharedSpiDevice = new SharedSpiDevice(0);
 #else
 	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_SCK]);

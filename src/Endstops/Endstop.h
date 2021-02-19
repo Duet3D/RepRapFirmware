@@ -105,7 +105,7 @@ public:
 	void SetAtHighEnd(bool b) noexcept { atHighEnd = b; }
 
 protected:
-	Endstop(uint8_t axis, EndStopPosition pos) noexcept;
+	Endstop(uint8_t p_axis, EndStopPosition pos) noexcept;
 
 	DECLARE_OBJECT_MODEL
 

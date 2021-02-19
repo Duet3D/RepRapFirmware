@@ -62,22 +62,33 @@ private:
 
 namespace CanInterface
 {
+	// Note: GetCanAddress() in this namespace is now declared in RepRapFirmware.h to overcome ordering issues
 	constexpr uint32_t CanResponseTimeout = 1000;
 
 	// Low level functions
 	void Init() noexcept;
 	void Shutdown() noexcept;
 
-	inline CanAddress GetCanAddress() noexcept { return CanId::MasterAddress; }
+#if SUPPORT_REMOTE_COMMANDS
+	bool InExpansionMode() noexcept;
+	void SwitchToExpansionMode(CanAddress addr) noexcept;
+#endif
+
 	CanRequestId AllocateRequestId(CanAddress destination) noexcept;
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr) noexcept;
-	GCodeResult SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, std::function<void(const CanMessageBuffer*) /*noexcept*/> callback) noexcept;
+	GCodeResult SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, stdext::inplace_function<void(const CanMessageBuffer*) /*noexcept*/> callback) noexcept;
 	void SendResponseNoFree(CanMessageBuffer *buf) noexcept;
 	void SendBroadcastNoFree(CanMessageBuffer *buf) noexcept;
 	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 	CanMessageBuffer *AllocateBuffer(const GCodeBuffer* gb) THROWS(GCodeException);
 	void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS(GCodeException);
+
+	uint16_t GetTimeStampCounter() noexcept;
+
+#if !SAME70
+	uint16_t GetTimeStampPeriod() noexcept;
+#endif
 
 	// Info functions
 	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
@@ -97,7 +108,7 @@ namespace CanInterface
 	GCodeResult SetRemoteDriverStepsPerMmAndMicrostepping(const CanDriversData<StepsPerUnitAndMicrostepping>& data, const StringRef& reply) noexcept;
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
-	void WakeCanSender() noexcept;
+	void WakeAsyncSenderFromIsr() noexcept;
 
 	// Remote handle functions
 	GCodeResult CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval, bool& currentState, const StringRef& reply) noexcept;
@@ -114,9 +125,9 @@ namespace CanInterface
 	GCodeResult DeleteFilamentMonitor(DriverId driver, GCodeBuffer* gb, const StringRef& reply) noexcept;		// called from a destructor, so must not throw
 
 	// Misc functions
-	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply)THROWS(GCodeException);
-	GCodeResult ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply)THROWS(GCodeException);
+	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer *gb, const StringRef& reply) noexcept;
+	GCodeResult ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 }
 
 // Members of template class CanDriversData

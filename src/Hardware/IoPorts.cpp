@@ -15,15 +15,23 @@
 # include "DuetNG/DueXn.h"
 #endif
 
+#include <AnalogOut.h>
+#include <Interrupts.h>
+#include <AnalogIn.h>
+using
 #if SAME5x
-# include <AnalogIn.h>
-using AnalogIn::AdcBits;
-# include <AnalogOut.h>
-# include <Interrupts.h>
+	AnalogIn
+#else
+	LegacyAnalogIn
 #endif
+	::AdcBits;
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanId.h>
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+# include <CAN/CanInterface.h>
 #endif
 
 // Read a port name parameter and assign some ports. Caller must call gb.Seen() with the appropriate letter and get 'true' returned before calling this.
@@ -31,7 +39,7 @@ using AnalogIn::AdcBits;
 /*static*/ size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[]) THROWS(GCodeException)
 {
 	// Get the full port names string
-	String<StringLength100> portNames;
+	String<StringLength100> portNames;				// 50 characters wasn't always enough when passing 4 duex endstop input names in a M574 command
 	gb.GetReducedString(portNames.GetRef());
 	return AssignPorts(portNames.c_str(), reply, neededFor, numPorts, ports, access);
 }
@@ -68,7 +76,7 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress boardAddress = RemoveBoardAddress(pn.GetRef());
-		if (boardAddress != 0)
+		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			reply.lcat("Remote ports are not supported by this command");
 #else
@@ -168,7 +176,7 @@ void IoPort::Release() noexcept
 }
 
 // Attach an interrupt to the pin. Nor permitted if we allocated the pin in shared input mode.
-bool IoPort::AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const noexcept
+bool IoPort::AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept
 {
 	return IsValid() && !isSharedInput && attachInterrupt(GetPinNoCheck(), callback, mode, param);
 }
@@ -180,6 +188,15 @@ void IoPort::DetachInterrupt() const noexcept
 		detachInterrupt(GetPinNoCheck());
 	}
 }
+
+#if SAME5x
+
+bool IoPort::SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept
+{
+	return AnalogIn::SetCallback(GetAnalogChannel(), fn, cbp, ticksPerCall, false);
+}
+
+#endif
 
 // Allocate the specified logical pin, returning true if successful
 bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
@@ -403,6 +420,12 @@ void IoPort::AppendPinName(const StringRef& str) const noexcept
 {
 	if (IsValid())
 	{
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			str.catf("%u.", CanInterface::GetCanAddress());
+		}
+#endif
 		if (GetInvert())
 		{
 			str.cat('!');
@@ -458,7 +481,7 @@ void IoPort::AppendPinName(const StringRef& str) const noexcept
 	}
 }
 
-/*static*/ void IoPort::AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]) noexcept
+/*static*/ void IoPort::AppendPinNames(const StringRef& str, size_t numPorts, const IoPort * const ports[]) noexcept
 {
 	for (size_t i = 0; i < numPorts; ++i)
 	{
@@ -537,7 +560,7 @@ uint16_t IoPort::ReadAnalog() const noexcept
 		portName.Erase(prefix, numToSkip - prefix + 1);			// remove the board address prefix
 		return (CanAddress)boardAddress;
 	}
-	return CanId::MasterAddress;
+	return CanInterface::GetCanAddress();
 #else
 	if (numToSkip != prefix && portName[numToSkip] == '.')
 	{
@@ -604,20 +627,16 @@ uint16_t IoPort::ReadAnalog() const noexcept
 
 /*static*/ void IoPort::WriteAnalog(Pin pin, float pwm, uint16_t freq) noexcept
 {
-#if SAME5x
-	AnalogOut::Write(pin, pwm, freq);
-#elif defined(DUET_NG)
+#if defined(DUET_NG)
 	if (pin >= DueXnExpansionStart)
 	{
 		DuetExpansion::AnalogOut(pin, pwm);
 	}
 	else
-	{
-		AnalogOut(pin, pwm, freq);
-	}
-#else
-	AnalogOut(pin, pwm, freq);
 #endif
+	{
+		AnalogOut::Write(pin, pwm, freq);
+	}
 }
 
 // Members of class PwmPort

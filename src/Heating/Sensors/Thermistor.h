@@ -22,7 +22,13 @@ class Thermistor : public SensorWithPort
 {
 public:
 	Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept;					// create an instance with default values
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException); // configure the sensor from M305 parameters
+
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException); // configure the sensor from M308 parameters
+
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override; // configure the sensor from M308 parameters
+#endif
+
 	void Poll() noexcept override;
 	const char *GetShortSensorType() const noexcept override { return (isPT1000) ? TypeNamePT1000 : TypeNameThermistor; }
 
@@ -32,6 +38,9 @@ public:
 private:
 	void CalcDerivedParameters() noexcept;											// calculate shA and shB
 	int32_t GetRawReading(bool& valid) const noexcept;								// get the ADC reading
+	bool ConfigureHParam(int hVal, const StringRef& reply) noexcept;				// configure the H parameter returning true if successful, false if error
+	bool ConfigureLParam(int lVal, const StringRef& reply) noexcept;				// configure the L parameter returning true if successful, false if error
+	void InitPort() noexcept;
 
 	// The following are configurable parameters
 	float r25, beta, shC, seriesR;													// parameters declared in the M305 command

@@ -36,10 +36,7 @@ public:
     void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point
 
 	void ClearProbeHeights() noexcept;											// Clear out the Z heights so that we don't re-use old points
-	bool SetProbedBedEquation(size_t numPoints, const StringRef& reply) noexcept;	// When we have a full set of probed points, work out the bed's equation
 	void SetIdentity() noexcept { numBedCompensationPoints = 0; }				// Set identity transform
-
-	float GetInterpolatedHeightError(float x, float y) const noexcept;			// Compute the interpolated height error at the specified point
 
 	bool GoodProbePoints(size_t numPoints) const noexcept;						// Check whether the specified set of points has been successfully defined and probed
 	void ReportProbeHeights(size_t numPoints, const StringRef& reply) const noexcept;	// Print out the probe heights and any errors
@@ -49,9 +46,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	bool GoodProbePointOrdering(size_t numPoints) const noexcept;				// Check that the probe points are in the right order
-    float SecondDegreeTransformZ(float x, float y) const noexcept;				// Used for second degree bed equation
-
 	// Enumeration to record what has been set
 	enum PointCoordinateSet
 	{

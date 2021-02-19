@@ -18,12 +18,12 @@
 #endif
 
 #if SAME5x
-# include <DmacManager.h>
 # include <hpl_user_area.h>
 #endif
 
-#include "FreeRTOS.h"
-#include "task.h"
+#include <FreeRTOS.h>
+#include <task.h>
+#include <freertos_task_additions.h>
 #include <malloc.h>
 
 const uint8_t memPattern = 0xA5;		// this must be the same pattern as FreeRTOS because we use common code for checking for stack overflow
@@ -102,11 +102,7 @@ extern "C" void ReleaseMallocMutex() noexcept
 }
 
 // Application entry point
-#if SAME5x		// if using CoreN2G
 [[noreturn]] void AppMain() noexcept
-#else			// using CoreNG
-extern "C" [[noreturn]] void AppMain() noexcept
-#endif
 {
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);	// set up diag LED for debugging and turn it off
 
@@ -162,10 +158,10 @@ extern "C" [[noreturn]] void AppMain() noexcept
 			}
 		}
 	}
+#endif
 
 	CoreInit();
 	DeviceInit();
-#endif
 
 	// Trap integer divide-by-zero.
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
@@ -246,14 +242,9 @@ const char* Tasks::GetHeapTop() noexcept
 void *Tasks::AllocPermanent(size_t sz, std::align_val_t align) noexcept
 {
 	GetMallocMutex();
-	char *newHeapLimit = reinterpret_cast<char *>(reinterpret_cast<uint32_t>(heapLimit - sz) & ~((uint32_t)align - 1));
-	if (newHeapLimit < heapTop)
-	{
-		OutOfMemoryHandler();
-	}
-	heapLimit = newHeapLimit;
+	void * const ret = CoreAllocPermanent(sz, align);
 	ReleaseMallocMutex();
-	return newHeapLimit;
+	return ret;
 }
 
 // Write data about the current task
@@ -286,14 +277,61 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 	p.Message(mtype, "Tasks:");
 	for (TaskBase *t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
 	{
-		TaskStatus_t taskDetails;
-		vTaskGetInfo(t->GetFreeRTOSHandle(), &taskDetails, pdTRUE, eInvalid);
-		const char* const stateText = (taskDetails.eCurrentState == eRunning) ? "running"
-										: (taskDetails.eCurrentState == eReady) ? "ready"
-											: (taskDetails.eCurrentState == eBlocked) ? "blocked"
-												: (taskDetails.eCurrentState == eSuspended) ? "suspended"
-													: "invalid";
-		p.MessageF(mtype, " %s(%s,%u)", taskDetails.pcTaskName, stateText, (unsigned int)taskDetails.usStackHighWaterMark);
+		ExtendedTaskStatus_t taskDetails;
+		vTaskGetExtendedInfo(t->GetFreeRTOSHandle(), &taskDetails);
+
+		const char* stateText;
+		switch (taskDetails.eCurrentState)
+		{
+		case esRunning:
+			stateText = "running";
+			break;
+		case esReady:
+			stateText = "ready";
+			break;
+		case esNotifyWaiting:
+			stateText = "notifyWait";
+			break;
+		case esResourceWaiting:
+			stateText = "resourceWait";
+			break;
+		case esDelaying:
+			stateText = "delaying";
+			break;
+		case esSuspended:
+			stateText = "suspended";
+			break;
+		case esBlocked:
+			stateText = "blocked";
+			break;
+		default:
+			stateText = "invalid";
+			break;
+		}
+
+		const char *mutexName = nullptr;
+		if (taskDetails.eCurrentState == esResourceWaiting)
+		{
+			const Mutex *m = Mutex::GetMutexList();
+			while (m != nullptr)
+			{
+				if ((const void *)m == taskDetails.pvResource)
+				{
+					mutexName = m->GetName();
+					break;
+				}
+				m = m->GetNext();
+			}
+		}
+
+		if (mutexName != nullptr)
+		{
+			p.MessageF(mtype, " %s(%s,%s,%u)", taskDetails.pcTaskName, stateText, mutexName, (unsigned int)taskDetails.usStackHighWaterMark);
+		}
+		else
+		{
+			p.MessageF(mtype, " %s(%s,%u)", taskDetails.pcTaskName, stateText, (unsigned int)taskDetails.usStackHighWaterMark);
+		}
 	}
 	p.Message(mtype, "\nOwned mutexes:");
 
@@ -340,5 +378,17 @@ extern "C" void __tzset() noexcept { }
 extern "C" void __tz_lock() noexcept { }
 extern "C" void __tz_unlock() noexcept { }
 extern "C" void _tzset_unlocked() noexcept { }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Functions called by CanMessageBuffer in CANlib
+void *MessageBufferAlloc(size_t sz, std::align_val_t align) noexcept
+{
+	return Tasks::AllocPermanent(sz, align);
+}
+
+void MessageBufferDelete(void *ptr, std::align_val_t align) noexcept { }
+
+#endif
 
 // End

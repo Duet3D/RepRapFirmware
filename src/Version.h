@@ -9,7 +9,7 @@
 #define SRC_VERSION_H_
 
 #ifndef VERSION
-# define MAIN_VERSION	"3.2.1"
+# define MAIN_VERSION	"3.3beta1+1"
 # ifdef USE_CAN0
 #  define VERSION_SUFFIX	" (CAN0)"
 # else
@@ -21,6 +21,14 @@
 #ifndef DATE
 # include <General/IsoDate.h>
 # define DATE IsoDate
+#endif
+
+#if 0
+// Use this for official releases
+# define TIME_SUFFIX
+#else
+// Use this for internal builds
+# define TIME_SUFFIX		" " __TIME__
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman, printm3d"

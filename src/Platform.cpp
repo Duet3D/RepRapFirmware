@@ -1,6 +1,6 @@
 /****************************************************************************************************
 
- RepRapFirmware - Platform: RepRapPro Ormerod with Duet controller
+ RepRapFirmware
 
  Platform contains all the code and definitions to deal with machine-dependent things such as control
  pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
@@ -46,13 +46,17 @@
 # include <Flash.h>		// for flash_read_unique_id()
 #endif
 
-#if SAME70
+#if SAM4E || SAM4S || SAME70
+# include <AnalogIn.h>
 # include <DmacManager.h>
+using LegacyAnalogIn::AdcBits;
+# if SAME70
 static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA channels in CoreNG");
+# endif
 #elif SAME5x
 # include <AnalogIn.h>
 # include <DmacManager.h>
-using AnalogIn::AdcBits;
+using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
 #elif defined(__LPC17xx__)
 # include "LPC/BoardConfig.h"
 #else
@@ -89,7 +93,7 @@ using AnalogIn::AdcBits;
 # include "Linux/DataTransfer.h"
 #endif
 
-#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+#if HAS_NETWORKING
 # include "Networking/HttpResponder.h"
 # include "Networking/FtpResponder.h"
 # include "Networking/TelnetResponder.h"
@@ -98,6 +102,10 @@ using AnalogIn::AdcBits;
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMessageGenericConstructor.h"
 # include "CAN/CanInterface.h"
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
 #endif
 
 #include <climits>
@@ -155,36 +163,6 @@ int debugLine = 0;
 
 // Global functions
 
-// Urgent initialisation function
-// This is called before general init has been done, and before constructors for C++ static data have been called.
-// Therefore, be very careful what you do here!
-extern "C" void UrgentInit()
-{
-#if defined(DUET_NG)
-	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
-	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the pins that control the drivers early here.
-	// On the production boards the ENN line is pulled high by an external pullup resistor and that prevents motor movements.
-	for (size_t drive = 0; drive < MaxSmartDrivers; ++drive)
-	{
-		pinMode(STEP_PINS[drive], OUTPUT_LOW);
-		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
-		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);
-	}
-#endif
-
-#if defined(DUET_M)
-	// The prototype boards don't have a pulldown on LCD_BEEP, which causes a hissing sound from the beeper on the 12864 display until the pin is initialised
-	pinMode(LcdBeepPin, OUTPUT_LOW);
-
-	// Set the 12864 display CS pin low to prevent it from receiving garbage due to other SPI traffic
-	pinMode(LcdCSPin, OUTPUT_LOW);
-
-	// On the prototype boards the stepper driver expansion ports don't have external pullup resistors on their enable pins
-	pinMode(ENABLE_PINS[5], OUTPUT_HIGH);
-	pinMode(ENABLE_PINS[6], OUTPUT_HIGH);
-#endif
-}
-
 DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 {
 	DriversBitmap rslt;
@@ -238,7 +216,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[0] members
 #if SUPPORT_CAN_EXPANSION
-	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)0),																ObjectModelEntryFlags::none },
+	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)CanInterface::GetCanAddress()),									ObjectModelEntryFlags::none },
 #endif
 #if SUPPORT_12864_LCD
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
@@ -467,7 +445,7 @@ void Platform::Init() noexcept
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
 #endif
 
-#ifdef SERIAL_AUX2_DEVICE
+#if defined(SERIAL_AUX2_DEVICE) && !defined(DUET3_ATE)
     auxDevices[1].Init(&SERIAL_AUX2_DEVICE);
 	baudRates[2] = AUX2_BAUD_RATE;
 	commsParams[2] = 0;
@@ -638,6 +616,9 @@ void Platform::Init() noexcept
 		directions[driver] = true;								// drive moves forwards by default
 		enableValues[driver] = 0;								// assume active low enable signal
 
+#if SUPPORT_REMOTE_COMMANDS
+		remotePressureAdvance[driver] = 0.0;
+#endif
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
@@ -798,7 +779,11 @@ void Platform::Init() noexcept
 	AnalogIn::EnableTemperatureSensor(1, tcFilter.CallbackFeedIntoFilter, &tcFilter, 1, 0);
 	TemperatureCalibrationInit();
 # else
-	filteredAdcChannels[CpuTempFilterIndex] = GetTemperatureAdcChannel();
+	filteredAdcChannels[CpuTempFilterIndex] =
+#if SAM4E || SAM4S || SAME70
+			LegacyAnalogIn::
+#endif
+			GetTemperatureAdcChannel();
 # endif
 #endif
 
@@ -863,13 +848,17 @@ void Platform::ReadUniqueId()
 	memset(uniqueId, 0, sizeof(uniqueId));
 
 	const bool cacheWasEnabled = Cache::Disable();
-	const uint32_t rc = flash_read_unique_id(uniqueId);
+#if SAM4E || SAM4S || SAME70
+	const bool success = Flash::ReadUniqueId(uniqueId);
+#else
+	const bool success = flash_read_unique_id(uniqueId) == 0;
+#endif
 	if (cacheWasEnabled)
 	{
 		Cache::Enable();
 	}
 
-	if (rc == 0)
+	if (success)
 	{
 # endif
 		// Put the checksum at the end
@@ -1071,8 +1060,24 @@ void Platform::Spin() noexcept
 	}
 
 #if defined(DUET3) || defined(DUET3MINI) || defined(__LPC17xx__)
-	// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-	digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
+# if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode())
+	{
+		if (StepTimer::IsSynced())
+		{
+			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetMasterTime() & (1u << 19)) != 0);
+		}
+		else
+		{
+			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 17)) != 0);
+		}
+	}
+	else
+# endif
+	{
+		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+		digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
+	}
 #endif
 
 #if HAS_MASS_STORAGE
@@ -1582,6 +1587,20 @@ float Platform::GetCpuTemperature() const noexcept
 //*****************************************************************************************************************
 // Interrupts
 
+#if SAME5x
+// Set a contiguous range of interrupts to the specified priority
+static void SetInterruptPriority(IRQn base, unsigned int num, uint32_t prio)
+{
+	do
+	{
+		NVIC_SetPriority(base, prio);
+		base = (IRQn)(base + 1);
+		--num;
+	}
+	while (num != 0);
+}
+#endif
+
 void Platform::InitialiseInterrupts() noexcept
 {
 	// Watchdog interrupt priority if applicable has already been set up in RepRap::Init
@@ -1616,11 +1635,7 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 
 #if SAME5x
-	// SAME5x DMAC has 5 contiguous IRQ numbers
-	for (unsigned int i = 0; i < 5; i++)
-	{
-		NVIC_SetPriority((IRQn)(DMAC_0_IRQn + i), NvicPriorityDMA);
-	}
+	SetInterruptPriority(DMAC_0_IRQn, 5, NvicPriorityDMA);				// SAME5x DMAC has 5 contiguous IRQ numbers
 #elif SAME70
 	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 #endif
@@ -1628,7 +1643,9 @@ void Platform::InitialiseInterrupts() noexcept
 #ifdef __LPC17xx__
 	// Interrupt for GPIO pins. Only port 0 and 2 support interrupts and both share EINT3
 	NVIC_SetPriority(EINT3_IRQn, NvicPriorityPins);
-#elif !SAME5x
+#elif SAME5x
+	SetInterruptPriority(EIC_0_IRQn, 16, NvicPriorityPins);				// SAME5x EXINT has 16 contiguous IRQ numbers
+#else
 	NVIC_SetPriority(PIOA_IRQn, NvicPriorityPins);
 	NVIC_SetPriority(PIOB_IRQn, NvicPriorityPins);
 	NVIC_SetPriority(PIOC_IRQn, NvicPriorityPins);
@@ -1641,10 +1658,7 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 
 #if SAME5x
-	NVIC_SetPriority(USB_0_IRQn, NvicPriorityUSB);
-	NVIC_SetPriority(USB_1_IRQn, NvicPriorityUSB);
-	NVIC_SetPriority(USB_2_IRQn, NvicPriorityUSB);
-	NVIC_SetPriority(USB_3_IRQn, NvicPriorityUSB);
+	SetInterruptPriority(USB_0_IRQn, 4, NvicPriorityUSB);				// SAME5x USB has 4 contiguous IRQ numbers
 #elif SAME70
 	NVIC_SetPriority(USBHS_IRQn, NvicPriorityUSB);
 #elif SAM4E || SAM4S
@@ -2141,7 +2155,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		DDA::PrintMoves();
 		break;
 
-	case (unsigned int)DiagnosticTestType::TimeSquareRoot:		// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
+	case (unsigned int)DiagnosticTestType::TimeCalculations:	// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			bool ok1 = true;
 			uint32_t tim1 = 0;
@@ -2174,9 +2188,8 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 					(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
 							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR");
 		}
-		break;
 
-	case (unsigned int)DiagnosticTestType::TimeSinCos:			// Show the sin/cosine calculation time. Caution: may disable interrupt for several tens of microseconds.
+		// We now also time sine and cosine in the same test
 		{
 			uint32_t tim1 = 0;
 			constexpr uint32_t iterations = 100;				// use a value that divides into one million
@@ -2197,7 +2210,31 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 
 			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			reply.printf("Sine + cosine: float %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
+			reply.lcatf("Float sine + cosine: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
+		}
+
+		// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
+		{
+			uint32_t tim1 = 0;
+			constexpr uint32_t iterations = 100;				// use a value that divides into one million
+			float val = 10000.0;
+			for (unsigned int i = 0; i < iterations; ++i)
+			{
+
+				cpu_irq_disable();
+				asm volatile("":::"memory");
+				uint32_t now1 = SysTick->VAL;
+				val = sqrtf(val);
+				uint32_t now2 = SysTick->VAL;
+				asm volatile("":::"memory");
+				cpu_irq_enable();
+				now1 &= 0x00FFFFFF;
+				now2 &= 0x00FFFFFF;
+				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+			}
+
+			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
+			reply.lcatf("Float sqrt: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
 		}
 		break;
 
@@ -2212,11 +2249,11 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
 				"DDA %u, DM %u, Tool %u, GCodeBuffer %u, heater %u"
-#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+#if HAS_NETWORKING
 				", HTTP resp %u, FTP resp %u, Telnet resp %u"
 #endif
 				, sizeof(DDA), sizeof(DriveMovement), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater)
-#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+#if HAS_NETWORKING
 				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
 #endif
 			);
@@ -2304,6 +2341,52 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
 			reply.printf("CRC of %u bytes took %.2fus", length, (double)((1'000'000.0f * (float)tim1)/(float)SystemCoreClock));
 		}
+		break;
+
+	case (unsigned int)DiagnosticTestType::TimeGetTimerTicks:
+		{
+			unsigned int i = 100;
+			cpu_irq_disable();
+			asm volatile("":::"memory");
+			uint32_t now1 = SysTick->VAL;
+			do
+			{
+				--i;
+				(void)StepTimer::GetTimerTicks();
+			} while (i != 0);
+			uint32_t now2 = SysTick->VAL;
+			asm volatile("":::"memory");
+			cpu_irq_enable();
+			now1 &= 0x00FFFFFF;
+			now2 &= 0x00FFFFFF;
+			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+			reply.printf("Reading step timer 100 times took %.2fus", (double)((1'000'000.0f * (float)tim1)/(float)SystemCoreClock));
+		}
+
+#if SUPPORT_CAN_EXPANSION
+		// Also check the correspondence between the CAN timestamp timer and the step clock
+		{
+			uint32_t startClocks, endClocks;
+			uint16_t startTimeStamp, endTimeStamp;
+			{
+				AtomicCriticalSectionLocker lock;
+				startClocks = StepTimer::GetTimerTicks();
+				startTimeStamp = CanInterface::GetTimeStampCounter();
+			}
+			delay(2);
+			{
+				AtomicCriticalSectionLocker lock;
+				endClocks = StepTimer::GetTimerTicks();
+				endTimeStamp = CanInterface::GetTimeStampCounter();
+			}
+# if SAME70
+			const uint32_t tsDiff = (endTimeStamp - startTimeStamp) & 0xFFFF;
+# else
+			const uint32_t tsDiff = (((endTimeStamp - startTimeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
+# endif
+			reply.lcatf("Clock diff %" PRIu32 ", ts diff %" PRIu32, endClocks - startClocks, tsDiff);
+		}
+#endif
 		break;
 
 #ifdef DUET_NG
@@ -2446,7 +2529,7 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 #if SUPPORT_CAN_EXPANSION
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc, std::function<void(DriverId)> remoteFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t)> localFunc, stdext::inplace_function<void(DriverId)> remoteFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -2480,7 +2563,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)
 #else
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t)> localFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -3412,10 +3495,23 @@ void Platform::Message(MessageType type, const char *message) noexcept
 	}
 	else
 	{
-		String<FormatStringLength> formatString;
-		formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
-		formatString.cat(message);
-		RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
+#ifdef DUET3_ATE
+		// FormatStringLength is too short for some ATE replies
+		OutputBuffer *buf;
+		if (OutputBuffer::Allocate(buf))
+		{
+			buf->copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
+			buf->cat(message);
+			Message(type, buf);
+		}
+		else
+#endif
+		{
+			String<FormatStringLength> formatString;
+			formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
+			formatString.cat(message);
+			RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
+		}
 	}
 }
 
@@ -4193,6 +4289,11 @@ MinMaxCurrent Platform::GetV12Voltages() const noexcept
 	return result;
 }
 
+float Platform::GetCurrentV12Voltage() const noexcept
+{
+	return AdcReadingToPowerVoltage(currentV12);
+}
+
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -4440,7 +4541,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 {
 	// Exactly one of FHJPS is allowed
 	unsigned int charsPresent = 0;
-	for (char c : (const char[]){'J', 'F', 'H', 'P', 'S'})
+	for (char c : (const char[]){'R', 'J', 'F', 'H', 'P', 'S'})
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
@@ -4474,9 +4575,14 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			const uint32_t gpinNumber = gb.GetLimitedUIValue('J', MaxGpInPorts);
 			return gpinPorts[gpinNumber].Configure(gpinNumber, gb, reply);
 		}
+	case 32:
+		{
+			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
+			return spindles[slot].Configure(gb, reply);
+		}
 
 	default:
-		reply.copy("exactly one of FHJPS must be given");
+		reply.copy("exactly one of FHJPSR must be given");
 		return GCodeResult::error;
 	}
 }
@@ -4600,6 +4706,386 @@ void Platform::TemperatureCalibrationInit() noexcept
 
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult Platform::EutHandleM950Gpio(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	// Get and validate the port number
+	CanMessageGenericParser parser(msg, M950GpioParams);
+	uint16_t gpioNumber;
+	if (!parser.GetUintParam('P', gpioNumber))
+	{
+		reply.copy("Missing port number parameter in M950Gpio message");
+		return GCodeResult::error;
+	}
+	if (gpioNumber >= MaxGpOutPorts)
+	{
+		reply.printf("GPIO port number %u is too high for board %u", gpioNumber, CanInterface::GetCanAddress());
+		return GCodeResult::error;
+	}
+
+	return gpoutPorts[gpioNumber].AssignFromRemote(gpioNumber, parser, reply);
+}
+
+GCodeResult Platform::EutHandleGpioWrite(const CanMessageWriteGpio& msg, const StringRef& reply) noexcept
+{
+	if (msg.portNumber >= MaxGpOutPorts)
+	{
+		reply.printf("GPIO port# %u is too high for this board", msg.portNumber);
+		return GCodeResult::error;
+	}
+
+	gpoutPorts[msg.portNumber].WriteAnalog(msg.pwm);
+	return GCodeResult::ok;
+}
+
+GCodeResult Platform::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+# if HAS_SMART_DRIVERS
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								SetMotorCurrent(driver, msg.values[count], 906, reply);
+							}
+						}
+				   );
+	return rslt;
+# else
+	reply.copy("Setting not available for external drivers");
+	return GCodeResult::error;
+# endif
+}
+
+GCodeResult Platform::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								SetDriveStepsPerUnit(driver, msg.values[count].GetStepsPerUnit(), 0);
+#if HAS_SMART_DRIVERS
+								microstepping[driver] = msg.values[count].GetMicrostepping();
+								const uint16_t microsteppingOnly = microstepping[driver] & 0x03FF;
+								const bool interpolate = (microstepping[driver] & 0x8000) != 0;
+								if (!SmartDrivers::SetMicrostepping(driver, microsteppingOnly, interpolate))
+								{
+									reply.lcatf("Driver %u.%u does not support x%u microstepping", CanInterface::GetCanAddress(), driver, microsteppingOnly);
+									if (interpolate)
+									{
+										reply.cat(" with interpolation");
+									}
+									rslt = GCodeResult::error;
+								}
+#endif
+							}
+						}
+					);
+	return rslt;
+}
+
+GCodeResult Platform::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept
+{
+	//TODO check message is long enough for the number of drivers specified
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	drivers.Iterate([this, &msg](unsigned int driver, unsigned int count) -> void
+		{
+			switch (msg.values[count].mode)
+			{
+			case DriverStateControl::driverActive:
+				EnableOneLocalDriver(driver, motorCurrents[driver]);
+				driverState[driver] = DriverStatus::enabled;
+				break;
+
+			case DriverStateControl::driverIdle:
+				UpdateMotorCurrent(driver, motorCurrents[driver] * idleCurrentFactor);
+				driverState[driver] = DriverStatus::idle;
+				break;
+
+			case DriverStateControl::driverDisabled:
+			default:
+				DisableOneLocalDriver(driver);
+				driverState[driver] = DriverStatus::disabled;
+				break;
+			}
+		});
+	return GCodeResult::ok;
+}
+
+float Platform::EutGetRemotePressureAdvance(size_t driver) const noexcept
+{
+	return (driver < ARRAY_SIZE(remotePressureAdvance)) ? remotePressureAdvance[driver] : 0.0;
+}
+
+GCodeResult Platform::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								remotePressureAdvance[driver] = msg.values[count];
+							}
+						}
+				   );
+	return rslt;
+}
+
+GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M569Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("Missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+
+	if (drive >= NumDirectDrivers)
+	{
+		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
+		return GCodeResult::error;
+	}
+
+	bool seen = false;
+	uint8_t direction;
+	if (parser.GetUintParam('S', direction))
+	{
+		seen = true;
+		SetDirectionValue(drive, direction != 0);
+	}
+	int8_t rValue;
+	if (parser.GetIntParam('R', rValue))
+	{
+		seen = true;
+		SetEnableValue(drive, rValue);
+	}
+
+	float timings[4];
+	size_t numTimings = 4;
+	if (parser.GetFloatArrayParam('T', numTimings, timings))
+	{
+		seen = true;
+		if (numTimings == 1)
+		{
+			timings[1] = timings[2] = timings[3] = timings[0];
+		}
+		else if (numTimings != 4)
+		{
+			reply.copy("bad timing parameter, expected 1 or 4 values");
+			return GCodeResult::error;
+		}
+		SetDriverStepTiming(drive, timings);
+	}
+
+#if HAS_SMART_DRIVERS
+	{
+		uint32_t val;
+		if (parser.GetUintParam('D', val))	// set driver mode
+		{
+			seen = true;
+			if (!SmartDrivers::SetDriverMode(drive, val))
+			{
+				reply.printf("Driver %u.%u does not support mode '%s'", CanInterface::GetCanAddress(), drive, TranslateDriverMode(val));
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('F', val))		// set off time
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, val))
+			{
+				reply.printf("Bad off time for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('B', val))		// set blanking time
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tblank, val))
+			{
+				reply.printf("Bad blanking time for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('V', val))		// set microstep interval for changing from stealthChop to spreadCycle
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tpwmthrs, val))
+			{
+				reply.printf("Bad mode change microstep interval for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+#if SUPPORT_TMC51xx
+		if (parser.GetUintParam('H', val))		// set coolStep threshold
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
+			{
+				reply.printf("Bad high speed microstep interval for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+#endif
+	}
+
+	size_t numHvalues = 3;
+	const uint8_t *hvalues;
+	if (parser.GetArrayParam('Y', ParamDescriptor::ParamType::uint8_array, numHvalues, hvalues))		// set spread cycle hysteresis
+	{
+		seen = true;
+		if (numHvalues == 2 || numHvalues == 3)
+		{
+			// There is a constraint on the sum of HSTRT and HEND, so set HSTART then HEND then HSTART again because one may go up and the other down
+			(void)SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
+			bool ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hend, hvalues[1]);
+			if (ok)
+			{
+				ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
+			}
+			if (ok && numHvalues == 3)
+			{
+				ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hdec, hvalues[2]);
+			}
+			if (!ok)
+			{
+				reply.printf("Bad hysteresis setting for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+		else
+		{
+			reply.copy("Expected 2 or 3 Y values");
+			return GCodeResult::error;
+		}
+	}
+#endif
+	if (!seen)
+	{
+		reply.printf("Driver %u.%u runs %s, active %s enable",
+						CanInterface::GetCanAddress(),
+						drive,
+						(GetDirectionValue(drive)) ? "forwards" : "in reverse",
+						(GetEnableValue(drive)) ? "high" : "low");
+
+		float timings[4];
+		const bool isSlowDriver = GetDriverStepTiming(drive, timings);
+		if (isSlowDriver)
+		{
+			reply.catf(", step timing %.1f:%.1f:%.1f:%.1fus", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
+		}
+		else
+		{
+			reply.cat(", step timing fast");
+		}
+
+#if HAS_SMART_DRIVERS
+		// It's a smart driver, so print the parameters common to all modes, except for the position
+		reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32,
+				TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::tblank)
+			);
+
+# if SUPPORT_TMC51xx
+		{
+			const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
+			bool bdummy;
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * Platform::DriveStepsPerUnit(drive));
+			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
+		}
+# endif
+
+		// Print the additional parameters that are relevant in the current mode
+		if (SmartDrivers::GetDriverMode(drive) == DriverMode::spreadCycle)
+		{
+			reply.catf(", hstart/hend/hdec %" PRIu32 "/%" PRIu32 "/%" PRIu32,
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hstart),
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hend),
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
+					  );
+		}
+
+# if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+		if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
+		{
+			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
+			bool bdummy;
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * Platform::DriveStepsPerUnit(drive));
+			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
+			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
+			const unsigned int pwmScaleSum = pwmScale & 0xFF;
+			const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
+			const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
+			const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
+			reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
+						tpwmthrs, (double)mmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
+		}
+# endif
+		// Finally, print the microstep position
+		{
+			const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
+			if (mstepPos < 1024)
+			{
+				reply.catf(", pos %" PRIu32, mstepPos);
+			}
+			else
+			{
+				reply.cat(", pos unknown");
+			}
+		}
+#endif
+
+	}
+	return GCodeResult::ok;
+}
+
+#endif
+
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
 // This is what we need to do:
@@ -4612,7 +5098,7 @@ void Platform::TemperatureCalibrationInit() noexcept
 void Platform::Tick() noexcept
 {
 #if !SAME5x
-	AnalogInFinaliseConversion();
+	LegacyAnalogIn::AnalogInFinaliseConversion();
 #endif
 
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
@@ -4729,9 +5215,9 @@ void Platform::Tick() noexcept
 	// On Duet 3, AFEC1 is used only for thermistors and associated Vref/Vssa monitoring. AFEC0 is used for everything else.
 	// To reduce noise, we use x16 hardware averaging on AFEC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
 	// There is enough time to convert all AFEC0 channels in one tick, but only one AFEC1 channel because of the higher averaging.
-	AnalogInStartConversion(0x0FFF | (1u << filteredAdcChannels[currentFilterNumber]));
+	LegacyAnalogIn::AnalogInStartConversion(0x0FFF | (1u << (uint8_t) filteredAdcChannels[currentFilterNumber]));
 #elif !SAME5x
-	AnalogInStartConversion();
+	LegacyAnalogIn::AnalogInStartConversion();
 #endif
 }
 

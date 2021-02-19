@@ -193,14 +193,10 @@ public:
 	BlockState blockStates[MaxBlockIndent];
 	uint32_t lineNumber;
 
-	uint16_t
+	uint32_t
+		selectedPlane : 2,
 		drivesRelative : 1,
 		axesRelative : 1,
-#if HAS_LINUX_INTERFACE
-		lastCodeFromSbc : 1,
-		macroStartedByCode : 1,
-		fileFinished : 1,
-#endif
 		doingFileMacro : 1,
 		waitWhileCooling : 1,
 		runningM501 : 1,
@@ -211,7 +207,13 @@ public:
 		usingInches : 1,						// true if units are inches not mm
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
-		messageCancelled : 1;
+		messageCancelled : 1
+#if HAS_LINUX_INTERFACE
+		, lastCodeFromSbc : 1,
+		macroStartedByCode : 1,
+		fileFinished : 1
+#endif
+		;
 
 	Compatibility compatibility;
 	uint8_t blockNesting;

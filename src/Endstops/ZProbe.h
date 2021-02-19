@@ -35,8 +35,7 @@ public:
 	void SetDefaults() noexcept;
 
 	ZProbeType GetProbeType() const noexcept { return type; }
-	float GetXOffset() const noexcept { return xOffset; }
-	float GetYOffset() const noexcept { return yOffset; }
+	float GetOffset(size_t axisNumber) const noexcept { return offsets[axisNumber]; }
 	float GetConfiguredTriggerHeight() const noexcept { return triggerHeight; }
 	float GetActualTriggerHeight() const noexcept;
 	float GetDiveHeight() const noexcept { return diveHeight; }
@@ -88,7 +87,7 @@ protected:
 		} parts;
 		uint16_t all;
 	} misc;
-	float xOffset, yOffset;				// the offset of the probe relative to the print head
+	float offsets[MaxAxes];				// the offset of the probe relative to the print head
 	float triggerHeight;				// the nozzle height at which the target ADC value is returned
 	float calibTemperature;				// the temperature at which we did the calibration
 	float temperatureCoefficients[2];	// the variation of height with bed temperature and with the square of temperature

@@ -10,6 +10,10 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is 5MHz
 
 // SPI modes:
@@ -81,6 +85,61 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply, b
 		rref = (uint16_t)gb.GetUIValue();
 	}
 
+	return FinishConfiguring(changed, reply);
+}
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult RtdSensor31865::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	if (!ConfigurePort(parser, reply, seen))
+	{
+		return GCodeResult::error;
+	}
+
+	uint8_t paramF;
+	if (parser.GetUintParam('F', paramF))
+	{
+		seen = true;
+		if (paramF == 60)
+		{
+			cr0 &= ~0x01;		// set 60Hz rejection
+		}
+		else
+		{
+			cr0 |= 0x01;		// default to 50Hz rejection
+		}
+	}
+
+	uint8_t paramW;
+	if (parser.GetUintParam('W', paramW))
+	{
+		seen = true;
+		if (paramW == 3)
+		{
+			cr0 |= 0x10;		// 3 wire configuration
+		}
+		else
+		{
+			cr0 &= ~0x10;		// 2 or 4 wire configuration
+		}
+	}
+
+	float paramR;
+	if (parser.GetFloatParam('R', paramR))
+	{
+		seen = true;
+		rref = (uint16_t)paramR;
+	}
+
+	return FinishConfiguring(seen, reply);
+}
+
+#endif
+
+GCodeResult RtdSensor31865::FinishConfiguring(bool changed, const StringRef& reply) noexcept
+{
 	if (changed)
 	{
 		// Initialise the sensor
@@ -103,9 +162,9 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply, b
 
 		if (rslt != TemperatureError::success)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise RTD: %s\n", TemperatureErrorString(rslt));
+			reply.printf("Failed to initialise RTD: %s", TemperatureErrorString(rslt));
+			return GCodeResult::error;
 		}
-
 	}
 	else
 	{
@@ -155,7 +214,7 @@ void RtdSensor31865::Poll() noexcept
 		   )
 		{
 			static const uint8_t faultDataOut[2] = {0x07, 0x55};
-			if (DoSpiTransaction(faultDataOut, ARRAY_SIZE(faultDataOut), rawVal)== TemperatureError::success)	// read the fault register
+			if (DoSpiTransaction(faultDataOut, ARRAY_SIZE(faultDataOut), rawVal) == TemperatureError::success)	// read the fault register
 			{
 				sts = (rawVal & 0x04) ? TemperatureError::overOrUnderVoltage
 							: (rawVal & 0x18) ? TemperatureError::openCircuit

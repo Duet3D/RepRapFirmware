@@ -29,7 +29,8 @@ static inline const Move& GetMoveInstance() noexcept { return *moveInstance; }
 
 #elif SAME70
 
-#include <sam/drivers/xdmac/xdmac.h>
+#include <pmc/pmc.h>
+#include <xdmac/xdmac.h>
 
 # define TMC51xx_USES_SERCOM	0
 static inline const Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
@@ -1112,7 +1113,7 @@ static inline void EnableEndOfTransferInterrupt() noexcept
 }
 
 // DMA complete callback
-void RxDmaCompleteCallback(CallbackParameter param) noexcept
+void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) noexcept
 {
 #if SAME70
 	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);
@@ -1238,9 +1239,9 @@ void SmartDrivers::Init() noexcept
 	Serial::EnableSercomClock(SERCOM_TMC51xx_NUMBER);
 #else
 	// The pins are already set up for SPI in the pins table
-	ConfigurePin(TMC51xxMosiPin);
-	ConfigurePin(TMC51xxMisoPin);
-	ConfigurePin(TMC51xxSclkPin);
+	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
+	SetPinFunction(TMC51xxMisoPin, TMC51xxMisoPinPeriphMode);
+	SetPinFunction(TMC51xxSclkPin, TMC51xxSclkPinPeriphMode);
 
 	// Enable the clock to the USART or SPI
 	pmc_enable_periph_clk(ID_TMC51xx_SPI);

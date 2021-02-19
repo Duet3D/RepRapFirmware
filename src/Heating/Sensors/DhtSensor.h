@@ -27,7 +27,7 @@ enum class DhtSensorType
 class DhtTemperatureSensor : public SensorWithPort
 {
 public:
-	DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType type) noexcept;
+	DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept;
 	~DhtTemperatureSensor() noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
@@ -46,6 +46,12 @@ public:
 	static constexpr const char *TypeNameDht22 = "dht22";
 
 private:
+
+#if SAME5x
+	// On the SAME5c we need a separate port to get the interrupt, because the output ports don't support interrupts
+	IoPort interruptPort;
+#endif
+
 	DhtSensorType type;
 
 	float lastHumidity;

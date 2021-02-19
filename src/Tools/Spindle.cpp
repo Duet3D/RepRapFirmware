@@ -23,12 +23,12 @@ constexpr ObjectModelTableEntry Spindle::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Spindle members
-	{ "active",			OBJECT_MODEL_FUNC(self->configuredRpm),			ObjectModelEntryFlags::none },
-	{ "current",		OBJECT_MODEL_FUNC(self->currentRpm),			ObjectModelEntryFlags::live },
+	{ "active",			OBJECT_MODEL_FUNC((int32_t)self->configuredRpm),ObjectModelEntryFlags::none },
+	{ "current",		OBJECT_MODEL_FUNC((int32_t)self->currentRpm),	ObjectModelEntryFlags::live },
 	{ "frequency",		OBJECT_MODEL_FUNC((int32_t)self->frequency),	ObjectModelEntryFlags::verbose },
-	{ "max",			OBJECT_MODEL_FUNC(self->maxRpm),				ObjectModelEntryFlags::verbose },
-	{ "min",			OBJECT_MODEL_FUNC(self->minRpm),				ObjectModelEntryFlags::verbose },
-	{ "tool",			OBJECT_MODEL_FUNC((int32_t)self->toolNumber),	ObjectModelEntryFlags::verbose },
+	{ "max",			OBJECT_MODEL_FUNC((int32_t)self->maxRpm),		ObjectModelEntryFlags::verbose },
+	{ "min",			OBJECT_MODEL_FUNC((int32_t)self->minRpm),		ObjectModelEntryFlags::verbose },
+	{ "state",			OBJECT_MODEL_FUNC(self->state.ToString()),		ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t Spindle::objectModelTableDescriptor[] = { 1, 6 };
@@ -37,7 +37,13 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Spindle)
 
 #endif
 
-Spindle::Spindle() noexcept : currentRpm(0), configuredRpm(0), minRpm(DefaultMinSpindleRpm), maxRpm(DefaultMaxSpindleRpm), frequency(0), toolNumber(-1)
+Spindle::Spindle() noexcept
+	: currentRpm(0),
+	  configuredRpm(0),
+	  minRpm(DefaultMinSpindleRpm),
+	  maxRpm(DefaultMaxSpindleRpm),
+	  frequency(0),
+	  state(SpindleState::unconfigured)
 {
 }
 
@@ -62,7 +68,7 @@ GCodeResult Spindle::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		pwmPort.SetFrequency(frequency);
 	}
 
-	if (gb.Seen('R'))
+	if (gb.Seen('L'))
 	{
 		seen = true;
 		uint32_t rpm[2];
@@ -70,32 +76,43 @@ GCodeResult Spindle::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		gb.GetUnsignedArray(rpm, numValues, false);
 		if (numValues == 2)
 		{
-			minRpm = (int32_t)rpm[0];
-			maxRpm = (int32_t)rpm[1];
+			minRpm = rpm[0];
+			maxRpm = rpm[1];
 		}
 		else
 		{
 			minRpm = DefaultMinSpindleRpm;
-			maxRpm = (int32_t)rpm[0];
+			maxRpm = rpm[0];
 		}
-	}
-
-	if (gb.Seen('T'))
-	{
-		seen = true;
-		toolNumber = gb.GetIValue();
 	}
 
 	if (seen)
 	{
+		state = SpindleState::stopped;
 		reprap.SpindlesUpdated();
 	}
 	return GCodeResult::ok;
 }
 
-void Spindle::SetRpm(int32_t rpm) noexcept
+void Spindle::SetConfiguredRpm(const uint32_t rpm, bool updateCurrentRpm) noexcept
 {
-	if (rpm > 0)
+	configuredRpm = rpm;
+	if (updateCurrentRpm)
+	{
+		SetRpm(configuredRpm);
+	}
+	reprap.SpindlesUpdated();			// configuredRpm is not flagged live
+}
+
+void Spindle::SetRpm(uint32_t rpm) noexcept
+{
+	if (state == SpindleState::stopped || rpm == 0)
+	{
+		onOffPort.WriteDigital(false);
+		pwmPort.WriteAnalog(0.0);
+		currentRpm = 0;						// current rpm is flagged live, so no need to change seqs.spindles
+	}
+	else if (state == SpindleState::forward)
 	{
 		rpm = constrain<int>(rpm, minRpm, maxRpm);
 		reverseNotForwardPort.WriteDigital(false);
@@ -103,31 +120,22 @@ void Spindle::SetRpm(int32_t rpm) noexcept
 		onOffPort.WriteDigital(true);
 		currentRpm = rpm;					// current rpm is flagged live, so no need to change seqs.spindles
 	}
-	else if (rpm < 0)
+	else if (state == SpindleState::reverse)
 	{
-		rpm = constrain<int>(rpm, -maxRpm, -minRpm);
+		rpm = constrain<int>(-rpm, -maxRpm, -minRpm);
 		reverseNotForwardPort.WriteDigital(true);
 		pwmPort.WriteAnalog((float)(-rpm - minRpm) / (float)(maxRpm - minRpm));
 		onOffPort.WriteDigital(true);
-		currentRpm = rpm;					// current rpm is flagged live, so no need to change seqs.spindles
-	}
-	else
-	{
-		TurnOff();
-	}
-
-	if (configuredRpm != currentRpm)
-	{
-		configuredRpm = currentRpm;
-		reprap.SpindlesUpdated();			// configuredRpm is not flagged live
+		currentRpm = -rpm;					// current rpm is flagged live, so no need to change seqs.spindles
 	}
 }
 
-void Spindle::TurnOff() noexcept
-{
-	onOffPort.WriteDigital(false);
-	pwmPort.WriteAnalog(0.0);
-	currentRpm = 0;
+void Spindle::SetState(const SpindleState newState) noexcept {
+	if (state != newState)
+	{
+		state = newState;
+		SetRpm(configuredRpm);				// Depending on the configured SpindleState this might actually stop the spindle
+	}
 }
 
 // End

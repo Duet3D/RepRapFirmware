@@ -42,6 +42,8 @@ public:
 
 	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
 	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
+	void operator delete(void* ptr) noexcept {}
+	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
 	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept  SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxDriversPerAxis]) noexcept;		// Set up a leadscrew motor move
@@ -74,6 +76,11 @@ public:
 #else
 	void InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
 #endif
+
+#if SUPPORT_REMOTE_COMMANDS
+	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
+#endif
+
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
@@ -95,8 +102,8 @@ public:
 	int32_t GetStepsTaken(size_t drive) const noexcept;
 
 	float GetProportionDone(bool moveWasAborted) const noexcept;					// Return the proportion of extrusion for the complete multi-segment move already done
-	float GetInitialUserX() const noexcept { return initialUserX; }
-	float GetInitialUserY() const noexcept { return initialUserY; }
+	float GetInitialUserC0() const noexcept { return initialUserC0; }
+	float GetInitialUserC1() const noexcept { return initialUserC1; }
 
 	void MoveAborted() noexcept;
 
@@ -224,7 +231,8 @@ private:
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
-					 reduceAcceleration : 1;		// True if we should use low acceleration for this move
+					 hadHiccup : 1,	 	 	 		// True if we had a hiccup while executing a move from a remote master
+					 isRemote : 1;					// True if this move was commanded from a remote
 		};
 		uint16_t all;								// so that we can print all the flags at once for debugging
 	} flags;
@@ -252,7 +260,7 @@ private:
 	float topSpeed;
 
 	float proportionDone;							// what proportion of the extrusion in the G1 or G0 move of which this is a part has been done after this segment is complete
-	float initialUserX, initialUserY;				// if this is a segment of an arc move, the user X and Y coordinates at the start
+	float initialUserC0, initialUserC1;				// if this is a segment of an arc move, the user X and Y coordinates at the start
 	uint32_t clocksNeeded;
 
 	union

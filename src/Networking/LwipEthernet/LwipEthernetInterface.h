@@ -8,9 +8,9 @@
 #ifndef SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_
 #define SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_
 
+#include <RepRapFirmware.h>
 #include "Networking/NetworkInterface.h"
 #include "Networking/NetworkDefs.h"
-#include "RepRapFirmware.h"
 #include "MessageType.h"
 
 // We have 8 sockets available for Ethernet

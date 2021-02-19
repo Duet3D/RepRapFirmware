@@ -7,6 +7,7 @@
 
 #include "AuxDevice.h"
 
+#if HAS_AUX_DEVICES
 #include <RepRap.h>
 #include <Platform.h>
 
@@ -17,10 +18,10 @@ AuxDevice::AuxDevice() noexcept : uart(nullptr), seq(0), enabled(false), raw(tru
 void AuxDevice::Init(UARTClass *p_uart) noexcept
 {
 	uart = p_uart;
-# if SAME5x
-	uart->setInterruptPriority(NvicPriorityPanelDueUartRx, NvicPriorityPanelDueUartTx);
-# else
-	uart->setInterruptPriority(NvicPriorityPanelDueUart);
+#if SAME5x
+	uart->setInterruptPriority(NvicPriorityAuxUartRx, NvicPriorityAuxUartTx);
+#else
+	uart->setInterruptPriority(NvicPriorityAuxUart);
 #endif
 	mutex.Create("Aux");
 }
@@ -153,5 +154,7 @@ void AuxDevice::Diagnostics(MessageType mt, unsigned int index) noexcept
 	const UARTClass::Errors errs = uart->GetAndClearErrors();
 	reprap.GetPlatform().MessageF(mt, "Aux%u errors %u,%u,%u\n", index, (unsigned int)errs.uartOverrun, (unsigned int)errs.bufferOverrun, (unsigned int)errs.framing);
 }
+
+#endif
 
 // End

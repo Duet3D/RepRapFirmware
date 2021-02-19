@@ -16,10 +16,18 @@
 # include <Hardware/NonVolatileMemory.h>
 #endif
 
-#if SAME5x		// if using CoreN2G
-# include <AnalogIn.h>
-using AnalogIn::AdcBits;
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
 #endif
+
+#include <AnalogIn.h>
+using
+#if SAME5x
+	AnalogIn
+#else
+	LegacyAnalogIn
+#endif
+	::AdcBits;
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 static constexpr unsigned int AdcOversampleBits = 2;							// we use 2-bit oversampling
@@ -58,6 +66,135 @@ int32_t Thermistor::GetRawReading(bool& valid) const noexcept
 	return (uint32_t)port.ReadAnalog() << AdcOversampleBits;
 }
 
+// Configure the H parameter returning true if successful, false if error
+bool Thermistor::ConfigureHParam(int hVal, const StringRef& reply) noexcept
+{
+	if (hVal == 999)
+	{
+#if HAS_VREF_MONITOR
+		bool valid;
+		const int32_t val = GetRawReading(valid);
+		if (valid)
+		{
+			int32_t vrefReading = reprap.GetPlatform().GetAdcFilter(VrefFilterIndex).GetSum();
+# ifdef DUET3
+			// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon, so extrapolate the VrefMon reading to estimate VrefP.
+			// Version 1.01 and later boards have the series resistors connected to VrefMon.
+			if (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
+			{
+				const int32_t vssaReading = reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum();
+				vrefReading = vssaReading + lrintf((vrefReading - vssaReading) * (4715.0/4700.0));
+			}
+# endif
+			const int32_t computedCorrection =
+							(val - (int32_t)(vrefReading/(ThermistorAveragingFilter::NumAveraged() >> AdcOversampleBits)))
+								/(1 << (AdcBits + AdcOversampleBits - 13));
+			if (computedCorrection >= -127 && computedCorrection <= 127)
+			{
+				adcHighOffset = (int8_t)computedCorrection;
+				reply.copy("Measured H correction for port \"");
+				port.AppendPinName(reply);
+				reply.catf("\" is %d", adcHighOffset);
+
+				// Store the value in NVM
+				if (!reprap.GetGCodes().IsRunningConfigFile())
+				{
+					NonVolatileMemory mem;
+					mem.SetThermistorHighCalibration(adcFilterChannel, adcHighOffset);
+					mem.EnsureWritten();
+				}
+			}
+			else
+			{
+				reply.printf("Computed correction H%" PRIi32 " is out of range. Check that you have disconnected the thermistor.", computedCorrection);
+				return false;
+			}
+		}
+		else
+		{
+			reply.copy("Temperature reading is not valid");
+			return false;
+		}
+#else
+		reply.copy("Thermistor input auto calibration is not supported by this hardware");
+		return false;
+#endif
+	}
+	else
+	{
+		adcHighOffset = (int8_t)constrain<int>(hVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+	}
+	return true;
+}
+
+// Configure the L parameter returning true if successful, false if error
+bool Thermistor::ConfigureLParam(int lVal, const StringRef& reply) noexcept
+{
+	if (lVal == 999)
+	{
+#if HAS_VREF_MONITOR
+		bool valid;
+		const int32_t val = GetRawReading(valid);
+		if (valid)
+		{
+			const int32_t computedCorrection =
+							(val - (int32_t)(reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum()/(ThermistorAveragingFilter::NumAveraged() >> AdcOversampleBits)))
+								/(1 << (AdcBits + AdcOversampleBits - 13));
+			if (computedCorrection >= -127 && computedCorrection <= 127)
+			{
+				adcLowOffset = (int8_t)computedCorrection;
+				reply.copy("Measured L correction for port \"");
+				port.AppendPinName(reply);
+				reply.catf("\" is %d", adcLowOffset);
+
+				// Store the value in NVM
+				if (!reprap.GetGCodes().IsRunningConfigFile())
+				{
+					NonVolatileMemory mem;
+					mem.SetThermistorLowCalibration(adcFilterChannel, adcLowOffset);
+					mem.EnsureWritten();
+				}
+			}
+			else
+			{
+				reply.printf("Computed correction L%" PRIi32 " is out of range. Check that you have placed a jumper across the thermistor input.", computedCorrection);
+				return false;
+			}
+		}
+		else
+		{
+			reply.copy("Temperature reading is not valid");
+			return false;
+		}
+#else
+		reply.copy("Thermistor input auto calibration is not supported by this hardware");
+		return false;
+#endif
+	}
+	else
+	{
+		adcLowOffset = (int8_t)constrain<int>(lVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
+	}
+	return true;
+}
+
+// Initialise parameters after changing the port
+void Thermistor::InitPort() noexcept
+{
+	adcLowOffset = adcHighOffset = 0;
+	adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
+	if (adcFilterChannel >= 0)
+	{
+		reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
+#if HAS_VREF_MONITOR
+		// Default the H and L parameters to the values from nonvolatile memory
+		NonVolatileMemory mem;
+		adcLowOffset = mem.GetThermistorLowCalibration(adcFilterChannel);
+		adcHighOffset = mem.GetThermistorHighCalibration(adcFilterChannel);
+#endif
+	}
+}
+
 // Configure the temperature sensor
 GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
@@ -68,19 +205,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 
 	if (changed)
 	{
-		// We changed the port, so clear the ADC corrections and set up the ADC filter if there is one
-		adcLowOffset = adcHighOffset = 0;
-		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
-		if (adcFilterChannel >= 0)
-		{
-			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
-#if HAS_VREF_MONITOR
-			// Default the H and L parameters to the values from nonvolatile memory
-			NonVolatileMemory mem;
-			adcLowOffset = mem.GetThermistorLowCalibration(adcFilterChannel);
-			adcHighOffset = mem.GetThermistorHighCalibration(adcFilterChannel);
-#endif
-		}
+		InitPort();							// we changed the port, so clear the ADC corrections and set up the ADC filter if there is one
 	}
 
 	gb.TryGetFValue('R', seriesR, changed);
@@ -103,112 +228,18 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 
 	if (gb.Seen('L'))
 	{
-		const int lVal = gb.GetIValue();
-		if (lVal == 999)
+		if (!ConfigureLParam(gb.GetIValue(), reply))
 		{
-#if HAS_VREF_MONITOR
-			bool valid;
-			const int32_t val = GetRawReading(valid);
-			if (valid)
-			{
-				const int32_t computedCorrection =
-								(val - (int32_t)(reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum()/(ThermistorAveragingFilter::NumAveraged() >> AdcOversampleBits)))
-									/(1 << (AdcBits + AdcOversampleBits - 13));
-				if (computedCorrection >= -127 && computedCorrection <= 127)
-				{
-					adcLowOffset = (int8_t)computedCorrection;
-					reply.copy("Measured L correction for port \"");
-					port.AppendPinName(reply);
-					reply.catf("\" is %d", adcLowOffset);
-
-					// Store the value in NVM
-					if (!reprap.GetGCodes().IsRunningConfigFile())
-					{
-						NonVolatileMemory mem;
-						mem.SetThermistorLowCalibration(adcFilterChannel, adcLowOffset);
-						mem.EnsureWritten();
-					}
-				}
-				else
-				{
-					reply.copy("Computed correction is not valid. Check that you have placed a jumper across the thermistor input.");
-					return GCodeResult::error;
-				}
-			}
-			else
-			{
-				reply.copy("Temperature reading is not valid");
-				return GCodeResult::error;
-			}
-#else
-			reply.copy("Thermistor input auto calibration is not supported by this hardware");
 			return GCodeResult::error;
-#endif
-		}
-		else
-		{
-			adcLowOffset = (int8_t)constrain<int>(lVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
 		}
 		changed = true;
 	}
 
 	if (gb.Seen('H'))
 	{
-		const int hVal = gb.GetIValue();
-		if (hVal == 999)
+		if (!ConfigureHParam(gb.GetIValue(), reply))
 		{
-#if HAS_VREF_MONITOR
-			bool valid;
-			const int32_t val = GetRawReading(valid);
-			if (valid)
-			{
-				int32_t vrefReading = reprap.GetPlatform().GetAdcFilter(VrefFilterIndex).GetSum();
-#ifdef DUET3
-				// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon, so extrapolate the VrefMon reading to estimate VrefP.
-				// Version 1.01 and later boards have the series resistors connected to VrefMon.
-				if (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_v06_100)
-				{
-					const int32_t vssaReading = reprap.GetPlatform().GetAdcFilter(VssaFilterIndex).GetSum();
-					vrefReading = vssaReading + lrintf((vrefReading - vssaReading) * (4715.0/4700.0));
-				}
-#endif
-				const int32_t computedCorrection =
-								(val - (int32_t)(vrefReading/(ThermistorAveragingFilter::NumAveraged() >> AdcOversampleBits)))
-									/(1 << (AdcBits + AdcOversampleBits - 13));
-				if (computedCorrection >= -127 && computedCorrection <= 127)
-				{
-					adcHighOffset = (int8_t)computedCorrection;
-					reply.copy("Measured H correction for port \"");
-					port.AppendPinName(reply);
-					reply.catf("\" is %d", adcHighOffset);
-
-					// Store the value in NVM
-					if (!reprap.GetGCodes().IsRunningConfigFile())
-					{
-						NonVolatileMemory mem;
-						mem.SetThermistorHighCalibration(adcFilterChannel, adcHighOffset);
-						mem.EnsureWritten();
-					}
-				}
-				else
-				{
-					reply.copy("Computed correction is not valid. Check that you have disconnected the thermistor.");
-					return GCodeResult::error;
-				}
-			}
-			else
-			{
-				reply.copy("Temperature reading is not valid");
-				return GCodeResult::error;
-			}
-#else
-			reply.copy("Thermistor input auto calibration is not supported by this hardware");
 			return GCodeResult::error;
-#endif
-		}
-		else
-		{
-			adcHighOffset = (int8_t)constrain<int>(hVal, std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max());
 		}
 		changed = true;
 	}
@@ -244,6 +275,78 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 
 	return GCodeResult::ok;
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Configure the temperature sensor
+GCodeResult Thermistor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool changed = false;
+	if (!ConfigurePort(parser, reply, PinAccess::readAnalog, changed))
+	{
+		return GCodeResult::error;
+	}
+
+	if (changed)
+	{
+		InitPort();							// we changed the port, so clear the ADC corrections and set up the ADC filter if there is one
+	}
+
+	changed = parser.GetFloatParam('R', seriesR) || changed;
+	if (!isPT1000)
+	{
+		if (parser.GetFloatParam('B', beta))
+		{
+			shC = 0.0;						// if user changes B and doesn't define C, assume C=0
+			changed = true;
+		}
+		changed = parser.GetFloatParam('C', shC) || changed;
+		changed = parser.GetFloatParam('T', r25) || changed;
+		if (changed)
+		{
+			CalcDerivedParameters();
+		}
+	}
+
+	int16_t lVal;
+	if (parser.GetIntParam('L', lVal))
+	{
+		if (!ConfigureLParam(lVal, reply))
+		{
+			return GCodeResult::error;
+		}
+		changed = true;
+	}
+
+	int16_t hVal;
+	if (parser.GetIntParam('H', hVal))
+	{
+		if (!ConfigureHParam(hVal, reply))
+		{
+			return GCodeResult::error;
+		}
+		changed = true;
+	}
+
+	if (!changed)
+	{
+		CopyBasicDetails(reply);
+		if (isPT1000)
+		{
+			// For a PT1000 sensor, only the series resistor is configurable
+			reply.catf(", R:%.1f", (double)seriesR);
+		}
+		else
+		{
+			reply.catf(", T:%.1f B:%.1f C:%.2e R:%.1f", (double)r25, (double)beta, (double)shC, (double)seriesR);
+		}
+		reply.catf(" L:%d H:%d", adcLowOffset, adcHighOffset);
+	}
+
+	return GCodeResult::ok;
+}
+
+#endif
 
 // Get the temperature
 void Thermistor::Poll() noexcept

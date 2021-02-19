@@ -102,7 +102,7 @@ struct PrepParams
 	uint32_t topSpeedTimesCdivD;
 
 	// Parameters used only for extruders
-	float compFactor;
+	float accelCompFactor;
 
 #if SUPPORT_CAN_EXPANSION
 	// Parameters used by CAN expansion
@@ -137,12 +137,18 @@ public:
 
 	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
 	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
+	void operator delete(void* ptr) noexcept {}
+	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
-	bool CalcNextStepTimeCartesian(const DDA &dda, bool live) noexcept SPEED_CRITICAL;
-	bool CalcNextStepTimeDelta(const DDA &dda, bool live) noexcept SPEED_CRITICAL;
+	bool CalcNextStepTime(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) noexcept SPEED_CRITICAL;
+
+#if SUPPORT_REMOTE_COMMANDS
+	bool PrepareRemoteExtruder(const DDA& dda, const PrepParams& params) noexcept;
+#endif
+
 	void ReduceSpeed(uint32_t inverseSpeedFactor) noexcept;
 	void DebugPrint() const noexcept;
 	int32_t GetNetStepsLeft() const noexcept;
@@ -162,8 +168,8 @@ public:
 	static void Release(DriveMovement *item) noexcept;
 
 private:
-	bool CalcNextStepTimeCartesianFull(const DDA &dda, bool live) noexcept SPEED_CRITICAL;
-	bool CalcNextStepTimeDeltaFull(const DDA &dda, bool live) noexcept SPEED_CRITICAL;
+	bool CalcNextStepTimeCartesianFull(const DDA &dda) noexcept SPEED_CRITICAL;
+	bool CalcNextStepTimeDeltaFull(const DDA &dda) noexcept SPEED_CRITICAL;
 
 	static DriveMovement *freeList;
 	static unsigned int numCreated;
@@ -175,6 +181,7 @@ private:
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
+			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
 			fullCurrent : 1,							// true if the drivers are set to the full current, false if they are set to the standstill current
 			isDelta : 1;								// true if this DM uses segment-free delta kinematics
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
@@ -234,7 +241,7 @@ private:
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1.
 // This is also used for extruders on delta machines.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
-inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live) noexcept
+inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 {
 	++nextStep;
 	if (nextStep <= totalSteps)
@@ -255,7 +262,7 @@ inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live) 
 #endif
 			return true;
 		}
-		return CalcNextStepTimeCartesianFull(dda, live);
+		return (isDelta) ? CalcNextStepTimeDeltaFull(dda) : CalcNextStepTimeCartesianFull(dda);
 	}
 
 	state = DMState::idle;
@@ -267,32 +274,6 @@ inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live) 
 			asm volatile("nop");
 			asm volatile("nop");
 #endif
-	return false;
-}
-
-// Calculate the time since the start of the move when the next step for the specified DriveMovement is due
-// Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1.
-// We inline this part to speed things up when we are doing double/quad/octal stepping.
-inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live) noexcept
-{
-	++nextStep;
-	if (nextStep <= totalSteps)
-	{
-		if (stepsTillRecalc != 0)
-		{
-			--stepsTillRecalc;			// we are doing double or quad stepping
-#if EVEN_STEPS
-			nextStepTime += stepInterval;
-#endif
-			return true;
-		}
-		else
-		{
-			return CalcNextStepTimeDeltaFull(dda, live);
-		}
-	}
-
-	state = DMState::idle;
 	return false;
 }
 

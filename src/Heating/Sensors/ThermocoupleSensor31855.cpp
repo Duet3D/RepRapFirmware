@@ -50,6 +50,10 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 const uint32_t MAX31855_Frequency = 4000000;	// maximum for MAX31855 is 5MHz
 
 // SPI modes:
@@ -75,7 +79,26 @@ GCodeResult ThermocoupleSensor31855::Configure(GCodeBuffer& gb, const StringRef&
 	}
 
 	TryConfigureSensorName(gb, changed);
+	return FinishConfiguring(changed, reply);
+}
 
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult ThermocoupleSensor31855::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	if (!ConfigurePort(parser, reply, seen))
+	{
+		return GCodeResult::error;
+	}
+
+	return FinishConfiguring(seen, reply);
+}
+
+#endif
+
+GCodeResult ThermocoupleSensor31855::FinishConfiguring(bool changed, const StringRef& reply) noexcept
+{
 	if (changed)
 	{
 		// Initialise the sensor
