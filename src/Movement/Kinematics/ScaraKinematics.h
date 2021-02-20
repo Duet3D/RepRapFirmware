@@ -49,8 +49,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	static constexpr float DefaultSegmentsPerSecond = 100.0;
-	static constexpr float DefaultMinSegmentSize = 0.2;
 	static constexpr float DefaultProximalArmLength = 100.0;
 	static constexpr float DefaultDistalArmLength = 100.0;
 	static constexpr float DefaultMinTheta = -90.0;					// minimum proximal joint angle

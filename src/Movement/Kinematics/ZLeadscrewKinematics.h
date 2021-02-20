@@ -10,13 +10,12 @@
 
 #include "Kinematics.h"
 
-// This is used as the base class for any kinematic that supports auto or manual bed levelling (as distinct from bed compensation)
-// using leadscrews or bed adjusting screws.
+// This is used as the base class for any kinematic that supports auto or manual bed levelling (as distinct from bed compensation) using leadscrews or bed adjusting screws.
 class ZLeadscrewKinematics : public Kinematics
 {
 public:
 	ZLeadscrewKinematics(KinematicsType k) noexcept;
-	ZLeadscrewKinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0) noexcept;
+	ZLeadscrewKinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept;
 
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	bool SupportsAutoCalibration() const noexcept override;

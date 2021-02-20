@@ -48,9 +48,6 @@ protected:
 	OBJECT_MODEL_ARRAY(anchorC)
 
 private:
-	static constexpr float DefaultSegmentsPerSecond = 100.0;
-	static constexpr float DefaultMinSegmentSize = 0.2;
-
 	// Basic facts about movement system
 	static constexpr size_t HANGPRINTER_AXES = 4;
 	static constexpr size_t A_AXIS = 0;

@@ -268,51 +268,47 @@ const char* CoreKinematics::GetName(bool forStatusReport) const noexcept
 // This function is used for CoreXY and CoreXZ kinematics, but it overridden for CoreXYU kinematics
 bool CoreKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException)
 {
-	bool seen;
-	switch (mCode)
+	if (mCode != 669)
 	{
-	case 669:
+		return ZLeadscrewKinematics::Configure(mCode, gb, reply, error);
+	}
+
+	bool seen = gb.Seen('K');
+	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
 		{
-			seen = gb.Seen('K');
-			const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			seen = true;
+			float motorFactors[MaxAxes];
+			size_t numMotors = MaxAxes;
+			gb.GetFloatArray(motorFactors, numMotors, false);
+			for (size_t m = 0; m < numMotors; ++m)
 			{
-				if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
+				if (inverseMatrix(axis, m) != motorFactors[m])
 				{
-					seen = true;
-					float motorFactors[MaxAxes];
-					size_t numMotors = MaxAxes;
-					gb.GetFloatArray(motorFactors, numMotors, false);
-					for (size_t m = 0; m < numMotors; ++m)
-					{
-						if (inverseMatrix(axis, m) != motorFactors[m])
-						{
-							inverseMatrix(axis, m) = motorFactors[m];
-							modified = true;
-						}
-					}
-					for (size_t m = numMotors; m < MaxAxes; ++m)
-					{
-						if (inverseMatrix(axis, m) != 0.0)
-						{
-							inverseMatrix(axis, m) = 0.0;
-							modified = true;
-						}
-					}
+					inverseMatrix(axis, m) = motorFactors[m];
+					modified = true;
+				}
+			}
+			for (size_t m = numMotors; m < MaxAxes; ++m)
+			{
+				if (inverseMatrix(axis, m) != 0.0)
+				{
+					inverseMatrix(axis, m) = 0.0;
+					modified = true;
 				}
 			}
 		}
-		break;
-
-	default:
-		return ZLeadscrewKinematics::Configure(mCode, gb, reply, error);
 	}
+
+	const bool seenSeg = TryConfigureSegmentation(gb);			// configure optional segmentation
 
 	if (seen)
 	{
 		Recalc();
 	}
-	else
+	else if (!seenSeg)
 	{
 		reply.printf("Kinematics is %s%s, matrix:", ((modified) ? "modified " : ""), GetName(false));
 		const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -334,6 +330,7 @@ bool CoreKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const String
 			}
 		}
 	}
+
 	return seen;
 }
 

@@ -9,8 +9,8 @@
 #include "RepRap.h"
 #include "Platform.h"
 
-RoundBedKinematics::RoundBedKinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0) noexcept
-: Kinematics(t, segsPerSecond, minSegLength, doUseRawG0), printRadiusSquared(0.0)
+RoundBedKinematics::RoundBedKinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept
+: Kinematics(t, doUseSegmentation, doUseRawG0), printRadiusSquared(0.0)
 {
 }
 
@@ -48,3 +48,5 @@ AxesBitmap RoundBedKinematics::GetLinearAxes() const noexcept
 {
 	return AxesBitmap();
 }
+
+// End

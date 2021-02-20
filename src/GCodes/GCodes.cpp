@@ -2426,6 +2426,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	moveBuffer.arcAxis0 = axis0;
 	moveBuffer.arcAxis1 = axis1;
 	moveBuffer.doingArcMove = true;
+	moveBuffer.xyPlane = (selectedPlane == 0);
 	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
@@ -2542,21 +2543,21 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 			{
 				// Do the full calculation
 				moveBuffer.segmentsTillNextFullCalc = SegmentsPerFulArcCalculation;
-				moveBuffer.sine = sinf(moveBuffer.arcCurrentAngle);
-				moveBuffer.cosine = cosf(moveBuffer.arcCurrentAngle);
+				moveBuffer.currentAngleCosine = cosf(moveBuffer.arcCurrentAngle);
+				moveBuffer.currentAngleSine = sinf(moveBuffer.arcCurrentAngle);
 			}
 			else
 			{
 				// Speed up the computation by doing two multiplications and an addition or subtraction instead of a sine or cosine
 				--moveBuffer.segmentsTillNextFullCalc;
-				const float newCosine = moveBuffer.cosine * moveBuffer.angleIncrementCosine - moveBuffer.sine   * moveBuffer.angleIncrementSine;
-				const float newSine   = moveBuffer.sine   * moveBuffer.angleIncrementCosine + moveBuffer.cosine * moveBuffer.angleIncrementSine;
-				moveBuffer.cosine = newCosine;
-				moveBuffer.sine = newSine;
+				const float newCosine = moveBuffer.currentAngleCosine * moveBuffer.angleIncrementCosine - moveBuffer.currentAngleSine   * moveBuffer.angleIncrementSine;
+				const float newSine   = moveBuffer.currentAngleSine   * moveBuffer.angleIncrementCosine + moveBuffer.currentAngleCosine * moveBuffer.angleIncrementSine;
+				moveBuffer.currentAngleCosine = newCosine;
+				moveBuffer.currentAngleSine = newSine;
 			}
 			axisMap0 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis0);
 			axisMap1 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis1);
-			moveBuffer.cosXyAngle = moveBuffer.angleIncrementCosine;
+			moveBuffer.cosXyAngle = (moveBuffer.xyPlane) ? moveBuffer.angleIncrementCosine : 1.0;
 		}
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
@@ -2564,12 +2565,12 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 			if (moveBuffer.doingArcMove && axisMap1.IsBitSet(drive))
 			{
 				// Axis1 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.sine;
+				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.currentAngleSine;
 			}
 			else if (moveBuffer.doingArcMove && axisMap0.IsBitSet(drive))
 			{
 				// Axis0 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.cosine;
+				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.currentAngleCosine;
 			}
 			else
 			{

@@ -37,7 +37,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(PolarKinematics)
 
 // Constructor
 PolarKinematics::PolarKinematics() noexcept
-	: Kinematics(KinematicsType::polar, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true),
+	: Kinematics(KinematicsType::polar, true, true),
 	  minRadius(0.0), maxRadius(DefaultMaxRadius), homedRadius(0.0),
 	  maxTurntableSpeed(DefaultMaxTurntableSpeed), maxTurntableAcceleration(DefaultMaxTurntableAcceleration)
 {
@@ -64,10 +64,6 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 {
 	if (mCode == 669)
 	{
-		bool seenNonGeometry = false;
-		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);
-		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);
-
 		bool seen = false;
 		if (gb.Seen('R'))
 		{
@@ -89,14 +85,16 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		}
 
 		gb.TryGetFValue('H', homedRadius, seen);
+
+		bool seenNonGeometry = TryConfigureSegmentation(gb);
 		gb.TryGetFValue('A', maxTurntableAcceleration, seenNonGeometry);
 		gb.TryGetFValue('F', maxTurntableSpeed, seenNonGeometry);
 
-		if (seen || seenNonGeometry)
+		if (seen)
 		{
 			Recalc();
 		}
-		else if (!gb.Seen('K'))
+		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
 			reply.printf("Kinematics is Polar with radius %.1f to %.1fmm, homed radius %.1fmm, segments/sec %d, min. segment length %.2f",
 							(double)minRadius, (double)maxRadius, (double)homedRadius,

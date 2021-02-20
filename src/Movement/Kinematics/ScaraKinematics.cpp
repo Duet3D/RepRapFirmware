@@ -37,7 +37,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics)
 #endif
 
 ScaraKinematics::ScaraKinematics() noexcept
-	: ZLeadscrewKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true),
+	: ZLeadscrewKinematics(KinematicsType::scara, true, true),
 	  proximalArmLength(DefaultProximalArmLength), distalArmLength(DefaultDistalArmLength), xOffset(0.0), yOffset(0.0)
 {
 	thetaLimits[0] = DefaultMinTheta;
@@ -189,17 +189,15 @@ void ScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], const floa
 }
 
 // Set the parameters from a M665, M666 or M669 command
-// Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
+// Return true if we changed any parameters that affect the geometry. Set 'error' true if there was an error, otherwise leave it alone.
 bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) /*override*/
 {
 	if (mCode == 669)
 	{
+		const bool seenNonGeometry = TryConfigureSegmentation(gb);
 		bool seen = false;
-		bool seenNonGeometry = false;
 		gb.TryGetFValue('P', proximalArmLength, seen);
 		gb.TryGetFValue('D', distalArmLength, seen);
-		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);
-		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);
 		gb.TryGetFValue('X', xOffset, seen);
 		gb.TryGetFValue('Y', yOffset, seen);
 		if (gb.TryGetFloatArray('A', 2, thetaLimits, reply, seen))
@@ -219,11 +217,11 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		}
 		gb.TryGetFValue('R', requestedMinRadius, seen);
 
-		if (seen || seenNonGeometry)
+		if (seen)
 		{
 			Recalc();
 		}
-		else if (!gb.Seen('K'))
+		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
 			reply.printf("Kinematics is Scara with proximal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL
 							"%s, distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL "%s, crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f), segments/sec %d, min. segment length %.2f",

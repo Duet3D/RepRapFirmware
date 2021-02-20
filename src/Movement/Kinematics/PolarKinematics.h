@@ -38,8 +38,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	static constexpr float DefaultSegmentsPerSecond = 100.0;
-	static constexpr float DefaultMinSegmentSize = 0.2;
 	static constexpr float DefaultMaxRadius = 150.0;
 	static constexpr float DefaultMaxTurntableSpeed = 30.0;				// degrees per second
 	static constexpr float DefaultMaxTurntableAcceleration = 30.0;		// degrees per second per second

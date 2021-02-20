@@ -61,8 +61,6 @@ private:
 	static constexpr size_t DELTA_C_AXIS = 2;
 
 	// Delta mechanism parameter defaults
-	static constexpr float DefaultSegmentsPerSecond = 100.0;
-	static constexpr float DefaultMinSegmentSize = 0.2;
 	static constexpr float DefaultArmLength = 100.0;
 	static constexpr float DefaultRodLength = 200.0;
 	static constexpr float DefaultDeltaRadius = 50.0;
