@@ -1124,7 +1124,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 inline void DDA::AdjustAcceleration() noexcept
 {
 	// Try to reduce the acceleration/deceleration of the move to cancel ringing
-	const float idealPeriod = reprap.GetMove().GetDRCperiod();
+	const float idealPeriod = (float)((uint32_t)reprap.GetMove().GetShapingHalfPeriod() * 2)/65536;
 
 	float proposedAcceleration = acceleration, proposedAccelDistance = beforePrepare.accelDistance;
 	bool adjustAcceleration = false;
@@ -1170,7 +1170,7 @@ inline void DDA::AdjustAcceleration() noexcept
 
 	if (adjustAcceleration || adjustDeceleration)
 	{
-		const float drcMinimumAcceleration = reprap.GetMove().GetDRCminimumAcceleration();
+		const float drcMinimumAcceleration = reprap.GetMove().GetShapingMinimumAcceleration();
 		if (proposedAccelDistance + proposedDecelDistance <= totalDistance)
 		{
 			if (proposedAcceleration < drcMinimumAcceleration || proposedDeceleration < drcMinimumAcceleration)
@@ -1253,7 +1253,7 @@ inline void DDA::AdjustAcceleration() noexcept
 void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 {
 	if (   flags.xyMoving
-		&& reprap.GetMove().IsDRCenabled()
+		&& reprap.GetMove().GetShapingType() == InputShaping::DAA
 		&& topSpeed > startSpeed && topSpeed > endSpeed
 		&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5)
 	   )
@@ -1352,7 +1352,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					{
 						if (delta != 0)
 						{
-							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::moving);
+							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::accel0);
 							pdm->totalSteps = labs(delta);
 							pdm->direction = (delta >= 0);
 							if (pdm->PrepareCartesianAxis(*this, params))
@@ -1382,7 +1382,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
-					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
+					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
 					pdm->totalSteps = labs(delta);
 					pdm->direction = (delta >= 0);
 					if (pdm->PrepareDeltaAxis(*this, params))
@@ -1440,7 +1440,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 
 					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
+						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
 						pdm->totalSteps = labs(delta);
 						pdm->direction = (delta >= 0);
 						if (pdm->PrepareCartesianAxis(*this, params))
@@ -1511,7 +1511,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					else
 #endif
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
+						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
 						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[extruder], speedChange, flags.usePressureAdvance);
 
 						if (stepsToDo)
@@ -2019,7 +2019,7 @@ void DDA::StepDrivers(Platform& p) noexcept
 	while (dmToInsert != dm)										// note that both of these may be nullptr
 	{
 		DriveMovement * const nextToInsert = dmToInsert->nextDM;
-		if (dmToInsert->state == DMState::moving)
+		if (dmToInsert->state >= DMState::accel0)
 		{
 			InsertDM(dmToInsert);
 			if (dmToInsert->directionChanged)
@@ -2155,7 +2155,7 @@ void DDA::ReduceHomingSpeed() noexcept
 		for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 		{
 			DriveMovement* const pdm = FindDM(drive);
-			if (pdm != nullptr && pdm->state == DMState::moving)
+			if (pdm != nullptr && pdm->state >= DMState::accel0)
 			{
 				pdm->ReduceSpeed(ProbingSpeedReductionFactor);
 			}

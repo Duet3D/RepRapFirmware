@@ -49,6 +49,14 @@ const unsigned int NumDms = 20 * 5;												// suitable for e.g. a delta + 2-
 
 constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
 
+NamedEnum(InputShaping, uint8_t,
+	none,
+	ZVD,
+	ZVDD,
+	EI2,
+	DAA
+);
+
 // This is the master movement class.  It controls all movement in the machine.
 class Move INHERIT_OBJECT_MODEL
 {
@@ -94,15 +102,14 @@ public:
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept;		// process M204
-	GCodeResult ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply) noexcept;	// process M593
+	GCodeResult ConfigureInputShaping(GCodeBuffer& gb, const StringRef& reply) noexcept;	// process M593
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;		// process M595
 
 	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
 	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
-	float GetDRCfreq() const noexcept { return 1.0/drcPeriod; }
-	float GetDRCperiod() const noexcept { return drcPeriod; }
-	float GetDRCminimumAcceleration() const noexcept { return drcMinimumAcceleration; }
-	float IsDRCenabled() const noexcept { return drcEnabled; }
+	float GetShapingHalfPeriod() const noexcept { return drcHalfPeriod; }
+	float GetShapingMinimumAcceleration() const noexcept { return drcMinimumAcceleration; }
+	InputShaping GetShapingType() const noexcept { return shapingType; }
 
 	void Diagnostics(MessageType mtype) noexcept;							// Report useful stuff
 
@@ -237,11 +244,12 @@ private:
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
-	bool drcEnabled;
+	InputShaping shapingType;
 
 	float maxPrintingAcceleration;
 	float maxTravelAcceleration;
-	float drcPeriod;									// the period of ringing that we don't want to excite
+	uint16_t drcHalfPeriod;								// half the period of ringing that we don't want to excite
+	uint16_t drcDamping;								// damping factor of the ringing as a 16-bit fractional number
 	float drcMinimumAcceleration;						// the minimum value that we reduce acceleration to
 
 	unsigned int jerkPolicy;							// When we allow jerk

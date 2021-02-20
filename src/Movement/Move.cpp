@@ -81,21 +81,22 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "calibration",			OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::none },
 	{ "compensation",			OBJECT_MODEL_FUNC(self, 7),																ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 3),																ObjectModelEntryFlags::live },
-	{ "daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
+	{ "shaping",				OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),						ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),			ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
 	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),	ObjectModelEntryFlags::none },
 
-	// 1. Move.Daa members
-	{ "enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 													ObjectModelEntryFlags::none },
+	// 1. Move.shaping members
+	{ "damping",				OBJECT_MODEL_FUNC((float)self->drcDamping/65536, 2), 									ObjectModelEntryFlags::none },
 	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration, 1),										ObjectModelEntryFlags::none },
-	{ "period",					OBJECT_MODEL_FUNC(self->drcPeriod, 1), 													ObjectModelEntryFlags::none },
+	{ "period",					OBJECT_MODEL_FUNC(self->drcHalfPeriod * 2, 1), 											ObjectModelEntryFlags::none },
+	{ "type", 					OBJECT_MODEL_FUNC(self->shapingType.ToString()), 										ObjectModelEntryFlags::none },
 
 	// 2. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),				ObjectModelEntryFlags::none },
@@ -145,7 +146,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),														ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 10, 14, 3, 2, 4 + SUPPORT_LASER, 3, 2, 2, 5 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 10, 14, 4, 2, 4 + SUPPORT_LASER, 3, 2, 2, 5 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -157,9 +158,9 @@ Move::Move() noexcept
 	  heightController(nullptr),
 #endif
 	  active(false),
-	  drcEnabled(false),											// disable dynamic ringing cancellation
+	  shapingType(InputShaping::none),								// no input shaping
 	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
-	  drcPeriod(0.025),												// 40Hz
+	  drcHalfPeriod(StepTimer::StepClockRate/(2 * 40)),				// 40Hz
 	  drcMinimumAcceleration(10.0),
 	  jerkPolicy(0),
 	  numCalibratedFactors(0)
@@ -990,43 +991,44 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 }
 
 // Process M593
-GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Move::ConfigureInputShaping(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
+	const float MinimumInputShapingFrequency = (float)StepTimer::StepClockRate/(2 * 65535);			// we use a 16-bit number of step clocks to represent half the input shaping period
+	const float MaximumInputShapingFrequency = 1000.0;
 	bool seen = false;
 	if (gb.Seen('F'))
 	{
-		seen = true;
-		const float f = gb.GetFValue();
-		if (f >= 4.0 && f <= 10000.0)
-		{
-			drcPeriod = 1.0/f;
-			drcEnabled = true;
-		}
-		else
-		{
-			drcEnabled = false;
-		}
+		drcHalfPeriod = (float)StepTimer::StepClockRate/(2 * gb.GetLimitedFValue('F', MinimumInputShapingFrequency, MaximumInputShapingFrequency));
 	}
 	if (gb.Seen('L'))
 	{
 		seen = true;
 		drcMinimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
 	}
+	if (gb.Seen('S'))
+	{
+		drcDamping = (uint16_t)lrintf(63336 * gb.GetLimitedFValue('S', 0.0, 0.99));
+	}
+	if (gb.Seen('P'))
+	{
+		shapingType = (InputShaping)gb.GetLimitedUIValue('S', InputShaping::NumValues);
+	}
 
 	if (seen)
 	{
 		reprap.MoveUpdated();
 	}
+	else if (shapingType != InputShaping::none)
+	{
+		reply.printf("%s input shaping at %.1fHz damping factor %.2f, min. acceleration %.1f",
+						shapingType.ToString(),
+						(double)((float)StepTimer::StepClockRate/(2.0 * (float)drcHalfPeriod)),
+						(double)((float)drcDamping/65536),
+						(double)drcMinimumAcceleration);
+	}
 	else
 	{
-		if (reprap.GetMove().IsDRCenabled())
-		{
-			reply.printf("Dynamic ringing cancellation at %.1fHz, min. acceleration %.1f", (double)(1.0/drcPeriod), (double)drcMinimumAcceleration);
-		}
-		else
-		{
-			reply.copy("Dynamic ringing cancellation is disabled");
-		}
+		reply.copy("Input shaping is disabled");
 	}
 	return GCodeResult::ok;
 }

@@ -123,8 +123,25 @@ struct PrepParams
 enum class DMState : uint8_t
 {
 	idle = 0,
-	moving = 1,
-	stepError = 2
+	stepError = 1,
+	// All higher values are various states of motion
+	accel0 = 2,
+	accel1,
+	accel2,
+	accel3,
+	accel4,
+	accel5,
+	accel6,
+	accel7,
+	steady,
+	decel0,
+	decel1,
+	decel2,
+	decel3,
+	decel4,
+	decel5,
+	decel6,
+	decel7,
 };
 
 // This class describes a single movement of one drive
