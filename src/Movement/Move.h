@@ -8,15 +8,16 @@
 #ifndef MOVE_H_
 #define MOVE_H_
 
-#include "RepRapFirmware.h"
-#include <Movement/StraightProbeSettings.h>
-#include "MessageType.h"
+#include <RepRapFirmware.h>
+#include <MessageType.h>
+#include "InputShaper.h"
+#include "StraightProbeSettings.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
 #include "BedProbing/Grid.h"
 #include "Kinematics/Kinematics.h"
-#include "GCodes/RestorePoint.h"
+#include <GCodes/RestorePoint.h>
 #include <Math/Deviation.h>
 
 #if SUPPORT_ASYNC_MOVES
@@ -48,14 +49,6 @@ const unsigned int NumDms = 20 * 5;												// suitable for e.g. a delta + 2-
 #endif
 
 constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
-
-NamedEnum(InputShaping, uint8_t,
-	none,
-	ZVD,
-	ZVDD,
-	EI2,
-	DAA
-);
 
 // This is the master movement class.  It controls all movement in the machine.
 class Move INHERIT_OBJECT_MODEL
@@ -102,14 +95,11 @@ public:
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept;		// process M204
-	GCodeResult ConfigureInputShaping(GCodeBuffer& gb, const StringRef& reply) noexcept;	// process M593
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;		// process M595
 
 	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
 	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
-	float GetShapingHalfPeriod() const noexcept { return drcHalfPeriod; }
-	float GetShapingMinimumAcceleration() const noexcept { return drcMinimumAcceleration; }
-	InputShaping GetShapingType() const noexcept { return shapingType; }
+	InputShaper& GetShaper() noexcept { return shaper; }
 
 	void Diagnostics(MessageType mtype) noexcept;							// Report useful stuff
 
@@ -244,13 +234,9 @@ private:
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
-	InputShaping shapingType;
 
 	float maxPrintingAcceleration;
 	float maxTravelAcceleration;
-	uint16_t drcHalfPeriod;								// half the period of ringing that we don't want to excite
-	uint16_t drcDamping;								// damping factor of the ringing as a 16-bit fractional number
-	float drcMinimumAcceleration;						// the minimum value that we reduce acceleration to
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
@@ -278,6 +264,7 @@ private:
 
 	Kinematics *kinematics;								// What kinematics we are using
 
+	InputShaper shaper;
 	StraightProbeSettings straightProbeSettings;		// G38 straight probe settings
 
 	float latestLiveCoordinates[MaxAxesPlusExtruders];

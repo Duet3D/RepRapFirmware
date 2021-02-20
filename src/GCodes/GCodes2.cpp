@@ -3738,7 +3738,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
-			result = reprap.GetMove().ConfigureInputShaping(gb, reply);
+			result = reprap.GetMove().GetShaper().Configure(gb, reply);
 			break;
 
 #if SUPPORT_ASYNC_MOVES

@@ -1124,7 +1124,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 inline void DDA::AdjustAcceleration() noexcept
 {
 	// Try to reduce the acceleration/deceleration of the move to cancel ringing
-	const float idealPeriod = (float)((uint32_t)reprap.GetMove().GetShapingHalfPeriod() * 2)/65536;
+	const float idealPeriod = (float)((uint32_t)reprap.GetMove().GetShaper().GetHalfPeriod() * 2)/65536;
 
 	float proposedAcceleration = acceleration, proposedAccelDistance = beforePrepare.accelDistance;
 	bool adjustAcceleration = false;
@@ -1170,7 +1170,7 @@ inline void DDA::AdjustAcceleration() noexcept
 
 	if (adjustAcceleration || adjustDeceleration)
 	{
-		const float drcMinimumAcceleration = reprap.GetMove().GetShapingMinimumAcceleration();
+		const float drcMinimumAcceleration = reprap.GetMove().GetShaper().GetMinimumAcceleration();
 		if (proposedAccelDistance + proposedDecelDistance <= totalDistance)
 		{
 			if (proposedAcceleration < drcMinimumAcceleration || proposedDeceleration < drcMinimumAcceleration)
@@ -1253,7 +1253,7 @@ inline void DDA::AdjustAcceleration() noexcept
 void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 {
 	if (   flags.xyMoving
-		&& reprap.GetMove().GetShapingType() == InputShaping::DAA
+		&& reprap.GetMove().GetShaper().GetType() == InputShaperType::DAA
 		&& topSpeed > startSpeed && topSpeed > endSpeed
 		&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5)
 	   )
