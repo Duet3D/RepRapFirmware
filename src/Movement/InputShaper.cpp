@@ -42,7 +42,7 @@ InputShaper::InputShaper() noexcept
 }
 
 // Process M593
-GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const float MinimumInputShapingFrequency = (float)StepTimer::StepClockRate/(2 * 65535);			// we use a 16-bit number of step clocks to represent half the input shaping period
 	const float MaximumInputShapingFrequency = 1000.0;

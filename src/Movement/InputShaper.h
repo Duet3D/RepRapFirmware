@@ -32,7 +32,7 @@ public:
 	float GetMinimumAcceleration() const noexcept { return minimumAcceleration; }
 	InputShaperType GetType() const noexcept { return type; }
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) noexcept;	// process M593
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 
 protected:
 	DECLARE_OBJECT_MODEL
