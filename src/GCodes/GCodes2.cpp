@@ -1816,7 +1816,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						type = MessageType::NoDestinationMessage;
 					}
-					const LogLevel logLevel = (LogLevel) gb.GetLimitedUIValue('L', LogLevel::NumValues, LogLevel::off);
+					const LogLevel logLevel = (LogLevel) gb.GetLimitedUIValue('L', LogLevel::off, LogLevel::NumValues);
 					switch (logLevel.ToBaseType())
 					{
 					case LogLevel::off:
@@ -3734,7 +3734,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 		case 593: // Configure dynamic ringing cancellation
-			result = reprap.GetMove().ConfigureDynamicAcceleration(gb, reply);
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
+			result = reprap.GetMove().GetShaper().Configure(gb, reply);
 			break;
 
 #if SUPPORT_ASYNC_MOVES
@@ -4548,7 +4552,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if HAS_AUX_DEVICES
 			if (gb.Seen('A'))
 			{
-				const uint32_t serialChannel = gb.GetLimitedUIValue('A', NumSerialChannels, 1);
+				const uint32_t serialChannel = gb.GetLimitedUIValue('A', 1, NumSerialChannels);
 				const uint32_t auxChannel = serialChannel - 1;
 				if (platform.IsAuxEnabled(auxChannel))
 				{

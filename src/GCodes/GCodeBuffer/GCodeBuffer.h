@@ -71,18 +71,24 @@ public:
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
 
-	bool Seen(char c) noexcept SPEED_CRITICAL;								// Is a character present?
+	bool Seen(char c) noexcept SPEED_CRITICAL;										// Is a character present?
 	void MustSee(char c) THROWS(GCodeException);									// Test for character present, throw error if not
 
-	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get a float after a key letter
+	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter
 	float GetDistance() THROWS(GCodeException);										// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get an integer after a key letter
+	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter
 	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
+		pre(minvalue <= maxValue)
 		post(minValue <= result; result <= maxValue);								// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
-	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne, uint32_t minValue = 0) THROWS(GCodeException)
-		pre(maxValuePlusOne > minValue)
-		post(result >= minValue; result < maxValuePlusOne);							// Get an unsigned integer value, throw if outside limits
+	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)		// Get an unsigned integer value, throw if outside limits
+		pre(maxValuePlusOne > minValue)												// Get an unsigned integer value, throw if outside limits
+		post(result >= minValue; result < maxValuePlusOne);
+	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS(GCodeException)
+		post(result < maxValuePlusOne) { return GetLimitedUIValue(c, 0, maxValuePlusOne); }
+	float GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
+		pre(minvalue <= maxValue)
+		post(minValue <= result; result <= maxValue);								// Get a float after a key letter
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);				// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);						// Get a MAC address sextet after a key letter
 	PwmFrequency GetPwmFrequency() THROWS(GCodeException);							// Get a PWM frequency

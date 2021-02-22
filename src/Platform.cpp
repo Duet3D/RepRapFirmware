@@ -3580,7 +3580,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 	if (gb.Seen('S'))
 	{
 		StopLogging();
-		const auto logLevel = (LogLevel) gb.GetLimitedUIValue('S', LogLevel::NumValues, LogLevel::off);
+		const auto logLevel = (LogLevel) gb.GetLimitedUIValue('S', LogLevel::off, LogLevel::NumValues);
 		if (logLevel > LogLevel::off)
 		{
 			// Start logging

@@ -8,15 +8,16 @@
 #ifndef MOVE_H_
 #define MOVE_H_
 
-#include "RepRapFirmware.h"
-#include <Movement/StraightProbeSettings.h>
-#include "MessageType.h"
+#include <RepRapFirmware.h>
+#include <MessageType.h>
+#include "InputShaper.h"
+#include "StraightProbeSettings.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
 #include "BedProbing/Grid.h"
 #include "Kinematics/Kinematics.h"
-#include "GCodes/RestorePoint.h"
+#include <GCodes/RestorePoint.h>
 #include <Math/Deviation.h>
 
 #if SUPPORT_ASYNC_MOVES
@@ -94,15 +95,11 @@ public:
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept;		// process M204
-	GCodeResult ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply) noexcept;	// process M593
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;		// process M595
 
 	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
 	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
-	float GetDRCfreq() const noexcept { return 1.0/drcPeriod; }
-	float GetDRCperiod() const noexcept { return drcPeriod; }
-	float GetDRCminimumAcceleration() const noexcept { return drcMinimumAcceleration; }
-	float IsDRCenabled() const noexcept { return drcEnabled; }
+	InputShaper& GetShaper() noexcept { return shaper; }
 
 	void Diagnostics(MessageType mtype) noexcept;							// Report useful stuff
 
@@ -237,12 +234,9 @@ private:
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
-	bool drcEnabled;
 
 	float maxPrintingAcceleration;
 	float maxTravelAcceleration;
-	float drcPeriod;									// the period of ringing that we don't want to excite
-	float drcMinimumAcceleration;						// the minimum value that we reduce acceleration to
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
@@ -270,6 +264,7 @@ private:
 
 	Kinematics *kinematics;								// What kinematics we are using
 
+	InputShaper shaper;
 	StraightProbeSettings straightProbeSettings;		// G38 straight probe settings
 
 	float latestLiveCoordinates[MaxAxesPlusExtruders];

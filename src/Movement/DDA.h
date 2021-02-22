@@ -284,7 +284,9 @@ private:
 			int32_t extraAccelerationClocks;	// the additional number of clocks needed because we started the move at less than topSpeed. Negative after ReduceHomingSpeed has been called.
 
 			// These are used only in delta calculations
+#if !DM_USE_FPU
 			int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
+#endif
 
 #if SUPPORT_CAN_EXPANSION
 			DriversBitmap drivesMoving;			// bitmap of logical drives moving - needed to keep track of whether remote drives are moving

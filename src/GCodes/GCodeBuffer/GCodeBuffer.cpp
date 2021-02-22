@@ -359,6 +359,21 @@ float GCodeBuffer::GetFValue() THROWS(GCodeException)
 	return PARSER_OPERATION(GetFValue());
 }
 
+float GCodeBuffer::GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
+{
+	MustSee(c);
+	const float ret = GetFValue();
+	if (ret < minValue)
+	{
+		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too low", (uint32_t)c);
+	}
+	if (ret > maxValue)
+	{
+		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+	}
+	return ret;
+}
+
 // Get a distance or coordinate and convert it from inches to mm if necessary
 float GCodeBuffer::GetDistance() THROWS(GCodeException)
 {
@@ -394,7 +409,7 @@ uint32_t GCodeBuffer::GetUIValue() THROWS(GCodeException)
 }
 
 // Get an unsigned integer value, throw if >= limit
-uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t maxValuePlusOne, uint32_t minValue) THROWS(GCodeException)
+uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)
 {
 	MustSee(c);
 	const uint32_t ret = GetUIValue();

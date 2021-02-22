@@ -49,8 +49,6 @@
 # include <CAN/CanMotion.h>
 #endif
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -78,30 +76,25 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::live },
-	{ "calibration",			OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::none },
-	{ "compensation",			OBJECT_MODEL_FUNC(self, 7),																ObjectModelEntryFlags::none },
-	{ "currentMove",			OBJECT_MODEL_FUNC(self, 3),																ObjectModelEntryFlags::live },
-	{ "daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
+	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																ObjectModelEntryFlags::none },
+	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
+	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::live },
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::live },
-	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
+	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
+	{ "shaping",				OBJECT_MODEL_FUNC(&self->shaper, 0),													ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),						ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),			ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
 	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),	ObjectModelEntryFlags::none },
 
-	// 1. Move.Daa members
-	{ "enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 													ObjectModelEntryFlags::none },
-	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration, 1),										ObjectModelEntryFlags::none },
-	{ "period",					OBJECT_MODEL_FUNC(self->drcPeriod, 1), 													ObjectModelEntryFlags::none },
-
-	// 2. Move.Idle members
+	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),				ObjectModelEntryFlags::none },
 	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),								ObjectModelEntryFlags::none },
 
-	// 3. move.currentMove members
+	// 2. move.currentMove members
 	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAcceleration(), 1),											ObjectModelEntryFlags::live },
 	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDeceleration(), 1),											ObjectModelEntryFlags::live },
 # if SUPPORT_LASER
@@ -111,45 +104,43 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed(), 1),										ObjectModelEntryFlags::live },
 	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed(), 1),												ObjectModelEntryFlags::live },
 
-	// 4. move.calibration members
-	{ "final",					OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
-	{ "initial",				OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
+	// 3. move.calibration members
+	{ "final",					OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
+	{ "initial",				OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::none },
 	{ "numFactors",				OBJECT_MODEL_FUNC((int32_t)self->numCalibratedFactors),									ObjectModelEntryFlags::none },
 
-	// 5. move.calibration.initialDeviation members
+	// 4. move.calibration.initialDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
-	// 6. move.calibration.finalDeviation members
+	// 5. move.calibration.finalDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
 
-	// 7. move.compensation members
+	// 6. move.compensation members
 	{ "fadeHeight",				OBJECT_MODEL_FUNC((self->useTaper) ? self->taperHeight : std::numeric_limits<float>::quiet_NaN(), 1),	ObjectModelEntryFlags::none },
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	{ "file",					OBJECT_MODEL_FUNC_IF(self->usingMesh, self->heightMap.GetFileName()),					ObjectModelEntryFlags::none },
 #endif
-	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 8),											ObjectModelEntryFlags::none },
+	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 7),											ObjectModelEntryFlags::none },
 	{ "probeGrid",				OBJECT_MODEL_FUNC((const GridDefinition *)&self->GetGrid()),							ObjectModelEntryFlags::none },
-	{ "skew",					OBJECT_MODEL_FUNC(self, 9),																ObjectModelEntryFlags::none },
+	{ "skew",					OBJECT_MODEL_FUNC(self, 8),																ObjectModelEntryFlags::none },
 	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),									ObjectModelEntryFlags::none },
 
-	// 8. move.compensation.meshDeviation members
+	// 7. move.compensation.meshDeviation members
 	{ "deviation",				OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetDeviationFromMean(), 3),					ObjectModelEntryFlags::none },
 	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 
-	// 9. move.compensation.skew members
+	// 8. move.compensation.skew members
 	{ "compensateXY",			OBJECT_MODEL_FUNC(self->compensateXY),													ObjectModelEntryFlags::none },
 	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY, 4),														ObjectModelEntryFlags::none },
 	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ, 4),														ObjectModelEntryFlags::none },
 	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),														ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 10, 14, 3, 2, 4 + SUPPORT_LASER, 3, 2, 2, 5 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 14, 2, 4 + SUPPORT_LASER, 3, 2, 2, 5 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
-
-#endif
 
 Move::Move() noexcept
 	:
@@ -157,10 +148,7 @@ Move::Move() noexcept
 	  heightController(nullptr),
 #endif
 	  active(false),
-	  drcEnabled(false),											// disable dynamic ringing cancellation
 	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
-	  drcPeriod(0.025),												// 40Hz
-	  drcMinimumAcceleration(10.0),
 	  jerkPolicy(0),
 	  numCalibratedFactors(0)
 {
@@ -985,48 +973,6 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 	else
 	{
 		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", (double)maxPrintingAcceleration, (double)maxTravelAcceleration);
-	}
-	return GCodeResult::ok;
-}
-
-// Process M593
-GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply) noexcept
-{
-	bool seen = false;
-	if (gb.Seen('F'))
-	{
-		seen = true;
-		const float f = gb.GetFValue();
-		if (f >= 4.0 && f <= 10000.0)
-		{
-			drcPeriod = 1.0/f;
-			drcEnabled = true;
-		}
-		else
-		{
-			drcEnabled = false;
-		}
-	}
-	if (gb.Seen('L'))
-	{
-		seen = true;
-		drcMinimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
-	}
-
-	if (seen)
-	{
-		reprap.MoveUpdated();
-	}
-	else
-	{
-		if (reprap.GetMove().IsDRCenabled())
-		{
-			reply.printf("Dynamic ringing cancellation at %.1fHz, min. acceleration %.1f", (double)(1.0/drcPeriod), (double)drcMinimumAcceleration);
-		}
-		else
-		{
-			reply.copy("Dynamic ringing cancellation is disabled");
-		}
 	}
 	return GCodeResult::ok;
 }
