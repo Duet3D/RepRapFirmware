@@ -244,7 +244,7 @@ FilamentSensorStatus PulsedFilamentMonitor::Check(bool isPrinting, bool fromIsr,
 		extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	}
 
-	return ret;
+	return (comparisonEnabled) ? ret : FilamentSensorStatus::ok;
 }
 
 // Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
