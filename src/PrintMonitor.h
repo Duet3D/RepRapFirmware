@@ -21,6 +21,7 @@ Licence: GPL
 #define PRINTMONITOR_H
 
 #include <RepRapFirmware.h>
+#include <GCodes/GCodeResult.h>
 #include <GCodes/GCodeFileInfo.h>
 #include <ObjectModel/ObjectModel.h>
 
@@ -37,7 +38,8 @@ enum PrintEstimationMethod
 {
 	filamentBased,
 	fileBased,
-	layerBased
+	layerBased,
+	slicerBased
 };
 
 class PrintMonitor INHERIT_OBJECT_MODEL
@@ -73,6 +75,8 @@ public:
 	bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
 	void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
 
+	GCodeResult ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(filament)
@@ -107,6 +111,9 @@ private:
 	float filamentUsagePerLayer[MAX_LAYER_SAMPLES];
 	float fileProgressPerLayer[MAX_LAYER_SAMPLES];
 	float layerEstimatedTimeLeft;
+
+	float slicerTimeLeft;						// time left in seconds as reported by slicer
+	uint32_t whenSlicerTimeLeftSet;
 
 	unsigned int lastLayerNumberNotified;
 	float lastLayerStartHeightNotified;
