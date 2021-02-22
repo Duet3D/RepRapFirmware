@@ -19,6 +19,9 @@ New features:
 - M669 S and T parameters are now supported on all kinematics. This allows segmentation to be used on Cartesian, CoreXY etc. and linear delta kinematics, for the purpose of allowing faster response to pause commands, M220 etc.
 - Auto calibration of rotary delta machines is supported experimentally
 
+Bug fixes:
+- M500 did not persist the M307 Inn value and thus making inverted heaters non-inverted after M501
+
 RepRapFirmware 3.3beta1
 =======================
 
