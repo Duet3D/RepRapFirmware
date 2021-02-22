@@ -90,6 +90,12 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	return GCodeResult::ok;
 }
 
+// Return the full period in seconds
+float InputShaper::GetFullPeriod() const noexcept
+{
+	return (float)halfPeriod/(float)(StepTimer::StepClockRate/2);
+}
+
 float InputShaper::GetFrequency() const noexcept
 {
 	return (float)StepTimer::StepClockRate/(2.0 * (float)halfPeriod);

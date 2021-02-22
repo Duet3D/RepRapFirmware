@@ -652,8 +652,13 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	params.decelStartDistance = 1.0 - params.decelDistance;
 
 	afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32(startSpeed/acceleration);
+#if DM_USE_FPU
+	params.fTopSpeedTimesCdivD = topSpeed/deceleration;
+	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = lrintf(params.fTopSpeedTimesCdivD) + msg.accelerationClocks + msg.steadyClocks;
+#else
 	params.topSpeedTimesCdivD = (uint32_t)roundU32(topSpeed/deceleration);
 	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + msg.accelerationClocks + msg.steadyClocks;
+#endif
 	afterPrepare.extraAccelerationClocks = msg.accelerationClocks - roundS32(params.accelDistance/topSpeed);
 	params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
 
@@ -667,7 +672,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 		if (delta != 0)
 		{
-			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
+			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
 			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 
@@ -1124,7 +1129,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 inline void DDA::AdjustAcceleration() noexcept
 {
 	// Try to reduce the acceleration/deceleration of the move to cancel ringing
-	const float idealPeriod = (float)((uint32_t)reprap.GetMove().GetShaper().GetHalfPeriod() * 2)/65536;
+	const float idealPeriod = reprap.GetMove().GetShaper().GetFullPeriod();
 
 	float proposedAcceleration = acceleration, proposedAccelDistance = beforePrepare.accelDistance;
 	bool adjustAcceleration = false;
@@ -1280,8 +1285,12 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		{
 			// This code assumes that the previous move in the DDA ring is the previously-executed move, because it fetches the X and Y end coordinates from that move.
 			// Therefore the Move code must not store a new move in that entry until this one has been prepared! (It took me ages to track this down.)
-			// Ideally we would store the initial X and Y coordinates in the DDA, but we need to be economical with memory in the Duet 06/085 build.
+			// Ideally we would store the initial X and Y coordinates in the DDA, but we need to be economical with memory
+#if DM_USE_FPU
+			// Nothing needed here, use directionVector[Z_AXIS] directly
+#else
 			afterPrepare.cKc = roundS32(directionVector[Z_AXIS] * DriveMovement::Kc);
+#endif
 			params.a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
 			params.initialX = prev->GetEndCoordinate(X_AXIS, false);
 			params.initialY = prev->GetEndCoordinate(Y_AXIS, false);
@@ -1308,8 +1317,13 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #endif
 		const float decelStartTime = accelStopTime + steadyTime;
 		afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32((startSpeed * StepTimer::StepClockRate)/acceleration);
-		params.topSpeedTimesCdivD = (uint32_t)roundU32((topSpeed * StepTimer::StepClockRate)/deceleration);
+#if DM_USE_FPU
+		params.fTopSpeedTimesCdivD = (topSpeed * StepTimer::StepClockRate)/deceleration;
+		afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = roundU32(params.fTopSpeedTimesCdivD + decelStartTime * StepTimer::StepClockRate);
+#else
+		params.topSpeedTimesCdivD = roundU32((topSpeed * StepTimer::StepClockRate)/deceleration);
 		afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + (uint32_t)roundU32(decelStartTime * StepTimer::StepClockRate);
+#endif
 		afterPrepare.extraAccelerationClocks = roundS32((accelStopTime - (beforePrepare.accelDistance/topSpeed)) * StepTimer::StepClockRate);
 
 		activeDMs = completedDMs = nullptr;
@@ -1522,8 +1536,11 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 								&& (   pdm->totalSteps > 1000000
 									|| pdm->reverseStartStep < pdm->mp.cart.decelStartStep
 									|| (   pdm->reverseStartStep <= pdm->totalSteps
-										&& pdm->mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD
-													> (int64_t)(pdm->mp.cart.twoCsquaredTimesMmPerStepDivD * pdm->reverseStartStep)
+#if DM_USE_FPU
+										&& pdm->mp.cart.fFourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD > pdm->fTwoCsquaredTimesMmPerStepDivD * pdm->reverseStartStep
+#else
+										&& pdm->mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD > (int64_t)(pdm->twoCsquaredTimesMmPerStepDivD * pdm->reverseStartStep)
+#endif
 									   )
 								   )
 							   )

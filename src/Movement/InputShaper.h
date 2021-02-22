@@ -26,7 +26,8 @@ class InputShaper INHERIT_OBJECT_MODEL
 public:
 	InputShaper() noexcept;
 
-	uint16_t GetHalfPeriod() const noexcept { return halfPeriod; }
+	uint16_t GetHalfPeriodClocks() const noexcept { return halfPeriod; }			// return the half period in step clocks
+	float GetFullPeriod() const noexcept;											// return the full period in seconds
 	float GetFrequency() const noexcept;
 	float GetFloatDamping() const noexcept;
 	float GetMinimumAcceleration() const noexcept { return minimumAcceleration; }
@@ -42,7 +43,7 @@ private:
 	static constexpr float DefaultDamping = 0.2;
 	static constexpr float DefaultMinimumAcceleration = 10.0;
 
-	uint16_t halfPeriod;							// half the period of ringing that we don't want to excite
+	uint16_t halfPeriod;							// half the period of ringing that we don't want to excite, in step clocks
 	uint16_t damping;								// damping factor of the ringing as a 16-bit fractional number
 	float minimumAcceleration;						// the minimum value that we reduce acceleration to
 	InputShaperType type;
