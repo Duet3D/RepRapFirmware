@@ -153,8 +153,20 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, O
 	{
 		// Cancel an object
 		seen = true;
-		const int objectToCancel = (seenC) ? currentObjectNumber : gb.GetIValue();
-		if (objectToCancel >= 0 && objectToCancel < (int)objectsCancelled.MaxBits() && !objectsCancelled.IsBitSet(objectToCancel))
+		const int objectToCancel = (seenC) ? currentObjectNumber : (int)gb.GetUIValue();
+		if (objectToCancel < 0)
+		{
+			reply.copy("No current object");
+			return GCodeResult::error;
+		}
+		if (objectToCancel >= (int)objectsCancelled.MaxBits())
+		{
+			reply.copy("Object number out of range");
+			return GCodeResult::error;
+		}
+
+		// We don't flag an error if you try to cancel the same object twice
+		if (!objectsCancelled.IsBitSet(objectToCancel))
 		{
 			objectsCancelled.SetBit(objectToCancel);
 			if (objectToCancel == currentObjectNumber)
@@ -170,8 +182,15 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, O
 	{
 		// Resume an object
 		seen = true;
-		const int objectToResume = gb.GetIValue();
-		if (objectToResume >= 0 && objectToResume < (int)objectsCancelled.MaxBits() && objectsCancelled.IsBitSet(objectToResume))
+		const int objectToResume = gb.GetUIValue();
+		if (objectToResume >= (int)objectsCancelled.MaxBits())
+		{
+			reply.copy("Object number out of range");
+			return GCodeResult::error;
+		}
+
+		// We don't flag an error if you try to resume an object that is not cancelled
+		if (objectsCancelled.IsBitSet(objectToResume))
 		{
 			objectsCancelled.ClearBit(objectToResume);
 			if (objectToResume == currentObjectNumber)
