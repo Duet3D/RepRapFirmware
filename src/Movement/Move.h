@@ -204,6 +204,7 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(queue)
 
 private:
 	enum class MoveState : uint8_t
@@ -221,15 +222,18 @@ private:
 
 	const char *GetCompensationTypeString() const noexcept;
 
-	DDARing mainDDARing;								// The DDA ring used for regular moves
-
 #if SUPPORT_ASYNC_MOVES
-	DDARing auxDDARing;									// the DDA ring used for live babystepping, height following and other asynchronous moves
+	DDARing rings[2];
+	DDARing& auxDDARing = rings[1];						// the DDA ring used for live babystepping, height following and other asynchronous moves
 	AsyncMove auxMove;
 	volatile bool auxMoveLocked;
 	volatile bool auxMoveAvailable;
 	HeightController *heightController;
+#else
+	DDARing rings[1];
 #endif
+
+	DDARing& mainDDARing = rings[0];					// The DDA ring used for regular moves
 
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?

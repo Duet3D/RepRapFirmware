@@ -12,7 +12,7 @@
 
 #include "DDA.h"
 
-class DDARing
+class DDARing INHERIT_OBJECT_MODEL
 {
 public:
 	DDARing() noexcept;
@@ -90,6 +90,9 @@ public:
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue
 #endif
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	bool StartNextMove(Platform& p, uint32_t startTime) noexcept SPEED_CRITICAL;		// Start the next move, returning true if laser or IObits need to be controlled
 	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept;
@@ -107,7 +110,7 @@ private:
 	volatile int32_t liveEndPoints[MaxAxesPlusExtruders];						// The XYZ endpoints of the last completed move in motor coordinates
 
 	unsigned int numDdasInRing;
-	uint32_t gracePeriod;														// The minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
+	uint32_t gracePeriod;														// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
 	uint32_t scheduledMoves;													// Move counters for the code queue
 	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile

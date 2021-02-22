@@ -18,6 +18,26 @@
 constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
 constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		// 50ms
 
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(DDARing, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(DDARing, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry DDARing::objectModelTable[] =
+{
+	// DDARing each group, these entries must be in alphabetical order
+	// 0. DDARing members
+	{ "gracePeriod",			OBJECT_MODEL_FUNC(self->gracePeriod * MillisToSeconds, 3),			ObjectModelEntryFlags::none },
+	{ "length",					OBJECT_MODEL_FUNC((int32_t)self->numDdasInRing), 					ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t DDARing::objectModelTableDescriptor[] = { 1, 2 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(DDARing)
+
 DDARing::DDARing() noexcept : gracePeriod(0), scheduledMoves(0), completedMoves(0), numHiccups(0)
 {
 }
