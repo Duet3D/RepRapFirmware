@@ -1268,6 +1268,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			break;
 
+		case 73:	// Slicer-inserted print time values
+			result = reprap.GetPrintMonitor().ProcessM73(gb, reply);
+			break;
+
 		case 80:	// ATX power on
 			atxPowerControlled = true;
 			platform.AtxPowerOn();

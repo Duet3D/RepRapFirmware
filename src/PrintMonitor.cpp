@@ -19,7 +19,8 @@ Licence: GPL
 
 #include "PrintMonitor.h"
 
-#include "GCodes/GCodes.h"
+#include <GCodes/GCodes.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
 #include "Platform.h"
@@ -82,9 +83,10 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(fileBased)),													ObjectModelEntryFlags::live },
 	{ "layer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(layerBased)),													ObjectModelEntryFlags::live },
+	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 10 + TRACK_OBJECT_NAMES, 11, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 10 + TRACK_OBJECT_NAMES, 11, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
@@ -135,6 +137,17 @@ void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info
 
 	TaskCriticalSectionLocker taskLock;
 	reprap.JobUpdated();
+}
+
+GCodeResult PrintMonitor::ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (gb.Seen('R'))
+	{
+		slicerTimeLeft = gb.GetFValue() * MinutesToSeconds;
+		whenSlicerTimeLeftSet = millis();
+	}
+	// M73 without P Q R or S parameters reports print progress in some implementations, but we don't currently do that
+	return GCodeResult::ok;
 }
 
 void PrintMonitor::Spin() noexcept
@@ -288,6 +301,8 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 # endif
 	{
 		printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished);
+		slicerTimeLeft = (printingFileParsed) ? printingFileInfo.printTime : 0.0;
+		whenSlicerTimeLeftSet = millis();
 	}
 	reprap.JobUpdated();
 #endif
@@ -303,6 +318,7 @@ void PrintMonitor::Reset() noexcept
 	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
 	lastLayerNumberNotified = 0;
 	lastLayerStartHeightNotified = 0.0;
+	slicerTimeLeft = 0.0;
 	reprap.JobUpdated();
 }
 
@@ -550,10 +566,12 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 			// Layer-based estimations are made after each layer change, only reflect this value
 			if (layerEstimatedTimeLeft > 0.0)
 			{
-				float timeLeft = layerEstimatedTimeLeft - (GetPrintDuration() - lastLayerChangeTime);
-				return (timeLeft > 0.0) ? timeLeft : 0.1;
+				return max<float>(0.1, layerEstimatedTimeLeft - (GetPrintDuration() - lastLayerChangeTime));
 			}
 			break;
+
+		case slicerBased:
+			return max<float>(0.1, slicerTimeLeft - (millis() - whenSlicerTimeLeftSet) * MillisToSeconds);
 	}
 
 	return 0.0;
