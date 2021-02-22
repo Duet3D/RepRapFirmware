@@ -2092,8 +2092,8 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 			const unsigned int minMeshSegments = max<unsigned int>(
 					1,
 					heightMap.GetMinimumSegments(
-							currentUserPosition[grid.GetNumber0()] - initialUserPosition[grid.GetNumber0()],
-							currentUserPosition[grid.GetNumber1()] - initialUserPosition[grid.GetNumber1()]
+							currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
+							currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
 					)
 			);
 			if (minMeshSegments > moveBuffer.totalSegments)

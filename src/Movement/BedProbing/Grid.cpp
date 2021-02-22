@@ -24,22 +24,53 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GridDefinition, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(GridDefinition, __VA_ARGS__)
 
+static constexpr ObjectModelArrayDescriptor axisArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetAxisLetter(context.GetLastIndex())); }
+};
+
+static constexpr ObjectModelArrayDescriptor maxsArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMax(context.GetLastIndex()), 1); }
+};
+
+static constexpr ObjectModelArrayDescriptor minsArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMin(context.GetLastIndex()), 1); }
+};
+
+static constexpr ObjectModelArrayDescriptor spacingsArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetSpacing(context.GetLastIndex()), 1); }
+};
+
 constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. GridDefinition members
-	{ "axis0",		OBJECT_MODEL_FUNC(self->letter0),			ObjectModelEntryFlags::none },
-	{ "axis1",		OBJECT_MODEL_FUNC(self->letter1),			ObjectModelEntryFlags::none },
-	{ "max0",		OBJECT_MODEL_FUNC(self->max0, 1),			ObjectModelEntryFlags::none },
-	{ "max1",		OBJECT_MODEL_FUNC(self->max1, 1),			ObjectModelEntryFlags::none },
-	{ "min0",		OBJECT_MODEL_FUNC(self->min0, 1),			ObjectModelEntryFlags::none },
-	{ "min1",		OBJECT_MODEL_FUNC(self->min1, 1),			ObjectModelEntryFlags::none },
-	{ "radius",		OBJECT_MODEL_FUNC(self->radius, 1),			ObjectModelEntryFlags::none },
-	{ "spacing0",	OBJECT_MODEL_FUNC(self->spacing0, 1),		ObjectModelEntryFlags::none },
-	{ "spacing1",	OBJECT_MODEL_FUNC(self->spacing1, 1),		ObjectModelEntryFlags::none },
+	{ "axes",		OBJECT_MODEL_FUNC_NOSELF(&axisArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "maxs",		OBJECT_MODEL_FUNC_NOSELF(&maxsArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "mins",		OBJECT_MODEL_FUNC_NOSELF(&minsArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "radius",		OBJECT_MODEL_FUNC(self->radius, 1),						ObjectModelEntryFlags::none },
+	{ "spacings",	OBJECT_MODEL_FUNC_NOSELF(&spacingsArrayDescriptor), 	ObjectModelEntryFlags::none },
+
+	{ "xMax",		OBJECT_MODEL_FUNC(self->maxs[0], 1),					ObjectModelEntryFlags::obsolete },
+	{ "xMin",		OBJECT_MODEL_FUNC(self->mins[0], 1),					ObjectModelEntryFlags::obsolete },
+	{ "xSpacing",	OBJECT_MODEL_FUNC(self->spacings[0], 1),				ObjectModelEntryFlags::obsolete },
+	{ "yMax",		OBJECT_MODEL_FUNC(self->maxs[1], 1),					ObjectModelEntryFlags::obsolete },
+	{ "yMin",		OBJECT_MODEL_FUNC(self->mins[1], 1),					ObjectModelEntryFlags::obsolete },
+	{ "ySpacing",	OBJECT_MODEL_FUNC(self->spacings[1], 1),				ObjectModelEntryFlags::obsolete },
 };
 
-constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 9 };
+constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 11 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 
@@ -53,31 +84,30 @@ const char * const GridDefinition::HeightMapLabelLines[] =
 };
 
 // Initialise the grid to be invalid
-GridDefinition::GridDefinition() noexcept
-	: letter0('X'), letter1('Y'),
-	  min0(0.0), max0(-1.0),
-	  min1(0.0), max1(-1.0),
-	  radius(-1.0),
-	  spacing0(0.0), spacing1(0.0),
-	  axis0Number(X_AXIS), axis1Number(Y_AXIS),
-	  num0(0), num1(0),
-	  recipAxis0spacing(0.0), recipAxis1spacing(0.0),
-	  isValid(false)
+GridDefinition::GridDefinition() noexcept : radius(-1.0), isValid(false)
 {
+	letters[0] = 'X';
+	letters[1] = 'Y';
+	mins[0] = mins[1] = 0.0;
+	maxs[0] = maxs[1] = -1.0;
+	spacings[0] = spacings[1] = 0.0;
+
+	nums[0] = nums[1] = 0;
+	recipAxisSpacings[0] = recipAxisSpacings[1] = 0.0;
 }
 
 // Set the grid parameters ands return true if it is now valid
-bool GridDefinition::Set(const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float pRadius, const float pSpacings[2]) noexcept
+bool GridDefinition::Set(const char axisLetters[2], const float axis0Range[2], const float axis1Range[2], float pRadius, const float pSpacings[2]) noexcept
 {
-	letter0 = axesLetters[0];
-	letter1 = axesLetters[1];
-	min0 = axis0Range[0];
-	max0 = axis0Range[1];
-	min1 = axis1Range[0];
-	max1 = axis1Range[1];
+	letters[0] = axisLetters[0];
+	letters[1] = axisLetters[1];
+	mins[0] = axis0Range[0];
+	maxs[0] = axis0Range[1];
+	mins[1] = axis1Range[0];
+	maxs[1] = axis1Range[1];
 	radius = pRadius;
-	spacing0 = pSpacings[0];
-	spacing1 = pSpacings[1];
+	spacings[0] = pSpacings[0];
+	spacings[1] = pSpacings[1];
 	CheckValidity();
 	return isValid;
 }
@@ -86,37 +116,27 @@ bool GridDefinition::Set(const char axesLetters[2], const float axis0Range[2], c
 // numAxis0, numAxis1 are always set up, but recipAxis0spacing, recipAxis1spacing only if the grid is valid
 void GridDefinition::CheckValidity() noexcept
 {
-	num0 = (max0 - min0 >= MinRange && spacing0 >= MinSpacing) ? (uint32_t)((max0 - min0)/spacing0) + 1 : 0;
-	num1 = (max1 - min1 >= MinRange && spacing1 >= MinSpacing) ? (uint32_t)((max1 - min1)/spacing1) + 1 : 0;
+	nums[0] = (maxs[0] - mins[0] >= MinRange && spacings[0] >= MinSpacing) ? (uint32_t)((maxs[0] - mins[0])/spacings[0]) + 1 : 0;
+	nums[1] = (maxs[1] - mins[1] >= MinRange && spacings[1] >= MinSpacing) ? (uint32_t)((maxs[1] - mins[1])/spacings[1]) + 1 : 0;
 
-	const size_t axis0NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(letter0);
-	const size_t axis1NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(letter1);
+	const size_t axis0NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(letters[0]);
+	const size_t axis1NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(letters[1]);
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 
 	isValid = NumPoints() != 0 && NumPoints() <= MaxGridProbePoints
 			&& (radius < 0.0 || radius >= 1.0)
-			&& NumAxis0points() <= MaxAxis0GridPoints
-			&& letter0 != letter1
+			&& NumAxisPoints(0) <= MaxAxis0GridPoints
+			&& letters[0] != letters[1]
 			&& axis0NumForLetter < numVisibleAxes
 			&& axis1NumForLetter < numVisibleAxes;
 
 	if (isValid)
 	{
-		axis0Number = axis0NumForLetter;
-		axis1Number = axis1NumForLetter;
-		recipAxis0spacing = 1.0/spacing0;
-		recipAxis1spacing = 1.0/spacing1;
+		axisNumbers[0] = axis0NumForLetter;
+		axisNumbers[1] = axis1NumForLetter;
+		recipAxisSpacings[0] = 1.0/spacings[0];
+		recipAxisSpacings[1] = 1.0/spacings[1];
 	}
-}
-
-float GridDefinition::GetCoordinate0(unsigned int axis0Index) const noexcept
-{
-	return min0 + (axis0Index * spacing0);
-}
-
-float GridDefinition::GetCoordinate1(unsigned int axis1Index) const noexcept
-{
-	return min1 + (axis1Index * spacing1);
 }
 
 bool GridDefinition::IsInRadius(float axis0, float y) const noexcept
@@ -128,14 +148,14 @@ bool GridDefinition::IsInRadius(float axis0, float y) const noexcept
 void GridDefinition::PrintParameters(const StringRef& s) const noexcept
 {
 	s.catf("%c%.1f:%.1f, %c%.1f:%.1f, radius %.1f, %c spacing %.1f, %c spacing %.1f, %" PRIu32 " points",
-			letter0, (double)min0, (double)max0, letter1, (double)min1, (double)max1, (double)radius, letter0, (double)spacing0, letter1, (double)spacing1, NumPoints());
+			letters[0], (double)mins[0], (double)maxs[0], letters[1], (double)mins[1], (double)maxs[1], (double)radius, letters[0], (double)spacings[0], letters[1], (double)spacings[1], NumPoints());
 }
 
 // Write the parameter label line to a string
 void GridDefinition::WriteHeadingAndParameters(const StringRef& s) const noexcept
 {
 	s.printf("%s\n%c,%c,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%" PRIi32 ",%" PRIi32 "\n",
-				HeightMapLabelLines[ARRAY_UPB(HeightMapLabelLines)], letter0, letter1, (double)min0, (double)max0, (double)min1, (double)max1, (double)radius, (double)spacing0, (double)spacing1, num0, num1);
+				HeightMapLabelLines[ARRAY_UPB(HeightMapLabelLines)], letters[0], letters[1], (double)mins[0], (double)maxs[0], (double)mins[1], (double)maxs[1], (double)radius, (double)spacings[0], (double)spacings[1], nums[0], nums[1]);
 }
 
 // Check the parameter label line, returning -1 if not recognised, else the version we found
@@ -161,19 +181,19 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 
 	if (version < 2)
 	{
-		letter0 = 'X';
-		letter1 = 'Y';
+		letters[0] = 'X';
+		letters[1] = 'Y';
 	}
 	else
 	{
-		letter0 = *p;
+		letters[0] = *p;
 		++p;
 		if (*p != ',')
 		{
 			return false;
 		}
 		++p;
-		letter1 = *p;
+		letters[1] = *p;
 		++p;
 		if (*p != ',')
 		{
@@ -182,28 +202,28 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 		++p;
 	}
 
-	min0 = SafeStrtof(p, &q);
+	mins[0] = SafeStrtof(p, &q);
 	if (p == q || *q != ',')
 	{
 		return false;
 	}
 	p = q + 1;
 
-	max0 = SafeStrtof(p, &q);
+	maxs[0] = SafeStrtof(p, &q);
 	if (p == q || *q != ',')
 	{
 		return false;
 	}
 	p = q + 1;
 
-	min1 = SafeStrtof(p, &q);
+	mins[1] = SafeStrtof(p, &q);
 	if (p == q || *q != ',')
 	{
 		return false;
 	}
 	p = q + 1;
 
-	max1 = SafeStrtof(p, &q);
+	maxs[1] = SafeStrtof(p, &q);
 	if (p == q || *q != ',')
 	{
 		return false;
@@ -217,7 +237,7 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 	}
 	p = q + 1;
 
-	spacing0 = SafeStrtof(p, &q);
+	spacings[0] = SafeStrtof(p, &q);
 	if (p == q || *q != ',')
 	{
 		return false;
@@ -226,11 +246,11 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 
 	if (version == 0)
 	{
-		spacing1 = spacing0;
+		spacings[1] = spacings[0];
 	}
 	else
 	{
-		spacing1 = SafeStrtof(p, &q);
+		spacings[1] = SafeStrtof(p, &q);
 		if (p == q || *q != ',')
 		{
 			return false;
@@ -238,14 +258,14 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 		p = q + 1;
 	}
 
-	num0 = StrToU32(p, &q);
+	nums[0] = StrToU32(p, &q);
 	if (p == q || *q != ',')
 	{
 		return false;
 	}
 	p = q + 1;
 
-	num1 = StrToU32(p, &q);
+	nums[1] = StrToU32(p, &q);
 	if (p == q)
 	{
 		return false;
@@ -258,20 +278,20 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 // Print what is wrong with the grid, appending it to the existing string
 void GridDefinition::PrintError(float originalAxis0range, float originalAxis1range, const StringRef& r) const noexcept
 {
-	if (spacing0 < MinSpacing || spacing1 < MinSpacing)
+	if (spacings[0] < MinSpacing || spacings[1] < MinSpacing)
 	{
 		r.cat("Spacing too small");
 	}
-	else if (num0 == 0)
+	else if (nums[0] == 0)
 	{
-		r.cat("X range too small");
+		r.catf("%c range too small", letters[0]);
 	}
-	else if (num1 == 0)
+	else if (nums[1] == 0)
 	{
-		r.cat("Y range too small");
+		r.catf("%c range too small", letters[1]);
 	}
-	else if (   num0 > MaxAxis0GridPoints
-			 || num0 > MaxGridProbePoints || num1 > MaxGridProbePoints		// check X and Y individually in case X*Y overflows
+	else if (   nums[0] > MaxAxis0GridPoints
+			 || nums[0] > MaxGridProbePoints || nums[1] > MaxGridProbePoints		// check X and Y individually in case X*Y overflows
 			 || NumPoints() > MaxGridProbePoints
 			)
 	{
@@ -312,7 +332,7 @@ void HeightMap::ClearGridHeights() noexcept
 // Set the height of a grid point
 void HeightMap::SetGridHeight(size_t axis0Index, size_t axis1Index, float height) noexcept
 {
-	SetGridHeight(axis1Index * def.num0 + axis0Index, height);
+	SetGridHeight(axis1Index * def.nums[0] + axis0Index, height);
 }
 
 void HeightMap::SetGridHeight(size_t index, float height) noexcept
@@ -329,10 +349,10 @@ void HeightMap::SetGridHeight(size_t index, float height) noexcept
 unsigned int HeightMap::GetMinimumSegments(float deltaAxis0, float deltaAxis1) const noexcept
 {
 	const float axis0Distance = fabsf(deltaAxis0);
-	unsigned int axis0Segments = (axis0Distance > 0.0) ? (unsigned int)(axis0Distance * def.recipAxis0spacing + 0.4) : 1;
+	unsigned int axis0Segments = (axis0Distance > 0.0) ? (unsigned int)(axis0Distance * def.recipAxisSpacings[0] + 0.4) : 1;
 
 	const float axis1Distance = fabsf(deltaAxis1);
-	unsigned int axis1Segments = (axis1Distance > 0.0) ? (unsigned int)(axis1Distance * def.recipAxis1spacing + 0.4) : 1;
+	unsigned int axis1Segments = (axis1Distance > 0.0) ? (unsigned int)(axis1Distance * def.recipAxisSpacings[1] + 0.4) : 1;
 
 	return max<unsigned int>(axis0Segments, axis1Segments);
 }
@@ -373,10 +393,10 @@ bool HeightMap::SaveToFile(FileStore *f, const char *fname, float zOffset) noexc
 
 	// Write the grid heights. We use a fixed field with of 6 characters to make is easier to view.
 	uint32_t index = 0;
-	for (uint32_t i = 0; i < def.num1; ++i)
+	for (uint32_t i = 0; i < def.nums[1]; ++i)
 	{
 		buf.Clear();
-		for (uint32_t j = 0; j < def.num0; ++j)
+		for (uint32_t j = 0; j < def.nums[0]; ++j)
 		{
 			if (j != 0)
 			{
@@ -446,7 +466,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 	else
 	{
 		SetGrid(newGrid);
-		for (uint32_t row = 0; row < def.num1; ++row)		// read the grid a row at a time
+		for (uint32_t row = 0; row < def.nums[1]; ++row)	// read the grid a row at a time
 		{
 			if (f->ReadLine(buffer, sizeof(buffer)) <= 0)
 			{
@@ -454,7 +474,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 				return true;								// failed to read a line
 			}
 			const char *p = buffer;
-			for (uint32_t col = 0; col < def.num0; ++col)
+			for (uint32_t col = 0; col < def.nums[0]; ++col)
 			{
 				while (*p == ' ' || *p == '\t')
 				{
@@ -504,9 +524,9 @@ void HeightMap::SetFileName(const char *name) noexcept
 void HeightMap::SaveToArray(float *arr, float zOffset) const noexcept
 {
 	size_t index = 0;
-	for (size_t i = 0; i < def.num1; ++i)
+	for (size_t i = 0; i < def.nums[1]; ++i)
 	{
-		for (size_t j = 0; j < def.num0; ++j)
+		for (size_t j = 0; j < def.nums[0]; ++j)
 		{
 			arr[index] = gridHeightSet.IsBitSet(index) ? (gridHeights[index] + zOffset) : std::numeric_limits<float>::quiet_NaN();
 			index++;
@@ -563,21 +583,21 @@ float HeightMap::GetInterpolatedHeightError(float axis0, float axis1) const noex
 	}
 
 	// Last grid point
-	const float xLast = def.min0 + (def.num0-1)*def.spacing0;
-	const float yLast = def.min1 + (def.num1-1)*def.spacing1;
+	const float xLast = def.mins[0] + (def.nums[0]-1)*def.spacings[0];
+	const float yLast = def.mins[1] + (def.nums[1]-1)*def.spacings[1];
 
 	// Clamp to rectangle so InterpolateXY will always have valid parameters
 	const float fEPSILON = 0.01;
-	if (axis0 < def.min0) { axis0 = def.min0; }
-	if (axis1 < def.min1) {	axis1 = def.min1; }
+	if (axis0 < def.mins[0]) { axis0 = def.mins[0]; }
+	if (axis1 < def.mins[1]) { axis1 = def.mins[1]; }
 	if (axis0 > xLast -fEPSILON) { axis0 = xLast -fEPSILON; }
 	if (axis1 > yLast -fEPSILON) { axis1 = yLast -fEPSILON; }
 
 
-	const float xf = (axis0 - def.min0) * def.recipAxis0spacing;
+	const float xf = (axis0 - def.mins[0]) * def.recipAxisSpacings[0];
 	const float xFloor = floor(xf);
 	const int32_t xIndex = (int32_t)xFloor;
-	const float yf = (axis1 - def.min1) * def.recipAxis1spacing;
+	const float yf = (axis1 - def.mins[1]) * def.recipAxisSpacings[1];
 	const float yFloor = floor(yf);
 	const int32_t yIndex = (int32_t)yFloor;
 
@@ -588,7 +608,7 @@ float HeightMap::InterpolateAxis0Axis1(uint32_t axis0Index, uint32_t axis1Index,
 {
 	const uint32_t indexX0Y0 = GetMapIndex(axis0Index, axis1Index);	// (X0,Y0)
 	const uint32_t indexX1Y0 = indexX0Y0 + 1;						// (X1,Y0)
-	const uint32_t indexX0Y1 = indexX0Y0 + def.num0;			// (X0 Y1)
+	const uint32_t indexX0Y1 = indexX0Y0 + def.nums[0];				// (X0 Y1)
 	const uint32_t indexX1Y1 = indexX0Y1 + 1;						// (X1,Y1)
 
 	const float xyFrac = axis0Frac * axis1Frac;
@@ -606,15 +626,15 @@ void HeightMap::ExtrapolateMissing() noexcept
 	//algorithm: http://www.ilikebigbits.com/blog/2015/3/2/plane-from-points
 	float sumAxis0 = 0, sumAxis1 = 0, sumZ = 0;
 	int n = 0;
-	for (uint32_t iAxis1 = 0; iAxis1 < def.num1; iAxis1++)
+	for (uint32_t iAxis1 = 0; iAxis1 < def.nums[1]; iAxis1++)
 	{
-		for (uint32_t iAxis0 = 0; iAxis0 < def.num0; iAxis0++)
+		for (uint32_t iAxis0 = 0; iAxis0 < def.nums[0]; iAxis0++)
 		{
 			const uint32_t index = GetMapIndex(iAxis0, iAxis1);
 			if (gridHeightSet.IsBitSet(index))
 			{
-				const float fAxis0 = (def.spacing0 * iAxis0) + def.min0;
-				const float fAxis1 = (def.spacing1 * iAxis1) + def.min1;
+				const float fAxis0 = (def.spacings[0] * iAxis0) + def.mins[0];
+				const float fAxis1 = (def.spacings[1] * iAxis1) + def.mins[1];
 				const float fZ = gridHeights[index];
 
 				n++;
@@ -630,15 +650,15 @@ void HeightMap::ExtrapolateMissing() noexcept
 	float axis0Axis0 = 0.0; float axis0Axis1 = 0.0; float axis0z = 0.0;
 	float axis1Axis1 = 0.0; float axis1z = 0.0; float zz = 0.0;
 
-	for (uint32_t iAxis1 = 0; iAxis1 < def.num1; iAxis1++)
+	for (uint32_t iAxis1 = 0; iAxis1 < def.nums[1]; iAxis1++)
 	{
-		for (uint32_t iAxis0 = 0; iAxis0 < def.num0; iAxis0++)
+		for (uint32_t iAxis0 = 0; iAxis0 < def.nums[0]; iAxis0++)
 		{
 			const uint32_t index = GetMapIndex(iAxis0, iAxis1);
 			if (gridHeightSet.IsBitSet(index))
 			{
-				const float fAxis0 = (def.spacing0 * iAxis0) + def.min0;
-				const float fAxis1 = (def.spacing1 * iAxis1) + def.min1;
+				const float fAxis0 = (def.spacings[0] * iAxis0) + def.mins[0];
+				const float fAxis1 = (def.spacings[1] * iAxis1) + def.mins[1];
 				const float fZ = gridHeights[index];
 
 				const float rAxis0 = fAxis0 - centAxis0;
@@ -673,15 +693,15 @@ void HeightMap::ExtrapolateMissing() noexcept
 	const float d = centAxis0*a + centAxis1*b + centZ*c;
 
 	// Fill in the blanks
-	for (uint32_t iAxis1 = 0; iAxis1 < def.num1; iAxis1++)
+	for (uint32_t iAxis1 = 0; iAxis1 < def.nums[1]; iAxis1++)
 	{
-		for (uint32_t iAxis0 = 0; iAxis0 < def.num0; iAxis0++)
+		for (uint32_t iAxis0 = 0; iAxis0 < def.nums[0]; iAxis0++)
 		{
 			const uint32_t index = GetMapIndex(iAxis0, iAxis1);
 			if (!gridHeightSet.IsBitSet(index))
 			{
-				const float fAxis0 = (def.spacing0 * iAxis0) + def.min0;
-				const float fAxis1 = (def.spacing1 * iAxis1) + def.min1;
+				const float fAxis0 = (def.spacings[0] * iAxis0) + def.mins[0];
+				const float fAxis1 = (def.spacings[1] * iAxis1) + def.mins[1];
 				const float fZ = (d - (a * fAxis0 + b * fAxis1)) * invC;
 				gridHeights[index] = fZ;	// fill in Z but don't mark it as set so we can always differentiate between measured and extrapolated
 			}

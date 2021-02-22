@@ -162,6 +162,8 @@ enum class ObjectModelEntryFlags : uint8_t
 	// canAlter can be or'ed in
 	canAlter = 4,			// we can alter this value
 	liveCanAlter = 5,		// we can alter this value
+
+	obsolete = 8			// entry is deprecated and should not be used any more
 };
 
 // Context passed to object model functions
@@ -190,6 +192,9 @@ public:
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 	uint64_t GetStartMillis() const { return startMillis; }
 
+	bool ObsoleteFieldQueried() const noexcept { return obsoleteFieldQueried; }
+	void SetObsoleteFieldQueried() noexcept { obsoleteFieldQueried = true; }
+
 	GCodeException ConstructParseException(const char *msg) const noexcept;
 	GCodeException ConstructParseException(const char *msg, const char *sparam) const noexcept;
 
@@ -208,7 +213,9 @@ private:
 				onlyLive : 1,
 				includeVerbose : 1,
 				wantArrayLength : 1,
-				includeNulls : 1;
+				includeNulls : 1,
+				includeObsolete : 1,
+				obsoleteFieldQueried : 1;
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.
@@ -299,6 +306,9 @@ public:
 
 	// Return true if this object table entry matches a filter or query
 	bool Matches(const char *filter, const ObjectExplorationContext& context) const noexcept;
+
+	// Check if the queried field is obsolete
+	bool IsObsolete() const noexcept { return ((uint8_t)flags & (uint8_t)ObjectModelEntryFlags::obsolete) != 0; }
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
 	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const noexcept;

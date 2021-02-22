@@ -64,7 +64,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "offsets",					OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 					ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 							ObjectModelEntryFlags::none },
 	{ "speed",						OBJECT_MODEL_FUNC(self->probeSpeed, 1), 							ObjectModelEntryFlags::none },
-	{ "temperatureCoefficient",		OBJECT_MODEL_FUNC(self->temperatureCoefficients[0], 5), 			ObjectModelEntryFlags::none },
+	{ "temperatureCoefficient",		OBJECT_MODEL_FUNC(self->temperatureCoefficients[0], 5), 			ObjectModelEntryFlags::obsolete },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_NOSELF(&temperatureCoefficientsArrayDescriptor), 	ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->adcValue), 						ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 								ObjectModelEntryFlags::none },

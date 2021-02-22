@@ -215,7 +215,7 @@ ObjectModel::ObjectModel() noexcept
 ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth) noexcept
 	: startMillis(millis()), maxDepth(initialMaxDepth), currentDepth(0), numIndicesProvided(0), numIndicesCounted(0),
 	  line(-1), column(-1),
-	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false)
+	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false), includeObsolete(false), obsoleteFieldQueried(false)
 {
 	while (true)
 	{
@@ -234,6 +234,9 @@ ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportF
 			break;
 		case 'n':
 			includeNulls = true;
+			break;
+		case 'o':
+			includeObsolete = true;
 			break;
 		case 'd':
 			maxDepth = 0;
@@ -257,7 +260,7 @@ ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportF
 ObjectExplorationContext::ObjectExplorationContext(bool wal, int p_line, int p_col) noexcept
 	: startMillis(millis()), maxDepth(99), currentDepth(0), numIndicesProvided(0), numIndicesCounted(0),
 	  line(p_line), column(p_col),
-	  shortForm(false), onlyLive(false), includeVerbose(true), wantArrayLength(wal), includeNulls(false)
+	  shortForm(false), onlyLive(false), includeVerbose(true), wantArrayLength(wal), includeNulls(false), includeObsolete(true), obsoleteFieldQueried(false)
 {
 }
 
@@ -282,7 +285,8 @@ int32_t ObjectExplorationContext::GetLastIndex() const THROWS(GCodeException)
 bool ObjectExplorationContext::ShouldReport(const ObjectModelEntryFlags f) const noexcept
 {
 	return (!onlyLive || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::live) != 0)
-		&& (includeVerbose || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::verbose) == 0);
+		&& (includeVerbose || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::verbose) == 0)
+		&& (includeObsolete || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::obsolete) == 0);
 }
 
 GCodeException ObjectExplorationContext::ConstructParseException(const char *msg) const noexcept
@@ -771,6 +775,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 		const ObjectModelTableEntry * const e = FindObjectModelTableEntry(classDescriptor, tableNumber, idString);
 		if (e != nullptr)
 		{
+			if (e->IsObsolete())
+			{
+				context.SetObsoleteFieldQueried();
+			}
 			idString = GetNextElement(idString);
 			const ExpressionValue val = e->func(this, context);
 			return GetObjectValue(context, classDescriptor, val, idString);

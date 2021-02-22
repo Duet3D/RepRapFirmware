@@ -154,23 +154,23 @@ constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. 
 //   So 32 points using double precision arithmetic need 3584 bytes of stack space.
 #if SAM4E || SAM4S || SAME70 || SAME5x
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 41;					// Maximum number of grid points in one X row
+constexpr size_t MaxAxis0GridPoints = 41;				// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 #elif SAM3XA
 constexpr size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 21;					// Maximum number of grid points in one X row
+constexpr size_t MaxAxis0GridPoints = 21;				// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 #elif __LPC17xx__
 # if defined(LPC_NETWORKING)
 constexpr size_t MaxGridProbePoints = 121;    			// 121 allows us to probe 200x200 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 21;         			// Maximum number of grid points in one X row
+constexpr size_t MaxAxis0GridPoints = 21;         		// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;       			// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 16; 			// Should a power of 2 for speed
 # else
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 41;					// Maximum number of grid points in one X row
+constexpr size_t MaxAxis0GridPoints = 41;				// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 # endif
