@@ -38,7 +38,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RotaryDeltaKinematics)
 #endif
 
 // Constructor
-RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::rotaryDelta, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false)
+RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::rotaryDelta, true, false)
 {
 	Init();
 }
@@ -146,11 +146,13 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			gb.TryGetFValue('Y', angleCorrections[DELTA_B_AXIS], seen);
 			gb.TryGetFValue('Z', angleCorrections[DELTA_C_AXIS], seen);
 
+			const bool seenNonGeometry = TryConfigureSegmentation(gb);
+
 			if (seen)
 			{
 				Recalc();
 			}
-			else
+			else if (!seenNonGeometry && !gb.Seen('K'))
 			{
 				reply.printf("Kinematics is rotary delta, arms (%.3f,%.2f,%.3f)mm, rods (%.3f,%.3f,%.3f)mm, bearingHeights (%.3f,%.2f,%.3f)mm"
 							 ", arm movement %.1f to %.1f" DEGREE_SYMBOL

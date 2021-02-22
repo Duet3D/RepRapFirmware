@@ -208,16 +208,20 @@ public:
 	bool UseRawG0() const noexcept { return useRawG0; }
 	float GetSegmentsPerSecond() const noexcept pre(UseSegmentation()) { return segmentsPerSecond; }
 	float GetMinSegmentLength() const noexcept pre(UseSegmentation()) { return minSegmentLength; }
+	float GetReciprocalMinSegmentLength() const noexcept pre(UseSegmentation()) { return reciprocalMinSegmentLength; }
 
 protected:
 	DECLARE_OBJECT_MODEL_VIRTUAL
 
 	// Constructor. Pass segsPerSecond <= 0.0 to get non-segmented motion.
-	Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0) noexcept;
+	Kinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept;
 
 	// Apply the M208 limits to the Cartesian position that the user wants to move to for all axes from the specified one upwards
 	// Return true if any coordinates were changed
 	bool LimitPositionFromAxis(float coords[], size_t firstAxis, size_t numVisibleAxes, AxesBitmap axesHomed) const noexcept;
+
+	// Try to configure the segmentation parameters
+	bool TryConfigureSegmentation(GCodeBuffer& gb) noexcept;
 
 	// Debugging functions
 	static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
@@ -227,10 +231,15 @@ protected:
 
 	float segmentsPerSecond;				// if we are using segmentation, the target number of segments/second
 	float minSegmentLength;					// if we are using segmentation, the minimum segment size
+	float reciprocalMinSegmentLength;		// if we are using segmentation, the reciprocal of minimum segment size
 
 	static const char * const HomeAllFileName;
 
 private:
+	// Default values for those kinematics that always use segmentation
+	static constexpr float DefaultSegmentsPerSecond = 100.0;
+	static constexpr float DefaultMinSegmentLength = 0.2;
+
 	bool useSegmentation;					// true if we have to approximate linear movement using segmentation
 	bool useRawG0;							// true if we normally use segmentation but we do not need to segment travel moves
 	KinematicsType type;

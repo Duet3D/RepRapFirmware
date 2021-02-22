@@ -42,7 +42,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(FiveBarScaraKinematics, ZLeadscrewKine
 #endif
 
 FiveBarScaraKinematics::FiveBarScaraKinematics() noexcept
-	: ZLeadscrewKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
+	: ZLeadscrewKinematics(KinematicsType::scara, true, true)
 {
 	Recalc();
 }
@@ -550,7 +550,6 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		gb.MustSee('D');
 
 		bool seen = false;
-		bool seenNonGeometry = false;
 
 		// parameter X: x origins of actuators
 		float paraX[2];
@@ -687,6 +686,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 		// optional rectangle definition of a print area. Must match the workmode reachable area
 		//TODO is this needed? Why not use the M208 limits instead?
+		bool seenNonGeometry = TryConfigureSegmentation(gb);
 		if (gb.Seen('Z'))
 		{
 			float coordinates[4];
@@ -701,9 +701,6 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		{
 			printAreaDefined = false;
 		}
-
-		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);		// value defined in Kinematics.h
-		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);		// value defined in Kinematics.h
 
 		if (seen)
 		{

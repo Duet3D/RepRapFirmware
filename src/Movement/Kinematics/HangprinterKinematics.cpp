@@ -70,7 +70,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(HangprinterKinematics)
 
 // Constructor
 HangprinterKinematics::HangprinterKinematics() noexcept
-	: RoundBedKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
+	: RoundBedKinematics(KinematicsType::scara, true, true)
 {
 	Init();
 }
@@ -129,15 +129,13 @@ const char *HangprinterKinematics::GetName(bool forStatusReport) const noexcept
 }
 
 // Set the parameters from a M665, M666 or M669 command
-// Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
+// Return true if we changed any parameters that affect the geometry. Set 'error' true if there was an error, otherwise leave it alone.
 bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) /*override*/
 {
 	if (mCode == 669)
 	{
+		const bool seenNonGeometry = TryConfigureSegmentation(gb);
 		bool seen = false;
-		bool seenNonGeometry = false;
-		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);
-		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);
 		if (gb.TryGetFloatArray('A', 3, anchorA, reply, seen))
 		{
 			error = true;
@@ -155,16 +153,17 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		}
 		gb.TryGetFValue('D', anchorDz, seen);
 
-		if (seen || seenNonGeometry)
-		{
-			Recalc();
-		}
 		if (gb.Seen('P'))
 		{
 			printRadius = gb.GetFValue();
 			seen = true;
 		}
-		else if (!gb.Seen('K'))
+
+		if (seen)
+		{
+			Recalc();
+		}
+		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
 			reply.printf("Kinematics is Hangprinter with ABC anchor coordinates (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f),"
 							"D anchor Z coordinate %.2f, print radius %.1f, segments/sec %d, min. segment length %.2f",

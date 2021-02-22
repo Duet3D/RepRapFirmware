@@ -49,20 +49,23 @@ enum class SegmentedMoveState : uint8_t
 struct ExtendedRawMove : public RawMove
 {
 	float initialCoords[MaxAxes];									// the initial positions of the axes
+	float previousX, previousY;										// the initial X and Y coordinates in user space of the previous move
+	float previousXYDistance;										// the XY length of that previous move
 	unsigned int segmentsLeft;										// the number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;										// the total number of segments left in the complete move
-	float arcCentre[MaxAxes];
-	float arcRadius;
-	float arcCurrentAngle;
-	float arcAngleIncrement;
-	unsigned int arcAxis0, arcAxis1;
-	float angleIncrementSine, angleIncrementCosine;
-	float sine, cosine;
-	unsigned int segmentsTillNextFullCalc;
-	bool doingArcMove;
+	unsigned int arcAxis0, arcAxis1;								// the axis numbers of the arc before we apply axis mapping
+	float arcCentre[MaxAxes];										// the arc centres coordinates of those axes that are moving in arcs
+	float arcRadius;												// the arc radius before we apply scaling factors
+	float arcCurrentAngle;											// the current angle of the arc relative to the +arcAxis0 direction
+	float currentAngleSine, currentAngleCosine;						// the sine and cosine of the current angle
+	float arcAngleIncrement;										// the amount by which we increment the arc angle in each segment
+	float angleIncrementSine, angleIncrementCosine;					// the sine and cosine of the increment
+	unsigned int segmentsTillNextFullCalc;							// how may more segments we can do before we need to do the full calculation instead of the quicker one
+	bool doingArcMove;												// true if we are doing an arc move
+	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
 	SegmentedMoveState segMoveState;
 
-	float GetProportionDone() const noexcept;
+	float GetProportionDone() const noexcept;						// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
 };
 
 #if SUPPORT_ASYNC_MOVES

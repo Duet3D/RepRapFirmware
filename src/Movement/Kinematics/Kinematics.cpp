@@ -23,8 +23,8 @@
 const char * const Kinematics::HomeAllFileName = "homeall.g";
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
-Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0) noexcept
-	: segmentsPerSecond(segsPerSecond), minSegmentLength(minSegLength), useSegmentation(segsPerSecond > 0.0), useRawG0(doUseRawG0), type(t)
+Kinematics::Kinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept
+	: segmentsPerSecond(DefaultSegmentsPerSecond), minSegmentLength(DefaultMinSegmentLength), useSegmentation(doUseSegmentation), useRawG0(doUseRawG0), type(t)
 {
 }
 
@@ -45,6 +45,23 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef&
 		error = true;
 	}
 	return false;
+}
+
+// Try to configure the segmentation parameters. Return true if we did.
+bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) noexcept
+{
+	bool seen = false;
+	gb.TryGetFValue('S', segmentsPerSecond, seen);
+	gb.TryGetFValue('T', minSegmentLength, seen);
+	if (seen)
+	{
+		useSegmentation = minSegmentLength > 0.0 && segmentsPerSecond > 0.0;
+		if (useSegmentation)
+		{
+			reciprocalMinSegmentLength = 1.0 / minSegmentLength;
+		}
+	}
+	return seen;
 }
 
 // Return true if the specified XY position is reachable by the print head reference point.

@@ -55,7 +55,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LinearDeltaKinematics)
 
 #endif
 
-LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::linearDelta, -1.0, 0.0, true), numTowers(UsualNumTowers)
+LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::linearDelta, false, true), numTowers(UsualNumTowers)
 {
 	Init();
 }
@@ -928,6 +928,8 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 
 	case 669:
 		{
+			const bool seenSeg = TryConfigureSegmentation(gb);			// configure optional segmentation
+
 			// X and Y give the X and Y coordinates of the additional towers beyond the first three
 			// The correct number of L parameters must have been given in the M665 command first
 			size_t numX = 0, numY = 0;
@@ -953,11 +955,18 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 					return true;
 				}
 			}
+
 			if (numX != 0 || numY != 0)
 			{
 				Recalc();				// recalculate the homed carriage heights
 				return true;
 			}
+
+			if (seenSeg)
+			{
+				return false;
+			}
+
 			return Kinematics::Configure(mCode, gb, reply, error);
 		}
 

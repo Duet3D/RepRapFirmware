@@ -49,9 +49,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	static constexpr float DefaultSegmentsPerSecond = 100.0;
-	static constexpr float DefaultMinSegmentSize = 0.2;
-
 	static constexpr const char *Home5BarScaraFileName = "home5barscara.g";
 
 	void Recalc() noexcept;

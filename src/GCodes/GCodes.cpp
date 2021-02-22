@@ -1868,8 +1868,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	// Set up the initial coordinates
 	memcpyf(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes);
 
-	// Deal with axis movement
-	const float initialXY[2] = { currentUserPosition[X_AXIS], currentUserPosition[Y_AXIS] };
+	// Save the current position, we need it possibly later
+	float initialUserPosition[MaxAxes];
+	memcpyf(initialUserPosition, currentUserPosition, numVisibleAxes);
+
 	AxesBitmap axesMentioned;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
@@ -2074,19 +2076,30 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		{
 			// This kinematics approximates linear motion by means of segmentation.
 			// We assume that the segments will be smaller than the mesh spacing.
-			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialXY[0]) + fsquare(currentUserPosition[Y_AXIS] - initialXY[1]));
+			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]));
 			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
-			moveBuffer.totalSegments = (unsigned int)max<long>(1, min<long>(lrintf(xyLength/kin.GetMinSegmentLength()), lrintf(moveTime * kin.GetSegmentsPerSecond())));
-		}
-		else if (reprap.GetMove().IsUsingMesh() && (moveBuffer.isCoordinated || machineType == MachineType::fff))
-		{
-			ReadLocker locker(reprap.GetMove().heightMapLock);
-			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
-			moveBuffer.totalSegments = max<unsigned int>(1, heightMap.GetMinimumSegments(currentUserPosition[X_AXIS] - initialXY[0], currentUserPosition[Y_AXIS] - initialXY[1]));
+			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(xyLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else
 		{
 			moveBuffer.totalSegments = 1;
+		}
+		if (reprap.GetMove().IsUsingMesh() && (moveBuffer.isCoordinated || machineType == MachineType::fff))
+		{
+			ReadLocker locker(reprap.GetMove().heightMapLock);
+			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
+			const GridDefinition& grid = heightMap.GetGrid();
+			const unsigned int minMeshSegments = max<unsigned int>(
+					1,
+					heightMap.GetMinimumSegments(
+							currentUserPosition[grid.GetNumber0()] - initialUserPosition[grid.GetNumber0()],
+							currentUserPosition[grid.GetNumber1()] - initialUserPosition[grid.GetNumber1()]
+					)
+			);
+			if (minMeshSegments > moveBuffer.totalSegments)
+			{
+				moveBuffer.totalSegments = minMeshSegments;
+			}
 		}
 	}
 
@@ -2426,6 +2439,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	moveBuffer.arcAxis0 = axis0;
 	moveBuffer.arcAxis1 = axis1;
 	moveBuffer.doingArcMove = true;
+	moveBuffer.xyPlane = (selectedPlane == 0);
 	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
@@ -2542,21 +2556,21 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 			{
 				// Do the full calculation
 				moveBuffer.segmentsTillNextFullCalc = SegmentsPerFulArcCalculation;
-				moveBuffer.sine = sinf(moveBuffer.arcCurrentAngle);
-				moveBuffer.cosine = cosf(moveBuffer.arcCurrentAngle);
+				moveBuffer.currentAngleCosine = cosf(moveBuffer.arcCurrentAngle);
+				moveBuffer.currentAngleSine = sinf(moveBuffer.arcCurrentAngle);
 			}
 			else
 			{
 				// Speed up the computation by doing two multiplications and an addition or subtraction instead of a sine or cosine
 				--moveBuffer.segmentsTillNextFullCalc;
-				const float newCosine = moveBuffer.cosine * moveBuffer.angleIncrementCosine - moveBuffer.sine   * moveBuffer.angleIncrementSine;
-				const float newSine   = moveBuffer.sine   * moveBuffer.angleIncrementCosine + moveBuffer.cosine * moveBuffer.angleIncrementSine;
-				moveBuffer.cosine = newCosine;
-				moveBuffer.sine = newSine;
+				const float newCosine = moveBuffer.currentAngleCosine * moveBuffer.angleIncrementCosine - moveBuffer.currentAngleSine   * moveBuffer.angleIncrementSine;
+				const float newSine   = moveBuffer.currentAngleSine   * moveBuffer.angleIncrementCosine + moveBuffer.currentAngleCosine * moveBuffer.angleIncrementSine;
+				moveBuffer.currentAngleCosine = newCosine;
+				moveBuffer.currentAngleSine = newSine;
 			}
 			axisMap0 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis0);
 			axisMap1 = Tool::GetAxisMapping(moveBuffer.tool, moveBuffer.arcAxis1);
-			moveBuffer.cosXyAngle = moveBuffer.angleIncrementCosine;
+			moveBuffer.cosXyAngle = (moveBuffer.xyPlane) ? moveBuffer.angleIncrementCosine : 1.0;
 		}
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
@@ -2564,12 +2578,12 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 			if (moveBuffer.doingArcMove && axisMap1.IsBitSet(drive))
 			{
 				// Axis1 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.sine;
+				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.currentAngleSine;
 			}
 			else if (moveBuffer.doingArcMove && axisMap0.IsBitSet(drive))
 			{
 				// Axis0 or a substitute in the selected plane
-				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.cosine;
+				moveBuffer.initialCoords[drive] = moveBuffer.arcCentre[drive] + moveBuffer.arcRadius * axisScaleFactors[drive] * moveBuffer.currentAngleCosine;
 			}
 			else
 			{
