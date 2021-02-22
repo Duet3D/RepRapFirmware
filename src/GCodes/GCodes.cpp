@@ -1868,8 +1868,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	// Set up the initial coordinates
 	memcpyf(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes);
 
-	// Deal with axis movement
-	const float initialXY[2] = { currentUserPosition[X_AXIS], currentUserPosition[Y_AXIS] };
+	// Save the current position, we need it possibly later
+	float initialUserPosition[MaxAxes];
+	memcpyf(initialUserPosition, currentUserPosition, numVisibleAxes);
+
 	AxesBitmap axesMentioned;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
@@ -2074,19 +2076,30 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		{
 			// This kinematics approximates linear motion by means of segmentation.
 			// We assume that the segments will be smaller than the mesh spacing.
-			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialXY[0]) + fsquare(currentUserPosition[Y_AXIS] - initialXY[1]));
+			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]));
 			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
-			moveBuffer.totalSegments = (unsigned int)max<long>(1, min<long>(lrintf(xyLength/kin.GetMinSegmentLength()), lrintf(moveTime * kin.GetSegmentsPerSecond())));
-		}
-		else if (reprap.GetMove().IsUsingMesh() && (moveBuffer.isCoordinated || machineType == MachineType::fff))
-		{
-			ReadLocker locker(reprap.GetMove().heightMapLock);
-			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
-			moveBuffer.totalSegments = max<unsigned int>(1, heightMap.GetMinimumSegments(currentUserPosition[X_AXIS] - initialXY[0], currentUserPosition[Y_AXIS] - initialXY[1]));
+			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(xyLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else
 		{
 			moveBuffer.totalSegments = 1;
+		}
+		if (reprap.GetMove().IsUsingMesh() && (moveBuffer.isCoordinated || machineType == MachineType::fff))
+		{
+			ReadLocker locker(reprap.GetMove().heightMapLock);
+			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
+			const GridDefinition& grid = heightMap.GetGrid();
+			const unsigned int minMeshSegments = max<unsigned int>(
+					1,
+					heightMap.GetMinimumSegments(
+							currentUserPosition[grid.GetNumber0()] - initialUserPosition[grid.GetNumber0()],
+							currentUserPosition[grid.GetNumber1()] - initialUserPosition[grid.GetNumber1()]
+					)
+			);
+			if (minMeshSegments > moveBuffer.totalSegments)
+			{
+				moveBuffer.totalSegments = minMeshSegments;
+			}
 		}
 	}
 
