@@ -208,6 +208,7 @@ public:
 	bool UseRawG0() const noexcept { return useRawG0; }
 	float GetSegmentsPerSecond() const noexcept pre(UseSegmentation()) { return segmentsPerSecond; }
 	float GetMinSegmentLength() const noexcept pre(UseSegmentation()) { return minSegmentLength; }
+	float GetReciprocalMinSegmentLength() const noexcept pre(UseSegmentation()) { return reciprocalMinSegmentLength; }
 
 protected:
 	DECLARE_OBJECT_MODEL_VIRTUAL
@@ -230,6 +231,7 @@ protected:
 
 	float segmentsPerSecond;				// if we are using segmentation, the target number of segments/second
 	float minSegmentLength;					// if we are using segmentation, the minimum segment size
+	float reciprocalMinSegmentLength;		// if we are using segmentation, the reciprocal of minimum segment size
 
 	static const char * const HomeAllFileName;
 

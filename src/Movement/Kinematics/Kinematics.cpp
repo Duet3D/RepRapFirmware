@@ -56,6 +56,10 @@ bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) noexcept
 	if (seen)
 	{
 		useSegmentation = minSegmentLength > 0.0 && segmentsPerSecond > 0.0;
+		if (useSegmentation)
+		{
+			reciprocalMinSegmentLength = 1.0 / minSegmentLength;
+		}
 	}
 	return seen;
 }
