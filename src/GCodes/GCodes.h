@@ -198,7 +198,6 @@ public:
 	void SetMappedFanSpeed(float f) noexcept;									// Set the speeds of fans mapped for the current tool
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
 	void EmergencyStop() noexcept;												// Cancel everything
-	bool GetLastPrintingHeight(float& height) const noexcept;					// Get the height in user coordinates of the last printing move
 	bool AtxPowerControlled() const noexcept { return atxPowerControlled; }
 
 	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };		// Get the default grid definition
@@ -530,7 +529,6 @@ private:
 	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
 	float currentUserPosition[MaxAxes];			// The current position of the axes as commanded by the input gcode, after accounting for workplace offset, before accounting for tool offset and Z hop
 	float currentZHop;							// The amount of Z hop that is currently applied
-	float lastPrintingMoveHeight;				// the Z coordinate in the last printing move, or a negative value if we don't know it
 
 	// The following contain the details of moves that the Move module fetches
 	// CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!

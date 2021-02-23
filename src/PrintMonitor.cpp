@@ -57,14 +57,15 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintOrSimulatedDuration()), 										ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
 	{ "filePosition",		OBJECT_MODEL_FUNC_NOSELF((uint64_t)reprap.GetGCodes().GetFilePosition()),											ObjectModelEntryFlags::live },
-	{ "firstLayerDuration", OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetFirstLayerDuration())), 									ObjectModelEntryFlags::none },
+	{ "firstLayerDuration", OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)reprap.GetGCodes().GetLastDuration()), 							ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
-	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), (int32_t)self->currentLayer), 												ObjectModelEntryFlags::none },
-	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetCurrentLayerTime())), 										ObjectModelEntryFlags::live },
+	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), (int32_t)self->currentLayer), 												ObjectModelEntryFlags::live },
+	{ "layerTime",			OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
+	{ "pauseDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetPauseDuration())),											ObjectModelEntryFlags::live },
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::live },
-	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::none },
+	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
 
 	// 1. ParsedFileInfo members
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 										ObjectModelEntryFlags::none },
@@ -82,11 +83,11 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	// 2. TimesLeft members
 	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(fileBased)),													ObjectModelEntryFlags::live },
-	{ "layer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(layerBased)),													ObjectModelEntryFlags::live },
+	{ "layer", 				OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 10 + TRACK_OBJECT_NAMES, 11, 4 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 11 + TRACK_OBJECT_NAMES, 11, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
@@ -97,16 +98,40 @@ int32_t PrintMonitor::GetPrintOrSimulatedDuration() const noexcept
 
 #endif
 
-PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), isPrinting(false), heatingUp(false),
-	printStartTime(0), pauseStartTime(0), totalPauseTime(0), currentLayer(0), warmUpDuration(0.0),
-	firstLayerDuration(0.0), firstLayerFilament(0.0), firstLayerProgress(0.0), lastLayerChangeTime(0.0),
-	lastLayerFilament(0.0), lastLayerZ(0.0), numLayerSamples(0), layerEstimatedTimeLeft(0.0), printingFileParsed(false)
+PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), isPrinting(false), heatingUp(false), paused(false), printingFileParsed(false)
 {
 }
 
 void PrintMonitor::Init() noexcept
 {
+	Reset();
 	lastUpdateTime = millis();
+}
+
+// This is called at various times including when a print starts. Don't reset slicerTimeLeft or totalFilamentNeeded.
+void PrintMonitor::Reset() noexcept
+{
+	WriteLocker locker(printMonitorLock);
+
+	heatingUp = paused = false;
+	currentLayer = 0;
+	printStartTime = pauseStartTime = lastSnapshotTime = lastLayerChangeTime = 0;
+	totalPauseTime = warmUpDuration = lastSnapshotNonPrintingTime = 0;
+	lastLayerDuration = 0;
+	lastSnapshotFileFraction = lastSnapshotFilamentUsed = 0.0;
+	fileProgressRate = filamentProgressRate = 0.0;
+	reprap.JobUpdated();
+}
+
+void PrintMonitor::UpdatePrintingFileInfo() noexcept
+{
+	totalFilamentNeeded = printingFileInfo.filamentNeeded[0];
+	for (size_t extruder = 1; extruder < printingFileInfo.numFilaments; extruder++)
+	{
+		totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
+	}
+	slicerTimeLeft = printingFileInfo.printTime;
+	printingFileParsed = true;
 }
 
 bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
@@ -132,10 +157,8 @@ void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info
 		WriteLocker locker(printMonitorLock);
 		filenameBeingPrinted.copy(filename);
 		printingFileInfo = info;
-		printingFileParsed = true;
+		UpdatePrintingFileInfo();
 	}
-
-	TaskCriticalSectionLocker taskLock;
 	reprap.JobUpdated();
 }
 
@@ -144,7 +167,7 @@ GCodeResult PrintMonitor::ProcessM73(GCodeBuffer& gb, const StringRef& reply) TH
 	if (gb.Seen('R'))
 	{
 		slicerTimeLeft = gb.GetFValue() * MinutesToSeconds;
-		whenSlicerTimeLeftSet = millis();
+		whenSlicerTimeLeftSet = millis64();
 	}
 	// M73 without P Q R or S parameters reports print progress in some implementations, but we don't currently do that
 	return GCodeResult::ok;
@@ -173,117 +196,89 @@ void PrintMonitor::Spin() noexcept
 			{
 				return;
 			}
+			UpdatePrintingFileInfo();
 		}
 #else
 		return;
 #endif
 	}
 
-	// Don't do any updates if the print has been paused
-	if (gCodes.GetPauseState() != PauseState::notPaused)
-	{
-		if (pauseStartTime == 0)
-		{
-			pauseStartTime = millis64();
-		}
-		return;
-	}
-
 	// Otherwise collect some stats after a certain period of time
-	const uint32_t now = millis();
-	if (IsPrinting()
+	const uint64_t now = millis64();
+	if (isPrinting
 #if SUPPORT_ROLAND
 		&& !reprap.GetRoland()->Active()
 #endif
-		&& now - lastUpdateTime > PRINTMONITOR_UPDATE_INTERVAL)
+		&& (uint32_t)now - lastUpdateTime > UpdateIntervalMillis)
 	{
-		// Adjust the actual print time if the print was paused before
-		if (pauseStartTime != 0)
+		if (gCodes.GetPauseState() != PauseState::notPaused)
 		{
-			totalPauseTime += millis64() - pauseStartTime;
-			pauseStartTime = 0;
-		}
-
-		if (gCodes.IsHeatingUp())
-		{
-			if (!heatingUp)
+			if (!paused)
 			{
-				heatingUp = true;
-				heatingStartedTime = millis64();
+				pauseStartTime = now;
+				paused = true;
 			}
 		}
 		else
 		{
-			if (heatingUp)
+			if (paused)
 			{
-				heatingUp = false;
-				warmUpDuration += (millis64() - heatingStartedTime) * MillisToSeconds;
+				const uint64_t pauseTime = now - pauseStartTime;
+				totalPauseTime += pauseTime;
+				whenSlicerTimeLeftSet += pauseTime;
+				paused = false;
 			}
 
-			float currentZ;
-			if (gCodes.GetLastPrintingHeight(currentZ))
+			if (gCodes.IsHeatingUp())
 			{
-				// Print is in progress and filament is being extruded
-				//TODO use lastLayerNumberNotified and lastLayerStartHeightNotified if available
-				if (currentLayer == 0)
+				if (!heatingUp)
 				{
-					currentLayer = 1;
-
-					// See if we need to determine the first layer height (usually smaller than the nozzle diameter)
-					WriteLocker locker(printMonitorLock);
-					if (printingFileInfo.firstLayerHeight == 0.0 && currentZ < platform.GetNozzleDiameter() * 1.5)
-					{
-						printingFileInfo.firstLayerHeight = currentZ;
-					}
-					reprap.JobUpdated();
+					heatingUp = true;
+					heatingStartedTime = now;
 				}
-				else if (printingFileInfo.layerHeight > 0.0)			// if layer height is known
+			}
+			else
+			{
+				if (heatingUp)
 				{
-					if (currentLayer == 1)
-					{
-						// Check if we've finished the first layer
-						ReadLocker locker(printMonitorLock);
-						if (currentZ > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
-						{
-							FirstLayerComplete();
-							currentLayer++;
+					const uint64_t heatingTime = now - heatingStartedTime;
+					warmUpDuration += heatingTime;
+					whenSlicerTimeLeftSet += heatingTime;
+					heatingUp = false;
+				}
 
-							lastLayerZ = currentZ;
-							lastLayerChangeTime = GetPrintDuration();
-							reprap.JobUpdated();
-						}
-					}
-					// Else check for following layer changes
-					else if (currentZ > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
-					{
-						ReadLocker locker(printMonitorLock);
-						LayerComplete();
-						currentLayer++;
+				const uint64_t totalNonPrintingTime = warmUpDuration + totalPauseTime;
+				const uint32_t printTimeSinceLastSnapshot = (uint32_t)((now - lastSnapshotTime) - (totalNonPrintingTime - lastSnapshotNonPrintingTime));
+				if (printTimeSinceLastSnapshot >= SnapshotIntervalSeconds * 1000)
+				{
+					// Take a new snapshot
+					const float currentFraction = FractionOfFilePrinted();
+					const float currentFilamentUsed = gCodes.GetTotalRawExtrusion();
 
-						// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
-						lastLayerZ = (printingFileInfo.layerHeight > 0.0)
-										? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
-											: currentZ;
-						lastLayerChangeTime = GetPrintDuration();
-						reprap.JobUpdated();
-					}
+					TaskCriticalSectionLocker lock;
+					fileProgressRate = 1000.0 * (currentFraction - lastSnapshotFileFraction)/printTimeSinceLastSnapshot;
+					filamentProgressRate = 1000.0 * (currentFilamentUsed - lastSnapshotFilamentUsed)/printTimeSinceLastSnapshot;
+					lastSnapshotFileFraction = currentFraction;
+					lastSnapshotFilamentUsed = currentFilamentUsed;
+					lastSnapshotNonPrintingTime = totalNonPrintingTime;
+					lastSnapshotTime = now;
 				}
 			}
 		}
-		lastUpdateTime = now;
+		lastUpdateTime = (uint32_t)now;
 	}
-}
-
-// Return the first layer print time
-float PrintMonitor::GetFirstLayerDuration() const noexcept
-{
-	return (firstLayerDuration > 0.0) ? firstLayerDuration : ((currentLayer > 0) ? GetPrintDuration() - warmUpDuration : 0.0);
 }
 
 // Return the warm-up time
 float PrintMonitor::GetWarmUpDuration() const noexcept
 {
-	return (heatingUp) ? warmUpDuration + (millis64() - heatingStartedTime) * MillisToSeconds : warmUpDuration;
+	return (float)((heatingUp) ? warmUpDuration + (millis64() - heatingStartedTime) : warmUpDuration) * MillisToSeconds;
+}
+
+// Return the total pause time
+float PrintMonitor::GetPauseDuration() const noexcept
+{
+	return (float)((paused) ? totalPauseTime + (millis64() - pauseStartTime) : totalPauseTime) * MillisToSeconds;
 }
 
 // Notifies this class that a file has been set for printing
@@ -300,26 +295,18 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 	else
 # endif
 	{
-		printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished);
-		slicerTimeLeft = (printingFileParsed) ? printingFileInfo.printTime : 0.0;
-		whenSlicerTimeLeftSet = millis();
+		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished)
+		{
+			UpdatePrintingFileInfo();
+		}
+		else
+		{
+			totalFilamentNeeded = 0.0;
+			slicerTimeLeft = 0.0;
+		}
 	}
 	reprap.JobUpdated();
 #endif
-}
-
-void PrintMonitor::Reset() noexcept
-{
-	WriteLocker locker(printMonitorLock);
-	currentLayer = numLayerSamples = 0;
-	pauseStartTime = totalPauseTime = 0;
-	firstLayerDuration = firstLayerFilament = firstLayerProgress = 0.0;
-	layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
-	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
-	lastLayerNumberNotified = 0;
-	lastLayerStartHeightNotified = 0.0;
-	slicerTimeLeft = 0.0;
-	reprap.JobUpdated();
 }
 
 // Tell this class that the file set for printing is now actually processed
@@ -327,107 +314,27 @@ void PrintMonitor::StartedPrint() noexcept
 {
 	Reset();
 	isPrinting = true;
-	heatingUp = false;
-	printStartTime = millis64();
+	printStartTime = lastSnapshotTime = whenSlicerTimeLeftSet = millis64();
 }
 
 void PrintMonitor::StoppedPrint() noexcept
 {
 	Reset();
-	isPrinting = heatingUp = printingFileParsed = false;
+	isPrinting = printingFileParsed = false;
 }
 
 // Set the current layer number as given in a comment
 // The Z move to the new layer probably hasn't been done yet, so just store the layer number.
 void PrintMonitor::SetLayerNumber(uint32_t layerNumber) noexcept
 {
-	lastLayerNumberNotified = layerNumber;
+	currentLayer = layerNumber;
 }
 
 // Set the printing height of the new layer
 // The Z move to the new layer probably hasn't been done yet, so just store the layer print height.
 void PrintMonitor::SetLayerZ(float layerZ) noexcept
 {
-	lastLayerStartHeightNotified = layerZ;
-}
-
-// Called when the first layer has been finished
-void PrintMonitor::FirstLayerComplete() noexcept
-{
-	firstLayerFilament = gCodes.GetTotalRawExtrusion();
-	firstLayerDuration = GetPrintDuration() - warmUpDuration;
-	firstLayerProgress = FractionOfFilePrinted();
-
-	// Update layer-based estimation time (if the object and layer heights are known)
-	// This won't be very accurate, but at least something can be sent the web interface and to PanelDue
-	if (printingFileInfo.layerHeight > 0.0 && printingFileInfo.objectHeight > printingFileInfo.layerHeight)
-	{
-		unsigned int layersToPrint = lrintf((printingFileInfo.objectHeight - printingFileInfo.firstLayerHeight) / printingFileInfo.layerHeight) + 1;
-		layerEstimatedTimeLeft = firstLayerDuration * FIRST_LAYER_SPEED_FACTOR * (layersToPrint - 1);
-	}
-}
-
-// This is called whenever a layer greater than 2 has been finished
-void PrintMonitor::LayerComplete() noexcept
-{
-	// Record a new set of layer, filament and file stats
-	const float extrRawTotal = gCodes.GetTotalRawExtrusion();
-	if (numLayerSamples < MAX_LAYER_SAMPLES)
-	{
-		if (numLayerSamples == 0)
-		{
-			filamentUsagePerLayer[numLayerSamples] = extrRawTotal - firstLayerFilament;
-			layerDurations[numLayerSamples] = GetPrintDuration() - warmUpDuration;
-		}
-		else
-		{
-			filamentUsagePerLayer[numLayerSamples] = extrRawTotal - lastLayerFilament;
-			layerDurations[numLayerSamples] = GetPrintDuration() - lastLayerChangeTime;
-		}
-		fileProgressPerLayer[numLayerSamples] = FractionOfFilePrinted();
-		numLayerSamples++;
-	}
-	else
-	{
-		for(size_t i = 1; i < MAX_LAYER_SAMPLES; i++)
-		{
-			layerDurations[i - 1] = layerDurations[i];
-			filamentUsagePerLayer[i - 1] = filamentUsagePerLayer[i];
-			fileProgressPerLayer[i - 1] = fileProgressPerLayer[i];
-		}
-
-		layerDurations[MAX_LAYER_SAMPLES - 1] = GetPrintDuration() - lastLayerChangeTime;
-		filamentUsagePerLayer[MAX_LAYER_SAMPLES - 1] = extrRawTotal - lastLayerFilament;
-		fileProgressPerLayer[MAX_LAYER_SAMPLES - 1] = FractionOfFilePrinted();
-	}
-	lastLayerFilament = extrRawTotal;
-
-	// Update layer-based estimation time (if the object and layer heights are known)
-	if (printingFileInfo.layerHeight > 0.0 && printingFileInfo.objectHeight > printingFileInfo.layerHeight)
-	{
-		// Calculate the average layer time and include the first layer if possible
-		float avgLayerTime = (numLayerSamples < MAX_LAYER_SAMPLES)
-								? firstLayerDuration * FIRST_LAYER_SPEED_FACTOR
-								: 0.0;
-		for(size_t layer = 0; layer < numLayerSamples; layer++)
-		{
-			avgLayerTime += layerDurations[layer];
-		}
-		avgLayerTime /= (numLayerSamples < MAX_LAYER_SAMPLES) ? numLayerSamples + 1 : numLayerSamples;
-
-		// Estimate the layer-based time left
-		const unsigned int totalLayers = lrintf((printingFileInfo.objectHeight - printingFileInfo.firstLayerHeight) / printingFileInfo.layerHeight) + 1;
-		if (currentLayer < totalLayers)
-		{
-			// Current layer is within reasonable boundaries, so an estimation can be made
-			layerEstimatedTimeLeft = avgLayerTime * (totalLayers - currentLayer);
-		}
-		else
-		{
-			// Current layer is higher than the maximum number of layers. Assume the print has almost finished
-			layerEstimatedTimeLeft = 0.1;
-		}
-	}
+	// Currently we don't use the layerZ value
 }
 
 float PrintMonitor::FractionOfFilePrinted() const noexcept
@@ -452,126 +359,52 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 		return 0.0;
 	}
 
-	// How long have we been printing continuously?
-	float realPrintDuration = GetPrintDuration() - warmUpDuration;
-
 	switch (method)
 	{
 		case fileBased:
-		{
-			// Can we provide an estimation at all?
-			const float fractionPrinted = FractionOfFilePrinted();
-			if (fractionPrinted < ESTIMATION_MIN_FILE_USAGE || heatingUp)
+			if (lastSnapshotTime != printStartTime)
 			{
-				// No, we haven't printed enough of the file yet. We can't provide an estimation at this moment
-				return 0.0;
-			}
-			if (fractionPrinted == 1.0)
-			{
-				// No, but the file has been processed entirely. It won't take long until the print finishes
-				return 0.1;
-			}
-
-			// See how long it takes per progress
-			float duration, fractionPrintedInLayers;
-			if (numLayerSamples == 0)
-			{
-				duration = firstLayerDuration;
-				fractionPrintedInLayers = firstLayerProgress;
-			}
-			else if (numLayerSamples == 1)
-			{
-				duration = layerDurations[0];
-				fractionPrintedInLayers = fileProgressPerLayer[0] - firstLayerProgress;
-			}
-			else if (numLayerSamples > 1)
-			{
-				duration = 0.0;
-				for(size_t sample = 1; sample < numLayerSamples; sample++)
-				{
-					duration += layerDurations[sample];
-				}
-				fractionPrintedInLayers = fileProgressPerLayer[numLayerSamples - 1] - fileProgressPerLayer[0];
-			}
-
-			// Can we use these values?
-			if (fractionPrintedInLayers < ESTIMATION_MIN_FILE_USAGE)
-			{
-				// No - only provide a rough estimation
-				return max<float>(realPrintDuration * (1.0 / fractionPrinted) - realPrintDuration, 0.1);
-			}
-
-			// Yes...
-			return max<float>(duration * (1.0 - fractionPrinted) / fractionPrintedInLayers, 0.1);
-		}
-
-		case filamentBased:
-		{
-			// Need some file information, otherwise this method won't work
-			if (currentLayer == 0 || printingFileInfo.numFilaments == 0
-#if SUPPORT_ROLAND
-					|| reprap.GetRoland()->Active()
-#endif
-				)
-			{
-				return 0.0;
-			}
-
-			// Sum up the filament usage and the filament needed
-			const float extrRawTotal = gCodes.GetTotalRawExtrusion();
-			float totalFilamentNeeded = printingFileInfo.filamentNeeded[0];
-			for (size_t extruder = 1; extruder < printingFileInfo.numFilaments; extruder++)
-			{
-				totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
-			}
-
-			// If we have a reasonable amount of filament extruded, calculate estimated times left
-			if (totalFilamentNeeded > 0.0 && extrRawTotal > totalFilamentNeeded * ESTIMATION_MIN_FILAMENT_USAGE)
-			{
-				// Do we have more total filament extruded than reported by the file
-				if (extrRawTotal >= totalFilamentNeeded)
-				{
-					// Yes - assume the print has almost finished
-					return 0.1;
-				}
-
-				// Get filament usage per layer
-				float filamentRate = 0.0;
-				if (numLayerSamples > 0)
-				{
-					for(size_t i = 0; i < numLayerSamples; i++)
-					{
-						filamentRate += filamentUsagePerLayer[i] / layerDurations[i];
-					}
-					filamentRate /= numLayerSamples;
-				}
-				else if (firstLayerDuration > 0.0)
-				{
-					filamentRate = firstLayerFilament / firstLayerDuration;
-				}
-
-				// Can we provide a good estimation?
-				if (filamentRate == 0.0)
-				{
-					// No - calculate time left based on the filament we have extruded so far
-					return realPrintDuration * (totalFilamentNeeded - extrRawTotal) / extrRawTotal;
-				}
-
-				return (totalFilamentNeeded - extrRawTotal) / filamentRate;
+				return (1.0 - FractionOfFilePrinted())/fileProgressRate;
 			}
 			break;
-		}
 
-		case layerBased:
-			// Layer-based estimations are made after each layer change, only reflect this value
-			if (layerEstimatedTimeLeft > 0.0)
+		case filamentBased:
+			if (lastSnapshotTime != printStartTime)
 			{
-				return max<float>(0.1, layerEstimatedTimeLeft - (GetPrintDuration() - lastLayerChangeTime));
+				// Sum up the filament usage and the filament needed
+				const float extrRawTotal = gCodes.GetTotalRawExtrusion();
+
+				// If we have a reasonable amount of filament extruded, calculate estimated times left
+				if (totalFilamentNeeded > 0.0 && extrRawTotal > totalFilamentNeeded * MinFilamentUsageForEstimation)
+				{
+					// Do we have more total filament extruded than reported by the file
+					if (extrRawTotal >= totalFilamentNeeded)
+					{
+						// Yes - assume the print has almost finished
+						return 1.0;
+					}
+
+					return (totalFilamentNeeded - extrRawTotal)/filamentProgressRate;
+				}
 			}
 			break;
 
 		case slicerBased:
-			return max<float>(0.1, slicerTimeLeft - (millis() - whenSlicerTimeLeftSet) * MillisToSeconds);
+			if (slicerTimeLeft > 0.0)
+			{
+				const int64_t now = millis64();
+				int64_t adjustment = (int64_t)(now - whenSlicerTimeLeftSet);			// add the time since we stored the slicer time left
+				if (heatingUp)
+				{
+					adjustment -= (int64_t)(now - heatingStartedTime);					// subtract any recent heating time
+				}
+				if (paused)
+				{
+					adjustment -= (int64_t)(now - pauseStartTime);						// subtract any current pause time
+				}
+				return max<float>(1.0, slicerTimeLeft - adjustment * MillisToSeconds);
+			}
+			break;
 	}
 
 	return 0.0;
@@ -597,8 +430,9 @@ float PrintMonitor::GetPrintDuration() const noexcept
 		return 0.0;
 	}
 
-	const uint64_t printDuration = ((pauseStartTime != 0) ? pauseStartTime : millis64()) - printStartTime - totalPauseTime;
-	return (float)printDuration * 0.001;
+	const uint64_t now = millis64();
+	const uint64_t pauseTime = (paused) ? totalPauseTime + (now - pauseStartTime) : totalPauseTime;
+	return (float)(now - printStartTime - pauseTime) * MillisToSeconds;
 }
 
-// vim: ts=4:sw=4
+// End

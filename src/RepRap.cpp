@@ -1741,10 +1741,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	else if (type == 3)
 	{
 		// Current Layer
-		response->catf(",\"currentLayer\":%d", printMonitor->GetCurrentLayer());
+		response->catf(",\"currentLayer\":%d,", printMonitor->GetCurrentLayer());
 
-		// Current Layer Time
-		response->catf(",\"currentLayerTime\":%.1f,", (double)(printMonitor->GetCurrentLayerTime()));
+		// Current Layer Time is no longer reported
 
 		// Raw Extruder Positions
 		AppendFloatArray(response, "extrRaw", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetRawExtruderTotalByDrive(extruder); }, 1);
@@ -1755,12 +1754,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		// Byte position of the file being printed
 		response->catf(",\"filePosition\":%lu", gCodes->GetFilePosition());
 
-		// First Layer Duration
-		response->catf(",\"firstLayerDuration\":%.1f", (double)(printMonitor->GetFirstLayerDuration()));
+		// First Layer Duration is no longer included
 
-		// First Layer Height
-		// NB: This shouldn't be needed any more, but leave it here for the case that the file-based first-layer detection fails
-		response->catf(",\"firstLayerHeight\":%.2f", (double)(printMonitor->GetFirstLayerHeight()));
+		// First Layer Height is no longer included
 
 		// Print Duration
 		response->catf(",\"printDuration\":%.1f", (double)(printMonitor->GetPrintDuration()));
@@ -1769,13 +1765,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		response->catf(",\"warmUpDuration\":%.1f", (double)(printMonitor->GetWarmUpDuration()));
 
 		/* Print Time Estimations */
-		{
-			// Based on file progress
-			response->catf(",\"timesLeft\":{\"file\":%.1f,\"filament\":%.1f,\"layer\":%.1f}",
-							(double)(printMonitor->EstimateTimeLeft(fileBased)),
-							(double)(printMonitor->EstimateTimeLeft(filamentBased)),
-							(double)(printMonitor->EstimateTimeLeft(layerBased)));
-		}
+		response->catf(",\"timesLeft\":{\"file\":%.1f,\"filament\":%.1f}", (double)(printMonitor->EstimateTimeLeft(fileBased)), (double)(printMonitor->EstimateTimeLeft(filamentBased)));
 	}
 
 	response->cat('}');
@@ -2011,10 +2001,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 		if (printMonitor->IsPrinting())
 		{
 			// Send estimated times left based on file progress, filament usage, and layers
-			response->catf(",\"timesLeft\":[%.1f,%.1f,%.1f]",
+			response->catf(",\"timesLeft\":[%.1f,%.1f,0.0]",
 					(double)(printMonitor->EstimateTimeLeft(fileBased)),
-					(double)(printMonitor->EstimateTimeLeft(filamentBased)),
-					(double)(printMonitor->EstimateTimeLeft(layerBased)));
+					(double)(printMonitor->EstimateTimeLeft(filamentBased)));
 		}
 	}
 	else if (type == 3)

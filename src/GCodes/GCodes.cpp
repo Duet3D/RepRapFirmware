@@ -257,7 +257,6 @@ void GCodes::Reset() noexcept
 	}
 
 	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
-	lastPrintingMoveHeight = -1.0;
 	newToolNumber = -1;
 
 	moveBuffer.tool = nullptr;
@@ -1999,11 +1998,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	}
 	else
 	{
-		if (&gb == fileGCode && !gb.IsDoingFileMacro() && moveBuffer.hasPositiveExtrusion && axesMentioned.Intersects(XyAxes))
-		{
-			lastPrintingMoveHeight = currentUserPosition[Z_AXIS];
-		}
-
 		ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned);
 																				// apply tool offset, baby stepping, Z hop and axis scaling
 		AxesBitmap effectiveAxesHomed = axesVirtuallyHomed;
@@ -3184,7 +3178,6 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	fileGCode->StartNewFile();
 
 	lastFilamentError = FilamentSensorStatus::ok;
-	lastPrintingMoveHeight = -1.0;
 	reprap.GetPrintMonitor().StartedPrint();
 	platform.MessageF(LogWarn,
 						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
@@ -4808,17 +4801,6 @@ size_t GCodes::GetAxisNumberForLetter(const char axisLetter) const noexcept
 Pwm_t GCodes::ConvertLaserPwm(float reqVal) const noexcept
 {
 	return (uint16_t)constrain<long>(lrintf((reqVal * 65535)/laserMaxPower), 0, 65535);
-}
-
-// Get the height in user coordinates of the last printing move
-bool GCodes::GetLastPrintingHeight(float& height) const noexcept
-{
-	if (IsReallyPrinting() && lastPrintingMoveHeight > 0.0)
-	{
-		height = lastPrintingMoveHeight;
-		return true;
-	}
-	return false;
 }
 
 // Assign the heightmap using the given parameters, returning true if they were valid
