@@ -410,7 +410,7 @@ RepRap::RepRap() noexcept
 	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
 	  toolList(nullptr), currentTool(nullptr), lastWarningMillis(0),
 	  activeExtruders(0), activeToolHeaters(0), numToolsToReport(0),
-	  ticksInSpinState(0), heatTaskIdleTicks(0), debug(0),
+	  ticksInSpinState(0), heatTaskIdleTicks(0),
 	  beepFrequency(0), beepDuration(0), beepTimer(0),
 	  previousToolNumber(-1),
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
@@ -420,6 +420,7 @@ RepRap::RepRap() noexcept
 														// because a disconnected SBC interface can generate noise which may trigger interrupts and DMA
 #endif
 {
+	ClearDebug();
 	// Don't call constructors for other objects here
 }
 
@@ -927,24 +928,20 @@ void RepRap::EmergencyStop() noexcept
 	platform->StopLogging();
 }
 
-void RepRap::SetDebug(Module m, bool enable) noexcept
+void RepRap::SetDebug(Module m, uint32_t flags) noexcept
 {
 	if (m < numModules)
 	{
-		if (enable)
-		{
-			debug |= (1u << m);
-		}
-		else
-		{
-			debug &= ~(1u << m);
-		}
+		debugMaps[m].SetFromRaw(flags);
 	}
 }
 
 void RepRap::ClearDebug() noexcept
 {
-	debug = 0;
+	for (DebugFlags& dm : debugMaps)
+	{
+		dm.Clear();
+	}
 }
 
 void RepRap::PrintDebug(MessageType mt) noexcept
@@ -952,16 +949,16 @@ void RepRap::PrintDebug(MessageType mt) noexcept
 	platform->Message((MessageType)(mt | PushFlag), "Debugging enabled for modules:");
 	for (size_t i = 0; i < numModules; i++)
 	{
-		if ((debug & (1u << i)) != 0)
+		if (debugMaps[i].IsNonEmpty())
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u - %#" PRIx32 ")", GetModuleName(i), i, debugMaps[i].GetRaw());
 		}
 	}
 
 	platform->Message((MessageType)(mt | PushFlag), "\nDebugging disabled for modules:");
 	for (size_t i = 0; i < numModules; i++)
 	{
-		if ((debug & (1u << i)) == 0)
+		if (debugMaps[i].IsEmpty())
 		{
 			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
 		}

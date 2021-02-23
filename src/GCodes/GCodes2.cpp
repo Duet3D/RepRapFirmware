@@ -1583,31 +1583,54 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 111: // Debug level
-			if (gb.Seen('S'))
 			{
-				const bool dbv = (gb.GetIValue() != 0);
+				bool seen = false;
+				uint32_t flags = 0;
+				Module module = Module::noModule;
+				if (gb.Seen('S'))
+				{
+					flags = gb.GetUIValue();
+					if (flags != 0)
+					{
+						flags = 0xFFFFFFFF;
+					}
+					seen = true;
+				}
+				else if (gb.Seen('D'))
+				{
+					flags = gb.GetUIValue();
+					seen = true;
+				}
 				if (gb.Seen('P'))
 				{
-					reprap.SetDebug(static_cast<Module>(gb.GetIValue()), dbv);
-					reprap.PrintDebug(gb.GetResponseMessageType());
-					return true;
+					module = static_cast<Module>(gb.GetLimitedUIValue('P', Module::numModules));
+					seen = true;
 				}
-				if (dbv)
+				if (seen)
 				{
-					// Repetier Host sends M111 with various S parameters to enable echo and similar features, which used to turn on all out debugging.
-					// But it's not useful to enable all debugging anyway. So we no longer allow debugging to be enabled without a P parameter.
-					reply.copy("Use P parameter to specify which module to debug");
+					if (module != Module::noModule)
+					{
+						reprap.SetDebug(module, flags);
+						reprap.PrintDebug(gb.GetResponseMessageType());
+						return true;
+					}
+					else if (flags != 0)
+					{
+						// Repetier Host sends M111 with various S parameters to enable echo and similar features, which used to turn on all out debugging.
+						// But it's not useful to enable all debugging anyway. So we no longer allow debugging to be enabled without a P parameter.
+						reply.copy("Use P parameter to specify which module to debug");
+					}
+					else
+					{
+						// M111 S0 still clears all debugging
+						reprap.ClearDebug();
+					}
 				}
 				else
 				{
-					// M111 S0 still clears all debugging
-					reprap.ClearDebug();
+					reprap.PrintDebug(gb.GetResponseMessageType());
+					return true;
 				}
-			}
-			else
-			{
-				reprap.PrintDebug(gb.GetResponseMessageType());
-				return true;
 			}
 			break;
 

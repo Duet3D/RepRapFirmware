@@ -42,7 +42,7 @@ void BinaryParser::DecodeCommand() noexcept
 {
 	if (gb.bufferState == GCodeBufferState::parsingGCode)
 	{
-		if (reprap.Debug(moduleGcodes))
+		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()))
 		{
 			String<MaxCodeBufferSize> buf;
 			AppendFullCommand(buf.GetRef());

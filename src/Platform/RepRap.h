@@ -53,6 +53,8 @@ struct MessageBox
 	MessageBox() noexcept : active(false), seq(0) { }
 };
 
+typedef Bitmap<uint32_t> DebugFlags;
+
 class RepRap INHERIT_OBJECT_MODEL
 {
 public:
@@ -67,8 +69,9 @@ public:
 	void DeferredDiagnostics(MessageType mtype) noexcept { diagnosticsDestination = mtype; }
 	void Timing(MessageType mtype) noexcept;
 
-	bool Debug(Module module) const noexcept;
-	void SetDebug(Module m, bool enable) noexcept;
+	bool Debug(Module module) const noexcept { return debugMaps[module].IsNonEmpty(); }
+	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m]; }
+	void SetDebug(Module m, uint32_t flags) noexcept;
 	void ClearDebug() noexcept;
 	void PrintDebug(MessageType mt) noexcept;
 	Module GetSpinningModule() const noexcept;
@@ -270,7 +273,7 @@ private:
 	uint16_t heatTaskIdleTicks;
 	uint32_t fastLoop, slowLoop;
 
-	uint32_t debug;
+	DebugFlags debugMaps[Module::numModules];
 
 	String<RepRapPasswordLength> password;
 	String<MachineNameLength> myName;
@@ -303,7 +306,6 @@ private:
 // A single instance of the RepRap class contains all the others
 extern RepRap reprap;
 
-inline bool RepRap::Debug(Module m) const noexcept { return debug & (1u << m); }
 inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
 
 inline Tool* RepRap::GetCurrentTool() const noexcept { return currentTool; }
