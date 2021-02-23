@@ -1143,12 +1143,6 @@ bool DataTransfer::WriteHeightMap() noexcept
 {
 	const GridDefinition& grid = reprap.GetMove().GetGrid();
 
-	// TODO: Remove this check once DCS is aware of the new format
-	if (!(grid.letter0 == 'X' && grid.letter1 == 'Y'))
-	{
-		return false;
-	}
-
 	size_t numPoints = reprap.GetMove().AccessHeightMap().UsingHeightMap() ? grid.NumPoints() : 0;
 	size_t bytesToWrite = sizeof(HeightMapHeader) + numPoints * sizeof(float);
 	if (!CanWritePacket(bytesToWrite))
@@ -1161,15 +1155,15 @@ bool DataTransfer::WriteHeightMap() noexcept
 
 	// Write heightmap header
 	HeightMapHeader *header = WriteDataHeader<HeightMapHeader>();
-	header->xMin = grid.min0;
-	header->xMax = grid.max0;
-	header->xSpacing = grid.spacing0;
-	header->yMin = grid.min1;
-	header->yMax = grid.max1;
-	header->ySpacing = grid.spacing1;
+	header->xMin = grid.GetMin(0);
+	header->xMax = grid.GetMax(0);
+	header->xSpacing = grid.GetSpacing(0);
+	header->yMin = grid.GetMin(1);
+	header->yMax = grid.GetMax(1);
+	header->ySpacing = grid.GetSpacing(1);
 	header->radius = grid.radius;
-	header->numX = grid.num0;
-	header->numY = grid.num1;
+	header->numX = grid.NumAxisPoints(0);
+	header->numY = grid.NumAxisPoints(1);
 
 	// Write Z points
 	if (numPoints != 0)

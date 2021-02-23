@@ -96,7 +96,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),			ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
-	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),	ObjectModelEntryFlags::none },
+	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),	ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),				ObjectModelEntryFlags::none },
@@ -601,10 +601,10 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 			float zCorrection = 0.0;
 			unsigned int numCorrections = 0;
 			const GridDefinition& grid = GetGrid();
-			const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetNumber1());
+			const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetAxisNumber(1));
 
 			// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-			Tool::GetAxisMapping(tool, grid.GetNumber0())
+			Tool::GetAxisMapping(tool, grid.GetAxisNumber(0))
 				.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int)
 							{
 								const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
@@ -637,10 +637,10 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const 
 		float zCorrection = 0.0;
 		unsigned int numCorrections = 0;
 		const GridDefinition& grid = GetGrid();
-		const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetNumber1());
+		const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetAxisNumber(1));
 
 		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-		Tool::GetAxisMapping(tool, grid.GetNumber0())
+		Tool::GetAxisMapping(tool, grid.GetAxisNumber(0))
 			.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int)
 						{
 							const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
@@ -686,7 +686,7 @@ void Move::SetZeroHeightError(const float coords[MaxAxes]) noexcept
 		memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
 		AxisTransform(tempCoords, nullptr);
 		const GridDefinition& grid = GetGrid();
-		zShift = -heightMap.GetInterpolatedHeightError(tempCoords[grid.GetNumber0()], tempCoords[grid.GetNumber1()]);
+		zShift = -heightMap.GetInterpolatedHeightError(tempCoords[grid.GetAxisNumber(0)], tempCoords[grid.GetAxisNumber(1)]);
 	}
 	else
 	{

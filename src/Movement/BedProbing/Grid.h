@@ -23,19 +23,19 @@ public:
 
 	GridDefinition() noexcept;
 
-	uint32_t NumAxis0points() const noexcept { return num0; }
-	uint32_t NumAxis1points() const noexcept { return num1; }
-	uint32_t NumPoints() const noexcept { return num0 * num1; }
-	uint8_t GetLetter0() const noexcept { return letter0; }
-	uint8_t GetLetter1() const noexcept { return letter1; }
-	uint8_t GetNumber0() const noexcept { return axis0Number; }
-	uint8_t GetNumber1() const noexcept { return axis1Number; }
-	float GetCoordinate0(unsigned int axis0Index) const noexcept;
-	float GetCoordinate1(unsigned int axis1Index) const noexcept;
+	char GetAxisLetter(size_t axis) const noexcept pre(axis < 2) { return letters[axis]; }
+	uint8_t GetAxisNumber(size_t axis) const noexcept pre(axis < 2) { return axisNumbers[axis]; }
+	float GetMin(size_t axis) const noexcept pre(axis < 2) { return mins[axis]; }
+	float GetMax(size_t axis) const noexcept pre(axis < 2) { return maxs[axis]; }
+	float GetSpacing(size_t axis) const noexcept pre(axis < 2) { return spacings[axis]; }
+
+	uint32_t NumAxisPoints(size_t axis) const noexcept pre(axis < 2) { return nums[axis]; }
+	uint32_t NumPoints() const noexcept { return nums[0] * nums[1]; }
+	float GetCoordinate(size_t axis, size_t coordinateIndex) pre(axis < 2) const noexcept { return mins[axis] + (coordinateIndex * spacings[axis]); }
 	bool IsInRadius(float x, float y) const noexcept;
 	bool IsValid() const noexcept { return isValid; }
 
-	bool Set(const char axesLetter[2], const float axis0Range[2], const float axis1Range[2], float pRadius, const float pSpacings[2]) noexcept;
+	bool Set(const char axisLetters[2], const float axis0Range[2], const float axis1Range[2], float pRadius, const float pSpacings[2]) noexcept;
 	void PrintParameters(const StringRef& r) const noexcept;
 	void WriteHeadingAndParameters(const StringRef& r) const noexcept;
 	static int CheckHeading(const StringRef& s) noexcept;
@@ -55,15 +55,15 @@ private:
 	static const char * const HeightMapLabelLines[];				// The line we write to the height map file listing the parameter names
 
 	// Primary parameters
-	char letter0, letter1;											// Axes letters for this grid
-	float min0, max0, min1, max1;									// The edges of the grid for G29 probing
+	char letters[2];												// Axis letters for this grid
+	float mins[2], maxs[2];											// The edges of the grid for G29 probing
 	float radius;													// The grid radius to probe
-	float spacing0, spacing1;										// The spacing of the grid probe points
+	float spacings[2];												// The spacings of the grid probe points
 
 	// Derived parameters
-	uint8_t axis0Number, axis1Number;								// Axes numbers for this grid
-	uint32_t num0, num1;
-	float recipAxis0spacing, recipAxis1spacing;
+	uint8_t axisNumbers[2];											// Axis numbers for this grid
+	uint32_t nums[2];												// Number of probe points in each direction
+	float recipAxisSpacings[2];										// Reciprocals of the axis spacings
 	bool isValid;
 };
 
@@ -117,7 +117,7 @@ private:
 #endif
 	bool useMap;													// True to do bed compensation
 
-	uint32_t GetMapIndex(uint32_t axis0Index, uint32_t axis1Index) const noexcept { return (axis1Index * def.NumAxis0points()) + axis0Index; }
+	uint32_t GetMapIndex(uint32_t axis0Index, uint32_t axis1Index) const noexcept { return (axis1Index * def.NumAxisPoints(0)) + axis0Index; }
 
 	float InterpolateAxis0Axis1(uint32_t axis0Index, uint32_t axis1Index, float axis0Frac, float axis1Frac) const noexcept;
 };

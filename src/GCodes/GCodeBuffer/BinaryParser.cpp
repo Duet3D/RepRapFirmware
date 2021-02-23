@@ -561,7 +561,6 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 	}
 }
 
-//TODO need a way to pass arrays in which one or more elements is an expression from DSF to RRF
 template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)

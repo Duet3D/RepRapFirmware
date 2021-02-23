@@ -18,7 +18,7 @@ class ExpressionParser
 public:
 	ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column = -1) noexcept;
 
-	ExpressionValue Parse(bool evaluate = true, uint8_t priority = 0) THROWS(GCodeException);
+	ExpressionValue Parse(bool evaluate = true) THROWS(GCodeException);
 	bool ParseBoolean() THROWS(GCodeException);
 	float ParseFloat() THROWS(GCodeException);
 	int32_t ParseInteger() THROWS(GCodeException);
@@ -33,6 +33,7 @@ private:
 	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
 	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;
 
+	ExpressionValue ParseInternal(bool evaluate = true, uint8_t priority = 0) THROWS(GCodeException);
 	ExpressionValue ParseExpectKet(bool evaluate, char expectedKet) THROWS(GCodeException);
 	ExpressionValue ParseNumber() noexcept
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
@@ -61,6 +62,7 @@ private:
 	int column;
 	char stringBufferStorage[StringBufferLength];
 	StringBuffer stringBuffer;
+	String<MaxVariableNameLength> obsoleteField;
 };
 
 #endif /* SRC_GCODES_GCODEBUFFER_EXPRESSIONPARSER_H_ */

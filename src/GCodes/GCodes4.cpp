@@ -537,12 +537,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// Move to the current probe point
 			Move& move = reprap.GetMove();
 			const GridDefinition& grid = move.AccessHeightMap().GetGrid();
-			const float axis0Coord = grid.GetCoordinate0(gridAxis0index);
-			const float axis1Coord = grid.GetCoordinate1(gridAxis1index);
+			const float axis0Coord = grid.GetCoordinate(0, gridAxis0index);
+			const float axis1Coord = grid.GetCoordinate(1, gridAxis1index);
 			if (grid.IsInRadius(axis0Coord, axis1Coord))
 			{
-				const size_t axis0Num = grid.GetNumber0();
-				const size_t axis1Num = grid.GetNumber1();
+				const size_t axis0Num = grid.GetAxisNumber(0);
+				const size_t axis1Num = grid.GetAxisNumber(1);
 				AxesBitmap axes;
 				axes.SetBit(axis0Num);
 				axes.SetBit(axis1Num);
@@ -567,7 +567,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else
 				{
-					platform.MessageF(WarningMessage, "Skipping grid point %c=%.1f, %c=%.1f because Z probe cannot reach it\n", grid.GetLetter0(), (double)axis0Coord, grid.GetLetter1(), (double)axis1Coord);
+					platform.MessageF(WarningMessage, "Skipping grid point %c=%.1f, %c=%.1f because Z probe cannot reach it\n", grid.GetAxisLetter(0), (double)axis0Coord, grid.GetAxisLetter(1), (double)axis1Coord);
 					gb.SetState(GCodeState::gridProbing6);
 				}
 			}
@@ -765,7 +765,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			else
 			{
 				// Even row, so increasing X
-				if (gridAxis0index + 1 == hm.GetGrid().NumAxis0points())
+				if (gridAxis0index + 1 == hm.GetGrid().NumAxisPoints(0))
 				{
 					++gridAxis1index;
 				}
@@ -775,7 +775,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 			}
 
-			if (gridAxis1index == hm.GetGrid().NumAxis1points())
+			if (gridAxis1index == hm.GetGrid().NumAxisPoints(1))
 			{
 				// Done all the points
 				gb.AdvanceState();

@@ -9,6 +9,7 @@
 
 #include "GCodeBuffer.h"
 #include <RepRap.h>
+#include <Platform.h>
 #include <General/NamedEnum.h>
 #include <General/NumericConverter.h>
 
@@ -35,8 +36,20 @@ ExpressionValue ExpressionParser::ParseExpectKet(bool evaluate, char closingBrac
 	return rslt;
 }
 
-// Evaluate an expression, stopping before any binary operators with priority 'priority' or lower
-ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(GCodeException)
+// Evaluate an expression
+ExpressionValue ExpressionParser::Parse(bool evaluate) THROWS(GCodeException)
+{
+	obsoleteField.Clear();
+	ExpressionValue result = ParseInternal(evaluate);
+	if (!obsoleteField.IsEmpty())
+	{
+		reprap.GetPlatform().MessageF(WarningMessage, "obsolete object model field %s queried\n", obsoleteField.c_str());
+	}
+	return result;
+}
+
+// Evaluate an expression internally, stopping before any binary operators with priority 'priority' or lower
+ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority) THROWS(GCodeException)
 {
 	// Lists of binary operators and their priorities
 	static constexpr const char *operators = "?^&|!=<>+-*/";				// for multi-character operators <= and >= and != this is the first character
@@ -57,7 +70,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 	case '-':
 		AdvancePointer();
-		val = Parse(evaluate, UnaryPriority);
+		val = ParseInternal(evaluate, UnaryPriority);
 		switch (val.GetType())
 		{
 		case TypeCode::Int32:
@@ -75,7 +88,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 	case '+':
 		AdvancePointer();
-		val = Parse(evaluate, UnaryPriority);
+		val = ParseInternal(evaluate, UnaryPriority);
 		switch (val.GetType())
 		{
 		case TypeCode::Uint32:
@@ -103,7 +116,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		}
 		else
 		{
-			val = Parse(evaluate, UnaryPriority);
+			val = ParseInternal(evaluate, UnaryPriority);
 			if (val.GetType() == TypeCode::CString)
 			{
 				const char* s = val.sVal;
@@ -130,7 +143,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 
 	case '!':
 		AdvancePointer();
-		val = Parse(evaluate, UnaryPriority);
+		val = ParseInternal(evaluate, UnaryPriority);
 		ConvertToBool(val, evaluate);
 		val.bVal = !val.bVal;
 		break;
@@ -158,6 +171,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		char opChar = CurrentCharacter();
 		if (opChar == 0)	// don't pass null to strchr
 		{
+
 			return val;
 		}
 
@@ -206,7 +220,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		case '&':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = Parse(evaluate && val.bVal, opPrio);		// get the next operand
+				ExpressionValue val2 = ParseInternal(evaluate && val.bVal, opPrio);		// get the next operand
 				if (val.bVal)
 				{
 					ConvertToBool(val2, evaluate);
@@ -218,7 +232,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		case '|':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = Parse(evaluate && !val.bVal, opPrio);		// get the next operand
+				ExpressionValue val2 = ParseInternal(evaluate && !val.bVal, opPrio);		// get the next operand
 				if (!val.bVal)
 				{
 					ConvertToBool(val2, evaluate);
@@ -230,20 +244,20 @@ ExpressionValue ExpressionParser::Parse(bool evaluate, uint8_t priority) THROWS(
 		case '?':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = Parse(evaluate && val.bVal, opPrio);		// get the second operand
+				ExpressionValue val2 = ParseInternal(evaluate && val.bVal, opPrio);		// get the second operand
 				if (CurrentCharacter() != ':')
 				{
 					throw ConstructParseException("expected ':'");
 				}
 				AdvancePointer();
-				ExpressionValue val3 = Parse(evaluate && !val.bVal, opPrio - 1);	// get the third operand, which may be a further conditional expression
+				ExpressionValue val3 = ParseInternal(evaluate && !val.bVal, opPrio - 1);	// get the third operand, which may be a further conditional expression
 				return (val.bVal) ? val2 : val3;
 			}
 
 		default:
 			// Handle binary operators that always evaluate both operands
 			{
-				ExpressionValue val2 = Parse(evaluate, opPrio);	// get the next operand
+				ExpressionValue val2 = ParseInternal(evaluate, opPrio);	// get the next operand
 				switch(opChar)
 				{
 				case '+':
@@ -1000,7 +1014,16 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	}
 
 	// If we are not evaluating then the object expression doesn't have to exist, so don't retrieve it because that might throw an error
-	return (evaluate) ? reprap.GetObjectValue(context, nullptr, id.c_str()) : ExpressionValue(nullptr);
+	if (evaluate)
+	{
+		ExpressionValue value = reprap.GetObjectValue(context, nullptr, id.c_str());
+		if (context.ObsoleteFieldQueried() && obsoleteField.IsEmpty())
+		{
+			obsoleteField.copy(id.c_str());
+		}
+		return value;
+	}
+	return ExpressionValue(nullptr);
 }
 
 // Parse a quoted string, given that the current character is double-quote
