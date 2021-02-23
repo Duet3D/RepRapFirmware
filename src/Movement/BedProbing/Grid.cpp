@@ -117,39 +117,39 @@ bool GridDefinition::Set(const char axisLetters[2], const float axis0Range[2], c
 // If the grid is valid then set up recipAxis0spacing and recipAxis1spacing
 void GridDefinition::CheckValidity(bool setNum0Num1) noexcept
 {
-	if (max0 - min0 < MinRange || spacings[0] < MinSpacing || max1 - min1 < MinRange || spacings[1] < MinSpacing)
+	if (maxs[0] - mins[0] < MinRange || spacings[0] < MinSpacing || maxs[1] - mins[1] < MinRange || spacings[1] < MinSpacing)
 	{
 		isValid = false;
 		if (setNum0Num1)
 		{
-			num0 = num1 = 0;
+			nums[0] = nums[1] = 0;
 		}
 	}
 	else
 	{
 		if (setNum0Num1)
 		{
-			num0 = (uint32_t)((max0 - min0)/spacings[0]) + 1;
-			num1 = (uint32_t)((max1 - min1)/spacings[1]) + 1;
+			nums[0] = (uint32_t)((maxs[0] - mins[0])/spacings[0]) + 1;
+			nums[1] = (uint32_t)((maxs[1] - mins[1])/spacings[1]) + 1;
 		}
 
-		const size_t axis0NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(letter0);
-		const size_t axis1NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(letter1);
+		const size_t axis0NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(letters[0]);
+		const size_t axis1NumForLetter = reprap.GetGCodes().GetAxisNumberForLetter(letters[1]);
 		const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 
 		isValid = NumPoints() != 0 && NumPoints() <= MaxGridProbePoints
 				&& (radius < 0.0 || radius >= 1.0)
-				&& NumAxis0points() <= MaxAxis0GridPoints
-				&& letter0 != letter1
+				&& nums[0] <= MaxAxis0GridPoints
+				&& letters[0] != letters[1]
 				&& axis0NumForLetter < numVisibleAxes
 				&& axis1NumForLetter < numVisibleAxes;
 
 		if (isValid)
 		{
-			axis0Number = axis0NumForLetter;
-			axis1Number = axis1NumForLetter;
-			recipAxis0spacing = 1.0/spacings[0];
-			recipAxis1spacing = 1.0/spacings[1];
+			axisNumbers[0] = axis0NumForLetter;
+			axisNumbers[1] = axis1NumForLetter;
+			recipAxisSpacings[0] = 1.0/spacings[0];
+			recipAxisSpacings[1] = 1.0/spacings[1];
 		}
 	}
 }
