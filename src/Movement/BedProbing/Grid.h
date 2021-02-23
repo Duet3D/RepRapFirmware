@@ -48,7 +48,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	void CheckValidity() noexcept;
+	void CheckValidity(bool setNum0Num1) noexcept;
 
 	static constexpr float MinSpacing = 0.1;						// The minimum point spacing allowed
 	static constexpr float MinRange = 1.0;							// The minimum X and Y range allowed
