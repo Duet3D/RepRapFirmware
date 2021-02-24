@@ -581,7 +581,9 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const uint32_t stepsToLimit = mp.cart.accelStopStep - nextStep;
 			if (stepsToLimit == 1)
 			{
-				state = DMState::steady;
+				state = (mp.cart.decelStartStep > mp.cart.accelStopStep) ? DMState::steady
+						: (reverseStartStep > mp.cart.accelStopStep) ? DMState::decel0
+							: DMState::reverse;
 			}
 			else if (stepInterval < DDA::MinCalcIntervalCartesian)
 			{
@@ -617,7 +619,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const uint32_t stepsToLimit = mp.cart.decelStartStep - nextStep;
 			if (stepsToLimit == 1)
 			{
-				state = DMState::decel0;
+				state = (reverseStartStep > mp.cart.decelStartStep) ? DMState::decel0
+							: DMState::reverse;
 			}
 			else if (stepInterval < DDA::MinCalcIntervalCartesian)
 			{
