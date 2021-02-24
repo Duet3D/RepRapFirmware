@@ -2183,25 +2183,29 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		const float dSquared = fsquare(deltaAxis0) + fsquare(deltaAxis1);	// square of the distance between start and end points
 
 		// The distance between start and end points must not be zero
-		constexpr const char *badArcParametersMessage = "G2/G3: radius is too small to reach endpoint";
 		if (dSquared == 0.0)
 		{
-			err = badArcParametersMessage;
+			err = "G2/G3: distance between start and end points must not be zero when specifying a radius";
 			return true;
 		}
 
 		// The perpendicular must have a real length (possibly zero)
 		const float hSquared = fsquare(rParam) - dSquared/4;				// square of the length of the perpendicular from the mid point to the arc centre
-		float hDivD = sqrtf(hSquared/dSquared);
-		if (hDivD < 0.0)
+
+		// When the arc is exactly 180deg, rounding error may make hSquared slightly negative instead of zero
+		float hDivD;
+		if (hSquared >= 0.0)
 		{
-			// When the arc is exactly 180deg, rounding error may make hDivD slightly negative instead of zero
-			if (hDivD < -0.001)
+			hDivD = sqrtf(hSquared/dSquared);
+		}
+		else
+		{
+			if (hSquared < -0.01 * fsquare(rParam))
 			{
-				err = badArcParametersMessage;
+				err = "G2/G3: radius is too small to reach endpoint";
 				return true;
 			}
-			hDivD = 0.0;													// this has the effect of increasing the radius slightly do that the maths works
+			hDivD = 0.0;													// this has the effect of increasing the radius slightly so that the maths works
 		}
 
 		// If hDivD is nonzero then there are two possible positions for the arc centre, giving a short arc (less than 180deg) or a long arc (more than 180deg).
