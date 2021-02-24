@@ -2200,7 +2200,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		}
 		else
 		{
-			if (hSquared < -0.01 * fsquare(rParam))
+			if (hSquared < -0.02 * fsquare(rParam))							// allow the radius to be up to 1% too short
 			{
 				err = "G2/G3: radius is too small to reach endpoint";
 				return true;
