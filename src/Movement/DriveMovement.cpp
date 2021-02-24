@@ -598,6 +598,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 					shiftFactor = 1;		// double stepping
 				}
 			}
+
+			stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 			const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
 #if DM_USE_FPU
 			const float adjustedStartSpeedTimesCdivA = (float)(dda.afterPrepare.startSpeedTimesCdivA + mp.cart.compensationClocks);
@@ -632,6 +634,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 					shiftFactor = 1;		// double stepping
 				}
 			}
+
+			stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 			const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
 			nextCalcStepTime =
 #if DM_USE_FPU
@@ -673,6 +677,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 					shiftFactor = 1;		// double stepping
 				}
 			}
+
+			stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 			const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
 			const uint32_t adjustedTopSpeedTimesCdivDPlusDecelStartClocks = dda.afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks - mp.cart.compensationClocks;
 #if DM_USE_FPU
@@ -709,6 +715,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 					shiftFactor = 1;		// double stepping
 				}
 			}
+
+			stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 			const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
 			const uint32_t adjustedTopSpeedTimesCdivDPlusDecelStartClocks = dda.afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks - mp.cart.compensationClocks;
 			nextCalcStepTime = adjustedTopSpeedTimesCdivDPlusDecelStartClocks
@@ -723,8 +731,6 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	default:
 		return false;
 	}
-
-	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 
 	// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
 	stepInterval = (nextCalcStepTime > nextStepTime)
