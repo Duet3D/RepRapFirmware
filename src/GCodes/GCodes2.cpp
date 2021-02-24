@@ -140,7 +140,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	{
 	case 0: // Rapid move
 	case 1: // Ordinary move
-		if (moveBuffer.segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
+		if (moveBuffer.segmentsLeft != 0)							// do this check first to avoid locking movement unnecessarily
 		{
 			return false;
 		}
@@ -156,9 +156,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			if (err != nullptr)
 			{
-				AbortPrint(gb);
-				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);	// force the user position to be restored
-				gb.MachineState().SetError(err);	// must do this *after* calling SetState
+				gb.SetState(GCodeState::abortWhenMovementFinished);		// empty the queue before ending simulation, and force the user position to be restored
+				gb.MachineState().SetError(err);						// must do this *after* calling SetState
 			}
 		}
 		break;
@@ -166,7 +165,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	case 2: // Clockwise arc
 	case 3: // Anti clockwise arc
 		// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
-		if (moveBuffer.segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
+		if (moveBuffer.segmentsLeft != 0)								// do this check first to avoid locking movement unnecessarily
 		{
 			return false;
 		}
@@ -182,9 +181,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			if (err != nullptr)
 			{
-				AbortPrint(gb);
-				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);	// force the user position to be restored
-				gb.MachineState().SetError(err);	// must do this *after* calling SetState
+				gb.SetState(GCodeState::abortWhenMovementFinished);		// empty the queue before ending simulation, and force the user position to be restored
+				gb.MachineState().SetError(err);						// must do this *after* calling SetState
 			}
 		}
 		break;

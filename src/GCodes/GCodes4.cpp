@@ -29,9 +29,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	// Perform the next operation of the state machine for this gcode source
 	GCodeResult stateMachineResult = GCodeResult::ok;
 
-	switch (gb.GetState())
+	const GCodeState state = gb.GetState();
+	switch (state)
 	{
 	case GCodeState::waitingForSpecialMoveToComplete:
+	case GCodeState::abortWhenMovementFinished:
 		if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for standstill and fetch the current position
 		{
 			// Check whether we made any G1 S3 moves and need to set the axis limits
@@ -55,7 +57,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				reply.copy("Z_move_comp");
 			}
+
 			gb.SetState(GCodeState::normal);
+			if (state == GCodeState::abortWhenMovementFinished)
+			{
+				AbortPrint(gb);
+			}
 		}
 		break;
 
