@@ -147,6 +147,7 @@ enum class DMState : uint8_t
 	decel5,
 	decel6,
 	decel7,
+	reversing,
 	reverse
 };
 

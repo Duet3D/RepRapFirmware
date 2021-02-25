@@ -417,13 +417,28 @@ bool Move::LowPowerOrStallPause(RestorePoint& rp) noexcept
 void Move::Diagnostics(MessageType mtype) noexcept
 {
 	// Get the type of bed compensation in use
-	String<StringLength50> bedCompString;
-	bedCompString.copy(GetCompensationTypeString());
+#if 0	// debug only
+	String<StringLength256> scratchString;
+#else
+	String<StringLength50> scratchString;
+#endif
+	scratchString.copy(GetCompensationTypeString());
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype, "=== Move ===\nDMs created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
-						DriveMovement::NumCreated(), longestGcodeWaitInterval, bedCompString.c_str(), (double)zShift);
+						DriveMovement::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift);
 	longestGcodeWaitInterval = 0;
+
+#if 0	// debug only
+	scratchString.copy("Steps requested/done:");
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		scratchString.catf(" %" PRIu32 "/%" PRIu32, DDA::stepsRequested[driver], DDA::stepsDone[driver]);
+		DDA::stepsRequested[driver] = DDA::stepsDone[driver] = 0;
+	}
+	scratchString.cat('\n');
+	p.Message(mtype, scratchString.c_str());
+#endif
 
 #if DDA_LOG_PROBE_CHANGES
 	// Temporary code to print Z probe trigger positions

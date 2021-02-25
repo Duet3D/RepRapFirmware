@@ -310,6 +310,9 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 			if (delta != 0)
 			{
+#if 0	// debug only
+				stepsRequested[drive] += labs(delta);
+#endif
 				if (reprap.GetPlatform().IsAxisRotational(drive))
 				{
 					rotationalAxesMoving = true;
@@ -1968,6 +1971,11 @@ pre(state == frozen)
 uint32_t DDA::lastStepLowTime = 0;
 uint32_t DDA::lastDirChangeTime = 0;
 
+#if 0	// debug only
+uint32_t DDA::stepsRequested[NumDirectDrivers];
+uint32_t DDA::stepsDone[NumDirectDrivers];
+#endif
+
 // Generate the step pulses of internal drivers used by this DDA
 // Sets the status to 'completed' if the move is complete and the next move should be started
 void DDA::StepDrivers(Platform& p) noexcept
@@ -1989,6 +1997,9 @@ void DDA::StepDrivers(Platform& p) noexcept
 	while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 	{
 		driversStepping |= p.GetDriversBitmap(dm->drive);
+#if 0	// debug only
+		++stepsDone[dm->drive];
+#endif
 		dm = dm->nextDM;
 	}
 

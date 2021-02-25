@@ -178,6 +178,10 @@ public:
 	static uint32_t lastStepLowTime;										// when we last completed a step pulse to a slow driver
 	static uint32_t lastDirChangeTime;										// when we last change the DIR signal to a slow driver
 
+#if 0	// debug only
+	static uint32_t stepsRequested[NumDirectDrivers], stepsDone[NumDirectDrivers];
+#endif
+
 private:
 	DriveMovement *FindDM(size_t drive) const noexcept;						// find the DM for a drive if there is one even if it is completed
 	DriveMovement *FindActiveDM(size_t drive) const noexcept;				// find the DM for a drive if there is one but only if it is active
