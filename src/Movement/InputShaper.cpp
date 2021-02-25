@@ -66,7 +66,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		type = (InputShaperType)gb.GetLimitedUIValue('S', InputShaperType::NumValues);
+		type = (InputShaperType)gb.GetLimitedUIValue('P', InputShaperType::NumValues);
 	}
 	else if (seen && type == InputShaperType::none)
 	{
