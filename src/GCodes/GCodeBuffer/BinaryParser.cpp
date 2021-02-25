@@ -418,42 +418,6 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 	}
 }
 
-void BinaryParser::GetReducedString(const StringRef& str) THROWS(GCodeException)
-{
-	str.Clear();
-	if (seenParameterValue != nullptr && seenParameter->type == DataType::String)
-	{
-		while (reducedBytesRead < seenParameter->intValue)
-		{
-			const char c = seenParameterValue[reducedBytesRead++];
-			switch(c)
-			{
-			case '_':
-			case '-':
-			case ' ':
-				break;
-
-			default:
-				if (c < ' ')
-				{
-					seenParameter = nullptr;
-					seenParameterValue = nullptr;
-					throw ConstructParseException("control character in string");
-				}
-				str.cat(tolower(c));
-				break;
-			}
-		}
-	}
-
-	seenParameter = nullptr;
-	seenParameterValue = nullptr;
-	if (str.IsEmpty())
-	{
-		throw ConstructParseException("non-empty string expected");
-	}
-}
-
 void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
 	GetArray(arr, length, doPad);

@@ -1232,54 +1232,6 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str) THROWS(
 	}
 }
 
-void StringParser::GetReducedString(const StringRef& str) THROWS(GCodeException)
-{
-	if (readPointer <= 0)
-	{
-		THROW_INTERNAL_ERROR;
-	}
-
-	// Reduced strings must start with a double-quote
-	if (gb.buffer[readPointer] != '"')
-	{
-		throw ConstructParseException("string expected");
-	}
-
-	++readPointer;
-	str.Clear();
-	for (;;)
-	{
-		const char c = gb.buffer[readPointer++];
-		switch(c)
-		{
-		case '"':
-			if (gb.buffer[readPointer++] != '"')
-			{
-				if (str.IsEmpty())
-				{
-					throw ConstructParseException("non-empty string expected");
-				}
-				return;
-			}
-			str.cat(c);
-			break;
-
-		case '_':
-		case '-':
-		case ' ':
-			break;
-
-		default:
-			if (c < ' ')
-			{
-				throw ConstructParseException("control character in string");
-			}
-			str.cat(tolower(c));
-			break;
-		}
-	}
-}
-
 // This returns a string comprising the rest of the line, excluding any comment
 // It is provided for legacy use, in particular in the M23
 // command that sets the name of a file to be printed.  In

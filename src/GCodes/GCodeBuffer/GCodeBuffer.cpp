@@ -456,7 +456,19 @@ void GCodeBuffer::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty)
 
 void GCodeBuffer::GetReducedString(const StringRef& str) THROWS(GCodeException)
 {
-	PARSER_OPERATION(GetReducedString(str));
+	// In order to handle string expressions here we first get a quoted string, then we reduce it
+	PARSER_OPERATION(GetQuotedString(str, false));
+	char *q = str.Pointer();
+	const char *p = q;
+	while (*p != 0)
+	{
+		const char c = *p++;
+		if (c != '-' && c != '_' && c != ' ')
+		{
+			*q++ = tolower(c);
+		}
+	}
+	*q = 0;
 }
 
 // Get a colon-separated list of floats after a key letter
