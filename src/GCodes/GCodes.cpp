@@ -3196,19 +3196,19 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 // Function to handle dwell delays. Returns true for dwell finished, false otherwise.
 GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 {
-	int32_t dwell;
-	if (gb.Seen('S'))
+	// Wait for all the queued moves to stop. Only do this if motion has been commanded from this GCode stream since we last waited for motion to stop.
+	// This is so that G4 can be used in a trigger or daemon macro file without pausing motion, when the macro doesn't itself command any motion.
+	if (gb.WasMotionCommanded())
 	{
-		dwell = (int32_t)(gb.GetFValue() * 1000.0);		// S values are in seconds
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
 	}
-	else if (gb.Seen('P'))
-	{
-		dwell = gb.GetIValue();							// P value are in milliseconds
-	}
-	else
-	{
-		return GCodeResult::ok;  // No time given - throw it away
-	}
+
+	const int32_t dwell = (gb.Seen('S')) ? (int32_t)(gb.GetFValue() * 1000.0)		// S values are in seconds
+							: (gb.Seen('P')) ? gb.GetIValue()						// P value are in milliseconds
+								: 0.0;
 
 	if (dwell <= 0)
 	{
@@ -3222,16 +3222,6 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 		return reprap.GetRoland()->ProcessDwell(dwell);
 	}
 #endif
-
-	// Wait for all the queued moves to stop. Only do this if motion has been commanded from this GCode stream since we last waited for motion to stop.
-	// This is so that G4 can be used in a trigger or daemon macro file without pausing motion, when the macro doesn't itself command any motion.
-	if (gb.WasMotionCommanded())
-	{
-		if (!LockMovementAndWaitForStandstill(gb))
-		{
-			return GCodeResult::notFinished;
-		}
-	}
 
 	if (simulationMode != 0)
 	{
