@@ -11,6 +11,7 @@
 #include <RepRapFirmware.h>
 #include "DriveMovement.h"
 #include "StepTimer.h"
+#include "MoveSegment.h"
 #include <Tasks.h>
 #include <GCodes/GCodes.h>			// for class RawMove
 
@@ -26,6 +27,7 @@ class DDARing;
 class DDA
 {
 	friend class DriveMovement;
+	friend class InputShaper;
 
 public:
 
@@ -187,7 +189,6 @@ private:
 	DriveMovement *FindActiveDM(size_t drive) const noexcept;				// find the DM for a drive if there is one but only if it is active
 	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
-	void ReduceHomingSpeed() noexcept;										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive) noexcept;									// stop movement of a drive and recalculate the endpoint
 	void InsertDM(DriveMovement *dm) noexcept SPEED_CRITICAL;
 	void DeactivateDM(size_t drive) noexcept;
@@ -282,19 +283,15 @@ private:
 		struct
 		{
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
-			uint32_t moveStartTime;				// clock count at which the move is due to start (before execution) or was started (during execution)
-			uint32_t startSpeedTimesCdivA;		// the number of clocks it would have taken to reach the start speed from rest
-			uint32_t topSpeedTimesCdivDPlusDecelStartClocks;
-			int32_t extraAccelerationClocks;	// the additional number of clocks needed because we started the move at less than topSpeed. Negative after ReduceHomingSpeed has been called.
-
-			// These are used only in delta calculations
-#if !DM_USE_FPU
-			int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
-#endif
+			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
 
 #if SUPPORT_CAN_EXPANSION
-			DriversBitmap drivesMoving;			// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
-			static_assert(MaxAxesPlusExtruders <= sizeof(drivesMoving) * CHAR_BIT);
+			DriversBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
+			static_assert(MaxAxesPlusExtruders <= DriversBitmap::MaxBits());
+#endif
+			// These are used only in delta calculations
+#if !DM_USE_FPU
+			int32_t cKc;							// The Z movement fraction multiplied by Kc and converted to integer
 #endif
 		} afterPrepare;
 	};
@@ -305,8 +302,10 @@ private:
 	void LogProbePosition();
 #endif
 
-	DriveMovement* activeDMs;					// list of associated DMs that need steps, in step time order
-	DriveMovement* completedDMs;				// list of associated DMs that don't need any more steps
+	// These three could possibly be moved into afterPrepare
+	DriveMovement* activeDMs;						// list of associated DMs that need steps, in step time order
+	DriveMovement* completedDMs;					// list of associated DMs that don't need any more steps
+	MoveSegment *segments;							// linked list of all move segments used by all DMs
 };
 
 // Find the DriveMovement record for a given drive even if it is completed, or return nullptr if there isn't one

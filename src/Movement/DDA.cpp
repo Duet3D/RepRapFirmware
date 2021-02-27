@@ -118,6 +118,7 @@ void DDA::LogProbePosition() noexcept
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 {
 	activeDMs = completedDMs = nullptr;
+	segments = nullptr;
 	tool = nullptr;						// needed in case we pause before any moves have been done
 
 	// Set the endpoints to zero, because Move will ask for them.
@@ -152,6 +153,14 @@ void DDA::ReleaseDMs() noexcept
 		dm = dnext;
 	}
 	activeDMs = completedDMs = nullptr;
+
+	for (MoveSegment* seg = segments; seg != nullptr; )
+	{
+		MoveSegment* const nextSeg = seg->GetNext();
+		MoveSegment::Release(seg);
+		seg = nextSeg;
+	}
+	segments = nullptr;
 }
 
 // Return the number of clocks this DDA still needs to execute.
@@ -227,10 +236,8 @@ void DDA::DebugPrint(const char *tag) const noexcept
 	debugPrintf(" s=%f", (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, 5);
 	debugPrintf("\n"
-				"a=%f d=%f reqv=%f startv=%f topv=%f endv=%f\n"
-				"cks=%" PRIu32 " sstcda=%" PRIu32 " tstcddpdsc=%" PRIu32 " exac=%" PRIi32 "\n",
-				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded,
-				afterPrepare.startSpeedTimesCdivA, afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks, afterPrepare.extraAccelerationClocks);
+				"a=%f d=%f reqv=%f startv=%f topv=%f endv=%f cks=%" PRIu32 "\n",
+				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded);
 }
 
 // Print the DDA and active DMs
@@ -1245,10 +1252,6 @@ inline void DDA::AdjustAcceleration() noexcept
 			}
 		}
 
-		const float totalTime =   (topSpeed - startSpeed)/acceleration
-								+ (topSpeed - endSpeed)/deceleration
-								+ (totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance)/topSpeed;
-		clocksNeeded = (uint32_t)(totalTime * StepTimer::StepClockRate);
 		if (reprap.Debug(moduleMove))
 		{
 			debugPrintf("New a=%.1f d=%.1f\n", (double)acceleration, (double)deceleration);
@@ -1260,15 +1263,6 @@ inline void DDA::AdjustAcceleration() noexcept
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 {
-	if (   flags.xyMoving
-		&& reprap.GetMove().GetShaper().GetType() == InputShaperType::DAA
-		&& topSpeed > startSpeed && topSpeed > endSpeed
-		&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5)
-	   )
-	{
-		AdjustAcceleration();
-	}
-
 #if SUPPORT_LASER
 	if (topSpeed < requestedSpeed && reprap.GetGCodes().GetMachineType() == MachineType::laser)
 	{
@@ -1277,13 +1271,51 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 	}
 #endif
 
+	const InputShaper& shaper = reprap.GetMove().GetShaper();
+	const bool useInputShaping =
+				   flags.xyMoving
+				&& shaper.GetType() == InputShaperType::DAA
+				&& topSpeed > startSpeed && topSpeed > endSpeed
+				&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5);
+
+	InputShaperPlan plan;
+	if (useInputShaping)
+	{
+		plan = shaper.PlanShaping(*this);			// this may change the acceleration and deceleration, but does not update clocksNeeded, which still needs to be done
+	}
+
 	PrepParams params;
 	params.accelDistance = beforePrepare.accelDistance;
 	params.decelDistance = beforePrepare.decelDistance;
 	params.decelStartDistance = totalDistance - beforePrepare.decelDistance;
+	const float accelClocks = ((topSpeed - startSpeed) * StepTimer::StepClockRate)/acceleration;
+	const float decelClocks = ((topSpeed - endSpeed) * StepTimer::StepClockRate)/deceleration;
+	const float steadyClocks = ((totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance) * StepTimer::StepClockRate)/topSpeed;
+	clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
 
 	if (simMode == 0)
 	{
+		// Calculate the segments needed for axis movement
+		// Deceleration phase
+		MoveSegment * tempSegments = (beforePrepare.decelDistance > 0.0)
+										? shaper.GetDecelerationSegments(plan, *this, params.decelStartDistance, accelClocks + steadyClocks)
+										: nullptr;
+		// Steady speed phase
+		if (steadyClocks > 0.0)
+		{
+			tempSegments = MoveSegment::Allocate(tempSegments);
+			const float ts = topSpeed * StepTimer::StepClockRate;
+			tempSegments->SetLinear(totalDistance/ts, accelClocks + beforePrepare.accelDistance/ts);
+		}
+
+		// Acceleration phase
+		if (beforePrepare.accelDistance > 0.0)
+		{
+			tempSegments = shaper.GetAccelerationSegments(plan, *this, tempSegments);
+		}
+
+		segments = tempSegments;
+
 		if (flags.isDeltaMovement)
 		{
 			// This code assumes that the previous move in the DDA ring is the previously-executed move, because it fetches the X and Y end coordinates from that move.
@@ -1304,30 +1336,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #endif
 			params.dparams = static_cast<const LinearDeltaKinematics*>(&(reprap.GetMove().GetKinematics()));
 		}
-
-		// Convert the accelerate/decelerate distances to times
-		const float accelStopTime = (topSpeed - startSpeed)/acceleration;
-		const float steadyTime = (params.decelStartDistance - beforePrepare.accelDistance)/topSpeed;
-#if SUPPORT_CAN_EXPANSION
-		params.accelTime = accelStopTime;
-		params.steadyTime = steadyTime;
-		params.decelTime = (topSpeed - endSpeed)/deceleration;
-		params.initialSpeedFraction = startSpeed/topSpeed;
-		params.finalSpeedFraction = endSpeed/topSpeed;
-		params.accelCompFactor = 1.0 - params.initialSpeedFraction;
-#else
-		params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
-#endif
-		const float decelStartTime = accelStopTime + steadyTime;
-		afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32((startSpeed * StepTimer::StepClockRate)/acceleration);
-#if DM_USE_FPU
-		params.fTopSpeedTimesCdivD = (topSpeed * StepTimer::StepClockRate)/deceleration;
-		afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = roundU32(params.fTopSpeedTimesCdivD + decelStartTime * StepTimer::StepClockRate);
-#else
-		params.topSpeedTimesCdivD = roundU32((topSpeed * StepTimer::StepClockRate)/deceleration);
-		afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + (uint32_t)roundU32(decelStartTime * StepTimer::StepClockRate);
-#endif
-		afterPrepare.extraAccelerationClocks = roundS32((accelStopTime - (beforePrepare.accelDistance/topSpeed)) * StepTimer::StepClockRate);
 
 		activeDMs = completedDMs = nullptr;
 
@@ -1534,22 +1542,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 						if (stepsToDo)
 						{
 							pdm->directionChanged = false;
-							// Check for sensible values, print them if they look dubious
-							if (   reprap.Debug(moduleDda)
-								&& (   pdm->totalSteps > 1000000
-									|| pdm->reverseStartStep < pdm->mp.cart.decelStartStep
-									|| (   pdm->reverseStartStep <= pdm->totalSteps
-#if DM_USE_FPU
-										&& pdm->mp.cart.fFourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD > pdm->fTwoCsquaredTimesMmPerStepDivD * pdm->reverseStartStep
-#else
-										&& pdm->mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD > (int64_t)(pdm->twoCsquaredTimesMmPerStepDivD * pdm->reverseStartStep)
-#endif
-									   )
-								   )
-							   )
-							{
-								DebugPrintAll("pr");
-							}
 							InsertDM(pdm);
 						}
 						else
@@ -1767,7 +1759,9 @@ float DDA::NormaliseLinearMotion(AxesBitmap linearAxes) noexcept
 // Either this move is currently executing (DDARing.currentDDA == this) and the state is 'executing', or we have almost finished preparing it and the state is 'provisional'.
 void DDA::CheckEndstops(Platform& platform) noexcept
 {
+#if SUPPORT_CAN_EXPANSION
 	const bool fromPrepare = (state == DDAState::provisional);		// determine this before anything sets the state to 'completed'
+#endif
 
 	for (;;)
 	{
@@ -1841,13 +1835,6 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
 			break;
-
-		case EndstopHitAction::reduceSpeed:
-			if (!fromPrepare)										// don't mess with finish times etc. if the move hasn't started yet
-			{
-				ReduceHomingSpeed();								// must be just close
-			}
-			return;													// there can't be a higher priority endstop
 
 		default:
 			return;
@@ -2156,39 +2143,6 @@ float DDA::GetProportionDone(bool moveWasAborted) const noexcept
 		}
 	}
 	return proportionDoneSoFar;
-}
-
-// Reduce the speed of this move to the indicated speed.
-// This is called from the ISR, so interrupts are disabled and nothing else can mess with us.
-// As this is only called for homing moves and with very low speeds, we assume that we don't need acceleration or deceleration phases.
-void DDA::ReduceHomingSpeed() noexcept
-{
-	if (!flags.goingSlow)
-	{
-		flags.goingSlow = true;
-
-		topSpeed *= (1.0/ProbingSpeedReductionFactor);
-
-		// Adjust extraAccelerationClocks so that step timing will be correct in the steady speed phase at the new speed
-		const uint32_t clocksSoFar = StepTimer::GetTimerTicks() - afterPrepare. moveStartTime;
-		afterPrepare.extraAccelerationClocks = (afterPrepare.extraAccelerationClocks * (int32_t)ProbingSpeedReductionFactor) - ((int32_t)clocksSoFar * (int32_t)(ProbingSpeedReductionFactor - 1));
-
-		// We also need to adjust the total clocks needed, to prevent step errors being recorded
-		if (clocksSoFar < clocksNeeded)
-		{
-			clocksNeeded += (clocksNeeded - clocksSoFar) * (ProbingSpeedReductionFactor - 1u);
-		}
-
-		// Adjust the speed in the DMs
-		for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
-		{
-			DriveMovement* const pdm = FindDM(drive);
-			if (pdm != nullptr && pdm->state >= DMState::accel0)
-			{
-				pdm->ReduceSpeed(ProbingSpeedReductionFactor);
-			}
-		}
-	}
 }
 
 bool DDA::HasStepError() const noexcept

@@ -21,6 +21,17 @@ NamedEnum(InputShaperType, uint8_t,
 	DAA
 );
 
+class DDA;
+class MoveSegment;
+
+struct InputShaperPlan
+{
+	uint32_t accelSegments : 4,				// number of acceleration segments
+			 decelSegments : 4;				// number of deceleration segments
+
+	InputShaperPlan() : accelSegments(1), decelSegments(1) { }
+};
+
 class InputShaper INHERIT_OBJECT_MODEL
 {
 public:
@@ -32,6 +43,9 @@ public:
 	float GetFloatDamping() const noexcept;
 	float GetMinimumAcceleration() const noexcept { return minimumAcceleration; }
 	InputShaperType GetType() const noexcept { return type; }
+	InputShaperPlan PlanShaping(DDA& dda) const noexcept;
+	MoveSegment *GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, MoveSegment *nextSegments) const noexcept;
+	MoveSegment *GetDecelerationSegments(InputShaperPlan plan, const DDA& dda, float decelStartDistance, float decelStartTime) const noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 

@@ -10,6 +10,8 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <RepRap.h>
 #include "StepTimer.h"
+#include "DDA.h"
+#include "MoveSegment.h"
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -104,6 +106,185 @@ float InputShaper::GetFrequency() const noexcept
 float InputShaper::GetFloatDamping() const noexcept
 {
 	return ((float)damping)/65536;
+}
+
+InputShaperPlan InputShaper::PlanShaping(DDA& dda) const noexcept
+{
+	switch (type.RawValue())
+	{
+	case InputShaperType::DAA:
+		{
+			// Try to reduce the acceleration/deceleration of the move to cancel ringing
+			const float idealPeriod = GetFullPeriod();
+
+			float proposedAcceleration = dda.acceleration, proposedAccelDistance = dda.beforePrepare.accelDistance;
+			bool adjustAcceleration = false;
+			if ((dda.prev->state != DDA::DDAState::frozen && dda.prev->state != DDA::DDAState::executing) || !dda.prev->IsAccelerationMove())
+			{
+				const float accelTime = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
+				if (accelTime < idealPeriod)
+				{
+					proposedAcceleration = (dda.topSpeed - dda.startSpeed)/idealPeriod;
+					adjustAcceleration = true;
+				}
+				else if (accelTime < idealPeriod * 2)
+				{
+					proposedAcceleration = (dda.topSpeed - dda.startSpeed)/(idealPeriod * 2);
+					adjustAcceleration = true;
+				}
+				if (adjustAcceleration)
+				{
+					proposedAccelDistance = (fsquare(dda.topSpeed) - fsquare(dda.startSpeed))/(2 * proposedAcceleration);
+				}
+			}
+
+			float proposedDeceleration = dda.deceleration, proposedDecelDistance = dda.beforePrepare.decelDistance;
+			bool adjustDeceleration = false;
+			if (dda.next->state != DDA::DDAState::provisional || !dda.next->IsDecelerationMove())
+			{
+				const float decelTime = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
+				if (decelTime < idealPeriod)
+				{
+					proposedDeceleration = (dda.topSpeed - dda.endSpeed)/idealPeriod;
+					adjustDeceleration = true;
+				}
+				else if (decelTime < idealPeriod * 2)
+				{
+					proposedDeceleration = (dda.topSpeed - dda.endSpeed)/(idealPeriod * 2);
+					adjustDeceleration = true;
+				}
+				if (adjustDeceleration)
+				{
+					proposedDecelDistance = (fsquare(dda.topSpeed) - fsquare(dda.endSpeed))/(2 * proposedDeceleration);
+				}
+			}
+
+			if (adjustAcceleration || adjustDeceleration)
+			{
+				const float drcMinimumAcceleration = GetMinimumAcceleration();
+				if (proposedAccelDistance + proposedDecelDistance <= dda.totalDistance)
+				{
+					if (proposedAcceleration < drcMinimumAcceleration || proposedDeceleration < drcMinimumAcceleration)
+					{
+						break;
+					}
+					dda.acceleration = proposedAcceleration;
+					dda.deceleration = proposedDeceleration;
+					dda.beforePrepare.accelDistance = proposedAccelDistance;
+					dda.beforePrepare.decelDistance = proposedDecelDistance;
+				}
+				else
+				{
+					// We can't keep this as a trapezoidal move with the original top speed.
+					// Try an accelerate-decelerate move with acceleration and deceleration times equal to the ideal period.
+					const float twiceTotalDistance = 2 * dda.totalDistance;
+					float proposedTopSpeed = dda.totalDistance/idealPeriod - (dda.startSpeed + dda.endSpeed)/2;
+					if (proposedTopSpeed > dda.startSpeed && proposedTopSpeed > dda.endSpeed)
+					{
+						proposedAcceleration = (twiceTotalDistance - ((3 * dda.startSpeed + dda.endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
+						proposedDeceleration = (twiceTotalDistance - ((dda.startSpeed + 3 * dda.endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
+						if (   proposedAcceleration < drcMinimumAcceleration || proposedDeceleration < drcMinimumAcceleration
+							|| proposedAcceleration > dda.acceleration || proposedDeceleration > dda.deceleration
+						   )
+						{
+							break;
+						}
+						dda.topSpeed = proposedTopSpeed;
+						dda.acceleration = proposedAcceleration;
+						dda.deceleration = proposedDeceleration;
+						dda.beforePrepare.accelDistance = dda.startSpeed * idealPeriod + (dda.acceleration * fsquare(idealPeriod))/2;
+						dda.beforePrepare.decelDistance = dda.endSpeed * idealPeriod + (dda.deceleration * fsquare(idealPeriod))/2;
+					}
+					else if (dda.startSpeed < dda.endSpeed)
+					{
+						// Change it into an accelerate-only move, accelerating as slowly as we can
+						proposedAcceleration = (fsquare(dda.endSpeed) - fsquare(dda.startSpeed))/twiceTotalDistance;
+						if (proposedAcceleration < drcMinimumAcceleration)
+						{
+							break;		// avoid very small accelerations because they can be problematic
+						}
+						dda.acceleration = proposedAcceleration;
+						dda.topSpeed = dda.endSpeed;
+						dda.beforePrepare.accelDistance = dda.totalDistance;
+						dda.beforePrepare.decelDistance = 0.0;
+					}
+					else if (dda.startSpeed > dda.endSpeed)
+					{
+						// Change it into a decelerate-only move, decelerating as slowly as we can
+						proposedDeceleration = (fsquare(dda.startSpeed) - fsquare(dda.endSpeed))/twiceTotalDistance;
+						if (proposedDeceleration < drcMinimumAcceleration)
+						{
+							break;		// avoid very small accelerations because they can be problematic
+						}
+						dda.deceleration = proposedDeceleration;
+						dda.topSpeed = dda.startSpeed;
+						dda.beforePrepare.accelDistance = 0.0;
+						dda.beforePrepare.decelDistance = dda.totalDistance;
+					}
+					else
+					{
+						// Start and end speeds are exactly the same, possibly zero, so give up trying to adjust this move
+						break;
+					}
+				}
+
+				if (reprap.Debug(moduleMove))
+				{
+					debugPrintf("New a=%.1f d=%.1f\n", (double)dda.acceleration, (double)dda.deceleration);
+				}
+			}
+		}
+		break;
+
+	case InputShaperType::ZVD:
+		//TODO
+		break;
+
+	case InputShaperType::ZVDD:
+		//TODO
+		break;
+
+	case InputShaperType::EI2:
+		//TODO
+		break;
+
+	case InputShaperType::none:
+	default:
+		break;
+	}
+
+	// If we get here then either we don't shape this move or we are using DAA, so just one acceleration and one deceleration segment
+	return InputShaperPlan();
+}
+
+MoveSegment *InputShaper::GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, MoveSegment *nextSegments) const noexcept
+{
+	if (plan.accelSegments == 1)
+	{
+		MoveSegment * const seg = MoveSegment::Allocate(nextSegments);
+		const float uDivA = dda.startSpeed/(dda.acceleration * StepTimer::StepClockRate);
+		const float twoDistDivA = (2.0 * dda.totalDistance)/(dda.acceleration * StepTimer::StepClockRateSquared);
+		seg->SetNonLinear(fsquare(uDivA), twoDistDivA, -uDivA);
+		return seg;
+	}
+
+	RRF_ASSERT(false);
+	return nullptr;
+}
+
+MoveSegment *InputShaper::GetDecelerationSegments(InputShaperPlan plan, const DDA& dda, float decelStartDistance, float decelStartTime) const noexcept
+{
+	if (plan.decelSegments == 1)
+	{
+		MoveSegment * const seg = MoveSegment::Allocate(nullptr);
+		const float uDivD = dda.topSpeed/(dda.deceleration * StepTimer::StepClockRate);
+		const float twoDistDivD = (2.0 * dda.totalDistance)/(dda.deceleration * StepTimer::StepClockRateSquared);
+		seg->SetNonLinear(fsquare(uDivD) - (2.0 * decelStartDistance)/(dda.deceleration * StepTimer::StepClockRate), twoDistDivD, uDivD + decelStartTime * StepTimer::StepClockRate);
+		return seg;
+	}
+
+	RRF_ASSERT(false);
+	return nullptr;
 }
 
 // End
