@@ -48,7 +48,7 @@ public:
 	EndStopPosition GetEndStopPosition(size_t axis) const pre(axis < MaxAxes) noexcept;
 	bool HomingZWithProbe() const noexcept;
 
-	EndStopHit Stopped(size_t axis) const noexcept;
+	bool Stopped(size_t axis) const noexcept;
 
 	void GetM119report(const StringRef& reply) noexcept;
 
@@ -90,7 +90,7 @@ private:
 #endif
 
 	// Translate end stop result to text
-	static const char *TranslateEndStopResult(EndStopHit es, bool atHighEnd) noexcept;
+	static const char *TranslateEndStopResult(bool hit, bool atHighEnd) noexcept;
 
 	ReadLockedPointer<Endstop> FindEndstop(size_t axis) const noexcept;
 

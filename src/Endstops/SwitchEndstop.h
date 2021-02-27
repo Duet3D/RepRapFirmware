@@ -22,7 +22,7 @@ public:
 	SwitchEndstop(uint8_t p_axis, EndStopPosition pos) noexcept;
 
 	EndStopType GetEndstopType() const noexcept override;
-	EndStopHit Stopped() const noexcept override;
+	bool Stopped() const noexcept override;
 	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept override;
 	EndstopHitDetails CheckTriggered(bool goingSlow) noexcept override;
 	bool Acknowledge(EndstopHitDetails what) noexcept override;

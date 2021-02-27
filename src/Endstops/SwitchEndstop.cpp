@@ -118,16 +118,16 @@ EndStopType SwitchEndstop::GetEndstopType() const noexcept
 }
 
 // Test whether we are at or near the stop
-EndStopHit SwitchEndstop::Stopped() const noexcept
+bool SwitchEndstop::Stopped() const noexcept
 {
 	for (size_t i = 0; i < numPortsUsed; ++i)
 	{
 		if (IsTriggered(i))
 		{
-			return EndStopHit::atStop;
+			return true;
 		}
 	}
-	return EndStopHit::noStop;
+	return false;
 }
 
 // This is called to prime axis endstops

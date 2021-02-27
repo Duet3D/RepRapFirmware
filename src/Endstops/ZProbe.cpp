@@ -208,40 +208,26 @@ int ZProbe::GetSecondaryValues(int& v1) const noexcept
 }
 
 // Test whether we are at or near the stop
-EndStopHit ZProbe::Stopped() const noexcept
+bool ZProbe::Stopped() const noexcept
 {
 	const int zProbeVal = GetReading();
-	return (zProbeVal >= adcValue) ? EndStopHit::atStop
-			: (zProbeVal * 10 >= adcValue * 9) ? EndStopHit::nearStop	// if we are at/above 90% of the target value
-				: EndStopHit::noStop;
+	return zProbeVal >= adcValue;
 }
 
 // Check whether the probe is triggered and return the action that should be performed. Called from the step ISR.
 EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow) noexcept
 {
-	EndStopHit e = Stopped();
+	bool b = Stopped();
 	if (misc.parts.probingAway)
 	{
-		e = (e == EndStopHit::atStop) ? EndStopHit::noStop : EndStopHit::atStop;
+		b = !b;
 	}
 
 	EndstopHitDetails rslt;			// initialised by default constructor
-	switch (e)
+	if (b)
 	{
-	case EndStopHit::atStop:
 		rslt.SetAction(EndstopHitAction::stopAll);
 		rslt.isZProbe = true;
-		break;
-
-	case EndStopHit::nearStop:
-		if (!goingSlow)
-		{
-			rslt.SetAction(EndstopHitAction::reduceSpeed);
-		}
-		break;
-
-	default:
-		break;
 	}
 	return rslt;
 }

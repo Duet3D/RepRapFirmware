@@ -28,7 +28,7 @@ public:
 	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept { }
 #endif
 
-	EndStopHit Stopped() const noexcept override;
+	bool Stopped() const noexcept override;
 	EndstopHitDetails CheckTriggered(bool goingSlow) noexcept override;
 	bool Acknowledge(EndstopHitDetails what) noexcept override;
 

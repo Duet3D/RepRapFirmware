@@ -29,7 +29,7 @@ public:
 	EndstopOrZProbe(const EndstopOrZProbe&) = delete;
 	virtual ~EndstopOrZProbe() noexcept {}
 
-	virtual EndStopHit Stopped() const noexcept = 0;
+	virtual bool Stopped() const noexcept = 0;
 	virtual EndstopHitDetails CheckTriggered(bool goingSlow) noexcept = 0;
 	virtual bool Acknowledge(EndstopHitDetails what) noexcept = 0;
 
