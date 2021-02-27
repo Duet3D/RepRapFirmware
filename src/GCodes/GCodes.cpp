@@ -2070,7 +2070,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		{
 			// This kinematics approximates linear motion by means of segmentation.
 			// We assume that the segments will be smaller than the mesh spacing.
-			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]));
+			const float xyLength = fastSqrtf(fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]));
 			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
 			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(xyLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
 		}
@@ -2196,7 +2196,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		float hDivD;
 		if (hSquared >= 0.0)
 		{
-			hDivD = sqrtf(hSquared/dSquared);
+			hDivD = fastSqrtf(hSquared/dSquared);
 		}
 		else
 		{
@@ -2397,7 +2397,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 
 	moveBuffer.usePressureAdvance = moveBuffer.hasPositiveExtrusion;
 
-	moveBuffer.arcRadius = sqrtf(iParam * iParam + jParam * jParam);
+	moveBuffer.arcRadius = fastSqrtf(iParam * iParam + jParam * jParam);
 	moveBuffer.arcCurrentAngle = atan2(-jParam, -iParam);
 
 	// Calculate the total angle moved, which depends on which way round we are going
@@ -2420,7 +2420,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	// We leave out the square term because it is very small
 	// In CNC applications even very small deviations can be visible, so we use a smaller segment length at low speeds
 	const float arcSegmentLength = constrain<float>
-									(	min<float>(sqrtf(8 * moveBuffer.arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
+									(	min<float>(fastSqrtf(8 * moveBuffer.arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
 										MinArcSegmentLength,
 										MaxArcSegmentLength
 									);

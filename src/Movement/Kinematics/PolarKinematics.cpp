@@ -116,7 +116,7 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 // Return true if successful, false if we were unable to convert
 bool PolarKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
-	motorPos[0] = lrintf(sqrtf(fsquare(machinePos[0]) + fsquare(machinePos[1])) * stepsPerMm[0]);
+	motorPos[0] = lrintf(fastSqrtf(fsquare(machinePos[0]) + fsquare(machinePos[1])) * stepsPerMm[0]);
 	motorPos[1] = (motorPos[0] == 0.0) ? 0 : lrintf(atan2f(machinePos[1], machinePos[0]) * RadiansToDegrees * stepsPerMm[1]);
 
 	// Transform remaining axes linearly
@@ -174,7 +174,7 @@ LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const fl
 	if (r2 < minRadiusSquared)
 	{
 		radiusLimited = true;
-		const float r = sqrtf(r2);
+		const float r = fastSqrtf(r2);
 		if (r < 0.01)
 		{
 			finalCoords[X_AXIS] = minRadius;
@@ -189,7 +189,7 @@ LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const fl
 	else if (r2 > maxRadiusSquared)
 	{
 		radiusLimited = true;
-		const float r = sqrtf(r2);
+		const float r = fastSqrtf(r2);
 		finalCoords[X_AXIS] *= maxRadius/r;
 		finalCoords[Y_AXIS] *= maxRadius/r;
 	}

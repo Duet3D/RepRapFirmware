@@ -350,7 +350,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 				effectiveXRadius = radius - 0.1;
 				if (numPoints[1] % 2 == 0)
 				{
-					effectiveXRadius *= sqrtf(1.0 - 1.0/(float)((numPoints[1] - 1) * (numPoints[1] - 1)));
+					effectiveXRadius *= fastSqrtf(1.0 - 1.0/(float)((numPoints[1] - 1) * (numPoints[1] - 1)));
 				}
 				spacings[0] = (2 * effectiveXRadius)/(numPoints[0] - 1);
 			}
@@ -367,7 +367,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 				effectiveYRadius = radius - 0.1;
 				if (numPoints[0] % 2 == 0)
 				{
-					effectiveYRadius *= sqrtf(1.0 - 1.0/(float)((numPoints[0] - 1) * (numPoints[0] - 1)));
+					effectiveYRadius *= fastSqrtf(1.0 - 1.0/(float)((numPoints[0] - 1) * (numPoints[0] - 1)));
 				}
 				spacings[1] = (2 * effectiveYRadius)/(numPoints[1] - 1);
 			}

@@ -487,7 +487,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	{
 		// Try to meld this move to the previous move to avoid stop/start
 		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = v^2 - 2as
-		prev->beforePrepare.targetNextSpeed = min<float>(sqrtf(deceleration * totalDistance * 2.0), requestedSpeed);
+		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(deceleration * totalDistance * 2.0), requestedSpeed);
 		DoLookahead(ring, prev);
 		startSpeed = prev->endSpeed;
 	}
@@ -800,7 +800,7 @@ pre(state == provisional)
 				   )
 				{
 					laDDA->MatchSpeeds();
-					const float maxStartSpeed = sqrtf(fsquare(laDDA->beforePrepare.targetNextSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
+					const float maxStartSpeed = fastSqrtf(fsquare(laDDA->beforePrepare.targetNextSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
 					laDDA->prev->beforePrepare.targetNextSpeed = min<float>(maxStartSpeed, laDDA->requestedSpeed);
 					// leave 'goingUp' true
 				}
@@ -811,7 +811,7 @@ pre(state == provisional)
 					{
 						laDDA->flags.hadLookaheadUnderrun = true;
 					}
-					const float maxReachableSpeed = sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
+					const float maxReachableSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
 					if (laDDA->beforePrepare.targetNextSpeed > maxReachableSpeed)
 					{
 						laDDA->beforePrepare.targetNextSpeed = maxReachableSpeed;
@@ -824,7 +824,7 @@ pre(state == provisional)
 			{
 				// This move doesn't reach its requested speed, but it isn't a deceleration-only move
 				// Set its end speed to the minimum of the requested speed and the highest we can reach
-				const float maxReachableSpeed = sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
+				const float maxReachableSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
 				if (laDDA->beforePrepare.targetNextSpeed > maxReachableSpeed)
 				{
 					// Looks like this is an acceleration segment, so to ensure smooth acceleration we should reduce targetNextSpeed to endSpeed as well
@@ -839,7 +839,7 @@ pre(state == provisional)
 			// Going back down the list
 			// We have adjusted the end speed of the previous move as much as is possible. Adjust this move to match it.
 			laDDA->startSpeed = laDDA->prev->endSpeed;
-			const float maxEndSpeed = sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
+			const float maxEndSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
 			if (maxEndSpeed < laDDA->beforePrepare.targetNextSpeed)
 			{
 				laDDA->beforePrepare.targetNextSpeed = maxEndSpeed;
@@ -983,7 +983,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 			// It's an accelerate-decelerate move. Calculate accelerate distance from: V^2 = u^2 + 2as.
 			beforePrepare.accelDistance = (vsquared - fsquare(startSpeed))/twoA;
 			beforePrepare.decelDistance = (vsquared - fsquare(endSpeed))/twoD;
-			topSpeed = sqrtf(vsquared);
+			topSpeed = fastSqrtf(vsquared);
 		}
 		else
 		{
@@ -1663,7 +1663,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 	{
 		magnitudeSquared += fsquare(v[d]);
 	}
-	return sqrtf(magnitudeSquared);
+	return fastSqrtf(magnitudeSquared);
 }
 
 // Normalise a vector with dim1 dimensions to unit length over the specified axes, and also return its previous magnitude in dim2 dimensions
@@ -1726,7 +1726,7 @@ float DDA::NormaliseLinearMotion(AxesBitmap linearAxes) noexcept
 	{
 		yMagSquared /= numYaxes;
 	}
-	const float magnitude = sqrtf(xMagSquared + yMagSquared + magSquared);
+	const float magnitude = fastSqrtf(xMagSquared + yMagSquared + magSquared);
 	if (magnitude <= 0.0)
 	{
 		return 0.0;
@@ -1742,7 +1742,7 @@ float DDA::NormaliseLinearMotion(AxesBitmap linearAxes) noexcept
 {
 	float magnitude = 0.0;
 	axes.Iterate([&magnitude, v](unsigned int axis, unsigned int count) { magnitude += fsquare(v[axis]); });
-	return sqrtf(magnitude);
+	return fastSqrtf(magnitude);
 }
 
 // Multiply a vector by a scalar

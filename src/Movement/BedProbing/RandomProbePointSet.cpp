@@ -131,7 +131,7 @@ void RandomProbePointSet::ReportProbeHeights(size_t numPoints, const StringRef& 
 	}
 	const float mean = sum/numPoints;
 	// In the following, if there is only 1 point we may try to take the square root of a negative number due to rounding error, hence the 'max' call
-	const float stdDev = sqrtf(max<float>(sumOfSquares/numPoints - fsquare(mean), 0.0));
+	const float stdDev = fastSqrtf(max<float>(sumOfSquares/numPoints - fsquare(mean), 0.0));
 	reply.catf(", mean %.3f, deviation from mean %.3f", (double)mean, (double)stdDev);
 }
 
@@ -147,7 +147,7 @@ void RandomProbePointSet::DebugPrint(size_t numPoints) const noexcept
 		sumOfSquares += fsquare(zBedProbePoints[i]);
 	}
 	const float mean = sum/numPoints;
-	debugPrintf(", mean %.3f, deviation from mean %.3f\n", (double)mean, (double)sqrtf(sumOfSquares/numPoints - fsquare(mean)));
+	debugPrintf(", mean %.3f, deviation from mean %.3f\n", (double)mean, (double)fastSqrtf(sumOfSquares/numPoints - fsquare(mean)));
 }
 
 // End

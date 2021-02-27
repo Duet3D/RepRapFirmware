@@ -32,7 +32,7 @@ bool RoundBedKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes,
 void RoundBedKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
-	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
+	const float xyFactor = fastSqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
 	if (xyFactor > 0.01)
 	{
 		const Platform& platform = reprap.GetPlatform();
