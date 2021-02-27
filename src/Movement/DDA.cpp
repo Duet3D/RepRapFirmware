@@ -638,6 +638,8 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 #if SUPPORT_REMOTE_COMMANDS
 
 // Set up a remote move. Return true if it represents real movement, else false.
+// All values have already been converted to step clocks and the total distance has been normalised to 1.0.
+//TODO pass the input shaping plan in the message. For now we don't use input shaping.
 bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
 	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
@@ -661,18 +663,29 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks/(2 * StepTimer::StepClockRate);
 	params.decelStartDistance = 1.0 - params.decelDistance;
 
-	afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32(startSpeed/acceleration);
-#if DM_USE_FPU
-	params.fTopSpeedTimesCdivD = topSpeed/deceleration;
-	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = lrintf(params.fTopSpeedTimesCdivD) + msg.accelerationClocks + msg.steadyClocks;
-#else
-	params.topSpeedTimesCdivD = (uint32_t)roundU32(topSpeed/deceleration);
-	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + msg.accelerationClocks + msg.steadyClocks;
-#endif
-	afterPrepare.extraAccelerationClocks = msg.accelerationClocks - roundS32(params.accelDistance/topSpeed);
-	params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
+	// Calculate the segments needed for axis movement
+	const InputShaper& shaper = reprap.GetMove().GetShaper();
+	// Deceleration phase
+	MoveSegment * tempSegments = (params.decelDistance > 0.0)
+									? shaper.GetDecelerationSegments(InputShaperPlan(), *this, params.decelStartDistance, msg.accelerationClocks + msg.steadyClocks)
+									: nullptr;
+	// Steady speed phase
+	if (msg.steadyClocks > 0.0)
+	{
+		tempSegments = MoveSegment::Allocate(tempSegments);
+		tempSegments->SetLinear(totalDistance/topSpeed, (float)msg.accelerationClocks + beforePrepare.accelDistance/topSpeed);
+	}
 
-	activeDMs = nullptr;
+	// Acceleration phase
+	if (beforePrepare.accelDistance > 0.0)
+	{
+		tempSegments = shaper.GetAccelerationSegments(InputShaperPlan(), *this, tempSegments);
+	}
+
+	segments = tempSegments;
+
+	params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
+	activeDMs = completedDMs = nullptr;
 
 	const size_t numDrivers = min<size_t>(msg.numDrivers, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
 	for (size_t drive = 0; drive < numDrivers; drive++)
@@ -1133,132 +1146,6 @@ pre(disableDeltaMapping || drive < MaxAxes)
 	}
 }
 
-// Adjust the acceleration and deceleration to reduce ringing
-// Only called if topSpeed > startSpeed & topSpeed > endSpeed
-// This is only called once, so inlined for speed
-inline void DDA::AdjustAcceleration() noexcept
-{
-	// Try to reduce the acceleration/deceleration of the move to cancel ringing
-	const float idealPeriod = reprap.GetMove().GetShaper().GetFullPeriod();
-
-	float proposedAcceleration = acceleration, proposedAccelDistance = beforePrepare.accelDistance;
-	bool adjustAcceleration = false;
-	if ((prev->state != DDAState::frozen && prev->state != DDAState::executing) || !prev->IsAccelerationMove())
-	{
-		const float accelTime = (topSpeed - startSpeed)/acceleration;
-		if (accelTime < idealPeriod)
-		{
-			proposedAcceleration = (topSpeed - startSpeed)/idealPeriod;
-			adjustAcceleration = true;
-		}
-		else if (accelTime < idealPeriod * 2)
-		{
-			proposedAcceleration = (topSpeed - startSpeed)/(idealPeriod * 2);
-			adjustAcceleration = true;
-		}
-		if (adjustAcceleration)
-		{
-			proposedAccelDistance = (fsquare(topSpeed) - fsquare(startSpeed))/(2 * proposedAcceleration);
-		}
-	}
-
-	float proposedDeceleration = deceleration, proposedDecelDistance = beforePrepare.decelDistance;
-	bool adjustDeceleration = false;
-	if (next->state != DDAState::provisional || !next->IsDecelerationMove())
-	{
-		const float decelTime = (topSpeed - endSpeed)/deceleration;
-		if (decelTime < idealPeriod)
-		{
-			proposedDeceleration = (topSpeed - endSpeed)/idealPeriod;
-			adjustDeceleration = true;
-		}
-		else if (decelTime < idealPeriod * 2)
-		{
-			proposedDeceleration = (topSpeed - endSpeed)/(idealPeriod * 2);
-			adjustDeceleration = true;
-		}
-		if (adjustDeceleration)
-		{
-			proposedDecelDistance = (fsquare(topSpeed) - fsquare(endSpeed))/(2 * proposedDeceleration);
-		}
-	}
-
-	if (adjustAcceleration || adjustDeceleration)
-	{
-		const float drcMinimumAcceleration = reprap.GetMove().GetShaper().GetMinimumAcceleration();
-		if (proposedAccelDistance + proposedDecelDistance <= totalDistance)
-		{
-			if (proposedAcceleration < drcMinimumAcceleration || proposedDeceleration < drcMinimumAcceleration)
-			{
-				return;
-			}
-			acceleration = proposedAcceleration;
-			deceleration = proposedDeceleration;
-			beforePrepare.accelDistance = proposedAccelDistance;
-			beforePrepare.decelDistance = proposedDecelDistance;
-		}
-		else
-		{
-			// We can't keep this as a trapezoidal move with the original top speed.
-			// Try an accelerate-decelerate move with acceleration and deceleration times equal to the ideal period.
-			const float twiceTotalDistance = 2 * totalDistance;
-			float proposedTopSpeed = totalDistance/idealPeriod - (startSpeed + endSpeed)/2;
-			if (proposedTopSpeed > startSpeed && proposedTopSpeed > endSpeed)
-			{
-				proposedAcceleration = (twiceTotalDistance - ((3 * startSpeed + endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
-				proposedDeceleration = (twiceTotalDistance - ((startSpeed + 3 * endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
-				if (   proposedAcceleration < drcMinimumAcceleration || proposedDeceleration < drcMinimumAcceleration
-					|| proposedAcceleration > acceleration || proposedDeceleration > deceleration
-				   )
-				{
-					return;
-				}
-				topSpeed = proposedTopSpeed;
-				acceleration = proposedAcceleration;
-				deceleration = proposedDeceleration;
-				beforePrepare.accelDistance = startSpeed * idealPeriod + (acceleration * fsquare(idealPeriod))/2;
-				beforePrepare.decelDistance = endSpeed * idealPeriod + (deceleration * fsquare(idealPeriod))/2;
-			}
-			else if (startSpeed < endSpeed)
-			{
-				// Change it into an accelerate-only move, accelerating as slowly as we can
-				proposedAcceleration = (fsquare(endSpeed) - fsquare(startSpeed))/twiceTotalDistance;
-				if (proposedAcceleration < drcMinimumAcceleration)
-				{
-					return;		// avoid very small accelerations because they can be problematic
-				}
-				acceleration = proposedAcceleration;
-				topSpeed = endSpeed;
-				beforePrepare.accelDistance = totalDistance;
-				beforePrepare.decelDistance = 0.0;
-			}
-			else if (startSpeed > endSpeed)
-			{
-				// Change it into a decelerate-only move, decelerating as slowly as we can
-				proposedDeceleration = (fsquare(startSpeed) - fsquare(endSpeed))/twiceTotalDistance;
-				if (proposedDeceleration < drcMinimumAcceleration)
-				{
-					return;		// avoid very small accelerations because they can be problematic
-				}
-				deceleration = proposedDeceleration;
-				topSpeed = startSpeed;
-				beforePrepare.accelDistance = 0.0;
-				beforePrepare.decelDistance = totalDistance;
-			}
-			else
-			{
-				// Start and end speeds are exactly the same, possibly zero, so give up trying to adjust this move
-				return;
-			}
-		}
-
-		if (reprap.Debug(moduleMove))
-		{
-			debugPrintf("New a=%.1f d=%.1f\n", (double)acceleration, (double)deceleration);
-		}
-	}
-}
-
 // Prepare this DDA for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
@@ -1338,6 +1225,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		}
 
 		activeDMs = completedDMs = nullptr;
+		params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
 
 #if SUPPORT_CAN_EXPANSION
 		CanMotion::StartMovement();

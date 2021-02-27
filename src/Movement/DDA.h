@@ -196,7 +196,6 @@ private:
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept;
-	void AdjustAcceleration() noexcept;										// Adjust the acceleration and deceleration to reduce ringing
 
 #if SUPPORT_CAN_EXPANSION
 	int32_t PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const noexcept;

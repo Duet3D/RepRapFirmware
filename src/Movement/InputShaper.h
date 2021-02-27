@@ -44,7 +44,7 @@ public:
 	float GetMinimumAcceleration() const noexcept { return minimumAcceleration; }
 	InputShaperType GetType() const noexcept { return type; }
 	InputShaperPlan PlanShaping(DDA& dda) const noexcept;
-	MoveSegment *GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, MoveSegment *nextSegments) const noexcept;
+	MoveSegment *GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, MoveSegment *nextSegment) const noexcept;
 	MoveSegment *GetDecelerationSegments(InputShaperPlan plan, const DDA& dda, float decelStartDistance, float decelStartTime) const noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593

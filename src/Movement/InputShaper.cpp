@@ -257,14 +257,18 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda) const noexcept
 	return InputShaperPlan();
 }
 
-MoveSegment *InputShaper::GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, MoveSegment *nextSegments) const noexcept
+MoveSegment *InputShaper::GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, MoveSegment *nextSegment) const noexcept
 {
 	if (plan.accelSegments == 1)
 	{
-		MoveSegment * const seg = MoveSegment::Allocate(nextSegments);
+		MoveSegment * const seg = MoveSegment::Allocate(nextSegment);
 		const float uDivA = dda.startSpeed/(dda.acceleration * StepTimer::StepClockRate);
 		const float twoDistDivA = (2.0 * dda.totalDistance)/(dda.acceleration * StepTimer::StepClockRateSquared);
 		seg->SetNonLinear(fsquare(uDivA), twoDistDivA, -uDivA);
+		if (nextSegment == nullptr)
+		{
+			seg->SetLast();
+		}
 		return seg;
 	}
 
@@ -280,6 +284,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(InputShaperPlan plan, const DD
 		const float uDivD = dda.topSpeed/(dda.deceleration * StepTimer::StepClockRate);
 		const float twoDistDivD = (2.0 * dda.totalDistance)/(dda.deceleration * StepTimer::StepClockRateSquared);
 		seg->SetNonLinear(fsquare(uDivD) - (2.0 * decelStartDistance)/(dda.deceleration * StepTimer::StepClockRate), twoDistDivD, uDivD + decelStartTime * StepTimer::StepClockRate);
+		seg->SetLast();
 		return seg;
 	}
 
