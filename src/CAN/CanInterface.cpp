@@ -93,7 +93,7 @@ constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,
 	.numTxBuffers = 6,
-	.txFifoSize = 4,
+	.txFifoSize = 16,
 	.numRxBuffers =  0,
 	.rxFifo0Size = 16,
 	.rxFifo1Size = 16,
@@ -140,7 +140,7 @@ static CanDevice *can1dev = nullptr;
 // Transmit buffer usage
 constexpr auto TxBufferIndexUrgent = CanDevice::TxBufferNumber::buffer0;
 constexpr auto TxBufferIndexTimeSync = CanDevice::TxBufferNumber::buffer1;
-constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer2;
+constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::fifo;
 // We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
 constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer3;
 constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer4;
