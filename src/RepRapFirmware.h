@@ -326,7 +326,11 @@ typedef Bitmap<uint32_t> DriversBitmap;			// Type of a bitmap representing a set
 typedef Bitmap<uint32_t> FansBitmap;			// Type of a bitmap representing a set of fan numbers
 typedef Bitmap<uint32_t> HeatersBitmap;			// Type of a bitmap representing a set of heater numbers
 typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing a set of drivers that typically have a common cooling fan
+#if defined(DUET3) || defined(DUET_NG)
+typedef Bitmap<uint32_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
+#else
 typedef Bitmap<uint16_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
+#endif
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
 
 #if defined(DUET3) || defined(DUET3MINI)
