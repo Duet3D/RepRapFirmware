@@ -2224,7 +2224,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				cpu_irq_disable();
 				asm volatile("":::"memory");
 				uint32_t now1 = SysTick->VAL;
-				val = sqrtf(val);
+				val = RepRap::FastSqrtf(val);
 				uint32_t now2 = SysTick->VAL;
 				asm volatile("":::"memory");
 				cpu_irq_enable();

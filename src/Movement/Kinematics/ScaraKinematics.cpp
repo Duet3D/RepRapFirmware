@@ -73,7 +73,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 	}
 
 	psi = acosf(cosPsi) * RadiansToDegrees;
-	const float sinPsi = sqrtf(square);
+	const float sinPsi = fastSqrtf(square);
 	const float SCARA_K1 = proximalArmLength + distalArmLength * cosPsi;
 	const float SCARA_K2 = distalArmLength * sinPsi;
 
@@ -277,7 +277,7 @@ LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const fl
 			// We are radius-limited
 			float x = finalCoords[X_AXIS] + xOffset;
 			float y = finalCoords[Y_AXIS] + yOffset;
-			const float r = sqrtf(fsquare(x) + fsquare(y));
+			const float r = fastSqrtf(fsquare(x) + fsquare(y));
 			if (r < minRadius)
 			{
 				// Radius is too small. The user may have specified x=0 y=0 so allow for this.
@@ -476,7 +476,7 @@ void ScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 {
 	// For now we limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration.
 	// Limiting the angular rates of the arms would be better.
-	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
+	const float xyFactor = fastSqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
 	if (xyFactor > 0.01)
 	{
 		const Platform& platform = reprap.GetPlatform();
@@ -506,7 +506,7 @@ void ScaraKinematics::Recalc() noexcept
 	distalArmLengthSquared = fsquare(distalArmLength);
 	twoPd = proximalArmLength * distalArmLength * 2;
 
-	minRadius = max<float>(sqrtf(proximalArmLengthSquared + distalArmLengthSquared
+	minRadius = max<float>(fastSqrtf(proximalArmLengthSquared + distalArmLengthSquared
 							+ twoPd * min<float>(cosf(psiLimits[0] * DegreesToRadians), cosf(psiLimits[1] * DegreesToRadians))) * 1.005,
 							requestedMinRadius);
 	minRadiusSquared = fsquare(minRadius);
@@ -523,7 +523,7 @@ void ScaraKinematics::Recalc() noexcept
 	else
 	{
 		const float minAngle = min<float>(fabsf(psiLimits[0]), fabsf(psiLimits[1])) * DegreesToRadians;
-		maxRadius = sqrtf(proximalArmLengthSquared + distalArmLengthSquared + (twoPd * cosf(minAngle)));
+		maxRadius = fastSqrtf(proximalArmLengthSquared + distalArmLengthSquared + (twoPd * cosf(minAngle)));
 	}
 	maxRadius *= 0.995;
 

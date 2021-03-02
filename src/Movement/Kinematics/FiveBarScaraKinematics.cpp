@@ -177,7 +177,7 @@ bool FiveBarScaraKinematics::isCantilevered(int mode) const noexcept
 // get angle between -90 and 270 for given origin and destination coordinates
 float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const noexcept
 {
-	const float length = sqrtf(fsquare(xOrig - xDest) + fsquare(yOrig - yDest));
+	const float length = fastSqrtf(fsquare(xOrig - xDest) + fsquare(yOrig - yDest));
 	const float y = fabs(yOrig - yDest);
 	float angle = asinf(y / length) * 180.0f / Pi;
 
@@ -208,9 +208,9 @@ void FiveBarScaraKinematics::getIntersec(float result[], float firstRadius, floa
 	const float secondRadius2 = fsquare(secondRadius);
 
 	const float distance2 = fsquare(firstX - secondX) + fsquare(firstY - secondY);
-	const float distance  = sqrtf(distance2);
+	const float distance  = fastSqrtf(distance2);
 
-	const float delta = 0.25 * sqrtf(
+	const float delta = 0.25 * fastSqrtf(
 			(distance + firstRadius + secondRadius)
 			* (distance + firstRadius - secondRadius)
 			* (distance - firstRadius + secondRadius)
@@ -927,7 +927,7 @@ void FiveBarScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *no
 	//TODO should we make use of numVisibleAxes and/or continuousRotationShortcut?
 	// For now we limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration.
 	// Limiting the angular rates of the arms would be better.
-	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
+	const float xyFactor = fastSqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
 	if (xyFactor > 0.01)
 	{
 		const Platform& platform = reprap.GetPlatform();

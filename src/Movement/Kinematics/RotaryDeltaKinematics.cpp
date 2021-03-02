@@ -614,7 +614,7 @@ LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], co
 		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 		if (diagonalSquared > printRadiusSquared)
 		{
-			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
+			const float factor = fastSqrtf(printRadiusSquared / diagonalSquared);
 			finalCoords[X_AXIS] *= factor;
 			finalCoords[Y_AXIS] *= factor;
 			limited = true;
@@ -743,7 +743,7 @@ float RotaryDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 		const float c = rodSquaredMinusArmSquared[axis] - (fsquare(hMinusZ) + fsquare(rMinusX) + fsquare(y));
 
 		// 3. Solve the quadratic equation, taking the lower root
-		const float sinTheta = (b * c - a * sqrtf(fsquare(a) + fsquare(b) - fsquare(c)))/(fsquare(a) + fsquare(b));
+		const float sinTheta = (b * c - a * fastSqrtf(fsquare(a) + fsquare(b) - fsquare(c)))/(fsquare(a) + fsquare(b));
 
 		// 4. Take the arc sine and convert to degrees
 		return asinf(sinTheta) * RadiansToDegrees;
@@ -797,7 +797,7 @@ void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 	const float C = fsquare(S) + fsquare(T) + (T * posAY - S * posAX) * P * 2 + (Da2 - rodSquared[DELTA_A_AXIS]) * P2;
 
 	// Solve the quadratic equation for z
-	const float z = (- halfB - sqrtf(fsquare(halfB) - A * C))/A;
+	const float z = (- halfB - fastSqrtf(fsquare(halfB) - A * C))/A;
 
 	// Substitute back for X and Y
 	machinePos[X_AXIS] = (Q * z + S)/P;

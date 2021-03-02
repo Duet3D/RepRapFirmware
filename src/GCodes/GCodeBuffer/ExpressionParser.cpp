@@ -890,7 +890,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 
 		case Function::sqrt:
 			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = sqrtf(rslt.fVal);
+			rslt.fVal = fastSqrtf(rslt.fVal);
 			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
 			break;
 

@@ -312,7 +312,7 @@ void GridDefinition::PrintError(float originalAxis0range, float originalAxis1ran
 	{
 		const float totalRange = originalAxis0range + originalAxis1range;
 		const float area = originalAxis0range * originalAxis1range;
-		const float minSpacing = (totalRange + sqrtf(fsquare(totalRange) + 4.0 * (MaxGridProbePoints - 1) * area))/(2.0 * (MaxGridProbePoints - 1));
+		const float minSpacing = (totalRange + fastSqrtf(fsquare(totalRange) + 4.0 * (MaxGridProbePoints - 1) * area))/(2.0 * (MaxGridProbePoints - 1));
 		const float minXspacing = originalAxis0range/(MaxAxis0GridPoints - 1);
 		r.catf("Too many grid points; suggest increase spacing to %.1fmm", (double)max<float>(minSpacing, minXspacing));
 	}
@@ -700,7 +700,7 @@ void HeightMap::ExtrapolateMissing() noexcept
 	// Plane equation: ax+by+cz=d -> z = (d-(ax+by))/c
 	float a = (axis1z*axis0Axis1 - axis0z*axis1Axis1) / detZ;
 	float b = (axis0z*axis0Axis1 - axis1z*axis0Axis0) / detZ;
-	const float invC = sqrtf(a*a + b*b + 1.0);
+	const float invC = fastSqrtf(a*a + b*b + 1.0);
 	const float normLenInv = 1.0 / invC;
 	a *= normLenInv;
 	b *= normLenInv;

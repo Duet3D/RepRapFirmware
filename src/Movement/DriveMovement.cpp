@@ -125,7 +125,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	const float B = params.initialY - params.dparams->GetTowerY(drive);
 	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
 	const float dSquaredMinusAsquaredMinusBsquared = params.dparams->GetDiagonalSquared(drive) - fsquare(A) - fsquare(B);
-	const float h0MinusZ0 = sqrtf(dSquaredMinusAsquaredMinusBsquared);
+	const float h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
 #if DM_USE_FPU
 	mp.delta.fHmz0s = h0MinusZ0 * stepsPerMm;
 	mp.delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
@@ -151,12 +151,12 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	{
 		// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
 		// the other root corresponds to the carriages being above the bed.
-		const float drev = ((dda.directionVector[Z_AXIS] * sqrtf(params.a2plusb2 * params.dparams->GetDiagonalSquared(drive) - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
+		const float drev = ((dda.directionVector[Z_AXIS] * fastSqrtf(params.a2plusb2 * params.dparams->GetDiagonalSquared(drive) - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
 							- aAplusbB)/params.a2plusb2;
 		if (drev > 0.0 && drev < dda.totalDistance)		// if the reversal point is within range
 		{
 			// Calculate how many steps we need to move up before reversing
-			const float hrev = dda.directionVector[Z_AXIS] * drev + sqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
+			const float hrev = dda.directionVector[Z_AXIS] * drev + fastSqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
 			const int32_t numStepsUp = (int32_t)((hrev - h0MinusZ0) * stepsPerMm);
 
 			// We may be almost at the peak height already, in which case we don't really have a reversal.
@@ -610,7 +610,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
 #if DM_USE_FPU
 			const float adjustedStartSpeedTimesCdivA = (float)(dda.afterPrepare.startSpeedTimesCdivA + mp.cart.compensationClocks);
-			nextCalcStepTime = lrintf(sqrtf(fsquare(adjustedStartSpeedTimesCdivA) + (fTwoCsquaredTimesMmPerStepDivA * nextCalcStep)) - adjustedStartSpeedTimesCdivA);
+			nextCalcStepTime = lrintf(fastSqrtf(fsquare(adjustedStartSpeedTimesCdivA) + (fTwoCsquaredTimesMmPerStepDivA * nextCalcStep)) - adjustedStartSpeedTimesCdivA);
 #else
 			const uint32_t adjustedStartSpeedTimesCdivA = dda.afterPrepare.startSpeedTimesCdivA + mp.cart.compensationClocks;
 			nextCalcStepTime = isqrt64(isquare64(adjustedStartSpeedTimesCdivA) + (twoCsquaredTimesMmPerStepDivA * nextCalcStep)) - adjustedStartSpeedTimesCdivA;
@@ -689,7 +689,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const float temp = fTwoCsquaredTimesMmPerStepDivD * nextCalcStep;
 			// Allow for possible rounding error when the end speed is zero or very small
 			nextCalcStepTime = (temp < fTwoDistanceToStopTimesCsquaredDivD)
-							? adjustedTopSpeedTimesCdivDPlusDecelStartClocks - lrintf(sqrtf(fTwoDistanceToStopTimesCsquaredDivD - temp))
+							? adjustedTopSpeedTimesCdivDPlusDecelStartClocks - lrintf(fastSqrtf(fTwoDistanceToStopTimesCsquaredDivD - temp))
 							: adjustedTopSpeedTimesCdivDPlusDecelStartClocks;
 #else
 			const uint64_t temp = twoCsquaredTimesMmPerStepDivD * nextCalcStep;
@@ -730,7 +730,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const uint32_t adjustedTopSpeedTimesCdivDPlusDecelStartClocks = dda.afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks - mp.cart.compensationClocks;
 			nextCalcStepTime = adjustedTopSpeedTimesCdivDPlusDecelStartClocks
 #if DM_USE_FPU
-								+ lrintf(sqrtf((fTwoCsquaredTimesMmPerStepDivD * nextCalcStep) - mp.cart.fFourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD));
+								+ lrintf(fastSqrtf((fTwoCsquaredTimesMmPerStepDivD * nextCalcStep) - mp.cart.fFourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD));
 #else
 								+ isqrt64((int64_t)(twoCsquaredTimesMmPerStepDivD * nextCalcStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD);
 #endif
@@ -839,7 +839,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	const float t1 = mp.delta.fMinusAaPlusBbTimesS + hmz0sc;
 	// Due to rounding error we can end up trying to take the square root of a negative number if we do not take precautions here
 	const float t2a = mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(mp.delta.fHmz0s) + fsquare(t1);
-	const float t2 = (t2a > 0.0) ? sqrtf(t2a) : 0.0;
+	const float t2 = (t2a > 0.0) ? fastSqrtf(t2a) : 0.0;
 	const float ds = (direction) ? t1 - t2 : t1 + t2;
 #else
 	// In the following, cKc is the Z movement fraction of the total move scaled by Kc
@@ -868,7 +868,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	if (ds < mp.delta.fAccelStopDs)
 	{
 		// Acceleration phase
-		nextCalcStepTime = lrintf(sqrtf(fsquare((float)dda.afterPrepare.startSpeedTimesCdivA) + (fTwoCsquaredTimesMmPerStepDivA * ds))) - dda.afterPrepare.startSpeedTimesCdivA;
+		nextCalcStepTime = lrintf(fastSqrtf(fsquare((float)dda.afterPrepare.startSpeedTimesCdivA) + (fTwoCsquaredTimesMmPerStepDivA * ds))) - dda.afterPrepare.startSpeedTimesCdivA;
 	}
 	else if (ds < mp.delta.fDecelStartDs)
 	{
@@ -882,7 +882,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		const float temp = fTwoCsquaredTimesMmPerStepDivD * ds;
 		// Because of possible rounding error when the end speed is zero or very small, we need to check that the square root will work OK
 		nextCalcStepTime = (temp < fTwoDistanceToStopTimesCsquaredDivD)
-						? dda.afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks - lrintf(sqrtf(fTwoDistanceToStopTimesCsquaredDivD - temp))
+						? dda.afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks - lrintf(fastSqrtf(fTwoDistanceToStopTimesCsquaredDivD - temp))
 						: dda.afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks;
 	}
 #else

@@ -2900,6 +2900,12 @@ void RepRap::StartIap(const char *filename) noexcept
 	return sinf(angle) + cosf(angle);
 }
 
+// Helper function for diagnostic tests in Platform.cpp, to calculate square root
+/*static*/ float RepRap::FastSqrtf(float f) noexcept
+{
+	return ::fastSqrtf(f);
+}
+
 // Report an internal error
 void RepRap::ReportInternalError(const char *file, const char *func, int line) const noexcept
 {

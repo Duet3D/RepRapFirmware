@@ -199,10 +199,10 @@ bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], cons
 							+ fsquare(anchorDz - machinePos[Z_AXIS]);
 	if (aSquared > 0.0 && bSquared > 0.0 && cSquared > 0.0 && dSquared > 0.0)
 	{
-		motorPos[A_AXIS] = lrintf(sqrtf(aSquared) * stepsPerMm[A_AXIS]);
-		motorPos[B_AXIS] = lrintf(sqrtf(bSquared) * stepsPerMm[B_AXIS]);
-		motorPos[C_AXIS] = lrintf(sqrtf(cSquared) * stepsPerMm[C_AXIS]);
-		motorPos[D_AXIS] = lrintf(sqrtf(dSquared) * stepsPerMm[D_AXIS]);
+		motorPos[A_AXIS] = lrintf(fastSqrtf(aSquared) * stepsPerMm[A_AXIS]);
+		motorPos[B_AXIS] = lrintf(fastSqrtf(bSquared) * stepsPerMm[B_AXIS]);
+		motorPos[C_AXIS] = lrintf(fastSqrtf(cSquared) * stepsPerMm[C_AXIS]);
+		motorPos[D_AXIS] = lrintf(fastSqrtf(dSquared) * stepsPerMm[D_AXIS]);
 		return true;
 	}
 	return false;
@@ -227,7 +227,7 @@ LimitPositionResult HangprinterKinematics::LimitPosition(float finalCoords[], co
 		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 		if (diagonalSquared > printRadiusSquared)
 		{
-			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
+			const float factor = fastSqrtf(printRadiusSquared / diagonalSquared);
 			finalCoords[X_AXIS] *= factor;
 			finalCoords[Y_AXIS] *= factor;
 			limited = true;
@@ -352,7 +352,7 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 	const float C = fsquare(S) + fsquare(T) + (anchorA[1] * T - anchorA[0] * S) * P * 2 + (Da2 - fsquare(La)) * P2;
 
 	// Solve the quadratic equation for z
-	machinePos[2] = (- halfB - sqrtf(fsquare(halfB) - A * C))/A;
+	machinePos[2] = (- halfB - fastSqrtf(fsquare(halfB) - A * C))/A;
 
 	// Substitute back for X and Y
 	machinePos[0] = (Q * machinePos[2] + S)/P;
@@ -403,9 +403,9 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			const floatc_t zp = reprap.GetMove().GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], probePoints.PointWasCorrected(i));
 			machinePos[Z_AXIS] = 0.0;
 
-			probeMotorPositions(i, A_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorA));
-			probeMotorPositions(i, B_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorB));
-			probeMotorPositions(i, C_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorC));
+			probeMotorPositions(i, A_AXIS) = fastSqrtf(LineLengthSquared(machinePos, anchorA));
+			probeMotorPositions(i, B_AXIS) = fastSqrtf(LineLengthSquared(machinePos, anchorB));
+			probeMotorPositions(i, C_AXIS) = fastSqrtf(LineLengthSquared(machinePos, anchorC));
 			initialSumOfSquares += fcsquare(zp);
 		}
 		initialDeviation.Set(initialSumOfSquares, initialSum, numPoints);

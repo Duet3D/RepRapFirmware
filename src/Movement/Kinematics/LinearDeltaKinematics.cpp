@@ -115,7 +115,7 @@ void LinearDeltaKinematics::Recalc() noexcept
 	{
 		D2[axis] = fsquare(diagonals[axis]);
 		homedCarriageHeights[axis] = homedHeight
-									+ sqrtf(D2[axis] - ((axis < UsualNumTowers) ? fsquare(radius) : fsquare(towerX[axis]) + fsquare(towerY[axis])))
+									+ fastSqrtf(D2[axis] - ((axis < UsualNumTowers) ? fsquare(radius) : fsquare(towerX[axis]) + fsquare(towerY[axis])))
 									+ endstopAdjustments[axis];
 		const float heightLimit = homedCarriageHeights[axis] - diagonals[axis];
 		if (heightLimit < alwaysReachableHeight)
@@ -161,7 +161,7 @@ float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 {
 	if (axis < numTowers)
 	{
-		return sqrtf(D2[axis] - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]))
+		return fastSqrtf(D2[axis] - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]))
 			 + machinePos[Z_AXIS]
 			 + (machinePos[X_AXIS] * xTilt)
 			 + (machinePos[Y_AXIS] * yTilt);
@@ -193,7 +193,7 @@ void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 							- (R * T + U * S);
 	const float C = fsquare(towerX[DELTA_A_AXIS] * Q - S) + fsquare(towerY[DELTA_A_AXIS] * Q + T) + (fsquare(Ha) - D2[DELTA_A_AXIS]) * Q2;
 
-	const float z = (minusHalfB - sqrtf(fsquare(minusHalfB) - A * C)) / A;
+	const float z = (minusHalfB - fastSqrtf(fsquare(minusHalfB) - A * C)) / A;
 	machinePos[X_AXIS] = (U * z + S) / Q;
 	machinePos[Y_AXIS] = -(R * z + T) / Q;
 	machinePos[Z_AXIS] = z - ((machinePos[X_AXIS] * xTilt) + (machinePos[Y_AXIS] * yTilt));
@@ -254,7 +254,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 		if (applyM208Limits && diagonalSquared > printRadiusSquared)
 		{
-			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
+			const float factor = fastSqrtf(printRadiusSquared / diagonalSquared);
 			finalCoords[X_AXIS] *= factor;
 			finalCoords[Y_AXIS] *= factor;
 			limited = true;
@@ -314,7 +314,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 						}
 						else
 						{
-							const float tP2Q2 = dz * sqrtf(discriminant * Q2) - ((tx * dx) + (ty * dy)) * Q2;
+							const float tP2Q2 = dz * fastSqrtf(discriminant * Q2) - ((tx * dx) + (ty * dy)) * Q2;
 							const float P2Q2 = P2 * Q2;
 							if (tP2Q2 >= P2Q2)
 							{
@@ -734,12 +734,12 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[]) noexce
 	{
 		if (numFactors >= 4)
 		{
-			const float oldCarriageHeight = sqrtf(fsquare(diagonals[tower]) - fsquare(oldRadius));
+			const float oldCarriageHeight = fastSqrtf(fsquare(diagonals[tower]) - fsquare(oldRadius));
 			if (numFactors == 7 || numFactors == 9)
 			{
 				diagonals[tower] += (float)v[6];
 			}
-			const float newCarriageHeight = sqrtf(fsquare(diagonals[tower]) - fsquare(radius));
+			const float newCarriageHeight = fastSqrtf(fsquare(diagonals[tower]) - fsquare(radius));
 			endstopAdjustments[tower] += oldCarriageHeight - newCarriageHeight;
 		}
 		endstopAdjustments[tower] += (float)v[tower];
