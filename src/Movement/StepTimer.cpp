@@ -218,6 +218,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	if (syncCount == MaxSyncCount && millis() - whenLastSynced > MinSyncInterval)
 	{
 		syncCount = 0;
+		++numResyncs;
 	}
 	return syncCount == MaxSyncCount;
 }
