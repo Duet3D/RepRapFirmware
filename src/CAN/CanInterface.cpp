@@ -1014,8 +1014,8 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 void CanInterface::Diagnostics(MessageType mtype) noexcept
 {
 	unsigned int messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount;
-	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount);
-
+	uint32_t lastCancelledId;
+	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount, lastCancelledId);
 	reprap.GetPlatform().MessageF(mtype,
 				"=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
 				", peak Tx sync delay %" PRIu32
@@ -1023,6 +1023,12 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 					messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
 					peakTimeSyncTxDelay,
 					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers());
+	if (lastCancelledId != 0)
+	{
+		CanId id;
+		id.SetReceivedId(lastCancelledId);
+		reprap.GetPlatform().MessageF(mtype, "Last cancelled message type %u dest %u\n", (unsigned int)id.MsgType(), id.Dst());
+	}
 
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;
