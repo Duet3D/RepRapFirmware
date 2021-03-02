@@ -38,16 +38,4 @@ MoveSegment *MoveSegment::Allocate(MoveSegment *next) noexcept
 	return ms;
 }
 
-uint32_t MoveSegment::CalcForwardStepTime(float moveFraction) const noexcept
-{
-	const float ret = pC + ((!IsLinear()) ? fastSqrtf(pA + pB * moveFraction) : pB * moveFraction);
-	return (uint32_t)ret;
-}
-
-uint32_t MoveSegment::CalcReverseStepTime(float moveFraction) const noexcept
-{
-	const float ret = pC - ((!IsLinear()) ? fastSqrtf(pA + pB * moveFraction) : pB * moveFraction);
-	return (uint32_t)ret;
-}
-
 // End

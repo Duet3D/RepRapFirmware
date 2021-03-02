@@ -5,6 +5,25 @@
  *      Author: David
  *
  * This class holds the parameters of a segment of a move.
+ *
+ * Accelerating moves obey t^2/2 + (u/a)t - (s/a) = 0 where t = time, a = acceleration, u = initial speed, s = distance moved
+ * from which t = sqrt(A + Bs) + C
+ * where A = (u/a)^2, B = 2/a, C = -u/a
+ * We can interpret A/B as the distance at which the move reversed, C is the time at which it reversed (in the past)
+ *
+ * Decelerating moves obey t^2/2 - (u/d)t + (s/d) = 0 where t = time, d = deceleration, u = initial speed, s = distance moved
+ * from which t = sqrt(A + Bs) + C
+ * where A = (u/a)^2, B = -2/d, C = u/d
+ * We can interpret -(A/B) as the distance at which the move will reverse, C is the time at which it will reverse (in the future)
+ *
+ * When a decelerating move reverses, s gets replaced by sr - (s - sr) = 2sr - s where sr is the distance at reverse
+ * from which t = sqrt(A + B(2sr - s)) + C = sqrt(A + 2Bsr - Bs)
+ * but A = -Bsr, therefore t = sqrt(-A - Bs) + C
+ * so we can just change the sign of A and B and use the same parameters for the reverse phase
+ *
+ * Linear moves obey ut = s where t = time, u = speed, s = distance moved
+ * from which t = Bs + C
+ * where B = 1/u, C is the time at which the segment started
  */
 
 #ifndef SRC_MOVEMENT_MOVESEGMENT_H_
@@ -23,13 +42,17 @@ public:
 
 	MoveSegment(MoveSegment *p_next) noexcept;
 
+	float GetA() const noexcept { return pA; }
+	float GetB() const noexcept { return pB; }
+	float GetC() const noexcept { return pC; }
+	float GetDistanceLimit() const noexcept { return distanceLimit; }
 	MoveSegment *GetNext() const noexcept;
 	bool IsLinear() const noexcept;
 	bool IsLast() const noexcept;
 
 	void SetNext(MoveSegment *p_next) noexcept;
-	void SetLinear(float uB, float uC) noexcept;
-	void SetNonLinear(float uA, float uB, float uC) noexcept;
+	void SetLinear(float pDistanceLimit, float uB, float uC) noexcept;
+	void SetNonLinear(float pDistanceLimit, float uA, float uB, float uC) noexcept;
 	void SetLast() noexcept;
 
 	uint32_t CalcForwardStepTime(float moveFraction) const noexcept;
@@ -53,14 +76,14 @@ private:
 	// The 'next' field is a MoveSegment pointer with two flag bits in the bottom two bits
 	uint32_t nextAndFlags;
 	float pA, pB, pC;
-	uint32_t segTime;
+	float distanceLimit;
 };
 
 // Create a new one, leaving the flags clear
 inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 	: nextAndFlags(reinterpret_cast<uint32_t>(p_next))				// this also clears the flags
 {
-	// pA, pB and pC are not initialised
+	// clocks, distanceLimit, pA, pB and pC are not initialised
 }
 
 inline MoveSegment *MoveSegment::GetNext() const noexcept
@@ -83,16 +106,18 @@ inline bool MoveSegment::IsLast() const noexcept
 	return nextAndFlags & 2u;
 }
 
-inline void MoveSegment::SetLinear(float uB, float uC) noexcept
+inline void MoveSegment::SetLinear(float pDistanceLimit, float uB, float uC) noexcept
 {
+	distanceLimit = pDistanceLimit;
 	pB = uB;
 	pC = uC;
 	nextAndFlags |= 1u;
 }
 
 // Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
-inline void MoveSegment::SetNonLinear(float uA, float uB, float uC) noexcept
+inline void MoveSegment::SetNonLinear(float pDistanceLimit, float uA, float uB, float uC) noexcept
 {
+	distanceLimit = pDistanceLimit;
 	pA = uA;
 	pB = uB;
 	pC = uC;
@@ -101,6 +126,18 @@ inline void MoveSegment::SetNonLinear(float uA, float uB, float uC) noexcept
 inline void MoveSegment::SetLast() noexcept
 {
 	nextAndFlags |= 2u;
+}
+
+inline uint32_t MoveSegment::CalcForwardStepTime(float moveFraction) const noexcept
+{
+	const float ret = pC + ((!IsLinear()) ? fastSqrtf(pA + pB * moveFraction) : pB * moveFraction);
+	return (uint32_t)ret;
+}
+
+inline uint32_t MoveSegment::CalcReverseStepTime(float moveFraction) const noexcept
+{
+	const float ret = pC + fastSqrtf((-pB) * moveFraction - pA);
+	return (uint32_t)ret;
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

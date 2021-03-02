@@ -81,9 +81,9 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 			if (buf->next == nullptr)
 			{
 				// This is the first CAN-connected board for this movement
-				move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
-				move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
-				move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
+				move->accelerationClocks = (uint32_t)params.accelClocks;
+				move->steadyClocks = (uint32_t)params.steadyClocks;
+				move->decelClocks = (uint32_t)params.decelClocks;
 				currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
 			}
 			else

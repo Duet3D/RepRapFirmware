@@ -95,24 +95,18 @@ inline int64_t roundS64(double d) noexcept
 struct PrepParams
 {
 	// Parameters used for all types of motion
-	float totalDistance;
 	float accelDistance;
 	float decelDistance;
-	float acceleration;
-	float deceleration;
 	float decelStartDistance;
-#if DM_USE_FPU
-	float fTopSpeedTimesCdivD;
-#else
-	uint32_t topSpeedTimesCdivD;
-#endif
+
+	float accelTime;
+	float accelClocks, steadyClocks, decelClocks;
 
 	// Parameters used only for extruders
-	float accelCompFactor;
+//	float accelCompFactor;
 
 #if SUPPORT_CAN_EXPANSION
 	// Parameters used by CAN expansion
-	float accelTime, steadyTime, decelTime;
 	float initialSpeedFraction, finalSpeedFraction;
 #endif
 
@@ -129,27 +123,12 @@ struct PrepParams
 enum class DMState : uint8_t
 {
 	idle = 0,
-	stepError = 1,
+	stepError,
 	// All higher values are various states of motion
-	accel0 = 2,
-	accel1,
-	accel2,
-	accel3,
-	accel4,
-	accel5,
-	accel6,
-	accel7,
-	steady,
-	decel0,
-	decel1,
-	decel2,
-	decel3,
-	decel4,
-	decel5,
-	decel6,
-	decel7,
-	reversing,
-	reverse
+	forwards,									// moving forwards
+	reversing,									// moving forwards but reversing on next step
+	reverse,									// reversing on this and subsequent steps
+	stopping									// just one more step to do
 };
 
 // This class describes a single movement of one drive
@@ -168,13 +147,13 @@ public:
 	bool CalcNextStepTime(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
-	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) noexcept SPEED_CRITICAL;
+	bool PrepareExtruder(DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) noexcept SPEED_CRITICAL;
+	bool PrepareExtruderCommon(DDA& dda, const PrepParams& params, float effectiveStepsPerMm, int32_t netSteps, float compensationTime) noexcept SPEED_CRITICAL;
 
 #if SUPPORT_REMOTE_COMMANDS
-	bool PrepareRemoteExtruder(const DDA& dda, const PrepParams& params) noexcept;
+	bool PrepareRemoteExtruder(DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 #endif
 
-	void ReduceSpeed(uint32_t inverseSpeedFactor) noexcept;
 	void DebugPrint() const noexcept;
 	int32_t GetNetStepsLeft() const noexcept;
 	int32_t GetNetStepsTaken() const noexcept;
@@ -195,6 +174,8 @@ public:
 private:
 	bool CalcNextStepTimeCartesianFull(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool CalcNextStepTimeDeltaFull(const DDA &dda) noexcept SPEED_CRITICAL;
+	void NewLinearSegment() noexcept;
+	void NewDeltaSegment(const DDA *dda) noexcept;
 
 	static DriveMovement *freeList;
 	static unsigned int numCreated;
@@ -202,6 +183,9 @@ private:
 	// Parameters common to Cartesian, delta and extruder moves
 
 	DriveMovement *nextDM;								// link to next DM that needs a step
+	MoveSegment *currentSegment;
+
+	float moveFraction;
 
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
@@ -215,6 +199,7 @@ private:
 
 	// These values change as the step is executed, except for reverseStartStep
 	uint32_t nextStep;									// number of steps already done
+	uint32_t phaseStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	uint32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
@@ -224,9 +209,12 @@ private:
 	{
 		// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
 #if DM_USE_FPU
+		float fTwoA;
+		float fTwoB;
 		float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
-		float fHmz0s;									// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
+		float fHmz0s;									// the starting step position less the starting Z height, multiplied by the Z movement fraction (can go negative)
 		float fMinusAaPlusBbTimesS;
+		float reverseStartDistance;
 #else
 		int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 		int32_t hmz0sK;									// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)

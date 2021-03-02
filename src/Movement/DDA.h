@@ -185,6 +185,7 @@ public:
 #endif
 
 private:
+	void AppendSegments(MoveSegment *segs) noexcept;
 	DriveMovement *FindDM(size_t drive) const noexcept;						// find the DM for a drive if there is one even if it is completed
 	DriveMovement *FindActiveDM(size_t drive) const noexcept;				// find the DM for a drive if there is one but only if it is active
 	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;

@@ -662,29 +662,33 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks/(2 * StepTimer::StepClockRate);
 	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks/(2 * StepTimer::StepClockRate);
 	params.decelStartDistance = 1.0 - params.decelDistance;
+	params.accelClocks = msg.accelerationClocks;
+	params.accelTime = msg.accelerationClocks/StepTimer::StepClockRate;
+	params.steadyClocks = msg.steadyClocks;
+	params.decelClocks = msg.decelClocks;
 
 	// Calculate the segments needed for axis movement
 	const InputShaper& shaper = reprap.GetMove().GetShaper();
+
 	// Deceleration phase
 	MoveSegment * tempSegments = (params.decelDistance > 0.0)
-									? shaper.GetDecelerationSegments(InputShaperPlan(), *this, params.decelStartDistance, msg.accelerationClocks + msg.steadyClocks)
+									? shaper.GetDecelerationSegments(InputShaperPlan(), *this, 1.0, params.decelStartDistance, (float)(msg.accelerationClocks + msg.steadyClocks))
 									: nullptr;
 	// Steady speed phase
 	if (msg.steadyClocks > 0.0)
 	{
 		tempSegments = MoveSegment::Allocate(tempSegments);
-		tempSegments->SetLinear(totalDistance/topSpeed, (float)msg.accelerationClocks + beforePrepare.accelDistance/topSpeed);
+		tempSegments->SetLinear(params.decelStartDistance, totalDistance/topSpeed, (float)msg.accelerationClocks + beforePrepare.accelDistance/topSpeed);
 	}
 
 	// Acceleration phase
 	if (beforePrepare.accelDistance > 0.0)
 	{
-		tempSegments = shaper.GetAccelerationSegments(InputShaperPlan(), *this, tempSegments);
+		tempSegments = shaper.GetAccelerationSegments(InputShaperPlan(), *this, params.accelDistance, tempSegments);
 	}
 
 	segments = tempSegments;
 
-	params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
 	activeDMs = completedDMs = nullptr;
 
 	const size_t numDrivers = min<size_t>(msg.numDrivers, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
@@ -695,7 +699,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 		if (delta != 0)
 		{
-			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
+			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::forwards);
 			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 
@@ -1175,30 +1179,31 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 	params.accelDistance = beforePrepare.accelDistance;
 	params.decelDistance = beforePrepare.decelDistance;
 	params.decelStartDistance = totalDistance - beforePrepare.decelDistance;
-	const float accelClocks = ((topSpeed - startSpeed) * StepTimer::StepClockRate)/acceleration;
-	const float decelClocks = ((topSpeed - endSpeed) * StepTimer::StepClockRate)/deceleration;
-	const float steadyClocks = ((totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance) * StepTimer::StepClockRate)/topSpeed;
-	clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
+	params.accelTime = (topSpeed - startSpeed)/acceleration;
+	params.accelClocks = params.accelTime * StepTimer::StepClockRate;
+	params.decelClocks = ((topSpeed - endSpeed) * StepTimer::StepClockRate)/deceleration;
+	params.steadyClocks = ((totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance) * StepTimer::StepClockRate)/topSpeed;
+	clocksNeeded = (uint32_t)(params.accelClocks + params.decelClocks + params.steadyClocks);
 
 	if (simMode == 0)
 	{
 		// Calculate the segments needed for axis movement
 		// Deceleration phase
 		MoveSegment * tempSegments = (beforePrepare.decelDistance > 0.0)
-										? shaper.GetDecelerationSegments(plan, *this, params.decelStartDistance, accelClocks + steadyClocks)
+										? shaper.GetDecelerationSegments(plan, *this, totalDistance, params.decelStartDistance, params.accelClocks + params.steadyClocks)
 										: nullptr;
 		// Steady speed phase
-		if (steadyClocks > 0.0)
+		if (params.steadyClocks > 0.0)
 		{
 			tempSegments = MoveSegment::Allocate(tempSegments);
 			const float ts = topSpeed * StepTimer::StepClockRate;
-			tempSegments->SetLinear(totalDistance/ts, accelClocks + beforePrepare.accelDistance/ts);
+			tempSegments->SetLinear(params.decelStartDistance, totalDistance/ts, params.accelClocks + beforePrepare.accelDistance/ts);
 		}
 
 		// Acceleration phase
 		if (beforePrepare.accelDistance > 0.0)
 		{
-			tempSegments = shaper.GetAccelerationSegments(plan, *this, tempSegments);
+			tempSegments = shaper.GetAccelerationSegments(plan, *this, params.accelDistance, tempSegments);
 		}
 
 		segments = tempSegments;
@@ -1225,7 +1230,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		}
 
 		activeDMs = completedDMs = nullptr;
-		params.accelCompFactor = (topSpeed - startSpeed)/topSpeed;
 
 #if SUPPORT_CAN_EXPANSION
 		CanMotion::StartMovement();
@@ -1265,7 +1269,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					{
 						if (delta != 0)
 						{
-							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::accel0);
+							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::forwards);
 							pdm->totalSteps = labs(delta);
 							pdm->direction = (delta >= 0);
 							if (pdm->PrepareCartesianAxis(*this, params))
@@ -1295,7 +1299,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
-					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
+					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::forwards);
 					pdm->totalSteps = labs(delta);
 					pdm->direction = (delta >= 0);
 					if (pdm->PrepareDeltaAxis(*this, params))
@@ -1353,7 +1357,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 
 					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
+						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::forwards);
 						pdm->totalSteps = labs(delta);
 						pdm->direction = (delta >= 0);
 						if (pdm->PrepareCartesianAxis(*this, params))
@@ -1424,7 +1428,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					else
 #endif
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
+						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::forwards);
 						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[extruder], speedChange, flags.usePressureAdvance);
 
 						if (stepsToDo)
@@ -1510,6 +1514,29 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 	if (state != completed)
 	{
 		state = frozen;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+	}
+}
+
+// Append some segments to the list. The last segment in the existing list must already have the 'last' flag set, so much the last segment in the list to be appended.
+void DDA::AppendSegments(MoveSegment *segs) noexcept
+{
+	MoveSegment *currentSeg = segments;
+	if (currentSeg == nullptr)
+	{
+		segments = segs;
+	}
+	else
+	{
+		do
+		{
+			MoveSegment * const nextSeg = currentSeg->GetNext();
+			if (next == nullptr)
+			{
+				currentSeg->SetNext(segs);
+				return;
+			}
+			currentSeg = nextSeg;
+		} while (true);
 	}
 }
 
@@ -1922,7 +1949,7 @@ void DDA::StepDrivers(Platform& p) noexcept
 	while (dmToInsert != dm)										// note that both of these may be nullptr
 	{
 		DriveMovement * const nextToInsert = dmToInsert->nextDM;
-		if (dmToInsert->state >= DMState::accel0)
+		if (dmToInsert->state >= DMState::forwards)
 		{
 			InsertDM(dmToInsert);
 			if (dmToInsert->directionChanged)
