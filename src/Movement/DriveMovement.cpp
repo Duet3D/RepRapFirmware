@@ -58,8 +58,8 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 {
 	const float stepsPerMm = (float)totalSteps/dda.totalDistance;
 #if DM_USE_FPU
-	fTwoCsquaredTimesMmPerStepDivA = (double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration);
-	fTwoCsquaredTimesMmPerStepDivD = (double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.deceleration);
+	fTwoCsquaredTimesMmPerStepDivA = (float)((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
+	fTwoCsquaredTimesMmPerStepDivD = (float)((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.deceleration));
 #else
 	twoCsquaredTimesMmPerStepDivA = roundU64((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
 	twoCsquaredTimesMmPerStepDivD = roundU64((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.deceleration));
@@ -130,8 +130,8 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	mp.delta.fHmz0s = h0MinusZ0 * stepsPerMm;
 	mp.delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
 	mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
-	fTwoCsquaredTimesMmPerStepDivA = (double)(2 * StepTimer::StepClockRateSquared)/((double)stepsPerMm * (double)dda.acceleration);
-	fTwoCsquaredTimesMmPerStepDivD = (double)(2 * StepTimer::StepClockRateSquared)/((double)stepsPerMm * (double)dda.deceleration);
+	fTwoCsquaredTimesMmPerStepDivA = (float)((double)(2 * StepTimer::StepClockRateSquared)/((double)stepsPerMm * (double)dda.acceleration));
+	fTwoCsquaredTimesMmPerStepDivD = (float)((double)(2 * StepTimer::StepClockRateSquared)/((double)stepsPerMm * (double)dda.deceleration));
 #else
 	mp.delta.hmz0sK = roundS32(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
 	mp.delta.minusAaPlusBbTimesKs = -roundS32(aAplusbB * stepsPerMm * DriveMovement::K2);
@@ -342,7 +342,8 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 #if DM_USE_FPU
 		const float initialDecelSpeedTimesCdivD = params.fTopSpeedTimesCdivD - (float)mp.cart.compensationClocks;
 		const float initialDecelSpeedTimesCdivDSquared = fsquare(initialDecelSpeedTimesCdivD);
-		fTwoDistanceToStopTimesCsquaredDivD = initialDecelSpeedTimesCdivDSquared + ((params.decelStartDistance + accelCompensationDistance) * (float)(StepTimer::StepClockRateSquared * 2))/dda.deceleration;
+		fTwoDistanceToStopTimesCsquaredDivD =
+			initialDecelSpeedTimesCdivDSquared + ((params.decelStartDistance + accelCompensationDistance) * (float)(StepTimer::StepClockRateSquared * 2))/dda.deceleration;
 #else
 		const int32_t initialDecelSpeedTimesCdivD = (int32_t)params.topSpeedTimesCdivD - (int32_t)mp.cart.compensationClocks;	// signed because it may be negative and we square it
 		const uint64_t initialDecelSpeedTimesCdivDSquared = isquare64(initialDecelSpeedTimesCdivD);
@@ -610,7 +611,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
 #if DM_USE_FPU
 			const float adjustedStartSpeedTimesCdivA = (float)(dda.afterPrepare.startSpeedTimesCdivA + mp.cart.compensationClocks);
-			nextCalcStepTime = lrintf(fastSqrtf(fsquare(adjustedStartSpeedTimesCdivA) + (fTwoCsquaredTimesMmPerStepDivA * nextCalcStep)) - adjustedStartSpeedTimesCdivA);
+			nextCalcStepTime = (uint32_t)(fastSqrtf(fsquare(adjustedStartSpeedTimesCdivA) + (fTwoCsquaredTimesMmPerStepDivA * nextCalcStep)) - adjustedStartSpeedTimesCdivA);
 #else
 			const uint32_t adjustedStartSpeedTimesCdivA = dda.afterPrepare.startSpeedTimesCdivA + mp.cart.compensationClocks;
 			nextCalcStepTime = isqrt64(isquare64(adjustedStartSpeedTimesCdivA) + (twoCsquaredTimesMmPerStepDivA * nextCalcStep)) - adjustedStartSpeedTimesCdivA;
@@ -646,7 +647,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
 			nextCalcStepTime =
 #if DM_USE_FPU
-					(uint32_t)(  lrintf(fMmPerStepTimesCdivtopSpeed * nextCalcStep)
+					(uint32_t)(  (int32_t)(fMmPerStepTimesCdivtopSpeed * nextCalcStep)
 							   + dda.afterPrepare.extraAccelerationClocks
 							   - (int32_t)mp.cart.accelCompensationClocks
 							  );
@@ -689,7 +690,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const float temp = fTwoCsquaredTimesMmPerStepDivD * nextCalcStep;
 			// Allow for possible rounding error when the end speed is zero or very small
 			nextCalcStepTime = (temp < fTwoDistanceToStopTimesCsquaredDivD)
-							? adjustedTopSpeedTimesCdivDPlusDecelStartClocks - lrintf(fastSqrtf(fTwoDistanceToStopTimesCsquaredDivD - temp))
+							? adjustedTopSpeedTimesCdivDPlusDecelStartClocks - (uint32_t)(fastSqrtf(fTwoDistanceToStopTimesCsquaredDivD - temp))
 							: adjustedTopSpeedTimesCdivDPlusDecelStartClocks;
 #else
 			const uint64_t temp = twoCsquaredTimesMmPerStepDivD * nextCalcStep;
@@ -730,7 +731,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			const uint32_t adjustedTopSpeedTimesCdivDPlusDecelStartClocks = dda.afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks - mp.cart.compensationClocks;
 			nextCalcStepTime = adjustedTopSpeedTimesCdivDPlusDecelStartClocks
 #if DM_USE_FPU
-								+ lrintf(fastSqrtf((fTwoCsquaredTimesMmPerStepDivD * nextCalcStep) - mp.cart.fFourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD));
+								+ (uint32_t)(fastSqrtf((fTwoCsquaredTimesMmPerStepDivD * nextCalcStep) - mp.cart.fFourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD));
 #else
 								+ isqrt64((int64_t)(twoCsquaredTimesMmPerStepDivD * nextCalcStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD);
 #endif
@@ -868,14 +869,12 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	if (ds < mp.delta.fAccelStopDs)
 	{
 		// Acceleration phase
-		nextCalcStepTime = lrintf(fastSqrtf(fsquare((float)dda.afterPrepare.startSpeedTimesCdivA) + (fTwoCsquaredTimesMmPerStepDivA * ds))) - dda.afterPrepare.startSpeedTimesCdivA;
+		nextCalcStepTime = (uint32_t)(fastSqrtf(fsquare((float)dda.afterPrepare.startSpeedTimesCdivA) + (fTwoCsquaredTimesMmPerStepDivA * ds))) - dda.afterPrepare.startSpeedTimesCdivA;
 	}
 	else if (ds < mp.delta.fDecelStartDs)
 	{
 		// Steady speed phase
-		nextCalcStepTime = (uint32_t)(  lrintf(fMmPerStepTimesCdivtopSpeed * ds)
-								  	  + dda.afterPrepare.extraAccelerationClocks
-								 	 );
+		nextCalcStepTime = (uint32_t)(fMmPerStepTimesCdivtopSpeed * ds) + dda.afterPrepare.extraAccelerationClocks;
 	}
 	else
 	{

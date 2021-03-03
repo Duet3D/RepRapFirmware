@@ -233,11 +233,11 @@ private:
 #endif
 
 #if DM_USE_FPU
-	float fTwoCsquaredTimesMmPerStepDivA;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / acceleration
-	float fTwoCsquaredTimesMmPerStepDivD;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / deceleration
+	float fTwoCsquaredTimesMmPerStepDivA;				// 2 * clock^2 * mmPerStepInHyperCuboidSpace / acceleration
+	float fTwoCsquaredTimesMmPerStepDivD;				// 2 * clock^2 * mmPerStepInHyperCuboidSpace / deceleration
 #else
-	uint64_t twoCsquaredTimesMmPerStepDivA;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / acceleration
-	uint64_t twoCsquaredTimesMmPerStepDivD;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / deceleration
+	uint64_t twoCsquaredTimesMmPerStepDivA;				// 2 * clock^2 * mmPerStepInHyperCuboidSpace / acceleration
+	uint64_t twoCsquaredTimesMmPerStepDivD;				// 2 * clock^2 * mmPerStepInHyperCuboidSpace / deceleration
 #endif
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
@@ -245,7 +245,6 @@ private:
 	{
 		struct CartesianParameters						// Parameters for Cartesian and extruder movement, including extruder pressure advance
 		{
-			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
 			// The following depend on how the move is executed, so they must be set up in Prepare()
 #if DM_USE_FPU
 			float fFourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD;
@@ -260,8 +259,8 @@ private:
 
 		struct DeltaParameters							// Parameters for delta movement
 		{
-			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
 #if DM_USE_FPU
+			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
 			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
 			float fHmz0s;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
 			float fMinusAaPlusBbTimesS;
@@ -270,6 +269,7 @@ private:
 			float fAccelStopDs;
 			float fDecelStartDs;
 #else
+			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
 			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
 			int32_t minusAaPlusBbTimesKs;

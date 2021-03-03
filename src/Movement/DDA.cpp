@@ -657,7 +657,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	afterPrepare.startSpeedTimesCdivA = (uint32_t)roundU32(startSpeed/acceleration);
 #if DM_USE_FPU
 	params.fTopSpeedTimesCdivD = topSpeed/deceleration;
-	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = lrintf(params.fTopSpeedTimesCdivD) + msg.accelerationClocks + msg.steadyClocks;
+	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = (uint32_t)(params.fTopSpeedTimesCdivD) + msg.accelerationClocks + msg.steadyClocks;
 #else
 	params.topSpeedTimesCdivD = (uint32_t)roundU32(topSpeed/deceleration);
 	afterPrepare.topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + msg.accelerationClocks + msg.steadyClocks;
