@@ -187,7 +187,6 @@ private:
 	DriveMovement *FindActiveDM(size_t drive) const noexcept;				// find the DM for a drive if there is one but only if it is active
 	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
-	void ReduceHomingSpeed() noexcept;										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive) noexcept;									// stop movement of a drive and recalculate the endpoint
 	void InsertDM(DriveMovement *dm) noexcept SPEED_CRITICAL;
 	void DeactivateDM(size_t drive) noexcept;

@@ -173,7 +173,6 @@ public:
 	bool PrepareRemoteExtruder(const DDA& dda, const PrepParams& params) noexcept;
 #endif
 
-	void ReduceSpeed(uint32_t inverseSpeedFactor) noexcept;
 	void DebugPrint() const noexcept;
 	int32_t GetNetStepsLeft() const noexcept;
 	int32_t GetNetStepsTaken() const noexcept;

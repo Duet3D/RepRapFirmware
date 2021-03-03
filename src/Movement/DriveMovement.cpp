@@ -938,33 +938,4 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	return true;
 }
 
-// Reduce the speed of this movement. Called to reduce the homing speed when we detect we are near the endstop for a drive.
-void DriveMovement::ReduceSpeed(uint32_t inverseSpeedFactor) noexcept
-{
-	if (isDelta)
-	{
-		// Force the linear motion phase
-#if DM_USE_FPU
-		mp.delta.fAccelStopDs = 0.0;
-		mp.delta.fDecelStartDs = std::numeric_limits<float>::max();
-#else
-		mp.delta.accelStopDsK = 0;
-		mp.delta.decelStartDsK = 0xFFFFFFFF;
-#endif
-	}
-	else
-	{
-		// Force the linear motion phase
-		mp.cart.accelStopStep = 0;
-		mp.cart.decelStartStep = totalSteps + 1;
-	}
-
-	// Adjust the speed
-#if DM_USE_FPU
-	fMmPerStepTimesCdivtopSpeed *= (float)inverseSpeedFactor;
-#else
-	mmPerStepTimesCKdivtopSpeed *= inverseSpeedFactor;
-#endif
-}
-
 // End

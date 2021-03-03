@@ -1842,13 +1842,6 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 			}
 			break;
 
-		case EndstopHitAction::reduceSpeed:
-			if (!fromPrepare)										// don't mess with finish times etc. if the move hasn't started yet
-			{
-				ReduceHomingSpeed();								// must be just close
-			}
-			return;													// there can't be a higher priority endstop
-
 		default:
 			return;
 		}
@@ -2156,39 +2149,6 @@ float DDA::GetProportionDone(bool moveWasAborted) const noexcept
 		}
 	}
 	return proportionDoneSoFar;
-}
-
-// Reduce the speed of this move to the indicated speed.
-// This is called from the ISR, so interrupts are disabled and nothing else can mess with us.
-// As this is only called for homing moves and with very low speeds, we assume that we don't need acceleration or deceleration phases.
-void DDA::ReduceHomingSpeed() noexcept
-{
-	if (!flags.goingSlow)
-	{
-		flags.goingSlow = true;
-
-		topSpeed *= (1.0/ProbingSpeedReductionFactor);
-
-		// Adjust extraAccelerationClocks so that step timing will be correct in the steady speed phase at the new speed
-		const uint32_t clocksSoFar = StepTimer::GetTimerTicks() - afterPrepare. moveStartTime;
-		afterPrepare.extraAccelerationClocks = (afterPrepare.extraAccelerationClocks * (int32_t)ProbingSpeedReductionFactor) - ((int32_t)clocksSoFar * (int32_t)(ProbingSpeedReductionFactor - 1));
-
-		// We also need to adjust the total clocks needed, to prevent step errors being recorded
-		if (clocksSoFar < clocksNeeded)
-		{
-			clocksNeeded += (clocksNeeded - clocksSoFar) * (ProbingSpeedReductionFactor - 1u);
-		}
-
-		// Adjust the speed in the DMs
-		for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
-		{
-			DriveMovement* const pdm = FindDM(drive);
-			if (pdm != nullptr && pdm->state >= DMState::accel0)
-			{
-				pdm->ReduceSpeed(ProbingSpeedReductionFactor);
-			}
-		}
-	}
 }
 
 bool DDA::HasStepError() const noexcept
