@@ -24,9 +24,9 @@ StallDetectionEndstop::StallDetectionEndstop() noexcept
 }
 
 // Test whether we are at or near the stop
-EndStopHit StallDetectionEndstop::Stopped() const noexcept
+bool StallDetectionEndstop::Stopped() const noexcept
 {
-	return (GetStalledDrivers(driversMonitored).IsNonEmpty()) ? EndStopHit::atStop : EndStopHit::noStop;
+	return GetStalledDrivers(driversMonitored).IsNonEmpty();
 }
 
 // This is called to prime axis endstops

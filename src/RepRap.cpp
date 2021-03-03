@@ -1606,7 +1606,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		const size_t numTotalAxes = gCodes->GetTotalAxes();
 		for (size_t axis = 0; axis < numTotalAxes; axis++)
 		{
-			if (platform->GetEndstops().Stopped(axis) == EndStopHit::atStop)
+			if (platform->GetEndstops().Stopped(axis))
 			{
 				endstops |= (1u << axis);
 			}

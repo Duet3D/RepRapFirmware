@@ -26,7 +26,7 @@ constexpr ObjectModelTableEntry Endstop::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Endstop members
 	{ "highEnd",	OBJECT_MODEL_FUNC(self->GetAtHighEnd()),		 					ObjectModelEntryFlags::none },
-	{ "triggered",	OBJECT_MODEL_FUNC(self->Stopped() == EndStopHit::atStop),		 	ObjectModelEntryFlags::live },
+	{ "triggered",	OBJECT_MODEL_FUNC(self->Stopped()),		 							ObjectModelEntryFlags::live },
 	{ "type",		OBJECT_MODEL_FUNC(self->GetEndstopType().ToString()), 				ObjectModelEntryFlags::none },
 };
 

@@ -280,7 +280,7 @@ EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow) noexcept
 		}
 	}
 
-	if (ret.GetAction() > EndstopHitAction::reduceSpeed)
+	if (ret.GetAction() != EndstopHitAction::none)
 	{
 		if (actioned->Acknowledge(ret))
 		{
@@ -506,9 +506,9 @@ bool EndstopsManager::HomingZWithProbe() const noexcept
 	return axisEndstops[Z_AXIS] == nullptr || axisEndstops[Z_AXIS]->GetEndstopType() == EndStopType::zProbeAsEndstop;
 }
 
-EndStopHit EndstopsManager::Stopped(size_t axis) const noexcept
+bool EndstopsManager::Stopped(size_t axis) const noexcept
 {
-	return (axisEndstops[axis] == nullptr) ? EndStopHit::noStop : axisEndstops[axis]->Stopped();
+	return (axisEndstops[axis] != nullptr) && axisEndstops[axis]->Stopped();
 }
 
 void EndstopsManager::GetM119report(const StringRef& reply) noexcept
@@ -524,20 +524,14 @@ void EndstopsManager::GetM119report(const StringRef& reply) noexcept
 	reply.catf("Z probe: %s", TranslateEndStopResult(GetZProbeOrDefault(0)->Stopped(), false));
 }
 
-const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEnd) noexcept
+const char *EndstopsManager::TranslateEndStopResult(bool hit, bool atHighEnd) noexcept
 {
-	switch (es)
+	if (hit)
 	{
-	case EndStopHit::atStop:
 		return (atHighEnd) ? "at max stop" : "at min stop";
-
-	case EndStopHit::nearStop:
-		return "near stop";
-
-	case EndStopHit::noStop:
-	default:
-		return "not stopped";
 	}
+
+	return "not stopped";
 }
 
 void EndstopsManager::SetZProbeDefaults() noexcept

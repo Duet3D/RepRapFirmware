@@ -624,7 +624,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					doingManualBedProbe = true;												// suspend the Z movement limit
 					DoManualBedProbe(gb);
 				}
-				else if (zp->Stopped() == EndStopHit::atStop)
+				else if (zp->Stopped())
 				{
 					reprap.GetMove().heightMapLock.ReleaseWriter();
 					reprap.GetHeat().SuspendHeaters(false);
@@ -910,7 +910,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					doingManualBedProbe = true;												// suspend the Z movement limit
 					DoManualBedProbe(gb);
 				}
-				else if (zp->Stopped() == EndStopHit::atStop)		// check for probe already triggered at start
+				else if (zp->Stopped())														// check for probe already triggered at start
 				{
 					// Z probe is already triggered at the start of the move, so abandon the probe and record an error
 					reprap.GetHeat().SuspendHeaters(false);
@@ -1200,7 +1200,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				else
 				{
 					const bool probingAway = sps.ProbingAway();
-					const bool atStop = (zp->Stopped() == EndStopHit::atStop);
+					const bool atStop = zp->Stopped();
 					if (probingAway != atStop)
 					{
 						// Z probe is already in target state at the start of the move, so abandon the probe and signal an error if the type demands so

@@ -23,7 +23,7 @@ public:
 	StallDetectionEndstop() noexcept;							// for creating the single extruders endstop
 
 	EndStopType GetEndstopType() const noexcept override { return (individualMotors) ? EndStopType::motorStallIndividual : EndStopType::motorStallAny; }
-	EndStopHit Stopped() const noexcept override;
+	bool Stopped() const noexcept override;
 	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept override;
 	EndstopHitDetails CheckTriggered(bool goingSlow) noexcept override;
 	bool Acknowledge(EndstopHitDetails what) noexcept override;

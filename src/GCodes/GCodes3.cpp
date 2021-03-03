@@ -508,7 +508,7 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply)
 	Platform& pfm = platform;
 	const bool ok = endstopsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int axis, unsigned int)->bool
 								{
-									const bool stopped = pfm.GetEndstops().Stopped(axis) == EndStopHit::atStop;
+									const bool stopped = pfm.GetEndstops().Stopped(axis);
 									return stopped == activeHigh;
 								}
 							 )
