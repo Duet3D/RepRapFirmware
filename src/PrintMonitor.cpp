@@ -328,9 +328,12 @@ void PrintMonitor::StoppedPrint() noexcept
 // The Z move to the new layer probably hasn't been done yet, so just store the layer number.
 void PrintMonitor::SetLayerNumber(uint32_t layerNumber) noexcept
 {
-	currentLayer = layerNumber;
-	lastLayerChangeTime = millis64();
-	lastLayerChangeNonPrintingTime = GetWarmUpDuration() + GetPauseDuration();
+	if (currentLayer != layerNumber)
+	{
+		currentLayer = layerNumber;
+		lastLayerChangeTime = millis64();
+		lastLayerChangeNonPrintingTime = GetWarmUpDuration() + GetPauseDuration();
+	}
 }
 
 // Set the printing height of the new layer
