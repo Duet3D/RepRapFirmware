@@ -421,7 +421,7 @@ private:
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start probing the grid, returning true if we didn't because of an error
 	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb) THROWS(GCodeException);		// Set up currentZProbeNumber and return the probe
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Probes at a given position - see the comment at the head of the function itself
-	void InitialiseTaps() noexcept;												// Set up to do the first of a possibly multi-tap probe
+	void InitialiseTaps(bool fastThenSlow) noexcept;								// Set up to do the first of a possibly multi-tap probe
 	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply);		// Handle M581
@@ -440,7 +440,7 @@ private:
 	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;				// Write the config-override header
 #endif
 
-	void CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept;						// Copy the feed rate etc. from the daemon to the input channels
+	void CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept;				// Copy the feed rate etc. from the daemon to the input channels
 
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); // Do manual probe in arbitrary direction
@@ -601,7 +601,7 @@ private:
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
-	uint8_t tapsDone;							// how many times we tapped the current point
+	int8_t tapsDone;							// how many times we tapped the current point
 	uint8_t currentZProbeNumber;				// which Z probe a G29 or G30 command is using
 
 	// Simulation and print time

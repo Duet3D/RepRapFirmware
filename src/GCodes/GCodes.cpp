@@ -406,9 +406,9 @@ void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 }
 
 // Set up to do the first of a possibly multi-tap probe
-void GCodes::InitialiseTaps() noexcept
+void GCodes::InitialiseTaps(bool fastThenSlow) noexcept
 {
-	tapsDone = 0;
+	tapsDone = (fastThenSlow) ? -1 : 0;
 	g30zHeightErrorSum = 0.0;
 	g30zHeightErrorLowestDiff = 1000.0;
 }
@@ -2883,7 +2883,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 		// G30 without P parameter. This probes the current location starting from the current position.
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
 		const auto zp = SetZProbeNumber(gb);					// may throw, so do this before changing the state
-		InitialiseTaps();
+		InitialiseTaps(zp->HasTwoProbingSpeeds());
 		gb.SetState(GCodeState::probingAtPoint2a);
 		if (zp->GetProbeType() != ZProbeType::blTouch)
 		{

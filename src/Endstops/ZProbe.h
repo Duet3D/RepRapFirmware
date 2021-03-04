@@ -40,7 +40,8 @@ public:
 	float GetActualTriggerHeight() const noexcept;
 	float GetDiveHeight() const noexcept { return diveHeight; }
 	float GetStartingHeight() const noexcept { return diveHeight + GetActualTriggerHeight(); }
-	float GetProbingSpeed() const noexcept { return probeSpeed; }
+	float GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
+	float HasTwoProbingSpeeds() const noexcept { return probeSpeeds[1] != probeSpeeds[0]; }
 	float GetTravelSpeed() const noexcept { return travelSpeed; }
 	float GetRecoveryTime() const noexcept { return recoveryTime; }
 	float GetTolerance() const noexcept { return tolerance; }
@@ -71,11 +72,12 @@ protected:
 	OBJECT_MODEL_ARRAY(offsets)
 	OBJECT_MODEL_ARRAY(value)
 	OBJECT_MODEL_ARRAY(temperatureCoefficients)
+	OBJECT_MODEL_ARRAY(speeds)
 
 	uint8_t number;
 	ZProbeType type;
-	int8_t sensor;					// the sensor number used for temperature calibration
-	int16_t adcValue;				// the target ADC value, after inversion if enabled
+	int8_t sensor;						// the sensor number used for temperature calibration
+	int16_t adcValue;					// the target ADC value, after inversion if enabled
 	union
 	{
 		struct
@@ -92,7 +94,7 @@ protected:
 	float calibTemperature;				// the temperature at which we did the calibration
 	float temperatureCoefficients[2];	// the variation of height with bed temperature and with the square of temperature
 	float diveHeight;					// the dive height we use when probing
-	float probeSpeed;					// the initial speed of probing
+	float probeSpeeds[2];				// the initial speed of probing
 	float travelSpeed;					// the speed at which we travel to the probe point
 	float recoveryTime;					// Z probe recovery time
 	float tolerance;					// maximum difference between probe heights when doing >1 taps

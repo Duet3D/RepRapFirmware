@@ -51,6 +51,14 @@ constexpr ObjectModelArrayDescriptor ZProbe::temperatureCoefficientsArrayDescrip
 				{ return ExpressionValue(((const ZProbe*)self)->temperatureCoefficients[context.GetLastIndex()], 5); }
 };
 
+constexpr ObjectModelArrayDescriptor ZProbe::speedsArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::probeSpeeds); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(((const ZProbe*)self)->probeSpeeds[context.GetLastIndex()], 1); }
+};
+
 constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
@@ -63,7 +71,8 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 				ObjectModelEntryFlags::none },
 	{ "offsets",					OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 					ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 							ObjectModelEntryFlags::none },
-	{ "speed",						OBJECT_MODEL_FUNC(self->probeSpeed, 1), 							ObjectModelEntryFlags::none },
+	{ "speed",						OBJECT_MODEL_FUNC(self->probeSpeeds[1], 1), 						ObjectModelEntryFlags::obsolete },
+	{ "speeds",						OBJECT_MODEL_FUNC_NOSELF(&speedsArrayDescriptor), 					ObjectModelEntryFlags::none },
 	{ "temperatureCoefficient",		OBJECT_MODEL_FUNC(self->temperatureCoefficients[0], 5), 			ObjectModelEntryFlags::obsolete },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_NOSELF(&temperatureCoefficientsArrayDescriptor), 	ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->adcValue), 						ObjectModelEntryFlags::none },
@@ -74,7 +83,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "value",						OBJECT_MODEL_FUNC_NOSELF(&valueArrayDescriptor), 					ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 17 };
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 18 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
@@ -100,7 +109,7 @@ void ZProbe::SetDefaults() noexcept
 		tc = 0.0;
 	}
 	diveHeight = DefaultZDive;
-	probeSpeed = DefaultProbingSpeed;
+	probeSpeeds[0] = probeSpeeds[1] = DefaultProbingSpeed;
 	travelSpeed = DefaultZProbeTravelSpeed;
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
@@ -330,7 +339,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		reprap.SensorsUpdated();
 		if (gb.MachineState().runningM501)
 		{
-			misc.parts.saveToConfigOverride = true;		// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
+			misc.parts.saveToConfigOverride = true;			// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
 		}
 	}
 	else
@@ -365,7 +374,11 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 	gb.TryGetFValue('H', diveHeight, seen);					// dive height
 	if (gb.Seen('F'))										// feed rate i.e. probing speed
 	{
-		probeSpeed = gb.GetFValue() * SecondsToMinutes;
+		float userProbeSpeeds[2];
+		size_t numSpeeds = 2;
+		gb.GetFloatArray(userProbeSpeeds, numSpeeds, true);
+		probeSpeeds[0] = userProbeSpeeds[0] * SecondsToMinutes;
+		probeSpeeds[1] = userProbeSpeeds[1] * SecondsToMinutes;
 		seen = true;
 	}
 
@@ -398,9 +411,9 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 
 	reply.printf("Z Probe %u: type %u", number, (unsigned int)type);
 	const GCodeResult rslt = AppendPinNames(reply);
-	reply.catf(", dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
+	reply.catf(", dive height %.1fmm, probe speeds %d,%dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
 					(double)diveHeight,
-					(int)(probeSpeed * MinutesToSeconds), (int)(travelSpeed * MinutesToSeconds),
+					(int)(probeSpeeds[0] * MinutesToSeconds), (int)(probeSpeeds[1] * MinutesToSeconds), (int)(travelSpeed * MinutesToSeconds),
 					(double)recoveryTime,
 					(misc.parts.turnHeatersOff) ? "suspended" : "normal",
 						misc.parts.maxTaps, (double)tolerance);

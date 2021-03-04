@@ -566,10 +566,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					moveBuffer.feedRate = zp->GetTravelSpeed();
 					NewMoveAvailable(1);
 
-					tapsDone = 0;
-					g30zHeightErrorSum = 0.0;
-					g30zHeightErrorLowestDiff = 1000.0;
-
+					InitialiseTaps(false);
 					gb.AdvanceState();
 				}
 				else
@@ -648,7 +645,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					moveBuffer.checkEndstops = true;
 					moveBuffer.reduceAcceleration = true;
 					moveBuffer.coords[Z_AXIS] = -zp->GetDiveHeight() + zp->GetActualTriggerHeight();
-					moveBuffer.feedRate = zp->GetProbingSpeed();
+					moveBuffer.feedRate = zp->GetProbingSpeed(tapsDone);
 					NewMoveAvailable(1);
 					gb.AdvanceState();
 				}
@@ -680,6 +677,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					break;
 				}
 
+				// Grid probing never does an additional fast tap, so we can always include this tap in the average
 				g30zHeightError = moveBuffer.coords[Z_AXIS] - zp->GetActualTriggerHeight();
 				g30zHeightErrorSum += g30zHeightError;
 			}
@@ -725,7 +723,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						acceptReading = true;
 					}
 				}
-				else if (tapsDone == zp->GetMaxTaps())
+				else if (tapsDone == (int)zp->GetMaxTaps())
 				{
 					g30zHeightError = g30zHeightErrorSum/tapsDone;
 					acceptReading = true;
@@ -737,7 +735,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reprap.GetMove().AccessHeightMap().SetGridHeight(gridAxis0index, gridAxis1index, g30zHeightError);
 				gb.AdvanceState();
 			}
-			else if (tapsDone < zp->GetMaxTaps())
+			else if (tapsDone < (int)zp->GetMaxTaps())
 			{
 				// Tap again
 				lastProbedTime = millis();
@@ -863,7 +861,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			moveBuffer.feedRate = zp->GetTravelSpeed();
 			NewMoveAvailable(1);
 
-			InitialiseTaps();
+			InitialiseTaps(false);
 			gb.AdvanceState();
 		}
 		break;
@@ -939,7 +937,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					moveBuffer.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
 												? platform.AxisMinimum(Z_AXIS) - zp->GetDiveHeight() + zp->GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
 												: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
-					moveBuffer.feedRate = zp->GetProbingSpeed();
+					moveBuffer.feedRate = zp->GetProbingSpeed(tapsDone);
 					NewMoveAvailable(1);
 					gb.AdvanceState();
 				}
@@ -979,8 +977,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
 					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;					// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
-					g30zHeightError = g30zStoppedHeight - zp->GetActualTriggerHeight();
-					g30zHeightErrorSum += g30zHeightError;
+					if (tapsDone > 0)
+					{
+						g30zHeightError = g30zStoppedHeight - zp->GetActualTriggerHeight();
+						g30zHeightErrorSum += g30zHeightError;
+					}
 				}
 			}
 
@@ -1058,7 +1059,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			if (!acceptReading)
 			{
-				if (tapsDone < zp->GetMaxTaps())
+				if (tapsDone < (int)zp->GetMaxTaps())
 				{
 					// Tap again
 					g30PrevHeightError = g30zHeightError;
@@ -1227,7 +1228,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						moveBuffer.checkEndstops = true;
 						moveBuffer.reduceAcceleration = true;
 						sps.SetCoordsToTarget(moveBuffer.coords);
-						moveBuffer.feedRate = zp->GetProbingSpeed();
+						moveBuffer.feedRate = zp->GetProbingSpeed(0);
 						NewMoveAvailable(1);
 						gb.AdvanceState();
 					}
