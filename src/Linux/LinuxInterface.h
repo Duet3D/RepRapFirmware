@@ -19,7 +19,7 @@
 #include "GCodes/GCodeFileInfo.h"
 #include "LinuxMessageFormats.h"
 #include "DataTransfer.h"
-#include "MessageType.h"
+#include <Platform/MessageType.h>
 
 class Platform;
 

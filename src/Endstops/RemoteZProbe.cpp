@@ -12,8 +12,8 @@
 #include <CanMessageBuffer.h>
 #include <CAN/CanInterface.h>
 #include <CAN/CanMessageGenericConstructor.h>
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Members of class RemoteZProbe

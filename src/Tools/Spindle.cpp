@@ -6,7 +6,7 @@
  */
 
 #include "Spindle.h"
-#include <RepRap.h>
+#include <Platform/RepRap.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_OBJECT_MODEL

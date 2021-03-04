@@ -6,10 +6,10 @@
  */
 
 #include "HangprinterKinematics.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Movement/Move.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Movement/Move.h>
 //#include "Movement/BedProbing/RandomProbePointSet.h"
 
 // Default anchor coordinates

@@ -6,12 +6,12 @@
  */
 
 #include "ZProbe.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "GCodes/GCodes.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Storage/FileStore.h"
-#include "Heating/Heat.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodes.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Storage/FileStore.h>
+#include <Heating/Heat.h>
 
 #if SUPPORT_OBJECT_MODEL
 

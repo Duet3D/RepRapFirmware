@@ -6,7 +6,7 @@
  */
 
 #include "GCodeMachineState.h"
-#include "RepRap.h"
+#include <Platform/RepRap.h>
 
 #include <limits>
 

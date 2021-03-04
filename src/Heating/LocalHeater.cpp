@@ -6,12 +6,12 @@
  */
 
 #include "LocalHeater.h"
-#include "GCodes/GCodes.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <GCodes/GCodes.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include "Heat.h"
 #include "HeaterMonitor.h"
-#include "Platform.h"
-#include "RepRap.h"
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 #include <Tools/Tool.h>
 
 // Member functions and constructors

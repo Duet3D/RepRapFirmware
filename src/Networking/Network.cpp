@@ -9,8 +9,12 @@
 #define NO_STATUS_CODES
 
 #include "Network.h"
-#include <Platform.h>
-#include <RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
+#include <General/IP4String.h>
+#include <Version.h>
+#include <Movement/StepTimer.h>
+#include <Platform/TaskPriorities.h>
 
 #if HAS_NETWORKING
 #include "NetworkBuffer.h"
@@ -41,10 +45,6 @@
 #if SUPPORT_TELNET
 #include "TelnetResponder.h"
 #endif
-#include <General/IP4String.h>
-#include <Version.h>
-#include <Movement/StepTimer.h>
-#include <TaskPriorities.h>
 
 #ifdef __LPC17xx__
 constexpr size_t NetworkStackWords = 375;

@@ -6,9 +6,9 @@
  */
 
 #include "SoftwareReset.h"
-#include <Tasks.h>
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/Tasks.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <General/Portability.h>
 
 extern uint32_t _estack;			// defined in the linker script

@@ -15,10 +15,10 @@
 #include "PolarKinematics.h"
 #include "FiveBarScaraKinematics.h"
 
-#include "RepRap.h"
-#include "Platform.h"
-#include "GCodes/GCodes.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodes.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 const char * const Kinematics::HomeAllFileName = "homeall.g";
 

@@ -10,9 +10,9 @@
 #if SUPPORT_TELNET
 
 #include "Socket.h"
-#include "OutputMemory.h"
-#include "GCodes/GCodes.h"
-#include "Platform.h"
+#include <Platform/OutputMemory.h>
+#include <GCodes/GCodes.h>
+#include <Platform/Platform.h>
 
 TelnetResponder::TelnetResponder(NetworkResponder *n) noexcept : NetworkResponder(n)
 {

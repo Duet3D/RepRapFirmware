@@ -9,9 +9,9 @@
 
 #if SUPPORT_OBJECT_MODEL
 
-#include <RepRap.h>
-#include <Platform.h>
-#include <OutputMemory.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/OutputMemory.h>
 #include <cstring>
 #include <General/SafeStrtod.h>
 #include <General/IP4String.h>

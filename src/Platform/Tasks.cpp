@@ -9,7 +9,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include <Cache.h>
-#include <TaskPriorities.h>
+#include <Platform/TaskPriorities.h>
 #include <Hardware/SoftwareReset.h>
 #include <Storage/CRC32.h>
 

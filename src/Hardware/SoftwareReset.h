@@ -9,7 +9,7 @@
 #define SRC_SOFTWARERESET_H_
 
 #include <RepRapFirmware.h>
-#include <MessageType.h>
+#include <Platform/MessageType.h>
 
 #if SAM3XA
 # include <DueFlashStorage.h>

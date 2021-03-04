@@ -9,7 +9,7 @@
 #define SRC_GCODES_GCODERESULT_H_
 
 #include <cctype>
-#include <MessageType.h>
+#include <Platform/MessageType.h>
 
 // Enumeration to specify the result of attempting to process a GCode command
 // These are ordered such that errors > warnings > ok

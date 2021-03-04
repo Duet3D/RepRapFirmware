@@ -8,9 +8,9 @@
 #include "Tool.h"
 #include "Filament.h"
 
-#include "RepRap.h"
-#include "Platform.h"
-#include <Tasks.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/Tasks.h>
 
 #include <ctime>
 

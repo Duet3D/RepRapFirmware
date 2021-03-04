@@ -48,8 +48,8 @@
 #include <Libraries/sd_mmc/conf_sd_mmc.h>
 
 #include "RepRapFirmware.h"
-#include "RepRap.h"
-#include "Tasks.h"
+#include <Platform/RepRap.h>
+#include <Platform/Tasks.h>
 #include <Movement/StepTimer.h>
 
 #include <cstring>

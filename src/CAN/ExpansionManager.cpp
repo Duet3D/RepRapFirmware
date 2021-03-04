@@ -10,8 +10,8 @@
 #if SUPPORT_CAN_EXPANSION
 
 #include <CAN/CanInterface.h>
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(BoardState::unknown), numDrivers(0)

@@ -2,11 +2,11 @@
 
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
-#include "RepRap.h"
-#include "Movement/Move.h"
-#include "Tools/Tool.h"
-#include "Heating/Heat.h"
-#include "Endstops/ZProbe.h"
+#include <Platform/RepRap.h>
+#include <Movement/Move.h>
+#include <Tools/Tool.h>
+#include <Heating/Heat.h>
+#include <Endstops/ZProbe.h>
 
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 # include <Comms/FirmwareUpdater.h>

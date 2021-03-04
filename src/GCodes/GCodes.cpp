@@ -27,22 +27,22 @@
 
 #include "GCodeBuffer/GCodeBuffer.h"
 #include "GCodeQueue.h"
-#include "Heating/Heat.h"
-#include "Platform.h"
-#include "Movement/Move.h"
-#include "Scanner.h"
-#include "PrintMonitor.h"
-#include "RepRap.h"
-#include "Tasks.h"
-#include "Tools/Tool.h"
-#include "Endstops/ZProbe.h"
+#include <Heating/Heat.h>
+#include <Platform/Platform.h>
+#include <Movement/Move.h>
+#include <Platform/Scanner.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <Platform/RepRap.h>
+#include <Platform/Tasks.h>
+#include <Tools/Tool.h>
+#include <Endstops/ZProbe.h>
 
 #if SUPPORT_LED_STRIPS
 # include <Fans/LedStripDriver.h>
 #endif
 
 #if HAS_LINUX_INTERFACE
-# include "Linux/LinuxInterface.h"
+# include <Linux/LinuxInterface.h>
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

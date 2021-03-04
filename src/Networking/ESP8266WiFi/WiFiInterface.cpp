@@ -7,14 +7,14 @@
 
 
 #include "WiFiInterface.h"
-#include "Platform.h"
-#include "RepRap.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "HttpResponder.h"
-#include "FtpResponder.h"
-#include "TelnetResponder.h"
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Networking/HttpResponder.h>
+#include <Networking/FtpResponder.h>
+#include <Networking/TelnetResponder.h>
 #include "WifiFirmwareUploader.h"
-#include "General/IP4String.h"
+#include <General/IP4String.h>
 #include "WiFiSocket.h"
 #include <Cache.h>
 

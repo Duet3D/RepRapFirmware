@@ -8,8 +8,8 @@
 #include "AuxDevice.h"
 
 #if HAS_AUX_DEVICES
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 AuxDevice::AuxDevice() noexcept : uart(nullptr), seq(0), enabled(false), raw(true)
 {

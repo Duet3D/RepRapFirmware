@@ -7,7 +7,7 @@
 
 #include "GCodeInput.h"
 
-#include "RepRap.h"
+#include <Platform/RepRap.h>
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 

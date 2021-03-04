@@ -6,8 +6,8 @@
  */
 
 #include "Heater.h"
-#include "RepRap.h"
-#include "Platform.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include "Heat.h"
 #include "HeaterMonitor.h"
 #include "Sensors/TemperatureSensor.h"

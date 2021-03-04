@@ -27,7 +27,7 @@ Licence: GPL
 #define TOOL_H_
 
 #include <RepRapFirmware.h>
-#include <RepRap.h>
+#include <Platform/RepRap.h>
 #include <ObjectModel/ObjectModel.h>
 #include <General/FreelistManager.h>
 #include <General/NamedEnum.h>

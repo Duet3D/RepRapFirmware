@@ -6,10 +6,10 @@
  */
 
 #include "Grid.h"
-#include "Platform.h"
-#include "RepRap.h"
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
-#include "Storage/FileStore.h"
+#include <Storage/FileStore.h>
 #include <Math/Deviation.h>
 
 #include <cmath>

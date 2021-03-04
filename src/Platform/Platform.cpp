@@ -21,18 +21,18 @@
 
 #include "Platform.h"
 
-#include "Heating/Heat.h"
-#include "Movement/DDA.h"
-#include "Movement/Move.h"
-#include "Movement/StepTimer.h"
-#include "Tools/Tool.h"
-#include "Endstops/ZProbe.h"
-#include "Networking/Network.h"
-#include "PrintMonitor.h"
-#include "FilamentMonitors/FilamentMonitor.h"
+#include <Heating/Heat.h>
+#include <Movement/DDA.h>
+#include <Movement/Move.h>
+#include <Movement/StepTimer.h>
+#include <Tools/Tool.h>
+#include <Endstops/ZProbe.h>
+#include <Networking/Network.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <FilamentMonitors/FilamentMonitor.h>
 #include "RepRap.h"
 #include "Scanner.h"
-#include "Version.h"
+#include <Version.h>
 #include "Logger.h"
 #include "Tasks.h"
 #include <Cache.h>

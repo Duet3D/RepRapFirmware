@@ -5,9 +5,9 @@
  *      Author: manuel
  */
 
-#include <Movement/Kinematics/RoundBedKinematics.h>
-#include "RepRap.h"
-#include "Platform.h"
+#include "RoundBedKinematics.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 RoundBedKinematics::RoundBedKinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept
 : Kinematics(t, doUseSegmentation, doUseRawG0), printRadiusSquared(0.0)

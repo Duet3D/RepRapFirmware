@@ -6,19 +6,18 @@
  */
 
 #include "LinearAnalogSensor.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Pins.h"
-#include "RepRap.h"
-#include "Platform.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Pins.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 #include <AnalogIn.h>
-using
+
 #if SAME5x
-	AnalogIn
+using AnalogIn::AdcBits;
 #else
-	LegacyAnalogIn
+using LegacyAnalogIn::AdcBits;
 #endif
-	::AdcBits;
 
 // ADC resolution
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf

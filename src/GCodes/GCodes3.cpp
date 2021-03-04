@@ -10,27 +10,27 @@
 #include "GCodes.h"
 
 #include "GCodeBuffer/GCodeBuffer.h"
-#include "Heating/Heat.h"
-#include "Movement/Move.h"
-#include "RepRap.h"
-#include "Tools/Tool.h"
-#include "Endstops/ZProbe.h"
-#include "PrintMonitor.h"
-#include "Tasks.h"
-#include "Hardware/I2C.h"
+#include <Heating/Heat.h>
+#include <Movement/Move.h>
+#include <Platform/RepRap.h>
+#include <Tools/Tool.h>
+#include <Endstops/ZProbe.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <Platform/Tasks.h>
+#include <Hardware/I2C.h>
 
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 # include <Comms/FirmwareUpdater.h>
 #endif
 
 #if SUPPORT_TMC2660
-# include "Movement/StepperDrivers/TMC2660.h"
+# include <Movement/StepperDrivers/TMC2660.h>
 #endif
 #if SUPPORT_TMC22xx
-# include "Movement/StepperDrivers/TMC22xx.h"
+# include <Movement/StepperDrivers/TMC22xx.h>
 #endif
 #if SUPPORT_TMC51xx
-# include "Movement/StepperDrivers/TMC51xx.h"
+# include <Movement/StepperDrivers/TMC51xx.h>
 #endif
 
 #if SUPPORT_CAN_EXPANSION

@@ -11,8 +11,8 @@
 
 #include "GCodeBuffer.h"
 #include "ExpressionParser.h"
-#include <Platform.h>
-#include <RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 #include <Networking/NetworkDefs.h>
 
 BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)

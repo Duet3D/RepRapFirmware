@@ -17,8 +17,8 @@
 #include "BinaryParser.h"
 #include "StringParser.h"
 #include <GCodes/GCodeException.h>
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 // Macros to reduce the amount of explicit conditional compilation in this file
 #if HAS_LINUX_INTERFACE

@@ -9,11 +9,11 @@
 
 #if SUPPORT_CAN_EXPANSION
 
-#include "RepRap.h"
+#include <Platform/RepRap.h>
 #include "Heat.h"
-#include "Platform.h"
-#include "CAN/CanMessageGenericConstructor.h"
-#include "CAN/CanInterface.h"
+#include <Platform/Platform.h>
+#include <CAN/CanMessageGenericConstructor.h>
+#include <CAN/CanInterface.h>
 #include <CanMessageFormats.h>
 #include <CanMessageBuffer.h>
 

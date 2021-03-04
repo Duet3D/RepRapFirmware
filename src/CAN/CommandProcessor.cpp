@@ -11,9 +11,9 @@
 
 #include "CanInterface.h"
 #include <CanMessageBuffer.h>
-#include "RepRap.h"
-#include "Platform.h"
-#include "Heating/Heat.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <Heating/Heat.h>
 #include "ExpansionManager.h"
 
 #ifndef DUET3_ATE
@@ -22,13 +22,13 @@
 # include <Version.h>
 
 # if SUPPORT_TMC2660
-#  include "Movement/StepperDrivers/TMC2660.h"
+#  include <Movement/StepperDrivers/TMC2660.h>
 # endif
 # if SUPPORT_TMC22xx
-#  include "Movement/StepperDrivers/TMC22xx.h"
+#  include <Movement/StepperDrivers/TMC22xx.h>
 # endif
 # if SUPPORT_TMC51xx
-#  include "Movement/StepperDrivers/TMC51xx.h"
+#  include <Movement/StepperDrivers/TMC51xx.h>
 # endif
 #endif
 

@@ -8,8 +8,8 @@
 #include "ExpressionParser.h"
 
 #include "GCodeBuffer.h"
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <General/NamedEnum.h>
 #include <General/NumericConverter.h>
 

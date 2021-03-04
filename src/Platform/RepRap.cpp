@@ -12,7 +12,7 @@
 #endif
 #include "Platform.h"
 #include "Scanner.h"
-#include "PrintMonitor.h"
+#include <PrintMonitor/PrintMonitor.h>
 #include "Tools/Tool.h"
 #include "Tools/Filament.h"
 #include "Endstops/ZProbe.h"

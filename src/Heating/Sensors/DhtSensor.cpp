@@ -9,10 +9,10 @@
 
 #if SUPPORT_DHT_SENSOR
 
-#include "RepRap.h"
-#include "Heating/Heat.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Movement/StepTimer.h"
+#include <Platform/RepRap.h>
+#include <Heating/Heat.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Movement/StepTimer.h>
 
 constexpr uint16_t MinimumReadInterval = 2000;		// ms
 constexpr uint8_t  MaximumReadTime = 20;			// ms

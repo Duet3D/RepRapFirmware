@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include "DriveMovement.h"
 #include "StepTimer.h"
-#include <Tasks.h>
+#include <Platform/Tasks.h>
 #include <GCodes/GCodes.h>			// for class RawMove
 
 #ifdef DUET_NG

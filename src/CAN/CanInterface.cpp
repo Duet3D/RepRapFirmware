@@ -17,7 +17,7 @@
 #include <Movement/DriveMovement.h>
 #include <Movement/StepTimer.h>
 #include <RTOSIface/RTOSIface.h>
-#include <TaskPriorities.h>
+#include <Platform/TaskPriorities.h>
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 

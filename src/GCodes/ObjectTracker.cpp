@@ -7,7 +7,7 @@
 
 #include "ObjectTracker.h"
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
-#include <RepRap.h>
+#include <Platform/RepRap.h>
 #include "GCodes.h"
 
 #if TRACK_OBJECT_NAMES

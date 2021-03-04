@@ -6,11 +6,11 @@
  */
 
 #include "FileInfoParser.h"
-#include "OutputMemory.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "PrintMonitor.h"
-#include "GCodes/GCodes.h"
+#include <Platform/OutputMemory.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <GCodes/GCodes.h>
 
 #if HAS_MASS_STORAGE
 

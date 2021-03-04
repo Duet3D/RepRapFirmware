@@ -12,8 +12,8 @@
 #include "ExpressionParser.h"
 
 #include <GCodes/GCodes.h>
-#include <Platform.h>
-#include <RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 #include <General/StringBuffer.h>
 #include <Networking/NetworkDefs.h>
 

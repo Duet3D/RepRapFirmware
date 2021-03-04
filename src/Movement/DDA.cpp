@@ -6,16 +6,16 @@
  */
 
 #include "DDA.h"
-#include "RepRap.h"
-#include "Platform.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include "Move.h"
 #include "StepTimer.h"
-#include "Endstops/EndstopsManager.h"
+#include <Endstops/EndstopsManager.h>
 #include "Kinematics/LinearDeltaKinematics.h"
-#include "Tools/Tool.h"
+#include <Tools/Tool.h>
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanMotion.h"
+# include <CAN/CanMotion.h>
 #endif
 
 #ifdef DUET_NG

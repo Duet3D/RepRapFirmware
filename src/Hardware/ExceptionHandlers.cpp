@@ -6,8 +6,8 @@
  */
 
 #include "ExceptionHandlers.h"
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Cache.h>
 #if SAME70 || SAM4S || SAM4E

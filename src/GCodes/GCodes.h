@@ -23,19 +23,19 @@ Licence: GPL
 #define GCODES_H
 
 #include "RepRapFirmware.h"
-#include "RepRap.h"			// for type ResponseSource
+#include <Platform/RepRap.h>			// for type ResponseSource
 #include "GCodeResult.h"
 #include "ObjectTracker.h"
-#include "Movement/RawMove.h"
-#include "Libraries/sha1/sha1.h"
-#include "Platform.h"		// for type EndStopHit
+#include <Movement/RawMove.h>
+#include <Libraries/sha1/sha1.h>
+#include <Platform/Platform.h>		// for type EndStopHit
 #include "GCodeChannel.h"
 #include "GCodeInput.h"
 #include "Trigger.h"
-#include "Tools/Filament.h"
-#include "FilamentMonitors/FilamentMonitor.h"
+#include <Tools/Filament.h>
+#include <FilamentMonitors/FilamentMonitor.h>
 #include "RestorePoint.h"
-#include "Movement/BedProbing/Grid.h"
+#include <Movement/BedProbing/Grid.h>
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude

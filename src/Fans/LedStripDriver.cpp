@@ -11,7 +11,7 @@
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
-#include <RepRap.h>
+#include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
 #if LEDSTRIP_USES_USART

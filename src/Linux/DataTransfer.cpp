@@ -57,15 +57,15 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 # include <spi/spi.h>
 #endif
 
-#include "RepRapFirmware.h"
-#include "GCodes/GCodeMachineState.h"
-#include "Movement/Move.h"
-#include "Movement/BedProbing/Grid.h"
-#include "ObjectModel/ObjectModel.h"
-#include "OutputMemory.h"
-#include "RepRap.h"
+#include <RepRapFirmware.h>
+#include <GCodes/GCodeMachineState.h>
+#include <Movement/Move.h>
+#include <Movement/BedProbing/Grid.h>
+#include <ObjectModel/ObjectModel.h>
+#include <Platform/OutputMemory.h>
+#include <Platform/RepRap.h>
 #include <Cache.h>
-#include "RTOSIface/RTOSIface.h"
+#include <RTOSIface/RTOSIface.h>
 
 #include <General/IP4String.h>
 

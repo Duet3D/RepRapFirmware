@@ -7,9 +7,9 @@
  */
 
 #include "Thermistor.h"
-#include "Platform.h"
-#include "RepRap.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if HAS_VREF_MONITOR
 # include <GCodes/GCodes.h>

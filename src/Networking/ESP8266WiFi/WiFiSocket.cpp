@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#include "NetworkBuffer.h"
-#include "RepRap.h"
+#include <Networking/NetworkBuffer.h>
+#include <Platform/RepRap.h>
 #include "WiFiInterface.h"
 #include "WiFiSocket.h"
 

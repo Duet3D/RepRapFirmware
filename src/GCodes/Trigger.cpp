@@ -6,9 +6,9 @@
  */
 
 #include "Trigger.h"
-#include "RepRap.h"
+#include <Platform/RepRap.h>
 #include "GCodes.h"
-#include "PrintMonitor.h"
+#include <PrintMonitor/PrintMonitor.h>
 #include "GCodeBuffer/GCodeBuffer.h"
 
 Trigger::Trigger() noexcept : condition(0)

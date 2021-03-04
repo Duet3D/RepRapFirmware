@@ -14,24 +14,24 @@
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #if HAS_LINUX_INTERFACE
-# include "Linux/LinuxInterface.h"
+# include <Linux/LinuxInterface.h>
 #endif
-#include "Movement/Move.h"
-#include "Networking/Network.h"
-#include "Scanner.h"
-#include "PrintMonitor.h"
-#include "RepRap.h"
-#include "Tools/Tool.h"
-#include "Endstops/ZProbe.h"
-#include "FilamentMonitors/FilamentMonitor.h"
-#include "General/IP4String.h"
-#include "Movement/StepperDrivers/DriverMode.h"
+#include <Movement/Move.h>
+#include <Networking/Network.h>
+#include <Platform/Scanner.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <Platform/RepRap.h>
+#include <Tools/Tool.h>
+#include <Endstops/ZProbe.h>
+#include <FilamentMonitors/FilamentMonitor.h>
+#include <General/IP4String.h>
+#include <Movement/StepperDrivers/DriverMode.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
-#include "Version.h"
+#include <Version.h>
 
 #if SUPPORT_IOBITS
-# include "PortControl.h"
+# include <Platform/PortControl.h>
 #endif
 
 #if HAS_WIFI_NETWORKING
@@ -39,7 +39,7 @@
 #endif
 
 #if SUPPORT_12864_LCD
-# include "Display/Display.h"
+# include <Display/Display.h>
 #endif
 
 #if SUPPORT_LED_STRIPS
@@ -56,7 +56,7 @@
 #endif
 
 #if HAS_MASS_STORAGE
-# include "Logger.h"
+# include <Platform/Logger.h>
 #endif
 
 #include <utility>			// for std::swap

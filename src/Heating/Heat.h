@@ -25,12 +25,12 @@ Licence: GPL
  * The master class that controls all the heaters in the RepRap machine
  */
 
-#include "RepRapFirmware.h"
-#include "RepRap.h"
+#include <RepRapFirmware.h>
+#include <Platform/RepRap.h>
 #include "Heater.h"
 #include "TemperatureError.h"
-#include "MessageType.h"
-#include "GCodes/GCodeResult.h"
+#include <Platform/MessageType.h>
+#include <GCodes/GCodeResult.h>
 #include <RTOSIface/RTOSIface.h>
 
 class TemperatureSensor;

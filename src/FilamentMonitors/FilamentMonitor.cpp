@@ -10,11 +10,11 @@
 #include "RotatingMagnetFilamentMonitor.h"
 #include "LaserFilamentMonitor.h"
 #include "PulsedFilamentMonitor.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Movement/Move.h"
-#include "PrintMonitor.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Movement/Move.h>
+#include <PrintMonitor/PrintMonitor.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>

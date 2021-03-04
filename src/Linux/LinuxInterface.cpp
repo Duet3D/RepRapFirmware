@@ -10,19 +10,19 @@
 
 #if HAS_LINUX_INTERFACE
 
-#include "GCodes/GCodeBuffer/ExpressionParser.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Heating/Heat.h"
-#include "Movement/Move.h"
-#include "Platform.h"
-#include "PrintMonitor.h"
-#include "Tools/Filament.h"
-#include "RepRap.h"
-#include "RepRapFirmware.h"
-#include <Tasks.h>
+#include <GCodes/GCodeBuffer/ExpressionParser.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Heating/Heat.h>
+#include <Movement/Move.h>
+#include <Platform/Platform.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <Tools/Filament.h>
+#include <Platform/RepRap.h>
+#include <RepRapFirmware.h>
+#include <Platform/Tasks.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
-#include <TaskPriorities.h>
+#include <Platform/TaskPriorities.h>
 
 extern char _estack;		// defined by the linker
 

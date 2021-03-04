@@ -8,8 +8,8 @@
 #ifndef SRC_HARDWARE_I2C_H_
 #define SRC_HARDWARE_I2C_H_
 
-#include "RepRapFirmware.h"
-#include "Tasks.h"
+#include <RepRapFirmware.h>
+#include <Platform/Tasks.h>
 
 #ifdef I2C_IFACE
 # include "Wire.h"

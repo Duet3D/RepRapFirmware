@@ -8,12 +8,12 @@
 #ifndef SRC_NETWORKING_NETWORKRESPONDER_H_
 #define SRC_NETWORKING_NETWORKRESPONDER_H_
 
-#include "RepRapFirmware.h"
-#include "RepRap.h"
+#include <RepRapFirmware.h>
+#include <Platform/RepRap.h>
 #include "NetworkDefs.h"
-#include "Storage/FileData.h"
+#include <Storage/FileData.h>
 #include "NetworkBuffer.h"
-#include "OutputMemory.h"
+#include <Platform/OutputMemory.h>
 
 // Forward declarations
 class NetworkResponder;

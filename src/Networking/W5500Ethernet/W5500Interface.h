@@ -9,9 +9,9 @@ Separated out from Platform.h by dc42 and extended by chrishamm
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include "NetworkInterface.h"
-#include "NetworkDefs.h"
-#include "MessageType.h"
+#include <Networking/NetworkInterface.h>
+#include <Networking/NetworkDefs.h>
+#include <Platform/MessageType.h>
 
 class NetworkResponder;
 class HttpResponder;

@@ -9,8 +9,8 @@
 #include "DDA.h"
 #include "Move.h"
 #include "StepTimer.h"
-#include "RepRap.h"
-#include "Math/Isqrt.h"
+#include <Platform/RepRap.h>
+#include <Math/Isqrt.h>
 #include "Kinematics/LinearDeltaKinematics.h"
 
 // Static members

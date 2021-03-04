@@ -6,13 +6,13 @@
  */
 
 #include "IoPorts.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "Configuration.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <Configuration.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #ifdef DUET_NG
-# include "DuetNG/DueXn.h"
+# include <DuetNG/DueXn.h>
 #endif
 
 #include <AnalogOut.h>

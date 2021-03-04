@@ -12,7 +12,7 @@
 #include "Socket.h"
 #include "Network.h"
 #include "NetworkInterface.h"
-#include "Platform.h"
+#include <Platform/Platform.h>
 
 FtpResponder::FtpResponder(NetworkResponder *n) noexcept
 	: UploadingNetworkResponder(n), dataSocket(nullptr), passivePort(0), passivePortOpenTime(0), dataBuf(nullptr), haveFileToMove(false)

@@ -7,8 +7,8 @@
 
 #include "GpOutPort.h"
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>
