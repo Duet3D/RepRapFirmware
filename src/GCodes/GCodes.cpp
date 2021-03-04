@@ -1281,6 +1281,21 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 		return false;								// can't handle it yet
 	}
 
+	// Flag the stalled axes as not homed before we call rehome.g
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		const AxisDriversConfig& cfg = platform.GetAxisDriversConfig(axis);
+		for (unsigned int i = 0; i < cfg.numDrivers; ++i)
+		{
+			//TODO handle remote stalled drivers
+			if (cfg.driverNumbers[i].IsLocal() && stalledDrivers.IsBitSet(cfg.driverNumbers[i].localDriver))
+			{
+				SetAxisNotHomed(axis);
+				break;
+			}
+		}
+	}
+
 	autoPauseGCode->SetState(GCodeState::resuming1); // set up to resume after rehoming
 	pauseState = PauseState::resuming;
 	DoFileMacro(*autoPauseGCode, REHOME_G, true); 	// run the SD card rehome-and-resume script
