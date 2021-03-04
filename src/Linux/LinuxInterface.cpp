@@ -484,9 +484,8 @@ void LinuxInterface::Init() noexcept
 				// Evaluate an expression
 				case LinuxRequest::EvaluateExpression:
 				{
-					String<StringLength100> expression;
-					StringRef expressionRef = expression.GetRef();
-					GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expressionRef);
+					String<StringLength256> expression;
+					const GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expression.GetRef());
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);

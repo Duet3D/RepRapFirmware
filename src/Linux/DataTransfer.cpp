@@ -660,7 +660,7 @@ void DataTransfer::ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fi
 	}
 }
 
-GCodeChannel DataTransfer::ReadEvaluateExpression(size_t packetLength, StringRef& expression) noexcept
+GCodeChannel DataTransfer::ReadEvaluateExpression(size_t packetLength, const StringRef& expression) noexcept
 {
 	// Read header
 	const CodeChannelHeader *header = ReadDataHeader<CodeChannelHeader>();
