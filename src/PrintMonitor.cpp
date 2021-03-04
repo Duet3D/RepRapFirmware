@@ -62,7 +62,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
 	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), (int32_t)self->currentLayer), 												ObjectModelEntryFlags::live },
-	{ "layerTime",			OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
+	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetCurrentLayerTime(), 1), 											ObjectModelEntryFlags::live },
 	{ "pauseDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetPauseDuration())),											ObjectModelEntryFlags::live },
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::live },
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
@@ -116,7 +116,7 @@ void PrintMonitor::Reset() noexcept
 	heatingUp = paused = false;
 	currentLayer = 0;
 	printStartTime = pauseStartTime = lastSnapshotTime = lastLayerChangeTime = 0;
-	totalPauseTime = warmUpDuration = lastSnapshotNonPrintingTime = 0;
+	totalPauseTime = warmUpDuration = lastSnapshotNonPrintingTime = lastLayerChangeNonPrintingTime = 0;
 	lastLayerDuration = 0;
 	lastSnapshotFileFraction = lastSnapshotFilamentUsed = 0.0;
 	fileProgressRate = filamentProgressRate = 0.0;
@@ -315,6 +315,7 @@ void PrintMonitor::StartedPrint() noexcept
 	Reset();
 	isPrinting = true;
 	printStartTime = lastSnapshotTime = whenSlicerTimeLeftSet = millis64();
+	SetLayerNumber(0);
 }
 
 void PrintMonitor::StoppedPrint() noexcept
@@ -328,6 +329,8 @@ void PrintMonitor::StoppedPrint() noexcept
 void PrintMonitor::SetLayerNumber(uint32_t layerNumber) noexcept
 {
 	currentLayer = layerNumber;
+	lastLayerChangeTime = millis64();
+	lastLayerChangeNonPrintingTime = GetWarmUpDuration() + GetPauseDuration();
 }
 
 // Set the printing height of the new layer
@@ -433,6 +436,12 @@ float PrintMonitor::GetPrintDuration() const noexcept
 	const uint64_t now = millis64();
 	const uint64_t pauseTime = (paused) ? totalPauseTime + (now - pauseStartTime) : totalPauseTime;
 	return (float)(now - printStartTime - pauseTime) * MillisToSeconds;
+}
+
+// Get the time since starting the current layer in seconds
+float PrintMonitor::GetCurrentLayerTime() const noexcept
+{
+	return (float)(millis64() - lastLayerChangeTime + lastLayerChangeNonPrintingTime - (GetWarmUpDuration() + GetPauseDuration())) * MillisToSeconds;
 }
 
 // End

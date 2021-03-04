@@ -1741,9 +1741,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	else if (type == 3)
 	{
 		// Current Layer
-		response->catf(",\"currentLayer\":%d,", printMonitor->GetCurrentLayer());
+		response->catf(",\"currentLayer\":%d", printMonitor->GetCurrentLayer());
 
-		// Current Layer Time is no longer reported
+		// Current Layer Time
+		response->catf(",\"currentLayerTime\":%.1f,", (double)(printMonitor->GetCurrentLayerTime()));
 
 		// Raw Extruder Positions
 		AppendFloatArray(response, "extrRaw", GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetRawExtruderTotalByDrive(extruder); }, 1);

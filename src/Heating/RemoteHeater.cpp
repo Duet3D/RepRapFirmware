@@ -446,6 +446,7 @@ GCodeResult RemoteHeater::UpdateHeaterMonitors(const StringRef& reply) noexcept
 	return GCodeResult::error;
 }
 
+// This function processes an incoming heater report from an expansion board
 void RemoteHeater::UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept
 {
 	if (src == boardAddress)
@@ -457,6 +458,7 @@ void RemoteHeater::UpdateRemoteStatus(CanAddress src, const CanHeaterReport& rep
 	}
 }
 
+// This function processes an incoming heater tuning report from an expansion board
 void RemoteHeater::UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept
 {
 	if (src == boardAddress && tuningState >= TuningState::idleCycles && !newTuningResult)
