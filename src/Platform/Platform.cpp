@@ -31,6 +31,7 @@
 #include <PrintMonitor/PrintMonitor.h>
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RepRap.h"
+#include "Heap.h"
 #include "Scanner.h"
 #include <Version.h>
 #include "Logger.h"
@@ -1858,6 +1859,8 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #endif
 
 	reprap.Timing(mtype);
+
+	StringHandle::Diagnostics(mtype);
 
 #if 0
 	// Debugging temperature readings
