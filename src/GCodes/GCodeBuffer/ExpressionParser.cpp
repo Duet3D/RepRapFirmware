@@ -20,7 +20,7 @@ NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _res
 NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
 
 ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column) noexcept
-	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column), stringBuffer(stringBufferStorage, ARRAY_SIZE(stringBufferStorage))
+	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column)
 {
 }
 
@@ -48,6 +48,25 @@ ExpressionValue ExpressionParser::Parse(bool evaluate) THROWS(GCodeException)
 	return result;
 }
 
+// Evaluate an expression that must either be a numeric or string literal or enclosed in { }
+ExpressionValue ExpressionParser::ParseSimple() THROWS(GCodeException)
+{
+	const char c = CurrentCharacter();
+	if (c == '{')
+	{
+		return ParseExpectKet(true, '}');
+	}
+	if (c == '"')
+	{
+		return ParseQuotedString();
+	}
+	if (isDigit(c))
+	{
+		return ParseNumber();
+	}
+	throw ConstructParseException("expected simple expression");
+}
+
 // Evaluate an expression internally, stopping before any binary operators with priority 'priority' or lower
 ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority) THROWS(GCodeException)
 {
@@ -64,8 +83,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 	switch (c)
 	{
 	case '"':
-		ParseQuotedString(stringBuffer.GetRef());
-		val.Set(GetAndFix());
+		val = ParseQuotedString();
 		break;
 
 	case '-':
@@ -119,10 +137,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 			val = ParseInternal(evaluate, UnaryPriority);
 			if (val.GetType() == TypeCode::CString)
 			{
-				const char* s = val.sVal;
-				val.Set((int32_t)strlen(s));
-				stringBuffer.FinishedUsing(s);
-				val.SetType(TypeCode::Int32);
+				val.Set((int32_t)strlen(val.sVal));
 			}
 			else
 			{
@@ -450,14 +465,14 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 					break;
 
 				case '^':
-					ConvertToString(val, evaluate);
-					ConvertToString(val2, evaluate);
-					// We could skip evaluation if evaluate is false, but there is no real need to
-					if (stringBuffer.Concat(val.sVal, val2.sVal))
 					{
-						throw ConstructParseException("too many strings");
+						String<StringLength100> str;
+						val.AppendAsString(str.GetRef());
+						val2.AppendAsString(str.GetRef());
+						StringHandle sh(str.c_str());
+						val.Set(sh);
+						val2.Release();
 					}
-					val.sVal = GetAndFix();
 					break;
 				}
 			}
@@ -641,26 +656,16 @@ void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) THRO
 	{
 		if (evaluate)
 		{
-			stringBuffer.ClearLatest();
-			val.AppendAsString(stringBuffer.GetRef());
-			val.Set(GetAndFix());
+			String<StringLength100> str;
+			val.AppendAsString(str.GetRef());
+			StringHandle sh(str.c_str());
+			val.Set(sh);
 		}
 		else
 		{
 			val.Set("");
 		}
 	}
-}
-
-// Get a C-style pointer to the latest string in the buffer, and start a new one
-const char *ExpressionParser::GetAndFix()
-{
-	const char *const rslt = stringBuffer.LatestCStr();
-	if (stringBuffer.Fix())
-	{
-		throw ConstructParseException("too many strings");
-	}
-	return rslt;
 }
 
 void ExpressionParser::SkipWhiteSpace() noexcept
@@ -1028,11 +1033,11 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 
 // Parse a quoted string, given that the current character is double-quote
 // This is almost a copy of InternalGetQuotedString in class StringParser
-void ExpressionParser::ParseQuotedString(const StringRef& str) THROWS(GCodeException)
+ExpressionValue ExpressionParser::ParseQuotedString() THROWS(GCodeException)
 {
-	str.Clear();
+	String<StringLength100> str;
 	AdvancePointer();
-	for (;;)
+	while (true)
 	{
 		char c = CurrentCharacter();
 		AdvancePointer();
@@ -1044,7 +1049,8 @@ void ExpressionParser::ParseQuotedString(const StringRef& str) THROWS(GCodeExcep
 		{
 			if (CurrentCharacter() != c)
 			{
-				return;
+				StringHandle sh(str.c_str());
+				return ExpressionValue(sh);
 			}
 			AdvancePointer();
 		}

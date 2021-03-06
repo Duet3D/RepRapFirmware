@@ -752,6 +752,7 @@ void StringParser::DecodeCommand() noexcept
 		// Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
 		bool inQuotes = false;
 		unsigned int localBraceCount = 0;
+		parametersPresent.Clear();
 		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
 		{
 			const char c = gb.buffer[commandEnd];
@@ -774,10 +775,14 @@ void StringParser::DecodeCommand() noexcept
 				}
 				else
 				{
-					char c2;
-					if (((c2 = toupper(c)) == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
+					const char c2 = toupper(c);
+					if ((c2  == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
 					{
 						break;
+					}
+					if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+					{
+						parametersPresent.SetBit(c2 - 'A');
 					}
 				}
 			}
@@ -903,18 +908,22 @@ bool StringParser::IsLastCommand() const noexcept
 	return commandEnd >= gcodeLineEnd;			// using >= here also covers the case where the buffer is empty and gcodeLineEnd has been set to zero
 }
 
-// Is 'c' in the G Code string? 'c' must be uppercase.
+// Is 'c' in the G Code string?
 // Leave the pointer one after it for a subsequent read.
 bool StringParser::Seen(char c) noexcept
 {
-	bool inQuotes = false;
-	bool escaped = false;
 	bool wantLowerCase = (c >= 'a');
 	if (wantLowerCase)
 	{
 		c = toupper(c);
 	}
+	else if (!parametersPresent.IsBitSet(c - 'A'))
+	{
+		return false;
+	}
 
+	bool inQuotes = false;
+	bool escaped = false;
 	unsigned int inBrackets = 0;
 	for (readPointer = parameterStart; (unsigned int)readPointer < commandEnd; ++readPointer)
 	{
@@ -1660,6 +1669,26 @@ void StringParser::SkipWhiteSpace() noexcept
 	{
 		++readPointer;
 	}
+}
+
+void StringParser::SetParameters(GCodeMachineState *mc, int codeRunning) noexcept
+{
+	parametersPresent.Iterate([this, mc, codeRunning](unsigned int bit, unsigned int count)
+								{
+									const char letter = 'A' + bit;
+									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
+									{
+										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);
+										try
+										{
+											ExpressionValue ev = parser.Parse();
+											char paramName[2] = { letter, 0 };
+											mc->variables.Insert(new Variable(paramName, ev, -1));
+										}
+										catch (const GCodeException&) { }
+									}
+								}
+							  );
 }
 
 GCodeException StringParser::ConstructParseException(const char *str) const noexcept

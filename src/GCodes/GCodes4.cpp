@@ -249,7 +249,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				String<StringLength20> scratchString;
 				scratchString.printf("tfree%d.g", oldTool->Number());
-				DoFileMacro(gb, scratchString.c_str(), false, 0);		// don't pass the T code here because it may be negative
+				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);		// don't pass the T code here because it may be negative
 			}
 		}
 		break;
@@ -269,7 +269,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				String<StringLength20> scratchString;
 				scratchString.printf("tpre%d.g", newToolNumber);
-				DoFileMacro(gb, scratchString.c_str(), false, 0);
+				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
 			}
 		}
 		break;
@@ -291,7 +291,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				String<StringLength20> scratchString;
 				scratchString.printf("tpost%d.g", newToolNumber);
-				DoFileMacro(gb, scratchString.c_str(), false, 0);
+				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
 			}
 		}
 		break;
@@ -365,7 +365,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				DoFileMacro(gb, PAUSE_G, true, 25);
+				DoFileMacro(gb, PAUSE_G, true, SystemMacroCode);
 			}
 		}
 		break;
@@ -376,9 +376,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, -1))
+				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, SystemMacroCode))
 				{
-					DoFileMacro(gb, PAUSE_G, true, -1);
+					DoFileMacro(gb, PAUSE_G, true, SystemMacroCode);
 				}
 			}
 		}
@@ -392,11 +392,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				String<StringLength20> macroName;
 				macroName.printf(FILAMENT_ERROR "%u.g", gb.MachineState().stateParameter);
-				if (!DoFileMacro(gb, macroName.c_str(), false, -1))
+				if (!DoFileMacro(gb, macroName.c_str(), false, SystemMacroCode))
 				{
-					if (!DoFileMacro(gb, FILAMENT_ERROR ".g", false, -1))
+					if (!DoFileMacro(gb, FILAMENT_ERROR ".g", false, SystemMacroCode))
 					{
-						DoFileMacro(gb, PAUSE_G, true, -1);
+						DoFileMacro(gb, PAUSE_G, true, SystemMacroCode);
 					}
 				}
 			}
@@ -588,7 +588,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (platform.GetZProbeOrDefault(currentZProbeNumber)->GetProbeType() == ZProbeType::blTouch)
 			{
-				DeployZProbe(gb, 29);
+				DeployZProbe(gb);
 			}
 		}
 		break;
@@ -627,7 +627,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					reprap.GetHeat().SuspendHeaters(false);
 					gb.MachineState().SetError("Z probe already triggered before probing move started");
 					gb.SetState(GCodeState::checkError);
-					RetractZProbe(gb, 29);
+					RetractZProbe(gb);
 					break;
 				}
 				else
@@ -639,7 +639,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						reprap.GetMove().heightMapLock.ReleaseWriter();
 						gb.MachineState().SetError("Failed to enable Z probe");
 						gb.SetState(GCodeState::checkError);
-						RetractZProbe(gb, 29);
+						RetractZProbe(gb);
 						break;
 					}
 					moveBuffer.checkEndstops = true;
@@ -673,7 +673,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					reprap.GetMove().heightMapLock.ReleaseWriter();
 					gb.MachineState().SetError("Z probe was not triggered during probing move");
 					gb.SetState(GCodeState::checkError);
-					RetractZProbe(gb, 29);
+					RetractZProbe(gb);
 					break;
 				}
 
@@ -685,7 +685,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (zp->GetProbeType() == ZProbeType::blTouch)		// bltouch needs to be retracted when it triggers
 			{
-				RetractZProbe(gb, 29);
+				RetractZProbe(gb);
 			}
 		}
 		break;
@@ -747,7 +747,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reprap.GetMove().heightMapLock.ReleaseWriter();
 				gb.MachineState().SetError("Z probe readings not consistent");
 				gb.SetState(GCodeState::checkError);
-				RetractZProbe(gb, 29);
+				RetractZProbe(gb);
 			}
 		}
 		break;
@@ -784,7 +784,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Done all the points
 				gb.AdvanceState();
-				RetractZProbe(gb, 29);
+				RetractZProbe(gb);
 			}
 			else
 			{
@@ -874,7 +874,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (platform.GetZProbeOrDefault(currentZProbeNumber)->GetProbeType() == ZProbeType::blTouch)	// bltouch needs to be redeployed prior to each probe point
 			{
-				DeployZProbe(gb, 30);
+				DeployZProbe(gb);
 			}
 		}
 		break;
@@ -918,7 +918,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(), true, true);
 					}
 					gb.SetState(GCodeState::checkError);									// no point in doing anything else
-					RetractZProbe(gb, 30);
+					RetractZProbe(gb);
 				}
 				else
 				{
@@ -928,7 +928,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					{
 						gb.MachineState().SetError("Failed to enable Z probe");
 						gb.SetState(GCodeState::checkError);
-						RetractZProbe(gb, 30);
+						RetractZProbe(gb);
 						break;
 					}
 
@@ -992,7 +992,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// G30 S-1 command taps once and reports the height, S-2 sets the tool offset to the negative of the current height, S-3 sets the Z probe trigger height
 					gb.SetState(GCodeState::probingAtPoint7);					// special state for reporting the stopped height at the end
-					RetractZProbe(gb, 30);										// retract the probe before moving to the new state
+					RetractZProbe(gb);											// retract the probe before moving to the new state
 					break;
 				}
 
@@ -1019,7 +1019,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (zp->GetProbeType() == ZProbeType::blTouch)						// bltouch needs to be retracted when it triggers
 			{
-				RetractZProbe(gb, 30);
+				RetractZProbe(gb);
 			}
 		}
 		break;
@@ -1097,7 +1097,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (zp->GetProbeType() != ZProbeType::blTouch)			// if it's a BLTouch then we have already retracted it
 			{
-				RetractZProbe(gb, 30);
+				RetractZProbe(gb);
 			}
 		}
 		break;
@@ -1165,7 +1165,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			gb.AdvanceState();
 			currentZProbeNumber = reprap.GetMove().GetStraightProbeSettings().GetZProbeToUse();
-			DeployZProbe(gb, 38);
+			DeployZProbe(gb);
 		}
 		break;
 
@@ -1211,7 +1211,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 							gb.MachineState().SetError((probingAway) ? "Probe not triggered at start of probing move" : "Probe already triggered at start of probing move");
 						}
 						gb.SetState(GCodeState::checkError);								// no point in doing anything else
-						RetractZProbe(gb, 38);
+						RetractZProbe(gb);
 					}
 					else
 					{
@@ -1221,7 +1221,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						{
 							gb.MachineState().SetError("Failed to enable Z probe");
 							gb.SetState(GCodeState::checkError);
-							RetractZProbe(gb, 38);
+							RetractZProbe(gb);
 							break;
 						}
 
@@ -1256,7 +1256,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 			gb.SetState(GCodeState::checkError);
-			RetractZProbe(gb, 38);							// retract the probe before moving to the new state
+			RetractZProbe(gb);								// retract the probe before moving to the new state
 		}
 		break;
 

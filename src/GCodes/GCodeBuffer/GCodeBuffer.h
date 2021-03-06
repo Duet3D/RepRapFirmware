@@ -223,6 +223,8 @@ public:
 	void MotionStopped() noexcept { motionCommanded = false; }
 	bool WasMotionCommanded() const noexcept { return motionCommanded; }
 
+	void SetParameters(int codeRunning) noexcept;
+
 	Mutex mutex;
 
 protected:

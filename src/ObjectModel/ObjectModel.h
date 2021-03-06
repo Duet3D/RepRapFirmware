@@ -10,6 +10,7 @@
 
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeException.h>
+#include <Platform/Heap.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -35,6 +36,7 @@ enum class TypeCode : uint8_t
 	Enum32,
 	ObjectModel,
 	CString,
+	HeapString,
 	IPAddress,
 	Array,
 	DateTime,
@@ -94,6 +96,8 @@ struct ExpressionValue
 		const char *sVal;
 		const ObjectModel *omVal;					// object of some class derived form ObjectModel
 		const ObjectModelArrayDescriptor *omadVal;
+		StringHandle shVal;
+		uint32_t whole;								// a member we can use to copy the whole thing safely, at least as big as all the others. Assumes all other members are trivially copyable.
 	};
 
 	enum class SpecialType : uint32_t
@@ -121,21 +125,26 @@ struct ExpressionValue
 	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap64) { Set56BitValue(bm.GetRaw()); }
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
 	explicit ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
+	explicit ExpressionValue(StringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h) { }
 #if SUPPORT_CAN_EXPANSION
 	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif
 
+	ExpressionValue& operator=(const ExpressionValue& other) noexcept;
+	void Release() noexcept;					// release any associated storage
+
 	TypeCode GetType() const noexcept { return (TypeCode)type; }
 	void SetType(TypeCode t) noexcept { type = (uint32_t)t; }
 
-	void Set(bool b) noexcept { type = (uint32_t)TypeCode::Bool; bVal = b; }
-	void Set(char c) noexcept { type = (uint32_t)TypeCode::Char; cVal = c; }
-	void Set(int32_t i) noexcept { type = (uint32_t)TypeCode::Int32; iVal = i; }
-	void Set(float f) noexcept { type = (uint32_t)TypeCode::Float; fVal = f; param = 1; }
-	void Set(const char *s) noexcept { type = (uint32_t)TypeCode::CString; sVal = s; }
+	void Set(bool b) noexcept { Release(); type = (uint32_t)TypeCode::Bool; bVal = b; }
+	void Set(char c) noexcept { Release(); type = (uint32_t)TypeCode::Char; cVal = c; }
+	void Set(int32_t i) noexcept { Release(); type = (uint32_t)TypeCode::Int32; iVal = i; }
+	void Set(float f) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = 1; }
+	void Set(const char *s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
+	void Set(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
 
 	// Sore a 56-bit value
-	void Set56BitValue(uint64_t v) { param = (uint32_t)(v >> 32) & 0x00FFFFFF; uVal = (uint32_t)v; }
+	void Set56BitValue(uint64_t v) { Release(); param = (uint32_t)(v >> 32) & 0x00FFFFFF; uVal = (uint32_t)v; }
 
 	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.
 	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }

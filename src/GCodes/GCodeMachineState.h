@@ -13,6 +13,7 @@
 #include <General/FreelistManager.h>
 #include <General/NamedEnum.h>
 #include <GCodes/GCodeResult.h>
+#include <GCodes/Variable.h>
 
 // Enumeration to list all the possible states that the Gcode processing machine may be in
 enum class GCodeState : uint8_t
@@ -184,12 +185,13 @@ public:
 
 	GCodeMachineState *GetPrevious() const noexcept { return previous; }
 
+	VariableSet variables;											// local variables and parameters
 	float feedRate;
 #if HAS_MASS_STORAGE
 	FileData fileState;
 #endif
 #if HAS_LINUX_INTERFACE
-	FileId fileId;								// virtual ID to distinguish files in different stack levels (only unique per GB)
+	FileId fileId;													// virtual ID to distinguish files in different stack levels (only unique per GB)
 #endif
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];
@@ -209,7 +211,8 @@ public:
 		usingInches : 1,						// true if units are inches not mm
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
-		messageCancelled : 1
+		messageCancelled : 1,
+		localPush : 1							// true if this stack frame was created by M120, so we use the parent variables
 #if HAS_LINUX_INTERFACE
 		, lastCodeFromSbc : 1,
 		macroStartedByCode : 1,

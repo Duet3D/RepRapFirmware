@@ -1011,4 +1011,9 @@ void GCodeBuffer::AppendFullCommand(const StringRef &s) const noexcept
 	PARSER_OPERATION(AppendFullCommand(s));
 }
 
+void GCodeBuffer::SetParameters(int codeRunning) noexcept
+{
+	PARSER_OPERATION(SetParameters(machineState, codeRunning));
+}
+
 // End

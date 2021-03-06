@@ -375,7 +375,7 @@ FilePosition GCodes::GetFilePosition() const noexcept
 // Start running the config file
 bool GCodes::RunConfigFile(const char* fileName) noexcept
 {
-	runningConfigFile = DoFileMacro(*triggerGCode, fileName, false);
+	runningConfigFile = DoFileMacro(*triggerGCode, fileName, false, SystemMacroCode);
 	return runningConfigFile;
 }
 
@@ -579,7 +579,7 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 			&& gb.DoDwellTime(1000)
 		   )
 		{
-			return DoFileMacro(gb, DAEMON_G, false, -1);
+			return DoFileMacro(gb, DAEMON_G, false, SystemMacroCode);
 		}
 	}
 	else
@@ -855,7 +855,7 @@ void GCodes::CheckTriggers() noexcept
 				triggersPending.ClearBit(lowestTriggerPending);		// clear the trigger
 				String<StringLength20> filename;
 				filename.printf("trigger%u.g", lowestTriggerPending);
-				DoFileMacro(*triggerGCode, filename.c_str(), true);
+				DoFileMacro(*triggerGCode, filename.c_str(), true, SystemMacroCode);
 			}
 		}
 	}
@@ -1300,9 +1300,9 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 	// Now pass the machine axes to the rehome.g file
 	// TODO
 
-	autoPauseGCode->SetState(GCodeState::resuming1); // set up to resume after rehoming
+	autoPauseGCode->SetState(GCodeState::resuming1);				// set up to resume after rehoming
 	pauseState = PauseState::resuming;
-	DoFileMacro(*autoPauseGCode, REHOME_G, true);	// run the SD card rehome-and-resume script
+	DoFileMacro(*autoPauseGCode, REHOME_G, true, SystemMacroCode);	// run the SD card rehome-and-resume script
 	return true;
 }
 
@@ -2688,7 +2688,7 @@ void GCodes::EmergencyStop() noexcept
 // 501 = running M501
 // 502 = running M502
 // 98 = running a macro explicitly via M98
-// otherwise it is either the G- or M-code being executed, or 0 for a tool change file, or -1 for another system file
+// otherwise it is either the G- or M-code being executed, or ToolChangeMacroCode for a tool change file, or SystemMacroCode for another system file
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept
 {
 #if HAS_LINUX_INTERFACE
@@ -2698,7 +2698,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 		{
 			if (reportMissing)
 			{
-				MessageType mt = (gb.IsBinary() && codeRunning >= 0)
+				MessageType mt = (gb.IsBinary() && codeRunning != SystemMacroCode)
 						? (MessageType)(gb.GetResponseMessageType() | WarningMessageFlag | PushFlag)
 							: WarningMessage;
 				platform.MessageF(mt, "Macro file %s not found\n", fileName);
@@ -2739,6 +2739,10 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			f->Close();
 			return true;
 		}
+		if (codeRunning >= 0)
+		{
+			gb.SetParameters(codeRunning);
+		}
 		gb.MachineState().fileState.Set(f);
 		gb.StartNewFile();
 		gb.GetFileInput()->Reset(gb.MachineState().fileState);
@@ -2755,10 +2759,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	gb.MachineState().doingFileMacro = true;
 	gb.MachineState().runningM501 = (codeRunning == 501);
 	gb.MachineState().runningM502 = (codeRunning == 502);
-	if (codeRunning != 98)
-	{
-		gb.MachineState().runningSystemMacro = true; 	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
-	}
+	gb.MachineState().runningSystemMacro = (codeRunning == SystemMacroCode || codeRunning == 29 || codeRunning == 32);	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 	return true;
@@ -2892,7 +2893,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 				gb.SetState(GCodeState::probingAtPoint0);
 				if (zp->GetProbeType() != ZProbeType::blTouch)
 				{
-					DeployZProbe(gb, 30);
+					DeployZProbe(gb);
 				}
 			}
 		}
@@ -2906,7 +2907,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 		gb.SetState(GCodeState::probingAtPoint2a);
 		if (zp->GetProbeType() != ZProbeType::blTouch)
 		{
-			DeployZProbe(gb, 30);
+			DeployZProbe(gb);
 		}
 	}
 	return GCodeResult::ok;
@@ -2982,7 +2983,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	gb.SetState(GCodeState::gridProbing1);
 	if (zp->GetProbeType() != ZProbeType::blTouch)
 	{
-		DeployZProbe(gb, 29);
+		DeployZProbe(gb);
 	}
 	return GCodeResult::ok;
 }
@@ -3208,7 +3209,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	if (fromStart)
 	{
 		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
-		DoFileMacro(*fileGCode, START_G, false);
+		DoFileMacro(*fileGCode, START_G, false, SystemMacroCode);
 	}
 }
 
@@ -3919,7 +3920,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
-		DoFileMacro(gb, scratchString.c_str(), true, 701);
+		DoFileMacro(gb, scratchString.c_str(), true, SystemMacroCode);
 	}
 	else if (tool->GetFilament()->IsLoaded())
 	{
@@ -3953,7 +3954,7 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 		gb.SetState(GCodeState::unloadingFilament);
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
-		DoFileMacro(gb, scratchString.c_str(), true, 702);
+		DoFileMacro(gb, scratchString.c_str(), true, SystemMacroCode);
 	}
 	return GCodeResult::ok;
 }

@@ -17,7 +17,7 @@
 
 #define CHECK_HANDLES	(1)							// set nonzero to check that handles are valid before dereferencing them
 
-constexpr size_t IndexBlockSlots = 99;			// number of 4-byte handles per index block, plus one for link to next index block
+constexpr size_t IndexBlockSlots = 99;				// number of 4-byte handles per index block, plus one for link to next index block
 constexpr size_t HeapBlockSize = 2048;				// the size of each heap block
 
 struct StorageSpace
@@ -165,6 +165,8 @@ unsigned int StringHandle::gcCyclesDone = 0;
 
 /*static*/ bool StringHandle::CheckIntegrity(const StringRef& errmsg) noexcept
 {
+	ReadLocker lock(heapLock);
+
 	// Check that all heap block entries end at the allocated length
 	unsigned int numHeapErrors = 0;
 	for (HeapBlock *currentBlock = heapRoot; currentBlock != nullptr; currentBlock = currentBlock->next)
@@ -330,23 +332,55 @@ unsigned int StringHandle::gcCyclesDone = 0;
 }
 
 // StringHandle members
+// Build a handle from a single null-terminated string
 StringHandle::StringHandle(const char *s) noexcept
 {
 	WriteLocker locker(heapLock);							// prevent other tasks modifying the heap
-	IndexSlot * const slot = AllocateHandle();			// allocate a handle
-	const size_t spaceNeeded = strlen(s) + 1;
-	StorageSpace * const space = AllocateSpace(spaceNeeded);
-	if (space->length < spaceNeeded)
+	InternalAssign(s, strlen(s));
+}
+
+// Build a handle from a character array and a length
+StringHandle::StringHandle(const char *s, size_t len) noexcept
+{
+	WriteLocker locker(heapLock);							// prevent other tasks modifying the heap
+	InternalAssign(s, len);
+}
+
+void StringHandle::Assign(const char *s) noexcept
+{
+	WriteLocker locker(heapLock);							// prevent other tasks modifying the heap
+	if (slotPtr != nullptr)
 	{
-		memcpy(space->data, s, space->length);				// truncate the string
-		space->data[space->length - 1] = 0;
+		InternalDelete();
 	}
-	else
-	{
-		memcpy(space->data, s, spaceNeeded);
-	}
+	InternalAssign(s, strlen(s));
+}
+
+void StringHandle::InternalAssign(const char *s, size_t len) noexcept
+{
+	IndexSlot * const slot = AllocateHandle();				// allocate a handle
+	StorageSpace * const space = AllocateSpace(len + 1);
+	const size_t lengthToCopy = min<size_t>(len, space->length - 1);	// truncate the string if it won't fit
+	memcpy(space->data, s, lengthToCopy);
+	space->data[lengthToCopy] = 0;
 	slot->storage = space;
 	slotPtr = slot;
+}
+
+void StringHandle::Delete() noexcept
+{
+	if (slotPtr != nullptr)
+	{
+		WriteLocker locker(heapLock);					// prevent other tasks modifying the heap
+		InternalDelete();
+	}
+}
+
+void StringHandle::InternalDelete() noexcept
+{
+	ReleaseSpace(slotPtr->storage);					// release the space
+	slotPtr->storage = nullptr;						// release the handle entry
+	slotPtr = nullptr;								// clear the pointer to the handle entry
 }
 
 ReadLockedPointer<const char> StringHandle::Get() const noexcept
@@ -373,17 +407,6 @@ ReadLockedPointer<const char> StringHandle::Get() const noexcept
 #endif
 
 	return ReadLockedPointer<const char>(locker, slotPtr->storage->data);
-}
-
-void StringHandle::Delete() noexcept
-{
-	if (slotPtr != nullptr)
-	{
-		WriteLocker locker(heapLock);					// prevent other tasks modifying the heap
-		ReleaseSpace(slotPtr->storage);					// release the space
-		slotPtr->storage = nullptr;						// release the handle entry
-		slotPtr = nullptr;								// clear the pointer to the handle entry
-	}
 }
 
 /*static*/ void StringHandle::Diagnostics(MessageType mt) noexcept

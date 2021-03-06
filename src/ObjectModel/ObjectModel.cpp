@@ -33,6 +33,13 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.cat(sVal);
 		break;
 
+	case TypeCode::HeapString:
+		{
+			const auto p = shVal.Get();
+			str.cat(p.Ptr());
+		}
+		break;
+
 	case TypeCode::Float:
 		str.catf(GetFloatFormatString(), (double)fVal);
 		break;
@@ -120,6 +127,25 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 	case TypeCode::Enum32:
 		str.cat("(enumeration)");
 		break;
+	}
+}
+
+ExpressionValue& ExpressionValue::operator=(const ExpressionValue& other) noexcept
+{
+	Release();
+	type = other.type;
+	param = other.param;
+	whole = other.whole;
+	return *this;
+}
+
+// Release any associated storage
+void ExpressionValue::Release() noexcept
+{
+	if (type == (uint32_t)TypeCode::HeapString)
+	{
+		shVal.Delete();
+		type = (uint32_t)TypeCode::None;
 	}
 }
 
@@ -501,6 +527,13 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 
 	case TypeCode::CString:
 		buf->catf("\"%.s\"", val.sVal);
+		break;
+
+	case TypeCode::HeapString:
+		{
+			const auto p = val.shVal.Get();
+			buf->catf("\"%.s\"", p.Ptr());
+		}
 		break;
 
 #if SUPPORT_CAN_EXPANSION

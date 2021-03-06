@@ -20,11 +20,14 @@ class IndexBlock;
 class StringHandle
 {
 public:
+	StringHandle() noexcept { slotPtr = nullptr; }
 	StringHandle(const char *s) noexcept;
+	StringHandle(const char *s, size_t len) noexcept;
 
 	ReadLockedPointer<const char> Get() const noexcept;
 	void Delete() noexcept;
 	bool IsNull() const noexcept { return slotPtr == nullptr; }
+	void Assign(const char *s) noexcept;
 
 	static void GarbageCollect() noexcept;
 //	static size_t GetWastedSpace() noexcept { return spaceToRecycle; }
@@ -34,6 +37,9 @@ public:
 	static void Diagnostics(MessageType mt) noexcept;
 
 private:
+	void InternalAssign(const char *s, size_t len) noexcept;
+	void InternalDelete() noexcept;
+
 	static IndexSlot *AllocateHandle() noexcept;
 	static StorageSpace *AllocateSpace(uint16_t length) noexcept;
 	static void ReleaseSpace(StorageSpace *ptr) noexcept;
