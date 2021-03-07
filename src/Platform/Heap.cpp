@@ -88,11 +88,11 @@ unsigned int StringHandle::gcCyclesDone = 0;
 		while (p < currentBlock->data + currentBlock->allocated)
 		{
 			const size_t len = reinterpret_cast<StorageSpace*>(p)->length;
-			if (len & 1)					// if this slot has been marked as free
+			if (len & 1u)					// if this slot has been marked as free
 			{
 				break;
 			}
-			p += (len & ~1u) + sizeof(StorageSpace::length);
+			p += len + sizeof(StorageSpace::length);
 		}
 
 		if (p < currentBlock->data + currentBlock->allocated)					// if we found an unused block before we reached the end
@@ -104,8 +104,8 @@ unsigned int StringHandle::gcCyclesDone = 0;
 				// Find the end of the unused blocks
 				while (p < currentBlock->data + currentBlock->allocated)
 				{
-					size_t len = reinterpret_cast<StorageSpace*>(p)->length;
-					if ((len & 1) == 0)
+					const size_t len = reinterpret_cast<StorageSpace*>(p)->length;
+					if ((len & 1u) == 0)
 					{
 						break;
 					}
@@ -124,18 +124,18 @@ unsigned int StringHandle::gcCyclesDone = 0;
 					unsigned int numHandlesToAdjust = 0;
 					while (p < currentBlock->data + currentBlock->allocated)
 					{
-						size_t len = reinterpret_cast<StorageSpace*>(p)->length;
-						if ((len & 1) == 0)
+						const size_t len = reinterpret_cast<StorageSpace*>(p)->length;
+						if (len & 1u)
 						{
 							break;
 						}
 						++numHandlesToAdjust;
-						p += (len & ~1u) + sizeof(StorageSpace::length);
+						p += len + sizeof(StorageSpace::length);
 					}
 
 					// Move the contiguous blocks down
-					//TODO make this more efficient by building up a small table f several adjustments, so we need to make fewer passes through the index
 					memmove(startSkip, startUsed, p - startUsed);
+					//TODO make this more efficient by building up a small table of several adjustments, so we need to make fewer passes through the index
 					AdjustHandles(startUsed, p, startUsed - startSkip, numHandlesToAdjust);
 					startSkip += p - startUsed;
 				}
