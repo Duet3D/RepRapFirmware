@@ -327,20 +327,12 @@ unsigned int StringHandle::gcCyclesDone = 0;
 
 	// Create a new heap block
 	heapRoot = new HeapBlock(heapRoot);
-	heapAllocated += HeapBlockSize - (length + sizeof(StorageSpace::length));
+	heapAllocated += HeapBlockSize;
+	heapUsed += length + sizeof(StorageSpace::length);
 	StorageSpace * const ret2 = reinterpret_cast<StorageSpace*>(heapRoot->data);
 	ret2->length = length;
 	heapRoot->allocated = length + sizeof(StorageSpace::length);
 	return ret2;
-}
-
-/*static*/ void StringHandle::ReleaseSpace(StorageSpace *ptr) noexcept
-{
-	if (ptr != nullptr)
-	{
-		heapToRecycle += ptr->length;
-		ptr->length |= 1;									// flag the space as unused
-	}
 }
 
 // StringHandle members
@@ -374,7 +366,7 @@ void StringHandle::Assign(const char *s) noexcept
 
 void StringHandle::InternalAssign(const char *s, size_t len) noexcept
 {
-	IndexSlot * const slot = AllocateHandle();				// allocate a handle
+	IndexSlot * const slot = AllocateHandle();					// allocate a handle
 	StorageSpace * const space = AllocateSpace(len + 1);
 	const size_t lengthToCopy = min<size_t>(len, space->length - 1);	// truncate the string if it won't fit
 	memcpy(space->data, s, lengthToCopy);
@@ -406,9 +398,11 @@ const StringHandle& StringHandle::IncreaseRefCount() const noexcept
 void StringHandle::InternalDelete() noexcept
 {
 	RRF_ASSERT(slotPtr->refCount != 0);
+	RRF_ASSERT(slotPtr->storage != nullptr);
 	if (--slotPtr->refCount == 0)
 	{
-		ReleaseSpace(slotPtr->storage);						// release the space
+		heapToRecycle += slotPtr->storage->length + sizeof(StorageSpace::length);
+		slotPtr->storage->length |= 1;									// flag the space as unused
 		slotPtr->storage = nullptr;							// release the handle entry
 		--handlesUsed;
 	}

@@ -47,7 +47,6 @@ protected:
 
 	static IndexSlot *AllocateHandle() noexcept;
 	static StorageSpace *AllocateSpace(size_t length) noexcept;
-	static void ReleaseSpace(StorageSpace *ptr) noexcept;
 	static void GarbageCollectInternal() noexcept;
 	static void AdjustHandles(char *startAddr, char *endAddr, size_t moveDown, unsigned int numHandles) noexcept;
 
