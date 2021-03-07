@@ -1016,4 +1016,14 @@ void GCodeBuffer::SetParameters(int codeRunning) noexcept
 	PARSER_OPERATION(SetParameters(machineState, codeRunning));
 }
 
+VariableSet& GCodeBuffer::GetVariables() const noexcept
+{
+	GCodeMachineState *mc = machineState;
+	while (mc->localPush && mc->GetPrevious() != nullptr)
+	{
+		mc = mc->GetPrevious();
+	}
+	return mc->variables;
+}
+
 // End

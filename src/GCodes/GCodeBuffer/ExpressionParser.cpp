@@ -1031,6 +1031,23 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	// If we are not evaluating then the object expression doesn't have to exist, so don't retrieve it because that might throw an error
 	if (evaluate)
 	{
+		// Check for a parameter, local or global variable
+		if (StringStartsWith(id.c_str(), "param."))
+		{
+			return GetVariableValue(gb.GetVariables(), id.c_str() + strlen("param."), true);
+		}
+
+		if (StringStartsWith(id.c_str(), "global."))
+		{
+			return GetVariableValue(gb.GetVariables(), id.c_str() + strlen("global."), false);
+		}
+
+		if (StringStartsWith(id.c_str(), "user."))
+		{
+			return GetVariableValue(reprap.globalVariables, id.c_str() + strlen("user."), false);
+		}
+
+		// Else assume an object model value
 		ExpressionValue value = reprap.GetObjectValue(context, nullptr, id.c_str());
 		if (context.ObsoleteFieldQueried() && obsoleteField.IsEmpty())
 		{
@@ -1039,6 +1056,18 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		return value;
 	}
 	return ExpressionValue(nullptr);
+}
+
+// Get the value of a variable
+ExpressionValue ExpressionParser::GetVariableValue(VariableSet& vars, const char *name, bool parameter) THROWS(GCodeException)
+{
+	const Variable* var = vars.Lookup(name);
+	if (var != nullptr && (!parameter || var->GetScope() < 0))
+	{
+		return var->GetValue();
+	}
+
+	throw ConstructParseException("Unknown variable");
 }
 
 // Parse a quoted string, given that the current character is double-quote

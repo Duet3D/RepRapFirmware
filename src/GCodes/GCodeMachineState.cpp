@@ -20,7 +20,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 	  selectedPlane(0), drivesRelative(false), axesRelative(false),
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(false),
 #if HAS_LINUX_INTERFACE
 	  lastCodeFromSbc(false), macroStartedByCode(false), fileFinished(false),
 #endif
@@ -45,7 +45,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  selectedPlane(prev.selectedPlane), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
-	  waitingForAcknowledgement(false), messageAcknowledged(false),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(withinSameFile),
 #if HAS_LINUX_INTERFACE
 	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif

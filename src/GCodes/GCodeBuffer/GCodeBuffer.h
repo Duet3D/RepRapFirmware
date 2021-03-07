@@ -49,7 +49,7 @@ public:
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
 
-	bool Put(char c) noexcept SPEED_CRITICAL;								// Add a character to the end
+	bool Put(char c) noexcept SPEED_CRITICAL;									// Add a character to the end
 #if HAS_LINUX_INTERFACE
 	void PutBinary(const uint32_t *data, size_t len) noexcept;					// Add an entire binary G-Code, overwriting any existing content
 #endif
@@ -224,6 +224,7 @@ public:
 	bool WasMotionCommanded() const noexcept { return motionCommanded; }
 
 	void SetParameters(int codeRunning) noexcept;
+	VariableSet& GetVariables() const noexcept;
 
 	Mutex mutex;
 

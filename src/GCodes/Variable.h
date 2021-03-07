@@ -25,6 +25,9 @@ public:
 	Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept;
 	~Variable();
 
+	ExpressionValue GetValue() const { return val; }
+	int8_t GetScope() const { return scope; }
+
 private:
 	Variable *next;
 	StringHandle name;
