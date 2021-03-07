@@ -754,7 +754,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 	}
 }
 
-void BinaryParser::SetParameters(GCodeMachineState *mc, int codeRunning) noexcept
+void BinaryParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
 {
 	if (bufferLength != 0 && header->numParameters != 0)
 	{
@@ -806,7 +806,7 @@ void BinaryParser::SetParameters(GCodeMachineState *mc, int codeRunning) noexcep
 				if (ev.GetType() != TypeCode::None)
 				{
 					char paramName[2] = { param->letter, 0 };
-					mc->variables.Insert(new Variable(paramName, ev, -1));
+					vs.Insert(new Variable(paramName, ev, -1));
 				}
 			}
 

@@ -1671,9 +1671,9 @@ void StringParser::SkipWhiteSpace() noexcept
 	}
 }
 
-void StringParser::SetParameters(GCodeMachineState *mc, int codeRunning) noexcept
+void StringParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
 {
-	parametersPresent.Iterate([this, mc, codeRunning](unsigned int bit, unsigned int count)
+	parametersPresent.Iterate([this, &vs, codeRunning](unsigned int bit, unsigned int count)
 								{
 									const char letter = 'A' + bit;
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
@@ -1683,7 +1683,7 @@ void StringParser::SetParameters(GCodeMachineState *mc, int codeRunning) noexcep
 										{
 											ExpressionValue ev = parser.Parse();
 											char paramName[2] = { letter, 0 };
-											mc->variables.Insert(new Variable(paramName, ev, -1));
+											vs.Insert(new Variable(paramName, ev, -1));
 										}
 										catch (const GCodeException&) { }
 									}

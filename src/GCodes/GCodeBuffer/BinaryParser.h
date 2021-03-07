@@ -60,7 +60,7 @@ public:
 
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
-	void SetParameters(GCodeMachineState *mc, int codeRunning) noexcept;
+	void SetParameters(VariableSet& vs, int codeRunning) noexcept;
 
 private:
 	GCodeBuffer& gb;

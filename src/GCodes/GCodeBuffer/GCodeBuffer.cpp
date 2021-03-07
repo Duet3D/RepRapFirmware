@@ -1013,7 +1013,7 @@ void GCodeBuffer::AppendFullCommand(const StringRef &s) const noexcept
 
 void GCodeBuffer::SetParameters(int codeRunning) noexcept
 {
-	PARSER_OPERATION(SetParameters(machineState, codeRunning));
+	PARSER_OPERATION(SetParameters(GetVariables(), codeRunning));
 }
 
 VariableSet& GCodeBuffer::GetVariables() const noexcept

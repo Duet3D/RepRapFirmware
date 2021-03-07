@@ -20,6 +20,7 @@ class GCodeBuffer;
 class IPAddress;
 class MacAddress;
 class StringBuffer;
+class VariableSet;
 
 class StringParser
 {
@@ -82,7 +83,7 @@ public:
 
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
-	void SetParameters(GCodeMachineState *mc, int codeRunning) noexcept;
+	void SetParameters(VariableSet& vs, int codeRunning) noexcept;
 
 	GCodeException ConstructParseException(const char *str) const noexcept;
 	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
