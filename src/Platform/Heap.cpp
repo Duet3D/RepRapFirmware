@@ -378,21 +378,22 @@ void StringHandle::Delete() noexcept
 
 void StringHandle::InternalDelete() noexcept
 {
-	ReleaseSpace(slotPtr->storage);					// release the space
-	slotPtr->storage = nullptr;						// release the handle entry
-	slotPtr = nullptr;								// clear the pointer to the handle entry
+	ReleaseSpace(slotPtr->storage);						// release the space
+	slotPtr->storage = nullptr;							// release the handle entry
+	slotPtr = nullptr;									// clear the pointer to the handle entry
 }
 
 ReadLockedPointer<const char> StringHandle::Get() const noexcept
 {
-#if CHECK_HANDLES
-	RRF_ASSERT(slotPtr != nullptr);
-	RRF_ASSERT(((uint32_t)slotPtr & 3) == 0);
-#endif
+	if (slotPtr == nullptr)
+	{
+		return ReadLockedPointer<const char>(nullptr, "");	// a null handle means an empty string
+	}
 
 	ReadLocker locker(heapLock);
 
 #if CHECK_HANDLES
+	RRF_ASSERT(((uint32_t)slotPtr & 3) == 0);
 	// Check that the handle points into an index block and is not null
 	bool ok = false;
 	for (IndexBlock *indexBlock = indexRoot; indexBlock != nullptr; indexBlock = indexBlock->next)
@@ -407,6 +408,34 @@ ReadLockedPointer<const char> StringHandle::Get() const noexcept
 #endif
 
 	return ReadLockedPointer<const char>(locker, slotPtr->storage->data);
+}
+
+size_t StringHandle::GetLength() const noexcept
+{
+	if (slotPtr == nullptr)
+	{
+		return 0;
+	}
+
+
+	ReadLocker locker(heapLock);
+
+#if CHECK_HANDLES
+	RRF_ASSERT(((uint32_t)slotPtr & 3) == 0);
+	// Check that the handle points into an index block and is not null
+	bool ok = false;
+	for (IndexBlock *indexBlock = indexRoot; indexBlock != nullptr; indexBlock = indexBlock->next)
+	{
+		if (slotPtr >= &indexBlock->slots[0] && slotPtr < &indexBlock->slots[IndexBlockSlots])
+		{
+			ok = true;
+			break;
+		}
+	}
+	RRF_ASSERT(ok);
+#endif
+
+	return strlen(slotPtr->storage->data);
 }
 
 /*static*/ void StringHandle::Diagnostics(MessageType mt) noexcept

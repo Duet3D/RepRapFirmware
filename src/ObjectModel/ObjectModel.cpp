@@ -34,10 +34,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		break;
 
 	case TypeCode::HeapString:
-		{
-			const auto p = shVal.Get();
-			str.cat(p.Ptr());
-		}
+		str.cat(shVal.Get().Ptr());
 		break;
 
 	case TypeCode::Float:
@@ -451,6 +448,10 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 		buf->catf("%u", strlen(val.sVal));
 		break;
 
+	case TypeCode::HeapString:
+		buf->catf("%u", val.shVal.GetLength());
+		break;
+
 	default:
 		buf->cat("null");
 		break;
@@ -530,10 +531,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		break;
 
 	case TypeCode::HeapString:
-		{
-			const auto p = val.shVal.Get();
-			buf->catf("\"%.s\"", p.Ptr());
-		}
+		buf->catf("\"%.s\"", val.shVal.Get().Ptr());
 		break;
 
 #if SUPPORT_CAN_EXPANSION
@@ -951,21 +949,25 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 	case TypeCode::CanExpansionBoardDetails:
 		if (*idString == 0)
 		{
-			if (context.WantArrayLength())
-			{
-				return GetExpansionBoardDetailLength(val);
-			}
-			return val;
+			return (context.WantArrayLength()) ? GetExpansionBoardDetailLength(val) : val;
 		}
 		break;
 #endif
 
-	case TypeCode::CString:
-		if (*idString == 0 && context.WantArrayLength())
+	case TypeCode::HeapString:
+		if (*idString == 0)
 		{
-			return ExpressionValue((int32_t)strlen(val.sVal));
+			return (context.WantArrayLength()) ? ExpressionValue((int32_t)val.shVal.GetLength()) : val;
 		}
-		// no break
+		break;
+
+	case TypeCode::CString:
+		if (*idString == 0)
+		{
+			return (context.WantArrayLength()) ? ExpressionValue((int32_t)strlen(val.sVal)) : val;
+		}
+		break;
+
 	default:
 		if (*idString == 0)
 		{

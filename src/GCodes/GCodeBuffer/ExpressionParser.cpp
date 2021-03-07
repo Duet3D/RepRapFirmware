@@ -15,6 +15,8 @@
 
 #include <limits>
 
+constexpr size_t MaxStringExpressionLength = StringLength100;
+
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true);
 NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
@@ -138,6 +140,10 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 			if (val.GetType() == TypeCode::CString)
 			{
 				val.Set((int32_t)strlen(val.sVal));
+			}
+			else if (val.GetType() == TypeCode::HeapString)
+			{
+				val.Set((int32_t)val.shVal.GetLength());
 			}
 			else
 			{
@@ -450,7 +456,11 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 							break;
 
 						case TypeCode::CString:
-							val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
+							val.bVal = (strcmp(val.sVal, (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
+							break;
+
+						case TypeCode::HeapString:
+							val.bVal = (strcmp(val.shVal.Get().Ptr(), (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
 							break;
 
 						default:
@@ -466,7 +476,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 
 				case '^':
 					{
-						String<StringLength100> str;
+						String<MaxStringExpressionLength> str;
 						val.AppendAsString(str.GetRef());
 						val2.AppendAsString(str.GetRef());
 						StringHandle sh(str.c_str());
@@ -563,7 +573,7 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 // Balance types for a comparison operator
 void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException)
 {
-	if (val1.GetType() == val2.GetType())			// handle the common case first
+	if ((val1.GetType() == val2.GetType()) || (val1.IsStringType() && val2.IsStringType()))			// handle the common case first
 	{
 		// nothing to do
 	}
@@ -575,11 +585,11 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 	{
 		ConvertToFloat(val1, evaluate);
 	}
-	else if (val2.GetType() == TypeCode::CString && TypeHasNoLiterals(val1.GetType()))
+	else if (val2.IsStringType() && TypeHasNoLiterals(val1.GetType()))
 	{
 		ConvertToString(val1, evaluate);
 	}
-	else if (val1.GetType() == TypeCode::CString && TypeHasNoLiterals(val2.GetType()))
+	else if (val1.IsStringType() && TypeHasNoLiterals(val2.GetType()))
 	{
 		ConvertToString(val2, evaluate);
 	}
@@ -652,11 +662,11 @@ void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const 
 
 void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) THROWS(GCodeException)
 {
-	if (val.GetType() != TypeCode::CString)
+	if (!val.IsStringType())
 	{
 		if (evaluate)
 		{
-			String<StringLength100> str;
+			String<MaxStringExpressionLength> str;
 			val.AppendAsString(str.GetRef());
 			StringHandle sh(str.c_str());
 			val.Set(sh);
@@ -1035,7 +1045,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 // This is almost a copy of InternalGetQuotedString in class StringParser
 ExpressionValue ExpressionParser::ParseQuotedString() THROWS(GCodeException)
 {
-	String<StringLength100> str;
+	String<MaxStringExpressionLength> str;
 	AdvancePointer();
 	while (true)
 	{

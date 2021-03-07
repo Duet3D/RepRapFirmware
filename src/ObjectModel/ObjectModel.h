@@ -135,6 +135,7 @@ struct ExpressionValue
 
 	TypeCode GetType() const noexcept { return (TypeCode)type; }
 	void SetType(TypeCode t) noexcept { type = (uint32_t)t; }
+	bool IsStringType() const noexcept { return type == (uint32_t)TypeCode::CString || type == (uint32_t)TypeCode::HeapString; }
 
 	void Set(bool b) noexcept { Release(); type = (uint32_t)TypeCode::Bool; bVal = b; }
 	void Set(char c) noexcept { Release(); type = (uint32_t)TypeCode::Char; cVal = c; }

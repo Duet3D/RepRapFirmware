@@ -25,6 +25,7 @@ public:
 	StringHandle(const char *s, size_t len) noexcept;
 
 	ReadLockedPointer<const char> Get() const noexcept;
+	size_t GetLength() const noexcept;
 	void Delete() noexcept;
 	bool IsNull() const noexcept { return slotPtr == nullptr; }
 	void Assign(const char *s) noexcept;
