@@ -64,9 +64,11 @@ struct HeapBlock
 ReadWriteLock StringHandle::heapLock;
 IndexBlock *StringHandle::indexRoot = nullptr;
 HeapBlock *StringHandle::heapRoot = nullptr;
-std::atomic<size_t> StringHandle::spaceToRecycle = 0;
-size_t StringHandle::totalIndexSpace = 0;
-size_t StringHandle::totalHeapSpace = 0;
+size_t StringHandle::handlesAllocated = 0;
+std::atomic<size_t> StringHandle::handlesUsed = 0;
+size_t StringHandle::heapAllocated = 0;
+size_t StringHandle::heapUsed = 0;
+std::atomic<size_t> StringHandle::heapToRecycle = 0;
 unsigned int StringHandle::gcCyclesDone = 0;
 
 /*static*/ void StringHandle::GarbageCollect() noexcept
@@ -81,6 +83,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 	RRF_ASSERT(heapLock.GetWriteLockOwner() == TaskBase::GetCallerTaskHandle());
 #endif
 
+	heapUsed = 0;
 	for (HeapBlock *currentBlock = heapRoot; currentBlock != nullptr; )
 	{
 		// Skip any used blocks at the start because they won't be moved
@@ -142,9 +145,11 @@ unsigned int StringHandle::gcCyclesDone = 0;
 			}
 		}
 
+		heapUsed += currentBlock->allocated;
 		currentBlock = currentBlock->next;
 	}
-	spaceToRecycle = 0;
+
+	heapToRecycle = 0;
 	++gcCyclesDone;
 }
 
@@ -262,6 +267,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 			if (curBlock->slots[i].storage == nullptr)
 			{
 				curBlock->slots[i].refCount = 0;
+				++handlesUsed;
 				return &curBlock->slots[i];
 			}
 		}
@@ -271,7 +277,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 
 	// If we get here then we didn't find a free handle entry
 	IndexBlock * const newIndexBlock = new IndexBlock;
-	totalIndexSpace += sizeof(IndexBlock);
+	handlesAllocated += IndexBlockSlots;
 
 	if (prevIndexBlock == nullptr)
 	{
@@ -282,6 +288,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 		prevIndexBlock->next = newIndexBlock;
 	}
 
+	++handlesUsed;
 	return &newIndexBlock->slots[0];
 }
 
@@ -304,12 +311,13 @@ unsigned int StringHandle::gcCyclesDone = 0;
 				StorageSpace * const ret = reinterpret_cast<StorageSpace*>(currentBlock->data + currentBlock->allocated);
 				ret->length = length;
 				currentBlock->allocated += length + sizeof(StorageSpace::length);
+				heapUsed += length + sizeof(StorageSpace::length);
 				return ret;
 			}
 		}
 
 		// There is no space in any existing heap block. Decide whether to garbage collect and try again, or allocate a new block.
-		if (collected || spaceToRecycle < length * 4)
+		if (collected || heapToRecycle < length * 4)
 		{
 			break;
 		}
@@ -319,7 +327,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 
 	// Create a new heap block
 	heapRoot = new HeapBlock(heapRoot);
-	totalHeapSpace += sizeof(HeapBlock);
+	heapAllocated += HeapBlockSize - (length + sizeof(StorageSpace::length));
 	StorageSpace * const ret2 = reinterpret_cast<StorageSpace*>(heapRoot->data);
 	ret2->length = length;
 	heapRoot->allocated = length + sizeof(StorageSpace::length);
@@ -330,7 +338,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 {
 	if (ptr != nullptr)
 	{
-		spaceToRecycle += ptr->length;
+		heapToRecycle += ptr->length;
 		ptr->length |= 1;									// flag the space as unused
 	}
 }
@@ -385,12 +393,13 @@ void StringHandle::Delete() noexcept
 	}
 }
 
-void StringHandle::IncreaseRefCount() noexcept
+const StringHandle& StringHandle::IncreaseRefCount() const noexcept
 {
 	if (slotPtr != nullptr)
 	{
 		++slotPtr->refCount;
 	}
+	return *this;
 }
 
 // Caller must have at least a read lock when calling this
@@ -401,6 +410,7 @@ void StringHandle::InternalDelete() noexcept
 	{
 		ReleaseSpace(slotPtr->storage);						// release the space
 		slotPtr->storage = nullptr;							// release the handle entry
+		--handlesUsed;
 	}
 	slotPtr = nullptr;										// clear the pointer to the handle entry
 }
@@ -469,7 +479,8 @@ size_t StringHandle::GetLength() const noexcept
 	{
 		temp.copy("Heap OK");
 	}
-	temp.catf(", index memory %u, heap memory %u, reclaimable space %u, gc cycles %u\n", totalIndexSpace, totalHeapSpace, (unsigned int)spaceToRecycle, gcCyclesDone);
+	temp.catf(", handles allocated/used %u/%u, heap memory allocated/used/recyclable %u/%u/%u, gc cycles %u\n",
+					handlesAllocated, (unsigned int)handlesUsed, heapAllocated, heapUsed, (unsigned int)heapToRecycle, gcCyclesDone);
 	reprap.GetPlatform().Message(mt, temp.c_str());
 }
 
@@ -478,6 +489,11 @@ size_t StringHandle::GetLength() const noexcept
 AutoStringHandle::AutoStringHandle(const AutoStringHandle& other) noexcept
 {
 	IncreaseRefCount();
+}
+
+AutoStringHandle::AutoStringHandle(AutoStringHandle&& other) noexcept
+{
+	other.slotPtr = nullptr;
 }
 
 AutoStringHandle& AutoStringHandle::operator=(const AutoStringHandle& other) noexcept

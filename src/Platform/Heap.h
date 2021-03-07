@@ -30,7 +30,7 @@ public:
 	ReadLockedPointer<const char> Get() const noexcept;
 	size_t GetLength() const noexcept;
 	void Delete() noexcept;
-	void IncreaseRefCount() noexcept;
+	const StringHandle& IncreaseRefCount() const noexcept;
 	bool IsNull() const noexcept { return slotPtr == nullptr; }
 	void Assign(const char *s) noexcept;
 
@@ -56,9 +56,11 @@ protected:
 	static ReadWriteLock heapLock;
 	static IndexBlock *indexRoot;
 	static HeapBlock *heapRoot;
-	static std::atomic<size_t> spaceToRecycle;
-	static size_t totalIndexSpace;
-	static size_t totalHeapSpace;
+	static size_t handlesAllocated;
+	static std::atomic<size_t> handlesUsed;
+	static size_t heapAllocated;
+	static size_t heapUsed;
+	static std::atomic<size_t> heapToRecycle;
 	static unsigned int gcCyclesDone;
 };
 
@@ -70,6 +72,7 @@ public:
 	AutoStringHandle(const char *s) noexcept : StringHandle(s) { }
 	AutoStringHandle(const char *s, size_t len) noexcept : StringHandle(s, len) { }
 	AutoStringHandle(const AutoStringHandle& other) noexcept;
+	AutoStringHandle(AutoStringHandle&& other) noexcept;
 	AutoStringHandle& operator=(const AutoStringHandle& other) noexcept;
 	~AutoStringHandle();
 };

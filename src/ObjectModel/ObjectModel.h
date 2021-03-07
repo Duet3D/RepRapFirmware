@@ -135,6 +135,7 @@ struct ExpressionValue
 #endif
 
 	ExpressionValue(const ExpressionValue& other) noexcept;
+	ExpressionValue(ExpressionValue&& other) noexcept;
 	~ExpressionValue();
 	ExpressionValue& operator=(const ExpressionValue& other) noexcept;
 	void Release() noexcept;					// release any associated storage

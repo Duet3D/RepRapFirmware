@@ -19,7 +19,6 @@
 class GCodeBuffer;
 class IPAddress;
 class MacAddress;
-class StringBuffer;
 class VariableSet;
 
 class StringParser

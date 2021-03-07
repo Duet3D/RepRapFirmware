@@ -1824,6 +1824,8 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	lowestV12 = highestV12 = currentV12;
 #endif
 
+	StringHandle::Diagnostics(mtype);
+
 	// Show the motor position and stall status
 	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 	{
@@ -1859,8 +1861,6 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #endif
 
 	reprap.Timing(mtype);
-
-	StringHandle::Diagnostics(mtype);
 
 #if 0
 	// Debugging temperature readings

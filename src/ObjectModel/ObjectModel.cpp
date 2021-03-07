@@ -138,6 +138,14 @@ ExpressionValue::ExpressionValue(const ExpressionValue& other) noexcept
 	}
 }
 
+ExpressionValue::ExpressionValue(ExpressionValue&& other) noexcept
+{
+	type = other.type;
+	param = other.param;
+	whole = other.whole;
+	other.type = (uint32_t)TypeCode::None;
+}
+
 ExpressionValue::~ExpressionValue()
 {
 	Release();

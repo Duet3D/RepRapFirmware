@@ -9,7 +9,6 @@
 #define SRC_GCODES_GCODEBUFFER_EXPRESSIONPARSER_H_
 
 #include <RepRapFirmware.h>
-#include <General/StringBuffer.h>
 #include <ObjectModel/ObjectModel.h>
 #include <GCodes/GCodeException.h>
 

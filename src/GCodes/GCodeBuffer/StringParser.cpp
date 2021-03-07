@@ -14,7 +14,6 @@
 #include <GCodes/GCodes.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
-#include <General/StringBuffer.h>
 #include <Networking/NetworkDefs.h>
 
 // Replace the default definition of THROW_INTERNAL_ERROR by one that gives line information
