@@ -1074,7 +1074,7 @@ ExpressionValue ExpressionParser::ParseQuotedString() THROWS(GCodeException)
 			}
 			else if (CurrentCharacter() == c)
 			{
-				// Two backslashes are used to represent one
+				// Two quotes are used to represent one
 				AdvancePointer();
 			}
 		}

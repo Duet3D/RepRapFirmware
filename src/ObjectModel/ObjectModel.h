@@ -100,6 +100,10 @@ struct ExpressionValue
 		uint32_t whole;								// a member we can use to copy the whole thing safely, at least as big as all the others. Assumes all other members are trivially copyable.
 	};
 
+	static_assert(sizeof(whole) >= sizeof(shVal));
+	static_assert(sizeof(whole) >= sizeof(omVal));
+	static_assert(sizeof(whole) >= sizeof(fVal));
+
 	enum class SpecialType : uint32_t
 	{
 		sysDir = 0,
@@ -130,6 +134,8 @@ struct ExpressionValue
 	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif
 
+	ExpressionValue(const ExpressionValue& other) noexcept;
+	~ExpressionValue();
 	ExpressionValue& operator=(const ExpressionValue& other) noexcept;
 	void Release() noexcept;					// release any associated storage
 
@@ -144,7 +150,7 @@ struct ExpressionValue
 	void Set(const char *s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
 	void Set(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
 
-	// Sore a 56-bit value
+	// Store a 56-bit value
 	void Set56BitValue(uint64_t v) { Release(); param = (uint32_t)(v >> 32) & 0x00FFFFFF; uVal = (uint32_t)v; }
 
 	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.

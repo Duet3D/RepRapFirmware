@@ -127,12 +127,35 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 	}
 }
 
-ExpressionValue& ExpressionValue::operator=(const ExpressionValue& other) noexcept
+ExpressionValue::ExpressionValue(const ExpressionValue& other) noexcept
 {
-	Release();
 	type = other.type;
 	param = other.param;
 	whole = other.whole;
+	if (type == (uint32_t)TypeCode::HeapString)
+	{
+		shVal.IncreaseRefCount();
+	}
+}
+
+ExpressionValue::~ExpressionValue()
+{
+	Release();
+}
+
+ExpressionValue& ExpressionValue::operator=(const ExpressionValue& other) noexcept
+{
+	if (&other != this)
+	{
+		Release();
+		type = other.type;
+		param = other.param;
+		whole = other.whole;
+		if (type == (uint32_t)TypeCode::HeapString)
+		{
+			shVal.IncreaseRefCount();
+		}
+	}
 	return *this;
 }
 
