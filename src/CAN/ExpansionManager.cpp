@@ -192,7 +192,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 # if HAS_LINUX_INTERFACE
 			!reprap.UsingLinuxInterface() &&
 # endif
-			!reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, firmwareFilename.c_str()))
+			!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, firmwareFilename.c_str()))
 	{
 		reply.printf("Firmware file %s not found", firmwareFilename.c_str());
 		return GCodeResult::error;
