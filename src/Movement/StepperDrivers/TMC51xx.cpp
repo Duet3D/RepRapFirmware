@@ -51,15 +51,14 @@ const bool DefaultStallDetectFiltered = false;
 const unsigned int DefaultMinimumStepsPerSecond = 200;		// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC5160 datasheet
 const uint32_t DefaultTcoolthrs = 2000;						// max interval between 1/256 microsteps for stall detection to be enabled
 const uint32_t DefaultThigh = 200;
-constexpr size_t TmcTaskStackWords = 100;
+constexpr size_t TmcTaskStackWords = 140;					// with 100 stack words, deckingman's M122 after a major axis shift showed just 10 words left
 
 #if TMC_TYPE == 5130
 constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
 #elif TMC_TYPE == 5160
-// We now define MaxTmc5160Current in the board configuration file because it varies between boards
+// We now define MaxTmc5160Current and Tmc5160SenseResistor in the board configuration file because they vary between boards
 constexpr float MaximumStandstillCurrent = MaxTmc5160Current * 0.707;
-constexpr float SenseResistor = 0.050;						// assume same as we use for TMC2660
-constexpr float RecipFullScaleCurrent = SenseResistor/325.0;		// 1.0 divided by full scale current in mA
+constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divided by full scale current in mA
 #endif
 
 // The SPI clock speed is a compromise:
