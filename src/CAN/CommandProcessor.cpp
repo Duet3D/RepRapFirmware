@@ -147,7 +147,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		{
 #if HAS_MASS_STORAGE
 			// Fetch the firmware file from the local SD card
-			FileStore * const f = reprap.GetPlatform().OpenFile(DEFAULT_SYS_DIR, fname.c_str(), OpenMode::read);
+			FileStore * const f = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, fname.c_str(), OpenMode::read);
 			if (f != nullptr)
 			{
 				fileLength = f->Length();
