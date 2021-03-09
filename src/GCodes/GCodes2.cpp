@@ -4358,6 +4358,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		// using X or Y or Z copies current tool position to Px // eg: M930 {X} P0 // sets P0 to current X position
 		// P0 value is accessible to other G or M commands using {%P0} format. eg. G0 X{%P0} // outputs G0 X6
 		// if P is not set it auto initialises to 0
+
+		if (gb.Seen('P') {
+			const int slot = gb.GetIValue();
+			if (slot < 0 || slot > 9)
+			{
+				reply.printf("Checksum error on line %d", val);
+			}
+			std::size_t curlyStart = str.find('{');
+			std::size_t curlyEnd = str.find('}');	
+			
+			}
 		break;
 	
 	case 931: // saves P0 to P9 on SD Card under savedValues.save
