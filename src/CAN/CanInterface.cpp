@@ -92,7 +92,7 @@ static bool inExpansionMode = false;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,
-	.numTxBuffers = 6,
+	.numTxBuffers = 5,
 	.txFifoSize = 16,
 	.numRxBuffers =  0,
 	.rxFifo0Size = 16,
@@ -137,16 +137,15 @@ static CanDevice *can1dev = nullptr;
 
 #endif
 
-// Transmit buffer usage
+// Transmit buffer usage. All dedicated buffer numbers must be < Can0Config.numTxBuffers.
 constexpr auto TxBufferIndexUrgent = CanDevice::TxBufferNumber::buffer0;
 constexpr auto TxBufferIndexTimeSync = CanDevice::TxBufferNumber::buffer1;
-constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::fifo;
-// We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
-constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer3;
-constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer4;
-constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer5;
+constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer2;
+constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer3;
+constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer4;
+constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::fifo;				// we send lots of movement messages so use the FIFO for them
 
-// Receive buffer/FIFO usage
+// Receive buffer/FIFO usage. All dedicated buffer numbers must be < Can0Config.numRxBuffers.
 constexpr auto RxBufferIndexBroadcast = CanDevice::RxBufferNumber::fifo0;
 constexpr auto RxBufferIndexRequest = CanDevice::RxBufferNumber::fifo0;
 constexpr auto RxBufferIndexResponse = CanDevice::RxBufferNumber::fifo1;
