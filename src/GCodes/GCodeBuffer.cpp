@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-//*************************************************************************************
+ //*************************************************************************************
 
 #include "GCodeBuffer.h"
 #include "GCodes.h"
@@ -19,16 +19,16 @@ static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
 	: machineState(new GCodeMachineState()), identity(id), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0),
-	  toolNumberAdjust(0), responseMessageType(mt),
-	  hasCommandNumber(false), commandLetter('Q'),
-	  checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
+	toolNumberAdjust(0), responseMessageType(mt),
+	hasCommandNumber(false), commandLetter('Q'),
+	checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
 {
 	Init();
 }
 
 void GCodeBuffer::Reset()
 {
-	while (PopState()) { }
+	while (PopState()) {}
 	Init();
 }
 
@@ -40,6 +40,8 @@ void GCodeBuffer::Init()
 	hadLineNumber = hadChecksum = timerRunning = false;
 	computedChecksum = 0;
 	bufferState = GCodeBufferState::parseNotStarted;
+	// added for aritmethics
+	isDoingAritmethics = false;
 }
 
 void GCodeBuffer::Diagnostics(MessageType mtype)
@@ -64,13 +66,12 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 	}
 
 	scratchString.cat(" in state(s)");
-	const GCodeMachineState *ms = machineState;
+	const GCodeMachineState* ms = machineState;
 	do
 	{
 		scratchString.catf(" %d", (int)ms->state);
 		ms = ms->previous;
-	}
-	while (ms != nullptr);
+	} while (ms != nullptr);
 	scratchString.cat('\n');
 	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
@@ -189,6 +190,11 @@ bool GCodeBuffer::Put(char c)
 				bufferState = GCodeBufferState::parsingBracketedComment;
 				break;
 
+			case '{':
+				AddToChecksum(c);
+				bufferState = GCodeBufferState::parsingArithmetics;
+				break;
+
 			case '"':
 				StoreAndAddToChecksum(c);
 				bufferState = GCodeBufferState::parsingQuotedString;
@@ -202,6 +208,14 @@ bool GCodeBuffer::Put(char c)
 		case GCodeBufferState::parsingBracketedComment:		// inside a (...) comment
 			AddToChecksum(c);
 			if (c == ')')
+			{
+				bufferState = GCodeBufferState::parsingGCode;
+			}
+			break;
+
+		case GCodeBufferState::parsingArithmetics:		// inside a {...} arithmetics
+			AddToChecksum(c);
+			if (c == '}')
 			{
 				bufferState = GCodeBufferState::parsingGCode;
 			}
@@ -315,8 +329,7 @@ void GCodeBuffer::DecodeCommand()
 			{
 				commandNumber = (10 * commandNumber) + (gcodeBuffer[parameterStart] - '0');
 				++parameterStart;
-			}
-			while (isdigit(gcodeBuffer[parameterStart]));
+			} while (isdigit(gcodeBuffer[parameterStart]));
 			if (negative)
 			{
 				commandNumber = -commandNumber;
@@ -356,14 +369,14 @@ void GCodeBuffer::DecodeCommand()
 			}
 		}
 	}
-	else if (   hasCommandNumber
-			 && commandLetter == 'G'
-			 && commandNumber <= 3
-			 && (   strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr
-				 || ((cl == 'I' || cl == 'J') && commandNumber >= 2)
-				)
-			 && reprap.GetGCodes().GetMachineType() == MachineType::cnc
+	else if (hasCommandNumber
+		&& commandLetter == 'G'
+		&& commandNumber <= 3
+		&& (strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr
+			|| ((cl == 'I' || cl == 'J') && commandNumber >= 2)
 			)
+		&& reprap.GetGCodes().GetMachineType() == MachineType::cnc
+		)
 	{
 		// Fanuc-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
 		parameterStart = commandStart;
@@ -384,7 +397,7 @@ void GCodeBuffer::DecodeCommand()
 }
 
 // Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line
-void GCodeBuffer::Put(const char *str, size_t len)
+void GCodeBuffer::Put(const char* str, size_t len)
 {
 	Init();
 	for (size_t i = 0; i < len; i++)
@@ -399,7 +412,7 @@ void GCodeBuffer::Put(const char *str, size_t len)
 }
 
 // Add a null-terminated string, overwriting any existing content
-void GCodeBuffer::Put(const char *str)
+void GCodeBuffer::Put(const char* str)
 {
 	Put(str, strlen(str));
 }
@@ -496,7 +509,7 @@ void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 	if (readPointer >= 0)
 	{
 		size_t length = 0;
-		const char *p = gcodeBuffer + readPointer + 1;
+		const char* p = gcodeBuffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength)		// array limit has been set in here
@@ -506,7 +519,7 @@ void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 				returnedLength = 0;
 				return;
 			}
-			const char *q;
+			const char* q;
 			arr[length] = ReadFloatValue(p, &q);
 			length++;
 			if (*q != LIST_SEPARATOR)
@@ -544,7 +557,7 @@ void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 	if (readPointer >= 0)
 	{
 		size_t length = 0;
-		const char *p = gcodeBuffer + readPointer + 1;
+		const char* p = gcodeBuffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength) // Array limit has been set in here
@@ -554,7 +567,7 @@ void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 				returnedLength = 0;
 				return;
 			}
-			const char *q;
+			const char* q;
 			arr[length] = ReadIValue(p, &q);
 			length++;
 			if (*q != LIST_SEPARATOR)
@@ -591,7 +604,7 @@ void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool 
 	if (readPointer >= 0)
 	{
 		size_t length = 0;
-		const char *p = gcodeBuffer + readPointer + 1;
+		const char* p = gcodeBuffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength) // Array limit has been set in here
@@ -601,7 +614,7 @@ void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool 
 				returnedLength = 0;
 				return;
 			}
-			const char *q;
+			const char* q;
 			arr[length] = ReadUIValue(p, &q);
 			length++;
 			if (*q != LIST_SEPARATOR)
@@ -914,7 +927,7 @@ bool GCodeBuffer::GetIPAddress(IPAddress& returnedIp)
 	unsigned int n = 0;
 	for (;;)
 	{
-		const char *pp;
+		const char* pp;
 		const unsigned long v = SafeStrtoul(p, &pp);
 		if (pp == p || v > 255)
 		{
@@ -958,7 +971,7 @@ bool GCodeBuffer::GetMacAddress(uint8_t mac[6])
 	unsigned int n = 0;
 	for (;;)
 	{
-		const char *pp;
+		const char* pp;
 		const unsigned long v = SafeStrtoul(p, &pp, 16);
 		if (pp == p || v > 255)
 		{
@@ -986,7 +999,7 @@ bool GCodeBuffer::GetMacAddress(uint8_t mac[6])
 // Get the original machine state before we pushed anything
 GCodeMachineState& GCodeBuffer::OriginalMachineState() const
 {
-	GCodeMachineState *ms = machineState;
+	GCodeMachineState* ms = machineState;
 	while (ms->previous != nullptr)
 	{
 		ms = ms->previous;
@@ -1003,7 +1016,7 @@ float GCodeBuffer::ConvertDistance(float distance) const
 // Convert from mm to inches if necessary
 float GCodeBuffer::InverseConvertDistance(float distance) const
 {
-	return (machineState->usingInches) ? distance/InchToMm : distance;
+	return (machineState->usingInches) ? distance / InchToMm : distance;
 }
 
 // Push state returning true if successful (i.e. stack not overflowed)
@@ -1011,7 +1024,7 @@ bool GCodeBuffer::PushState()
 {
 	// Check the current stack depth
 	unsigned int depth = 0;
-	for (const GCodeMachineState *m1 = machineState; m1 != nullptr; m1 = m1->previous)
+	for (const GCodeMachineState* m1 = machineState; m1 != nullptr; m1 = m1->previous)
 	{
 		++depth;
 	}
@@ -1020,7 +1033,7 @@ bool GCodeBuffer::PushState()
 		return false;
 	}
 
-	GCodeMachineState * const ms = GCodeMachineState::Allocate();
+	GCodeMachineState* const ms = GCodeMachineState::Allocate();
 	ms->previous = machineState;
 	ms->feedRate = machineState->feedRate;
 	ms->fileState.CopyFrom(machineState->fileState);
@@ -1044,7 +1057,7 @@ bool GCodeBuffer::PushState()
 // Pop state returning true if successful (i.e. no stack underrun)
 bool GCodeBuffer::PopState()
 {
-	GCodeMachineState * const ms = machineState;
+	GCodeMachineState* const ms = machineState;
 	if (ms->previous == nullptr)
 	{
 		ms->messageAcknowledged = false;			// avoid getting stuck in a loop trying to pop
@@ -1084,7 +1097,7 @@ bool GCodeBuffer::IsDoingFileMacro() const
 // Allow for the possibility that the source may have started running a macro since it started waiting
 void GCodeBuffer::MessageAcknowledged(bool cancelled)
 {
-	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->previous)
+	for (GCodeMachineState* ms = machineState; ms != nullptr; ms = ms->previous)
 	{
 		if (ms->waitingForAcknowledgement)
 		{
@@ -1245,7 +1258,7 @@ void GCodeBuffer::FileEnded()
 }
 
 // Functions to read values from lines of GCode, allowing for expressions and variable substitution
-float GCodeBuffer::ReadFloatValue(const char *p, const char **endptr)
+float GCodeBuffer::ReadFloatValue(const char* p, const char** endptr)
 {
 #if SUPPORT_OBJECT_MODEL
 	if (*p == '[')
@@ -1272,7 +1285,7 @@ float GCodeBuffer::ReadFloatValue(const char *p, const char **endptr)
 	return SafeStrtof(p, endptr);
 }
 
-uint32_t GCodeBuffer::ReadUIValue(const char *p, const char **endptr)
+uint32_t GCodeBuffer::ReadUIValue(const char* p, const char** endptr)
 {
 #if SUPPORT_OBJECT_MODEL
 	if (*p == '[')
@@ -1331,7 +1344,7 @@ uint32_t GCodeBuffer::ReadUIValue(const char *p, const char **endptr)
 	return result;
 }
 
-int32_t GCodeBuffer::ReadIValue(const char *p, const char **endptr)
+int32_t GCodeBuffer::ReadIValue(const char* p, const char** endptr)
 {
 #if SUPPORT_OBJECT_MODEL
 	if (*p == '[')
@@ -1404,13 +1417,13 @@ bool GCodeBuffer::GetStringExpression(const StringRef& str)
 }
 
 // Evaluate an expression. the current character is '['.
-TypeCode GCodeBuffer::EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
+TypeCode GCodeBuffer::EvaluateExpression(const char* p, const char** endptr, ExpressionValue& rslt)
 {
 	++p;						// skip the '['
 	// For now the only form of expression we handle is [variable-name]
 	if (isalpha(*p))			// if it's a variable name
 	{
-		const char * const start = p;
+		const char* const start = p;
 		unsigned int numBrackets = 0;
 		while (isalpha(*p) || isdigit(*p) || *p == '_' || *p == '.' || *p == '[' || (*p == ']' && numBrackets != 0))
 		{
@@ -1420,7 +1433,7 @@ TypeCode GCodeBuffer::EvaluateExpression(const char *p, const char **endptr, Exp
 			}
 			else if (*p == ']')
 			{
-				-- numBrackets;
+				--numBrackets;
 			}
 			++p;
 		}
