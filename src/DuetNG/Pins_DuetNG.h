@@ -157,27 +157,18 @@ constexpr Pin ENABLE_PINS[NumDirectDrivers] =
 {
 	PortDPin(14), PortCPin(9), PortCPin(10), PortCPin(17), PortCPin(25),	// Duet
 	PortDPin(23), PortDPin(24), PortDPin(25), PortDPin(26), PortBPin(14),	// DueX5
-	PortDPin(18),															// CONN_LCD
-#if !SUPPORT_12864_LCD
-	PortCPin(28)
-#endif
+	PortDPin(18), PortCPin(28)												// CONN_LCD
 };
 constexpr Pin STEP_PINS[NumDirectDrivers] =
 {
 	PortDPin(6), PortDPin(7), PortDPin(8), PortDPin(5), PortDPin(4),		// Duet
 	PortDPin(2), PortDPin(1), PortDPin(0), PortDPin(3), PortDPin(27),		// DueX5
-	PortDPin(20),															// CONN_LCD
-#if !SUPPORT_12864_LCD
-	PortDPin(21)
-#endif
+	PortDPin(20), PortDPin(21)												// CONN_LCD
 };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =
 {	PortDPin(11), PortDPin(12), PortDPin(13), PortAPin(1), PortDPin(9),		// Duet
 	PortDPin(28), PortDPin(22), PortDPin(16), PortDPin(17), PortCPin(0),	// DueX5
-	PortDPin(19),															// CONN_LCD
-#if !SUPPORT_12864_LCD
-	PortAPin(25)
-#endif
+	PortDPin(19), PortAPin(25)												// CONN_LCD
 };
 
 // Pin assignments etc. using USART1 in SPI mode

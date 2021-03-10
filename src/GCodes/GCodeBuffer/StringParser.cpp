@@ -290,7 +290,7 @@ bool StringParser::LineFinished()
 	{
 		const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
 		const bool missingChecksum = (checksumRequired && !hadChecksum && gb.LatestMachineState().GetPrevious() == nullptr);
-		if (reprap.Debug(moduleGcodes) && fileBeingWritten == nullptr)
+		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
 		{
 			debugPrintf("%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
 		}
