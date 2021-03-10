@@ -25,8 +25,9 @@ public:
 	Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept;
 	~Variable();
 
-	ExpressionValue GetValue() const { return val; }
-	int8_t GetScope() const { return scope; }
+	ExpressionValue GetValue() const noexcept { return val; }
+	int8_t GetScope() const noexcept { return scope; }
+	void Assign(ExpressionValue ev) noexcept { val = ev; }
 
 private:
 	Variable *next;
@@ -45,6 +46,8 @@ public:
 
 	Variable *Lookup(const char *str) noexcept;
 	void Insert(Variable *toInsert) noexcept;
+	void EndScope(uint8_t blockNesting) noexcept;
+	void Clear() noexcept;
 
 private:
 	Variable *root;

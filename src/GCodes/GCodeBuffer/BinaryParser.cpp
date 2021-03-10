@@ -35,8 +35,8 @@ void BinaryParser::Put(const uint32_t *data, size_t len) noexcept
 	memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
 	bufferLength = len * sizeof(uint32_t);
 	gb.bufferState = GCodeBufferState::parsingGCode;
-	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
-	gb.machineState->lineNumber = header->lineNumber;
+	gb.LatestMachineState().g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
+	gb.CurrentFileMachineState().lineNumber = header->lineNumber;
 }
 
 void BinaryParser::DecodeCommand() noexcept
@@ -471,7 +471,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 
 void BinaryParser::SetFinished() noexcept
 {
-	gb.machineState->g53Active = false;		// G53 does not persist beyond the current command
+	gb.LatestMachineState().g53Active = false;		// G53 does not persist beyond the current command
 	Init();
 }
 

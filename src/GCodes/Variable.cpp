@@ -37,7 +37,35 @@ void VariableSet::Insert(Variable *toInsert) noexcept
 	root = toInsert;
 }
 
-VariableSet::~VariableSet()
+// Remove all variables with a scope greater than the parameter
+void VariableSet::EndScope(uint8_t blockNesting) noexcept
+{
+	Variable *prev = nullptr;
+	for (Variable *v = root; v != nullptr; )
+	{
+		if (v->scope > blockNesting)
+		{
+			Variable *temp = v;
+			v = v->next;
+			if (prev == nullptr)
+			{
+				root = v;
+			}
+			else
+			{
+				prev->next = v;
+			}
+			delete temp;
+		}
+		else
+		{
+			prev = v;
+			v = v->next;
+		}
+	}
+}
+
+void VariableSet::Clear() noexcept
 {
 	while (root != nullptr)
 	{
@@ -45,6 +73,11 @@ VariableSet::~VariableSet()
 		root = v->next;
 		delete v;
 	}
+}
+
+VariableSet::~VariableSet()
+{
+	Clear();
 }
 
 // End

@@ -337,7 +337,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	{
 		sensor = newSensor;
 		reprap.SensorsUpdated();
-		if (gb.MachineState().runningM501)
+		if (gb.LatestMachineState().runningM501)
 		{
 			misc.parts.saveToConfigOverride = true;			// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
 		}

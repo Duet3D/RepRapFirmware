@@ -424,7 +424,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		{
 			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 			SavePosition(simulationRestorePoint, gb);
-			simulationRestorePoint.feedRate = gb.MachineState().feedRate;
+			simulationRestorePoint.feedRate = gb.LatestMachineState().feedRate;
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
@@ -836,7 +836,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 			// - If prefixed by G53 add the ToolOffset that will be subtracted below in ToolOffsetTransform as we ignore any offsets when G53 is active
 			// - otherwise add current workplace offsets so we go where the user expects to go
 			// comparable to hoe DoStraightMove/DoArcMove does it
-			const float axisTarget = gb.GetDistance() + (gb.MachineState().g53Active ? GetCurrentToolOffset(axis) : GetWorkplaceOffset(axis));
+			const float axisTarget = gb.GetDistance() + (gb.LatestMachineState().g53Active ? GetCurrentToolOffset(axis) : GetWorkplaceOffset(axis));
 			if (axisTarget != userPositionTarget[axis])
 			{
 				doesMove = true;
@@ -942,9 +942,9 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			if (gb.Seen(feedrateLetter))
 			{
 				const float rate = gb.GetDistance();
-				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+				gb.LatestMachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 			}
-			moveBuffer.feedRate = gb.MachineState().feedRate;
+			moveBuffer.feedRate = gb.LatestMachineState().feedRate;
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
@@ -1008,7 +1008,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 			// Deal with feed rate
 			gb.MustSee(feedrateLetter);
 			const float rate = gb.GetDistance();
-			moveBuffer.feedRate = gb.MachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+			moveBuffer.feedRate = gb.LatestMachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)

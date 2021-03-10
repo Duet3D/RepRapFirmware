@@ -316,7 +316,7 @@ void LinuxInterface::Init() noexcept
 							{
 								if (error)
 								{
-									gb->MachineState().CloseFile();
+									gb->CurrentFileMachineState().CloseFile();
 									gb->PopState(false);
 									gb->Init();
 								}
@@ -724,7 +724,7 @@ void LinuxInterface::Init() noexcept
 							}
 
 							// Handle blocking messages and their results
-							if (gb->MachineState().waitingForAcknowledgement && gb->IsMessagePromptPending() &&
+							if (gb->LatestMachineState().waitingForAcknowledgement && gb->IsMessagePromptPending() &&
 								transfer.WriteWaitForAcknowledgement(channel))
 							{
 								gb->MessagePromptSent();
@@ -861,7 +861,7 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
 	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() ||
 		gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
-		(gb.MachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
+		(gb.LatestMachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
 	{
 		// Don't process codes that are supposed to be suspended...
 		return false;

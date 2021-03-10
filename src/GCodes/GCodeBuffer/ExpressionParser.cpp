@@ -717,7 +717,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	}
 
 	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context(applyLengthOperator, gb.MachineState().lineNumber, GetColumn());
+	ObjectExplorationContext context(applyLengthOperator, gb.GetLineNumber(), GetColumn());
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
@@ -766,7 +766,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 
 		case NamedConstant::iterations:
 			{
-				const int32_t v = gb.MachineState().GetIterations();
+				const int32_t v = gb.CurrentFileMachineState().GetIterations();
 				if (v < 0)
 				{
 					throw ConstructParseException("'iterations' used when not inside a loop");
@@ -796,7 +796,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 			}
 
 		case NamedConstant::line:
-			return ExpressionValue((int32_t)gb.MachineState().lineNumber);
+			return ExpressionValue((int32_t)gb.GetLineNumber());
 
 		default:
 			THROW_INTERNAL_ERROR;
@@ -1039,12 +1039,12 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 
 		if (StringStartsWith(id.c_str(), "global."))
 		{
-			return GetVariableValue(gb.GetVariables(), id.c_str() + strlen("global."), false);
+			return GetVariableValue(reprap.globalVariables, id.c_str() + strlen("global."), false);
 		}
 
-		if (StringStartsWith(id.c_str(), "user."))
+		if (StringStartsWith(id.c_str(), "var."))
 		{
-			return GetVariableValue(reprap.globalVariables, id.c_str() + strlen("user."), false);
+			return GetVariableValue(gb.GetVariables(), id.c_str() + strlen("var."), false);
 		}
 
 		// Else assume an object model value
@@ -1067,7 +1067,7 @@ ExpressionValue ExpressionParser::GetVariableValue(VariableSet& vars, const char
 		return var->GetValue();
 	}
 
-	throw ConstructParseException("Unknown variable");
+	throw ConstructParseException((parameter) ? "unknown parameter '%s'" : "unknown variable '%s'", name);
 }
 
 // Parse a quoted string, given that the current character is double-quote
@@ -1127,17 +1127,17 @@ int ExpressionParser::GetColumn() const noexcept
 
 GCodeException ExpressionParser::ConstructParseException(const char *str) const noexcept
 {
-	return GCodeException(gb.MachineState().lineNumber, GetColumn(), str);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str);
 }
 
 GCodeException ExpressionParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
-	return GCodeException(gb.MachineState().lineNumber, GetColumn(), str, param);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
 }
 
 GCodeException ExpressionParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
-	return GCodeException(gb.MachineState().lineNumber, GetColumn(), str, param);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
 }
 
 // End

@@ -114,7 +114,7 @@ private:
 	void ProcessWhileCommand() THROWS(GCodeException);
 	void ProcessBreakCommand() THROWS(GCodeException);
 	void ProcessContinueCommand() THROWS(GCodeException);
-	void ProcessVarCommand() THROWS(GCodeException);
+	void ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeException);
 	void ProcessSetCommand() THROWS(GCodeException);
 	void ProcessAbortCommand(const StringRef& reply) noexcept;
 	void ProcessEchoCommand(const StringRef& reply) THROWS(GCodeException);

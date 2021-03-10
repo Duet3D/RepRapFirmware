@@ -53,7 +53,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 			}
 
-			if (gb.MachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
+			if (gb.LatestMachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
 			{
 				reply.copy("Z_move_comp");
 			}
@@ -79,7 +79,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				break;
 			}
-			gb.MachineState().SetError("G1/G2/G3: intermediate position outside machine limits");
+			gb.LatestMachineState().SetError("G1/G2/G3: intermediate position outside machine limits");
 			gb.SetState(GCodeState::normal);
 			if (machineType != MachineType::fff)
 			{
@@ -307,9 +307,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				const float newZPos = (moveBuffer.coords[Z_AXIS] - currentTool->GetOffset(Z_AXIS));
 				if(newZPos > platform.AxisMaximum(Z_AXIS) || newZPos < platform.AxisMinimum(Z_AXIS))
 				{
-					gb.MachineState().feedRate = toolChangeRestorePoint.feedRate;
+					gb.LatestMachineState().feedRate = toolChangeRestorePoint.feedRate;
 					doingToolChange = false;
-					gb.MachineState().SetError("New tool too close to Z axis limit. Aborting tool change");
+					gb.LatestMachineState().SetError("New tool too close to Z axis limit. Aborting tool change");
 					AbortPrint(gb);
 					gb.SetState(GCodeState::checkError);
 					break;
@@ -331,7 +331,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChangeComplete:
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing or the move to height to finish
 		{
-			gb.MachineState().feedRate = toolChangeRestorePoint.feedRate;
+			gb.LatestMachineState().feedRate = toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
 			doingToolChange = false;
 
@@ -348,7 +348,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::m109WaitForTemperature:
-		if (cancelWait || simulationMode != 0 || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling, TEMPERATURE_CLOSE_ENOUGH))
+		if (cancelWait || simulationMode != 0 || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.LatestMachineState().waitWhileCooling, TEMPERATURE_CLOSE_ENOUGH))
 		{
 			cancelWait = isWaiting = false;
 			gb.SetState(GCodeState::normal);
@@ -391,7 +391,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (AllAxesAreHomed())
 			{
 				String<StringLength20> macroName;
-				macroName.printf(FILAMENT_ERROR "%u.g", gb.MachineState().stateParameter);
+				macroName.printf(FILAMENT_ERROR "%u.g", gb.LatestMachineState().stateParameter);
 				if (!DoFileMacro(gb, macroName.c_str(), false, SystemMacroCode))
 				{
 					if (!DoFileMacro(gb, FILAMENT_ERROR ".g", false, SystemMacroCode))
@@ -458,7 +458,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
 			moveBuffer.virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;
-			fileGCode->MachineState().feedRate = pauseRestorePoint.feedRate;
+			fileGCode->LatestMachineState().feedRate = pauseRestorePoint.feedRate;
 			moveFractionToSkip = pauseRestorePoint.proportionDone;
 			restartInitialUserC0 = pauseRestorePoint.initialUserC0;
 			restartInitialUserC1 = pauseRestorePoint.initialUserC1;
@@ -625,7 +625,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					reprap.GetMove().heightMapLock.ReleaseWriter();
 					reprap.GetHeat().SuspendHeaters(false);
-					gb.MachineState().SetError("Z probe already triggered before probing move started");
+					gb.LatestMachineState().SetError("Z probe already triggered before probing move started");
 					gb.SetState(GCodeState::checkError);
 					RetractZProbe(gb);
 					break;
@@ -637,7 +637,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 					{
 						reprap.GetMove().heightMapLock.ReleaseWriter();
-						gb.MachineState().SetError("Failed to enable Z probe");
+						gb.LatestMachineState().SetError("Failed to enable Z probe");
 						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb);
 						break;
@@ -671,7 +671,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if (!zProbeTriggered)
 				{
 					reprap.GetMove().heightMapLock.ReleaseWriter();
-					gb.MachineState().SetError("Z probe was not triggered during probing move");
+					gb.LatestMachineState().SetError("Z probe was not triggered during probing move");
 					gb.SetState(GCodeState::checkError);
 					RetractZProbe(gb);
 					break;
@@ -745,7 +745,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			else
 			{
 				reprap.GetMove().heightMapLock.ReleaseWriter();
-				gb.MachineState().SetError("Z probe readings not consistent");
+				gb.LatestMachineState().SetError("Z probe readings not consistent");
 				gb.SetState(GCodeState::checkError);
 				RetractZProbe(gb);
 			}
@@ -825,7 +825,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			else
 			{
-				gb.MachineState().SetError("Too few points probed");
+				gb.LatestMachineState().SetError("Too few points probed");
 			}
 			reprap.GetMove().heightMapLock.ReleaseWriter();
 		}
@@ -912,7 +912,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Z probe is already triggered at the start of the move, so abandon the probe and record an error
 					reprap.GetHeat().SuspendHeaters(false);
-					gb.MachineState().SetError("Z probe already triggered at start of probing move");
+					gb.LatestMachineState().SetError("Z probe already triggered at start of probing move");
 					if (g30ProbePointIndex >= 0)
 					{
 						reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(), true, true);
@@ -926,7 +926,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					SetMoveBufferDefaults();
 					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 					{
-						gb.MachineState().SetError("Failed to enable Z probe");
+						gb.LatestMachineState().SetError("Failed to enable Z probe");
 						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb);
 						break;
@@ -966,7 +966,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->SetProbing(false);
 				if (!zProbeTriggered)
 				{
-					gb.MachineState().SetError("Z probe was not triggered during probing move");
+					gb.LatestMachineState().SetError("Z probe was not triggered during probing move");
 					g30zHeightErrorSum = g30zHeightError = 0.0;
 					hadProbingError = true;
 				}
@@ -1072,7 +1072,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				g30zHeightError = g30zHeightErrorSum/tapsDone;
 				if (zp->GetTolerance() > 0.0)			// zero or negative tolerance means always average all readings, so no warning message
 				{
-					gb.MachineState().SetError("Z probe readings not consistent");
+					gb.LatestMachineState().SetError("Z probe readings not consistent");
 				}
 			}
 
@@ -1144,7 +1144,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			Tool * const tool = reprap.GetCurrentTool();
 			if (tool == nullptr)
 			{
-				gb.MachineState().SetError("Tool was deselected during G30 S-2 command");
+				gb.LatestMachineState().SetError("Tool was deselected during G30 S-2 command");
 			}
 			else
 			{
@@ -1208,7 +1208,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						reprap.GetHeat().SuspendHeaters(false);
 						if (sps.SignalError())
 						{
-							gb.MachineState().SetError((probingAway) ? "Probe not triggered at start of probing move" : "Probe already triggered at start of probing move");
+							gb.LatestMachineState().SetError((probingAway) ? "Probe not triggered at start of probing move" : "Probe already triggered at start of probing move");
 						}
 						gb.SetState(GCodeState::checkError);								// no point in doing anything else
 						RetractZProbe(gb);
@@ -1219,7 +1219,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						SetMoveBufferDefaults();
 						if (!platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway) || !zp->SetProbing(true))
 						{
-							gb.MachineState().SetError("Failed to enable Z probe");
+							gb.LatestMachineState().SetError("Failed to enable Z probe");
 							gb.SetState(GCodeState::checkError);
 							RetractZProbe(gb);
 							break;
@@ -1251,7 +1251,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->SetProbing(false);
 				if (!zProbeTriggered && sps.SignalError())
 				{
-					gb.MachineState().SetError((probingAway) ? "Z probe did not lose contact during probing move" : "Z probe was not triggered during probing move");
+					gb.LatestMachineState().SetError((probingAway) ? "Z probe did not lose contact during probing move" : "Z probe was not triggered during probing move");
 				}
 			}
 
@@ -1364,7 +1364,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if (sdTimingFile == nullptr)
 				{
 					platform.Delete(platform.GetGCodeDir(), TimingFileName);
-					gb.MachineState().SetError("Failed to re-open timing file");
+					gb.LatestMachineState().SetError("Failed to re-open timing file");
 					gb.SetState(GCodeState::normal);
 					break;
 				}
@@ -1381,7 +1381,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				sdTimingFile->Close();
 				platform.Delete(platform.GetGCodeDir(), TimingFileName);
-				gb.MachineState().SetError("Failed to write to timing file");
+				gb.LatestMachineState().SetError("Failed to write to timing file");
 				gb.SetState(GCodeState::normal);
 				break;
 			}
@@ -1410,7 +1410,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				sdTimingFile->Close();
 				platform.Delete(platform.GetGCodeDir(), TimingFileName);
-				gb.MachineState().SetError("Failed to read from timing file");
+				gb.LatestMachineState().SetError("Failed to read from timing file");
 				gb.SetState(GCodeState::normal);
 				break;
 			}
@@ -1428,7 +1428,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	default:				// should not happen
-		gb.MachineState().SetError("Undefined GCodeState");
+		gb.LatestMachineState().SetError("Undefined GCodeState");
 		gb.SetState(GCodeState::normal);
 		break;
 	}
@@ -1438,7 +1438,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We completed a command, so unlock resources and tell the host about it
 		gb.StopTimer();
 		UnlockAll(gb);
-		gb.MachineState().RetrieveStateMachineResult(stateMachineResult, reply);
+		gb.LatestMachineState().RetrieveStateMachineResult(stateMachineResult, reply);
 		HandleReply(gb, stateMachineResult, reply.c_str());
 		CheckForDeferredPause(gb);
 	}
