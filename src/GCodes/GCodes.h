@@ -306,8 +306,10 @@ private:
 
 	static_assert(NumResources <= sizeof(Resource) * CHAR_BIT, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
-	static constexpr int ToolChangeMacroCode = -1;
-	static constexpr int SystemMacroCode = -2;
+	// Codes passed to DoFileMacro
+	static constexpr int ToolChangeMacroCode = -1;								// A macro that is being called because of a tool change
+	static constexpr int SystemHelperMacroCode = -2;							// Another system macro that is being called to help execute the current command
+	static constexpr int AsyncSystemMacroCode = -3;								// A macro that is not being executed as part of a commend being executed, e.g. due to a trigger, filament out etc.
 
 	bool LockResource(const GCodeBuffer& gb, Resource r) noexcept;				// Lock the resource, returning true if success
 	bool LockFileSystem(const GCodeBuffer& gb) noexcept;						// Lock the unshareable parts of the file system

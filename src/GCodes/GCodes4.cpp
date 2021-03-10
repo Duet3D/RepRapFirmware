@@ -365,7 +365,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				DoFileMacro(gb, PAUSE_G, true, SystemMacroCode);
+				DoFileMacro(gb, PAUSE_G, true, SystemHelperMacroCode);
 			}
 		}
 		break;
@@ -376,9 +376,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, SystemMacroCode))
+				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, AsyncSystemMacroCode))
 				{
-					DoFileMacro(gb, PAUSE_G, true, SystemMacroCode);
+					DoFileMacro(gb, PAUSE_G, true, AsyncSystemMacroCode);
 				}
 			}
 		}
@@ -392,11 +392,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				String<StringLength20> macroName;
 				macroName.printf(FILAMENT_ERROR "%u.g", gb.LatestMachineState().stateParameter);
-				if (!DoFileMacro(gb, macroName.c_str(), false, SystemMacroCode))
+				if (!DoFileMacro(gb, macroName.c_str(), false, AsyncSystemMacroCode))
 				{
-					if (!DoFileMacro(gb, FILAMENT_ERROR ".g", false, SystemMacroCode))
+					if (!DoFileMacro(gb, FILAMENT_ERROR ".g", false, AsyncSystemMacroCode))
 					{
-						DoFileMacro(gb, PAUSE_G, true, SystemMacroCode);
+						DoFileMacro(gb, PAUSE_G, true, AsyncSystemMacroCode);
 					}
 				}
 			}

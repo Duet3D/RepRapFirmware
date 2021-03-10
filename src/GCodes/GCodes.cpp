@@ -375,7 +375,7 @@ FilePosition GCodes::GetFilePosition() const noexcept
 // Start running the config file
 bool GCodes::RunConfigFile(const char* fileName) noexcept
 {
-	runningConfigFile = DoFileMacro(*triggerGCode, fileName, false, SystemMacroCode);
+	runningConfigFile = DoFileMacro(*triggerGCode, fileName, false, AsyncSystemMacroCode);
 	return runningConfigFile;
 }
 
@@ -542,7 +542,9 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 		result = true;													// assume we did something useful (not necessarily true, e.g. could be waiting for movement to stop)
 	}
 
-	if (gb.IsExecuting() || (isWaiting && !cancelWait))
+	if (   gb.IsExecuting()
+		|| (isWaiting && !cancelWait)									// this is needed to get reports sent during M109 commands
+	   )
 	{
 		CheckReportDue(gb, reply.GetRef());
 	}
@@ -579,7 +581,7 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 			&& gb.DoDwellTime(1000)
 		   )
 		{
-			return DoFileMacro(gb, DAEMON_G, false, SystemMacroCode);
+			return DoFileMacro(gb, DAEMON_G, false, AsyncSystemMacroCode);
 		}
 	}
 	else
@@ -855,7 +857,7 @@ void GCodes::CheckTriggers() noexcept
 				triggersPending.ClearBit(lowestTriggerPending);		// clear the trigger
 				String<StringLength20> filename;
 				filename.printf("trigger%u.g", lowestTriggerPending);
-				DoFileMacro(*triggerGCode, filename.c_str(), true, SystemMacroCode);
+				DoFileMacro(*triggerGCode, filename.c_str(), true, AsyncSystemMacroCode);
 			}
 		}
 	}
@@ -1300,9 +1302,9 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 	// Now pass the machine axes to the rehome.g file
 	// TODO
 
-	autoPauseGCode->SetState(GCodeState::resuming1);				// set up to resume after rehoming
+	autoPauseGCode->SetState(GCodeState::resuming1);					// set up to resume after rehoming
 	pauseState = PauseState::resuming;
-	DoFileMacro(*autoPauseGCode, REHOME_G, true, SystemMacroCode);	// run the SD card rehome-and-resume script
+	DoFileMacro(*autoPauseGCode, REHOME_G, true, AsyncSystemMacroCode);	// run the SD card rehome-and-resume script
 	return true;
 }
 
@@ -2694,13 +2696,13 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{
-		if (!gb.RequestMacroFile(fileName, gb.IsBinary() && codeRunning >= 0))
+		if (!gb.RequestMacroFile(fileName, gb.IsBinary() && codeRunning != AsyncSystemMacroCode))
 		{
 			if (reportMissing)
 			{
-				MessageType mt = (gb.IsBinary() && codeRunning != SystemMacroCode)
-						? (MessageType)(gb.GetResponseMessageType() | WarningMessageFlag | PushFlag)
-							: WarningMessage;
+				MessageType mt = (gb.IsBinary() && codeRunning != SystemHelperMacroCode)
+									? (MessageType)(gb.GetResponseMessageType() | WarningMessageFlag | PushFlag)
+										: WarningMessage;
 				platform.MessageF(mt, "Macro file %s not found\n", fileName);
 				return true;
 			}
@@ -2759,7 +2761,8 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	gb.LatestMachineState().doingFileMacro = true;
 	gb.LatestMachineState().runningM501 = (codeRunning == 501);
 	gb.LatestMachineState().runningM502 = (codeRunning == 502);
-	gb.LatestMachineState().runningSystemMacro = (codeRunning == SystemMacroCode || codeRunning == 29 || codeRunning == 32);	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
+	gb.LatestMachineState().runningSystemMacro = (codeRunning == SystemHelperMacroCode || codeRunning == AsyncSystemMacroCode || codeRunning == 29 || codeRunning == 32);
+																		// running a system macro e.g. homing, so don't use workplace coordinates
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 	return true;
@@ -3209,7 +3212,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	if (fromStart)
 	{
 		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
-		DoFileMacro(*fileGCode, START_G, false, SystemMacroCode);
+		DoFileMacro(*fileGCode, START_G, false, AsyncSystemMacroCode);
 	}
 }
 
@@ -3920,7 +3923,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
-		DoFileMacro(gb, scratchString.c_str(), true, SystemMacroCode);
+		DoFileMacro(gb, scratchString.c_str(), true, SystemHelperMacroCode);
 	}
 	else if (tool->GetFilament()->IsLoaded())
 	{
@@ -3954,7 +3957,7 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 		gb.SetState(GCodeState::unloadingFilament);
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
-		DoFileMacro(gb, scratchString.c_str(), true, SystemMacroCode);
+		DoFileMacro(gb, scratchString.c_str(), true, SystemHelperMacroCode);
 	}
 	return GCodeResult::ok;
 }
