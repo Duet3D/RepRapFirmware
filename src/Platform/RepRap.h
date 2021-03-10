@@ -27,6 +27,7 @@ Licence: GPL
 #include "RTOSIface/RTOSIface.h"
 #include "GCodes/GCodeResult.h"
 #include <General/inplace_function.h>
+#include <GCodes/Variable.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/ExpansionManager.h>
@@ -180,7 +181,7 @@ public:
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
 	static void GenerateBusFault() noexcept;							// helper function for diagnostic tests
 	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests
-	static float FastSqrtf(float f) noexcept;								// helper function for diagnostic tests
+	static float FastSqrtf(float f) noexcept;							// helper function for diagnostic tests
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
@@ -198,6 +199,8 @@ public:
 	void StateUpdated() noexcept { ++stateSeq; }
 	void ToolsUpdated() noexcept { ++toolsSeq; }
 	void VolumesUpdated() noexcept { ++volumesSeq; }
+
+	VariableSet globalVariables;
 
 protected:
 	DECLARE_OBJECT_MODEL

@@ -47,10 +47,11 @@ constexpr ObjectModelTableEntry ObjectTracker::objectModelTable[] =
 	{ "m486Names",		OBJECT_MODEL_FUNC(self->usingM486Naming),							ObjectModelEntryFlags::none },
 	{ "m486Numbers",	OBJECT_MODEL_FUNC(self->usingM486Labelling),						ObjectModelEntryFlags::none },
 	{ "objects",		OBJECT_MODEL_FUNC_NOSELF(&objectsArrayDescriptor),					ObjectModelEntryFlags::none },
+
 #if TRACK_OBJECT_NAMES
 	// 1. ObjectDirectoryEntry root
 	{ "cancelled",	OBJECT_MODEL_FUNC(self->IsCancelled(context.GetLastIndex())),			ObjectModelEntryFlags::none },
-	{ "name",		OBJECT_MODEL_FUNC(self->objectDirectory[context.GetLastIndex()].name),	ObjectModelEntryFlags::none },
+	{ "name",		OBJECT_MODEL_FUNC(self->objectDirectory[context.GetLastIndex()].name.IncreaseRefCount()),	ObjectModelEntryFlags::none },
 	{ "x",			OBJECT_MODEL_FUNC_NOSELF(&xArrayDescriptor),							ObjectModelEntryFlags::none },
 	{ "y",			OBJECT_MODEL_FUNC_NOSELF(&yArrayDescriptor),							ObjectModelEntryFlags::none },
 #endif
@@ -81,7 +82,6 @@ void ObjectTracker::Init() noexcept
 	{
 		objectDirectory[i].Init("");
 	}
-	objectNames.Reset();
 	usingM486Naming = false;
 #endif
 }
@@ -137,10 +137,9 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, O
 			{
 				CreateObject(num, objectName.c_str());
 			}
-			else if (strcmp(objectName.c_str(), objectDirectory[num].name) != 0)
+			else if (strcmp(objectName.c_str(), objectDirectory[num].name.Get().Ptr()) != 0)
 			{
-				objectNames.FinishedUsing(objectDirectory[num].name);
-				SetObjectName(num, objectName.c_str());
+				objectDirectory[num].SetName(objectName.c_str());
 				reprap.JobUpdated();
 			}
 		}
@@ -225,7 +224,7 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, O
 							(objectsCancelled.IsBitSet(i) ? " (cancelled)" : ""),
 							(int)obj.x[0], (int)obj.x[1],
 							(int)obj.y[0], (int)obj.y[1],
-							obj.name);
+							obj.name.Get().Ptr());
 			}
 			if (numObjects > MaxTrackedObjects)
 			{
@@ -278,7 +277,7 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 	for (size_t i = 0; ok && i < min<unsigned int>(numObjects, MaxTrackedObjects); ++i)
 	{
 		String<StringLength100> buf;
-		buf.printf("M486 S%u A\"%s\"\n", i, objectDirectory[i].name);
+		buf.printf("M486 S%u A\"%s\"\n", i, objectDirectory[i].name.Get().Ptr());
 		ok = f->Write(buf.c_str());
 	}
 #else
@@ -318,7 +317,7 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 // Create a new entry in the object directory
 void ObjectDirectoryEntry::Init(const char *label) noexcept
 {
-	name = label;
+	name.Assign(label);
 	x[0] = x[1] = y[0] = y[1] = std::numeric_limits<int16_t>::min();
 }
 
@@ -369,6 +368,11 @@ bool ObjectDirectoryEntry::UpdateObjectCoordinates(const float coords[], AxesBit
 	return updated;
 }
 
+void ObjectDirectoryEntry::SetName(const char *label) noexcept
+{
+	name.Assign(label);
+}
+
 // Update the min and max object coordinates to include the coordinates passed
 // We could pass both the start and end coordinates of the printing move, however it is simpler just to pass the end coordinates.
 // This is OK because it is very unlikely that there won't be a subsequent extruding move that ends close to the original one.
@@ -383,14 +387,6 @@ void ObjectTracker::UpdateObjectCoordinates(const float coords[], AxesBitmap axe
 	}
 }
 
-void ObjectTracker::SetObjectName(unsigned int number, const char *label) noexcept
-{
-	bool err = objectNames.GetRef().copy(label);
-	const char * const name = objectNames.LatestCStr();
-	err = err || objectNames.Fix();
-	objectDirectory[number].name = ((err) ? "" : name);
-}
-
 // This is called when we need to create a new named object
 void ObjectTracker::CreateObject(unsigned int number, const char *label) noexcept
 {
@@ -401,7 +397,7 @@ void ObjectTracker::CreateObject(unsigned int number, const char *label) noexcep
 			objectDirectory[numObjects].Init("");
 			++numObjects;
 		}
-		SetObjectName(number, label);
+		objectDirectory[number].SetName(label);
 		reprap.JobUpdated();
 	}
 }
@@ -413,7 +409,7 @@ void ObjectTracker::StartObject(GCodeBuffer& gb, const char *label) noexcept
 	{
 		for (size_t i = 0; i < numObjects; ++i)
 		{
-			if (strcmp(objectDirectory[i].name, label) == 0)
+			if (strcmp(objectDirectory[i].name.Get().Ptr(), label) == 0)
 			{
 				ChangeToObject(gb, i);
 				return;

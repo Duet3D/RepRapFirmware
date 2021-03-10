@@ -15,6 +15,7 @@
 #include <Linux/LinuxMessageFormats.h>
 #include <Platform/MessageType.h>
 #include <GCodes/GCodeException.h>
+#include <GCodes/GCodeMachineState.h>
 
 class GCodeBuffer;
 class IPAddress;
@@ -59,6 +60,7 @@ public:
 
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
+	void SetParameters(VariableSet& vs, int codeRunning) noexcept;
 
 private:
 	GCodeBuffer& gb;

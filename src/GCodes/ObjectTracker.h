@@ -12,17 +12,18 @@
 #include "GCodeResult.h"
 #include "RestorePoint.h"
 #include <ObjectModel/ObjectModel.h>
-#include <General/StringBuffer.h>
+#include <Platform/Heap.h>
 
 #if TRACK_OBJECT_NAMES
 
 struct ObjectDirectoryEntry
 {
-	const char *name;					// pointer to the object name within the string buffer
-	int16_t x[2], y[2];					// lowest and highest extrusion coordinates
+	AutoStringHandle name;					// pointer to the object name within the string buffer
+	int16_t x[2], y[2];						// lowest and highest extrusion coordinates
 
 	void Init(const char *label) noexcept;
 	bool UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept;
+	void SetName(const char *label) noexcept;
 };
 
 #endif
@@ -35,9 +36,6 @@ class ObjectTracker
 public:
 	ObjectTracker() noexcept
 		: numObjects(0)
-#if TRACK_OBJECT_NAMES
-		  , objectNames(stringBufferStorage, ARRAY_SIZE(stringBufferStorage))
-#endif
 	{ }
 
 	void Init() noexcept;
@@ -82,7 +80,6 @@ private:
 
 #if TRACK_OBJECT_NAMES
 	void CreateObject(unsigned int number, const char *label) noexcept;
-	void SetObjectName(unsigned int number, const char *label) noexcept;
 	ExpressionValue GetXCoordinate(const ObjectExplorationContext& context) const noexcept;
 	ExpressionValue GetYCoordinate(const ObjectExplorationContext& context) const noexcept;
 #endif
@@ -95,8 +92,6 @@ private:
 
 #if TRACK_OBJECT_NAMES
 	ObjectDirectoryEntry objectDirectory[MaxTrackedObjects];
-	StringBuffer objectNames;
-	char stringBufferStorage[ObjectNamesStringSpace];
 	bool usingM486Naming;
 #endif
 

@@ -33,6 +33,10 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.cat(sVal);
 		break;
 
+	case TypeCode::HeapString:
+		str.cat(shVal.Get().Ptr());
+		break;
+
 	case TypeCode::Float:
 		str.catf(GetFloatFormatString(), (double)fVal);
 		break;
@@ -120,6 +124,56 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 	case TypeCode::Enum32:
 		str.cat("(enumeration)");
 		break;
+	}
+}
+
+ExpressionValue::ExpressionValue(const ExpressionValue& other) noexcept
+{
+	type = other.type;
+	param = other.param;
+	whole = other.whole;
+	if (type == (uint32_t)TypeCode::HeapString)
+	{
+		shVal.IncreaseRefCount();
+	}
+}
+
+ExpressionValue::ExpressionValue(ExpressionValue&& other) noexcept
+{
+	type = other.type;
+	param = other.param;
+	whole = other.whole;
+	other.type = (uint32_t)TypeCode::None;
+}
+
+ExpressionValue::~ExpressionValue()
+{
+	Release();
+}
+
+ExpressionValue& ExpressionValue::operator=(const ExpressionValue& other) noexcept
+{
+	if (&other != this)
+	{
+		Release();
+		type = other.type;
+		param = other.param;
+		whole = other.whole;
+		if (type == (uint32_t)TypeCode::HeapString)
+		{
+			shVal.IncreaseRefCount();
+		}
+	}
+	return *this;
+}
+
+// Release any associated storage
+void ExpressionValue::Release() noexcept
+{
+	if (type == (uint32_t)TypeCode::HeapString)
+	{
+		shVal.Delete();
+		type = (uint32_t)TypeCode::None;
 	}
 }
 
@@ -425,6 +479,10 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 		buf->catf("%u", strlen(val.sVal));
 		break;
 
+	case TypeCode::HeapString:
+		buf->catf("%u", val.shVal.GetLength());
+		break;
+
 	default:
 		buf->cat("null");
 		break;
@@ -501,6 +559,10 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 
 	case TypeCode::CString:
 		buf->catf("\"%.s\"", val.sVal);
+		break;
+
+	case TypeCode::HeapString:
+		buf->catf("\"%.s\"", val.shVal.Get().Ptr());
 		break;
 
 #if SUPPORT_CAN_EXPANSION
@@ -918,21 +980,25 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 	case TypeCode::CanExpansionBoardDetails:
 		if (*idString == 0)
 		{
-			if (context.WantArrayLength())
-			{
-				return GetExpansionBoardDetailLength(val);
-			}
-			return val;
+			return (context.WantArrayLength()) ? GetExpansionBoardDetailLength(val) : val;
 		}
 		break;
 #endif
 
-	case TypeCode::CString:
-		if (*idString == 0 && context.WantArrayLength())
+	case TypeCode::HeapString:
+		if (*idString == 0)
 		{
-			return ExpressionValue((int32_t)strlen(val.sVal));
+			return (context.WantArrayLength()) ? ExpressionValue((int32_t)val.shVal.GetLength()) : val;
 		}
-		// no break
+		break;
+
+	case TypeCode::CString:
+		if (*idString == 0)
+		{
+			return (context.WantArrayLength()) ? ExpressionValue((int32_t)strlen(val.sVal)) : val;
+		}
+		break;
+
 	default:
 		if (*idString == 0)
 		{

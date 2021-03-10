@@ -306,6 +306,9 @@ private:
 
 	static_assert(NumResources <= sizeof(Resource) * CHAR_BIT, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
+	static constexpr int ToolChangeMacroCode = -1;
+	static constexpr int SystemMacroCode = -2;
+
 	bool LockResource(const GCodeBuffer& gb, Resource r) noexcept;				// Lock the resource, returning true if success
 	bool LockFileSystem(const GCodeBuffer& gb) noexcept;						// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb) noexcept;							// Lock movement
@@ -323,7 +326,7 @@ private:
 	void StopPrint(StopPrintReason reason) noexcept;							// Stop the current print
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;			// Get G Codes from a file and print them
-	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = -1) noexcept;
+	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept;
 																						// Run a GCode macro file, optionally report error if not found
 	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro
 
@@ -445,8 +448,8 @@ private:
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); // Do manual probe in arbitrary direction
 	void DoManualBedProbe(GCodeBuffer& gb);										// Do a manual bed probe
-	void DeployZProbe(GCodeBuffer& gb, int code) noexcept;
-	void RetractZProbe(GCodeBuffer& gb, int code) noexcept;
+	void DeployZProbe(GCodeBuffer& gb) noexcept;
+	void RetractZProbe(GCodeBuffer& gb) noexcept;
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 

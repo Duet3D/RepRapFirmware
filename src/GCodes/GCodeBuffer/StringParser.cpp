@@ -14,7 +14,6 @@
 #include <GCodes/GCodes.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
-#include <General/StringBuffer.h>
 #include <Networking/NetworkDefs.h>
 
 // Replace the default definition of THROW_INTERNAL_ERROR by one that gives line information
@@ -271,11 +270,11 @@ bool StringParser::LineFinished()
 {
 	if (hadLineNumber)
 	{
-		gb.machineState->lineNumber = receivedLineNumber;
+		gb.CurrentFileMachineState().lineNumber = receivedLineNumber;
 	}
 	else
 	{
-		++gb.machineState->lineNumber;
+		++gb.CurrentFileMachineState().lineNumber;
 	}
 
 	if (gcodeLineEnd == 0)
@@ -290,7 +289,7 @@ bool StringParser::LineFinished()
 	if (gb.bufferState != GCodeBufferState::parsingComment)			// we don't checksum comment lines
 	{
 		const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
-		const bool missingChecksum = (checksumRequired && !hadChecksum && gb.machineState->GetPrevious() == nullptr);
+		const bool missingChecksum = (checksumRequired && !hadChecksum && gb.LatestMachineState().GetPrevious() == nullptr);
 		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
 		{
 			debugPrintf("%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
@@ -307,7 +306,7 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 {
 	if (overflowed)
 	{
-		throw GCodeException(gb.MachineState().lineNumber, ARRAY_SIZE(gb.buffer) - 1, "GCode command too long");
+		throw GCodeException(gb.GetLineNumber(), ARRAY_SIZE(gb.buffer) - 1, "GCode command too long");
 	}
 
 	const bool doingFile = gb.IsDoingFile();
@@ -337,30 +336,30 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 				// Finished skipping the nested block
 				if (indentToSkipTo == commandIndent)
 				{
-					skippedBlockType = gb.machineState->CurrentBlockState().GetType();	// save the type of the block we skipped in case the command is 'else' or 'elif'
-					gb.machineState->CurrentBlockState().SetPlainBlock();	// we've ended the loop or if-block
+					skippedBlockType = gb.GetBlockState().GetType();		// save the type of the block we skipped in case the command is 'else' or 'elif'
+					gb.GetBlockState().SetPlainBlock();						// we've ended the loop or if-block
 				}
 				indentToSkipTo = NoIndentSkip;								// no longer skipping
 			}
 		}
 
-		while (commandIndent < gb.machineState->CurrentBlockIndent())
+		while (commandIndent < gb.GetBlockIndent())
 		{
-			gb.machineState->EndBlock();
-			if (gb.machineState->CurrentBlockState().GetType() == BlockType::loop)
+			gb.CurrentFileMachineState().EndBlock();
+			if (gb.GetBlockState().GetType() == BlockType::loop)
 			{
 				// Go back to the start of the loop and re-evaluate the while-part
-				gb.machineState->lineNumber = gb.machineState->CurrentBlockState().GetLineNumber();
-				gb.RestartFrom(gb.machineState->CurrentBlockState().GetFilePosition());
+				gb.CurrentFileMachineState().lineNumber = gb.GetBlockState().GetLineNumber();
+				gb.RestartFrom(gb.GetBlockState().GetFilePosition());
 				Init();
 				return true;
 			}
 		}
 
-		if (commandIndent > gb.machineState->CurrentBlockIndent())
+		if (commandIndent > gb.GetBlockIndent())
 		{
 			// Indentation has increased so start new block(s)
-			if (!gb.machineState->CreateBlock(commandIndent))
+			if (!gb.CurrentFileMachineState().CreateBlock(commandIndent))
 			{
 				throw ConstructParseException("blocks nested too deeply");
 			}
@@ -393,7 +392,7 @@ void StringParser::CheckForMixedSpacesAndTabs() noexcept
 	if (seenMetaCommand && !warnedAboutMixedSpacesAndTabs && seenLeadingSpace && seenLeadingTab)
 	{
 		reprap.GetPlatform().MessageF(AddWarning(gb.GetResponseMessageType()),
-								"both space and tab characters used to indent blocks by line %" PRIu32, gb.MachineState().lineNumber);
+								"both space and tab characters used to indent blocks by line %" PRIu32, gb.GetLineNumber());
 		warnedAboutMixedSpacesAndTabs = true;
 	}
 }
@@ -428,18 +427,15 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 			break;
 
 		case 3:
-			if (doingFile)
+			if (doingFile && StringStartsWith(command, "var"))
 			{
-				if (StringStartsWith(command, "var"))
-				{
-					ProcessVarCommand();
-					return true;
-				}
-				if (StringStartsWith(command, "set"))
-				{
-					ProcessSetCommand();
-					return true;
-				}
+				ProcessVarOrGlobalCommand(false);
+				return true;
+			}
+			if (StringStartsWith(command, "set"))
+			{
+				ProcessSetCommand();
+				return true;
 			}
 			break;
 
@@ -489,6 +485,14 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 			}
 			break;
 
+		case 6:
+			if (StringStartsWith(command, "global"))
+			{
+				ProcessVarOrGlobalCommand(true);
+				return true;
+			}
+			break;
+
 		case 8:
 			if (doingFile && StringStartsWith(command, "continue"))
 			{
@@ -506,29 +510,29 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 	return false;
 }
 
-void StringParser::ProcessIfCommand()
+void StringParser::ProcessIfCommand() THROWS(GCodeException)
 {
 	if (EvaluateCondition())
 	{
-		gb.machineState->CurrentBlockState().SetIfTrueBlock();
+		gb.GetBlockState().SetIfTrueBlock();
 	}
 	else
 	{
-		gb.machineState->CurrentBlockState().SetIfFalseNoneTrueBlock();
-		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the block
+		gb.GetBlockState().SetIfFalseNoneTrueBlock();
+		indentToSkipTo = gb.GetBlockIndent();			// skip forwards to the end of the block
 	}
 }
 
-void StringParser::ProcessElseCommand(BlockType skippedBlockType)
+void StringParser::ProcessElseCommand(BlockType skippedBlockType) THROWS(GCodeException)
 {
 	if (skippedBlockType == BlockType::ifFalseNoneTrue)
 	{
-		gb.machineState->CurrentBlockState().SetPlainBlock();			// execute the else-block, treating it like a plain block
+		gb.GetBlockState().SetPlainBlock();				// execute the else-block, treating it like a plain block
 	}
-	else if (skippedBlockType == BlockType::ifFalseHadTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue)
+	else if (skippedBlockType == BlockType::ifFalseHadTrue || gb.GetBlockState().GetType() == BlockType::ifTrue)
 	{
-		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the if-block
-		gb.machineState->CurrentBlockState().SetPlainBlock();			// so that we get an error if there is another 'else' part
+		indentToSkipTo = gb.GetBlockIndent();			// skip forwards to the end of the if-block
+		gb.GetBlockState().SetPlainBlock();				// so that we get an error if there is another 'else' part
 	}
 	else
 	{
@@ -536,24 +540,24 @@ void StringParser::ProcessElseCommand(BlockType skippedBlockType)
 	}
 }
 
-void StringParser::ProcessElifCommand(BlockType skippedBlockType)
+void StringParser::ProcessElifCommand(BlockType skippedBlockType) THROWS(GCodeException)
 {
 	if (skippedBlockType == BlockType::ifFalseNoneTrue)
 	{
 		if (EvaluateCondition())
 		{
-			gb.machineState->CurrentBlockState().SetIfTrueBlock();
+			gb.GetBlockState().SetIfTrueBlock();
 		}
 		else
 		{
-			indentToSkipTo = gb.machineState->CurrentBlockIndent();		// skip forwards to the end of the elif-block
-			gb.machineState->CurrentBlockState().SetIfFalseNoneTrueBlock();
+			indentToSkipTo = gb.GetBlockIndent();		// skip forwards to the end of the elif-block
+			gb.GetBlockState().SetIfFalseNoneTrueBlock();
 		}
 	}
-	else if (skippedBlockType == BlockType::ifFalseHadTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue)
+	else if (skippedBlockType == BlockType::ifFalseHadTrue || gb.GetBlockState().GetType() == BlockType::ifTrue)
 	{
-		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the if-block
-		gb.machineState->CurrentBlockState().SetIfFalseHadTrueBlock();
+		indentToSkipTo = gb.GetBlockIndent();			// skip forwards to the end of the if-block
+		gb.GetBlockState().SetIfFalseHadTrueBlock();
 	}
 	else
 	{
@@ -561,69 +565,138 @@ void StringParser::ProcessElifCommand(BlockType skippedBlockType)
 	}
 }
 
-void StringParser::ProcessWhileCommand()
+void StringParser::ProcessWhileCommand() THROWS(GCodeException)
 {
 	// Set the current block as a loop block first so that we may use 'iterations' in the condition
-	if (gb.machineState->CurrentBlockState().GetType() == BlockType::loop)
+	if (gb.GetBlockState().GetType() == BlockType::loop)
 	{
-		gb.machineState->CurrentBlockState().IncrementIterations();		// starting another iteration
+		gb.GetBlockState().IncrementIterations();		// starting another iteration
 	}
 	else
 	{
-		gb.machineState->CurrentBlockState().SetLoopBlock(GetFilePosition(), gb.machineState->lineNumber);
+		gb.GetBlockState().SetLoopBlock(GetFilePosition(), gb.GetLineNumber());
 	}
 
 	if (!EvaluateCondition())
 	{
-		gb.machineState->CurrentBlockState().SetPlainBlock();
-		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the block
+		gb.GetBlockState().SetPlainBlock();
+		indentToSkipTo = gb.GetBlockIndent();			// skip forwards to the end of the block
 	}
 }
 
-void StringParser::ProcessBreakCommand()
+void StringParser::ProcessBreakCommand() THROWS(GCodeException)
 {
 	do
 	{
-		if (gb.machineState->CurrentBlockIndent() == 0)
+		if (gb.GetBlockIndent() == 0)
 		{
 			throw ConstructParseException("'break' was not inside a loop");
 		}
-		gb.machineState->EndBlock();
-	} while (gb.machineState->CurrentBlockState().GetType() != BlockType::loop);
-	gb.machineState->CurrentBlockState().SetPlainBlock();
-	indentToSkipTo = gb.machineState->CurrentBlockIndent();				// skip forwards to the end of the loop
+		gb.CurrentFileMachineState().EndBlock();
+	} while (gb.GetBlockState().GetType() != BlockType::loop);
+	gb.GetBlockState().SetPlainBlock();
+	indentToSkipTo = gb.GetBlockIndent();				// skip forwards to the end of the loop
 }
 
-void StringParser::ProcessContinueCommand()
+void StringParser::ProcessContinueCommand() THROWS(GCodeException)
 {
 	do
 	{
-		if (gb.machineState->CurrentBlockIndent() == 0)
+		if (gb.GetBlockIndent() == 0)
 		{
 			throw ConstructParseException("'continue' was not inside a loop");
 		}
-		gb.machineState->EndBlock();
-	} while (gb.machineState->CurrentBlockState().GetType() != BlockType::loop);
+		gb.CurrentFileMachineState().EndBlock();
+	} while (gb.GetBlockState().GetType() != BlockType::loop);
 
 	// Go back to the start of the loop and re-evaluate the while-part
-	gb.machineState->lineNumber = gb.machineState->CurrentBlockState().GetLineNumber();
-	gb.RestartFrom(gb.machineState->CurrentBlockState().GetFilePosition());
+	gb.CurrentFileMachineState().lineNumber = gb.GetBlockState().GetLineNumber();
+	gb.RestartFrom(gb.GetBlockState().GetFilePosition());
 }
 
-void StringParser::ProcessVarCommand()
+void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeException)
 {
-#if 0
 	SkipWhiteSpace();
+
+	// Get the identifier
+	char c = gb.buffer[readPointer];
+	if (!isalpha(c))
+	{
+		throw ConstructParseException("expected a new variable name");
+	}
 	String<MaxVariableNameLength> varName;
-	ParseIdentifier(varName.GetRef());
-	qq;
-#endif
-	throw ConstructParseException("'var' not implemented");
+	do
+	{
+		varName.cat(c);
+		++readPointer;
+		c = gb.buffer[readPointer];
+	} while (isalpha(c) || isdigit(c) || c == '_' );
+
+	// Expect '='
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] != '=')
+	{
+		throw ConstructParseException("expected '='");
+	}
+	++readPointer;
+
+	// Check whether the identifier already exists
+	VariableSet& vset = (isGlobal) ? reprap.globalVariables : gb.GetVariables();
+	Variable * const v = vset.Lookup(varName.c_str());
+	if (v != nullptr)
+	{
+		// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
+		throw ConstructParseException("variable '%s' already exists", varName.c_str());
+	}
+
+	SkipWhiteSpace();
+	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+	ExpressionValue ev = parser.Parse();
+	vset.Insert(new Variable(varName.c_str(), ev, (isGlobal) ? 0 : gb.CurrentFileMachineState().GetBlockNesting()));
 }
 
-void StringParser::ProcessSetCommand()
+void StringParser::ProcessSetCommand() THROWS(GCodeException)
 {
-	throw ConstructParseException("'set' not implemented");
+	// Skip the "var." or "global." prefix
+	SkipWhiteSpace();
+	VariableSet& vset = (StringStartsWith(gb.buffer + readPointer, "global.")) ? (readPointer += strlen("global."), reprap.globalVariables)
+						: (StringStartsWith(gb.buffer + readPointer, "var.")) ? (readPointer += strlen("var."), gb.GetVariables())
+							: throw ConstructParseException("expected a global or local variable");
+
+	// Get the identifier
+	char c = gb.buffer[readPointer];
+	if (!isalpha(c))
+	{
+		throw ConstructParseException("expected a new variable name");
+	}
+
+	String<MaxVariableNameLength> varName;
+	do
+	{
+		varName.cat(c);
+		++readPointer;
+		c = gb.buffer[readPointer];
+	} while (isalpha(c) || isdigit(c) || c == '_' );
+
+	// Expect '='
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] != '=')
+	{
+		throw ConstructParseException("expected '='");
+	}
+	++readPointer;
+
+	// Look up the identifier
+	Variable * const var = vset.Lookup(varName.c_str());
+	if (var == nullptr)
+	{
+		throw ConstructParseException("unknown variable '%s'", varName.c_str());
+	}
+
+	SkipWhiteSpace();
+	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+	ExpressionValue ev = parser.Parse();
+	var->Assign(ev);
 }
 
 void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
@@ -752,6 +825,7 @@ void StringParser::DecodeCommand() noexcept
 		// Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
 		bool inQuotes = false;
 		unsigned int localBraceCount = 0;
+		parametersPresent.Clear();
 		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
 		{
 			const char c = gb.buffer[commandEnd];
@@ -774,10 +848,14 @@ void StringParser::DecodeCommand() noexcept
 				}
 				else
 				{
-					char c2;
-					if (((c2 = toupper(c)) == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
+					const char c2 = toupper(c);
+					if ((c2  == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
 					{
 						break;
+					}
+					if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+					{
+						parametersPresent.SetBit(c2 - 'A');
 					}
 				}
 			}
@@ -866,7 +944,7 @@ void StringParser::SetFinished() noexcept
 	}
 	else
 	{
-		gb.machineState->g53Active = false;		// G53 does not persist beyond the current line
+		gb.LatestMachineState().g53Active = false;		// G53 does not persist beyond the current line
 		Init();
 	}
 }
@@ -875,13 +953,13 @@ void StringParser::SetFinished() noexcept
 FilePosition StringParser::GetFilePosition() const noexcept
 {
 #if HAS_MASS_STORAGE
-	if (gb.machineState->DoingFile()
+	if (gb.LatestMachineState().DoingFile()
 # if HAS_LINUX_INTERFACE
 		&& !reprap.UsingLinuxInterface()
 # endif
 	   )
 	{
-		return gb.machineState->fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
+		return gb.LatestMachineState().fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
 	}
 #endif
 	return noFilePosition;
@@ -903,18 +981,22 @@ bool StringParser::IsLastCommand() const noexcept
 	return commandEnd >= gcodeLineEnd;			// using >= here also covers the case where the buffer is empty and gcodeLineEnd has been set to zero
 }
 
-// Is 'c' in the G Code string? 'c' must be uppercase.
+// Is 'c' in the G Code string?
 // Leave the pointer one after it for a subsequent read.
 bool StringParser::Seen(char c) noexcept
 {
-	bool inQuotes = false;
-	bool escaped = false;
 	bool wantLowerCase = (c >= 'a');
 	if (wantLowerCase)
 	{
 		c = toupper(c);
 	}
+	else if (!parametersPresent.IsBitSet(c - 'A'))
+	{
+		return false;
+	}
 
+	bool inQuotes = false;
+	bool escaped = false;
 	unsigned int inBrackets = 0;
 	for (readPointer = parameterStart; (unsigned int)readPointer < commandEnd; ++readPointer)
 	{
@@ -1431,7 +1513,7 @@ void StringParser::WriteToFile() noexcept
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			Init();
-			const char* const r = (gb.MachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
+			const char* const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 			return;
 		}
@@ -1494,7 +1576,7 @@ void StringParser::FinishWritingBinary() noexcept
 	binaryWriting = false;
 	if (crcOk)
 	{
-		const char* const r = (gb.MachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
+		const char* const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 	}
 	else
@@ -1541,12 +1623,12 @@ bool StringParser::FileEnded() noexcept
 		fileBeingWritten->Close();
 		fileBeingWritten = nullptr;
 		SetFinished();
-		const char* const r = (gb.MachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
+		const char* const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 		return false;
 	}
 
-	if (!commandCompleted && gb.MachineState().GetIterations() >= 0)
+	if (!commandCompleted && gb.CurrentFileMachineState().GetIterations() >= 0)
 	{
 		// We reached the end of the file while inside a loop. Insert a dummy 'skip' command to allow the loop processing to complete.
 		Init();
@@ -1662,19 +1744,39 @@ void StringParser::SkipWhiteSpace() noexcept
 	}
 }
 
+void StringParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
+{
+	parametersPresent.Iterate([this, &vs, codeRunning](unsigned int bit, unsigned int count)
+								{
+									const char letter = 'A' + bit;
+									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
+									{
+										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);
+										try
+										{
+											ExpressionValue ev = parser.Parse();
+											char paramName[2] = { letter, 0 };
+											vs.Insert(new Variable(paramName, ev, -1));
+										}
+										catch (const GCodeException&) { }
+									}
+								}
+							  );
+}
+
 GCodeException StringParser::ConstructParseException(const char *str) const noexcept
 {
-	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str);
+	return GCodeException(gb.GetLineNumber(), readPointer + commandIndent, str);
 }
 
 GCodeException StringParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
-	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
+	return GCodeException(gb.GetLineNumber(), readPointer + commandIndent, str, param);
 }
 
 GCodeException StringParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
-	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
+	return GCodeException(gb.GetLineNumber(), readPointer + commandIndent, str, param);
 }
 
 // End
