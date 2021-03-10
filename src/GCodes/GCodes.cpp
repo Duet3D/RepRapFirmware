@@ -542,7 +542,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 		result = true;													// assume we did something useful (not necessarily true, e.g. could be waiting for movement to stop)
 	}
 
-	if (gb.IsExecuting())
+	if (gb.IsExecuting() || (isWaiting && !cancelWait))
 	{
 		CheckReportDue(gb, reply.GetRef());
 	}
