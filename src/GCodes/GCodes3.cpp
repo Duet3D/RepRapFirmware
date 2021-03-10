@@ -1573,9 +1573,9 @@ void GCodes::DeployZProbe(GCodeBuffer& gb) noexcept
 	{
 		String<StringLength20> fileName;
 		fileName.printf(DEPLOYPROBE "%u.g", currentZProbeNumber);
-		if (!DoFileMacro(gb, fileName.c_str(), false, SystemMacroCode))
+		if (!DoFileMacro(gb, fileName.c_str(), false, 30))
 		{
-			DoFileMacro(gb, DEPLOYPROBE ".g", false, SystemMacroCode);
+			DoFileMacro(gb, DEPLOYPROBE ".g", false, 30);
 		}
 	}
 }
@@ -1589,9 +1589,9 @@ void GCodes::RetractZProbe(GCodeBuffer& gb) noexcept
 	{
 		String<StringLength20> fileName;
 		fileName.printf(RETRACTPROBE "%u.g", currentZProbeNumber);
-		if (!DoFileMacro(gb, fileName.c_str(), false, SystemMacroCode))
+		if (!DoFileMacro(gb, fileName.c_str(), false, 30))
 		{
-			DoFileMacro(gb, RETRACTPROBE ".g", false, SystemMacroCode);
+			DoFileMacro(gb, RETRACTPROBE ".g", false, 30);
 		}
 	}
 }

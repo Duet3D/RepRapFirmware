@@ -365,7 +365,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				DoFileMacro(gb, PAUSE_G, true, SystemMacroCode);
+				DoFileMacro(gb, PAUSE_G, true, 25);
 			}
 		}
 		break;
