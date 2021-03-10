@@ -115,7 +115,7 @@ void PrintMonitor::Reset() noexcept
 
 	heatingUp = paused = false;
 	currentLayer = 0;
-	printStartTime = pauseStartTime = lastSnapshotTime = lastLayerChangeTime = 0;
+	printStartTime = pauseStartTime = lastSnapshotTime = lastLayerChangeTime = heatingStartedTime = millis64();
 	totalPauseTime = warmUpDuration = lastSnapshotNonPrintingTime = lastLayerChangeNonPrintingTime = 0;
 	lastLayerDuration = 0;
 	lastSnapshotFileFraction = lastSnapshotFilamentUsed = 0.0;
