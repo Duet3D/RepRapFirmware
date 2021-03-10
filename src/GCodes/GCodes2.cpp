@@ -516,14 +516,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 				{
 					// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-					if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, SystemMacroCode))
+					if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))
 					{
 						break;
 					}
 
 					const bool leaveHeatersOn = (gb.Seen('H') && gb.GetIValue() > 0);
 					gb.SetState((leaveHeatersOn) ? GCodeState::stoppingWithHeatersOn : GCodeState::stoppingWithHeatersOff);
-					(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemMacroCode);
+					(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemHelperMacroCode);
 				}
 			}
 			break;
@@ -944,7 +944,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.SetState(GCodeState::resuming1);
 						if (AllAxesAreHomed())
 						{
-							DoFileMacro(gb, RESUME_G, true, SystemMacroCode);
+							DoFileMacro(gb, RESUME_G, true, SystemHelperMacroCode);
 						}
 					}
 				}
@@ -4120,7 +4120,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<StringLength256> scratchString;
 					scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filament->GetName(), CONFIG_FILAMENT_G);
-					DoFileMacro(gb, scratchString.c_str(), false, SystemMacroCode);
+					DoFileMacro(gb, scratchString.c_str(), false, SystemHelperMacroCode);
 				}
 			}
 			else
@@ -4479,7 +4479,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			else
 			{
-				DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true, SystemMacroCode);
+				DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true, SystemHelperMacroCode);
 			}
 			break;
 #endif
