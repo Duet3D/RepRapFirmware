@@ -108,6 +108,7 @@ private:
 		parsingWhitespace,								// parsing whitespace after the line number
 		parsingGCode,									// parsing GCode words
 		parsingBracketedComment,						// inside a (...) comment
+		parsingArithmetic,								// inside a {...} expression
 		parsingQuotedString,							// inside a double-quoted string
 		parsingChecksum,								// parsing the checksum after '*'
 		discarding,										// discarding characters after the checksum or an end-of-line comment
@@ -157,6 +158,7 @@ private:
 
 	uint8_t computedChecksum;
 	bool hadLineNumber;
+	bool hasArithmetics;								// sets when the GCode line has arithmetics in it
 	bool hadChecksum;
 	bool hasCommandNumber;
 	char commandLetter;
