@@ -4,6 +4,7 @@
  *  Created on: 5 Dec 2017
  *      Author: David
  *  This file contains functions that are called form file GCodes2.cpp to execute various G and M codes.
+ *	Arithmetics added by Bruce
  */
 
 #include "GCodes.h"
@@ -16,6 +17,7 @@
 #include "PrintMonitor.h"
 #include "Tasks.h"
 #include "Hardware/I2C.h"
+#include "toolkit\exprtk.hpp"
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -1494,6 +1496,110 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor)
 		moveBuffer.coords[extruder + numTotalAxes] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}
 	extrusionFactors[extruder] = factor;
+}
+
+
+char GCodes::setArithmeticsExpressionValues(char gExpression) {
+	unsigned int findingVariablesHearder = 0;
+	bool again = false;
+	gExpression = toupper(gExpression);
+	do {
+		again = false;
+		size_t found = gExpression.find("%P", findingVariablesHearder);
+		if (found != std::string::npos) {
+			unsigned int slot = (int)std::string gExpression.substr(arithValueDelimiter + 2, 1);
+			std::string gExpression = gExpression.replace(arithValueDelimiter, 4, arithmeticsMemory[slot]);
+			findingVariablesHearder += found + 3; // moving find start header forward to speed up the find process. This and the following if can be omitted
+			if (findingVariablesHearder < gExpression.length()) {
+				again = true;
+			}
+		}
+	} while (again);
+}
+
+char GCodes::setArithmeticsExpressionAxisPositions(char gExpression) {
+	unsigned int findingVariablesHearder = 0;
+	bool again = false;
+	gExpression = toupper(gExpression);
+	for (int thisAxisNumber = 0; thisAxisNumber < 2; thisAxisNumber++) {
+		do {
+			again = false;
+			size_t found = gExpression.find(axisLetters[thisAxisNumber], findingVariablesHearder);
+			if (arithValueDelimiter != std::string::npos) {
+				std::string gExpression = gExpression.replace(arithValueDelimiter, 4, currentUserPosition[thisAxisNumber]);
+				findingVariablesHearder += found + 1; // moving find start header forward to speed up the find process. This and the following if can be omitted
+				if (findingVariablesHearder < gExpression.length()) {
+					again = true;
+				}
+			}
+		} while (again);
+	}
+}
+
+double GCodes::solveArithmetics(char expression_string, GCodeResult* res) {
+
+	typedef double T; // numeric type (float, double, mpfr etc...)
+
+	typedef exprtk::symbol_table<T> symbol_table_t;
+	typedef exprtk::expression<T>     expression_t;
+	typedef exprtk::parser<T>             parser_t;
+
+	symbol_table_t symbol_table;
+	expression_t expression;
+	expression.register_symbol_table(symbol_table);
+	parser_t parser;
+	if (!parser.compile(expression_string, expression))
+	{
+		// cannot solve the expression. It's probaly a bad one
+		*res = GCodeResult::error;
+		return 0;
+	}
+	T result = expression.value();
+}
+
+bool GCodes::saveArithmeticsMemorySlots()
+{	
+	const char* const fileName = ARITHMETICS_VARIABLES_DATA;
+	FileStore* const f = platform.OpenSysFile(fileName, OpenMode::write);
+	if (f == nullptr)
+	{
+		reply.printf("Failed to create file %s", fileName);
+		return false;
+	}
+
+	String<MaxFilenameLength> buf;
+	String<MaxFilenameLength> bufValues;
+	buf.copy("; Arithmetic memory slot values");
+	bufValues.copy("");
+	for (int slot = 0; slot < 10; slot++) {
+		buf.cat("; Value in Slot [" + slot + "] is: " + arithmeticsMemory[slot] + "\n");
+		bufValues.cat("M930 {" + arithmeticsMemory[slot] + "} P"+ slot + "\n");
+	}
+	bool okValues = f->Write(bufValues.c_str());
+	bool okHumanReadable = f->Write(buf.c_str());
+	bool okCaution = f->Write("; This is a system-generated file - do not edit\n");
+	bool okClose = f->Close();
+
+	if (!
+		(okValues
+		&& okHumanReadable
+		&& okCaution
+		&& okClose)
+		)
+	{
+		reply.printf("Failed to save variables on to file %s", fileName);
+		platform.DeleteSysFile(fileName);
+		return false;
+	}
+	return true;
+}
+
+bool GCodes::loadArithmeticsMemorySlots() {
+	if (!DoFileMacro(gb, ARITHMETICS_VARIABLES_DATA, true, 931)) {
+		reply.printf("Failed to load variable from file %s", ARITHMETICS_VARIABLES_DATA);
+		return false;
+	}
+	return true;
 }
 
 // End
