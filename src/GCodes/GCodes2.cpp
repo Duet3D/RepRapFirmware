@@ -5,6 +5,7 @@
  *      Author: David
  *
  *  This file contains the code to see what G, M or T command we have and start processing it.
+ *	Arithmetics added by Bruce
  */
 
 #include "GCodes.h"
@@ -4356,24 +4357,83 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 930: // Preforms arithmetics of numbers between curly brackets ({}) and saves results in one on the P0 to P9 slots
 		// example: M930 {2*(2+1)} P0 // sets P0 to 6
 		// using X or Y or Z copies current tool position to Px // eg: M930 {X} P0 // sets P0 to current X position
-		// P0 value is accessible to other G or M commands using {%P0} format. eg. G0 X{%P0} // outputs G0 X6
+		// P0 value is accessible to other G or M commands using #P0# format. eg. G0 X#P0# // outputs G0 X6
+		// example M930 {(X*#P0#)+2} P0 // P0 was 6, it is now set to be (X*6)+2. For example if X is at 5, P0 would be 32
 		// if P is not set it auto initialises to 0
 
-		if (gb.Seen('P') {
+		if (gb.Seen('P')) {
 			const int slot = gb.GetIValue();
 			if (slot < 0 || slot > 9)
 			{
-				reply.printf("Checksum error on line %d", val);
+				reply.printf("Variable Memory Slot is out of range. P%d", slot);
+				result = GCodeResult::badOrMissingParameter;
 			}
-			std::size_t curlyStart = str.find('{');
-			std::size_t curlyEnd = str.find('}');	
-			
-			}
+			else {
+				// TODO get gcode string as expression
+				char gExpression = GCode;
+				double arithmeticsResult;
+				size_t arithStartDelimiter = gExpression.find('{');
+				size_t arithEndDelimiter = gExpression.find('}');
+				gExpression = gExpression.substr(arithStartDelimiter + 1, arithEndDelimiter - arithStartDelimiter);
+				// -- preparing the expression for execution -- BEGIN -- 
+				// We got the expression, now we replace known variable names with their values
+				// replacing variables with their values
+				gExpression = setArithmeticsExpressionValues(gExpression);
+				// replacing X, Y or Z values with their respective current position
+				gExpression = setArithmeticsExpressionAxisPositions(gExpression);
+				// -- preparing the expression for execution -- ENDS -- 
+				// executing the prepared expression
+				// EXECUTE
+				arithmeticsResult = solveArithmetics(gExpression, &result);
+				if (result != GCodeResult::error) {
+					// assigning result of the expression in the specified memory slot
+					arithmeticsMemory[slot] = arithmeticsResult;
+					result = GCodeResult::ok;
+				}
+				else {
+					reply.printf("Bad arithmetic expression. Cannot resolve.");
+					result = GCodeResult::error;
+				}
+			}			
+		}
+		else {
+			// no memory slot to hold the result is assined (No P parameter) nothing happens
+			reply.printf("No memory slot specified to hold the arithmetic result.");
+			result = GCodeResult::warning;
+		}
 		break;
 	
 	case 931: // saves P0 to P9 on SD Card under savedValues.save
-		// example M931 P0 // saves values
-		// example M931 P1 // loads values
+		// example M931 P0 // saves all values
+		// example M931 P1 // loads all values
+		if (gb.Seen('P')) {
+			const int readWrite = gb.GetIValue();
+			result = GCodeResult::error; // this will be changed to ok if everything goes fine
+			if (readWrite != 0 || readWrite != 1) {
+				reply.printf("Bad use of M931 Pd%. Neither Read nor Write operation is requested", readWrite);
+				// result is still error
+			}
+			else {
+				if (readWrite == 0) {
+					// this is a save request
+					if (saveArithmeticsMemorySlots()) {
+						// succeffully saved the file. Result is now ok
+						result = GCodeResult::ok;
+					} // else result is still error
+				}
+				else {
+					// this is a load request
+					if (loadArithmeticsMemorySlots()) {
+						// succeffully loaded the file. Result is now ok
+						result = GCodeResult::ok;
+					} // else result is still error! damn it
+				}
+			}
+		}
+		else {
+			reply.printf("M931 P parameter is missing. Memory Slots values are not changed.");
+			result = GCodeResult::badOrMissingParameter;
+		}
 		break;
 
 	case 997: // Perform firmware update
