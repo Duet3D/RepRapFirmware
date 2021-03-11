@@ -9,9 +9,9 @@
  *
  */
 
-#include "RepRap.h"
-#include "RepRapFirmware.h"
-#include "Platform.h"
+#include <Platform/RepRap.h>
+#include <RepRapFirmware.h>
+#include <Platform/Platform.h>
 
 #include "MdnsResponder.h"
 #include "W5500Interface.h"

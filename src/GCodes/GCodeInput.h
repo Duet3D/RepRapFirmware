@@ -8,10 +8,10 @@
 #ifndef GCODEINPUT_H
 #define GCODEINPUT_H
 
-#include "RepRapFirmware.h"
-#include "Storage/FileData.h"
-#include "MessageType.h"
-#include "RTOSIface/RTOSIface.h"
+#include <RepRapFirmware.h>
+#include <Storage/FileData.h>
+#include <Platform/MessageType.h>
+#include <RTOSIface/RTOSIface.h>
 
 #include <Stream.h>
 

@@ -62,6 +62,7 @@ constexpr size_t MaxCanDrivers = 20;
 constexpr size_t MaxCanBoards = 20;
 
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
+constexpr float Tmc5160SenseResistor = 0.050;
 
 constexpr size_t MaxBedHeaters = 12;
 constexpr size_t MaxChamberHeaters = 4;

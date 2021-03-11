@@ -26,11 +26,11 @@
 #include "Tool.h"
 #include "Filament.h"
 
-#include "GCodes/GCodes.h"
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
-#include "Heating/Heat.h"
-#include "Platform.h"
-#include "RepRap.h"
+#include <Heating/Heat.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 
 #if SUPPORT_OBJECT_MODEL
 

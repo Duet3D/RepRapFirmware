@@ -21,11 +21,11 @@ local, and you've found our code helpful, please buy us a round!
 Distributed as-is; no warranty is given.
 ******************************************************************************/
 
-#include "RepRapFirmware.h"
-#include "Tasks.h"
+#include <RepRapFirmware.h>
+#include <Platform/Tasks.h>
 #include "SX1509.h"
 #include "SX1509Registers.h"
-#include "Hardware/I2C.h"
+#include <Hardware/I2C.h>
 #include <Interrupts.h>
 
 SX1509::SX1509() noexcept : _clkX(0)

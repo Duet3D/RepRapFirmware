@@ -6,7 +6,7 @@
  */
 
 #include "I2C.h"
-#include "Tasks.h"
+#include <Platform/Tasks.h>
 
 #if defined(I2C_IFACE)
 static bool i2cInitialised = false;

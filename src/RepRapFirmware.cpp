@@ -161,12 +161,12 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-#include "MessageType.h"
-#include "Platform.h"
-#include "RepRap.h"
+#include <Platform/MessageType.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 
-#include "FreeRTOS.h"
-#include "task.h"
+#include <FreeRTOS.h>
+#include <task.h>
 
 // We just need one instance of RepRap; everything else is contained within it and hidden
 

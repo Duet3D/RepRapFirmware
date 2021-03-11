@@ -7,8 +7,8 @@
 
 #include "StepTimer.h"
 #include <RTOSIface/RTOSIface.h>
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <GCodes/GCodes.h>
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -218,6 +218,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	if (syncCount == MaxSyncCount && millis() - whenLastSynced > MinSyncInterval)
 	{
 		syncCount = 0;
+		++numResyncs;
 	}
 	return syncCount == MaxSyncCount;
 }

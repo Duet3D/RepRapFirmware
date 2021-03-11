@@ -9,19 +9,19 @@
 
 #if SUPPORT_12864_LCD
 
-#include "RepRap.h"
-#include "Heating/Heat.h"
-#include "Platform.h"
-#include "GCodes/GCodes.h"
-#include "Movement/Move.h"
+#include <Platform/RepRap.h>
+#include <Heating/Heat.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodes.h>
+#include <Movement/Move.h>
 #include "Display.h"
-#include "Tools/Tool.h"
-#include "PrintMonitor.h"
+#include <Tools/Tool.h>
+#include <PrintMonitor/PrintMonitor.h>
 
 #ifdef __LPC17xx__
 # include "Network.h"
 #else
-# include "Networking/Network.h"
+# include <Networking/Network.h>
 #endif
 
 MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis) noexcept

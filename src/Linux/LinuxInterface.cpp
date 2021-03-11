@@ -10,19 +10,19 @@
 
 #if HAS_LINUX_INTERFACE
 
-#include "GCodes/GCodeBuffer/ExpressionParser.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Heating/Heat.h"
-#include "Movement/Move.h"
-#include "Platform.h"
-#include "PrintMonitor.h"
-#include "Tools/Filament.h"
-#include "RepRap.h"
-#include "RepRapFirmware.h"
-#include <Tasks.h>
+#include <GCodes/GCodeBuffer/ExpressionParser.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Heating/Heat.h>
+#include <Movement/Move.h>
+#include <Platform/Platform.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <Tools/Filament.h>
+#include <Platform/RepRap.h>
+#include <RepRapFirmware.h>
+#include <Platform/Tasks.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
-#include <TaskPriorities.h>
+#include <Platform/TaskPriorities.h>
 
 extern char _estack;		// defined by the linker
 
@@ -316,7 +316,7 @@ void LinuxInterface::Init() noexcept
 							{
 								if (error)
 								{
-									gb->MachineState().CloseFile();
+									gb->CurrentFileMachineState().CloseFile();
 									gb->PopState(false);
 									gb->Init();
 								}
@@ -484,9 +484,8 @@ void LinuxInterface::Init() noexcept
 				// Evaluate an expression
 				case LinuxRequest::EvaluateExpression:
 				{
-					String<StringLength100> expression;
-					StringRef expressionRef = expression.GetRef();
-					GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expressionRef);
+					String<StringLength256> expression;
+					const GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expression.GetRef());
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
@@ -725,7 +724,7 @@ void LinuxInterface::Init() noexcept
 							}
 
 							// Handle blocking messages and their results
-							if (gb->MachineState().waitingForAcknowledgement && gb->IsMessagePromptPending() &&
+							if (gb->LatestMachineState().waitingForAcknowledgement && gb->IsMessagePromptPending() &&
 								transfer.WriteWaitForAcknowledgement(channel))
 							{
 								gb->MessagePromptSent();
@@ -862,7 +861,7 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
 	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() ||
 		gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
-		(gb.MachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
+		(gb.LatestMachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
 	{
 		// Don't process codes that are supposed to be suspended...
 		return false;

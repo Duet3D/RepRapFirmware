@@ -9,7 +9,7 @@
 #define MOVE_H_
 
 #include <RepRapFirmware.h>
-#include <MessageType.h>
+#include <Platform/MessageType.h>
 #include "InputShaper.h"
 #include "StraightProbeSettings.h"
 #include "DDARing.h"

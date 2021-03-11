@@ -11,13 +11,13 @@
 #include "BinaryParser.h"
 #include "StringParser.h"
 
-#include "RepRapFirmware.h"
-#include "GCodes/GCodeChannel.h"
-#include "GCodes/GCodeMachineState.h"
-#include "GCodes/GCodeResult.h"
-#include "Linux/LinuxMessageFormats.h"
-#include "MessageType.h"
-#include "ObjectModel/ObjectModel.h"
+#include <RepRapFirmware.h>
+#include <GCodes/GCodeChannel.h>
+#include <GCodes/GCodeMachineState.h>
+#include <GCodes/GCodeResult.h>
+#include <Linux/LinuxMessageFormats.h>
+#include <Platform/MessageType.h>
+#include <ObjectModel/ObjectModel.h>
 
 class FileGCodeInput;
 
@@ -49,7 +49,7 @@ public:
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
 
-	bool Put(char c) noexcept SPEED_CRITICAL;								// Add a character to the end
+	bool Put(char c) noexcept SPEED_CRITICAL;									// Add a character to the end
 #if HAS_LINUX_INTERFACE
 	void PutBinary(const uint32_t *data, size_t len) noexcept;					// Add an entire binary G-Code, overwriting any existing content
 #endif
@@ -66,7 +66,7 @@ public:
 	int8_t GetCommandFraction() const noexcept;										// Return the command fraction, or -1 if none given
 	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
-	int32_t GetLineNumber() const noexcept { return machineState->lineNumber; }
+	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
 	bool IsLastCommand() const noexcept;
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
@@ -122,8 +122,12 @@ public:
 
 	void SetCommsProperties(uint32_t arg) noexcept;
 
-	GCodeMachineState& MachineState() const noexcept { return *machineState; }
+	GCodeMachineState& LatestMachineState() const noexcept { return *machineState; }
+	GCodeMachineState& CurrentFileMachineState() const noexcept;
 	GCodeMachineState& OriginalMachineState() const noexcept;
+	GCodeMachineState::BlockState& GetBlockState() const noexcept { return CurrentFileMachineState().CurrentBlockState(); }
+	uint16_t GetBlockIndent() const noexcept { return GetBlockState().GetIndent(); }
+
 	float ConvertDistance(float distance) const noexcept;
 	float InverseConvertDistance(float distance) const noexcept;
 	unsigned int GetStackDepth() const noexcept;
@@ -222,6 +226,9 @@ public:
 	void MotionCommanded() noexcept { motionCommanded = true; }
 	void MotionStopped() noexcept { motionCommanded = false; }
 	bool WasMotionCommanded() const noexcept { return motionCommanded; }
+
+	void SetParameters(int codeRunning) noexcept;
+	VariableSet& GetVariables() const noexcept;
 
 	Mutex mutex;
 

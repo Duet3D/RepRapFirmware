@@ -11,7 +11,7 @@
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
-#include <RepRap.h>
+#include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
 #if LEDSTRIP_USES_USART
@@ -416,12 +416,13 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 	if (gb.Seen('X'))
 	{
 		seenType = true;
-		const uint32_t newType = gb.GetLimitedUIValue('X', NumSupportedLedTypes,
+		const uint32_t newType = gb.GetLimitedUIValue('X',
 #if SUPPORT_DOTSTAR
-				0
+				0,
 #else
-				1
+				1,
 #endif
+				NumSupportedLedTypes
 			);
 		const bool typeChanged = (newType != ledType);
 

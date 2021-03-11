@@ -6,8 +6,8 @@
  */
 
 #include "RandomProbePointSet.h"
-#include "RepRap.h"
-#include "Platform.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 #if SUPPORT_OBJECT_MODEL
 

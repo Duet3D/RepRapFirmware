@@ -8,9 +8,9 @@
 #include "WifiFirmwareUploader.h"
 #include "WiFiInterface.h"
 
-#include "Platform.h"
-#include "RepRap.h"
-#include "Storage/FileStore.h"
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
+#include <Storage/FileStore.h>
 
 // ESP8266 command codes
 const uint8_t ESP_FLASH_BEGIN = 0x02;
@@ -246,8 +246,8 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 
 	// wait for the response
 	uint16_t needBytes = 1;
-	PacketState state = PacketState::begin;
-	while (state != PacketState::done)
+	PacketState pState = PacketState::begin;
+	while (pState != PacketState::done)
 	{
 		uint8_t c;
 		EspUploadResult stat;
@@ -265,7 +265,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 		}
 
 		// sufficient bytes have been received for the current state, process them
-		switch(state)
+		switch(pState)
 		{
 		case PacketState::begin:	// expecting frame start
 		case PacketState::end:		// expecting frame end
@@ -274,14 +274,14 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 			{
 				return EspUploadResult::slipFrame;
 			}
-			if (state == PacketState::begin)
+			if (pState == PacketState::begin)
 			{
-				state = PacketState::header;
+				pState = PacketState::header;
 				needBytes = 2;
 			}
 			else
 			{
-				state = PacketState::done;
+				pState = PacketState::done;
 			}
 			break;
 
@@ -297,7 +297,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 					stat = (rslt == 0 || rslt == -2) ? EspUploadResult::slipData : EspUploadResult::slipFrame;
 					return stat;
 				}
-				else if (state == PacketState::header)
+				else if (pState == PacketState::header)
 				{
 					//store the header byte
 					hdr[hdrIdx++] = c;
@@ -314,12 +314,12 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 
 						if (bodyLen != 0)
 						{
-							state = PacketState::body;
+							pState = PacketState::body;
 						}
 						else
 						{
 							needBytes = 1;
-							state = PacketState::end;
+							pState = PacketState::end;
 						}
 					}
 				}
@@ -334,7 +334,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 					if (bodyIdx >= bodyLen)
 					{
 						needBytes = 1;
-						state = PacketState::end;
+						pState = PacketState::end;
 					}
 				}
 			}

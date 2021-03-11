@@ -11,8 +11,9 @@
 
 #include "GCodeBuffer.h"
 #include "ExpressionParser.h"
-#include <Platform.h>
-#include <RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
+#include <GCodes/Variable.h>
 #include <Networking/NetworkDefs.h>
 
 BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
@@ -34,15 +35,15 @@ void BinaryParser::Put(const uint32_t *data, size_t len) noexcept
 	memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
 	bufferLength = len * sizeof(uint32_t);
 	gb.bufferState = GCodeBufferState::parsingGCode;
-	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
-	gb.machineState->lineNumber = header->lineNumber;
+	gb.LatestMachineState().g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
+	gb.CurrentFileMachineState().lineNumber = header->lineNumber;
 }
 
 void BinaryParser::DecodeCommand() noexcept
 {
 	if (gb.bufferState == GCodeBufferState::parsingGCode)
 	{
-		if (reprap.Debug(moduleGcodes))
+		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()))
 		{
 			String<MaxCodeBufferSize> buf;
 			AppendFullCommand(buf.GetRef());
@@ -70,6 +71,7 @@ bool BinaryParser::Seen(char c) noexcept
 				return true;
 			}
 
+			// Skip to the next parameter
 			if (param->type == DataType::IntArray ||
 				param->type == DataType::UIntArray ||
 				param->type == DataType::FloatArray ||
@@ -469,7 +471,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 
 void BinaryParser::SetFinished() noexcept
 {
-	gb.machineState->g53Active = false;		// G53 does not persist beyond the current command
+	gb.LatestMachineState().g53Active = false;		// G53 does not persist beyond the current command
 	Init();
 }
 
@@ -750,6 +752,79 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 			}
 		}
 	}
+}
+
+void BinaryParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
+{
+	if (bufferLength != 0 && header->numParameters != 0)
+	{
+		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
+		reducedBytesRead = 0;
+		seenParameter = nullptr;
+		seenParameterValue = parameterStart + header->numParameters * sizeof(CodeParameter);
+
+		for (size_t i = 0; i < header->numParameters; i++)
+		{
+			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
+			if (param->letter != 'P' || codeRunning != 98)
+			{
+				ExpressionValue ev;
+				switch (param->type)
+				{
+				case DataType::String:
+					{
+						StringHandle sh(seenParameterValue, seenParameter->intValue);
+						ev.Set(sh);
+					}
+					break;
+
+				case DataType::Expression:
+					try
+					{
+						ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+						ev.Set(parser.ParseFloat());
+					}
+					catch (const GCodeException&) { }
+					break;
+
+				case DataType::Float:
+					ev.Set(seenParameter->floatValue);
+					break;
+
+				case DataType::Int:
+					ev.Set(seenParameter->intValue);
+					break;
+
+				case DataType::UInt:
+					ev.Set((int32_t)seenParameter->uintValue);
+					break;
+
+				default:
+					break;
+				}
+
+				if (ev.GetType() != TypeCode::None)
+				{
+					char paramName[2] = { param->letter, 0 };
+					vs.Insert(new Variable(paramName, ev, -1));
+				}
+			}
+
+			// Skip to the next parameter
+			if (param->type == DataType::IntArray ||
+				param->type == DataType::UIntArray ||
+				param->type == DataType::FloatArray ||
+				param->type == DataType::DriverIdArray)
+			{
+				seenParameterValue += param->intValue * sizeof(uint32_t);
+			}
+			else if (param->type == DataType::String || param->type == DataType::Expression)
+			{
+				seenParameterValue += AddPadding(param->intValue);
+			}
+		}
+	}
+	//TODO
 }
 
 GCodeException BinaryParser::ConstructParseException(const char *str) const noexcept

@@ -12,8 +12,8 @@
 #include <cstdint>
 #include <ctime>
 
-#include "RepRapFirmware.h"
-#include "MessageType.h"
+#include <RepRapFirmware.h>
+#include <Platform/MessageType.h>
 
 constexpr uint8_t LinuxFormatCode = 0x5F;			// standard format code for RRF SPI protocol
 constexpr uint8_t LiunxFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode

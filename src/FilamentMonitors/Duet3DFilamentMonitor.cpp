@@ -21,10 +21,10 @@
  */
 
 #include "Duet3DFilamentMonitor.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Platform.h"
-#include "Movement/StepTimer.h"
-#include "RepRap.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Platform/Platform.h>
+#include <Movement/StepTimer.h>
+#include <Platform/RepRap.h>
 
 // Constructors
 Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, unsigned int p_type) noexcept

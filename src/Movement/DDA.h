@@ -12,7 +12,7 @@
 #include "DriveMovement.h"
 #include "StepTimer.h"
 #include "MoveSegment.h"
-#include <Tasks.h>
+#include <Platform/Tasks.h>
 #include <GCodes/GCodes.h>			// for class RawMove
 
 #ifdef DUET_NG
@@ -47,14 +47,14 @@ public:
 	void operator delete(void* ptr) noexcept {}
 	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
-	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept  SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
+	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxDriversPerAxis]) noexcept;		// Set up a leadscrew motor move
 #if SUPPORT_ASYNC_MOVES
 	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept;			// Set up an async move
 #endif
 
-	void Start(Platform& p, uint32_t tim) noexcept SPEED_CRITICAL;	// Start executing the DDA, i.e. move the move.
-	void StepDrivers(Platform& p) noexcept SPEED_CRITICAL;			// Take one step of the DDA, called by timed interrupt.
+	void Start(Platform& p, uint32_t tim) noexcept SPEED_CRITICAL;					// Start executing the DDA, i.e. move the move.
+	void StepDrivers(Platform& p) noexcept SPEED_CRITICAL;							// Take one step of the DDA, called by timed interrupt.
 	bool ScheduleNextStepInterrupt(StepTimer& timer) const noexcept SPEED_CRITICAL;	// Schedule the next interrupt, returning true if we can't because it is already due
 
 	void SetNext(DDA *n) noexcept { next = n; }
@@ -174,7 +174,7 @@ public:
 #endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
-	bool ControlLaser() const { return flags.controlLaser; }
+	bool ControlLaser() const noexcept { return flags.controlLaser; }
 #endif
 
 	static uint32_t lastStepLowTime;										// when we last completed a step pulse to a slow driver
@@ -202,7 +202,7 @@ private:
 	int32_t PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const noexcept;
 #endif
 
-	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept  SPEED_CRITICAL;	// Try to smooth out moves in the queue
+	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
     static float Normalise(float v[], AxesBitmap unitLengthAxes) noexcept;  // Normalise a vector to unit length over the specified axes
     static float Normalise(float v[]) noexcept; 							// Normalise a vector to unit length over all axes
 	float NormaliseLinearMotion(AxesBitmap linearAxes) noexcept;			// Make the direction vector unit-normal in XYZ
@@ -299,7 +299,7 @@ private:
 #if DDA_LOG_PROBE_CHANGES
 	static bool probeTriggered;
 
-	void LogProbePosition();
+	void LogProbePosition() noexcept;
 #endif
 
 	// These three could possibly be moved into afterPrepare

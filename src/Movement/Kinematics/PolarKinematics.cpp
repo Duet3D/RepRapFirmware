@@ -7,11 +7,11 @@
 
 #include "PolarKinematics.h"
 
-#include "RepRap.h"
-#include "Platform.h"
-#include "Storage/MassStorage.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Movement/DDA.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <Storage/MassStorage.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Movement/DDA.h>
 
 #if SUPPORT_OBJECT_MODEL
 

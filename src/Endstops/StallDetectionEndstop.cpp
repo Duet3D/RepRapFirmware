@@ -9,8 +9,8 @@
 
 #if HAS_STALL_DETECT
 
-#include "Platform.h"
-#include "Movement/Kinematics/Kinematics.h"
+#include <Platform/Platform.h>
+#include <Movement/Kinematics/Kinematics.h>
 
 // Stall detection endstop
 StallDetectionEndstop::StallDetectionEndstop(uint8_t p_axis, EndStopPosition pos, bool p_individualMotors) noexcept

@@ -5,15 +5,15 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
 
 #if SUPPORT_TMC2660
 
 #include "TMC2660.h"
-#include "RepRap.h"
-#include "Movement/Move.h"
-#include "Movement/StepTimer.h"
-#include "Endstops/Endstop.h"
+#include <Platform/RepRap.h>
+#include <Movement/Move.h>
+#include <Movement/StepTimer.h>
+#include <Endstops/Endstop.h>
 #include <Cache.h>
 
 # if SAME70

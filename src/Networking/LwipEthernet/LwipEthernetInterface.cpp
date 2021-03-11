@@ -9,16 +9,16 @@
 #define NO_STATUS_CODES
 
 #include "LwipEthernetInterface.h"
-#include "Networking/NetworkBuffer.h"
+#include <Networking/NetworkBuffer.h>
 #include "LwipSocket.h"
 
-#include "Platform.h"
-#include "RepRap.h"
-#include "Networking/HttpResponder.h"
-#include "Networking/FtpResponder.h"
-#include "Networking/TelnetResponder.h"
-#include "General/IP4String.h"
-#include "Version.h"								// version is reported by MDNS
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
+#include <Networking/HttpResponder.h>
+#include <Networking/FtpResponder.h>
+#include <Networking/TelnetResponder.h>
+#include <General/IP4String.h>
+#include <Version.h>								// version is reported by MDNS
 #include "GMAC/ethernet_sam.h"
 
 #if SAME70

@@ -1,6 +1,6 @@
 #include "MassStorage.h"
-#include <Platform.h>
-#include <RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 #include <ObjectModel/ObjectModel.h>
 #include <Libraries/Fatfs/diskio.h>
 

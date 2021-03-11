@@ -17,7 +17,7 @@
 #include <Movement/DriveMovement.h>
 #include <Movement/StepTimer.h>
 #include <RTOSIface/RTOSIface.h>
-#include <TaskPriorities.h>
+#include <Platform/TaskPriorities.h>
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
@@ -92,8 +92,8 @@ static bool inExpansionMode = false;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,
-	.numTxBuffers = 6,
-	.txFifoSize = 4,
+	.numTxBuffers = 5,
+	.txFifoSize = 16,
 	.numRxBuffers =  0,
 	.rxFifo0Size = 16,
 	.rxFifo1Size = 16,
@@ -137,16 +137,15 @@ static CanDevice *can1dev = nullptr;
 
 #endif
 
-// Transmit buffer usage
+// Transmit buffer usage. All dedicated buffer numbers must be < Can0Config.numTxBuffers.
 constexpr auto TxBufferIndexUrgent = CanDevice::TxBufferNumber::buffer0;
 constexpr auto TxBufferIndexTimeSync = CanDevice::TxBufferNumber::buffer1;
-constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer2;
-// We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
-constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer3;
-constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer4;
-constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer5;
+constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer2;
+constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer3;
+constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer4;
+constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::fifo;				// we send lots of movement messages so use the FIFO for them
 
-// Receive buffer/FIFO usage
+// Receive buffer/FIFO usage. All dedicated buffer numbers must be < Can0Config.numRxBuffers.
 constexpr auto RxBufferIndexBroadcast = CanDevice::RxBufferNumber::fifo0;
 constexpr auto RxBufferIndexRequest = CanDevice::RxBufferNumber::fifo0;
 constexpr auto RxBufferIndexResponse = CanDevice::RxBufferNumber::fifo1;
@@ -1014,8 +1013,8 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 void CanInterface::Diagnostics(MessageType mtype) noexcept
 {
 	unsigned int messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount;
-	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount);
-
+	uint32_t lastCancelledId;
+	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount, lastCancelledId);
 	reprap.GetPlatform().MessageF(mtype,
 				"=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
 				", peak Tx sync delay %" PRIu32
@@ -1023,6 +1022,12 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 					messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
 					peakTimeSyncTxDelay,
 					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers());
+	if (lastCancelledId != 0)
+	{
+		CanId id;
+		id.SetReceivedId(lastCancelledId);
+		reprap.GetPlatform().MessageF(mtype, "Last cancelled message type %u dest %u\n", (unsigned int)id.MsgType(), id.Dst());
+	}
 
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;

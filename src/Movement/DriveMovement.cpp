@@ -9,8 +9,8 @@
 #include "DDA.h"
 #include "Move.h"
 #include "StepTimer.h"
-#include "RepRap.h"
-#include "Math/Isqrt.h"
+#include <Platform/RepRap.h>
+#include <Math/Isqrt.h>
 #include "Kinematics/LinearDeltaKinematics.h"
 
 // Static members
@@ -223,7 +223,6 @@ bool DriveMovement::PrepareExtruder(DDA& dda, const PrepParams& params, float& e
 
 	const float rawStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
 	const float effectiveStepsPerMm = fabsf(dv) * rawStepsPerMm;
-
 	const int32_t netSteps = int32_t(extrusionRequired * rawStepsPerMm);
 	extrusionPending = extrusionRequired - (float)netSteps/rawStepsPerMm;
 

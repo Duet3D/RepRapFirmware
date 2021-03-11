@@ -7,16 +7,16 @@
 
 #include <Endstops/SwitchEndstop.h>
 
-#include "RepRap.h"
-#include "Platform.h"
-#include "Movement/Kinematics/Kinematics.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <Movement/Kinematics/Kinematics.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_CAN_EXPANSION
-# include "CanId.h"
-# include "CanMessageBuffer.h"
-# include "CanMessageFormats.h"
-# include "CAN/CanInterface.h"
+# include <CanId.h>
+# include <CanMessageBuffer.h>
+# include <CanMessageFormats.h>
+# include <CAN/CanInterface.h>
 #endif
 
 // Switch endstop

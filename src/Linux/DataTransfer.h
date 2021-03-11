@@ -15,7 +15,7 @@
 #include <GCodes/GCodeFileInfo.h>
 #include <GCodes/GCodeChannel.h>
 #include "LinuxMessageFormats.h"
-#include <MessageType.h>
+#include <Platform/MessageType.h>
 #include <RTOSIface/RTOSIface.h>
 
 class BinaryGCodeBuffer;
@@ -50,7 +50,7 @@ public:
 	GCodeChannel ReadCodeChannel() noexcept;												// Read a code channel
 	void ReadAssignFilament(int& extruder, StringRef& filamentName) noexcept;				// Read a request to assign the given filament to an extruder drive
 	void ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept;	// Read another chunk of a file
-	GCodeChannel ReadEvaluateExpression(size_t packetLength, StringRef& expression) noexcept;	// Read an expression request
+	GCodeChannel ReadEvaluateExpression(size_t packetLength, const StringRef& expression) noexcept;	// Read an expression request
 	bool ReadMessage(MessageType& type, OutputBuffer *buf) noexcept;						// Read a request to output a message
 
 	void ResendPacket(const PacketHeader *packet) noexcept;

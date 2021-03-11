@@ -23,19 +23,19 @@ Licence: GPL
 #define GCODES_H
 
 #include "RepRapFirmware.h"
-#include "RepRap.h"			// for type ResponseSource
+#include <Platform/RepRap.h>			// for type ResponseSource
 #include "GCodeResult.h"
 #include "ObjectTracker.h"
-#include "Movement/RawMove.h"
-#include "Libraries/sha1/sha1.h"
-#include "Platform.h"		// for type EndStopHit
+#include <Movement/RawMove.h>
+#include <Libraries/sha1/sha1.h>
+#include <Platform/Platform.h>		// for type EndStopHit
 #include "GCodeChannel.h"
 #include "GCodeInput.h"
 #include "Trigger.h"
-#include "Tools/Filament.h"
-#include "FilamentMonitors/FilamentMonitor.h"
+#include <Tools/Filament.h>
+#include <FilamentMonitors/FilamentMonitor.h>
 #include "RestorePoint.h"
-#include "Movement/BedProbing/Grid.h"
+#include <Movement/BedProbing/Grid.h>
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
@@ -306,6 +306,11 @@ private:
 
 	static_assert(NumResources <= sizeof(Resource) * CHAR_BIT, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
+	// Codes passed to DoFileMacro
+	static constexpr int ToolChangeMacroCode = -1;								// A macro that is being called because of a tool change
+	static constexpr int SystemHelperMacroCode = -2;							// Another system macro that is being called to help execute the current command
+	static constexpr int AsyncSystemMacroCode = -3;								// A macro that is not being executed as part of a commend being executed, e.g. due to a trigger, filament out etc.
+
 	bool LockResource(const GCodeBuffer& gb, Resource r) noexcept;				// Lock the resource, returning true if success
 	bool LockFileSystem(const GCodeBuffer& gb) noexcept;						// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb) noexcept;							// Lock movement
@@ -323,7 +328,7 @@ private:
 	void StopPrint(StopPrintReason reason) noexcept;							// Stop the current print
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;			// Get G Codes from a file and print them
-	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = -1) noexcept;
+	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept;
 																						// Run a GCode macro file, optionally report error if not found
 	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro
 
@@ -421,7 +426,7 @@ private:
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start probing the grid, returning true if we didn't because of an error
 	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb) THROWS(GCodeException);		// Set up currentZProbeNumber and return the probe
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Probes at a given position - see the comment at the head of the function itself
-	void InitialiseTaps() noexcept;												// Set up to do the first of a possibly multi-tap probe
+	void InitialiseTaps(bool fastThenSlow) noexcept;								// Set up to do the first of a possibly multi-tap probe
 	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply);		// Handle M581
@@ -440,13 +445,13 @@ private:
 	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;				// Write the config-override header
 #endif
 
-	void CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept;						// Copy the feed rate etc. from the daemon to the input channels
+	void CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept;				// Copy the feed rate etc. from the daemon to the input channels
 
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); // Do manual probe in arbitrary direction
 	void DoManualBedProbe(GCodeBuffer& gb);										// Do a manual bed probe
-	void DeployZProbe(GCodeBuffer& gb, int code) noexcept;
-	void RetractZProbe(GCodeBuffer& gb, int code) noexcept;
+	void DeployZProbe(GCodeBuffer& gb) noexcept;
+	void RetractZProbe(GCodeBuffer& gb) noexcept;
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 
@@ -601,7 +606,7 @@ private:
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
-	uint8_t tapsDone;							// how many times we tapped the current point
+	int8_t tapsDone;							// how many times we tapped the current point
 	uint8_t currentZProbeNumber;				// which Z probe a G29 or G30 command is using
 
 	// Simulation and print time

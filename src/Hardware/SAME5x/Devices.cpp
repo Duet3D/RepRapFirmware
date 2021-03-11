@@ -10,7 +10,7 @@
 #include <RepRapFirmware.h>
 #include <AnalogIn.h>
 #include <AnalogOut.h>
-#include <TaskPriorities.h>
+#include <Platform/TaskPriorities.h>
 
 #include <hal_gpio.h>
 #include <hal_usb_device.h>

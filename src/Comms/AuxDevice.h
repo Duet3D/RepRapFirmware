@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 #if HAS_AUX_DEVICES
-#include <OutputMemory.h>
+#include <Platform/OutputMemory.h>
 #include <RTOSIface/RTOSIface.h>
 
 class AuxDevice

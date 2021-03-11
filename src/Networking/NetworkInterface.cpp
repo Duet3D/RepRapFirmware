@@ -6,7 +6,7 @@
  */
 
 #include "NetworkInterface.h"
-#include <RepRap.h>
+#include <Platform/RepRap.h>
 
 void NetworkInterface::SetState(NetworkState::RawType newState) noexcept
 {

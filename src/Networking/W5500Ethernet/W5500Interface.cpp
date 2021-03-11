@@ -9,14 +9,14 @@
 #include "W5500Socket.h"
 #include "Wiznet/Ethernet/wizchip_conf.h"
 #include "Wiznet/Internet/DHCP/dhcp.h"
-#include "NetworkBuffer.h"
-#include "Platform.h"
-#include "RepRap.h"
-#include "HttpResponder.h"
-#include "FtpResponder.h"
-#include "TelnetResponder.h"
+#include <Networking/NetworkBuffer.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
+#include <Networking/HttpResponder.h>
+#include <Networking/FtpResponder.h>
+#include <Networking/TelnetResponder.h>
 #include "MdnsResponder.h"
-#include "General/IP4String.h"
+#include <General/IP4String.h>
 
 W5500Interface::W5500Interface(Platform& p) noexcept
 	: platform(p), lastTickMillis(0), ftpDataSocket(0), activated(false)

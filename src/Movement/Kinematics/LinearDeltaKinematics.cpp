@@ -7,10 +7,10 @@
 
 #include "LinearDeltaKinematics.h"
 
-#include "Movement/Move.h"
-#include "RepRap.h"
-#include "Storage/FileStore.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Movement/Move.h>
+#include <Platform/RepRap.h>
+#include <Storage/FileStore.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Math/Deviation.h>
 
 #if SUPPORT_OBJECT_MODEL

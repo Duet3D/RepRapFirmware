@@ -6,9 +6,9 @@
  */
 
 #include "DDARing.h"
-#include "RepRap.h"
+#include <Platform/RepRap.h>
 #include "Move.h"
-#include <Tasks.h>
+#include <Platform/Tasks.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_CAN_EXPANSION

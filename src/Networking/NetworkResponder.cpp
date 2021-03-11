@@ -7,7 +7,7 @@
 
 #include "NetworkResponder.h"
 #include "Socket.h"
-#include "Platform.h"
+#include <Platform/Platform.h>
 
 // NetworkResponder members
 

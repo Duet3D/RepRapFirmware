@@ -9,7 +9,7 @@
 #define DRIVEMOVEMENT_H_
 
 #include <RepRapFirmware.h>
-#include <Tasks.h>
+#include <Platform/Tasks.h>
 #include "MoveSegment.h"
 
 class LinearDeltaKinematics;

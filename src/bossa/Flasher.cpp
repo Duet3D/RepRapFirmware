@@ -28,11 +28,11 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "Flasher.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "General/Vector.hpp"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <General/Vector.hpp>
 #if HAS_LINUX_INTERFACE
-# include "Linux/LinuxInterface.h"
+# include <Linux/LinuxInterface.h>
 #endif
 
 void Flasher::erase(uint32_t foffset) THROWS(GCodeException)

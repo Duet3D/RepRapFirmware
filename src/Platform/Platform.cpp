@@ -21,18 +21,19 @@
 
 #include "Platform.h"
 
-#include "Heating/Heat.h"
-#include "Movement/DDA.h"
-#include "Movement/Move.h"
-#include "Movement/StepTimer.h"
-#include "Tools/Tool.h"
-#include "Endstops/ZProbe.h"
-#include "Networking/Network.h"
-#include "PrintMonitor.h"
-#include "FilamentMonitors/FilamentMonitor.h"
+#include <Heating/Heat.h>
+#include <Movement/DDA.h>
+#include <Movement/Move.h>
+#include <Movement/StepTimer.h>
+#include <Tools/Tool.h>
+#include <Endstops/ZProbe.h>
+#include <Networking/Network.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <FilamentMonitors/FilamentMonitor.h>
 #include "RepRap.h"
+#include "Heap.h"
 #include "Scanner.h"
-#include "Version.h"
+#include <Version.h>
 #include "Logger.h"
 #include "Tasks.h"
 #include <Cache.h>
@@ -1822,6 +1823,8 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		(double)AdcReadingToPowerVoltage(lowestV12), (double)AdcReadingToPowerVoltage(currentV12), (double)AdcReadingToPowerVoltage(highestV12), numV12UnderVoltageEvents);
 	lowestV12 = highestV12 = currentV12;
 #endif
+
+	StringHandle::Diagnostics(mtype);
 
 	// Show the motor position and stall status
 	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)

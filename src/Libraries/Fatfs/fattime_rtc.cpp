@@ -41,8 +41,8 @@
  *
  */
 #include "RepRapFirmware.h"
-#include "RepRap.h"
-#include "Platform.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 /**
  * \brief Current time returned is packed into a DWORD value.

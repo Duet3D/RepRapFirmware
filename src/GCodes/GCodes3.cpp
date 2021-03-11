@@ -10,27 +10,27 @@
 #include "GCodes.h"
 
 #include "GCodeBuffer/GCodeBuffer.h"
-#include "Heating/Heat.h"
-#include "Movement/Move.h"
-#include "RepRap.h"
-#include "Tools/Tool.h"
-#include "Endstops/ZProbe.h"
-#include "PrintMonitor.h"
-#include "Tasks.h"
-#include "Hardware/I2C.h"
+#include <Heating/Heat.h>
+#include <Movement/Move.h>
+#include <Platform/RepRap.h>
+#include <Tools/Tool.h>
+#include <Endstops/ZProbe.h>
+#include <PrintMonitor/PrintMonitor.h>
+#include <Platform/Tasks.h>
+#include <Hardware/I2C.h>
 
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 # include <Comms/FirmwareUpdater.h>
 #endif
 
 #if SUPPORT_TMC2660
-# include "Movement/StepperDrivers/TMC2660.h"
+# include <Movement/StepperDrivers/TMC2660.h>
 #endif
 #if SUPPORT_TMC22xx
-# include "Movement/StepperDrivers/TMC22xx.h"
+# include <Movement/StepperDrivers/TMC22xx.h>
 #endif
 #if SUPPORT_TMC51xx
-# include "Movement/StepperDrivers/TMC51xx.h"
+# include <Movement/StepperDrivers/TMC51xx.h>
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -424,7 +424,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		{
 			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 			SavePosition(simulationRestorePoint, gb);
-			simulationRestorePoint.feedRate = gb.MachineState().feedRate;
+			simulationRestorePoint.feedRate = gb.LatestMachineState().feedRate;
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
@@ -836,7 +836,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 			// - If prefixed by G53 add the ToolOffset that will be subtracted below in ToolOffsetTransform as we ignore any offsets when G53 is active
 			// - otherwise add current workplace offsets so we go where the user expects to go
 			// comparable to hoe DoStraightMove/DoArcMove does it
-			const float axisTarget = gb.GetDistance() + (gb.MachineState().g53Active ? GetCurrentToolOffset(axis) : GetWorkplaceOffset(axis));
+			const float axisTarget = gb.GetDistance() + (gb.LatestMachineState().g53Active ? GetCurrentToolOffset(axis) : GetWorkplaceOffset(axis));
 			if (axisTarget != userPositionTarget[axis])
 			{
 				doesMove = true;
@@ -942,9 +942,9 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			if (gb.Seen(feedrateLetter))
 			{
 				const float rate = gb.GetDistance();
-				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+				gb.LatestMachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 			}
-			moveBuffer.feedRate = gb.MachineState().feedRate;
+			moveBuffer.feedRate = gb.LatestMachineState().feedRate;
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
@@ -1008,7 +1008,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 			// Deal with feed rate
 			gb.MustSee(feedrateLetter);
 			const float rate = gb.GetDistance();
-			moveBuffer.feedRate = gb.MachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+			moveBuffer.feedRate = gb.LatestMachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
@@ -1566,32 +1566,32 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 
 // Deploy the Z probe unless it has already been deployed explicitly
 // The required next state must be set up (e.g. by gb.SetState()) before calling this
-void GCodes::DeployZProbe(GCodeBuffer& gb, int code) noexcept
+void GCodes::DeployZProbe(GCodeBuffer& gb) noexcept
 {
 	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(currentZProbeNumber);
 	if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !zp->IsDeployedByUser())
 	{
 		String<StringLength20> fileName;
 		fileName.printf(DEPLOYPROBE "%u.g", currentZProbeNumber);
-		if (!DoFileMacro(gb, fileName.c_str(), false, code))
+		if (!DoFileMacro(gb, fileName.c_str(), false, SystemHelperMacroCode))
 		{
-			DoFileMacro(gb, DEPLOYPROBE ".g", false, code);
+			DoFileMacro(gb, DEPLOYPROBE ".g", false, SystemHelperMacroCode);
 		}
 	}
 }
 
 // Retract the Z probe unless it was deployed explicitly (in which case, wait for the user to retract it explicitly)
 // The required next state must be set up (e.g. by gb.SetState()) before calling this
-void GCodes::RetractZProbe(GCodeBuffer& gb, int code) noexcept
+void GCodes::RetractZProbe(GCodeBuffer& gb) noexcept
 {
 	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(currentZProbeNumber);
 	if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !zp->IsDeployedByUser())
 	{
 		String<StringLength20> fileName;
 		fileName.printf(RETRACTPROBE "%u.g", currentZProbeNumber);
-		if (!DoFileMacro(gb, fileName.c_str(), false, code))
+		if (!DoFileMacro(gb, fileName.c_str(), false, SystemHelperMacroCode))
 		{
-			DoFileMacro(gb, RETRACTPROBE ".g", false, code);
+			DoFileMacro(gb, RETRACTPROBE ".g", false, SystemHelperMacroCode);
 		}
 	}
 }

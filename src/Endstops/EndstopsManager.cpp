@@ -16,11 +16,11 @@
 #include "LocalZProbe.h"
 #include "RemoteZProbe.h"
 
-#include "RepRap.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "GCodes/GCodes.h"
-#include "Movement/Move.h"
-#include <OutputMemory.h>
+#include <Platform/RepRap.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <GCodes/GCodes.h>
+#include <Movement/Move.h>
+#include <Platform/OutputMemory.h>
 #include <Heating/Heat.h>
 #include <Heating/Sensors/TemperatureSensor.h>
 

@@ -6,12 +6,12 @@
  */
 
 #include "W5500Socket.h"
-#include "Network.h"
-#include "NetworkDefs.h"
-#include "NetworkInterface.h"
+#include <Networking/Network.h>
+#include <Networking/NetworkDefs.h>
+#include <Networking/NetworkInterface.h>
 #include "Wiznet/Ethernet/socketlib.h"
-#include "NetworkBuffer.h"
-#include "RepRap.h"
+#include <Networking/NetworkBuffer.h>
+#include <Platform/RepRap.h>
 
 //***************************************************************************************************
 // Socket class

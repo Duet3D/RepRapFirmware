@@ -17,8 +17,8 @@
 #include "BinaryParser.h"
 #include "StringParser.h"
 #include <GCodes/GCodeException.h>
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 // Macros to reduce the amount of explicit conditional compilation in this file
 #if HAS_LINUX_INTERFACE
@@ -55,7 +55,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),				ObjectModelEntryFlags::none },
 	{ "feedRate",			OBJECT_MODEL_FUNC(self->machineState->feedRate, 1),							ObjectModelEntryFlags::live },
 	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),				ObjectModelEntryFlags::none },
-	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->machineState->lineNumber),					ObjectModelEntryFlags::live },
+	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),							ObjectModelEntryFlags::live },
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),							ObjectModelEntryFlags::none },
 	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),							ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),									ObjectModelEntryFlags::live },
@@ -349,7 +349,7 @@ void GCodeBuffer::MustSee(char c) THROWS(GCodeException)
 {
 	if (!Seen(c))
 	{
-		throw GCodeException(machineState->lineNumber, -1, "missing parameter '%c'", (uint32_t)c);
+		throw GCodeException(GetLineNumber(), -1, "missing parameter '%c'", (uint32_t)c);
 	}
 }
 
@@ -365,11 +365,11 @@ float GCodeBuffer::GetLimitedFValue(char c, float minValue, float maxValue) THRO
 	const float ret = GetFValue();
 	if (ret < minValue)
 	{
-		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too low", (uint32_t)c);
+		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
 	}
 	if (ret > maxValue)
 	{
-		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
 	}
 	return ret;
 }
@@ -393,11 +393,11 @@ int32_t GCodeBuffer::GetLimitedIValue(char c, int32_t minValue, int32_t maxValue
 	const int32_t ret = GetIValue();
 	if (ret < minValue)
 	{
-		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too low", (uint32_t)c);
+		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
 	}
 	if (ret > maxValue)
 	{
-		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
 	}
 	return ret;
 }
@@ -415,11 +415,11 @@ uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxV
 	const uint32_t ret = GetUIValue();
 	if (ret < minValue)
 	{
-		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too low", (uint32_t)c);
+		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
 	}
 	if (ret >= maxValuePlusOne)
 	{
-		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
 	}
 	return ret;
 }
@@ -527,11 +527,11 @@ bool GCodeBuffer::TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t 
 	{
 		if (val < minValue)
 		{
-			throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too low", (uint32_t)c);
+			throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
 		}
 		if (val > maxValue)
 		{
-			throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+			throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
 		}
 	}
 	return b;
@@ -555,7 +555,7 @@ bool GCodeBuffer::TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32
 	const bool b = TryGetUIValue(c, val, seen);
 	if (b && val >= maxValuePlusOne)
 	{
-		throw GCodeException(machineState->lineNumber, -1, "parameter '%c' too high", (uint32_t)c);
+		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
 	}
 	return b;
 }
@@ -706,6 +706,16 @@ GCodeMachineState& GCodeBuffer::OriginalMachineState() const noexcept
 	return *ms;
 }
 
+GCodeMachineState& GCodeBuffer::CurrentFileMachineState() const noexcept
+{
+	GCodeMachineState *ms = machineState;
+	while (ms->localPush && ms->GetPrevious() != nullptr)
+	{
+		ms = ms->GetPrevious();
+	}
+	return *ms;
+}
+
 // Convert from inches to mm if necessary
 float GCodeBuffer::ConvertDistance(float distance) const noexcept
 {
@@ -754,10 +764,6 @@ bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 	}
 
 	machineState = ms->GetPrevious();
-	if (withinSameFile)
-	{
-		machineState->lineNumber = ms->lineNumber;
-	}
 	delete ms;
 
 	return true;
@@ -1009,6 +1015,21 @@ void GCodeBuffer::PrintCommand(const StringRef& s) const noexcept
 void GCodeBuffer::AppendFullCommand(const StringRef &s) const noexcept
 {
 	PARSER_OPERATION(AppendFullCommand(s));
+}
+
+void GCodeBuffer::SetParameters(int codeRunning) noexcept
+{
+	PARSER_OPERATION(SetParameters(GetVariables(), codeRunning));
+}
+
+VariableSet& GCodeBuffer::GetVariables() const noexcept
+{
+	GCodeMachineState *mc = machineState;
+	while (mc->localPush && mc->GetPrevious() != nullptr)
+	{
+		mc = mc->GetPrevious();
+	}
+	return mc->variables;
 }
 
 // End

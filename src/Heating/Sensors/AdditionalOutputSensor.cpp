@@ -7,12 +7,12 @@
 
 #include <ctype.h>
 #include "AdditionalOutputSensor.h"
-#include "RepRap.h"
-#include "Heating/Heat.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Platform/RepRap.h>
+#include <Heating/Heat.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
-AdditionalOutputSensor::AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool enforcePollOrder) noexcept
-	: TemperatureSensor(sensorNum, type), parentSensor(0), outputNumber(0), enforcePollOrder(enforcePollOrder)
+AdditionalOutputSensor::AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool pEnforcePollOrder) noexcept
+	: TemperatureSensor(sensorNum, type), parentSensor(0), outputNumber(0), enforcePollOrder(pEnforcePollOrder)
 {
 }
 

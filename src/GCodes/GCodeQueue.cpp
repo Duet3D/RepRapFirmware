@@ -7,10 +7,10 @@
 
 #include "GCodeQueue.h"
 
-#include "RepRap.h"
+#include <Platform/RepRap.h>
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
-#include "Movement/Move.h"
+#include <Movement/Move.h>
 
 // GCodeQueue class
 

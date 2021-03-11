@@ -6,11 +6,11 @@
  */
 
 #include "CoreKinematics.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "GCodes/GCodes.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Movement/DDA.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodes.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Movement/DDA.h>
 
 #if SUPPORT_OBJECT_MODEL
 

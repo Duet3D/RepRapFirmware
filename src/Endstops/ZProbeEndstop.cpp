@@ -8,9 +8,9 @@
 #include "ZProbeEndstop.h"
 
 #include "ZProbe.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "Movement/Kinematics/Kinematics.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <Movement/Kinematics/Kinematics.h>
 
 // Z probe endstop
 ZProbeEndstop::ZProbeEndstop(uint8_t p_axis, EndStopPosition pos) noexcept : Endstop(p_axis, pos), zProbeNumber(0)

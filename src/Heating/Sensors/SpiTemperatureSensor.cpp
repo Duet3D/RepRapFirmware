@@ -6,7 +6,7 @@
  */
 
 #include "SpiTemperatureSensor.h"
-#include "Tasks.h"
+#include <Platform/Tasks.h>
 #include <Hardware/SharedSpi/SharedSpiDevice.h>
 
 SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, SpiMode spiMode, uint32_t clockFrequency) noexcept

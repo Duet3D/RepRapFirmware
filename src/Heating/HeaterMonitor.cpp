@@ -7,8 +7,8 @@
 
 #include "HeaterMonitor.h"
 
-#include <Platform.h>
-#include <RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 #include "Heat.h"
 
 HeaterMonitor::HeaterMonitor() noexcept

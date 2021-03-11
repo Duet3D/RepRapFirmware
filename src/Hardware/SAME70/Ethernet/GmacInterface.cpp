@@ -32,9 +32,9 @@
  */
 
 #include "GmacInterface.h"
-#include "pmc/pmc.h"
+#include <pmc/pmc.h>
 
-#include "conf_eth.h"
+#include <conf_eth.h>
 #include <cstring>
 
 extern "C" {
@@ -53,7 +53,7 @@ extern "C" {
 
 #include <RepRapFirmware.h>
 #include <RTOSIface/RTOSIface.h>
-#include <TaskPriorities.h>
+#include <Platform/TaskPriorities.h>
 
 extern Mutex lwipMutex;
 

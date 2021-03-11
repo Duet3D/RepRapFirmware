@@ -9,8 +9,8 @@
 
 #if HAS_AUX_DEVICES
 
-#include <Platform.h>
-#include <RepRap.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 
 class AuxSerialPort : public SerialPort
 {

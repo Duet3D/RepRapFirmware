@@ -6,7 +6,7 @@
  */
 
 #include "StraightProbeSettings.h"
-#include "RepRap.h"
+#include <Platform/RepRap.h>
 
 StraightProbeSettings::StraightProbeSettings() noexcept
 {

@@ -8,19 +8,21 @@
 #include "ExpressionParser.h"
 
 #include "GCodeBuffer.h"
-#include <RepRap.h>
-#include <Platform.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <General/NamedEnum.h>
 #include <General/NumericConverter.h>
 
 #include <limits>
+
+constexpr size_t MaxStringExpressionLength = StringLength100;
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true);
 NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
 
 ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column) noexcept
-	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column), stringBuffer(stringBufferStorage, ARRAY_SIZE(stringBufferStorage))
+	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column)
 {
 }
 
@@ -48,6 +50,25 @@ ExpressionValue ExpressionParser::Parse(bool evaluate) THROWS(GCodeException)
 	return result;
 }
 
+// Evaluate an expression that must either be a numeric or string literal or enclosed in { }
+ExpressionValue ExpressionParser::ParseSimple() THROWS(GCodeException)
+{
+	const char c = CurrentCharacter();
+	if (c == '{')
+	{
+		return ParseExpectKet(true, '}');
+	}
+	if (c == '"')
+	{
+		return ParseQuotedString();
+	}
+	if (isDigit(c))
+	{
+		return ParseNumber();
+	}
+	throw ConstructParseException("expected simple expression");
+}
+
 // Evaluate an expression internally, stopping before any binary operators with priority 'priority' or lower
 ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority) THROWS(GCodeException)
 {
@@ -64,8 +85,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 	switch (c)
 	{
 	case '"':
-		ParseQuotedString(stringBuffer.GetRef());
-		val.Set(GetAndFix());
+		val = ParseQuotedString();
 		break;
 
 	case '-':
@@ -119,10 +139,11 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 			val = ParseInternal(evaluate, UnaryPriority);
 			if (val.GetType() == TypeCode::CString)
 			{
-				const char* s = val.sVal;
-				val.Set((int32_t)strlen(s));
-				stringBuffer.FinishedUsing(s);
-				val.SetType(TypeCode::Int32);
+				val.Set((int32_t)strlen(val.sVal));
+			}
+			else if (val.GetType() == TypeCode::HeapString)
+			{
+				val.Set((int32_t)val.shVal.GetLength());
 			}
 			else
 			{
@@ -435,7 +456,11 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 							break;
 
 						case TypeCode::CString:
-							val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
+							val.bVal = (strcmp(val.sVal, (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
+							break;
+
+						case TypeCode::HeapString:
+							val.bVal = (strcmp(val.shVal.Get().Ptr(), (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
 							break;
 
 						default:
@@ -450,14 +475,14 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 					break;
 
 				case '^':
-					ConvertToString(val, evaluate);
-					ConvertToString(val2, evaluate);
-					// We could skip evaluation if evaluate is false, but there is no real need to
-					if (stringBuffer.Concat(val.sVal, val2.sVal))
 					{
-						throw ConstructParseException("too many strings");
+						String<MaxStringExpressionLength> str;
+						val.AppendAsString(str.GetRef());
+						val2.AppendAsString(str.GetRef());
+						StringHandle sh(str.c_str());
+						val.Set(sh);
+						val2.Release();
 					}
-					val.sVal = GetAndFix();
 					break;
 				}
 			}
@@ -548,7 +573,7 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 // Balance types for a comparison operator
 void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException)
 {
-	if (val1.GetType() == val2.GetType())			// handle the common case first
+	if ((val1.GetType() == val2.GetType()) || (val1.IsStringType() && val2.IsStringType()))			// handle the common case first
 	{
 		// nothing to do
 	}
@@ -560,11 +585,11 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 	{
 		ConvertToFloat(val1, evaluate);
 	}
-	else if (val2.GetType() == TypeCode::CString && TypeHasNoLiterals(val1.GetType()))
+	else if (val2.IsStringType() && TypeHasNoLiterals(val1.GetType()))
 	{
 		ConvertToString(val1, evaluate);
 	}
-	else if (val1.GetType() == TypeCode::CString && TypeHasNoLiterals(val2.GetType()))
+	else if (val1.IsStringType() && TypeHasNoLiterals(val2.GetType()))
 	{
 		ConvertToString(val2, evaluate);
 	}
@@ -637,30 +662,20 @@ void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const 
 
 void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) THROWS(GCodeException)
 {
-	if (val.GetType() != TypeCode::CString)
+	if (!val.IsStringType())
 	{
 		if (evaluate)
 		{
-			stringBuffer.ClearLatest();
-			val.AppendAsString(stringBuffer.GetRef());
-			val.Set(GetAndFix());
+			String<MaxStringExpressionLength> str;
+			val.AppendAsString(str.GetRef());
+			StringHandle sh(str.c_str());
+			val.Set(sh);
 		}
 		else
 		{
 			val.Set("");
 		}
 	}
-}
-
-// Get a C-style pointer to the latest string in the buffer, and start a new one
-const char *ExpressionParser::GetAndFix()
-{
-	const char *const rslt = stringBuffer.LatestCStr();
-	if (stringBuffer.Fix())
-	{
-		throw ConstructParseException("too many strings");
-	}
-	return rslt;
 }
 
 void ExpressionParser::SkipWhiteSpace() noexcept
@@ -702,7 +717,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	}
 
 	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context(applyLengthOperator, gb.MachineState().lineNumber, GetColumn());
+	ObjectExplorationContext context(applyLengthOperator, gb.GetLineNumber(), GetColumn());
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
@@ -751,7 +766,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 
 		case NamedConstant::iterations:
 			{
-				const int32_t v = gb.MachineState().GetIterations();
+				const int32_t v = gb.CurrentFileMachineState().GetIterations();
 				if (v < 0)
 				{
 					throw ConstructParseException("'iterations' used when not inside a loop");
@@ -781,7 +796,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 			}
 
 		case NamedConstant::line:
-			return ExpressionValue((int32_t)gb.MachineState().lineNumber);
+			return ExpressionValue((int32_t)gb.GetLineNumber());
 
 		default:
 			THROW_INTERNAL_ERROR;
@@ -1016,6 +1031,23 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	// If we are not evaluating then the object expression doesn't have to exist, so don't retrieve it because that might throw an error
 	if (evaluate)
 	{
+		// Check for a parameter, local or global variable
+		if (StringStartsWith(id.c_str(), "param."))
+		{
+			return GetVariableValue(gb.GetVariables(), id.c_str() + strlen("param."), true);
+		}
+
+		if (StringStartsWith(id.c_str(), "global."))
+		{
+			return GetVariableValue(reprap.globalVariables, id.c_str() + strlen("global."), false);
+		}
+
+		if (StringStartsWith(id.c_str(), "var."))
+		{
+			return GetVariableValue(gb.GetVariables(), id.c_str() + strlen("var."), false);
+		}
+
+		// Else assume an object model value
 		ExpressionValue value = reprap.GetObjectValue(context, nullptr, id.c_str());
 		if (context.ObsoleteFieldQueried() && obsoleteField.IsEmpty())
 		{
@@ -1026,13 +1058,25 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	return ExpressionValue(nullptr);
 }
 
+// Get the value of a variable
+ExpressionValue ExpressionParser::GetVariableValue(VariableSet& vars, const char *name, bool parameter) THROWS(GCodeException)
+{
+	const Variable* var = vars.Lookup(name);
+	if (var != nullptr && (!parameter || var->GetScope() < 0))
+	{
+		return var->GetValue();
+	}
+
+	throw ConstructParseException((parameter) ? "unknown parameter '%s'" : "unknown variable '%s'", name);
+}
+
 // Parse a quoted string, given that the current character is double-quote
 // This is almost a copy of InternalGetQuotedString in class StringParser
-void ExpressionParser::ParseQuotedString(const StringRef& str) THROWS(GCodeException)
+ExpressionValue ExpressionParser::ParseQuotedString() THROWS(GCodeException)
 {
-	str.Clear();
+	String<MaxStringExpressionLength> str;
 	AdvancePointer();
-	for (;;)
+	while (true)
 	{
 		char c = CurrentCharacter();
 		AdvancePointer();
@@ -1044,7 +1088,8 @@ void ExpressionParser::ParseQuotedString(const StringRef& str) THROWS(GCodeExcep
 		{
 			if (CurrentCharacter() != c)
 			{
-				return;
+				StringHandle sh(str.c_str());
+				return ExpressionValue(sh);
 			}
 			AdvancePointer();
 		}
@@ -1058,7 +1103,7 @@ void ExpressionParser::ParseQuotedString(const StringRef& str) THROWS(GCodeExcep
 			}
 			else if (CurrentCharacter() == c)
 			{
-				// Two backslashes are used to represent one
+				// Two quotes are used to represent one
 				AdvancePointer();
 			}
 		}
@@ -1082,17 +1127,17 @@ int ExpressionParser::GetColumn() const noexcept
 
 GCodeException ExpressionParser::ConstructParseException(const char *str) const noexcept
 {
-	return GCodeException(gb.MachineState().lineNumber, GetColumn(), str);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str);
 }
 
 GCodeException ExpressionParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
-	return GCodeException(gb.MachineState().lineNumber, GetColumn(), str, param);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
 }
 
 GCodeException ExpressionParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
-	return GCodeException(gb.MachineState().lineNumber, GetColumn(), str, param);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
 }
 
 // End

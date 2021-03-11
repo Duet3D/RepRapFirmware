@@ -49,13 +49,10 @@ public:
 
 	// Return an estimate in seconds based on a specific estimation method
 	float EstimateTimeLeft(PrintEstimationMethod method) const noexcept;
-#if SUPPORT_OBJECT_MODEL
-	ExpressionValue EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept;
-#endif
 
 	// Provide some information about the file being printed
 	unsigned int GetCurrentLayer() const noexcept;
-	float GetCurrentLayerTime() const noexcept;
+	float GetCurrentLayerTime() const noexcept;				// Return the number of seconds printing the current layer
 	float GetPrintDuration() const noexcept;
 	float GetWarmUpDuration() const noexcept;
 	float GetPauseDuration() const noexcept;
@@ -79,6 +76,7 @@ private:
 	void UpdatePrintingFileInfo() noexcept;
 
 #if SUPPORT_OBJECT_MODEL
+	ExpressionValue EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept;
 	int32_t GetPrintOrSimulatedDuration() const noexcept;
 #endif
 
@@ -97,6 +95,7 @@ private:
 	uint64_t lastSnapshotTime;
 	uint64_t lastSnapshotNonPrintingTime;
 	uint64_t lastLayerChangeTime;
+	uint64_t lastLayerChangeNonPrintingTime;
 	uint64_t whenSlicerTimeLeftSet;
 
 	uint32_t lastLayerDuration;

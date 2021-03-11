@@ -7,7 +7,7 @@
 
 #include "UploadingNetworkResponder.h"
 #include "Socket.h"
-#include "Platform.h"
+#include <Platform/Platform.h>
 
 UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) noexcept : NetworkResponder(n)
 #if HAS_MASS_STORAGE

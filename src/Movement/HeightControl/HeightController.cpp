@@ -9,13 +9,13 @@
 
 #if SUPPORT_ASYNC_MOVES
 
-#include "RepRap.h"
-#include "Platform.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Heating/Heat.h"
-#include "Heating/Sensors/TemperatureSensor.h"
-#include "Movement/Move.h"
-#include <TaskPriorities.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Heating/Heat.h>
+#include <Heating/Sensors/TemperatureSensor.h>
+#include <Movement/Move.h>
+#include <Platform/TaskPriorities.h>
 
 HeightController::HeightController() noexcept
 	: heightControllerTask(nullptr), sensorNumber(-1),

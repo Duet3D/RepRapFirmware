@@ -7,11 +7,11 @@
 
 #include "DueXn.h"
 #include "SX1509.h"
-#include "Platform.h"
-#include "RepRap.h"
-#include "Wire.h"
-#include "Hardware/I2C.h"
-#include <TaskPriorities.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
+#include <Wire.h>
+#include <Hardware/I2C.h>
+#include <Platform/TaskPriorities.h>
 #include <Interrupts.h>
 
 namespace DuetExpansion

@@ -35,14 +35,14 @@
 
 #include "Move.h"
 #include "StepTimer.h"
-#include "Platform.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Tools/Tool.h"
-#include "Endstops/ZProbe.h"
-#include <TaskPriorities.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Tools/Tool.h>
+#include <Endstops/ZProbe.h>
+#include <Platform/TaskPriorities.h>
 
 #if SUPPORT_IOBITS
-# include <PortControl.h>
+# include <Platform/PortControl.h>
 #endif
 
 #if SUPPORT_CAN_EXPANSION

@@ -6,7 +6,7 @@
  */
 
 #include "RestorePoint.h"
-#include <RepRap.h>
+#include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
 #if SUPPORT_OBJECT_MODEL

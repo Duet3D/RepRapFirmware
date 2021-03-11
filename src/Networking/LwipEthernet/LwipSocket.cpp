@@ -9,8 +9,8 @@
 #define NO_STATUS_CODES
 
 #include "LwipSocket.h"
-#include "Networking/NetworkBuffer.h"
-#include "RepRap.h"
+#include <Networking/NetworkBuffer.h>
+#include <Platform/RepRap.h>
 
 extern Mutex lwipMutex;
 

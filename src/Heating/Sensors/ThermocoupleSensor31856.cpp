@@ -6,9 +6,9 @@
  */
 
 #include "ThermocoupleSensor31856.h"
-#include "RepRap.h"
-#include "Platform.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_REMOTE_COMMANDS
 # include <CanMessageGenericParser.h>

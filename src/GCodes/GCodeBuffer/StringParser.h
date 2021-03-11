@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeInput.h>
 #include <GCodes/GCodeMachineState.h>
-#include <MessageType.h>
+#include <Platform/MessageType.h>
 #include <ObjectModel/ObjectModel.h>
 #include <GCodes/GCodeException.h>
 #include <Networking/NetworkDefs.h>
@@ -19,7 +19,7 @@
 class GCodeBuffer;
 class IPAddress;
 class MacAddress;
-class StringBuffer;
+class VariableSet;
 
 class StringParser
 {
@@ -82,6 +82,7 @@ public:
 
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
+	void SetParameters(VariableSet& vs, int codeRunning) noexcept;
 
 	GCodeException ConstructParseException(const char *str) const noexcept;
 	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
@@ -113,7 +114,7 @@ private:
 	void ProcessWhileCommand() THROWS(GCodeException);
 	void ProcessBreakCommand() THROWS(GCodeException);
 	void ProcessContinueCommand() THROWS(GCodeException);
-	void ProcessVarCommand() THROWS(GCodeException);
+	void ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeException);
 	void ProcessSetCommand() THROWS(GCodeException);
 	void ProcessAbortCommand(const StringRef& reply) noexcept;
 	void ProcessEchoCommand(const StringRef& reply) THROWS(GCodeException);
@@ -128,6 +129,7 @@ private:
 	unsigned int commandLength;							// Number of characters we read to build this command including the final \r or \n
 	unsigned int braceCount;							// how many nested { } we are inside
 	unsigned int gcodeLineEnd;							// Number of characters in the entire line of gcode
+	Bitmap<uint32_t> parametersPresent;					// which parameters are present in this command
 	int readPointer;									// Where in the buffer to read next, or -1
 
 	FileStore *fileBeingWritten;						// If we are copying GCodes to a file, which file it is
