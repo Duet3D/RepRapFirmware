@@ -17,6 +17,7 @@ http://reprappro.com
 
 Licence: GPL
 
+	Arithmetics added by Bruce
 ****************************************************************************************************/
 
 #ifndef GCODES_H
@@ -35,6 +36,10 @@ Licence: GPL
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
+
+// Arithmetics Memory Slots
+unsigned int arithmeticsMemory[10] = {0,0,0,0,0,0,0,0,0,0};
+
 
 // Type for specifying which endstops we want to check
 typedef uint32_t EndstopsBitmap;						// must be large enough to hold a bitmap of drive numbers or ZProbeActive
@@ -406,6 +411,15 @@ private:
 	void SetMoveBufferDefaults();										// Set up default values in the move buffer
 	void ChangeExtrusionFactor(unsigned int extruder, float factor);	// Change a live extrusion factor
 
+	char setArithmeticsExpressionValues(char expression);				// for M930 in an arithmetics expression prepration, replaces the variable name (as in %P0%) with its value in memory slot
+
+	char char setArithmeticsExpressionAxisPositions(char expression);	// for M930 in an arithmetics expression prepration, replaces the axis name (as in X) with its current position
+
+	double solveArithmetics(char expression, GCodeResult* result);		// resolves the arithmetics expression and returns the result in double and set the code handeler results
+	bool saveArithmeticsMemorySlots();									// saves all memory slot values on to a file. Previously saved files will be overwritten without warning
+	bool loadArithmeticsMemorySlots();									// loads all previously saved values
+
+
 #if SUPPORT_12864_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const;
 #endif
@@ -644,6 +658,7 @@ private:
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
 	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
+	static constexpr const char* ARITHMETICS_VARIABLES_DATA = "arithmetics-memory-slots.g";
 #if HAS_SMART_DRIVERS
 	static constexpr const char* REHOME_G = "rehome.g";
 #endif
