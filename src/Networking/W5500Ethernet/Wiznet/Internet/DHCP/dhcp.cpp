@@ -270,7 +270,7 @@ void default_ip_assign(void)
 	setGAR (DHCP_allocated_gw);
 }
 
-/* The default handler of ip chaged */
+/* The default handler of ip changed */
 void default_ip_update(void)
 {
 	/* WIZchip Software Reset */
@@ -280,7 +280,7 @@ void default_ip_update(void)
 	setSHAR(DHCP_CHADDR);
 }
 
-/* The default handler of ip chaged */
+/* The default handler of ip changed */
 void default_ip_conflict(void)
 {
 	// WIZchip Software Reset
