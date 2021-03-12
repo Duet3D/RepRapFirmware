@@ -46,7 +46,7 @@ bool StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig
 
 // Check whether the endstop is triggered and return the action that should be performed. Called from the step ISR.
 // Note, the result will not necessarily be acted on because there may be a higher priority endstop!
-EndstopHitDetails StallDetectionEndstop::CheckTriggered(bool goingSlow) noexcept
+EndstopHitDetails StallDetectionEndstop::CheckTriggered() noexcept
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
 	const DriversBitmap relevantStalledDrivers = GetStalledDrivers(driversMonitored);

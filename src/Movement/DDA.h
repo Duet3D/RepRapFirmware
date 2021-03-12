@@ -227,7 +227,6 @@ private:
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
 					 xyMoving : 1,					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
-					 goingSlow : 1,					// True if we have slowed the movement because the Z probe is approaching its threshold
 					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
 					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is a fast extruder-only move, probably a retract/re-prime

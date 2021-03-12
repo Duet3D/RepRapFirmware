@@ -256,13 +256,13 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 
 // Check the endstops.
 // If an endstop has triggered, remove it from the active list and return its details
-EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow) noexcept
+EndstopHitDetails EndstopsManager::CheckEndstops() noexcept
 {
 	EndstopHitDetails ret;									// the default constructor will clear all fields
 	EndstopOrZProbe *actioned = nullptr;
 	for (EndstopOrZProbe *esp = activeEndstops; esp != nullptr; esp = esp->GetNext())
 	{
-		EndstopHitDetails hd = esp->CheckTriggered(goingSlow);
+		EndstopHitDetails hd = esp->CheckTriggered();
 		if (hd.GetAction() == EndstopHitAction::stopAll)
 		{
 			activeEndstops = nullptr;						// no need to do anything else

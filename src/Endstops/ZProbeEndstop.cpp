@@ -38,7 +38,7 @@ bool ZProbeEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDr
 }
 
 // Check whether the endstop is triggered and return the action that should be performed. Called from the step ISR.
-EndstopHitDetails ZProbeEndstop::CheckTriggered(bool goingSlow) noexcept
+EndstopHitDetails ZProbeEndstop::CheckTriggered() noexcept
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
 	if (Stopped())

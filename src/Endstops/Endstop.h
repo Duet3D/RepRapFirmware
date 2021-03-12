@@ -30,7 +30,7 @@ public:
 	virtual ~EndstopOrZProbe() noexcept {}
 
 	virtual bool Stopped() const noexcept = 0;
-	virtual EndstopHitDetails CheckTriggered(bool goingSlow) noexcept = 0;
+	virtual EndstopHitDetails CheckTriggered() noexcept = 0;
 	virtual bool Acknowledge(EndstopHitDetails what) noexcept = 0;
 
 	EndstopOrZProbe *GetNext() const noexcept { return next; }

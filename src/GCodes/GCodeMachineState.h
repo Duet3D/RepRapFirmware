@@ -27,9 +27,13 @@ enum class GCodeState : uint8_t
 
 	probingToolOffset,
 
-	findCenterOfCavityMin,
-	findCenterOfCavityR,
-	findCenterOfCavityMax,
+	// These next 7 must be contiguous
+	findCenterOfCavity1,
+	findCenterOfCavity2,
+	findCenterOfCavity3,
+	findCenterOfCavity4,
+	findCenterOfCavity5,
+	findCenterOfCavity6,
 
 	homing1,
 	homing2,

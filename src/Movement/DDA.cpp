@@ -1773,7 +1773,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 
 	for (;;)
 	{
-		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops(flags.goingSlow);
+		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops();
 		switch (hitDetails.GetAction())
 		{
 		case EndstopHitAction::stopAll:

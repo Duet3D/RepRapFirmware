@@ -353,6 +353,14 @@ void GCodeBuffer::MustSee(char c) THROWS(GCodeException)
 	}
 }
 
+// Test for one of two characters present, throw error if not saying that the first one is missing
+char GCodeBuffer::MustSee(char c1, char c2) THROWS(GCodeException)
+{
+	if (Seen(c1)) { return c1; }
+	if (Seen(c2)) { return c2; }
+	throw GCodeException(GetLineNumber(), -1, "missing parameter '%c'", (uint32_t)c1);
+}
+
 // Get a float after a key letter
 float GCodeBuffer::GetFValue() THROWS(GCodeException)
 {
