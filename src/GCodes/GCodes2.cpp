@@ -432,6 +432,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 #if SUPPORT_LASER
 			case MachineType::laser:
+				if (segmentsLeft != 0)
+				{
+					return false;						// don't modify moves that haven't gone yet
+				}
 				moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 				break;
 #endif
@@ -506,6 +510,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 #if SUPPORT_LASER
 		case MachineType::laser:
+			if (segmentsLeft != 0)
+			{
+				return false;						// don't modify moves that haven't gone yet
+			}
 			moveBuffer.laserPwmOrIoBits.Clear();
 			break;
 #endif
