@@ -41,7 +41,7 @@ void GCodeBuffer::Init()
 	computedChecksum = 0;
 	bufferState = GCodeBufferState::parseNotStarted;
 	// added for aritmethics
-	isDoingAritmethics = false;
+	hasArithmetics = false;		// true if the GCode line has arithmetics
 }
 
 void GCodeBuffer::Diagnostics(MessageType mtype)
@@ -190,9 +190,10 @@ bool GCodeBuffer::Put(char c)
 				bufferState = GCodeBufferState::parsingBracketedComment;
 				break;
 
-			case '{':
-				AddToChecksum(c);
-				bufferState = GCodeBufferState::parsingArithmetics;
+			case '#':
+				StoreAndAddToChecksum(c);
+				bufferState = GCodeBufferState::parsingArithmetic;
+				hasArithmetics = true;
 				break;
 
 			case '"':
@@ -213,11 +214,11 @@ bool GCodeBuffer::Put(char c)
 			}
 			break;
 
-		case GCodeBufferState::parsingArithmetics:		// inside a {...} arithmetics
+		case GCodeBufferState::parsingArithmetic:		// inside a {...} arithmetics
 			AddToChecksum(c);
-			if (c == '}')
+			if (c == '#')
 			{
-				bufferState = GCodeBufferState::parsingGCode;
+				bufferState = GCodeBufferState::parsingGCode; // back to parsing GCode
 			}
 			break;
 
@@ -300,6 +301,7 @@ bool GCodeBuffer::LineFinished()
 	DecodeCommand();
 	return true;
 }
+
 
 // Decode this command command and find the start of the next one on the same line.
 // On entry, 'commandStart' has already been set to the address the start of where the command should be.
@@ -767,6 +769,38 @@ bool GCodeBuffer::GetUnprecedentedString(const StringRef& str)
 		++readPointer;	// skip leading spaces
 	}
 	return InternalGetPossiblyQuotedString(str);
+}
+// by Bruce // possibly useless - Comment if not needed (Also line 37 in GCodeBuffer.h)
+double GCodeBuffer::GetInlineArithmeticVariable() {
+	std::string gVarName;
+	char gVarName = '#';
+	gVarName.copy('');
+	float gResult = 0;
+	for (;;) {
+		if (gcodeBuffer[readPointer] != gVarName) {
+			gVarName.append(gcodeBuffer[readPointer]);
+			++readPointer;
+		}
+		else {
+			break;
+		}
+	}
+	// we got the variable name, now we try to get its value from memory
+	// triming any spaces on the right (end)
+	gVarName.erase(std::find_if(gVarName.rbegin(), gVarName.rend(),
+		std::not1(std::ptr_fun<int, int>(std::isspace))).base(),
+		gVarName.end()); 
+	if (!gVarName.length() > 2) {
+		// length of the variable name seems OK
+		if (toupper(gVarName.substr(0, 1)) == 'P') {
+			// name is OK
+			if (isdigit(gVarName.substr(1, 1))) {
+				int slot = gVarName;
+				gResult = arithmeticsMemory[slot];
+			} // else returns 0
+		} // else returns 0
+	} // else returns 0
+	return gResult;
 }
 
 // Get an int32 after a G Code letter
