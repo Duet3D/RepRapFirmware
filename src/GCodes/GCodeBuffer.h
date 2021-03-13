@@ -34,6 +34,8 @@ public:
 
 	float GetFValue() __attribute__((hot));				// Get a float after a key letter
 	float GetDistance();								// Get a distance or coordinate and convert it from inches to mm if necessary
+	// by Bruce // possibly useless - Comment if not needed (Also line 773 in GCodeBuffer.cpp)
+	double GetInlineArithmeticVariable();
 	int32_t GetIValue() __attribute__((hot));			// Get an integer after a key letter
 	uint32_t GetUIValue();								// Get an unsigned integer value
 	bool GetIPAddress(IPAddress& returnedIp);			// Get an IP address quad after a key letter
