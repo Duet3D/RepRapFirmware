@@ -1240,6 +1240,10 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();
 		break;
+	case TypeCode::HeapString:
+		payloadLength = expressionLength + value.shVal.GetLength();
+		break;
+
 	default:
 		rslt.printf("unsupported type code %d", (int)value.type);
 		payloadLength = expressionLength + rslt.strlen();
@@ -1289,6 +1293,11 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::Int32:
 		header->dataType = DataType::Int;
 		header->intValue = value.iVal;
+		break;
+	case TypeCode::HeapString:
+		header->dataType = DataType::String;
+		header->intValue = value.shVal.GetLength();
+		WriteData(value.shVal.Get().Ptr(), header->intValue);
 		break;
 	case TypeCode::DateTime:
 	case TypeCode::MacAddress:
