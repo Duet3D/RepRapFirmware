@@ -101,7 +101,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 	{
 		return true;					// we only simulate some gcodes
 	}
-
+	// Bruce // replacing variables with their numerical_to_String values (in gb)
+	gb = setArithmeticsExpressionValues(gb);
+	//(this was another approach I think it maybe useless (see line 37 in gcodebuffer.h and 773 in gcodebuffer.cpp)) Now commented below
+	//GetInlineArithmeticVariable();
+	
 	switch (code)
 	{
 	case 0: // Rapid move
@@ -4290,7 +4294,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
-		// For case 913, see 906
+// For case 913, see 906
 
 #if defined(__ALLIGATOR__)
 	case 914: 				// Set/Get J14 Expansion Voltage Level Translator on Port J5, 5.5V or 3.3V
@@ -4362,6 +4366,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		// if P is not set it auto initialises to 0
 
 		if (gb.Seen('P')) {
+			bool again;
+			bool syntaxError = false;
 			const int slot = gb.GetIValue();
 			if (slot < 0 || slot > 9)
 			{
@@ -4369,37 +4375,60 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				result = GCodeResult::badOrMissingParameter;
 			}
 			else {
-				// TODO get gcode string as expression
-				char gExpression = GCode;
 				double arithmeticsResult;
-				size_t arithStartDelimiter = gExpression.find('{');
-				size_t arithEndDelimiter = gExpression.find('}');
-				gExpression = gExpression.substr(arithStartDelimiter + 1, arithEndDelimiter - arithStartDelimiter);
-				// -- preparing the expression for execution -- BEGIN -- 
-				// We got the expression, now we replace known variable names with their values
-				// replacing variables with their values
-				gExpression = setArithmeticsExpressionValues(gExpression);
-				// replacing X, Y or Z values with their respective current position
-				gExpression = setArithmeticsExpressionAxisPositions(gExpression);
-				// -- preparing the expression for execution -- ENDS -- 
-				// executing the prepared expression
-				// EXECUTE
-				arithmeticsResult = solveArithmetics(gExpression, &result);
-				if (result != GCodeResult::error) {
-					// assigning result of the expression in the specified memory slot
-					arithmeticsMemory[slot] = arithmeticsResult;
-					result = GCodeResult::ok;
-				}
-				else {
-					reply.printf("Bad arithmetic expression. Cannot resolve.");
-					result = GCodeResult::error;
-				}
-			}			
+				// gb contains the raw gcode
+				size_t arithStartDelimiter = gb.find('{');
+				size_t arithEndDelimiter = gb.find('}');
+				do {
+					again = false;
+					if (arithStartDelimiter != std::string::npos) {
+						// expression opening curly bracket is detected
+						if (arithEndDelimiter != std::string::npos) {
+							// expression closing curly bracket is detected
+							if (arithEndDelimiter > arithStartDelimiter) {
+								// closing is coming after opening correctly
+								char* gExpression = gb.substr(arithStartDelimiter + 1, arithEndDelimiter - arithStartDelimiter);
+								// -- preparing the expression for execution -> BEGINS -- 
+								// replacing known variable names with their values
+								gExpression = setArithmeticsExpressionValues(gExpression);
+								// Now replacing X, Y or Z values with their respective current position
+								gExpression = setArithmeticsExpressionAxisPositions(gExpression);
+								// -- Expression preprations ENDS -- 
+								if ((gExpression.find("{") == std::string::npos) ||
+									(gExpression.find("}") == std::string::npos)) {
+									// no more 'internal' curly brackets were found
+									// executing the prepared expression
+									arithmeticsResult = solveArithmetics(gExpression, &result);
+								}
+								else {
+									again = true;
+								}
+							}
+							else {
+								// bad expression syntax like }..{ instead of {..}
+								syntaxError = true;
+							}
+						}
+						else {
+							// no expression ending curly bracket detected/ Like ...}
+							syntaxError = true;
+						}
+					}
+					else {
+						// has no opening expression / like {...
+						syntaxError = true;
+					}
+				} while (again)
+			} // calc is done			
 		}
 		else {
 			// no memory slot to hold the result is assined (No P parameter) nothing happens
-			reply.printf("No memory slot specified to hold the arithmetic result.");
+			reply.printf("No memory slot specified to hold the arithmetic result. Result calculation is lost");
 			result = GCodeResult::warning;
+		}
+		if (syntaxError) {
+			reply.printf("M390 Syntax error. Cannot resolve.");
+			result = GCodeResult::error;
 		}
 		break;
 	
@@ -4431,7 +4460,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		else {
-			reply.printf("M931 P parameter is missing. Memory Slots values are not changed.");
+			reply.printf("M931 misses P parameter. Memory Slots values aren't saved or loaded.");
 			result = GCodeResult::badOrMissingParameter;
 		}
 		break;
