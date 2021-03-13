@@ -440,7 +440,7 @@ constexpr size_t XY_AXES = 2;										// The number of Cartesian axes
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
 constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
-constexpr size_t NO_AXIS = 0x0F;									// A value to represent no axis, must fit in 4 bits (see Endstops) and not be a valid axis number
+constexpr size_t NO_AXIS = 0x3F;									// A value to represent no axis, must fit in 6 bits (see EndstopHitDetails and RemoteInputHandle) and not be a valid axis number
 
 static_assert(MaxAxesPlusExtruders <= MaxAxes + MaxExtruders);
 static_assert(MaxAxesPlusExtruders >= MinAxes + NumDefaultExtruders);
