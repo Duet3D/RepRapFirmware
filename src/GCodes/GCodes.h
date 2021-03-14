@@ -87,12 +87,21 @@ enum class PauseState : uint8_t
 	resuming
 };
 
+struct M585Settings
+{
+	size_t axisNumber;			// the axis we are moving
+	float feedRate;
+	float probingLimit;
+	float offset;
+	bool useProbe;				// true if using a probe (M585 only because M675 always uses a probe)
+};
+
 struct M675Settings
 {
-	unsigned int axisNumber;
-	float backoffDistance;
+	size_t axisNumber;			// the axis we are moving
 	float feedRate;
-	float minDistance;
+	float backoffDistance;		// back off distance
+	float minDistance;			// the position we reached when probing towards minimum
 };
 
 class LinuxInterface;
@@ -370,6 +379,8 @@ private:
 
 	bool SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept;
 	void SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept;
+	bool SetupM585ProbingMove(GCodeBuffer& gb) noexcept;
+	size_t FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException);					// Search for and return an axis, throw if none found
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
@@ -523,7 +534,11 @@ private:
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 
 	StraightProbeSettings straightProbeSettings;						// G38 straight probe settings
-	M675Settings m675Settings;
+	union
+	{
+		M675Settings m675Settings;
+		M585Settings m585Settings;
+	};
 
 	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?

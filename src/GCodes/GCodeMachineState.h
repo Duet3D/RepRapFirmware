@@ -25,7 +25,11 @@ enum class GCodeState : uint8_t
 	waitingForSpecialMoveToComplete,					// doing a special move, so we must wait for it to finish before processing another GCode
 	waitingForSegmentedMoveToGo,						// doing an arc move, so we must check whether it completes normally
 
-	probingToolOffset,
+	// This group must be contiguous
+	probingToolOffset1,
+	probingToolOffset2,
+	probingToolOffset3,
+	probingToolOffset4,
 
 	// These next 7 must be contiguous
 	findCenterOfCavity1,

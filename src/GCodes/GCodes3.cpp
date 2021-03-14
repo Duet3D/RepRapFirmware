@@ -884,6 +884,24 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 	return GCodeResult::ok;
 }
 
+// Search for and return an axis, throw if none found or that axis hasn't been homed. On return we can fetch the parameter value after the axis letter.
+size_t GCodes::FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException)
+{
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			if (IsAxisHomed(axis))
+			{
+				return axis;
+			}
+			throw GCodeException(gb.GetLineNumber(), -1, "%c axis has not been homed", (uint32_t)axisLetters[axis]);
+		}
+	}
+
+	throw GCodeException(gb.GetLineNumber(), -1, "No axis specified");
+}
+
 // Deal with a M585
 GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -898,70 +916,82 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		return GCodeResult::notFinished;
 	}
 
+	// Get the feed rate and axis
+	gb.MustSee(feedrateLetter);
+	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+	m585Settings.axisNumber = FindAxisLetter(gb);
+	m585Settings.offset = gb.GetDistance();
+
 	// See whether we are using a Z probe or just endstops
-	unsigned int probeNumberToUse;
-	const bool useProbe = gb.Seen('P');
-	if (useProbe)
+	if (gb.Seen('K'))
 	{
-		probeNumberToUse = gb.GetUIValue();
-		if (platform.GetEndstops().GetZProbe(probeNumberToUse).IsNull())
-		{
-			reply.copy("Invalid probe number");
-			return GCodeResult::error;
-		}
+		(void)SetZProbeNumber(gb, 'K');						// throws if the probe doesn't exist
+		m585Settings.useProbe = true;
+	}
+	else if (gb.Seen('P'))
+	{
+		(void)SetZProbeNumber(gb, 'P');						// throws if the probe doesn't exist
+		m585Settings.useProbe = true;
+	}
+	else
+	{
+		m585Settings.useProbe = false;
 	}
 
-	for (size_t axis = 0; axis < numTotalAxes; axis++)
+	// Decide which way and how far to go
+	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+	m585Settings.probingLimit = (gb.Seen('R')) ? moveBuffer.coords[m585Settings.axisNumber] + gb.GetDistance()
+								: (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(m585Settings.axisNumber)
+									: platform.AxisMaximum(m585Settings.axisNumber);
+	if (m585Settings.useProbe)
 	{
-		if (gb.Seen(axisLetters[axis]))
-		{
-			// Save the current axis coordinates
-			SavePosition(toolChangeRestorePoint, gb);
-
-			// Prepare another move similar to G1 .. S3
-			moveBuffer.SetDefaults(numVisibleAxes);
-			moveBuffer.moveType = 3;
-			moveBuffer.canPauseAfter = false;
-
-			// Decide which way and how far to go
-			if (gb.Seen('R'))
-			{
-				// Use relative probing radius if the R parameter is present
-				moveBuffer.coords[axis] += gb.GetFValue();
-			}
-			else
-			{
-				// Move to axis minimum if S1 is passed or to the axis maximum otherwise
-				moveBuffer.coords[axis] = (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(axis) : platform.AxisMaximum(axis);
-			}
-
-			// Deal with feed rate
-			if (gb.Seen(feedrateLetter))
-			{
-				const float rate = gb.GetDistance();
-				gb.LatestMachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
-			}
-			moveBuffer.feedRate = gb.LatestMachineState().feedRate;
-
-			const bool probeOk = (useProbe)
-									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
-										: platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(axis), false);
-			if (!probeOk)
-			{
-				reply.copy("Failed to prime endstop or probe");
-				AbortPrint(gb);
-				return GCodeResult::error;
-			}
-
-			moveBuffer.checkEndstops = true;
-
-			// Kick off new movement
-			NewMoveAvailable(1);
-			gb.SetState(GCodeState::probingToolOffset);
-		}
+		gb.SetState(GCodeState::probingToolOffset1);
+		DeployZProbe(gb);
+	}
+	else
+	{
+		gb.SetState(GCodeState::probingToolOffset3);		// skip the Z probe stuff
 	}
 
 	return GCodeResult::ok;
+}
+
+// Set up a probing move for M675. If using a Z probe, it has already been deployed
+// Return true if successful, else SetError has been called to save the error message
+bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
+{
+	if (m585Settings.useProbe)
+	{
+		const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+		if (zp->Stopped())
+		{
+			gb.LatestMachineState().SetError("Probe already triggered before probing move started");
+			return false;
+		}
+		if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
+		{
+			gb.LatestMachineState().SetError("Failed to enable probe");
+			return false;
+		}
+	}
+	else
+	{
+		if (!platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(m585Settings.axisNumber), false))
+		{
+			gb.LatestMachineState().SetError("Failed to enable endstop");
+			return false;
+		}
+	}
+
+	SetMoveBufferDefaults();
+	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+	moveBuffer.feedRate = m585Settings.feedRate;
+	moveBuffer.coords[m585Settings.axisNumber] = m585Settings.probingLimit;
+	moveBuffer.checkEndstops = true;
+	moveBuffer.canPauseAfter = false;
+	zProbeTriggered = false;
+	NewMoveAvailable(1);
+	return true;
 }
 
 GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -977,30 +1007,11 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) 
 		return GCodeResult::notFinished;
 	}
 
-	// Get the feed rate
+	// Get the feed rate, backoff distance, and axis
 	gb.MustSee(feedrateLetter);
 	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
-
-	// Get the backoff distance
 	m675Settings.backoffDistance = gb.Seen('R') ? gb.GetDistance() : 5.0;
-
-	// Get the axis number
-	bool seenAxis = false;
-	for (size_t axis = 0; axis < numVisibleAxes; axis++)
-	{
-		if (gb.Seen(axisLetters[axis]))
-		{
-			m675Settings.axisNumber = axis;
-			seenAxis = true;
-			break;
-		}
-	}
-
-	if (!seenAxis)
-	{
-		reply.copy("No axis specified");
-		return GCodeResult::error;
-	}
+	m675Settings.axisNumber = FindAxisLetter(gb);
 
 	// Get the probe number from the K or P parameter
 	const char probeLetter = gb.MustSee('K', 'P');				// throws if neither character is found
@@ -1021,17 +1032,16 @@ bool GCodes::SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept
 		gb.LatestMachineState().SetError("Probe already triggered before probing move started");
 		return false;
 	}
-
-	SetMoveBufferDefaults();
-	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-	moveBuffer.coords[m675Settings.axisNumber] = towardsMin ? platform.AxisMinimum(m675Settings.axisNumber) : platform.AxisMaximum(m675Settings.axisNumber);
-	moveBuffer.feedRate = m675Settings.feedRate;
 	if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 	{
 		gb.LatestMachineState().SetError("Failed to enable probe");
 		return false;
 	}
 
+	SetMoveBufferDefaults();
+	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+	moveBuffer.coords[m675Settings.axisNumber] = towardsMin ? platform.AxisMinimum(m675Settings.axisNumber) : platform.AxisMaximum(m675Settings.axisNumber);
+	moveBuffer.feedRate = m675Settings.feedRate;
 	moveBuffer.checkEndstops = true;
 	moveBuffer.canPauseAfter = false;
 	zProbeTriggered = false;
@@ -1616,8 +1626,9 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 		"stop printing object",		// slic3r
 		"layer",					// S3D "; layer 1, z=0.200"
 		"LAYER",					// Ideamaker, Cura (followed by layer number starting at zero)
+		"; --- layer",				// KiriMoto (the line starts with ;;)
 		"BEGIN_LAYER_OBJECT z=",	// KISSlicer (followed by Z height)
-		"HEIGHT"					// Ideamaker
+		"HEIGHT",					// Ideamaker
 	};
 
 	String<StringLength100> comment;
@@ -1659,7 +1670,6 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 #endif
 					break;
 
-
 				case 3:		// stop printing object
 #if TRACK_OBJECT_NAMES
 					buildObjects.StopObject(gb);
@@ -1668,12 +1678,13 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 
 				case 4:		// layer (counting from 1)
 				case 5:		// layer (counting from 0)
+				case 6:		// later (counting from 0)
 					{
 						const char *endptr;
 						const uint32_t layer = StrToU32(text, &endptr);
 						if (endptr != text)
 						{
-							reprap.GetPrintMonitor().SetLayerNumber((i == 5) ? layer + 1 : layer);
+							reprap.GetPrintMonitor().SetLayerNumber((i == 4) ? layer : layer + 1);
 						}
 						text = endptr;
 						if (!StringStartsWith(text, ", z = "))		// S3D gives us the height too
@@ -1684,8 +1695,8 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 					}
 					// no break
 
-				case 6:		// new layer, but we are given the Z height, not the layer number
-				case 7:
+				case 7:		// new layer, but we are given the Z height, not the layer number
+				case 8:
 					{
 						const char *endptr;
 						const float layerZ = SafeStrtof(text, &endptr);

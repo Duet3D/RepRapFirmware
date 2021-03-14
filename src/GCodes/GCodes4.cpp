@@ -90,32 +90,71 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::probingToolOffset:
+	case GCodeState::probingToolOffset2:					// Z probe has been deployed and recovery timer is running
+		{
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			if (millis() - lastProbedTime >= (uint32_t)(zp->GetRecoveryTime() * SecondsToMillis))
+			{
+				gb.AdvanceState();
+			}
+		}
+		break;
+
+	case GCodeState::probingToolOffset3:					// executing M585 with an endstop, or with a probe after deploying the probe and waiting for the recovery time
+		if (SetupM585ProbingMove(gb))
+		{
+			gb.AdvanceState();
+		}
+		else
+		{
+			AbortPrint(gb);
+			gb.SetState(GCodeState::checkError);
+			if (m585Settings.useProbe)
+			{
+				reprap.GetHeat().SuspendHeaters(false);
+				RetractZProbe(gb);
+			}
+		}
+		break;
+
+	case GCodeState::probingToolOffset4:					// executing M585, probing move has started
 		if (LockMovementAndWaitForStandstill(gb))
 		{
+			if (m585Settings.useProbe)
+			{
+				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				zp->SetProbing(false);
+				reprap.GetHeat().SuspendHeaters(false);
+				if (!zProbeTriggered)
+				{
+					gb.LatestMachineState().SetError("Probe was not triggered during probing move");
+					gb.SetState(GCodeState::checkError);
+					RetractZProbe(gb);
+					break;
+				}
+			}
+
 			Tool * const currentTool = reprap.GetCurrentTool();
 			if (currentTool != nullptr)
 			{
-				for (size_t axis = 0; axis < numTotalAxes; ++axis)
-				{
-					if (gb.Seen(axisLetters[axis]))
-					{
-						// We get here when the tool probe has been activated. In this case we know how far we
-						// went (i.e. the difference between our start and end positions) and if we need to
-						// incorporate any correction factors. That's why we only need to set the final tool
-						// offset to this value in order to finish the tool probing.
-						const float coord = toolChangeRestorePoint.moveCoords[axis] - currentUserPosition[axis] + gb.GetFValue();
-						currentTool->SetOffset(axis, coord, true);
-						break;
-					}
-				}
+				// We get here when the tool probe has been activated. In this case we know how far we
+				// went (i.e. the difference between our start and end positions) and if we need to
+				// incorporate any correction factors. That's why we only need to set the final tool
+				// offset to this value in order to finish the tool probing.
+				const float coord = toolChangeRestorePoint.moveCoords[m585Settings.axisNumber] - currentUserPosition[m585Settings.axisNumber] + m585Settings.offset;
+				currentTool->SetOffset(m585Settings.axisNumber, coord, true);
 			}
 			gb.SetState(GCodeState::normal);
+			if (m585Settings.useProbe)
+			{
+				RetractZProbe(gb);
+			}
 		}
 		break;
 
 
 	case GCodeState::findCenterOfCavity1:						// Executing M675 using a Z probe, have already deployed the probe
+	case GCodeState::probingToolOffset1:						// Executing M585 using a probe, which we have deployed
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			lastProbedTime = millis();							// start the recovery timer
