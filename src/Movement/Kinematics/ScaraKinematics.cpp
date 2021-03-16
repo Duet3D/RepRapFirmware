@@ -260,10 +260,10 @@ bool ScaraKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bo
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
-													size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
+													size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	// First limit all axes according to M208
-	bool limited = applyM208Limits && Kinematics::LimitPositionFromAxis(finalCoords, 0, numVisibleAxes, axesHomed);
+	bool limited = applyM208Limits && Kinematics::LimitPositionFromAxis(finalCoords, 0, numVisibleAxes, axesToLimit);
 
 	// Now check whether the arms can reach the final position
 	float theta, psi;

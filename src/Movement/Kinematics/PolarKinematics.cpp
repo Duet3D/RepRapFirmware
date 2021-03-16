@@ -164,10 +164,10 @@ bool PolarKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bo
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
-													size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
+													size_t numAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	const bool m208Limited = (applyM208Limits)
-								? Kinematics::LimitPositionFromAxis(finalCoords, Z_AXIS, numAxes, axesHomed)	// call base class function to limit Z and higher axes
+								? Kinematics::LimitPositionFromAxis(finalCoords, Z_AXIS, numAxes, axesToLimit)	// call base class function to limit Z and higher axes
 								: false;
 	const float r2 = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 	bool radiusLimited;
