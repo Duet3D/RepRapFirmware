@@ -3400,7 +3400,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	String<ToolNameLength> name;
 	if (gb.Seen('S'))
 	{
-		gb.GetReducedString(name.GetRef());
+		gb.GetQuotedString(name.GetRef());
 		seen = true;
 	}
 
