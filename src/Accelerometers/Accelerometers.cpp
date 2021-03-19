@@ -78,10 +78,13 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			const uint16_t mask = (1u << resolution) - 1;
 			const unsigned int bitsAfterPoint = resolution - 2;					// assumes the range is +/- 2g
 			const int decimalPlaces = (bitsAfterPoint >= 11) ? 4 : (bitsAfterPoint >= 8) ? 3 : 2;
+			unsigned int actualSampleRate = msg.actualSampleRate;
+			unsigned int overflowed = msg.overflowed;
 			while (numSamples != 0)
 			{
 				String<StringLength50> temp;
-				temp.printf("%u,%u,%u", expectedSampleNumber, msg.actualSampleRate, msg.overflowed);
+				temp.printf("%u,%u,%u", expectedSampleNumber, actualSampleRate, overflowed);
+				actualSampleRate = overflowed = 0;								// only report sample rate and overflow once per message
 				++expectedSampleNumber;
 
 				for (unsigned int axis = 0; axis < numAxes; ++axis)
