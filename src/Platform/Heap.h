@@ -8,9 +8,8 @@
 #ifndef SRC_PLATFORM_HEAP_H_
 #define SRC_PLATFORM_HEAP_H_
 
+#include <RepRapFirmware.h>
 #include <RTOSIface/RTOSIface.h>
-#include <General/StringRef.h>
-#include <Platform/MessageType.h>
 
 class IndexSlot;
 class StorageSpace;

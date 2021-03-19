@@ -12,7 +12,6 @@
 #include <Storage/FileData.h>
 #include <General/FreelistManager.h>
 #include <General/NamedEnum.h>
-#include <GCodes/GCodeResult.h>
 #include <GCodes/Variable.h>
 
 // Enumeration to list all the possible states that the Gcode processing machine may be in

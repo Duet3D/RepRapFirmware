@@ -8,9 +8,8 @@
 #ifndef SRC_TASKS_H_
 #define SRC_TASKS_H_
 
-#include "RepRapFirmware.h"
-#include "MessageType.h"
-#include "RTOSIface/RTOSIface.h"
+#include <RepRapFirmware.h>
+#include <RTOSIface/RTOSIface.h>
 
 namespace Tasks
 {

@@ -11,7 +11,6 @@
 #include <RepRapFirmware.h>
 #include <Hardware/IoPorts.h>
 #include <ObjectModel/ObjectModel.h>
-#include <GCodes/GCodeResult.h>
 #include <General/NamedEnum.h>
 
 NamedEnum(SpindleState, uint8_t, unconfigured, stopped, forward, reverse);

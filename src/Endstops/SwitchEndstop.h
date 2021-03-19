@@ -9,7 +9,6 @@
 #define SRC_ENDSTOPS_SWITCHENDSTOP_H_
 
 #include "Endstop.h"
-#include "GCodes/GCodeResult.h"
 
 // Switch-type endstop, either on the main board or on a CAN-connected board
 class SwitchEndstop : public Endstop

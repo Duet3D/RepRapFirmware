@@ -13,11 +13,68 @@
 #include <Storage/MassStorage.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+
+#if SUPPORT_CAN_EXPANSION
+# include <CAN/CanInterface.h>
+# include <CAN/ExpansionManager.h>
+# include <CAN/CanMessageGenericConstructor.h>
+#endif
 
 static FileStore *f = nullptr;
 static unsigned int expectedSampleNumber;
 static CanAddress currentBoard = CanId::NoAddress;
 static uint8_t axes;
+
+// Deal with M955
+GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	gb.MustSee('P');
+	DriverId device = gb.GetDriverId();
+
+# if SUPPORT_CAN_EXPANSION
+	if (device.IsRemote())
+	{
+		CanMessageGenericConstructor cons(M955Params);
+		cons.PopulateFromCommand(gb);
+		return cons.SendAndGetResponse(CanMessageType::accelerometerConfig, device.boardAddress, reply);
+	}
+# endif
+
+	reply.copy("Local accelerometers are not supported yet");
+	return GCodeResult::error;
+}
+
+// Deal with M956
+GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	gb.MustSee('P');
+	const DriverId device = gb.GetDriverId();
+	gb.MustSee('S');
+	const uint16_t numSamples = min<uint32_t>(gb.GetUIValue(), 65535);
+	gb.MustSee('A');
+	const uint8_t mode = gb.GetUIValue();
+
+	uint8_t axes = 0;
+	if (gb.Seen('X')) { axes |= 1u << 0; }
+	if (gb.Seen('Y')) { axes |= 1u << 1; }
+	if (gb.Seen('Z')) { axes |= 1u << 2; }
+
+	if (axes == 0)
+	{
+		axes = 0x07;						// default to all three axes
+	}
+
+# if SUPPORT_CAN_EXPANSION
+	if (device.IsRemote())
+	{
+		return CanInterface::StartAccelerometer(device, axes, numSamples, mode, gb, reply);
+	}
+# endif
+
+	reply.copy("Local accelerometers are not supported yet");
+	return GCodeResult::error;
+}
 
 void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept
 {

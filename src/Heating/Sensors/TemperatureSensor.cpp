@@ -248,7 +248,7 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 	{
 		ts = new TmcDriverTemperatureSensor(sensorNum, 0);
 	}
-# ifdef DUET_NG
+# if defined(DUET_NG) || defined(PCCB_10)
 	else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::DuexTypeName))
 	{
 		ts = new TmcDriverTemperatureSensor(sensorNum, 1);

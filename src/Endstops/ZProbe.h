@@ -9,7 +9,6 @@
 #define SRC_ZPROBE_H_
 
 #include "Endstop.h"
-#include "GCodes/GCodeResult.h"
 
 class ZProbe : public EndstopOrZProbe
 {

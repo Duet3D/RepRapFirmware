@@ -10,7 +10,6 @@
 
 #include <RepRapFirmware.h>
 #include <Hardware/IoPorts.h>
-#include <GCodes/GCodeResult.h>
 #include <ObjectModel/ObjectModel.h>
 
 class CanMessageGenericParser;

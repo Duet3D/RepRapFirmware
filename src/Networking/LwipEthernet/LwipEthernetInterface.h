@@ -11,7 +11,6 @@
 #include <RepRapFirmware.h>
 #include <Networking/NetworkInterface.h>
 #include <Networking/NetworkDefs.h>
-#include <Platform/MessageType.h>
 
 // We have 8 sockets available for Ethernet
 const size_t NumHttpSockets = 5;				// sockets 0-4 are for HTTP

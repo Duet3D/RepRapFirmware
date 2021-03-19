@@ -24,18 +24,17 @@ Licence: GPL
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#include "RepRapFirmware.h"
-#include "ObjectModel/ObjectModel.h"
-#include "Hardware/IoPorts.h"
-#include "Fans/FansManager.h"
-#include "Heating/TemperatureError.h"
+#include <RepRapFirmware.h>
+#include <ObjectModel/ObjectModel.h>
+#include <Hardware/IoPorts.h>
+#include <Fans/FansManager.h>
+#include <Heating/TemperatureError.h>
 #include "OutputMemory.h"
-#include "Storage/FileStore.h"
-#include "Storage/FileData.h"
-#include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
-#include "MessageType.h"
-#include "Tools/Spindle.h"
-#include "Endstops/EndstopsManager.h"
+#include <Storage/FileStore.h>
+#include <Storage/FileData.h>
+#include <Storage/MassStorage.h>	// must be after Pins.h because it needs NumSdCards defined
+#include <Tools/Spindle.h>
+#include <Endstops/EndstopsManager.h>
 #include <GPIO/GpInPort.h>
 #include <GPIO/GpOutPort.h>
 #include <Comms/AuxDevice.h>

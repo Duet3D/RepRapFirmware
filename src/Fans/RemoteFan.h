@@ -12,8 +12,6 @@
 
 #if SUPPORT_CAN_EXPANSION
 
-#include "GCodes/GCodeResult.h"
-
 class RemoteFan : public Fan
 {
 public:

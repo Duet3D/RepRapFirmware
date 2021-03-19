@@ -24,7 +24,6 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 #include <Platform/RepRap.h>			// for type ResponseSource
-#include "GCodeResult.h"
 #include "ObjectTracker.h"
 #include <Movement/RawMove.h>
 #include <Libraries/sha1/sha1.h>

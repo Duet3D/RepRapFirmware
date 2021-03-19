@@ -10,7 +10,6 @@
 
 #include <RepRapFirmware.h>
 #include "EndstopDefs.h"
-#include <GCodes/GCodeResult.h>
 #include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
 

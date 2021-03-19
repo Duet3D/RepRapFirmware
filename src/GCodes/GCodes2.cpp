@@ -51,6 +51,10 @@
 # include <CAN/ExpansionManager.h>
 #endif
 
+#if SUPPORT_ACCELEROMETERS
+# include <Accelerometers/Accelerometers.h>
+#endif
+
 #ifdef DUET3_ATE
 # include <Duet3Ate.h>
 #endif
@@ -4541,11 +4545,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_ACCELEROMETERS
 		case 955:
-			result = ConfigureAccelerometer(gb, reply);
+			result = Accelerometers::ConfigureAccelerometer(gb, reply);
 			break;
 
 		case 956:
-			result = StartAccelerometer(gb, reply);
+			result = Accelerometers::StartAccelerometer(gb, reply);
 			break;
 #endif
 

@@ -10,7 +10,6 @@
 
 #include <RepRapFirmware.h>
 #include "Fan.h"
-#include "GCodes/GCodeResult.h"
 #include <RTOSIface/RTOSIface.h>
 
 #if SUPPORT_CAN_EXPANSION

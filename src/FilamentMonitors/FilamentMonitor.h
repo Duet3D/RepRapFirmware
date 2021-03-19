@@ -10,8 +10,6 @@
 
 #include <RepRapFirmware.h>
 #include <Hardware/IoPorts.h>
-#include <Platform/MessageType.h>
-#include "GCodes/GCodeResult.h"
 #include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
 

@@ -12,7 +12,6 @@
 #include <General/NamedEnum.h>
 #include "FOPDT.h"
 #include "HeaterMonitor.h"
-#include <GCodes/GCodeResult.h>
 #include <ObjectModel/ObjectModel.h>
 #include <Math/DeviationAccumulator.h>
 

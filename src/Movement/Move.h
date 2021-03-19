@@ -9,7 +9,6 @@
 #define MOVE_H_
 
 #include <RepRapFirmware.h>
-#include <Platform/MessageType.h>
 #include "InputShaper.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions

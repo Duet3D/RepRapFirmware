@@ -16,7 +16,6 @@
 #include "FOPDT.h"
 #include "TemperatureError.h"
 #include <Hardware/IoPorts.h>
-#include <GCodes/GCodeResult.h>
 
 class HeaterMonitor;
 

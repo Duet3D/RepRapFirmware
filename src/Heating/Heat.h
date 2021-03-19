@@ -29,8 +29,6 @@ Licence: GPL
 #include <Platform/RepRap.h>
 #include "Heater.h"
 #include "TemperatureError.h"
-#include <Platform/MessageType.h>
-#include <GCodes/GCodeResult.h>
 #include <RTOSIface/RTOSIface.h>
 
 class TemperatureSensor;

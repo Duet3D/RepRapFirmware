@@ -22,7 +22,7 @@ public:
 	const char *GetShortSensorType() const noexcept override;
 
 	static constexpr const char *PrimaryTypeName = "drivers";
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(PCCB_10)
 	static constexpr const char *DuexTypeName = "drivers-duex";
 	static constexpr const char *DuexTypeShortName = "driversduex";
 #endif

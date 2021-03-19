@@ -11,7 +11,6 @@
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeInput.h>
 #include <GCodes/GCodeMachineState.h>
-#include <Platform/MessageType.h>
 #include <ObjectModel/ObjectModel.h>
 #include <GCodes/GCodeException.h>
 #include <Networking/NetworkDefs.h>

@@ -14,9 +14,7 @@
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeChannel.h>
 #include <GCodes/GCodeMachineState.h>
-#include <GCodes/GCodeResult.h>
 #include <Linux/LinuxMessageFormats.h>
-#include <Platform/MessageType.h>
 #include <ObjectModel/ObjectModel.h>
 
 class FileGCodeInput;

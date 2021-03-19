@@ -161,7 +161,6 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-#include <Platform/MessageType.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 

@@ -35,7 +35,6 @@
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>
 # include <CAN/ExpansionManager.h>
-# include <CAN/CanMessageGenericConstructor.h>
 #endif
 
 #ifdef I2C_IFACE
@@ -1712,60 +1711,5 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 	}
 	return true;
 }
-
-#if SUPPORT_ACCELEROMETERS
-
-// Deal with M955
-GCodeResult GCodes::ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-{
-	gb.MustSee('P');
-	DriverId device = gb.GetDriverId();
-
-# if SUPPORT_CAN_EXPANSION
-	if (device.IsRemote())
-	{
-		CanMessageGenericConstructor cons(M955Params);
-		cons.PopulateFromCommand(gb);
-		return cons.SendAndGetResponse(CanMessageType::accelerometerConfig, device.boardAddress, reply);
-	}
-# endif
-
-	reply.copy("Local accelerometers are not supported yet");
-	return GCodeResult::error;
-}
-
-// Deal with M956
-GCodeResult GCodes::StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-{
-	gb.MustSee('P');
-	const DriverId device = gb.GetDriverId();
-	gb.MustSee('S');
-	const uint16_t numSamples = min<uint32_t>(gb.GetUIValue(), 65535);
-	gb.MustSee('A');
-	const uint8_t mode = gb.GetUIValue();
-
-	uint8_t axes = 0;
-	if (gb.Seen('X')) { axes |= 1u << 0; }
-	if (gb.Seen('Y')) { axes |= 1u << 1; }
-	if (gb.Seen('Z')) { axes |= 1u << 2; }
-
-	if (axes == 0)
-	{
-		reply.copy("At least one axis must be specified");
-		return GCodeResult::error;
-	}
-
-# if SUPPORT_CAN_EXPANSION
-	if (device.IsRemote())
-	{
-		return CanInterface::StartAccelerometer(device, axes, numSamples, mode, gb, reply);
-	}
-# endif
-
-	reply.copy("Local accelerometers are not supported yet");
-	return GCodeResult::error;
-}
-
-#endif
 
 // End

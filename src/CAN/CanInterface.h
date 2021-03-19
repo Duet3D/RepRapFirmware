@@ -12,8 +12,6 @@
 
 #if SUPPORT_CAN_EXPANSION
 
-#include <GCodes/GCodeResult.h>
-#include <Platform/MessageType.h>
 #include <CanId.h>
 #include <CanMessageFormats.h>
 

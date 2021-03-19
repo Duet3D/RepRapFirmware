@@ -13,11 +13,14 @@
 #if SUPPORT_ACCELEROMETERS
 
 #include <CanId.h>
+#include <GCodes/GCodeException.h>
 
 class CanMessageAccelerometerData;
 
 namespace Accelerometers
 {
+	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept;
 }
 

@@ -65,6 +65,10 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # include <CoreIO.h>
 # include <Devices.h>
 
+// The following are needed by many other files, so include them here
+# include <Platform/MessageType.h>
+# include <GCodes/GCodeResult.h>
+
 #define SPEED_CRITICAL	__attribute__((optimize("O2")))
 
 // API level definition.

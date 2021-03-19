@@ -21,7 +21,6 @@ Licence: GPL
 #define PRINTMONITOR_H
 
 #include <RepRapFirmware.h>
-#include <GCodes/GCodeResult.h>
 #include <GCodes/GCodeFileInfo.h>
 #include <ObjectModel/ObjectModel.h>
 

@@ -8,8 +8,7 @@
 #ifndef SRC_FANS_LEDSTRIPDRIVER_H_
 #define SRC_FANS_LEDSTRIPDRIVER_H_
 
-#include "RepRapFirmware.h"
-#include "GCodes/GCodeResult.h"
+#include <RepRapFirmware.h>
 
 class GCodeBuffer;
 
