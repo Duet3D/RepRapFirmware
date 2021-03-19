@@ -4539,6 +4539,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 #endif
 
+#if SUPPORT_ACCELEROMETERS
+		case 955:
+			result = ConfigureAccelerometer(gb, reply);
+			break;
+
+		case 956:
+			result = StartAccelerometer(gb, reply);
+			break;
+#endif
+
 		case 997:	// Perform firmware update
 #ifdef DUET3_ATE
 			Duet3Ate::PowerOffEUT();

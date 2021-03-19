@@ -376,6 +376,10 @@ private:
 	GCodeResult SetDateTime(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);			// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);		// Deal with G60
 	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M569
+#if SUPPORT_ACCELEROMETERS
+	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M955
+	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M956
+#endif
 
 	bool SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept;
 	void SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept;
