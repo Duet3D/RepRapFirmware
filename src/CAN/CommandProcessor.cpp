@@ -541,7 +541,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 #if SUPPORT_ACCELEROMETERS
 			case CanMessageType::accelerometerData:
-				Accelerometers::ProcessReceivedData(buf->id.Src(), buf->msg.accelerometerData);
+				Accelerometers::ProcessReceivedData(buf->id.Src(), buf->msg.accelerometerData, buf->dataLength);
 				break;
 #endif
 

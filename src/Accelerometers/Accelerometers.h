@@ -18,7 +18,7 @@ class CanMessageAccelerometerData;
 
 namespace Accelerometers
 {
-	void ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg) noexcept;
+	void ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept;
 }
 
 #endif
