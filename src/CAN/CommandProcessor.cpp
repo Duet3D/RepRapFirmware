@@ -32,6 +32,10 @@
 # endif
 #endif
 
+#if SUPPORT_ACCELEROMETERS
+# include <Accelerometers/Accelerometers.h>
+#endif
+
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
 
@@ -534,6 +538,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::filamentMonitorsStatusReport:
 				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
 				break;
+
+#if SUPPORT_ACCELEROMETERS
+			case CanMessageType::accelerometerData:
+				Accelerometers::ProcessReceivedData(buf->id.Src(), buf->msg.accelerometerData);
+				break;
+#endif
 
 #if SUPPORT_REMOTE_COMMANDS
 			case CanMessageType::enterTestMode:
