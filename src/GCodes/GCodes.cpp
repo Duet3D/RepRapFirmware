@@ -3246,7 +3246,11 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	}
 #endif
 
-	if (simulationMode != 0)
+	if (   simulationMode != 0														// if we are simulating then simulate the G4...
+		&& &gb != daemonGCode														// ...unless it comes from the daemon...
+		&& &gb != triggerGCode														// ...or a trigger...
+		&& (&gb == fileGCode || !exitSimulationWhenFileComplete)					// ...or we are simulating a file and this command doesn't come from the file
+	   )
 	{
 		simulationTime += (float)dwell * 0.001;
 		return GCodeResult::ok;
