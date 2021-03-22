@@ -404,13 +404,15 @@ void Platform::Init() noexcept
 	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// hold the Ethernet Phy chip in reset, hopefully this will prevent it being too noisy if Ethernet is not enabled
 #endif
 
+#ifndef __LPC17xx__
 	// Deal with power first (we assume this doesn't depend on identifying the board type)
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
+#endif
 
 	// Make sure the on-board drivers are disabled
-#if defined(DUET_NG) || defined(PCCB_10) || defined(PCCB_08_X5)
+#if defined(DUET_NG) || defined(PCCB_10)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
-#elif defined(DUET_M) || defined(PCCB_08) || defined(PCCB_08_X5) || defined(DUET3MINI)
+#elif defined(DUET_M) || defined(DUET3MINI)
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #endif
 
@@ -471,10 +473,7 @@ void Platform::Init() noexcept
 #ifdef __LPC17xx__
 	// Load HW pin assignments from sdcard
 	BoardConfig::Init();
-	pinMode(ATX_POWER_PIN,(ATX_POWER_INVERTED==false)?OUTPUT_LOW:OUTPUT_HIGH);
-#else
-	// Deal with power first (we assume this doesn't depend on identifying the board type)
-	pinMode(ATX_POWER_PIN,OUTPUT_LOW);
+	pinMode(ATX_POWER_PIN, (ATX_POWER_INVERTED) ? OUTPUT_HIGH : OUTPUT_LOW);
 #endif
 
     // Ethernet networking defaults
@@ -3655,18 +3654,14 @@ void Platform::StopLogging() noexcept
 
 bool Platform::AtxPower() const noexcept
 {
-#ifdef __LPC17xx__
 	const bool val = IoPort::ReadPin(ATX_POWER_PIN);
 	return (ATX_POWER_INVERTED) ? !val : val;
-#else
-    return IoPort::ReadPin(ATX_POWER_PIN);
-#endif
 }
 
 void Platform::AtxPowerOn() noexcept
 {
 	deferredPowerDown = false;
-	IoPort::WriteDigital(ATX_POWER_PIN, true);
+	IoPort::WriteDigital(ATX_POWER_PIN, !ATX_POWER_INVERTED);
 }
 
 void Platform::AtxPowerOff(bool defer) noexcept
@@ -3682,11 +3677,7 @@ void Platform::AtxPowerOff(bool defer) noexcept
 			// We don't call logger->Stop() here because we don't know whether turning off the power will work
 		}
 #endif
-#ifdef __LPC17xx__
 		IoPort::WriteDigital(ATX_POWER_PIN, ATX_POWER_INVERTED);
-#else
-		IoPort::WriteDigital(ATX_POWER_PIN, false);
-#endif
 	}
 }
 
