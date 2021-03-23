@@ -68,7 +68,12 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 	else
 	{
 		CopyBasicDetails(reply);
-		reply.catf(", temperature range %.1f to %.1fC", (double)tempAt4mA, (double)tempAt20mA);
+		reply.catf(", channel: %d", (int)chipChannel);
+		if (isDifferential)
+		{
+			reply.copy(", differential mode");
+		}
+		reply.catf(", temperature range %.1f to %.1fC", (double)minLinearAdcTemp, (double)tempAt20mA);
 	}
 	return GCodeResult::ok;
 }

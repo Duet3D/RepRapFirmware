@@ -24,7 +24,7 @@ SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *n
 
 bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen)
 {
-	const bool ret = SensorWithPort::ConfigurePort(gb, reply, PinAccess::write1, seen);
+	const bool ret = SensorWithPort::ConfigurePort(gb, reply, PinAccess::write1, PinUsedBy::chipSelect, seen);
 	device.csPin = port.GetPin();
 	return ret;
 }
