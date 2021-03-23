@@ -21,6 +21,10 @@
 # include <CAN/CanMessageGenericConstructor.h>
 #endif
 
+#ifdef DUET3_ATE
+# include <Duet3Ate.h>
+#endif
+
 static FileStore *f = nullptr;
 static unsigned int expectedSampleNumber;
 static CanAddress currentBoard = CanId::NoAddress;
@@ -78,6 +82,13 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 
 void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept
 {
+#ifdef DUET3_ATE
+	if (Duet3Ate::ProcessAccelerometerData(src, msg, msgLen))
+	{
+		return;								// ATE has processed the data
+	}
+#endif
+
 	if (msg.firstSampleNumber == 0)
 	{
 		// Close any existing file
