@@ -3357,7 +3357,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 		reply.printf("Tool %d offsets:", tool->Number());
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			reply.catf(" %c%.2f", axisLetters[axis], (double)tool->GetOffset(axis));
+			reply.catf(" %c%.3f", axisLetters[axis], (double)tool->GetOffset(axis));
 		}
 		if (hCount != 0)
 		{
