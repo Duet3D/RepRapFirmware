@@ -326,13 +326,15 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		// Seen both axes
 		if (seenP)
 		{
+			// In the following, we multiply the spacing by 0.9999 to ensure that when we divide the axis range by the spacing, we get the correct number of points
+			// Otherwise, for some values we occasionally get one less point
 			if (spacings[0] >= 2 && axis0Values[1] > axis0Values[0])
 			{
-				spacings[0] = (axis0Values[1] - axis0Values[0])/(numPoints[0] - 1);
+				spacings[0] = (axis0Values[1] - axis0Values[0])/(numPoints[0] - 1) * 0.9999;
 			}
 			if (spacings[1] >= 2 && axis1Values[1] > axis1Values[0])
 			{
-				spacings[1] = (axis1Values[1] - axis1Values[0])/(numPoints[1] - 1);
+				spacings[1] = (axis1Values[1] - axis1Values[0])/(numPoints[1] - 1) * 0.9999;
 			}
 		}
 	}
