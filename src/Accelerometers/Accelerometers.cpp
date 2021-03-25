@@ -178,7 +178,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 constexpr uint16_t DefaultSamplingRate = 1000;
 constexpr uint8_t DefaultResolution = 10;
 
-constexpr size_t AccelerometerTaskStackWords = 130;
+constexpr size_t AccelerometerTaskStackWords = 400;			// big enough to handle printf and file writes
 static Task<AccelerometerTaskStackWords> *accelerometerTask;
 
 static LIS3DH *accelerometer = nullptr;
@@ -216,75 +216,87 @@ static IoPort irqPort;
 				const unsigned int bitsAfterPoint = resolution - 2;			// assumes the range is +/- 2g
 				const int decimalPlaces = (bitsAfterPoint >= 11) ? 4 : (bitsAfterPoint >= 8) ? 3 : 2;
 
-				accelerometer->StartCollecting(axesRequested);
-				do
+				if (accelerometer->StartCollecting(axesRequested))
 				{
-					uint16_t dataRate;
-					const uint16_t *data;
-					bool overflowed;
-					unsigned int samplesRead = accelerometer->CollectData(&data, dataRate, overflowed);
-					if (samplesRead == 0)
+					do
 					{
-						// samplesRead == 0 indicates an error, e.g. no interrupt
-						samplesWanted = 0;
-						if (f != nullptr)
+						uint16_t dataRate;
+						const uint16_t *data;
+						bool overflowed;
+						unsigned int samplesRead = accelerometer->CollectData(&data, dataRate, overflowed);
+						if (samplesRead == 0)
 						{
-							f->Write("Failed to connect data from accelerometer\n");
-							f->Close();
-							f = nullptr;
-						}
-					}
-					else
-					{
-						if (samplesWritten == 0)
-						{
-							// The first sample taken after waking up is inaccurate, so discard it
-							--samplesRead;
-							data += 3;
-						}
-						if (samplesRead >= samplesWanted)
-						{
-							samplesRead = samplesWanted;
-						}
-
-						while (samplesRead != 0)
-						{
-							// Write a row of data
-							String<StringLength50> temp;
-							temp.printf("%u,%u,%u", samplesWritten, dataRate, overflowed);
-							dataRate = overflowed = 0;									// only report sample rate and overflow once per message
-
-							for (unsigned int axis = 0; axis < 3; ++axis)
+							// samplesRead == 0 indicates an error, e.g. no interrupt
+							samplesWanted = 0;
+							if (f != nullptr)
 							{
-								if (axesRequested & (1u << axis))
-								{
-									uint16_t dataVal = data[axisLookup[axis]];
-									if (axisInverted[axis])
-									{
-										dataVal = (dataVal == 0x8000) ? ~dataVal : ~dataVal + 1;
-									}
-									dataVal >>= (16u - resolution);						// data from LIS3DH is left justified
-
-									// Sign-extend it
-									if (dataVal & (1u << (resolution - 1)))
-									{
-										dataVal |= ~mask;
-									}
-
-									// Convert it to a float number of g
-									const float fVal = (float)(int16_t)dataVal/(float)(1u << bitsAfterPoint);
-
-									// Append it to the buffer
-									temp.catf(",%.*f", decimalPlaces, (double)fVal);
-								}
+								f->Write("Failed to connect data from accelerometer\n");
+								f->Close();
+								f = nullptr;
 							}
-							temp.cat('\n');
-							f->Write(temp.c_str());
-							--samplesWanted;
-							++samplesWritten;
 						}
-					}
-				} while (samplesWanted != 0);
+						else
+						{
+							if (samplesWritten == 0)
+							{
+								// The first sample taken after waking up is inaccurate, so discard it
+								--samplesRead;
+								data += 3;
+							}
+							if (samplesRead >= samplesWanted)
+							{
+								samplesRead = samplesWanted;
+							}
+
+							while (samplesRead != 0)
+							{
+								// Write a row of data
+								String<StringLength50> temp;
+								temp.printf("%u,%u,%u", samplesWritten, dataRate, (unsigned int)overflowed);
+								dataRate = 0;											// only report sample rate and overflow once per message
+								overflowed = false;
+
+								for (unsigned int axis = 0; axis < 3; ++axis)
+								{
+									if (axesRequested & (1u << axis))
+									{
+										uint16_t dataVal = data[axisLookup[axis]];
+										if (axisInverted[axis])
+										{
+											dataVal = (dataVal == 0x8000) ? ~dataVal : ~dataVal + 1;
+										}
+										dataVal >>= (16u - resolution);					// data from LIS3DH is left justified
+
+										// Sign-extend it
+										if (dataVal & (1u << (resolution - 1)))
+										{
+											dataVal |= ~mask;
+										}
+
+										// Convert it to a float number of g
+										const float fVal = (float)(int16_t)dataVal/(float)(1u << bitsAfterPoint);
+
+										// Append it to the buffer
+										temp.catf(",%.*f", decimalPlaces, (double)fVal);
+									}
+								}
+
+								data += 3;
+
+								temp.cat('\n');
+								f->Write(temp.c_str());
+
+								--samplesRead;
+								--samplesWanted;
+								++samplesWritten;
+							}
+						}
+					} while (samplesWanted != 0);
+				}
+				else if (f != nullptr)
+				{
+					f->Write("Failed to start accelerometer\n");
+				}
 
 				if (f != nullptr)
 				{
@@ -375,7 +387,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		irqPort.Release();
 
 		IoPort * const ports[2] = { &spiCsPort, &irqPort };
-		PinAccess access[2] = { PinAccess::write1, PinAccess::read };
+		const PinAccess access[2] = { PinAccess::write1, PinAccess::read };
 		if (IoPort::AssignPorts(gb, reply, PinUsedBy::sensor, 2, ports, access) != 2)
 		{
 			spiCsPort.Release();				// in case it was allocated
@@ -418,7 +430,11 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 
 	if (seen)
 	{
-		accelerometer->Configure(samplingRate, resolution);
+		if (!accelerometer->Configure(samplingRate, resolution))
+		{
+			reply.copy("Failed to configure accelerometer");
+			return GCodeResult::error;
+		}
 		(void)TranslateOrientation(orientation);
 	}
 

@@ -14,13 +14,13 @@
 
 constexpr uint32_t Lis3dSpiTimeout = 25;
 constexpr uint8_t FifoInterruptLevel = 24;							// how full the FIFO must get before we want an interrupt
-constexpr uint32_t SpiFrequency = 4000;
+constexpr uint32_t SpiFrequency = 4000000;
 const SpiMode lisMode = SpiMode::mode3;
 
 static constexpr uint8_t WhoAmIValue = 0x33;
 
 LIS3DH::LIS3DH(SharedSpiDevice& dev, Pin p_csPin, Pin p_int1Pin) noexcept
-	: SharedSpiClient(dev, SpiFrequency, lisMode, p_csPin, false), int1Pin(p_int1Pin)
+	: SharedSpiClient(dev, SpiFrequency, lisMode, p_csPin, false), taskWaiting(nullptr), int1Pin(p_int1Pin)
 {
 }
 
@@ -39,7 +39,7 @@ uint8_t LIS3DH::ReadStatus() noexcept
 
 // Configure the accelerometer to collect for the requested axis at or near the requested sampling rate and the requested resolution in bits.
 // Actual collection does not start until the first call to Collect8bitData or Collect16bitData.
-void LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
+bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 {
 	// Set up control registers 1 and 4 according to the selected sampling rate and resolution
 	ctrlReg1 = 0;													// collect no axes for now
@@ -123,16 +123,19 @@ void LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 	dataBuffer[3] = ctrlReg4;
 	dataBuffer[4] = (1u << 6);					// ctrlReg5: enable fifo
 	dataBuffer[5] = 0;							// ctrlReg6: INT2 disabled, active high interrupts
-	WriteRegisters(LisRegister::Ctrl1, 6);
-
-	// Set the fifo mode
-	WriteRegister(LisRegister::FifoControl, (2u << 6) | (FifoInterruptLevel - 1));
+	bool ok = WriteRegisters(LisRegister::Ctrl1, 6);
+	if (ok)
+	{
+		// Set the fifo mode
+		ok = WriteRegister(LisRegister::FifoControl, (2u << 6) | (FifoInterruptLevel - 1));
+	}
+	return ok;
 }
 
 void Int1Interrupt(CallbackParameter p) noexcept;		// forward declaration
 
 // Start collecting data
-void LIS3DH:: StartCollecting(uint8_t axes) noexcept
+bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 {
 	ctrlReg1 |= (axes & 7);
 
@@ -144,10 +147,14 @@ void LIS3DH:: StartCollecting(uint8_t axes) noexcept
 	}
 
 	AtomicCriticalSectionLocker lock;
-	WriteRegister(LisRegister::Ctrl1, ctrlReg1);
-	lastInterruptTime = StepTimer::GetTimerTicks();
-	attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, this);
-	numLastRead = 0;
+	const bool ok = WriteRegister(LisRegister::Ctrl1, ctrlReg1);
+	if (ok)
+	{
+		lastInterruptTime = StepTimer::GetTimerTicks();
+		attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, this);
+		numLastRead = 0;
+	}
+	return ok;
 }
 
 // Collect some 8-bit data from the FIFO, suspending until the data is available
@@ -206,7 +213,7 @@ bool LIS3DH::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 	{
 		return false;
 	}
-	transferBuffer[1] = (uint8_t)reg | 0xC0;
+	transferBuffer[1] = (uint8_t)reg | 0xC0;		// set auto increment and read bits
 	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToRead);
 	Deselect();
 	return ret;
@@ -219,7 +226,11 @@ bool LIS3DH::WriteRegisters(LisRegister reg, size_t numToWrite) noexcept
 	{
 		return false;
 	}
-	transferBuffer[1] = (uint8_t)reg | 0x40;
+	if (!Select(Lis3dSpiTimeout))
+	{
+		return false;
+	}
+	transferBuffer[1] = (uint8_t)reg | 0x40;		// set auto increment bit
 	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToWrite);
 	Deselect();
 	return ret;
@@ -237,10 +248,6 @@ bool LIS3DH::ReadRegister(LisRegister reg, uint8_t& val) noexcept
 
 bool LIS3DH::WriteRegister(LisRegister reg, uint8_t val) noexcept
 {
-	if ((uint8_t)reg < 0x1E)						// don't overwrite the factory calibration values
-	{
-		return false;
-	}
 	dataBuffer[0] = val;
 	return WriteRegisters(reg, 1);
 }
