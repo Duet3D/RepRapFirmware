@@ -12,8 +12,11 @@
 
 #if SUPPORT_ACCELEROMETERS
 
-#include <CanId.h>
 #include <GCodes/GCodeException.h>
+
+#if SUPPORT_CAN_EXPANSION
+# include <CanId.h>
+#endif
 
 class CanMessageAccelerometerData;
 
@@ -21,7 +24,9 @@ namespace Accelerometers
 {
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+#if SUPPORT_CAN_EXPANSION
 	void ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept;
+#endif
 }
 
 #endif

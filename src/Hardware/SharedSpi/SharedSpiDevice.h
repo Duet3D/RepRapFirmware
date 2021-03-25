@@ -20,8 +20,14 @@ public:
 	void Disable() const noexcept;
 	void Enable() const noexcept;
 	void SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noexcept;
+
+	// Send and receive data returning true if successful. Caller must already own the mutex and have asserted CS.
 	bool TransceivePacket(const uint8_t *tx_data, uint8_t *rx_data, size_t len) const noexcept;
-	bool Take(uint32_t timeout) noexcept { return mutex.Take(timeout); }					// get ownership of this SPI, return true if successful
+
+	// Get ownership of this SPI, return true if successful
+	bool Take(uint32_t timeout) noexcept { return mutex.Take(timeout); }
+
+	// Release ownership of this SPI
 	void Release() noexcept { mutex.Release(); }
 
 	static void Init() noexcept;
