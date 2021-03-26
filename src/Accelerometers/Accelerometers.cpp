@@ -28,27 +28,31 @@
 # include <Duet3Ate.h>
 #endif
 
-#if SUPPORT_CAN_EXPANSION
-static FileStore *CreateFile(CanAddress src, uint8_t axesToWrite) noexcept
-#else
-static FileStore *CreateFile(uint8_t axesToWrite) noexcept
-#endif
+// Get the number of binary digits after the decimal point
+static inline unsigned int GetBitsAfterPoint(uint8_t dataResolution) noexcept
+{
+	return dataResolution - 2;							// assumes the range is +/- 2g
+}
+
+// Get the number of decimal places that we should use when we print each acceleration value
+static unsigned int GetDecimalPlaces(uint8_t dataResolution) noexcept
+{
+	return (GetBitsAfterPoint(dataResolution) >= 11) ? 4 : (GetBitsAfterPoint(dataResolution) >= 8) ? 3 : 2;
+}
+
+static FileStore *CreateFile(CanAddress src, uint8_t axesToWrite, uint32_t preallocSize) noexcept
 {
 	const time_t time = reprap.GetPlatform().GetDateTime();
 	tm timeInfo;
 	gmtime_r(&time, &timeInfo);
 	String<StringLength50> temp;
 	temp.printf("0:/sys/accelerometer/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
-#if SUPPORT_CAN_EXPANSION
 					(unsigned int)src,
-#else
-					0,
-#endif
 					timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-	FileStore *f = MassStorage::OpenFile(temp.c_str(), OpenMode::write, 0);
+	FileStore * const f = MassStorage::OpenFile(temp.c_str(), OpenMode::write, preallocSize);
 	if (f != nullptr)
 	{
-		temp.printf("Sample,Rate,Overflowed");
+		temp.printf("Sample");
 		if (axesToWrite & 1u) { temp.cat(",X"); }
 		if (axesToWrite & 2u) { temp.cat(",Y"); }
 		if (axesToWrite & 4u) { temp.cat(",Z"); }
@@ -74,6 +78,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 	static unsigned int expectedSampleNumber = 0;
 	static CanAddress currentBoard = CanId::NoAddress;
 	static uint8_t axesReceived;
+	static unsigned int numOverflows;
 
 	if (msg.firstSampleNumber == 0)
 	{
@@ -88,7 +93,8 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 		currentBoard = src;
 		axesReceived = msg.axes;
 		expectedSampleNumber = 0;
-		f = CreateFile(src, msg.axes);
+		numOverflows = 0;
+		f = CreateFile(src, msg.axes, 0);
 	}
 
 	if (f != nullptr)
@@ -114,15 +120,16 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			unsigned int bitsLeft = 0;
 			const unsigned int receivedResolution = msg.bitsPerSampleMinusOne + 1;
 			const uint16_t mask = (1u << receivedResolution) - 1;
-			const unsigned int bitsAfterPoint = receivedResolution - 2;			// assumes the range is +/- 2g
-			const int decimalPlaces = (bitsAfterPoint >= 11) ? 4 : (bitsAfterPoint >= 8) ? 3 : 2;
-			unsigned int actualSampleRate = msg.actualSampleRate;
-			unsigned int overflowed = msg.overflowed;
+			const int decimalPlaces = GetDecimalPlaces(receivedResolution);
+			if (msg.overflowed)
+			{
+				++numOverflows;
+			}
+
 			while (numSamples != 0)
 			{
 				String<StringLength50> temp;
-				temp.printf("%u,%u,%u", expectedSampleNumber, actualSampleRate, overflowed);
-				actualSampleRate = overflowed = 0;								// only report sample rate and overflow once per message
+				temp.printf("%u", expectedSampleNumber);
 				++expectedSampleNumber;
 
 				for (unsigned int axis = 0; axis < numAxes; ++axis)
@@ -150,7 +157,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 					}
 
 					// Convert it to a float number of g
-					const float fVal = (float)(int16_t)val/(float)(1u << bitsAfterPoint);
+					const float fVal = (float)(int16_t)val/(float)(1u << GetBitsAfterPoint(receivedResolution));
 
 					// Append it to the buffer
 					temp.catf(",%.*f", decimalPlaces, (double)fVal);
@@ -160,11 +167,16 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				f->Write(temp.c_str());
 				--numSamples;
 			}
-		}
-		if (msg.lastPacket)
-		{
-			f->Close();
-			f = nullptr;
+
+			if (msg.lastPacket)
+			{
+				String<StringLength50> temp;
+				temp.printf("Rate %u, overflows %u\n", msg.actualSampleRate, numOverflows);
+				f->Write(temp.c_str());
+				f->Close();
+				f = nullptr;
+				expectedSampleNumber = 0;
+			}
 		}
 	}
 }
@@ -202,25 +214,24 @@ static IoPort irqPort;
 		TaskBase::Take();
 		if (running)
 		{
-#if SUPPORT_CAN_EXPANSION
-			FileStore *f = CreateFile(CanInterface::GetCanAddress(), axesRequested);
-#else
-			FileStore *f = CreateFile(axesRequested);
-#endif
+			// Calculate the approximate file size so that we can preallocate storage to reduce the risk of overflow
+			const unsigned int numAxes = (axesRequested & 1u) + ((axesRequested >> 1) & 1u) + ((axesRequested >> 2) & 1u);
+			const uint32_t preallocSize = numSamplesRequested * ((numAxes * (3 + GetDecimalPlaces(resolution))) + 4);
+			FileStore *f = CreateFile(CanInterface::GetCanAddress(), axesRequested, preallocSize);
 			if (f != nullptr)
 			{
 				// Collect and write the samples
 				unsigned int samplesWritten = 0;
 				unsigned int samplesWanted = numSamplesRequested;
+				unsigned int numOverflows = 0;
 				const uint16_t mask = (1u << resolution) - 1;
-				const unsigned int bitsAfterPoint = resolution - 2;			// assumes the range is +/- 2g
-				const int decimalPlaces = (bitsAfterPoint >= 11) ? 4 : (bitsAfterPoint >= 8) ? 3 : 2;
+				const int decimalPlaces = GetDecimalPlaces(resolution);
 
 				if (accelerometer->StartCollecting(axesRequested))
 				{
+					uint16_t dataRate = 0;
 					do
 					{
-						uint16_t dataRate;
 						const uint16_t *data;
 						bool overflowed;
 						unsigned int samplesRead = accelerometer->CollectData(&data, dataRate, overflowed);
@@ -230,13 +241,18 @@ static IoPort irqPort;
 							samplesWanted = 0;
 							if (f != nullptr)
 							{
-								f->Write("Failed to connect data from accelerometer\n");
+								f->Write("Failed to collect data from accelerometer\n");
 								f->Close();
 								f = nullptr;
 							}
+							break;
 						}
 						else
 						{
+							if (overflowed)
+							{
+								++numOverflows;
+							}
 							if (samplesWritten == 0)
 							{
 								// The first sample taken after waking up is inaccurate, so discard it
@@ -252,9 +268,7 @@ static IoPort irqPort;
 							{
 								// Write a row of data
 								String<StringLength50> temp;
-								temp.printf("%u,%u,%u", samplesWritten, dataRate, (unsigned int)overflowed);
-								dataRate = 0;											// only report sample rate and overflow once per message
-								overflowed = false;
+								temp.printf("%u", samplesWritten);
 
 								for (unsigned int axis = 0; axis < 3; ++axis)
 								{
@@ -274,7 +288,7 @@ static IoPort irqPort;
 										}
 
 										// Convert it to a float number of g
-										const float fVal = (float)(int16_t)dataVal/(float)(1u << bitsAfterPoint);
+										const float fVal = (float)(int16_t)dataVal/(float)(1u << GetBitsAfterPoint(resolution));
 
 										// Append it to the buffer
 										temp.catf(",%.*f", decimalPlaces, (double)fVal);
@@ -292,6 +306,13 @@ static IoPort irqPort;
 							}
 						}
 					} while (samplesWanted != 0);
+
+					if (f != nullptr)
+					{
+						String<StringLength50> temp;
+						temp.printf("Rate %u, overflows %u\n", dataRate, numOverflows);
+						f->Write(temp.c_str());
+					}
 				}
 				else if (f != nullptr)
 				{

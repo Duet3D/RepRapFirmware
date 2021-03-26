@@ -57,12 +57,12 @@ private:
 	bool WriteRegister(LisRegister reg, uint8_t val) noexcept;
 
 	volatile TaskHandle taskWaiting;
+	uint32_t firstInterruptTime;
 	uint32_t lastInterruptTime;
-	uint32_t lastInterruptInterval;
+	uint32_t totalNumRead;
 	uint8_t currentAxis;
 	uint8_t ctrlReg1;
 	Pin int1Pin;
-	uint8_t numLastRead;
 	alignas(2) uint8_t transferBuffer[2 + (6 * 32)];			// 1 dummy byte for alignment, one register address byte, 192 data bytes to read entire FIFO
 	uint8_t* const dataBuffer = transferBuffer + 2;
 };

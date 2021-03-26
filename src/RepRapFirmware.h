@@ -117,12 +117,22 @@ static_assert(MinVisibleAxes <= MinAxes);
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
 #if SUPPORT_CAN_EXPANSION
+
 # include <CanId.h>
 
 // We have to declare CanInterface::GetCanAddress here because CanInterface.h needs to include this file for the declaration of DriverId
 namespace CanInterface
 {
 	CanAddress GetCanAddress() noexcept;
+}
+
+#else
+
+typedef uint8_t CanAddress;
+
+namespace CanInterface
+{
+	inline CanAddress GetCanAddress() noexcept { return 0; }
 }
 
 #endif

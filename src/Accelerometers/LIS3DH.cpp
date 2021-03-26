@@ -12,8 +12,9 @@
 #include <Hardware/IoPorts.h>
 #include <Movement/StepTimer.h>
 
-constexpr uint32_t Lis3dSpiTimeout = 25;
-constexpr uint8_t FifoInterruptLevel = 24;							// how full the FIFO must get before we want an interrupt
+constexpr uint32_t Lis3dSpiTimeout = 25;							// timeout while waiting for the SPI bus
+constexpr uint32_t DataCollectionTimeout = (1000 * 32)/400 + 2;		// timeout whole collecting data, enough to fill the FIFO at 400Hz
+constexpr uint8_t FifoInterruptLevel = 20;							// how full the FIFO must get before we want an interrupt
 constexpr uint32_t SpiFrequency = 4000000;
 const SpiMode lisMode = SpiMode::mode3;
 
@@ -78,40 +79,10 @@ bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 			samplingRate = 1600;
 		}
 	}
-	else if (samplingRate >= 400)
-	{
-		odr = 0x7;
-		samplingRate = 400;
-	}
-	else if (samplingRate >= 200)
-	{
-		odr = 0x6;
-		samplingRate = 200;
-	}
-	else if (samplingRate >= 100)
-	{
-		odr = 0x5;
-		samplingRate = 100;
-	}
-	else if (samplingRate >= 50)
-	{
-		odr = 0x4;
-		samplingRate = 500;
-	}
-	else if (samplingRate >= 25)
-	{
-		odr = 0x3;
-		samplingRate = 25;
-	}
-	else if (samplingRate >= 10)
-	{
-		odr = 0x2;
-		samplingRate = 10;
-	}
 	else
 	{
-		odr = 0x1;
-		samplingRate = 1;
+		odr = 0x7;
+		samplingRate = 400;											// we don't support lower than 400Hz because it isn't useful
 	}
 
 	ctrlReg1 |= (odr << 4);
@@ -146,25 +117,22 @@ bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 		ReadRegisters(LisRegister::OutXL, 6);
 	}
 
-	AtomicCriticalSectionLocker lock;
+	totalNumRead = 0;
 	const bool ok = WriteRegister(LisRegister::Ctrl1, ctrlReg1);
-	if (ok)
-	{
-		lastInterruptTime = StepTimer::GetTimerTicks();
-		attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, this);
-		numLastRead = 0;
-	}
-	return ok;
+	return ok && attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, this);
 }
 
-// Collect some 8-bit data from the FIFO, suspending until the data is available
+// Collect some data from the FIFO, suspending until the data is available
 unsigned int LIS3DH::CollectData(const uint16_t **collectedData, uint16_t &dataRate, bool &overflowed) noexcept
 {
 	// Wait until we have some data
 	taskWaiting = TaskBase::GetCallerTaskHandle();
 	while (!digitalRead(int1Pin))
 	{
-		TaskBase::Take();
+		if (!TaskBase::Take(DataCollectionTimeout))
+		{
+			return 0;
+		}
 	}
 	taskWaiting = nullptr;
 
@@ -193,9 +161,9 @@ unsigned int LIS3DH::CollectData(const uint16_t **collectedData, uint16_t &dataR
 
 		*collectedData = reinterpret_cast<const uint16_t*>(dataBuffer);
 		overflowed = (fifoStatus & 0x40) != 0;
-		dataRate = (lastInterruptInterval == 0) ? 0
-					: (numLastRead * StepTimer::StepClockRate)/lastInterruptInterval;
-		numLastRead = numToRead;
+		dataRate = (totalNumRead == 0) ? 0
+					: (totalNumRead * StepTimer::StepClockRate)/(lastInterruptTime - firstInterruptTime);
+		totalNumRead += numToRead;
 	}
 	return numToRead;
 }
@@ -255,7 +223,10 @@ bool LIS3DH::WriteRegister(LisRegister reg, uint8_t val) noexcept
 void LIS3DH::Int1Isr() noexcept
 {
 	const uint32_t now = StepTimer::GetTimerTicks();
-	lastInterruptInterval = now - lastInterruptTime;
+	if (totalNumRead == 0)
+	{
+		firstInterruptTime = now;
+	}
 	lastInterruptTime = now;
 	TaskBase::GiveFromISR(taskWaiting);
 	taskWaiting = nullptr;
