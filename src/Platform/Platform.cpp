@@ -1799,6 +1799,15 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	}
 #endif
 
+#ifdef DUET3MINI
+	// Report the analogIn status (trying to debug the spurious zero VIN issue)
+	{
+		uint32_t conversionsStarted, conversionsCompleted, conversionTimeouts;
+		AnalogIn::GetDebugInfo(conversionsStarted, conversionsCompleted, conversionTimeouts);
+		MessageF(mtype, "ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 "\n", conversionsStarted, conversionsCompleted, conversionTimeouts);
+	}
+#endif
+
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
 	const float currentMcuTemperature = GetCpuTemperature();
