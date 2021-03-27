@@ -30,7 +30,7 @@
 #define SRC_MOVEMENT_MOVESEGMENT_H_
 
 #include <RepRapFirmware.h>
-#include <Tasks.h>
+#include <Platform/Tasks.h>
 
 class MoveSegment
 {
