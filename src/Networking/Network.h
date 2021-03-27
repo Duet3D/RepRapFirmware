@@ -10,8 +10,6 @@
 
 #include <RepRapFirmware.h>
 #include "NetworkDefs.h"
-#include <Platform/MessageType.h>
-#include <GCodes/GCodeResult.h>
 #include <RTOSIface/RTOSIface.h>
 #include <ObjectModel/ObjectModel.h>
 #include <General/NamedEnum.h>

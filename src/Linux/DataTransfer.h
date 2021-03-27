@@ -15,7 +15,6 @@
 #include <GCodes/GCodeFileInfo.h>
 #include <GCodes/GCodeChannel.h>
 #include "LinuxMessageFormats.h"
-#include <Platform/MessageType.h>
 #include <RTOSIface/RTOSIface.h>
 
 class BinaryGCodeBuffer;

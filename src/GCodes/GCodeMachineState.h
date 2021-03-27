@@ -12,7 +12,6 @@
 #include <Storage/FileData.h>
 #include <General/FreelistManager.h>
 #include <General/NamedEnum.h>
-#include <GCodes/GCodeResult.h>
 #include <GCodes/Variable.h>
 
 // Enumeration to list all the possible states that the Gcode processing machine may be in
@@ -25,11 +24,19 @@ enum class GCodeState : uint8_t
 	waitingForSpecialMoveToComplete,					// doing a special move, so we must wait for it to finish before processing another GCode
 	waitingForSegmentedMoveToGo,						// doing an arc move, so we must check whether it completes normally
 
-	probingToolOffset,
+	// This group must be contiguous
+	probingToolOffset1,
+	probingToolOffset2,
+	probingToolOffset3,
+	probingToolOffset4,
 
-	findCenterOfCavityMin,
-	findCenterOfCavityR,
-	findCenterOfCavityMax,
+	// These next 7 must be contiguous
+	findCenterOfCavity1,
+	findCenterOfCavity2,
+	findCenterOfCavity3,
+	findCenterOfCavity4,
+	findCenterOfCavity5,
+	findCenterOfCavity6,
 
 	homing1,
 	homing2,

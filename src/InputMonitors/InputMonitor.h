@@ -13,7 +13,6 @@
 #if SUPPORT_REMOTE_COMMANDS
 
 #include <Hardware/IoPorts.h>
-#include <GCodes/GCodeResult.h>
 #include <RTOSIface/RTOSIface.h>
 
 struct CanMessageCreateInputMonitor;

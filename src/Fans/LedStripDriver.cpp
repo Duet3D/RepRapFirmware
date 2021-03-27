@@ -49,15 +49,42 @@ namespace LedStripDriver
 {
 	constexpr uint32_t DefaultDotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 	constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2500000;		// must be between about 2MHz and about 4MHz
-	constexpr uint32_t DefaultSpiFrequencies[2] = { DefaultDotStarSpiClockFrequency, DefaultNeoPixelSpiClockFrequency };
 	constexpr uint32_t MinNeoPixelResetTicks = (250 * StepTimer::StepClockRate)/1000000;		// 250us minimum Neopixel reset time on later chips
 
-	constexpr size_t ChunkBufferSize = 720;								// the size of our DMA buffer. DotStar LEDs use 4 bytes/LED, NeoPixels use 12 bytes/LED.
-	constexpr unsigned int MaxDotStarChunkSize = ChunkBufferSize/4;		// maximum number of DotStarLEDs we DMA to in one go. Most strips have 30 LEDs/metre.
-	constexpr unsigned int MaxNeoPixelChunkSize = ChunkBufferSize/12;	// maximum number of NeoPixels we can support. A full ring contains 60.
+#ifdef DUET3_V06
+	// We have plenty of non-cached RAM left on Duet 3
+	constexpr size_t ChunkBufferSize = 240 * 16;							// the size of our DMA buffer. DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED.
+#else
+	constexpr size_t ChunkBufferSize = 60 * 16;							// the size of our DMA buffer. DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED.
+#endif
+
+	enum class LedType : unsigned int
+	{
+		dotstar,
+		neopixelRGB,
+		neopixelBitBang,
+		neopixelRGBW
+	};
+
+	constexpr const char *LedTypeNames[] =
+	{
+		"DotStar on LED port",
+		"NeoPixel RGB on LED port",
+		"NeoPixel RGB on 12864 display",
+		"NeoPixel RGBW on LED port"
+	};
+	constexpr unsigned int NumSupportedLedTypes = ARRAY_SIZE(LedTypeNames);
+
+	constexpr uint32_t DefaultSpiFrequencies[] =
+	{
+		DefaultDotStarSpiClockFrequency,
+		DefaultNeoPixelSpiClockFrequency,
+		DefaultNeoPixelSpiClockFrequency,
+		DefaultNeoPixelSpiClockFrequency
+	};
 
 	static uint32_t currentFrequency;									// the SPI frequency we are using
-	static unsigned int ledType = 1;									// 0 = DotStar (not supported on Duet 3 Mini), 1 = NeoPixel, 2 = NeoPixel on Mini 12864 display (Duet 3 Mini only)
+	static LedType ledType = LedType::neopixelRGB;						// 0 = DotStar (not supported on Duet 3 Mini), 1 = NeoPixel, 2 = NeoPixel on Mini 12864 display (Duet 3 Mini only). 4 = NeoPixel RGBW
 	static uint32_t whenDmaFinished = 0;								// the time in step clocks when we determined that the DMA had finished
 	static unsigned int numRemaining = 0;								// how much of the current request remains after the current transfer (DotStar only)
 	static unsigned int totalSent = 0;									// total amount of data sent since the start frame (DotStar only)
@@ -72,15 +99,22 @@ namespace LedStripDriver
 	alignas(4) static uint8_t chunkBuffer[ChunkBufferSize];				// buffer for sending data to LEDs
 #endif
 
-	constexpr const char *LedTypeNames[] =
+	static size_t MaxLedsPerBuffer() noexcept
 	{
-		"DotStar",
-		"NeoPixel",
-#if SUPPORT_BITBANG_NEOPIXEL
-		"NeoPixel on 12864 display"
-#endif
-	};
-	constexpr unsigned int NumSupportedLedTypes = ARRAY_SIZE(LedTypeNames);
+		switch (ledType)
+		{
+		case LedType::dotstar:
+			return ChunkBufferSize/4;
+
+		case LedType::neopixelRGBW:
+			return ChunkBufferSize/16;
+
+		case LedType::neopixelRGB:
+		case LedType::neopixelBitBang:
+		default:
+			return ChunkBufferSize/12;
+		}
+	}
 
 	// DMA the data. Must be a multiple of 2 bytes if USE_16BIT_SPI is true.
 	static void DmaSendChunkBuffer(size_t numBytes) noexcept
@@ -192,7 +226,7 @@ namespace LedStripDriver
 # endif
 		QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/currentFrequency - 1);
 		QSPI->QSPI_CR = QSPI_CR_QSPIEN;
-		if (ledType == 1)
+		if (ledType == LedType::neopixelRGB || ledType == LedType::neopixelRGBW)
 		{
 			QSPI->QSPI_TDR = 0;													// send a word of zeros to set the data line low
 		}
@@ -210,7 +244,7 @@ namespace LedStripDriver
 		// where N is the number of LEDs in the strip. The datasheet says to send 32 bits of 1 but this is only sufficient for up to 64 LEDs. Sending 1s can lead to a spurious
 		// white LED at the end if we don't provide data for all the LEDs. So instead we send 32 or more bits of zeros.
 		// See https://cpldcpu.wordpress.com/2014/11/30/understanding-the-apa102-superled/ for more.
-		unsigned int spaceLeft = MaxDotStarChunkSize;
+		unsigned int spaceLeft = MaxLedsPerBuffer();
 		uint32_t *p = reinterpret_cast<uint32_t*>(chunkBuffer);
 		if (needStartFrame)
 		{
@@ -220,7 +254,7 @@ namespace LedStripDriver
 		}
 
 		// Can we fit the remaining data and stop bits in the buffer?
-		unsigned int numStopWordsNeeded = (following) ? 0 : min<unsigned int>((numLeds + totalSent + 63)/64, MaxDotStarChunkSize - 1);
+		unsigned int numStopWordsNeeded = (following) ? 0 : min<unsigned int>((numLeds + totalSent + 63)/64, MaxLedsPerBuffer() - 1);
 		unsigned int thisChunk;
 		if (numLeds + numStopWordsNeeded <= spaceLeft)
 		{
@@ -261,7 +295,7 @@ namespace LedStripDriver
 		static constexpr uint8_t EncodedByte[4] = { 0b10001000, 0b10001110, 0b11101000, 0b11101110 };
 
 #if USE_16BIT_SPI
-		if (ledType == 1)
+		if (ledType == LedType::neopixelRGB || ledType == LedType::neopixelRGBW)
 		{
 			// Swap bytes for 16-bit DMA
 			*p++ = EncodedByte[(val >> 4) & 3];
@@ -280,7 +314,7 @@ namespace LedStripDriver
 	}
 
 	// Send data to NeoPixel LEDs by DMA to SPI
-	static GCodeResult SpiSendNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint32_t numLeds, bool following) noexcept
+	static GCodeResult SpiSendNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint8_t white, uint32_t numLeds, bool includeWhite, bool following) noexcept
 	{
 		uint8_t *p = chunkBuffer + (12 * numAlreadyInBuffer);
 		while (numLeds != 0 && p <= chunkBuffer + ARRAY_SIZE(chunkBuffer) - 12)
@@ -291,13 +325,18 @@ namespace LedStripDriver
 			p += 4;
 			EncodeNeoPixelByte(p, blue);
 			p += 4;
+			if (includeWhite)
+			{
+				EncodeNeoPixelByte(p, white);
+				p += 4;
+			}
 			--numLeds;
 			++numAlreadyInBuffer;
 		}
 
 		if (!following)
 		{
-			DmaSendChunkBuffer(12 * numAlreadyInBuffer);			// send data by DMA to SPI
+			DmaSendChunkBuffer(((includeWhite) ? 16 : 12) * numAlreadyInBuffer);		// send data by DMA to SPI
 			numAlreadyInBuffer = 0;
 			needStartFrame = true;
 		}
@@ -369,20 +408,18 @@ namespace LedStripDriver
 
 void LedStripDriver::Init() noexcept
 {
-#if SAME5x
+#if defined(DUET3MINI)
 	SetPinFunction(NeopixelOutPin, NeopixelOutPinFunction);
 	hri_mclk_set_AHBMASK_QSPI_bit(MCLK);
 	hri_mclk_clear_AHBMASK_QSPI_2X_bit(MCLK);			// we don't need the 2x clock
 	hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
-#else
+#elif defined(DUET3_V06) || defined(PCCB_10)
 	SetPinFunction(DotStarMosiPin, DotStarPinMode);
 	SetPinFunction(DotStarSclkPin, DotStarPinMode);
-
-	// Enable the clock to the USART or SPI peripheral
-	pmc_enable_periph_clk(DotStarClockId);
+	pmc_enable_periph_clk(DotStarClockId);				// enable the clock to the USART or SPI peripheral
 #endif
 
-	currentFrequency = DefaultSpiFrequencies[ledType];
+	currentFrequency = DefaultSpiFrequencies[(unsigned int)ledType];
 	SetupSpi();
 
 	// Initialise variables
@@ -406,7 +443,7 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 		return GCodeResult::notFinished;
 	}
 
-	if (needStartFrame && (ledType == 1 || ledType == 2) && StepTimer::GetTimerTicks() - whenDmaFinished < MinNeoPixelResetTicks)
+	if (needStartFrame && (ledType != LedType::neopixelBitBang) && StepTimer::GetTimerTicks() - whenDmaFinished < MinNeoPixelResetTicks)
 	{
 		return GCodeResult::notFinished;									// give the NeoPixels time to reset
 	}
@@ -424,9 +461,17 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 #endif
 				NumSupportedLedTypes
 			);
-		const bool typeChanged = (newType != ledType);
+		const bool typeChanged = (newType != (unsigned int)ledType);
 
+#if SUPPORT_BITBANG_NEOPIXEL
 		if (newType != 2)
+#else
+		if (newType == 2)
+		{
+			reply.copy("Unsupported LED strip type");
+			return GCodeResult::error;
+		}
+#endif
 		{
 			bool setFrequency = typeChanged;
 			currentFrequency = DefaultSpiFrequencies[newType];
@@ -439,7 +484,7 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 
 		if (typeChanged)
 		{
-			ledType = newType;
+			ledType = (LedType)newType;
 			needInit = true;
 		}
 	}
@@ -451,7 +496,7 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 		needInit = false;
 
 #if SUPPORT_BITBANG_NEOPIXEL
-		if (ledType == 2)
+		if (ledType == LedType::neopixelBitBang)
 		{
 			// Set the data output low to start a WS2812 reset sequence
 			IoPort::SetPinMode(LcdNeopixelOutPin, PinMode::OUTPUT_LOW);
@@ -463,13 +508,15 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 	}
 
 	// Get the RGB and brightness values
-	uint32_t red = 0, green = 0, blue = 0, brightness = 128, numLeds = MaxDotStarChunkSize;
+	uint32_t red = 0, green = 0, blue = 0, white = 0, brightness = 128;
+	uint32_t numLeds = MaxLedsPerBuffer();
 	bool following = false;
 	bool seenColours = false;
 
 	gb.TryGetLimitedUIValue('R', red, seenColours, 256);
 	gb.TryGetLimitedUIValue('U', green, seenColours, 256);
 	gb.TryGetLimitedUIValue('B', blue, seenColours, 256);
+	gb.TryGetLimitedUIValue('W', white, seenColours, 256);					// W value is used by RGBW NeoPixels only
 
 	if (gb.Seen('P'))
 	{
@@ -488,7 +535,7 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 		if (!seenType)
 		{
 			// Report the current configuration
-			reply.printf("Led type is %s, frequency %.2fMHz", LedTypeNames[ledType], (double)((float)currentFrequency * 0.000001));
+			reply.printf("Led type is %s, frequency %.2fMHz", LedTypeNames[(unsigned int)ledType], (double)((float)currentFrequency * 0.000001));
 		}
 		return GCodeResult::ok;
 	}
@@ -496,7 +543,7 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 	// If there are no LEDs to set, we have finished unless we need to send a start frame to DotStar LEDs
 	if (numLeds == 0
 #if SUPPORT_DOTSTAR
-		&& (ledType != 0 || (!needStartFrame && !following))
+		&& (ledType != LedType::dotstar || (!needStartFrame && !following))
 #endif
 		)
 	{
@@ -505,34 +552,37 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 
 	switch (ledType)
 	{
+	case LedType::dotstar:
 #if SUPPORT_DOTSTAR
-	case 0:	// DotStar
 		{
 			if (numRemaining != 0)
 			{
 				numLeds = numRemaining;
 			}
 
-#if USE_16BIT_SPI
+# if USE_16BIT_SPI
 			// Swap bytes for 16-bit SPI
 			const uint32_t data = ((brightness >> 11) | (0xE0 << 8)) | ((blue & 255)) | ((green & 255) << 24) | ((red & 255) << 16);
-#else
+# else
 			const uint32_t data = ((brightness >> 3) | 0xE0) | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);
-#endif
+# endif
 			return SendDotStarData(data, numLeds, following);
 		}
+#else
+		break;
 #endif
 
-	case 1:	// NeoPixel
+	case LedType::neopixelRGB:
 		// Scale RGB by the brightness
 		return SpiSendNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
 									(uint8_t)((green * brightness + 255) >> 8),
 									(uint8_t)((blue * brightness + 255) >> 8),
-									numLeds, following
+									0,
+									numLeds, false, following
 							      );
 
+	case LedType::neopixelBitBang:
 #if SUPPORT_BITBANG_NEOPIXEL
-	case 2:
 		// Interrupts are disabled while bit-banging the data, so make sure movement has stopped
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
 		{
@@ -545,7 +595,18 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 									(uint8_t)((blue * brightness + 255) >> 8),
 									numLeds, following
 							      );
+#else
+		break;
 #endif
+
+	case LedType::neopixelRGBW:
+		// Scale RGBW by the brightness
+		return SpiSendNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
+									(uint8_t)((green * brightness + 255) >> 8),
+									(uint8_t)((blue * brightness + 255) >> 8),
+									(uint8_t)((white * brightness + 255) >> 8),
+									numLeds, true, following
+							      );
 	}
 	return GCodeResult::ok;													// should never get here
 }

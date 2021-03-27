@@ -130,7 +130,7 @@ public:
 	// applyM208Limits determines whether the m208 limits are applied, otherwise just the geometric limitations of the architecture are applied.
 	// If initialCoords is null, just limit the final coordinates; else limit all points on a straight line between the two.
 	virtual LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords,
-												size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept;
+												size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept;
 
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)

@@ -10,9 +10,7 @@
 
 #include <RepRapFirmware.h>
 #include <Networking/NetworkDefs.h>
-#include <Platform/MessageType.h>
 #include <Networking/NetworkInterface.h>
-#include <GCodes/GCodeResult.h>
 #include <MessageFormats.h>
 
 // Forward declarations

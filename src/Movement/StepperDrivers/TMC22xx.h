@@ -13,7 +13,6 @@
 #if SUPPORT_TMC22xx
 
 #include "DriverMode.h"
-#include <Platform/MessageType.h>
 
 // TMC22xx DRV_STATUS register bit assignments
 const uint32_t TMC_RR_OT = 1u << 1;			// over temperature shutdown

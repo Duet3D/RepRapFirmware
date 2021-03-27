@@ -9,7 +9,6 @@
 #define SRC_GCODES_OBJECTTRACKER_H_
 
 #include <RepRapFirmware.h>
-#include "GCodeResult.h"
 #include "RestorePoint.h"
 #include <ObjectModel/ObjectModel.h>
 #include <Platform/Heap.h>

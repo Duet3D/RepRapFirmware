@@ -9,9 +9,7 @@
 #define MOVE_H_
 
 #include <RepRapFirmware.h>
-#include <Platform/MessageType.h>
 #include "InputShaper.h"
-#include "StraightProbeSettings.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
@@ -152,7 +150,6 @@ public:
 #endif
 
 	const RandomProbePointSet& GetProbePoints() const noexcept { return probePoints; }		// Return the probe point set constructed from G30 commands
-	StraightProbeSettings& GetStraightProbeSettings() noexcept { return straightProbeSettings; }	// Return the settings for G38 straight probe
 
 	DDARing& GetMainDDARing() noexcept { return mainDDARing; }
 	float GetTopSpeed() const noexcept { return mainDDARing.GetTopSpeed(); }
@@ -269,7 +266,6 @@ private:
 	Kinematics *kinematics;								// What kinematics we are using
 
 	InputShaper shaper;
-	StraightProbeSettings straightProbeSettings;		// G38 straight probe settings
 
 	float latestLiveCoordinates[MaxAxesPlusExtruders];
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)

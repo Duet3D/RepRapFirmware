@@ -61,8 +61,8 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)reprap.GetGCodes().GetLastDuration()), 							ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
-	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), (int32_t)self->currentLayer), 												ObjectModelEntryFlags::live },
-	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetCurrentLayerTime(), 1), 											ObjectModelEntryFlags::live },
+	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, (int32_t)self->currentLayer), 					ObjectModelEntryFlags::live },
+	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, self->GetCurrentLayerTime(), 1), 				ObjectModelEntryFlags::live },
 	{ "pauseDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetPauseDuration())),											ObjectModelEntryFlags::live },
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::live },
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },

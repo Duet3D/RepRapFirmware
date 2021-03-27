@@ -10,7 +10,6 @@
 
 #include <RepRapFirmware.h>
 #include <Storage/FileData.h>
-#include <Platform/MessageType.h>
 #include <RTOSIface/RTOSIface.h>
 
 #include <Stream.h>

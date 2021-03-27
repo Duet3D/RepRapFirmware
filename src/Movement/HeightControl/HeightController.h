@@ -8,12 +8,10 @@
 #ifndef SRC_MOVEMENT_HEIGHTCONTROL_HEIGHTCONTROLLER_H_
 #define SRC_MOVEMENT_HEIGHTCONTROL_HEIGHTCONTROLLER_H_
 
-#include "RepRapFirmware.h"
-#undef array
+#include <RepRapFirmware.h>
 
 #if SUPPORT_ASYNC_MOVES
 
-#include "GCodes/GCodeResult.h"
 #include <RTOSIface/RTOSIface.h>
 
 class HeightController

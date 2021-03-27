@@ -24,7 +24,7 @@ void SharedSpiClient::InitCsPin() const noexcept
 	}
 }
 
-// Get ownership of this SPI, return true if successful
+// Get ownership of this SPI and assert CS, returning true if successful
 bool SharedSpiClient::Select(uint32_t timeout) const noexcept
 {
 	const bool ok = device.Take(timeout);
@@ -37,6 +37,7 @@ bool SharedSpiClient::Select(uint32_t timeout) const noexcept
 	return ok;
 }
 
+// Release CS and release ownership of the SPI bus
 void SharedSpiClient::Deselect() const noexcept
 {
 	IoPort::WriteDigital(csPin, !csActivePolarity);

@@ -21,11 +21,9 @@ Licence: GPL
 #ifndef REPRAP_H
 #define REPRAP_H
 
-#include "RepRapFirmware.h"
-#include "ObjectModel/ObjectModel.h"
-#include "MessageType.h"
-#include "RTOSIface/RTOSIface.h"
-#include "GCodes/GCodeResult.h"
+#include <RepRapFirmware.h>
+#include <ObjectModel/ObjectModel.h>
+#include <RTOSIface/RTOSIface.h>
 #include <General/inplace_function.h>
 #include <GCodes/Variable.h>
 

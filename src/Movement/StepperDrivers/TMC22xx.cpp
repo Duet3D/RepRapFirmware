@@ -1859,7 +1859,7 @@ void SmartDrivers::Init() noexcept
 	// Set up the single UART that communicates with all TMC22xx drivers
 	SetPinFunction(TMC22xxUartTxPin, TMC22xxUartPeriphMode);
 	SetPinFunction(TMC22xxUartRxPin, TMC22xxUartPeriphMode);
-	SetPullup(TMC22xxUartRxPin, true);
+	EnablePullup(TMC22xxUartRxPin);
 
 	// Enable the clock to the UART
 	pmc_enable_periph_clk(ID_TMC22xx_UART);

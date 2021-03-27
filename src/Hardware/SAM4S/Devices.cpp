@@ -24,7 +24,7 @@ void SerialInit() noexcept
 {
 	SetPinFunction(APIN_Serial0_RXD, Serial0PeriphMode);
 	SetPinFunction(APIN_Serial0_TXD, Serial0PeriphMode);
-	SetPullup(APIN_Serial0_RXD, true);
+	EnablePullup(APIN_Serial0_RXD);
 }
 #endif
 
@@ -36,7 +36,7 @@ void SdhcInit() noexcept
 	for (Pin p : HsmciOtherPins)
 	{
 		SetPinFunction(p, HsmciPinsFunction);
-		SetPullup(p, true);
+		EnablePullup(p);
 	}
 }
 

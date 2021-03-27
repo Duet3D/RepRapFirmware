@@ -8,9 +8,8 @@
 #ifndef SRC_GCODES_TRIGGER_H_
 #define SRC_GCODES_TRIGGER_H_
 
-#include "RepRapFirmware.h"
-#include "GCodeResult.h"
-#include "Hardware/IoPorts.h"
+#include <RepRapFirmware.h>
+#include <Hardware/IoPorts.h>
 
 class Trigger
 {

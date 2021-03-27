@@ -14,9 +14,7 @@
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeChannel.h>
 #include <GCodes/GCodeMachineState.h>
-#include <GCodes/GCodeResult.h>
 #include <Linux/LinuxMessageFormats.h>
-#include <Platform/MessageType.h>
 #include <ObjectModel/ObjectModel.h>
 
 class FileGCodeInput;
@@ -73,6 +71,7 @@ public:
 
 	bool Seen(char c) noexcept SPEED_CRITICAL;										// Is a character present?
 	void MustSee(char c) THROWS(GCodeException);									// Test for character present, throw error if not
+	char MustSee(char c1, char c2) THROWS(GCodeException);							// Test for one of two characters present, throw error if not
 
 	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter
 	float GetDistance() THROWS(GCodeException);										// Get a distance or coordinate and convert it from inches to mm if necessary

@@ -13,7 +13,6 @@
 #include <RepRapFirmware.h>
 #include "DriverMode.h"
 #include <Pins.h>
-#include <Platform/MessageType.h>
 
 // TMC2660 read response bits that are returned by the status calls
 const uint32_t TMC_RR_SG = 1 << 0;			// stall detected

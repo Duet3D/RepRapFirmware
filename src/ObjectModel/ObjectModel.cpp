@@ -820,7 +820,7 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 		++n;
 	}
 	return (*n == 0 && (*id == 0 || *id == '.' || *id == '[' || *id == '^')) ? 0
-		: (*id > *n) ? 1
+		: (*id > *n && *id != '^') ? 1
 			: -1;
 }
 

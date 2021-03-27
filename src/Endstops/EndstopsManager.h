@@ -10,7 +10,6 @@
 
 #include <RepRapFirmware.h>
 #include "EndstopDefs.h"
-#include <GCodes/GCodeResult.h>
 #include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
 
@@ -40,7 +39,7 @@ public:
 	bool EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept;
 
 	// Get the first endstop that has triggered and remove it from the active list if appropriate
-	EndstopHitDetails CheckEndstops(bool goingSlow) noexcept;
+	EndstopHitDetails CheckEndstops() noexcept;
 
 	// Configure the endstops in response to M574
 	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) noexcept;

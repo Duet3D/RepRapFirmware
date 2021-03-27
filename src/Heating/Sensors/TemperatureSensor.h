@@ -1,10 +1,9 @@
 #ifndef TEMPERATURESENSOR_H
 #define TEMPERATURESENSOR_H
 
-#include "RepRapFirmware.h"
-#include "Heating/TemperatureError.h"		// for result codes
-#include "Hardware/IoPorts.h"
-#include "GCodes/GCodeResult.h"
+#include <RepRapFirmware.h>
+#include <Heating/TemperatureError.h>		// for result codes
+#include <Hardware/IoPorts.h>
 #include <ObjectModel/ObjectModel.h>
 
 class GCodeBuffer;

@@ -27,7 +27,7 @@ public:
 #if HAS_MASS_STORAGE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
 #endif
-	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept override;
+	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const noexcept override { return 0; }
 	const char* HomingButtonNames() const noexcept override { return "ABCD"; }

@@ -34,9 +34,9 @@ struct EndstopHitDetails
 	void SetAction(EndstopHitAction a) noexcept { action = (uint32_t)a; }
 	EndstopHitAction GetAction() const noexcept { return (EndstopHitAction)action; }
 
-	uint16_t action : 4,			// an EndstopHitAction
-			 internalUse : 4,		// used to pass data between CheckTriggered() and Acknowledge()
-			 axis : 4,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisPos is true
+	uint16_t action : 2,			// an EndstopHitAction
+			 internalUse : 4,		// used to pass the port index between CheckTriggered() and Acknowledge()
+			 axis : 6,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisLow or SetAxisHigh is true
 			 setAxisLow : 1,		// whether or not to set the axis position to its min
 			 setAxisHigh : 1,		// whether or not to set the axis position to its max
 			 isZProbe : 1;			// whether this is a Z probe

@@ -2892,7 +2892,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 			else
 			{
 				// Do a Z probe at the specified point.
-				const auto zp = SetZProbeNumber(gb);			// may throw, so do this before changing the state
+				const auto zp = SetZProbeNumber(gb, 'K');		// may throw, so do this before changing the state
 				gb.SetState(GCodeState::probingAtPoint0);
 				if (zp->GetProbeType() != ZProbeType::blTouch)
 				{
@@ -2905,7 +2905,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 	{
 		// G30 without P parameter. This probes the current location starting from the current position.
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
-		const auto zp = SetZProbeNumber(gb);					// may throw, so do this before changing the state
+		const auto zp = SetZProbeNumber(gb, 'K');				// may throw, so do this before changing the state
 		InitialiseTaps(zp->HasTwoProbingSpeeds());
 		gb.SetState(GCodeState::probingAtPoint2a);
 		if (zp->GetProbeType() != ZProbeType::blTouch)
@@ -2917,9 +2917,9 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Set up currentZProbeNumber and return the probe
-ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb) THROWS(GCodeException)
+ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException)
 {
-	const uint32_t probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+	const uint32_t probeNumber = (gb.Seen(probeLetter)) ? gb.GetLimitedUIValue(probeLetter, MaxZProbes) : 0;
 	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNull())
 	{
@@ -2977,7 +2977,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::error;
 	}
 
-	const auto zp = SetZProbeNumber(gb);			// may throw, so do this before changing the state
+	const auto zp = SetZProbeNumber(gb, 'K');			// may throw, so do this before changing the state
 
 	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
 	ClearBedMapping();
@@ -3246,7 +3246,11 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	}
 #endif
 
-	if (simulationMode != 0)
+	if (   simulationMode != 0														// if we are simulating then simulate the G4...
+		&& &gb != daemonGCode														// ...unless it comes from the daemon...
+		&& &gb != triggerGCode														// ...or a trigger...
+		&& (&gb == fileGCode || !exitSimulationWhenFileComplete)					// ...or we are simulating a file and this command doesn't come from the file
+	   )
 	{
 		simulationTime += (float)dwell * 0.001;
 		return GCodeResult::ok;
@@ -3353,7 +3357,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 		reply.printf("Tool %d offsets:", tool->Number());
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			reply.catf(" %c%.2f", axisLetters[axis], (double)tool->GetOffset(axis));
+			reply.catf(" %c%.3f", axisLetters[axis], (double)tool->GetOffset(axis));
 		}
 		if (hCount != 0)
 		{
@@ -3400,7 +3404,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	String<ToolNameLength> name;
 	if (gb.Seen('S'))
 	{
-		gb.GetReducedString(name.GetRef());
+		gb.GetQuotedString(name.GetRef());
 		seen = true;
 	}
 

@@ -40,8 +40,8 @@ protected:
 	GCodeResult UpdateModel(const StringRef& reply) noexcept override;		// Called when the heater model has been changed
 	GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept override;
 	GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept override;
-	GCodeResult StartAutoTune(const StringRef& reply, FansBitmap fans, float targetTemp, float pwm, bool seenA, float ambientTemp) noexcept override;	// Start an auto tune cycle for this heater
-
+	GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept override;
+																			// Start an auto tune cycle for this heater
 private:
 	enum class TuningState : uint8_t
 	{

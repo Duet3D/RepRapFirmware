@@ -242,13 +242,13 @@ void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
 LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
-															size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const noexcept
+															size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	bool limited = false;
 
 	// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
 	// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
-	if ((axesHomed & XyzAxes) == XyzAxes)
+	if ((axesToLimit & XyzAxes) == XyzAxes)
 	{
 		// Constrain the move to be within the build radius
 		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
@@ -399,7 +399,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 	}
 
 	// Limit any additional axes according to the M208 limits
-	if (applyM208Limits && LimitPositionFromAxis(finalCoords, numTowers, numVisibleAxes, axesHomed))
+	if (applyM208Limits && LimitPositionFromAxis(finalCoords, numTowers, numVisibleAxes, axesToLimit))
 	{
 		limited = true;
 	}

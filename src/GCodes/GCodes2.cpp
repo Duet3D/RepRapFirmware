@@ -51,6 +51,10 @@
 # include <CAN/ExpansionManager.h>
 #endif
 
+#if SUPPORT_ACCELEROMETERS
+# include <Accelerometers/Accelerometers.h>
+#endif
+
 #ifdef DUET3_ATE
 # include <Duet3Ate.h>
 #endif
@@ -4536,6 +4540,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				CanAddress addr = gb.GetLimitedUIValue('A', 1, CanId::MaxCanAddress + 1);
 				CanInterface::SwitchToExpansionMode(addr);
 			}
+			break;
+#endif
+
+#if SUPPORT_ACCELEROMETERS
+		case 955:
+			result = Accelerometers::ConfigureAccelerometer(gb, reply);
+			break;
+
+		case 956:
+			result = Accelerometers::StartAccelerometer(gb, reply);
 			break;
 #endif
 

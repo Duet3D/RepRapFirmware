@@ -8,10 +8,9 @@
 #ifndef SRC_FAN_H_
 #define SRC_FAN_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
-#include "Hardware/IoPorts.h"
-#include "GCodes/GCodeResult.h"
+#include <Hardware/IoPorts.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanMessageFormats.h>

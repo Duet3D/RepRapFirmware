@@ -21,7 +21,7 @@ public:
 	EndStopType GetEndstopType() const noexcept override { return EndStopType::zProbeAsEndstop; }
 	bool Stopped() const noexcept override;
 	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept override;
-	EndstopHitDetails CheckTriggered(bool goingSlow) noexcept override;
+	EndstopHitDetails CheckTriggered() noexcept override;
 	bool Acknowledge(EndstopHitDetails what) noexcept override;
 	void AppendDetails(const StringRef& str) noexcept override;
 

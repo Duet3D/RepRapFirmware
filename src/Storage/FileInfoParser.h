@@ -10,7 +10,6 @@
 
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeFileInfo.h>
-#include <GCodes/GCodeResult.h>
 
 #if HAS_MASS_STORAGE
 

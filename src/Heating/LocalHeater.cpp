@@ -423,16 +423,16 @@ float LocalHeater::GetAveragePWM() const noexcept
 // Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
 float LocalHeater::GetExpectedHeatingRate() const noexcept
 {
-	// In the following we allow for the gain being only 75% of what we think it should be, to avoid false alarms
-	const float maxTemperatureRise = 0.75 * GetModel().GetGainFanOff() * GetAveragePWM();	// this is the highest temperature above ambient we expect the heater can reach at this PWM
+	// In the following we allow for the gain being only 60% of what we think it should be, to avoid false alarms
+	const float maxTemperatureRise = 0.60 * GetModel().GetGainFanOff() * GetAveragePWM();	// this is the highest temperature above ambient we expect the heater can reach at this PWM
 	const float initialHeatingRate = maxTemperatureRise/GetModel().GetTimeConstantFanOn();	// this is the expected heating rate at ambient temperature
 	return (maxTemperatureRise >= 20.0)
 			? (maxTemperatureRise + NormalAmbientTemperature - temperature) * initialHeatingRate/maxTemperatureRise
 			: 0.0;
 }
 
-// Auto tune this heater. The caller has already checked that on other heater is being tuned.
-GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, FansBitmap fans, float targetTemp, float pwm, bool seenA, float ambientTemp) noexcept
+// Auto tune this heater. The caller has already checked that no other heater is being tuned and has set up tuningTargetTemp, tuningPwm, tuningFans, tuningHysteresis and tuningFanPwm.
+GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept
 {
 	if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
 	{
@@ -440,11 +440,8 @@ GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, FansBitmap fans, 
 		return GCodeResult::error;
 	}
 
-	tuningFans = fans;
 	reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
 
-	tuningPwm = pwm;
-	tuningTargetTemp = targetTemp;
 	tuningStartTemp.Clear();
 	tuningBeginTime = millis();
 	tuned = false;					// assume failure
@@ -595,7 +592,7 @@ void LocalHeater::DoTuningStep() noexcept
 			peakTemp = afterPeakTemp = temperature;
 			peakTime = afterPeakTime = now;
 		}
-		else if (temperature < tuningTargetTemp - TuningHysteresis)
+		else if (temperature < tuningTargetTemp - tuningHysteresis)
 		{
 			// Temperature has dropped below the low limit.
 			// If we have been doing idle cycles, see whether we can switch to collecting data, and turn the heater on.
@@ -649,9 +646,9 @@ void LocalHeater::DoTuningStep() noexcept
 							tuningPhase = 4;
 							ClearCounters();
 #if TUNE_WITH_HALF_FAN
-							reprap.GetFansManager().SetFansValue(tuningFans, 0.5);		// turn fans on at half PWM
+							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm * 0.5);	// turn fans on at half PWM
 #else
-							reprap.GetFansManager().SetFansValue(tuningFans, 1.0);		// turn fans on at full PWM
+							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm);		// turn fans on at full PWM
 #endif
 							ReportTuningUpdate();
 						}
@@ -662,13 +659,13 @@ void LocalHeater::DoTuningStep() noexcept
 						CalculateModel(fanOnParams);
 						tuningPhase = 5;
 						ClearCounters();
-						reprap.GetFansManager().SetFansValue(tuningFans, 1.0);			// turn fans fully on
+						reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm);			// turn fans fully on
 						ReportTuningUpdate();
 					}
 #endif
 					else
 					{
-						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);			// turn fans off
+						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);					// turn fans off
 						CalculateModel(fanOnParams);
 						SetAndReportModel(true);
 						break;
@@ -707,7 +704,7 @@ void LocalHeater::DoTuningStep() noexcept
 			lastPwm = 0.0;								// turn heater off
 			mode = HeaterMode::tuning2;
 		}
-		else if (afterPeakTime == peakTime && temperature - tuningTargetTemp >= TuningPeakTempDrop - TuningHysteresis)
+		else if (afterPeakTime == peakTime && temperature - tuningTargetTemp >= TuningPeakTempDrop - tuningHysteresis)
 		{
 			afterPeakTime = now;
 			afterPeakTemp = temperature;
@@ -720,7 +717,7 @@ void LocalHeater::DoTuningStep() noexcept
 	}
 
 	// If we get here, we have finished
-	SwitchOff();								// sets mode and lastPWM, also deletes tuningTempReadings
+	SwitchOff();										// sets mode and lastPWM, also deletes tuningTempReadings
 }
 
 // Calculate the heater model from the accumulated heater parameters

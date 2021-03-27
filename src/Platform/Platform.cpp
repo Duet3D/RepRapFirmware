@@ -404,13 +404,15 @@ void Platform::Init() noexcept
 	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// hold the Ethernet Phy chip in reset, hopefully this will prevent it being too noisy if Ethernet is not enabled
 #endif
 
+#ifndef __LPC17xx__
 	// Deal with power first (we assume this doesn't depend on identifying the board type)
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
+#endif
 
 	// Make sure the on-board drivers are disabled
-#if defined(DUET_NG) || defined(PCCB_10) || defined(PCCB_08_X5)
+#if defined(DUET_NG) || defined(PCCB_10)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
-#elif defined(DUET_M) || defined(PCCB_08) || defined(PCCB_08_X5) || defined(DUET3MINI)
+#elif defined(DUET_M) || defined(DUET3MINI)
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #endif
 
@@ -471,10 +473,7 @@ void Platform::Init() noexcept
 #ifdef __LPC17xx__
 	// Load HW pin assignments from sdcard
 	BoardConfig::Init();
-	pinMode(ATX_POWER_PIN,(ATX_POWER_INVERTED==false)?OUTPUT_LOW:OUTPUT_HIGH);
-#else
-	// Deal with power first (we assume this doesn't depend on identifying the board type)
-	pinMode(ATX_POWER_PIN,OUTPUT_LOW);
+	pinMode(ATX_POWER_PIN, (ATX_POWER_INVERTED) ? OUTPUT_HIGH : OUTPUT_LOW);
 #endif
 
     // Ethernet networking defaults
@@ -1797,6 +1796,15 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	for (size_t i = 0; i < ARRAY_SIZE(auxDevices); ++i)
 	{
 		auxDevices[i].Diagnostics(mtype, i);
+	}
+#endif
+
+#ifdef DUET3MINI
+	// Report the analogIn status (trying to debug the spurious zero VIN issue)
+	{
+		uint32_t conversionsStarted, conversionsCompleted, conversionTimeouts;
+		AnalogIn::GetDebugInfo(conversionsStarted, conversionsCompleted, conversionTimeouts);
+		MessageF(mtype, "ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 "\n", conversionsStarted, conversionsCompleted, conversionTimeouts);
 	}
 #endif
 
@@ -3655,18 +3663,14 @@ void Platform::StopLogging() noexcept
 
 bool Platform::AtxPower() const noexcept
 {
-#ifdef __LPC17xx__
 	const bool val = IoPort::ReadPin(ATX_POWER_PIN);
 	return (ATX_POWER_INVERTED) ? !val : val;
-#else
-    return IoPort::ReadPin(ATX_POWER_PIN);
-#endif
 }
 
 void Platform::AtxPowerOn() noexcept
 {
 	deferredPowerDown = false;
-	IoPort::WriteDigital(ATX_POWER_PIN, true);
+	IoPort::WriteDigital(ATX_POWER_PIN, !ATX_POWER_INVERTED);
 }
 
 void Platform::AtxPowerOff(bool defer) noexcept
@@ -3682,11 +3686,7 @@ void Platform::AtxPowerOff(bool defer) noexcept
 			// We don't call logger->Stop() here because we don't know whether turning off the power will work
 		}
 #endif
-#ifdef __LPC17xx__
 		IoPort::WriteDigital(ATX_POWER_PIN, ATX_POWER_INVERTED);
-#else
-		IoPort::WriteDigital(ATX_POWER_PIN, false);
-#endif
 	}
 }
 
@@ -4305,25 +4305,17 @@ float Platform::GetCurrentV12Voltage() const noexcept
 float Platform::GetTmcDriversTemperature(unsigned int boardNumber) const noexcept
 {
 #if defined(DUET3MINI)
-	const DriversBitmap mask = (boardNumber == 0)
-							? DriversBitmap::MakeLowestNBits(5)							// drivers 0-4 are on the main board
-								: DriversBitmap::MakeLowestNBits(3).ShiftUp(5);			// drivers 5-7 are on the daughter board
+	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(7);						// report the 2-driver addon along with the main board
 #elif defined(DUET3)
 	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(6);						// there are 6 drivers, only one board
 #elif defined(DUET_NG)
 	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(5).ShiftUp(5 * boardNumber);	// there are 5 drivers on each board
 #elif defined(DUET_M)
-	const DriversBitmap mask = (boardNumber == 0)
-							? DriversBitmap::MakeLowestNBits(5)							// drivers 0-4 are on the main board
-								: DriversBitmap::MakeLowestNBits(2).ShiftUp(5);			// drivers 5-6 are on the daughter board
+	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(7);						// report the 2-driver addon along with the main board
 #elif defined(PCCB_10)
 	const DriversBitmap mask = (boardNumber == 0)
 							? DriversBitmap::MakeLowestNBits(2)							// drivers 0,1 are on-board
 								: DriversBitmap::MakeLowestNBits(5).ShiftUp(2);			// drivers 2-7 are on the DueX5
-#elif defined(PCCB_08_X5)
-	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(5);						// all drivers (0-4) are on the DueX, no further expansion supported
-#elif defined(PCCB_08)
-	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(2);						// drivers 0, 1 are on-board, no expansion supported
 #else
 # error Undefined board
 #endif

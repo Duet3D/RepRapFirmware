@@ -11,7 +11,6 @@ Separated out from Platform.h by dc42 and extended by chrishamm
 
 #include <Networking/NetworkInterface.h>
 #include <Networking/NetworkDefs.h>
-#include <Platform/MessageType.h>
 
 class NetworkResponder;
 class HttpResponder;

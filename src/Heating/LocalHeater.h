@@ -16,7 +16,6 @@
 #include "FOPDT.h"
 #include "TemperatureError.h"
 #include <Hardware/IoPorts.h>
-#include <GCodes/GCodeResult.h>
 
 class HeaterMonitor;
 
@@ -53,8 +52,8 @@ protected:
 	GCodeResult UpdateModel(const StringRef& reply) noexcept override;		// Called when the heater model has been changed
 	GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept override { return GCodeResult::ok; }
 	GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept override { return GCodeResult::ok; }
-	GCodeResult StartAutoTune(const StringRef& reply, FansBitmap fans, float targetTemp, float pwm, bool seenA, float ambientTemp) noexcept override;	// Start an auto tune cycle for this heater
-
+	GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept override;
+																			// Start an auto tune cycle for this heater
 private:
 	void SetHeater(float power) const noexcept;				// Power is a fraction in [0,1]
 	TemperatureError ReadTemperature() noexcept;			// Read and store the temperature of this heater

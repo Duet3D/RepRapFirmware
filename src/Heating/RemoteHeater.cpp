@@ -160,9 +160,9 @@ void RemoteHeater::Spin() noexcept
 							tuningPhase = 4;
 							ClearCounters();
 #if TUNE_WITH_HALF_FAN
-							reprap.GetFansManager().SetFansValue(tuningFans, 0.5);		// turn fans on at half PWM
+							reprap.GetFansManager().SetFansValue(tuningFans,tuningFanPwm *  0.5);	// turn fans on at half PWM
 #else
-							reprap.GetFansManager().SetFansValue(tuningFans, 1.0);		// turn fans on at full PWM
+							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm);		// turn fans on at full PWM
 #endif
 							ReportTuningUpdate();
 						}
@@ -173,13 +173,13 @@ void RemoteHeater::Spin() noexcept
 						CalculateModel(fanOnParams);
 						tuningPhase = 5;
 						ClearCounters();
-						reprap.GetFansManager().SetFansValue(tuningFans, 1.0);			// turn fans fully on
+						reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm);			// turn fans fully on
 						ReportTuningUpdate();
 					}
 #endif
 					else
 					{
-						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);			// turn fans off
+						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);					// turn fans off
 						CalculateModel(fanOnParams);
 						SetAndReportModel(true);
 						StopTuning();
@@ -286,7 +286,8 @@ float RemoteHeater::GetAccumulator() const noexcept
 	return 0.0;		// not supported
 }
 
-GCodeResult RemoteHeater::StartAutoTune(const StringRef& reply, FansBitmap fans, float targetTemp, float pwm, bool seenA, float ambientTemp) noexcept
+// Auto tune this heater. The caller has already checked that no other heater is being tuned and has set up tuningTargetTemp, tuningPwm, tuningFans, tuningHysteresis and tuningFanPwm.
+GCodeResult RemoteHeater::StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -295,11 +296,8 @@ GCodeResult RemoteHeater::StartAutoTune(const StringRef& reply, FansBitmap fans,
 		return GCodeResult::error;
 	}
 
-	tuningFans = fans;
 	reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
 
-	tuningPwm = pwm;
-	tuningTargetTemp = targetTemp;
 	tuningStartTemp.Clear();
 	tuningBeginTime = millis();
 	tuned = false;
@@ -490,7 +488,7 @@ GCodeResult RemoteHeater::SendTuningCommand(const StringRef& reply, bool on) noe
 	msg->heaterNumber = GetHeaterNumber();
 	msg->on = on;
 	msg->highTemp = tuningTargetTemp;
-	msg->lowTemp = tuningTargetTemp - TuningHysteresis;
+	msg->lowTemp = tuningTargetTemp - tuningHysteresis;
 	msg->pwm = tuningPwm;
 	msg->peakTempDrop = TuningPeakTempDrop;
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
