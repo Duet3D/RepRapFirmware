@@ -563,6 +563,9 @@ void RepRap::Init() noexcept
 
 	active = true;										// must do this after we initialise the watchdog but before we start the network or call Spin(), else the watchdog may time out
 
+	delay(100);											// give the tick ISR time to collect voltage readings
+	platform->ResetVoltageMonitors();					// get rid of the spurious zero minimum voltage readings
+
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
 #if HAS_LINUX_INTERFACE && !HAS_MASS_STORAGE

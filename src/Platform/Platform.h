@@ -582,8 +582,10 @@ public:
 #endif
 
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
+	void ResetVoltageMonitors() noexcept;
 	bool HasVinPower() const noexcept;
 #else
+	void ResetVoltageMonitors() noexcept { }
 	bool HasVinPower() const noexcept { return true; }
 #endif
 
