@@ -135,6 +135,7 @@ static bool spi_dma_check_rx_complete() noexcept
 
 // Set up the transmit DMA but don't enable it
 static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noexcept
+pre(bytesToTransfer <= outBuffer.limit)
 {
 #if USE_DMAC
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
@@ -189,6 +190,7 @@ static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noex
 
 // Set up the receive DMA but don't enable it
 static void spi_rx_dma_setup(void *inBuffer, size_t bytesToTransfer) noexcept
+pre(bytesToTransfer <= inBuffer.limit)
 {
 #if USE_DMAC
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
@@ -245,6 +247,7 @@ static void spi_rx_dma_setup(void *inBuffer, size_t bytesToTransfer) noexcept
  * \brief Set SPI slave transfer.
  */
 static void spi_slave_dma_setup(void *inBuffer, const void *outBuffer, size_t bytesToTransfer) noexcept
+pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 {
 	spi_dma_disable();
 	spi_tx_dma_setup(outBuffer, bytesToTransfer);
@@ -267,6 +270,7 @@ static void spi_slave_dma_setup(void *inBuffer, const void *outBuffer, size_t by
 }
 
 static void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer) noexcept
+pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 {
 #if !SAME5x
 	// Reset SPI

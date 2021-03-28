@@ -834,6 +834,16 @@ void Platform::Init() noexcept
 	active = true;
 }
 
+// Reset the min and max recorded voltages to the current values
+void Platform::ResetVoltageMonitors() noexcept
+{
+	lowestVin = highestVin = currentVin;
+
+#if HAS_12V_MONITOR
+	lowestV12 = highestV12 = currentV12;
+#endif
+}
+
 #if MCU_HAS_UNIQUE_ID
 
 // Read the unique ID of the MCU, if it has one
@@ -1800,11 +1810,14 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #endif
 
 #ifdef DUET3MINI
-	// Report the analogIn status (trying to debug the spurious zero VIN issue)
+	// Report the processor revision level and analogIn status (trying to debug the spurious zero VIN issue)
 	{
-		uint32_t conversionsStarted, conversionsCompleted, conversionTimeouts;
-		AnalogIn::GetDebugInfo(conversionsStarted, conversionsCompleted, conversionTimeouts);
-		MessageF(mtype, "ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 "\n", conversionsStarted, conversionsCompleted, conversionTimeouts);
+		// The DSU clocks are enabled by default so no need to enable them here
+		const unsigned int chipVersion = DSU->DID.bit.REVISION;
+		uint32_t conversionsStarted, conversionsCompleted, conversionTimeouts, errors;
+		AnalogIn::GetDebugInfo(conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
+		MessageF(mtype, "MCU revision %u, ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 ", errs %" PRIu32 "\n",
+					chipVersion, conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
 	}
 #endif
 
@@ -1822,15 +1835,15 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
 				numVinUnderVoltageEvents, numVinOverVoltageEvents,
 				(HasVinPower()) ? "yes" : "no");
-	lowestVin = highestVin = currentVin;
 #endif
 
 #if HAS_12V_MONITOR
 	// Show the 12V rail voltage
 	MessageF(mtype, "12V rail voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 "\n",
 		(double)AdcReadingToPowerVoltage(lowestV12), (double)AdcReadingToPowerVoltage(currentV12), (double)AdcReadingToPowerVoltage(highestV12), numV12UnderVoltageEvents);
-	lowestV12 = highestV12 = currentV12;
 #endif
+
+	ResetVoltageMonitors();
 
 	StringHandle::Diagnostics(mtype);
 

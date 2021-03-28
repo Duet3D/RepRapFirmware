@@ -707,17 +707,29 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 32+32+32+13);
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
-constexpr DmaChannel DmacChanTmcTx = 0;
-constexpr DmaChannel DmacChanTmcRx = 1;
-constexpr DmaChannel FirstAdcDmaChannel = 2;			// the ADCs use 4 DMA channels
-constexpr DmaChannel DmacChanWiFiTx = 6;
-constexpr DmaChannel DmacChanWiFiRx = 7;
-constexpr DmaChannel DmacChanSbcTx = 8;
-constexpr DmaChannel DmacChanSbcRx = 9;
-constexpr DmaChannel DmacChanDotStarTx = 10;
+// When static arbitration within a priority level is selected, lower channel number have higher priority.
+// So we use the low channel numbers for the highest priority sources.
+constexpr DmaChannel DmacChanWiFiTx = 0;
+constexpr DmaChannel DmacChanWiFiRx = 1;
+constexpr DmaChannel DmacChanSbcTx = 2;
+constexpr DmaChannel DmacChanSbcRx = 3;
+constexpr DmaChannel FirstAdcDmaChannel = 4;			// the ADCs use 4 DMA channels
+constexpr DmaChannel DmacChanDotStarTx = 8;
+constexpr DmaChannel DmacChanTmcRx = 9;
+constexpr DmaChannel DmacChanTmcTx = 10;
 
 constexpr unsigned int NumDmaChannelsUsed = 11;
 
+// The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
+#if 1
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 0;				// the baud rate is 250kbps so this is not very critical
+constexpr DmaPriority DmacPrioAdcTx = 0;
+constexpr DmaPriority DmacPrioAdcRx = 0;
+constexpr DmaPriority DmacPrioWiFi = 0;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioSbc = 0;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioDotStar = 0;				// QSPI in master mode
+#else
 constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 250kbps so this is not very critical
 constexpr DmaPriority DmacPrioAdcTx = 0;
@@ -725,6 +737,7 @@ constexpr DmaPriority DmacPrioAdcRx = 2;
 constexpr DmaPriority DmacPrioWiFi = 3;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 3;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioDotStar = 1;				// QSPI in master mode
+#endif
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers
