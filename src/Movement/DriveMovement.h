@@ -174,8 +174,8 @@ public:
 private:
 	bool CalcNextStepTimeCartesianFull(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool CalcNextStepTimeDeltaFull(const DDA &dda) noexcept SPEED_CRITICAL;
-	void NewLinearSegment() noexcept;
-	void NewDeltaSegment(const DDA *dda) noexcept;
+	void NewLinearSegment(float startDistance) noexcept;
+	void NewDeltaSegment(const DDA& dda, float startDistance) noexcept;
 
 	static DriveMovement *freeList;
 	static unsigned int numCreated;
@@ -192,7 +192,8 @@ private:
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
 			fullCurrent : 1,							// true if the drivers are set to the full current, false if they are set to the standstill current
-			isDelta : 1;								// true if this DM uses segment-free delta kinematics
+			isDelta : 1,								// true if this DM uses segment-free delta kinematics
+			reverseInThisSegment : 1;					// true if there is a direction reversal within this segment
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
 	uint32_t totalSteps;								// total number of steps for this move
@@ -204,6 +205,8 @@ private:
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
+	float reverseStartDistance;
+
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	struct DeltaParameters								// Parameters for delta movement
 	{
@@ -212,9 +215,9 @@ private:
 		float fTwoA;
 		float fTwoB;
 		float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
-		float fHmz0s;									// the starting step position less the starting Z height, multiplied by the Z movement fraction (can go negative)
+		float h0MinusZ0;								// the height subtended by the rod at the start of the move
+		float fHmz0s;									// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
 		float fMinusAaPlusBbTimesS;
-		float reverseStartDistance;
 #else
 		int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 		int32_t hmz0sK;									// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)

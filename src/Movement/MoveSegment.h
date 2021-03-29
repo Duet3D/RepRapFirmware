@@ -74,9 +74,9 @@ private:
 	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
 
 	// The 'next' field is a MoveSegment pointer with two flag bits in the bottom two bits
-	uint32_t nextAndFlags;
-	float pA, pB, pC;
-	float distanceLimit;
+	uint32_t nextAndFlags;			// pointer to the next segment
+	float pA, pB, pC;				// the parameters that describe this move
+	float distanceLimit;			// the fraction of the overall move completed at the end of this segment
 };
 
 // Create a new one, leaving the flags clear

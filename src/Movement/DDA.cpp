@@ -678,7 +678,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	if (msg.steadyClocks > 0.0)
 	{
 		tempSegments = MoveSegment::Allocate(tempSegments);
-		tempSegments->SetLinear(params.decelStartDistance, totalDistance/topSpeed, (float)msg.accelerationClocks + beforePrepare.accelDistance/topSpeed);
+		tempSegments->SetLinear(params.decelStartDistance, 1.0/topSpeed, (float)msg.accelerationClocks + beforePrepare.accelDistance/topSpeed);
 	}
 
 	// Acceleration phase
@@ -1190,20 +1190,20 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		// Calculate the segments needed for axis movement
 		// Deceleration phase
 		MoveSegment * tempSegments = (beforePrepare.decelDistance > 0.0)
-										? shaper.GetDecelerationSegments(plan, *this, totalDistance, params.decelStartDistance, params.accelClocks + params.steadyClocks)
+										? shaper.GetDecelerationSegments(plan, *this, totalDistance, params.decelStartDistance/totalDistance, params.accelClocks + params.steadyClocks)
 										: nullptr;
 		// Steady speed phase
 		if (params.steadyClocks > 0.0)
 		{
 			tempSegments = MoveSegment::Allocate(tempSegments);
 			const float ts = topSpeed * StepTimer::StepClockRate;
-			tempSegments->SetLinear(params.decelStartDistance, totalDistance/ts, params.accelClocks + beforePrepare.accelDistance/ts);
+			tempSegments->SetLinear(params.decelStartDistance/totalDistance, totalDistance/ts, params.accelClocks + beforePrepare.accelDistance/ts);
 		}
 
 		// Acceleration phase
 		if (beforePrepare.accelDistance > 0.0)
 		{
-			tempSegments = shaper.GetAccelerationSegments(plan, *this, params.accelDistance, tempSegments);
+			tempSegments = shaper.GetAccelerationSegments(plan, *this, params.accelDistance/totalDistance, tempSegments);
 		}
 
 		segments = tempSegments;

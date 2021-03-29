@@ -57,7 +57,7 @@ DriveMovement::DriveMovement(DriveMovement *next) noexcept : nextDM(next)
 bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept
 {
 	currentSegment = dda.segments;
-	NewLinearSegment();
+	NewLinearSegment(0.0);
 
 	// Prepare for the first step
 	nextStep = 0;
@@ -68,33 +68,101 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 }
 
 // This is called when currentSegment has just been changed to a new segment
-void DriveMovement::NewLinearSegment() noexcept
+void DriveMovement::NewLinearSegment(float startDistance) noexcept
 {
+	const float distanceLimit = currentSegment->GetDistanceLimit();
+
 	// Work out the movement limit in steps
-	const uint32_t thisPhaseStepLimit = (uint32_t)(currentSegment->GetDistanceLimit()/totalSteps) + 1;
-	if (currentSegment->IsLast() && !currentSegment->IsLinear() && nextStep >= thisPhaseStepLimit)
+	if (currentSegment->IsLast())
 	{
-		state = DMState::reverse;
 		phaseStepLimit = totalSteps + 1;
+		if (reverseStartDistance < distanceLimit && startDistance < reverseStartDistance)
+		{
+			if (nextStep == reverseStartStep)
+			{
+				direction = !direction;
+				reverseInThisSegment = false;
+				state = DMState::reverse;
+			}
+			else
+			{
+				reverseInThisSegment = true;
+				state = DMState::forwards;
+			}
+		}
+		else
+		{
+			reverseInThisSegment = false;
+			state = DMState::forwards;
+		}
 	}
 	else
 	{
-		state = DMState::forwards;
-		phaseStepLimit = thisPhaseStepLimit;
+		const float thisPhaseStepLimit = (currentSegment->GetDistanceLimit() * totalSteps) + 1;
+		if ((float)reverseStartStep <= thisPhaseStepLimit && nextStep <= reverseStartStep)
+		{
+			if (nextStep == reverseStartStep)
+			{
+				direction = !direction;
+				reverseInThisSegment = false;
+				state = DMState::reverse;
+				phaseStepLimit = qq;
+			}
+			else
+			{
+				reverseInThisSegment = true;
+				state = DMState::forwards;
+				phaseStepLimit = qq;
+			}
+		}
+		else
+		{
+			reverseInThisSegment = false;
+			state = DMState::forwards;
+			phaseStepLimit = thisPhaseStepLimit;
+		}
 	}
 }
 
-void DriveMovement::NewDeltaSegment(const DDA *dda) noexcept
+void DriveMovement::NewDeltaSegment(const DDA& dda, float startDistance) noexcept
 {
 	// Work out the movement limit in steps
 	const float distanceLimit = currentSegment->GetDistanceLimit();
+	const float sDx = distanceLimit * dda.directionVector[0];
+	const float sDy = distanceLimit * dda.directionVector[1];
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-	const float sDx = distanceLimit * dda->directionVector[0];
-	const float sDy = distanceLimit * dda->directionVector[1];
-	int32_t steps = fastSqrtf(delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + fTwoA) + sDy * (sDy + fTwoB))) - qq;
-	if (distanceLimit > reverseStartDistance)
+	const float netStepsAtEnd = fastSqrtf(delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + delta.fTwoA) + sDy * (sDy + delta.fTwoB)))
+							 + (distanceLimit * dda.directionVector[2] - delta.h0MinusZ0) * stepsPerMm;
+	if (direction)
 	{
-		qq;
+		// Going up
+		if ((uint32_t)netStepsAtEnd > reverseStartStep)
+		{
+			// We reverse direction during this segment
+			reverseInThisSegment = true;
+			phaseStepLimit = reverseStartStep;
+		}
+		else if (currentSegment->IsLast())
+		{
+			phaseStepLimit = totalSteps + 1;
+		}
+		else
+		{
+			phaseStepLimit = (uint32_t)netStepsAtEnd + 1;
+		}
+	}
+	else
+	{
+		// Going down
+		if (currentSegment->IsLast())
+		{
+			phaseStepLimit = totalSteps + 1;
+		}
+		else
+		{
+			phaseStepLimit = (uint32_t)(netStepsAtEnd);
+			qq;
+		}
 	}
 }
 
@@ -106,11 +174,11 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	const float B = params.initialY - params.dparams->GetTowerY(drive);
 	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
 	const float dSquaredMinusAsquaredMinusBsquared = params.dparams->GetDiagonalSquared(drive) - fsquare(A) - fsquare(B);
-	const float h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
+	delta.h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
 #if DM_USE_FPU
 	delta.fTwoA = 2.0 * A;
 	delta.fTwoB = 2.0 * B;
-	delta.fHmz0s = h0MinusZ0 * stepsPerMm;
+	delta.fHmz0s = delta.h0MinusZ0 * stepsPerMm;
 	delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
 	delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
 #else
@@ -138,12 +206,13 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 			// Calculate how many steps we need to move up before reversing
 			reverseStartDistance = drev;
 			const float hrev = dda.directionVector[Z_AXIS] * drev + fastSqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
-			const int32_t numStepsUp = (int32_t)((hrev - h0MinusZ0) * stepsPerMm);
+			const int32_t numStepsUp = (int32_t)((hrev - delta.h0MinusZ0) * stepsPerMm);
 
 			// We may be almost at the peak height already, in which case we don't really have a reversal.
 			if (numStepsUp < 1 || (direction && (uint32_t)numStepsUp <= totalSteps))
 			{
 				reverseStartStep = totalSteps + 1;
+				direction = false;
 			}
 			else
 			{
@@ -165,8 +234,10 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 		}
 		else
 		{
+			// No reversal
 			reverseStartStep = totalSteps + 1;
 			reverseStartDistance = 2 * dda.totalDistance;
+			direction = (drev <= 0.0);
 		}
 	}
 
@@ -254,7 +325,6 @@ bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, fl
 	const float accelExtraDistance = compensationTime * dda.acceleration * params.accelTime;
 	const float totalAccelDistance = params.accelDistance + accelExtraDistance;
 	float actualTotalDistance = params.decelStartDistance + accelExtraDistance;			// this starts off being the decel start distance and ends up being the total distance
-	float reverseStartDistance;
 
 	// Deceleration phase
 	MoveSegment *segs = nullptr;
@@ -290,7 +360,7 @@ bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, fl
 
 		const float uDivDminusP = (dda.topSpeed * StepTimer::StepClockRate)/dda.deceleration - compensationClocks;
 		segs = MoveSegment::Allocate(nullptr);
-		segs->SetNonLinear(actualTotalDistance,
+		segs->SetNonLinear(actualTotalDistance/dda.totalDistance,
 							reverseStartDistance,
 								(2.0 * actualTotalDistance)/(dda.deceleration * StepTimer::StepClockRate),
 								params.accelClocks + params.steadyClocks + uDivDminusP);
@@ -303,7 +373,7 @@ bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, fl
 		const float ts = dda.topSpeed * StepTimer::StepClockRate;
 		MoveSegment * const oldSegs = segs;
 		segs = MoveSegment::Allocate(segs);
-		segs->SetLinear(params.decelStartDistance + accelExtraDistance, dda.totalDistance/ts, totalAccelDistance);
+		segs->SetLinear((params.decelStartDistance + accelExtraDistance)/dda.totalDistance, dda.totalDistance/ts, totalAccelDistance);
 		if (oldSegs == nullptr)
 		{
 			segs->SetLast();
@@ -316,7 +386,7 @@ bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, fl
 		const float uDivAplusP = (dda.startSpeed/dda.acceleration + compensationTime) * StepTimer::StepClockRate;
 		MoveSegment * const oldSegs = segs;
 		segs = MoveSegment::Allocate(segs);
-		segs->SetNonLinear(totalAccelDistance,
+		segs->SetNonLinear(totalAccelDistance/dda.totalDistance,
 							fsquare(uDivAplusP),
 							(2.0 * dda.totalDistance)/(dda.acceleration * StepTimer::StepClockRateSquared),
 							-uDivAplusP);
@@ -390,11 +460,11 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	{
 	case DMState::forwards:	// acceleration phase
 		{
-			const uint32_t stepsToLimit = phaseStepLimit - nextStep;
+			const uint32_t stepsToLimit = ((reverseInThisSegment) ? reverseStartStep : phaseStepLimit) - nextStep;
 			if (stepsToLimit == 1)
 			{
 				// This is the last step in this phase
-				state = (reverseStartStep <= totalSteps) ? DMState::reversing : DMState::stopping;
+				state = (reverseInThisSegment) ? DMState::reversing : DMState::stopping;
 			}
 			else if (stepInterval < DDA::MinCalcIntervalCartesian)
 			{
@@ -454,7 +524,16 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		break;
 
 	case DMState::stopping:
-		qq;
+		if (currentSegment->IsLast())
+		{
+			return false;
+		}
+		else
+		{
+			const float startDistance = currentSegment->GetDistanceLimit();
+			currentSegment = currentSegment->GetNext();
+			NewLinearSegment(startDistance);
+		}
 		break;
 
 	default:
@@ -608,7 +687,16 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		break;
 
 	case DMState::stopping:
-		qq;
+		if (currentSegment->IsLast())
+		{
+			return false;
+		}
+		else
+		{
+			const float startDistance = currentSegment->GetDistanceLimit();
+			currentSegment = currentSegment->GetNext();
+			NewDeltaSegment(dda, startDistance);
+		}
 		break;
 
 	default:
