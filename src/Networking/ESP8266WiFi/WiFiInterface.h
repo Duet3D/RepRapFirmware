@@ -120,7 +120,7 @@ private:
 		uint8_t data[MaxDataLength];	// data to send
 	};
 
-	struct MessageBufferIn
+	struct alignas(16) MessageBufferIn
 	{
 		MessageHeaderEspToSam hdr;
 		uint8_t data[MaxDataLength];	// data to send

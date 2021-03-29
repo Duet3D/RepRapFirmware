@@ -686,7 +686,8 @@ constexpr size_t SendDataCRCIndex0 = 7;
 constexpr size_t SendDataCRCIndex1 = 11;
 
 // Buffer for the message we receive when reading data, dword-aligned so that we can use 32-bit mode on the SAME5x. The first 4 or 12 bytes bytes are our own transmitted data.
-alignas(4) volatile uint8_t TmcDriverState::receiveData[20];
+// Align on a 16-bit boundary to make sure it covers only 2 cache lines not 3
+alignas(16) volatile uint8_t TmcDriverState::receiveData[20];
 
 constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 {

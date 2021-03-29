@@ -47,7 +47,7 @@
 //# define DEFINE_MALLOPT
 //# define DEFINE_MALLOC_STATS
 //# define DEFINE_MALLOC_USABLE_SIZE
-//# define DEFINE_MEMALIGN
+# define DEFINE_MEMALIGN					// this is needed by C++ aligned allocation
 //# define DEFINE_VALLOC
 //# define DEFINE_PVALLOC
 #endif
