@@ -720,8 +720,8 @@ constexpr DmaChannel DmacChanTmcTx = 10;
 
 constexpr unsigned int NumDmaChannelsUsed = 11;
 
+#if 0
 // The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
-#if 1
 constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 0;				// the baud rate is 250kbps so this is not very critical
 constexpr DmaPriority DmacPrioAdcTx = 0;

@@ -746,9 +746,7 @@ bool DataTransfer::IsReady() noexcept
 		{
 		case SpiState::ExchangingHeader:
 		{
-#if SAME5x
 			Cache::InvalidateAfterDMAReceive(&rxHeader, sizeof(rxHeader));
-#endif
 			// (1) Exchanged transfer headers
 			const uint32_t headerResponse = *reinterpret_cast<const uint32_t*>(&rxHeader);
 			if (headerResponse == TransferResponse::BadResponse)
@@ -791,9 +789,7 @@ bool DataTransfer::IsReady() noexcept
 
 		case SpiState::ExchangingHeaderResponse:
 			// (2) Exchanged response to transfer header
-#if SAME5x
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
-#endif
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
 			{
 				if (rxHeader.dataLength != 0 || txHeader.dataLength != 0)
@@ -829,9 +825,7 @@ bool DataTransfer::IsReady() noexcept
 
 		case SpiState::ExchangingData:
 		{
-#if SAME5x
-			Cache::InvalidateAfterDMAReceive(rxBuffer, LinuxTransferBufferSize);
-#endif
+			Cache::InvalidateAfterDMAReceive(rxBuffer, rxHeader.dataLength);
 			// (3) Exchanged data
 			if (*reinterpret_cast<uint32_t*>(rxBuffer) == TransferResponse::BadResponse)
 			{
@@ -860,9 +854,7 @@ bool DataTransfer::IsReady() noexcept
 
 		case SpiState::ExchangingDataResponse:
 			// (4) Exchanged response to data transfer
-#if SAME5x
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
-#endif
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
 			{
 				// Everything OK

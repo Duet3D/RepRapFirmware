@@ -402,6 +402,7 @@ void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 			}
 			runningConfigFile = false;
 		}
+		reprap.InputsUpdated();
 	}
 }
 
@@ -1595,6 +1596,7 @@ void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile)
 	{
 		platform.Message(ErrorMessage, "Pop(): stack underflow\n");
 	}
+	reprap.InputsUpdated();
 }
 
 // Set up the extrusion and feed rate of a move for the Move class
@@ -2765,6 +2767,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 																		// running a system macro e.g. homing, so don't use workplace coordinates
 	gb.SetState(GCodeState::normal);
 	gb.Init();
+	reprap.InputsUpdated();
 	return true;
 #endif
 }
