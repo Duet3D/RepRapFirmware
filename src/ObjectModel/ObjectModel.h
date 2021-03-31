@@ -191,7 +191,7 @@ public:
 	ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth) noexcept;
 
 	// Constructor used when evaluating expressions
-	ObjectExplorationContext(bool wal, int p_line, int p_col) noexcept;
+	ObjectExplorationContext(bool wal, bool wex, int p_line, int p_col) noexcept;
 
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
@@ -206,6 +206,7 @@ public:
 	bool ShortFormReport() const noexcept { return shortForm; }
 	bool ShouldReport(const ObjectModelEntryFlags f) const noexcept;
 	bool WantArrayLength() const noexcept { return wantArrayLength; }
+	bool WantExists() const noexcept { return wantExists; }
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 	uint64_t GetStartMillis() const { return startMillis; }
 
@@ -232,7 +233,8 @@ private:
 				wantArrayLength : 1,
 				includeNulls : 1,
 				includeObsolete : 1,
-				obsoleteFieldQueried : 1;
+				obsoleteFieldQueried : 1,
+				wantExists : 1;
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.

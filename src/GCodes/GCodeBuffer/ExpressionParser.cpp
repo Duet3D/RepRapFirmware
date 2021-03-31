@@ -15,11 +15,17 @@
 
 #include <limits>
 
+#ifdef exists
+# undef exists
+#endif
+
 constexpr size_t MaxStringExpressionLength = StringLength100;
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, degrees, exists, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
+
+const char * const InvalidExistsMessage = "invalid 'exists' expression";
 
 ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column) noexcept
 	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column)
@@ -132,7 +138,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 		if (isalpha(CurrentCharacter()))
 		{
 			// Probably applying # to an object model array, so optimise by asking the OM for just the length
-			val = ParseIdentifierExpression(evaluate, true);
+			val = ParseIdentifierExpression(evaluate, true, false);
 		}
 		else
 		{
@@ -176,7 +182,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 		}
 		else if (isalpha(c))				// looks like a variable name
 		{
-			val = ParseIdentifierExpression(evaluate, false);
+			val = ParseIdentifierExpression(evaluate, false, false);
 		}
 		else
 		{
@@ -709,7 +715,7 @@ ExpressionValue ExpressionParser::ParseNumber() noexcept
 // Parse an identifier expression
 // If 'evaluate' is false then the object model path may not exist, in which case we must ignore error that and parse it all anyway
 // This means we can use expressions such as: if {a.b == null || a.b.c == 1}
-ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool applyLengthOperator) THROWS(GCodeException)
+ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 {
 	if (!isalpha(CurrentCharacter()))
 	{
@@ -717,7 +723,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	}
 
 	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context(applyLengthOperator, gb.GetLineNumber(), GetColumn());
+	ObjectExplorationContext context(applyLengthOperator, applyExists, gb.GetLineNumber(), GetColumn());
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
@@ -750,6 +756,11 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	NamedConstant whichConstant(id.c_str());
 	if (whichConstant.IsValid())
 	{
+		if (context.WantExists())
+		{
+			throw ConstructParseException(InvalidExistsMessage);
+		}
+
 		switch (whichConstant.RawValue())
 		{
 		case NamedConstant::_true:
@@ -808,215 +819,229 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	if (CurrentCharacter() == '(')
 	{
 		// It's a function call
-		AdvancePointer();
-		ExpressionValue rslt = Parse(evaluate);					// evaluate the first operand
+		if (context.WantExists())
+		{
+			throw ConstructParseException(InvalidExistsMessage);
+		}
+
 		const Function func(id.c_str());
 		if (!func.IsValid())
 		{
 			throw ConstructParseException("unknown function");
 		}
 
-		switch (func.RawValue())
+		AdvancePointer();
+		ExpressionValue rslt;
+		if (func == Function::exists)
 		{
-		case Function::abs:
-			switch (rslt.GetType())
+			rslt = ParseIdentifierExpression(evaluate, false, true);
+		}
+		else
+		{
+			rslt = Parse(evaluate);					// evaluate the first operand
+
+			switch (func.RawValue())
 			{
-			case TypeCode::Int32:
-				rslt.iVal = labs(rslt.iVal);
+			case Function::abs:
+				switch (rslt.GetType())
+				{
+				case TypeCode::Int32:
+					rslt.iVal = labs(rslt.iVal);
+					break;
+
+				case TypeCode::Float:
+					rslt.fVal = fabsf(rslt.fVal);
+					break;
+
+				default:
+					if (evaluate)
+					{
+						throw ConstructParseException("expected numeric operand");
+					}
+					rslt.Set((int32_t)0);
+				}
 				break;
 
-			case TypeCode::Float:
-				rslt.fVal = fabsf(rslt.fVal);
+			case Function::sin:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = sinf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::cos:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = cosf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::tan:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = tanf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::asin:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = asinf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::acos:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = acosf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::atan:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = atanf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::atan2:
+				{
+					ConvertToFloat(rslt, evaluate);
+					SkipWhiteSpace();
+					if (CurrentCharacter() != ',')
+					{
+						throw ConstructParseException("expected ','");
+					}
+					AdvancePointer();
+					SkipWhiteSpace();
+					ExpressionValue nextOperand = Parse(evaluate);
+					ConvertToFloat(nextOperand, evaluate);
+					rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
+					rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				}
+				break;
+
+			case Function::degrees:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = rslt.fVal * RadiansToDegrees;
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::radians:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = rslt.fVal * DegreesToRadians;
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::sqrt:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = fastSqrtf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::isnan:
+				ConvertToFloat(rslt, evaluate);
+				rslt.SetType(TypeCode::Bool);
+				rslt.bVal = (std::isnan(rslt.fVal) != 0);
+				break;
+
+			case Function::floor:
+				{
+					ConvertToFloat(rslt, evaluate);
+					const float f = floorf(rslt.fVal);
+					if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
+					{
+						rslt.SetType(TypeCode::Int32);
+						rslt.iVal = (int32_t)f;
+					}
+					else
+					{
+						rslt.fVal = f;
+					}
+				}
+				break;
+
+			case Function::mod:
+				{
+					SkipWhiteSpace();
+					if (CurrentCharacter() != ',')
+					{
+						throw ConstructParseException("expected ','");
+					}
+					AdvancePointer();
+					SkipWhiteSpace();
+					ExpressionValue nextOperand = Parse(evaluate);
+					BalanceNumericTypes(rslt, nextOperand, evaluate);
+					if (rslt.GetType() == TypeCode::Float)
+					{
+						rslt.fVal = fmod(rslt.fVal, nextOperand.fVal);
+					}
+					else if (nextOperand.iVal == 0)
+					{
+						rslt.iVal = 0;
+					}
+					else
+					{
+						rslt.iVal %= nextOperand.iVal;
+					}
+				}
+				break;
+
+			case Function::max:
+				for (;;)
+				{
+					SkipWhiteSpace();
+					if (CurrentCharacter() != ',')
+					{
+						break;
+					}
+					AdvancePointer();
+					SkipWhiteSpace();
+					ExpressionValue nextOperand = Parse(evaluate);
+					BalanceNumericTypes(rslt, nextOperand, evaluate);
+					if (rslt.GetType() == TypeCode::Float)
+					{
+						rslt.fVal = max<float>(rslt.fVal, nextOperand.fVal);
+						rslt.param = max(rslt.param, nextOperand.param);
+					}
+					else
+					{
+						rslt.iVal = max<int32_t>(rslt.iVal, nextOperand.iVal);
+					}
+				}
+				break;
+
+			case Function::min:
+				for (;;)
+				{
+					SkipWhiteSpace();
+					if (CurrentCharacter() != ',')
+					{
+						break;
+					}
+					AdvancePointer();
+					SkipWhiteSpace();
+					ExpressionValue nextOperand = Parse(evaluate);
+					BalanceNumericTypes(rslt, nextOperand, evaluate);
+					if (rslt.GetType() == TypeCode::Float)
+					{
+						rslt.fVal = min<float>(rslt.fVal, nextOperand.fVal);
+						rslt.param = max(rslt.param, nextOperand.param);
+					}
+					else
+					{
+						rslt.iVal = min<int32_t>(rslt.iVal, nextOperand.iVal);
+					}
+				}
+				break;
+
+			case Function::random:
+				{
+					const uint32_t limit = (rslt.GetType() == TypeCode::Uint32) ? rslt.uVal
+											: (rslt.GetType() == TypeCode::Int32 && rslt.iVal > 0) ? rslt.iVal
+												: throw ConstructParseException("expected positive integer");
+					rslt.SetType(TypeCode::Int32);
+					rslt.iVal = random(limit);
+				}
 				break;
 
 			default:
-				if (evaluate)
-				{
-					throw ConstructParseException("expected numeric operand");
-				}
-				rslt.Set((int32_t)0);
+				THROW_INTERNAL_ERROR;
 			}
-			break;
-
-		case Function::sin:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = sinf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::cos:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = cosf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::tan:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = tanf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::asin:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = asinf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::acos:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = acosf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::atan:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = atanf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::atan2:
-			{
-				ConvertToFloat(rslt, evaluate);
-				SkipWhiteSpace();
-				if (CurrentCharacter() != ',')
-				{
-					throw ConstructParseException("expected ','");
-				}
-				AdvancePointer();
-				SkipWhiteSpace();
-				ExpressionValue nextOperand = Parse(evaluate);
-				ConvertToFloat(nextOperand, evaluate);
-				rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
-				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			}
-			break;
-
-		case Function::degrees:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = rslt.fVal * RadiansToDegrees;
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::radians:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = rslt.fVal * DegreesToRadians;
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::sqrt:
-			ConvertToFloat(rslt, evaluate);
-			rslt.fVal = fastSqrtf(rslt.fVal);
-			rslt.param = MaxFloatDigitsDisplayedAfterPoint;
-			break;
-
-		case Function::isnan:
-			ConvertToFloat(rslt, evaluate);
-			rslt.SetType(TypeCode::Bool);
-			rslt.bVal = (std::isnan(rslt.fVal) != 0);
-			break;
-
-		case Function::floor:
-			{
-				ConvertToFloat(rslt, evaluate);
-				const float f = floorf(rslt.fVal);
-				if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
-				{
-					rslt.SetType(TypeCode::Int32);
-					rslt.iVal = (int32_t)f;
-				}
-				else
-				{
-					rslt.fVal = f;
-				}
-			}
-			break;
-
-		case Function::mod:
-			{
-				SkipWhiteSpace();
-				if (CurrentCharacter() != ',')
-				{
-					throw ConstructParseException("expected ','");
-				}
-				AdvancePointer();
-				SkipWhiteSpace();
-				ExpressionValue nextOperand = Parse(evaluate);
-				BalanceNumericTypes(rslt, nextOperand, evaluate);
-				if (rslt.GetType() == TypeCode::Float)
-				{
-					rslt.fVal = fmod(rslt.fVal, nextOperand.fVal);
-				}
-				else if (nextOperand.iVal == 0)
-				{
-					rslt.iVal = 0;
-				}
-				else
-				{
-					rslt.iVal %= nextOperand.iVal;
-				}
-			}
-			break;
-
-		case Function::max:
-			for (;;)
-			{
-				SkipWhiteSpace();
-				if (CurrentCharacter() != ',')
-				{
-					break;
-				}
-				AdvancePointer();
-				SkipWhiteSpace();
-				ExpressionValue nextOperand = Parse(evaluate);
-				BalanceNumericTypes(rslt, nextOperand, evaluate);
-				if (rslt.GetType() == TypeCode::Float)
-				{
-					rslt.fVal = max<float>(rslt.fVal, nextOperand.fVal);
-					rslt.param = max(rslt.param, nextOperand.param);
-				}
-				else
-				{
-					rslt.iVal = max<int32_t>(rslt.iVal, nextOperand.iVal);
-				}
-			}
-			break;
-
-		case Function::min:
-			for (;;)
-			{
-				SkipWhiteSpace();
-				if (CurrentCharacter() != ',')
-				{
-					break;
-				}
-				AdvancePointer();
-				SkipWhiteSpace();
-				ExpressionValue nextOperand = Parse(evaluate);
-				BalanceNumericTypes(rslt, nextOperand, evaluate);
-				if (rslt.GetType() == TypeCode::Float)
-				{
-					rslt.fVal = min<float>(rslt.fVal, nextOperand.fVal);
-					rslt.param = max(rslt.param, nextOperand.param);
-				}
-				else
-				{
-					rslt.iVal = min<int32_t>(rslt.iVal, nextOperand.iVal);
-				}
-			}
-			break;
-
-		case Function::random:
-			{
-				const uint32_t limit = (rslt.GetType() == TypeCode::Uint32) ? rslt.uVal
-										: (rslt.GetType() == TypeCode::Int32 && rslt.iVal > 0) ? rslt.iVal
-											: throw ConstructParseException("expected positive integer");
-				rslt.SetType(TypeCode::Int32);
-				rslt.iVal = random(limit);
-			}
-			break;
-
-		default:
-			THROW_INTERNAL_ERROR;
 		}
 
 		SkipWhiteSpace();
@@ -1034,18 +1059,25 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		// Check for a parameter, local or global variable
 		if (StringStartsWith(id.c_str(), "param."))
 		{
-			return GetVariableValue(&gb.GetVariables(), id.c_str() + strlen("param."), true);
+			return GetVariableValue(&gb.GetVariables(), id.c_str() + strlen("param."), true, context.WantExists());
 		}
 
 		if (StringStartsWith(id.c_str(), "global."))
 		{
 			auto vars = reprap.GetGlobalVariablesForReading();
-			return GetVariableValue(vars.Ptr(), id.c_str() + strlen("global."), false);
+			return GetVariableValue(vars.Ptr(), id.c_str() + strlen("global."), false, context.WantExists());
 		}
 
 		if (StringStartsWith(id.c_str(), "var."))
 		{
-			return GetVariableValue(&gb.GetVariables(), id.c_str() + strlen("var."), false);
+			return GetVariableValue(&gb.GetVariables(), id.c_str() + strlen("var."), false, context.WantExists());
+		}
+
+		// "exists(var)", "exists(param)" and "exists(global)" should return true.
+		// "exists(global)" will anyway because "global" is a root key in the object model. Handle the other two here.
+		if (context.WantExists() && (strcmp(id.c_str(), "param") == 0 || strcmp(id.c_str(), "var") == 0))
+		{
+			return ExpressionValue(true);
 		}
 
 		// Else assume an object model value
@@ -1060,9 +1092,14 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 }
 
 // Get the value of a variable
-ExpressionValue ExpressionParser::GetVariableValue(const VariableSet *vars, const char *name, bool parameter) THROWS(GCodeException)
+ExpressionValue ExpressionParser::GetVariableValue(const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException)
 {
 	const Variable* var = vars->Lookup(name);
+	if (wantExists)
+	{
+		return ExpressionValue(var != nullptr);
+	}
+
 	if (var != nullptr && (!parameter || var->GetScope() < 0))
 	{
 		return var->GetValue();
