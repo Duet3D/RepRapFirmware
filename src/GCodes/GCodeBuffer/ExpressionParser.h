@@ -42,7 +42,7 @@ private:
 	ExpressionValue ParseIdentifierExpression(bool evaluate, bool applyLengthOperator) THROWS(GCodeException)
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 	ExpressionValue ParseQuotedString() THROWS(GCodeException);
-	ExpressionValue GetVariableValue(VariableSet& vars, const char *name, bool parameter) THROWS(GCodeException);
+	ExpressionValue GetVariableValue(const VariableSet *vars, const char *name, bool parameter) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);

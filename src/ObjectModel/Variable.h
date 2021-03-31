@@ -45,7 +45,9 @@ public:
 	~VariableSet();
 
 	Variable *Lookup(const char *str) noexcept;
+	const Variable *Lookup(const char *str) const noexcept;
 	void Insert(Variable *toInsert) noexcept;
+	void ListAsJson(OutputBuffer *buf) const noexcept;
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Clear() noexcept;
 

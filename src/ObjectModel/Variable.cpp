@@ -6,6 +6,7 @@
  */
 
 #include "Variable.h"
+#include <Platform/Outputmemory.h>
 
 Variable::Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept : name(str), val(pVal), scope(pScope)
 {
@@ -31,10 +32,38 @@ Variable* VariableSet::Lookup(const char *str) noexcept
 	return v;
 }
 
+const Variable* VariableSet::Lookup(const char *str) const noexcept
+{
+	const Variable *v;
+	for (v = root; v != nullptr; v = v->next)
+	{
+		auto vname = v->name.Get();
+		if (strcmp(vname.Ptr(), str) == 0)
+		{
+			break;
+		}
+	}
+	return v;
+}
+
 void VariableSet::Insert(Variable *toInsert) noexcept
 {
 	toInsert->next = root;
 	root = toInsert;
+}
+
+void VariableSet::ListAsJson(OutputBuffer *buf) const noexcept
+{
+	bool needComma = false;
+	for (const Variable *v = root; v != nullptr; v = v->next)
+	{
+		auto vname = v->name.Get();
+		buf->catf((needComma) ? ",\"%s\":" : "\"%s\":", vname.Ptr());
+		buf->cat("42");		//TEMP!
+		//v->val.qq;
+	//qq;
+		needComma = true;
+	}
 }
 
 // Remove all variables with a scope greater than the parameter

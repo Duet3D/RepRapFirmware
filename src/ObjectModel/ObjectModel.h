@@ -253,13 +253,13 @@ public:
 	ObjectModel() noexcept;
 	virtual ~ObjectModel() { }
 
-	// Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
+	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
 	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
 	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
 
-	// Function to report a value or object as JSON
+	// Function to report a value or object as JSON. This does not need to handle 'var' or 'global' because those are checked for before this is called.
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
 							const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 
@@ -268,7 +268,8 @@ public:
 
 protected:
 	// Construct a JSON representation of those parts of the object model requested by the user
-	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
+	// Overridden in class GlobalVariables
+	virtual void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
 
 	// Report an entire array as JSON
 	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException);

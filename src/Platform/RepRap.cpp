@@ -241,6 +241,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
 #endif
 	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
+	{ "global",					OBJECT_MODEL_FUNC(&(self->globalVariables)),							ObjectModelEntryFlags::none },
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor),						ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
@@ -357,6 +358,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
 #endif
 	{ "fans",					OBJECT_MODEL_FUNC((int32_t)self->fansSeq),								ObjectModelEntryFlags::live },
+	{ "global",					OBJECT_MODEL_FUNC((int32_t)self->globalSeq),							ObjectModelEntryFlags::live },
 	{ "heat",					OBJECT_MODEL_FUNC((int32_t)self->heatSeq),								ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC((int32_t)self->inputsSeq),							ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC((int32_t)self->jobSeq),								ObjectModelEntryFlags::live },
@@ -382,7 +384,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
 	7,																		// number of sub-tables
-	14 + SUPPORT_SCANNER + HAS_MASS_STORAGE,								// root
+	15 + SUPPORT_SCANNER + HAS_MASS_STORAGE,								// root
 #if HAS_MASS_STORAGE
 	8, 																		// directories
 #else
@@ -392,7 +394,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	16 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
 	2,																		// state.beep
 	6,																		// state.messageBox
-	11 + HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE			// seqs
+	12 + HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE			// seqs
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -406,7 +408,7 @@ ReadWriteLock RepRap::toolListLock;
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
 RepRap::RepRap() noexcept
-	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), moveSeq(0),
+	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), moveSeq(0), globalSeq(0),
 	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
 	  toolList(nullptr), currentTool(nullptr), lastWarningMillis(0),
 	  activeExtruders(0), activeToolHeaters(0), numToolsToReport(0),

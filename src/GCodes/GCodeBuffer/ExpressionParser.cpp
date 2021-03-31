@@ -1034,17 +1034,18 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		// Check for a parameter, local or global variable
 		if (StringStartsWith(id.c_str(), "param."))
 		{
-			return GetVariableValue(gb.GetVariables(), id.c_str() + strlen("param."), true);
+			return GetVariableValue(&gb.GetVariables(), id.c_str() + strlen("param."), true);
 		}
 
 		if (StringStartsWith(id.c_str(), "global."))
 		{
-			return GetVariableValue(reprap.globalVariables, id.c_str() + strlen("global."), false);
+			auto vars = reprap.GetGlobalVariablesForReading();
+			return GetVariableValue(vars.Ptr(), id.c_str() + strlen("global."), false);
 		}
 
 		if (StringStartsWith(id.c_str(), "var."))
 		{
-			return GetVariableValue(gb.GetVariables(), id.c_str() + strlen("var."), false);
+			return GetVariableValue(&gb.GetVariables(), id.c_str() + strlen("var."), false);
 		}
 
 		// Else assume an object model value
@@ -1059,9 +1060,9 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 }
 
 // Get the value of a variable
-ExpressionValue ExpressionParser::GetVariableValue(VariableSet& vars, const char *name, bool parameter) THROWS(GCodeException)
+ExpressionValue ExpressionParser::GetVariableValue(const VariableSet *vars, const char *name, bool parameter) THROWS(GCodeException)
 {
-	const Variable* var = vars.Lookup(name);
+	const Variable* var = vars->Lookup(name);
 	if (var != nullptr && (!parameter || var->GetScope() < 0))
 	{
 		return var->GetValue();
