@@ -282,11 +282,11 @@ protected:
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
-															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportBitmap1632Long(OutputBuffer *buf, const ExpressionValue& val) noexcept;

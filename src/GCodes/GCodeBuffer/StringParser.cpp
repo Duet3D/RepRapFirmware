@@ -427,7 +427,7 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 			break;
 
 		case 3:
-			if (doingFile && StringStartsWith(command, "var"))
+			if (StringStartsWith(command, "var"))
 			{
 				ProcessVarOrGlobalCommand(false);
 				return true;

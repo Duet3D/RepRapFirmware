@@ -52,20 +52,6 @@ void VariableSet::Insert(Variable *toInsert) noexcept
 	root = toInsert;
 }
 
-void VariableSet::ListAsJson(OutputBuffer *buf) const noexcept
-{
-	bool needComma = false;
-	for (const Variable *v = root; v != nullptr; v = v->next)
-	{
-		auto vname = v->name.Get();
-		buf->catf((needComma) ? ",\"%s\":" : "\"%s\":", vname.Ptr());
-		buf->cat("42");		//TEMP!
-		//v->val.qq;
-	//qq;
-		needComma = true;
-	}
-}
-
 // Remove all variables with a scope greater than the parameter
 void VariableSet::EndScope(uint8_t blockNesting) noexcept
 {

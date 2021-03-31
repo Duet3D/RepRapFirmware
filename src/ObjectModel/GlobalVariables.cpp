@@ -6,7 +6,7 @@
  */
 
 #include "GlobalVariables.h"
-#include <Platform/Outputmemory.h>
+#include <Platform/OutputMemory.h>
 
 // This function is not used in this class
 const ObjectModelClassDescriptor *GlobalVariables::GetObjectModelClassDescriptor() const noexcept { return nullptr; }
@@ -20,8 +20,18 @@ void GlobalVariables::ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 	buf->cat('{');
 	if (context.IncreaseDepth())
 	{
-		ReadLocker locker(lock);
-		vars.ListAsJson(buf);
+		bool needComma = false;
+		{
+			ReadLocker locker(lock);			// make sure that no other task modifies the list while we are traversing it
+
+			for (const Variable *v = vars.GetRoot(); v != nullptr; v = v->GetNext())
+			{
+				buf->catf((needComma) ? ",\"%s\":" : "\"%s\":", v->GetName().Ptr());
+				ReportItemAsJsonFull(buf, context, classDescriptor, v->GetValue(), filter);
+				needComma = true;
+			}
+		}
+		context.DecreaseDepth();
 	}
 	buf->cat('}');
 }
