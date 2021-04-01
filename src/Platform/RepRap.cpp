@@ -830,33 +830,58 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 {
 	platform->Message(mtype, "=== Diagnostics ===\n");
 
-// DEBUG print the module addresses
-//	platform->MessageF(mtype, "platform %" PRIx32 ", network %" PRIx32 ", move %" PRIx32 ", heat %" PRIx32 ", gcodes %" PRIx32 ", scanner %"  PRIx32 ", pm %" PRIx32 ", portc %" PRIx32 "\n",
-//						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
-
-	// Print the firmware version and board type
+	// Print the firmware version, board type etc.
 
 #ifdef DUET_NG
-# if HAS_LINUX_INTERFACE
-	platform->MessageF(mtype, "%s version %s running on %s (%s mode)", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
-						(UsingLinuxInterface()) ? "SBC" : "standalone");
-# else
-	platform->MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
-# endif
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
-	platform->MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
-#elif defined(__LPC17xx__)
-	platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
-#elif HAS_LINUX_INTERFACE
-	platform->MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
+#endif
+
+	platform->MessageF(mtype,
+		// Format string
+		"%s"											// firmware name
+#ifdef __LPC17xx__
+		" (%s)"											// lpcBoardName
+#endif
+		" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
+#ifdef DUET_NG
+		"%s%s"											// optional DueX expansion board
+#endif
+#ifdef __LPC17xx__
+		" at %uMhz"										// clock speed
+#endif
+#if HAS_LINUX_INTERFACE || SUPPORT_REMOTE_COMMANDS
+		" (%s mode)"									// standalone, SBC or expansion mode
+#endif
+		"\n",
+
+		// Parameters to match format string
+		FIRMWARE_NAME,
+#ifdef __LPC17xx__
+		lpcBoardName,
+#endif
+		VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
+#ifdef DUET_NG
+		, ((expansionName == nullptr) ? "" : " + ")
+		, ((expansionName == nullptr) ? "" : expansionName)
+#endif
+#ifdef __LPC17xx__
+		, (unsigned int)(SystemCoreClock/1000000)
+#endif
+#if HAS_LINUX_INTERFACE || SUPPORT_REMOTE_COMMANDS
+		,
 # if SUPPORT_REMOTE_COMMANDS
 						(CanInterface::InExpansionMode()) ? "expansion" :
 # endif
-						(UsingLinuxInterface()) ? "SBC" : "standalone"
-					);
-#else
-	platform->MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
+# if HAS_LINUX_INTERFACE
+						(UsingLinuxInterface()) ? "SBC" :
+# endif
+							"standalone"
 #endif
+	);
+
+	// DEBUG print the module addresses
+	//	platform->MessageF(mtype, "platform %" PRIx32 ", network %" PRIx32 ", move %" PRIx32 ", heat %" PRIx32 ", gcodes %" PRIx32 ", scanner %"  PRIx32 ", pm %" PRIx32 ", portc %" PRIx32 "\n",
+	//						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
 
 #if MCU_HAS_UNIQUE_ID
 	platform->MessageF(mtype, "Board ID: %s\n", platform->GetUniqueIdString());
