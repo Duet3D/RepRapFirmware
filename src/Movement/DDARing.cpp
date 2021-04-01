@@ -558,7 +558,7 @@ void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 		&& addPointer->GetState() == DDA::DDAState::empty
 	   )
 	{
-		addPointer->GetPrevious()->SetPositions(move, MaxAxesPlusExtruders);
+		addPointer->GetPrevious()->SetPositions(move);
 	}
 	else
 	{
@@ -631,13 +631,14 @@ bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 // The caller must make sure that no moves are in progress or pending when calling this
 void DDARing::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept
 {
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
+	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
+	for (size_t drive = 0; drive < numAxes; drive++)
 	{
 		liveCoordinates[drive] = coords[drive];
 	}
 	liveCoordinatesValid = true;
 	liveCoordinatesChanged = true;
-	reprap.GetMove().EndPointToMachine(coords, const_cast<int32_t *>(liveEndPoints), reprap.GetGCodes().GetVisibleAxes());
+	(void)reprap.GetMove().CartesianToMotorSteps(coords, const_cast<int32_t *>(liveEndPoints), true);
 }
 
 void DDARing::ResetExtruderPositions() noexcept
