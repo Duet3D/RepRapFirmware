@@ -191,7 +191,7 @@ public:
 	ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth) noexcept;
 
 	// Constructor used when evaluating expressions
-	ObjectExplorationContext(bool wal, int p_line, int p_col) noexcept;
+	ObjectExplorationContext(bool wal, bool wex, int p_line, int p_col) noexcept;
 
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
@@ -206,6 +206,7 @@ public:
 	bool ShortFormReport() const noexcept { return shortForm; }
 	bool ShouldReport(const ObjectModelEntryFlags f) const noexcept;
 	bool WantArrayLength() const noexcept { return wantArrayLength; }
+	bool WantExists() const noexcept { return wantExists; }
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 	uint64_t GetStartMillis() const { return startMillis; }
 
@@ -232,7 +233,8 @@ private:
 				wantArrayLength : 1,
 				includeNulls : 1,
 				includeObsolete : 1,
-				obsoleteFieldQueried : 1;
+				obsoleteFieldQueried : 1,
+				wantExists : 1;
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.
@@ -253,13 +255,13 @@ public:
 	ObjectModel() noexcept;
 	virtual ~ObjectModel() { }
 
-	// Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
+	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
 	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
 	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
 
-	// Function to report a value or object as JSON
+	// Function to report a value or object as JSON. This does not need to handle 'var' or 'global' because those are checked for before this is called.
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
 							const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 
@@ -268,7 +270,8 @@ public:
 
 protected:
 	// Construct a JSON representation of those parts of the object model requested by the user
-	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
+	// Overridden in class GlobalVariables
+	virtual void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
 
 	// Report an entire array as JSON
 	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException);
@@ -281,11 +284,11 @@ protected:
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
-															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportBitmap1632Long(OutputBuffer *buf, const ExpressionValue& val) noexcept;

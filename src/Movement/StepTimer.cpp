@@ -125,7 +125,7 @@ void StepTimer::Init() noexcept
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = 0x0001;
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RC = 0x0002;
 
-	cpu_irq_disable();
+	IrqDisable();
 	tc_start(STEP_TC, STEP_TC_CHAN_UPPER);
 	tc_start(STEP_TC, STEP_TC_CHAN);
 
@@ -134,7 +134,7 @@ void StepTimer::Init() noexcept
 
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = 0xFFFF;
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RC = 0;
-	cpu_irq_enable();
+	IrqEnable();
 
 # else
 	// Use a single 32-bit timer. CLOCK4 is MCLK/128.

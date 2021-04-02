@@ -269,7 +269,7 @@ ObjectModel::ObjectModel() noexcept
 ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth) noexcept
 	: startMillis(millis()), maxDepth(initialMaxDepth), currentDepth(0), numIndicesProvided(0), numIndicesCounted(0),
 	  line(-1), column(-1),
-	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false), includeObsolete(false), obsoleteFieldQueried(false)
+	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false), includeObsolete(false), obsoleteFieldQueried(false), wantExists(false)
 {
 	while (true)
 	{
@@ -311,10 +311,10 @@ ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportF
 }
 
 // Constructor when evaluating expressions
-ObjectExplorationContext::ObjectExplorationContext(bool wal, int p_line, int p_col) noexcept
+ObjectExplorationContext::ObjectExplorationContext(bool wal, bool wex, int p_line, int p_col) noexcept
 	: startMillis(millis()), maxDepth(99), currentDepth(0), numIndicesProvided(0), numIndicesCounted(0),
 	  line(p_line), column(p_col),
-	  shortForm(false), onlyLive(false), includeVerbose(true), wantArrayLength(wal), includeNulls(false), includeObsolete(true), obsoleteFieldQueried(false)
+	  shortForm(false), onlyLive(false), includeVerbose(true), wantArrayLength(wal), includeNulls(false), includeObsolete(true), obsoleteFieldQueried(false), wantExists(wex)
 {
 }
 
@@ -852,11 +852,21 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 		classDescriptor = classDescriptor->parent;			// search parent class object model too
 	}
 
+	if (context.WantExists())
+	{
+		return ExpressionValue(false);
+	}
+
 	throw context.ConstructParseException("unknown value '%s'", idString);
 }
 
 ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const
 {
+	if (*idString == 0 && context.WantExists() && val.GetType() != TypeCode::None)
+	{
+		return ExpressionValue(true);
+	}
+
 	switch (val.GetType())
 	{
 	case TypeCode::Array:
@@ -880,6 +890,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 
 			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.omadVal->GetNumElements(this, context))
 			{
+				if (context.WantExists())
+				{
+					return ExpressionValue(false);
+				}
 				throw context.ConstructParseException("array index out of bounds");
 			}
 
@@ -902,6 +916,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 		break;
 
 	case TypeCode::None:
+		if (context.WantExists())
+		{
+			return ExpressionValue(false);
+		}
 		if (*idString == 0)
 		{
 			return val;				// a null value can be compared to null
@@ -925,6 +943,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 			if (*idString != 0)
 			{
 				break;
+			}
+			if (context.WantExists())
+			{
+				return ExpressionValue(true);
 			}
 			const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
 			return ExpressionValue((int32_t)bm.GetSetBitNumber(context.GetLastIndex()));
@@ -955,6 +977,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 			if (*idString != 0)
 			{
 				break;
+			}
+			if (context.WantExists())
+			{
+				return ExpressionValue(true);
 			}
 			const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
 			return ExpressionValue((int32_t)bm.GetSetBitNumber(context.GetLastIndex()));

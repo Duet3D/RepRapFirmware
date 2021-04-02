@@ -25,7 +25,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
 #include <General/inplace_function.h>
-#include <GCodes/Variable.h>
+#include <ObjectModel/GlobalVariables.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/ExpansionManager.h>
@@ -186,6 +186,7 @@ public:
 	void BoardsUpdated() noexcept { ++boardsSeq; }
 	void DirectoriesUpdated() noexcept { ++directoriesSeq; }
 	void FansUpdated() noexcept { ++fansSeq; }
+	void GlobalUpdated() noexcept { ++globalSeq; }
 	void HeatUpdated() noexcept { ++heatSeq; }
 	void InputsUpdated() noexcept { ++inputsSeq; }
 	void JobUpdated() noexcept { ++jobSeq; }
@@ -198,7 +199,8 @@ public:
 	void ToolsUpdated() noexcept { ++toolsSeq; }
 	void VolumesUpdated() noexcept { ++volumesSeq; }
 
-	VariableSet globalVariables;
+	ReadLockedPointer<const VariableSet> GetGlobalVariablesForReading() noexcept { return globalVariables.GetForReading(); }
+	WriteLockedPointer<VariableSet> GetGlobalVariablesForWriting() noexcept { return globalVariables.GetForWriting(); }
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -259,8 +261,10 @@ private:
 
  	mutable Mutex messageBoxMutex;				// mutable so that we can lock and release it in const functions
 
-	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, moveSeq;
+	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, moveSeq, globalSeq;;
 	uint16_t networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
+
+	GlobalVariables globalVariables;
 
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;

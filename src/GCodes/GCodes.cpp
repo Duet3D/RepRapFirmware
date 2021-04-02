@@ -1445,6 +1445,10 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			}
 			if (ok)
 			{
+				ok = buildObjects.WriteObjectDirectory(f);					// write the state of printing objects
+			}
+			if (ok)
+			{
 				const unsigned int selectedPlane = fileGCode->OriginalMachineState().selectedPlane;
 				buf.printf("G%u\nM23 \"%s\"\nM26 S%" PRIu32, selectedPlane + 17, printingFilename, pauseRestorePoint.filePos);
 				if (pauseRestorePoint.proportionDone > 0.0)
@@ -1495,7 +1499,6 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				buf.cat("\n");
 				ok = f->Write(buf.c_str());									// restore feed rate and output bits or laser power
 			}
-
 			if (ok)
 			{
 				buf.printf("%s\nM24\n", (fileGCode->OriginalMachineState().usingInches) ? "G20" : "G21");
@@ -4438,11 +4441,6 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 		ok = WriteWorkplaceCoordinates(f);
 	}
 #endif
-
-	if (ok)
-	{
-		ok = buildObjects.WriteObjectDirectory(f);
-	}
 
 	if (!f->Close())
 	{

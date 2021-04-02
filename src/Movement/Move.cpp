@@ -468,20 +468,9 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool do
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentTool(), doBedCompensation);
-	SetLiveCoordinates(newPos);
-	mainDDARing.SetPositions(newPos);
-}
 
-// This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered and DDA::SetPositions
-void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const noexcept
-{
-	if (CartesianToMotorSteps(coords, ep, true))
-	{
-		for (size_t drive = reprap.GetGCodes().GetTotalAxes(); drive < numDrives; ++drive)
-		{
-			ep[drive] = MotorMovementToSteps(drive, coords[drive]);
-		}
-	}
+	mainDDARing.SetLiveCoordinates(newPos);
+	mainDDARing.SetPositions(newPos);
 }
 
 // Convert distance to steps for a particular drive

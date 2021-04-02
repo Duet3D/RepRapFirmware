@@ -88,7 +88,7 @@ public:
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
 	bool FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]) noexcept;
-	void SetPositions(const float move[], size_t numDrives) noexcept;				// Force the endpoints to be these
+	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeed() const noexcept { return requestedSpeed; }
 	float GetTopSpeed() const noexcept { return topSpeed; }

@@ -1119,9 +1119,9 @@ bool DDA::FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile f
 }
 
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered
-void DDA::SetPositions(const float move[MaxAxesPlusExtruders], size_t numDrives) noexcept
+void DDA::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 {
-	reprap.GetMove().EndPointToMachine(move, endPoint, numDrives);
+	(void)reprap.GetMove().CartesianToMotorSteps(move, endPoint, true);
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
 	for (size_t axis = 0; axis < numAxes; ++axis)
 	{

@@ -400,7 +400,7 @@ void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const fl
 			tempCoordinates[axis] = dda.GetEndCoordinate(axis, false);
 		}
 		tempCoordinates[axis] = hitPoint;
-		dda.SetPositions(tempCoordinates, numTotalAxes);
+		dda.SetPositions(tempCoordinates);
 	}
 	else
 	{

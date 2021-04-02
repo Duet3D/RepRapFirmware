@@ -50,6 +50,10 @@
 #include <Core.h>
 #include "sd_mmc_protocol.h"
 
+#ifndef UNUSED
+# define UNUSED(_x)		(void)(_x)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
