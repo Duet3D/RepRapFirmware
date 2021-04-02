@@ -396,7 +396,7 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 	{
 		tuned = true;
 		str.printf("Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n"
-					" M307 H%u R%.3f C%.1f",
+					" M307 H%u B0 R%.3f C%.1f",
 					GetHeaterNumber(),
 					idleCyclesDone,
 					(usingFans) ? fanOffParams.numCycles + fanOnParams.numCycles : fanOffParams.numCycles,
