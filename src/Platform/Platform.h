@@ -228,17 +228,19 @@ public:
 	}
 
 	// Call this to put a new reading into the filter
-	// This is only called by the ISR, so it not declared volatile to make it faster
-	void ProcessReading(uint16_t r) noexcept
+	// This is called by the ISR and by the ADC callback function
+	void ProcessReading(uint16_t r) volatile noexcept
 	{
-		sum = sum - readings[index] + r;
-		readings[index] = r;
-		++index;
-		if (index == numAveraged)
+		size_t locIndex = index;				// avoid repeatedly reloading volatile variable
+		sum = sum - readings[locIndex] + r;
+		readings[locIndex] = r;
+		++locIndex;
+		if (locIndex == numAveraged)
 		{
-			index = 0;
+			locIndex = 0;
 			isValid = true;
 		}
+		index = locIndex;
 	}
 
 	// Return the raw sum
@@ -251,14 +253,6 @@ public:
 	bool IsValid() const volatile noexcept
 	{
 		return isValid;
-	}
-
-	// Get the latest reading
-	uint16_t GetLatestReading() const volatile noexcept
-	{
-		size_t indexOfLastReading = index;			// capture volatile variable
-		indexOfLastReading =  (indexOfLastReading == 0) ? numAveraged - 1 : indexOfLastReading - 1;
-		return readings[indexOfLastReading];
 	}
 
 	static constexpr size_t NumAveraged() noexcept { return numAveraged; }
