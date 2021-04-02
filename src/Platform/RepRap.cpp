@@ -2819,7 +2819,7 @@ void RepRap::StartIap(const char *filename) noexcept
 
 	// Disable all IRQs
 	SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk;	// disable the system tick exception
-	cpu_irq_disable();
+	IrqDisable();
 	for (size_t i = 0; i < 8; i++)
 	{
 		NVIC->ICER[i] = 0xFFFFFFFF;					// Disable IRQs
@@ -2878,7 +2878,7 @@ void RepRap::StartIap(const char *filename) noexcept
 	__DSB();
 	__ISB();
 
-	cpu_irq_enable();
+	IrqEnable();
 
 	__asm volatile ("mov r3, %0" : : "r" (IAP_IMAGE_START) : "r3");
 

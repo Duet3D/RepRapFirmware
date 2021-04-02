@@ -170,22 +170,22 @@ bool FileStore::Close() noexcept
 	case FileUseMode::readOnly:
 	case FileUseMode::readWrite:
 		{
-			const irqflags_t flags = cpu_irq_save();
+			const irqflags_t flags = IrqSave();
 			if (openCount > 1)
 			{
 				--openCount;
-				cpu_irq_restore(flags);
+				IrqRestore(flags);
 				return true;
 			}
 			else if (inInterrupt())
 			{
 				closeRequested = true;
-				cpu_irq_restore(flags);
+				IrqRestore(flags);
 				return true;
 			}
 			else
 			{
-				cpu_irq_restore(flags);
+				IrqRestore(flags);
 				return ForceClose();
 			}
 		}
@@ -193,7 +193,7 @@ bool FileStore::Close() noexcept
 	case FileUseMode::invalidated:
 	default:
 		{
-			const irqflags_t flags = cpu_irq_save();
+			const irqflags_t flags = IrqSave();
 			if (openCount > 1)
 			{
 				--openCount;
@@ -202,7 +202,7 @@ bool FileStore::Close() noexcept
 			{
 				usageMode = FileUseMode::free;
 			}
-			cpu_irq_restore(flags);
+			IrqRestore(flags);
 			return true;
 		}
 	}
@@ -422,9 +422,9 @@ void FileStore::Duplicate() noexcept
 	case FileUseMode::readOnly:
 	case FileUseMode::readWrite:
 		{
-			const irqflags_t flags = cpu_irq_save();
+			const irqflags_t flags = IrqSave();
 			++openCount;
-			cpu_irq_restore(flags);
+			IrqRestore(flags);
 		}
 		break;
 

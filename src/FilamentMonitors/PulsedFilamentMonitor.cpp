@@ -187,10 +187,10 @@ bool PulsedFilamentMonitor::Interrupt() noexcept
 // Call the following regularly to keep the status up to date
 void PulsedFilamentMonitor::Poll() noexcept
 {
-	cpu_irq_disable();
+	IrqDisable();
 	const uint32_t locSensorVal = sensorValue;
 	sensorValue = 0;
-	cpu_irq_enable();
+	IrqEnable();
 	movementMeasuredSinceLastSync += (float)locSensorVal;
 
 	if (haveInterruptData)					// if we have a synchronised value for the amount of extrusion commanded

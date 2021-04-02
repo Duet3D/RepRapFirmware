@@ -1396,6 +1396,8 @@ void Platform::Spin() noexcept
 			}
 			if (numVinUnderVoltageEvents != previousVinUnderVoltageEvents)
 			{
+				//DEBUG increased the number of d.p.
+//				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)(%u)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue), lastVinUnderVoltageValue);
 				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue));
 				previousVinUnderVoltageEvents = numVinUnderVoltageEvents;
 				reported = true;
@@ -1905,13 +1907,13 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 // Execute a timed square root that takes less than one millisecond
 static uint32_t TimedSqrt(uint64_t arg, uint32_t& timeAcc) noexcept
 {
-	cpu_irq_disable();
+	IrqDisable();
 	asm volatile("":::"memory");
 	uint32_t now1 = SysTick->VAL;
 	const uint32_t ret = isqrt64(arg);
 	uint32_t now2 = SysTick->VAL;
 	asm volatile("":::"memory");
-	cpu_irq_enable();
+	IrqEnable();
 	now1 &= 0x00FFFFFF;
 	now2 &= 0x00FFFFFF;
 	timeAcc += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -2221,13 +2223,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			{
 				const float angle = 0.01 * i;
 
-				cpu_irq_disable();
+				IrqDisable();
 				asm volatile("":::"memory");
 				uint32_t now1 = SysTick->VAL;
 				(void)RepRap::SinfCosf(angle);
 				uint32_t now2 = SysTick->VAL;
 				asm volatile("":::"memory");
-				cpu_irq_enable();
+				IrqEnable();
 				now1 &= 0x00FFFFFF;
 				now2 &= 0x00FFFFFF;
 				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -2245,13 +2247,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			for (unsigned int i = 0; i < iterations; ++i)
 			{
 
-				cpu_irq_disable();
+				IrqDisable();
 				asm volatile("":::"memory");
 				uint32_t now1 = SysTick->VAL;
 				val = RepRap::FastSqrtf(val);
 				uint32_t now2 = SysTick->VAL;
 				asm volatile("":::"memory");
-				cpu_irq_enable();
+				IrqEnable();
 				now1 &= 0x00FFFFFF;
 				now2 &= 0x00FFFFFF;
 				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -2347,7 +2349,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		{
 			const size_t length = (gb.Seen('S')) ? gb.GetUIValue() : 1024;
 			CRC32 crc;
-			cpu_irq_disable();
+			IrqDisable();
 			asm volatile("":::"memory");
 			uint32_t now1 = SysTick->VAL;
 			crc.Update(
@@ -2359,7 +2361,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 						length);
 			uint32_t now2 = SysTick->VAL;
 			asm volatile("":::"memory");
-			cpu_irq_enable();
+			IrqEnable();
 			now1 &= 0x00FFFFFF;
 			now2 &= 0x00FFFFFF;
 			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -2370,7 +2372,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::TimeGetTimerTicks:
 		{
 			unsigned int i = 100;
-			cpu_irq_disable();
+			IrqDisable();
 			asm volatile("":::"memory");
 			uint32_t now1 = SysTick->VAL;
 			do
@@ -2380,7 +2382,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			} while (i != 0);
 			uint32_t now2 = SysTick->VAL;
 			asm volatile("":::"memory");
-			cpu_irq_enable();
+			IrqEnable();
 			now1 &= 0x00FFFFFF;
 			now2 &= 0x00FFFFFF;
 			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;

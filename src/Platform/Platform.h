@@ -216,7 +216,7 @@ public:
 
 	void Init(uint16_t val) volatile noexcept
 	{
-		const irqflags_t flags = cpu_irq_save();
+		const irqflags_t flags = IrqSave();
 		sum = (uint32_t)val * (uint32_t)numAveraged;
 		index = 0;
 		isValid = false;
@@ -224,7 +224,7 @@ public:
 		{
 			readings[i] = val;
 		}
-		cpu_irq_restore(flags);
+		IrqRestore(flags);
 	}
 
 	// Call this to put a new reading into the filter
