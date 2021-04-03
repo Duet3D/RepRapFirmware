@@ -11,6 +11,7 @@
 #include <RepRapFirmware.h>
 #include <Platform/Tasks.h>
 #include "MoveSegment.h"
+#include "InputShaper.h"	// for BasicPrepParams
 
 class LinearDeltaKinematics;
 
@@ -18,90 +19,9 @@ class LinearDeltaKinematics;
 #define EVEN_STEPS			(1)			// 1 to generate steps at even intervals when doing double/quad/octal stepping
 #define ROUND_TO_NEAREST	(0)			// 1 for round to nearest (as used in 1.20beta10), 0 for round down (as used prior to 1.20beta10)
 
-// Rounding functions, to improve code clarity. Also allows a quick switch between round-to-nearest and round down in the movement code.
-inline uint32_t roundU32(float f) noexcept
-{
-#if ROUND_TO_NEAREST
-	return (uint32_t)lrintf(f);
-#else
-	return (uint32_t)f;
-#endif
-}
-
-inline uint32_t roundU32(double d) noexcept
-{
-#if ROUND_TO_NEAREST
-	return lrint(d);
-#else
-	return (uint32_t)d;
-#endif
-}
-
-inline int32_t roundS32(float f) noexcept
-{
-#if ROUND_TO_NEAREST
-	return lrintf(f);
-#else
-	return (int32_t)f;
-#endif
-}
-
-inline int32_t roundS32(double d) noexcept
-{
-#if ROUND_TO_NEAREST
-	return lrint(d);
-#else
-	return (int32_t)d;
-#endif
-}
-
-inline uint64_t roundU64(float f) noexcept
-{
-#if ROUND_TO_NEAREST
-	return (uint64_t)llrintf(f);
-#else
-	return (uint64_t)f;
-#endif
-}
-
-inline uint64_t roundU64(double d) noexcept
-{
-#if ROUND_TO_NEAREST
-	return (uint64_t)llrint(d);
-#else
-	return (uint64_t)d;
-#endif
-}
-
-inline int64_t roundS64(float f) noexcept
-{
-#if ROUND_TO_NEAREST
-	return llrintf(f);
-#else
-	return (int64_t)f;
-#endif
-}
-
-inline int64_t roundS64(double d) noexcept
-{
-#if ROUND_TO_NEAREST
-	return llrint(d);
-#else
-	return (int64_t)d;
-#endif
-}
-
 // Struct for passing parameters to the DriveMovement Prepare methods
-struct PrepParams
+struct PrepParams : public BasicPrepParams
 {
-	// Parameters used for all types of motion
-	float accelDistance;
-	float decelDistance;
-	float decelStartDistance;
-
-	float accelTime;
-	float accelClocks, steadyClocks, decelClocks;
-
 	// Parameters used only for extruders
 //	float accelCompFactor;
 
@@ -125,10 +45,17 @@ enum class DMState : uint8_t
 	idle = 0,
 	stepError,
 	// All higher values are various states of motion
-	forwards,									// moving forwards
-	reversing,									// moving forwards but reversing on next step
-	reverse,									// reversing on this and subsequent steps
-	stopping									// just one more step to do
+	cartAccelOrDecelNoReverse,					// linear accelerating motion
+	cartLinear,									// linear steady speed
+	cartDecelExpectReverse,						// linear decelerating, reversal later
+	cartDecelReversing,							// linear decelerating, reverse on next step
+	cartDecelReverse,							// linear decelerating, reverse motion
+	cartStopping,								// just one more step to do
+
+	deltaForwards,								// moving forwards
+	deltaReversing,								// moving forwards but reversing on next step
+	deltaReverse,								// reversing on this and subsequent steps
+	deltaStopping
 };
 
 // This class describes a single movement of one drive
@@ -162,20 +89,16 @@ public:
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
 
-#if SUPPORT_CAN_EXPANSION
-	int32_t GetSteps() const noexcept { return (direction) ? totalSteps : -totalSteps; }
-#endif
-
 	static void InitialAllocate(unsigned int num) noexcept;
 	static unsigned int NumCreated() noexcept { return numCreated; }
 	static DriveMovement *Allocate(size_t p_drive, DMState st) noexcept;
 	static void Release(DriveMovement *item) noexcept;
 
 private:
-	bool CalcNextStepTimeCartesianFull(const DDA &dda) noexcept SPEED_CRITICAL;
-	bool CalcNextStepTimeDeltaFull(const DDA &dda) noexcept SPEED_CRITICAL;
-	void NewLinearSegment(float startDistance) noexcept;
-	void NewDeltaSegment(const DDA& dda, float startDistance) noexcept;
+	bool CalcNextStepTimeFull(const DDA &dda) noexcept SPEED_CRITICAL;
+	void NewCartesianSegment(float startFraction, float startTime) noexcept;
+	void NewDeltaSegment(const DDA& dda, float startFraction, float startTime) noexcept;
+	void NewExtruderSegment(const DDA& dda, float startFraction, float startTime) noexcept;
 
 	static DriveMovement *freeList;
 	static unsigned int numCreated;
@@ -192,8 +115,7 @@ private:
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
 			fullCurrent : 1,							// true if the drivers are set to the full current, false if they are set to the standstill current
-			isDelta : 1,								// true if this DM uses segment-free delta kinematics
-			reverseInThisSegment : 1;					// true if there is a direction reversal within this segment
+			isDelta : 1;								// true if this DM uses segment-free delta kinematics
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
 	uint32_t totalSteps;								// total number of steps for this move
@@ -206,6 +128,8 @@ private:
 	uint32_t stepInterval;								// how many clocks between steps
 
 	float reverseStartDistance;
+	float phaseStartTime;
+	float pA, pB, pC;
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	struct DeltaParameters								// Parameters for delta movement
@@ -259,7 +183,7 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 #endif
 			return true;
 		}
-		return (isDelta) ? CalcNextStepTimeDeltaFull(dda) : CalcNextStepTimeCartesianFull(dda);
+		return CalcNextStepTimeFull(dda);
 	}
 
 	state = DMState::idle;

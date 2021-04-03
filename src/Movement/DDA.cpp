@@ -678,7 +678,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	if (msg.steadyClocks > 0.0)
 	{
 		tempSegments = MoveSegment::Allocate(tempSegments);
-		tempSegments->SetLinear(params.decelStartDistance, 1.0/topSpeed, (float)msg.accelerationClocks + beforePrepare.accelDistance/topSpeed);
+		tempSegments->SetLinear(params.decelStartDistance, (float)msg.accelerationClocks + beforePrepare.accelDistance/topSpeed, 1.0/topSpeed);
 	}
 
 	// Acceleration phase
@@ -699,7 +699,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 		if (delta != 0)
 		{
-			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::forwards);
+			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 
@@ -1170,20 +1170,22 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5);
 
 	InputShaperPlan plan;
+	PrepParams params;
 	if (useInputShaping)
 	{
-		plan = shaper.PlanShaping(*this);			// this may change the acceleration and deceleration, but does not update clocksNeeded, which still needs to be done
+		plan = shaper.PlanShaping(*this, params);			// this may change the acceleration and deceleration, but does not update clocksNeeded, which still needs to be done
 	}
-
-	PrepParams params;
-	params.accelDistance = beforePrepare.accelDistance;
-	params.decelDistance = beforePrepare.decelDistance;
-	params.decelStartDistance = totalDistance - beforePrepare.decelDistance;
-	params.accelTime = (topSpeed - startSpeed)/acceleration;
-	params.accelClocks = params.accelTime * StepTimer::StepClockRate;
-	params.decelClocks = ((topSpeed - endSpeed) * StepTimer::StepClockRate)/deceleration;
-	params.steadyClocks = ((totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance) * StepTimer::StepClockRate)/topSpeed;
-	clocksNeeded = (uint32_t)(params.accelClocks + params.decelClocks + params.steadyClocks);
+	else
+	{
+		params.accelDistance = beforePrepare.accelDistance;
+		params.decelDistance = beforePrepare.decelDistance;
+		params.decelStartDistance = totalDistance - beforePrepare.decelDistance;
+		params.accelTime = (topSpeed - startSpeed)/acceleration;
+		params.accelClocks = params.accelTime * StepTimer::StepClockRate;
+		params.decelClocks = ((topSpeed - endSpeed) * StepTimer::StepClockRate)/deceleration;
+		params.steadyClocks = ((totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance) * StepTimer::StepClockRate)/topSpeed;
+		clocksNeeded = (uint32_t)(params.accelClocks + params.decelClocks + params.steadyClocks);
+	}
 
 	if (simMode == 0)
 	{
@@ -1197,7 +1199,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 		{
 			tempSegments = MoveSegment::Allocate(tempSegments);
 			const float ts = topSpeed * StepTimer::StepClockRate;
-			tempSegments->SetLinear(params.decelStartDistance/totalDistance, totalDistance/ts, params.accelClocks + beforePrepare.accelDistance/ts);
+			tempSegments->SetLinear(params.decelStartDistance/totalDistance, params.accelClocks + beforePrepare.accelDistance/ts, totalDistance/ts);
 		}
 
 		// Acceleration phase
@@ -1269,7 +1271,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					{
 						if (delta != 0)
 						{
-							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::forwards);
+							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::idle);
 							pdm->totalSteps = labs(delta);
 							pdm->direction = (delta >= 0);
 							if (pdm->PrepareCartesianAxis(*this, params))
@@ -1299,7 +1301,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
-					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::forwards);
+					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 					pdm->totalSteps = labs(delta);
 					pdm->direction = (delta >= 0);
 					if (pdm->PrepareDeltaAxis(*this, params))
@@ -1357,7 +1359,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 
 					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::forwards);
+						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 						pdm->totalSteps = labs(delta);
 						pdm->direction = (delta >= 0);
 						if (pdm->PrepareCartesianAxis(*this, params))
@@ -1428,7 +1430,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					else
 #endif
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::forwards);
+						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[extruder], speedChange, flags.usePressureAdvance);
 
 						if (stepsToDo)
@@ -1949,7 +1951,7 @@ void DDA::StepDrivers(Platform& p) noexcept
 	while (dmToInsert != dm)										// note that both of these may be nullptr
 	{
 		DriveMovement * const nextToInsert = dmToInsert->nextDM;
-		if (dmToInsert->state >= DMState::forwards)
+		if (dmToInsert->state >= DMState::cartAccelOrDecelNoReverse)
 		{
 			InsertDM(dmToInsert);
 			if (dmToInsert->directionChanged)

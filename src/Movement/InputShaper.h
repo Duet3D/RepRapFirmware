@@ -17,11 +17,24 @@ NamedEnum(InputShaperType, uint8_t,
 	ZVD,
 	ZVDD,
 	EI2,
+	EI3,
 	DAA
 );
 
 class DDA;
 class MoveSegment;
+
+// Movement parameters calculated by the input shaper
+struct BasicPrepParams
+{
+	// Parameters used for all types of motion
+	float accelDistance;
+	float decelDistance;
+	float decelStartDistance;
+
+	float accelTime;
+	float accelClocks, steadyClocks, decelClocks;
+};
 
 struct InputShaperPlan
 {
@@ -36,13 +49,11 @@ class InputShaper INHERIT_OBJECT_MODEL
 public:
 	InputShaper() noexcept;
 
-	uint16_t GetHalfPeriodClocks() const noexcept { return halfPeriod; }			// return the half period in step clocks
-	float GetFullPeriod() const noexcept;											// return the full period in seconds
-	float GetFrequency() const noexcept;
-	float GetFloatDamping() const noexcept;
-	float GetMinimumAcceleration() const noexcept { return minimumAcceleration; }
+	float GetFrequency() const noexcept { return frequency; }
+	float GetDamping() const noexcept { return zeta; }
+	float GetDAAMinimumAcceleration() const noexcept { return minimumAcceleration; }
 	InputShaperType GetType() const noexcept { return type; }
-	InputShaperPlan PlanShaping(DDA& dda) const noexcept;
+	InputShaperPlan PlanShaping(DDA& dda, BasicPrepParams& params) const noexcept;
 	MoveSegment *GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, float distanceLimit, MoveSegment *nextSegment) const noexcept;
 	MoveSegment *GetDecelerationSegments(InputShaperPlan plan, const DDA& dda, float distanceLimit, float decelStartDistance, float decelStartClocks) const noexcept;
 
@@ -54,12 +65,17 @@ protected:
 private:
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.2;
-	static constexpr float DefaultMinimumAcceleration = 10.0;
+	static constexpr float DefaultDAAMinimumAcceleration = 10.0;
 
-	uint16_t halfPeriod;							// half the period of ringing that we don't want to excite, in step clocks
-	uint16_t damping;								// damping factor of the ringing as a 16-bit fractional number
-	float minimumAcceleration;						// the minimum value that we reduce acceleration to
+	float frequency;								// the undamped frequency
+	float zeta;										// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
+	float minimumAcceleration;						// the minimum value that we reduce acceleration to (DAA only)
+	float halfPeriod;
+	float coefficients[5];
+	float times[3];
+	float timeLost;
 	InputShaperType type;
+	uint8_t numImpulses;
 };
 
 #endif /* SRC_MOVEMENT_INPUTSHAPER_H_ */

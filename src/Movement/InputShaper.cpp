@@ -25,10 +25,10 @@ constexpr ObjectModelTableEntry InputShaper::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. InputShaper members
-	{ "damping",				OBJECT_MODEL_FUNC(self->GetFloatDamping(), 2), 							ObjectModelEntryFlags::none },
-	{ "frequency",				OBJECT_MODEL_FUNC(self->GetFrequency(), 2), 							ObjectModelEntryFlags::none },
-	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),						ObjectModelEntryFlags::none },
-	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 								ObjectModelEntryFlags::none },
+	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
+	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
+	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
+	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t InputShaper::objectModelTableDescriptor[] = { 1, 4 };
@@ -36,10 +36,11 @@ constexpr uint8_t InputShaper::objectModelTableDescriptor[] = { 1, 4 };
 DEFINE_GET_OBJECT_MODEL_TABLE(InputShaper)
 
 InputShaper::InputShaper() noexcept
-	: halfPeriod((uint16_t)lrintf(StepTimer::StepClockRate/(2 * DefaultFrequency))),
-	  damping(lrintf(DefaultDamping * 65536)),
-	  minimumAcceleration(DefaultMinimumAcceleration),
-	  type(InputShaperType::none)
+	: frequency(DefaultFrequency),
+	  zeta(DefaultDamping),
+	  minimumAcceleration(DefaultDAAMinimumAcceleration),
+	  type(InputShaperType::none),
+	  numImpulses(1)
 {
 }
 
@@ -52,7 +53,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	if (gb.Seen('F'))
 	{
 		seen = true;
-		halfPeriod = (float)StepTimer::StepClockRate/(2 * gb.GetLimitedFValue('F', MinimumInputShapingFrequency, MaximumInputShapingFrequency));
+		frequency = gb.GetLimitedFValue('F', MinimumInputShapingFrequency, MaximumInputShapingFrequency);
 	}
 	if (gb.Seen('L'))
 	{
@@ -62,7 +63,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	if (gb.Seen('S'))
 	{
 		seen = true;
-		damping = (uint16_t)lrintf(63336 * gb.GetLimitedFValue('S', 0.0, 0.99));
+		zeta = gb.GetLimitedFValue('S', 0.0, 0.99);
 	}
 
 	if (gb.Seen('P'))
@@ -78,44 +79,111 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen)
 	{
+		const float sqrtOneMinusZetaSquared = fastSqrtf(1.0 - fsquare(zeta));
+		const float dampedFrequency = frequency * sqrtOneMinusZetaSquared;
+		halfPeriod = 0.5/dampedFrequency;
+		const float k = expf(-zeta * Pi/sqrtOneMinusZetaSquared);
+		switch (type.RawValue())
+		{
+		case InputShaperType::none:
+			numImpulses = 1;
+			break;
+
+		case InputShaperType::DAA:
+			numImpulses	= 1;
+			times[0] = 0.5/dampedFrequency;
+			times[1] = 1.0/dampedFrequency;
+			break;
+
+		case InputShaperType::ZVD:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
+			{
+				const float j = 1.0 + 2.0 * k + fsquare(k);
+				coefficients[0] = 1.0/j;
+				coefficients[1] = 2.0 * k/j;
+				coefficients[2] = fsquare(k)/j;
+			}
+			times[0] = 0.5/dampedFrequency;
+			times[1] = 1.0/dampedFrequency;
+			numImpulses = 3;
+			break;
+
+		case InputShaperType::ZVDD:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
+			{
+				const float j = 1.0 + 3.0 * (k + fsquare(k)) + k * fsquare(k);
+				coefficients[0] = 1.0/j;
+				coefficients[1] = 3.0 * k/j;
+				coefficients[2] = 3.0 * fsquare(k)/j;
+				coefficients[3] = k * fsquare(k)/j;
+			}
+			times[0] = 0.5/dampedFrequency;
+			times[1] = 1.0/dampedFrequency;
+			times[2] = 1.5/dampedFrequency;
+			numImpulses = 4;
+			break;
+
+		case InputShaperType::EI2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
+			{
+				const float zetaSquared = fsquare(zeta);
+				const float zetaCubed = zetaSquared * zeta;
+				coefficients[0] = 0.16054 +  0.76699 * zeta +  2.26560 * zetaSquared + -1.22750 * zetaCubed;
+				coefficients[1] = 0.33911 +  0.45081 * zeta + -2.58080 * zetaSquared +  1.73650 * zetaCubed;
+				coefficients[2] = 0.34089 + -0.61533 * zeta + -0.68765 * zetaSquared +  0.42261 * zetaCubed;
+				coefficients[3] = 0.15997 + -0.60246 * zeta +  1.00280 * zetaSquared + -0.93145 * zetaCubed;
+				times[0] = (0.49890 +  0.16270 * zeta + -0.54262 * zetaSquared + 6.16180 * zetaCubed)/dampedFrequency;
+				times[1] = (0.99748 +  0.18382 * zeta + -1.58270 * zetaSquared + 8.17120 * zetaCubed)/dampedFrequency;
+				times[2] = (1.49920 + -0.09297 * zeta + -0.28338 * zetaSquared + 1.85710 * zetaCubed)/dampedFrequency;
+			}
+			numImpulses = 4;
+			break;
+
+		case InputShaperType::EI3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
+			{
+				const float zetaSquared = fsquare(zeta);
+				const float zetaCubed = zetaSquared * zeta;
+				coefficients[0] = 0.11275 +  0.76632 * zeta +  3.29160 * zetaSquared + -1.44380 * zetaCubed;
+				coefficients[1] = 0.23698 +  0.61164 * zeta + -2.57850 * zetaSquared +  4.85220 * zetaCubed;
+				coefficients[2] = 0.30008 + -0.19062 * zeta + -2.14560 * zetaSquared +  0.13744 * zetaCubed;
+				coefficients[3] = 0.23775 + -0.73297 * zeta +  0.46885 * zetaSquared + -2.08650 * zetaCubed;
+				coefficients[4] = 0.11244 + -0.45439 * zeta +  0.96382 * zetaSquared + -1.46000 * zetaCubed;
+				times[0] = (0.49974 +  0.23834 * zeta +  0.44559 * zetaSquared + 12.4720 * zetaCubed)/dampedFrequency;
+				times[1] = (0.99849 +  0.29808 * zeta + -2.36460 * zetaSquared + 23.3990 * zetaCubed)/dampedFrequency;
+				times[2] = (1.49870 +  0.10306 * zeta + -2.01390 * zetaSquared + 17.0320 * zetaCubed)/dampedFrequency;
+				times[3] = (1.99960 + -0.28231 * zeta +  0.61536 * zetaSquared + 5.40450 * zetaCubed)/dampedFrequency;
+			}
+			numImpulses = 5;
+			break;
+		}
+
+		timeLost = 0.0;
+		for (uint8_t i = 0; i < numImpulses - 1; ++i)
+		{
+			timeLost += (1.0 - coefficients[i]) * times[i];
+		}
 		reprap.MoveUpdated();
 	}
-	else if (type != InputShaperType::none)
+	else if (type == InputShaperType::none)
 	{
-		reply.printf("%s input shaping at %.1fHz damping factor %.2f, min. acceleration %.1f",
-						type.ToString(), (double)GetFrequency(), (double)GetFloatDamping(), (double)minimumAcceleration);
+		reply.copy("Input shaping is disabled");
 	}
 	else
 	{
-		reply.copy("Input shaping is disabled");
+		reply.printf("%s input shaping at %.1fHz damping factor %.2f", type.ToString(), (double)frequency, (double)zeta);
+		if (type == InputShaperType::DAA)
+		{
+			reply.catf(", min. acceleration %.1f", (double)minimumAcceleration);
+		}
 	}
 	return GCodeResult::ok;
 }
 
-// Return the full period in seconds
-float InputShaper::GetFullPeriod() const noexcept
-{
-	return (float)halfPeriod/(float)(StepTimer::StepClockRate/2);
-}
-
-float InputShaper::GetFrequency() const noexcept
-{
-	return (float)StepTimer::StepClockRate/(2.0 * (float)halfPeriod);
-}
-
-float InputShaper::GetFloatDamping() const noexcept
-{
-	return ((float)damping)/65536;
-}
-
-InputShaperPlan InputShaper::PlanShaping(DDA& dda) const noexcept
+InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params) const noexcept
 {
 	switch (type.RawValue())
 	{
 	case InputShaperType::DAA:
 		{
 			// Try to reduce the acceleration/deceleration of the move to cancel ringing
-			const float idealPeriod = GetFullPeriod();
+			const float idealPeriod = times[1];
 
 			float proposedAcceleration = dda.acceleration, proposedAccelDistance = dda.beforePrepare.accelDistance;
 			bool adjustAcceleration = false;
@@ -161,10 +229,9 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda) const noexcept
 
 			if (adjustAcceleration || adjustDeceleration)
 			{
-				const float drcMinimumAcceleration = GetMinimumAcceleration();
 				if (proposedAccelDistance + proposedDecelDistance <= dda.totalDistance)
 				{
-					if (proposedAcceleration < drcMinimumAcceleration || proposedDeceleration < drcMinimumAcceleration)
+					if (proposedAcceleration < minimumAcceleration || proposedDeceleration < minimumAcceleration)
 					{
 						break;
 					}
@@ -183,7 +250,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda) const noexcept
 					{
 						proposedAcceleration = (twiceTotalDistance - ((3 * dda.startSpeed + dda.endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
 						proposedDeceleration = (twiceTotalDistance - ((dda.startSpeed + 3 * dda.endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
-						if (   proposedAcceleration < drcMinimumAcceleration || proposedDeceleration < drcMinimumAcceleration
+						if (   proposedAcceleration < minimumAcceleration || proposedDeceleration < minimumAcceleration
 							|| proposedAcceleration > dda.acceleration || proposedDeceleration > dda.deceleration
 						   )
 						{
@@ -199,7 +266,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda) const noexcept
 					{
 						// Change it into an accelerate-only move, accelerating as slowly as we can
 						proposedAcceleration = (fsquare(dda.endSpeed) - fsquare(dda.startSpeed))/twiceTotalDistance;
-						if (proposedAcceleration < drcMinimumAcceleration)
+						if (proposedAcceleration < minimumAcceleration)
 						{
 							break;		// avoid very small accelerations because they can be problematic
 						}
@@ -212,7 +279,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda) const noexcept
 					{
 						// Change it into a decelerate-only move, decelerating as slowly as we can
 						proposedDeceleration = (fsquare(dda.startSpeed) - fsquare(dda.endSpeed))/twiceTotalDistance;
-						if (proposedDeceleration < drcMinimumAcceleration)
+						if (proposedDeceleration < minimumAcceleration)
 						{
 							break;		// avoid very small accelerations because they can be problematic
 						}
@@ -233,6 +300,14 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda) const noexcept
 					debugPrintf("New a=%.1f d=%.1f\n", (double)dda.acceleration, (double)dda.deceleration);
 				}
 			}
+			params.accelDistance = dda.beforePrepare.accelDistance;
+			params.decelDistance = dda.beforePrepare.decelDistance;
+			params.decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+			params.accelTime = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
+			params.accelClocks = params.accelTime * StepTimer::StepClockRate;
+			params.decelClocks = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/dda.deceleration;
+			params.steadyClocks = ((dda.totalDistance - dda.beforePrepare.accelDistance - dda.beforePrepare.decelDistance) * StepTimer::StepClockRate)/dda.topSpeed;
+			dda.clocksNeeded = (uint32_t)(params.accelClocks + params.decelClocks + params.steadyClocks);
 		}
 		break;
 
@@ -264,11 +339,8 @@ MoveSegment *InputShaper::GetAccelerationSegments(InputShaperPlan plan, const DD
 		MoveSegment * const seg = MoveSegment::Allocate(nextSegment);
 		const float uDivA = dda.startSpeed/(dda.acceleration * StepTimer::StepClockRate);
 		const float twoDistDivA = (2.0 * dda.totalDistance)/(dda.acceleration * StepTimer::StepClockRateSquared);
-		seg->SetNonLinear(distanceLimit, fsquare(uDivA), twoDistDivA, -uDivA);
-		if (nextSegment == nullptr)
-		{
-			seg->SetLast();
-		}
+		const float segTime = qq;
+		seg->SetNonLinear(distanceLimit, segTime, uDivA, twoDistDivA, dda.acceleration * StepTimer::StepClockRateSquared);
 		return seg;
 	}
 
@@ -283,8 +355,8 @@ MoveSegment *InputShaper::GetDecelerationSegments(InputShaperPlan plan, const DD
 		MoveSegment * const seg = MoveSegment::Allocate(nullptr);
 		const float uDivD = dda.topSpeed/(dda.deceleration * StepTimer::StepClockRate);
 		const float twoDistDivD = (2.0 * dda.totalDistance)/(dda.deceleration * StepTimer::StepClockRateSquared);
-		seg->SetNonLinear(distanceLimit, fsquare(uDivD) - (2.0 * decelStartDistance)/(dda.deceleration * StepTimer::StepClockRate), twoDistDivD, uDivD + decelStartClocks);
-		seg->SetLast();
+		const float segTime = qq;
+		seg->SetNonLinear(distanceLimit, segTime, -uDivD, -twoDistDivD, -(dda.deceleration * StepTimer::StepClockRateSquared));
 		return seg;
 	}
 

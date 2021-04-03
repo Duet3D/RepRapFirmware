@@ -42,21 +42,20 @@ public:
 
 	MoveSegment(MoveSegment *p_next) noexcept;
 
-	float GetA() const noexcept { return pA; }
-	float GetB() const noexcept { return pB; }
-	float GetC() const noexcept { return pC; }
-	float GetDistanceLimit() const noexcept { return distanceLimit; }
+	float GetDistanceLimit() const noexcept { return endDistanceFraction; }
+	float GetSegmentTime() const noexcept { return segTime; }
+	float GetDDivU() const noexcept { return linear.dDivU; }
+	float GetUDivA() const noexcept { return quadratic.uDivA; }
+	float GetTwoDDivA() const noexcept { return quadratic.twoDDivA; }
+	float GetAcceleration() const noexcept { return quadratic.acceleration; }
+
 	MoveSegment *GetNext() const noexcept;
 	bool IsLinear() const noexcept;
 	bool IsLast() const noexcept;
 
 	void SetNext(MoveSegment *p_next) noexcept;
-	void SetLinear(float pDistanceLimit, float uB, float uC) noexcept;
-	void SetNonLinear(float pDistanceLimit, float uA, float uB, float uC) noexcept;
-	void SetLast() noexcept;
-
-	uint32_t CalcForwardStepTime(float moveFraction) const noexcept;
-	uint32_t CalcReverseStepTime(float moveFraction) const noexcept;
+	void SetLinear(float pDistanceLimit, float p_segTime, float p_dDivU) noexcept;
+	void SetNonLinear(float pDistanceLimit, float p_segTime, float p_uDivA, float p_twoDDivA, float a) noexcept;
 
 	// Allocate a MoveSegment, clearing the Linear and Last flags
 	static MoveSegment *Allocate(MoveSegment *next) noexcept;
@@ -74,16 +73,29 @@ private:
 	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
 
 	// The 'next' field is a MoveSegment pointer with two flag bits in the bottom two bits
-	uint32_t nextAndFlags;			// pointer to the next segment
-	float pA, pB, pC;				// the parameters that describe this move
-	float distanceLimit;			// the fraction of the overall move completed at the end of this segment
+	uint32_t nextAndFlags;			// pointer to the next segment, plus flag bits
+	float endDistanceFraction;		// the fraction of the move that has been completed at the end of this segment
+	float segTime;					// the time in step clocks at which this move ends
+	union
+	{
+		struct						// parameters for quadratic (accelerating/decelerating) moves
+		{
+			float uDivA;			// initial speed divided by acceleration
+			float twoDDivA;			// twice the movement distance divided by the acceleration
+			float acceleration;		// the acceleration of this move
+		} quadratic;
+		struct						// parameters for linear moves
+		{
+			uint32_t dDivU;			// the movement distance divided by the speed
+		} linear;
+	};
 };
 
 // Create a new one, leaving the flags clear
 inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 	: nextAndFlags(reinterpret_cast<uint32_t>(p_next))				// this also clears the flags
 {
-	// clocks, distanceLimit, pA, pB and pC are not initialised
+	// remaining fields are not initialised
 }
 
 inline MoveSegment *MoveSegment::GetNext() const noexcept
@@ -93,7 +105,7 @@ inline MoveSegment *MoveSegment::GetNext() const noexcept
 
 void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 {
-	nextAndFlags = (nextAndFlags & 3) | reinterpret_cast<uint32_t>(p_next);
+	nextAndFlags = (nextAndFlags & 3u) | reinterpret_cast<uint32_t>(p_next);
 }
 
 inline bool MoveSegment::IsLinear() const noexcept
@@ -103,41 +115,25 @@ inline bool MoveSegment::IsLinear() const noexcept
 
 inline bool MoveSegment::IsLast() const noexcept
 {
-	return nextAndFlags & 2u;
+	return (nextAndFlags & ~3u) == 0;
 }
 
-inline void MoveSegment::SetLinear(float pDistanceLimit, float uB, float uC) noexcept
+inline void MoveSegment::SetLinear(float pDistanceLimit, float p_segTime, float p_dDivU) noexcept
 {
-	distanceLimit = pDistanceLimit;
-	pB = uB;
-	pC = uC;
+	endDistanceFraction = pDistanceLimit;
+	segTime = p_segTime;
+	linear.dDivU = p_dDivU;
 	nextAndFlags |= 1u;
 }
 
 // Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
-inline void MoveSegment::SetNonLinear(float pDistanceLimit, float uA, float uB, float uC) noexcept
+inline void MoveSegment::SetNonLinear(float pDistanceLimit, float p_segTime, float p_uDivA, float p_twoDDivA, float a) noexcept
 {
-	distanceLimit = pDistanceLimit;
-	pA = uA;
-	pB = uB;
-	pC = uC;
-}
-
-inline void MoveSegment::SetLast() noexcept
-{
-	nextAndFlags |= 2u;
-}
-
-inline uint32_t MoveSegment::CalcForwardStepTime(float moveFraction) const noexcept
-{
-	const float ret = pC + ((!IsLinear()) ? fastSqrtf(pA + pB * moveFraction) : pB * moveFraction);
-	return (uint32_t)ret;
-}
-
-inline uint32_t MoveSegment::CalcReverseStepTime(float moveFraction) const noexcept
-{
-	const float ret = pC + fastSqrtf((-pB) * moveFraction - pA);
-	return (uint32_t)ret;
+	endDistanceFraction = pDistanceLimit;
+	segTime = p_segTime;
+	quadratic.uDivA = p_uDivA;
+	quadratic.twoDDivA = p_twoDDivA;
+	quadratic.acceleration = a;
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */
