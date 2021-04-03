@@ -120,10 +120,9 @@ void BasicPrepParams::SetFromDDA(DDA& dda) noexcept
 	accelDistance = dda.beforePrepare.accelDistance;
 	decelDistance = dda.beforePrepare.decelDistance;
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
-	accelTime = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
-	accelClocks = accelTime * StepTimer::StepClockRate;
+	accelClocks = ((dda.topSpeed - dda.startSpeed) * StepTimer::StepClockRate)/dda.acceleration;
 	decelClocks = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/dda.deceleration;
-	steadyClocks = ((dda.totalDistance - dda.beforePrepare.accelDistance - dda.beforePrepare.decelDistance) * StepTimer::StepClockRate)/dda.topSpeed;
+	steadyClocks = ((decelStartDistance - dda.beforePrepare.accelDistance) * StepTimer::StepClockRate)/dda.topSpeed;
 	dda.clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
 }
 
@@ -250,6 +249,10 @@ void DDA::DebugPrint(const char *tag) const noexcept
 	debugPrintf("\n"
 				"a=%f d=%f reqv=%f startv=%f topv=%f endv=%f cks=%" PRIu32 "\n",
 				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded);
+	for (const MoveSegment *segs = segments; segs != nullptr; segs = segs->GetNext())
+	{
+		segs->DebugPrint();
+	}
 }
 
 // Print the DDA and active DMs
@@ -1910,7 +1913,7 @@ void DDA::StepDrivers(Platform& p) noexcept
 	while (dmToInsert != dm)										// note that both of these may be nullptr
 	{
 		DriveMovement * const nextToInsert = dmToInsert->nextDM;
-		if (dmToInsert->state >= DMState::cartAccelOrDecelNoReverse)
+		if (dmToInsert->state >= DMState::firstMotionState)
 		{
 			InsertDM(dmToInsert);
 			if (dmToInsert->directionChanged)

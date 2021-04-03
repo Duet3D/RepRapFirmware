@@ -30,8 +30,6 @@ struct BasicPrepParams
 	float accelDistance;
 	float decelDistance;
 	float decelStartDistance;
-
-	float accelTime;
 	float accelClocks, steadyClocks, decelClocks;
 
 	// Set the parameters from the DDA and update clocksNeeded in the DDA

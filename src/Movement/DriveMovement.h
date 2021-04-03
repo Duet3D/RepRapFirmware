@@ -24,17 +24,16 @@ enum class DMState : uint8_t
 	idle = 0,
 	stepError,
 	// All higher values are various states of motion
-	cartAccelOrDecelNoReverse,					// linear accelerating motion
+	firstMotionState,
+	cartAccel = firstMotionState,				// linear accelerating motion
+	cartDecelNoReverse,							// linear decelerating motion
 	cartLinear,									// linear steady speed
 	cartDecelExpectReverse,						// linear decelerating, reversal later
 	cartDecelReversing,							// linear decelerating, reverse on next step
 	cartDecelReverse,							// linear decelerating, reverse motion
-	cartStopping,								// just one more step to do
 
 	deltaForwards,								// moving forwards
-	deltaReversing,								// moving forwards but reversing on next step
 	deltaReverse,								// reversing on this and subsequent steps
-	deltaStopping
 };
 
 // This class describes a single movement of one drive

@@ -21,7 +21,7 @@ void MoveSegment::InitialAllocate(unsigned int num) noexcept
 	}
 }
 
-// Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe.
+// Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Clears the flags.
 MoveSegment *MoveSegment::Allocate(MoveSegment *next) noexcept
 {
 	MoveSegment * ms = freeList;
@@ -36,6 +36,19 @@ MoveSegment *MoveSegment::Allocate(MoveSegment *next) noexcept
 		++numCreated;
 	}
 	return ms;
+}
+
+void MoveSegment::DebugPrint() const noexcept
+{
+	debugPrintf("f=%g t=%" PRIu32 " ", (double)endDistanceFraction, (uint32_t)segTime);
+	if (IsLinear())
+	{
+		debugPrintf("dDivU=%g\n", (double)linear.dDivU);
+	}
+	else
+	{
+		debugPrintf("uDivA=%g, twoDDivA=%g, a=%g\n", (double)quadratic.uDivA, (double)quadratic.twoDDivA, (double)quadratic.acceleration);
+	}
 }
 
 // End

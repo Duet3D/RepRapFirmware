@@ -314,9 +314,9 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 			if (dda.beforePrepare.decelDistance > 0.0)
 			{
 				tempSegments = MoveSegment::Allocate(nullptr);
-				const float uDivD = dda.topSpeed/(dda.deceleration * StepTimer::StepClockRate);
-				const float twoDistDivD = (2.0 * dda.totalDistance)/(dda.deceleration * StepTimer::StepClockRateSquared);
-				tempSegments->SetNonLinear(params.decelDistance/dda.totalDistance, params.decelClocks, -uDivD, -twoDistDivD, -(dda.deceleration * StepTimer::StepClockRateSquared));
+				const float uDivD = (dda.topSpeed * StepTimer::StepClockRate)/dda.deceleration;
+				const float twoDistDivD = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.deceleration;
+				tempSegments->SetNonLinear(1.0, params.decelClocks, -uDivD, -twoDistDivD, -(dda.deceleration/StepTimer::StepClockRateSquared));
 				plan.decelSegments = 1;
 			}
 			else
@@ -329,17 +329,16 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 			if (params.steadyClocks > 0.0)
 			{
 				tempSegments = MoveSegment::Allocate(tempSegments);
-				const float ts = dda.topSpeed * StepTimer::StepClockRate;
-				tempSegments->SetLinear(params.decelStartDistance/dda.totalDistance, params.accelClocks + dda.beforePrepare.accelDistance/ts, dda.totalDistance/ts);
+				tempSegments->SetLinear(params.decelStartDistance/dda.totalDistance, params.steadyClocks, (dda.totalDistance * StepTimer::StepClockRate)/dda.topSpeed);
 			}
 
 			// Acceleration phase
 			if (dda.beforePrepare.accelDistance > 0.0)
 			{
 				tempSegments = MoveSegment::Allocate(tempSegments);
-				const float uDivA = dda.startSpeed/(dda.acceleration * StepTimer::StepClockRate);
-				const float twoDistDivA = (2.0 * dda.totalDistance)/(dda.acceleration * StepTimer::StepClockRateSquared);
-				tempSegments->SetNonLinear(params.accelDistance/dda.totalDistance, params.accelClocks, uDivA, twoDistDivA, dda.acceleration * StepTimer::StepClockRateSquared);
+				const float uDivA = (dda.startSpeed * StepTimer::StepClockRate)/dda.acceleration;
+				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.acceleration;
+				tempSegments->SetNonLinear(params.accelDistance/dda.totalDistance, params.accelClocks, uDivA, twoDistDivA, dda.acceleration/StepTimer::StepClockRateSquared);
 				plan.accelSegments = 1;
 			}
 			else
