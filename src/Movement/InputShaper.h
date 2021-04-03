@@ -39,7 +39,7 @@ public:
 
 	float GetFrequency() const noexcept { return frequency; }
 	float GetDamping() const noexcept { return zeta; }
-	float GetDAAMinimumAcceleration() const noexcept { return minimumAcceleration; }
+	float GetDAAMinimumAcceleration() const noexcept { return daaMinimumAcceleration; }
 	InputShaperType GetType() const noexcept { return type; }
 	InputShaperPlan PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept;
 
@@ -59,11 +59,10 @@ private:
 
 	float frequency;								// the undamped frequency
 	float zeta;										// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
-	float minimumAcceleration;						// the minimum value that we reduce acceleration to (DAA only)
-	float halfPeriod;
+	float daaMinimumAcceleration;					// the minimum value that we reduce acceleration to (DAA only)
 	float coefficients[5];
 	float times[3];
-	float timeLost;
+	float timeLost;									// the acceleration time lost due to input shaping. Multiply by 2 if shaping is used at both the start and end of acceleration.
 	InputShaperType type;
 	uint8_t numImpulses;
 };

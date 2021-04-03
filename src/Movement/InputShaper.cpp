@@ -27,7 +27,7 @@ constexpr ObjectModelTableEntry InputShaper::objectModelTable[] =
 	// 0. InputShaper members
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
-	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
+	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->daaMinimumAcceleration, 1),			ObjectModelEntryFlags::none },
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
@@ -38,7 +38,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(InputShaper)
 InputShaper::InputShaper() noexcept
 	: frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-	  minimumAcceleration(DefaultDAAMinimumAcceleration),
+	  daaMinimumAcceleration(DefaultDAAMinimumAcceleration),
 	  type(InputShaperType::none),
 	  numImpulses(1)
 {
@@ -58,7 +58,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	if (gb.Seen('L'))
 	{
 		seen = true;
-		minimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
+		daaMinimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
 	}
 	if (gb.Seen('S'))
 	{
@@ -81,7 +81,6 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	{
 		const float sqrtOneMinusZetaSquared = fastSqrtf(1.0 - fsquare(zeta));
 		const float dampedFrequency = frequency * sqrtOneMinusZetaSquared;
-		halfPeriod = 0.5/dampedFrequency;
 		const float k = expf(-zeta * Pi/sqrtOneMinusZetaSquared);
 		switch (type.RawValue())
 		{
@@ -170,7 +169,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		reply.printf("%s input shaping at %.1fHz damping factor %.2f", type.ToString(), (double)frequency, (double)zeta);
 		if (type == InputShaperType::DAA)
 		{
-			reply.catf(", min. acceleration %.1f", (double)minimumAcceleration);
+			reply.catf(", min. acceleration %.1f", (double)daaMinimumAcceleration);
 		}
 	}
 	return GCodeResult::ok;
@@ -185,7 +184,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 	case InputShaperType::DAA:
 		{
 			// Try to reduce the acceleration/deceleration of the move to cancel ringing
-			const float idealPeriod = times[1];
+			const float idealPeriod = times[1];					// this the full period
 
 			float proposedAcceleration = dda.acceleration, proposedAccelDistance = dda.beforePrepare.accelDistance;
 			bool adjustAcceleration = false;
@@ -233,7 +232,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 			{
 				if (proposedAccelDistance + proposedDecelDistance <= dda.totalDistance)
 				{
-					if (proposedAcceleration < minimumAcceleration || proposedDeceleration < minimumAcceleration)
+					if (proposedAcceleration < daaMinimumAcceleration || proposedDeceleration < daaMinimumAcceleration)
 					{
 						break;
 					}
@@ -252,7 +251,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 					{
 						proposedAcceleration = (twiceTotalDistance - ((3 * dda.startSpeed + dda.endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
 						proposedDeceleration = (twiceTotalDistance - ((dda.startSpeed + 3 * dda.endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
-						if (   proposedAcceleration < minimumAcceleration || proposedDeceleration < minimumAcceleration
+						if (   proposedAcceleration < daaMinimumAcceleration || proposedDeceleration < daaMinimumAcceleration
 							|| proposedAcceleration > dda.acceleration || proposedDeceleration > dda.deceleration
 						   )
 						{
@@ -268,7 +267,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 					{
 						// Change it into an accelerate-only move, accelerating as slowly as we can
 						proposedAcceleration = (fsquare(dda.endSpeed) - fsquare(dda.startSpeed))/twiceTotalDistance;
-						if (proposedAcceleration < minimumAcceleration)
+						if (proposedAcceleration < daaMinimumAcceleration)
 						{
 							break;		// avoid very small accelerations because they can be problematic
 						}
@@ -281,7 +280,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 					{
 						// Change it into a decelerate-only move, decelerating as slowly as we can
 						proposedDeceleration = (fsquare(dda.startSpeed) - fsquare(dda.endSpeed))/twiceTotalDistance;
-						if (proposedDeceleration < minimumAcceleration)
+						if (proposedDeceleration < daaMinimumAcceleration)
 						{
 							break;		// avoid very small accelerations because they can be problematic
 						}
