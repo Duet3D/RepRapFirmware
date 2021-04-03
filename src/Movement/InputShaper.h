@@ -12,6 +12,8 @@
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
 
+class BasicPrepParams;
+
 NamedEnum(InputShaperType, uint8_t,
 	none,
 	ZVD,
@@ -24,24 +26,10 @@ NamedEnum(InputShaperType, uint8_t,
 class DDA;
 class MoveSegment;
 
-// Movement parameters calculated by the input shaper
-struct BasicPrepParams
-{
-	// Parameters used for all types of motion
-	float accelDistance;
-	float decelDistance;
-	float decelStartDistance;
-
-	float accelTime;
-	float accelClocks, steadyClocks, decelClocks;
-};
-
 struct InputShaperPlan
 {
 	uint32_t accelSegments : 4,				// number of acceleration segments
 			 decelSegments : 4;				// number of deceleration segments
-
-	InputShaperPlan() : accelSegments(1), decelSegments(1) { }
 };
 
 class InputShaper INHERIT_OBJECT_MODEL
@@ -53,18 +41,20 @@ public:
 	float GetDamping() const noexcept { return zeta; }
 	float GetDAAMinimumAcceleration() const noexcept { return minimumAcceleration; }
 	InputShaperType GetType() const noexcept { return type; }
-	InputShaperPlan PlanShaping(DDA& dda, BasicPrepParams& params) const noexcept;
-	MoveSegment *GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, float distanceLimit, MoveSegment *nextSegment) const noexcept;
-	MoveSegment *GetDecelerationSegments(InputShaperPlan plan, const DDA& dda, float distanceLimit, float decelStartDistance, float decelStartClocks) const noexcept;
+	InputShaperPlan PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
+
+#if SUPPORT_REMOTE_COMMANDS
+	void GetSegments(DDA& dda, const BasicPrepParams& params) const noexcept;
+#endif
 
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
 	static constexpr float DefaultFrequency = 40.0;
-	static constexpr float DefaultDamping = 0.2;
+	static constexpr float DefaultDamping = 0.1;
 	static constexpr float DefaultDAAMinimumAcceleration = 10.0;
 
 	float frequency;								// the undamped frequency

@@ -176,9 +176,11 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	return GCodeResult::ok;
 }
 
-InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params) const noexcept
+InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept
 {
-	switch (type.RawValue())
+	InputShaperPlan plan;
+
+	switch ((shapingEnabled) ? type.RawValue() : InputShaperType::none)
 	{
 	case InputShaperType::DAA:
 		{
@@ -300,68 +302,106 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params) cons
 					debugPrintf("New a=%.1f d=%.1f\n", (double)dda.acceleration, (double)dda.deceleration);
 				}
 			}
-			params.accelDistance = dda.beforePrepare.accelDistance;
-			params.decelDistance = dda.beforePrepare.decelDistance;
-			params.decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
-			params.accelTime = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
-			params.accelClocks = params.accelTime * StepTimer::StepClockRate;
-			params.decelClocks = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/dda.deceleration;
-			params.steadyClocks = ((dda.totalDistance - dda.beforePrepare.accelDistance - dda.beforePrepare.decelDistance) * StepTimer::StepClockRate)/dda.topSpeed;
-			dda.clocksNeeded = (uint32_t)(params.accelClocks + params.decelClocks + params.steadyClocks);
+		}
+		// no break
+	case InputShaperType::none:
+	default:
+		params.SetFromDDA(dda);
+		{
+			// Calculate the segments needed for axis movement
+			// Deceleration phase
+			MoveSegment * tempSegments;
+			if (dda.beforePrepare.decelDistance > 0.0)
+			{
+				tempSegments = MoveSegment::Allocate(nullptr);
+				const float uDivD = dda.topSpeed/(dda.deceleration * StepTimer::StepClockRate);
+				const float twoDistDivD = (2.0 * dda.totalDistance)/(dda.deceleration * StepTimer::StepClockRateSquared);
+				tempSegments->SetNonLinear(params.decelDistance/dda.totalDistance, params.decelClocks, -uDivD, -twoDistDivD, -(dda.deceleration * StepTimer::StepClockRateSquared));
+				plan.decelSegments = 1;
+			}
+			else
+			{
+				tempSegments = nullptr;
+				plan.decelSegments = 0;
+			}
+
+			// Steady speed phase
+			if (params.steadyClocks > 0.0)
+			{
+				tempSegments = MoveSegment::Allocate(tempSegments);
+				const float ts = dda.topSpeed * StepTimer::StepClockRate;
+				tempSegments->SetLinear(params.decelStartDistance/dda.totalDistance, params.accelClocks + dda.beforePrepare.accelDistance/ts, dda.totalDistance/ts);
+			}
+
+			// Acceleration phase
+			if (dda.beforePrepare.accelDistance > 0.0)
+			{
+				tempSegments = MoveSegment::Allocate(tempSegments);
+				const float uDivA = dda.startSpeed/(dda.acceleration * StepTimer::StepClockRate);
+				const float twoDistDivA = (2.0 * dda.totalDistance)/(dda.acceleration * StepTimer::StepClockRateSquared);
+				tempSegments->SetNonLinear(params.accelDistance/dda.totalDistance, params.accelClocks, uDivA, twoDistDivA, dda.acceleration * StepTimer::StepClockRateSquared);
+				plan.accelSegments = 1;
+			}
+			else
+			{
+				plan.accelSegments = 0;
+			}
+
+			dda.segments = tempSegments;
 		}
 		break;
 
-	case InputShaperType::ZVD:
+//	case InputShaperType::ZVD:
+//	case InputShaperType::ZVDD:
+//	case InputShaperType::EI2:
+//	case InputShaperType::EI3:
 		//TODO
-		break;
-
-	case InputShaperType::ZVDD:
-		//TODO
-		break;
-
-	case InputShaperType::EI2:
-		//TODO
-		break;
-
-	case InputShaperType::none:
-	default:
-		break;
+//		break;
 	}
 
 	// If we get here then either we don't shape this move or we are using DAA, so just one acceleration and one deceleration segment
-	return InputShaperPlan();
+	return plan;
 }
 
-MoveSegment *InputShaper::GetAccelerationSegments(InputShaperPlan plan, const DDA& dda, float distanceLimit, MoveSegment *nextSegment) const noexcept
+#if SUPPORT_REMOTE_COMMANDS
+
+void InputShaper::GetSegments(DDA& dda, const BasicPrepParams& params) const noexcept
 {
-	if (plan.accelSegments == 1)
+	// Deceleration phase
+	MoveSegment * tempSegments;
+	if (params.decelClocks > 0.0)
 	{
-		MoveSegment * const seg = MoveSegment::Allocate(nextSegment);
-		const float uDivA = dda.startSpeed/(dda.acceleration * StepTimer::StepClockRate);
-		const float twoDistDivA = (2.0 * dda.totalDistance)/(dda.acceleration * StepTimer::StepClockRateSquared);
-		const float segTime = qq;
-		seg->SetNonLinear(distanceLimit, segTime, uDivA, twoDistDivA, dda.acceleration * StepTimer::StepClockRateSquared);
-		return seg;
+		//TODO for now we assume just one deceleration segment
+		tempSegments = MoveSegment::Allocate(nullptr);
+		const float uDivD = dda.topSpeed/dda.deceleration;
+		const float twoDistDivD = 2.0/dda.deceleration;
+		tempSegments->SetNonLinear(params.decelDistance, params.decelClocks, -uDivD, -twoDistDivD, -dda.deceleration);
+	}
+	else
+	{
+		tempSegments = nullptr;
 	}
 
-	RRF_ASSERT(false);
-	return nullptr;
-}
-
-MoveSegment *InputShaper::GetDecelerationSegments(InputShaperPlan plan, const DDA& dda, float distanceLimit, float decelStartDistance, float decelStartClocks) const noexcept
-{
-	if (plan.decelSegments == 1)
+	// Steady speed phase
+	if (params.steadyClocks > 0.0)
 	{
-		MoveSegment * const seg = MoveSegment::Allocate(nullptr);
-		const float uDivD = dda.topSpeed/(dda.deceleration * StepTimer::StepClockRate);
-		const float twoDistDivD = (2.0 * dda.totalDistance)/(dda.deceleration * StepTimer::StepClockRateSquared);
-		const float segTime = qq;
-		seg->SetNonLinear(distanceLimit, segTime, -uDivD, -twoDistDivD, -(dda.deceleration * StepTimer::StepClockRateSquared));
-		return seg;
+		tempSegments = MoveSegment::Allocate(tempSegments);
+		tempSegments->SetLinear(params.decelStartDistance, params.accelClocks + dda.beforePrepare.accelDistance/dda.topSpeed, 1.0/dda.topSpeed);
 	}
 
-	RRF_ASSERT(false);
-	return nullptr;
+	// Acceleration phase
+	if (params.accelClocks > 0.0)
+	{
+		//TODO for now we assume just one acceleration segment
+		tempSegments = MoveSegment::Allocate(tempSegments);
+		const float uDivA = dda.startSpeed/dda.acceleration;
+		const float twoDistDivA = 2.0/dda.acceleration;
+		tempSegments->SetNonLinear(params.accelDistance, params.accelClocks, uDivA, twoDistDivA, dda.acceleration);
+	}
+
+	dda.segments = tempSegments;
 }
+
+#endif
 
 // End

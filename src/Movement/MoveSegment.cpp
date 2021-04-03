@@ -21,7 +21,7 @@ void MoveSegment::InitialAllocate(unsigned int num) noexcept
 	}
 }
 
-// Allocate a MoveSegment, from the freelist if possible, else create a new one
+// Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe.
 MoveSegment *MoveSegment::Allocate(MoveSegment *next) noexcept
 {
 	MoveSegment * ms = freeList;

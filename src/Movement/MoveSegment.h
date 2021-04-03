@@ -103,7 +103,7 @@ inline MoveSegment *MoveSegment::GetNext() const noexcept
 	return reinterpret_cast<MoveSegment*>(nextAndFlags & (~3u));
 }
 
-void MoveSegment::SetNext(MoveSegment *p_next) noexcept
+inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 {
 	nextAndFlags = (nextAndFlags & 3u) | reinterpret_cast<uint32_t>(p_next);
 }
@@ -134,6 +134,13 @@ inline void MoveSegment::SetNonLinear(float pDistanceLimit, float p_segTime, flo
 	quadratic.uDivA = p_uDivA;
 	quadratic.twoDDivA = p_twoDDivA;
 	quadratic.acceleration = a;
+}
+
+// Release a single MoveSegment. Not thread-safe.
+inline void MoveSegment::Release(MoveSegment *item) noexcept
+{
+	item->nextAndFlags = reinterpret_cast<uint32_t>(freeList);
+	freeList = item;
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

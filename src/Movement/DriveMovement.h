@@ -11,34 +11,13 @@
 #include <RepRapFirmware.h>
 #include <Platform/Tasks.h>
 #include "MoveSegment.h"
-#include "InputShaper.h"	// for BasicPrepParams
 
 class LinearDeltaKinematics;
+class PrepParams;
 
 #define DM_USE_FPU			(__FPU_USED)
 #define EVEN_STEPS			(1)			// 1 to generate steps at even intervals when doing double/quad/octal stepping
 #define ROUND_TO_NEAREST	(0)			// 1 for round to nearest (as used in 1.20beta10), 0 for round down (as used prior to 1.20beta10)
-
-// Struct for passing parameters to the DriveMovement Prepare methods
-struct PrepParams : public BasicPrepParams
-{
-	// Parameters used only for extruders
-//	float accelCompFactor;
-
-#if SUPPORT_CAN_EXPANSION
-	// Parameters used by CAN expansion
-	float initialSpeedFraction, finalSpeedFraction;
-#endif
-
-	// Parameters used only for delta moves
-	float initialX, initialY;
-#if SUPPORT_CAN_EXPANSION
-	float finalX, finalY;
-	float zMovement;
-#endif
-	const LinearDeltaKinematics *dparams;
-	float a2plusb2;								// sum of the squares of the X and Y movement fractions
-};
 
 enum class DMState : uint8_t
 {

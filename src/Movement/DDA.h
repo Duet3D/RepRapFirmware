@@ -23,11 +23,48 @@
 
 class DDARing;
 
+// Movement parameters calculated by the input shaper
+struct BasicPrepParams
+{
+	// Parameters used for all types of motion
+	float accelDistance;
+	float decelDistance;
+	float decelStartDistance;
+
+	float accelTime;
+	float accelClocks, steadyClocks, decelClocks;
+
+	// Set the parameters from the DDA and update clocksNeeded in the DDA
+	void SetFromDDA(DDA& dda) noexcept;
+};
+
+// Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
+struct PrepParams : public BasicPrepParams
+{
+	// Parameters used only for extruders
+//	float accelCompFactor;
+
+#if SUPPORT_CAN_EXPANSION
+	// Parameters used by CAN expansion
+	float initialSpeedFraction, finalSpeedFraction;
+#endif
+
+	// Parameters used only for delta moves
+	float initialX, initialY;
+#if SUPPORT_CAN_EXPANSION
+	float finalX, finalY;
+	float zMovement;
+#endif
+	const LinearDeltaKinematics *dparams;
+	float a2plusb2;								// sum of the squares of the X and Y movement fractions
+};
+
 // This defines a single coordinated movement of one or several motors
 class DDA
 {
 	friend class DriveMovement;
 	friend class InputShaper;
+	friend class BasicPrepParams;
 
 public:
 

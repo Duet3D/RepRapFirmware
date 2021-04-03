@@ -115,6 +115,18 @@ void DDA::LogProbePosition() noexcept
 
 #endif
 
+void BasicPrepParams::SetFromDDA(DDA& dda) noexcept
+{
+	accelDistance = dda.beforePrepare.accelDistance;
+	decelDistance = dda.beforePrepare.decelDistance;
+	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+	accelTime = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
+	accelClocks = accelTime * StepTimer::StepClockRate;
+	decelClocks = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/dda.deceleration;
+	steadyClocks = ((dda.totalDistance - dda.beforePrepare.accelDistance - dda.beforePrepare.decelDistance) * StepTimer::StepClockRate)/dda.topSpeed;
+	dda.clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
+}
+
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 {
 	activeDMs = completedDMs = nullptr;
@@ -669,25 +681,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 	// Calculate the segments needed for axis movement
 	const InputShaper& shaper = reprap.GetMove().GetShaper();
-
-	// Deceleration phase
-	MoveSegment * tempSegments = (params.decelDistance > 0.0)
-									? shaper.GetDecelerationSegments(InputShaperPlan(), *this, 1.0, params.decelStartDistance, (float)(msg.accelerationClocks + msg.steadyClocks))
-									: nullptr;
-	// Steady speed phase
-	if (msg.steadyClocks > 0.0)
-	{
-		tempSegments = MoveSegment::Allocate(tempSegments);
-		tempSegments->SetLinear(params.decelStartDistance, (float)msg.accelerationClocks + beforePrepare.accelDistance/topSpeed, 1.0/topSpeed);
-	}
-
-	// Acceleration phase
-	if (beforePrepare.accelDistance > 0.0)
-	{
-		tempSegments = shaper.GetAccelerationSegments(InputShaperPlan(), *this, params.accelDistance, tempSegments);
-	}
-
-	segments = tempSegments;
+	shaper.GetSegments(*this, params);
 
 	activeDMs = completedDMs = nullptr;
 
@@ -754,7 +748,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 // Return true if this move is or might have been intended to be a deceleration-only move
 // A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error
-inline bool DDA::IsDecelerationMove() const noexcept
+bool DDA::IsDecelerationMove() const noexcept
 {
 	return beforePrepare.decelDistance == totalDistance					// the simple case - is a deceleration-only move
 			|| (topSpeed < requestedSpeed								// can't have been intended as deceleration-only if it reaches the requested speed
@@ -764,7 +758,7 @@ inline bool DDA::IsDecelerationMove() const noexcept
 
 // Return true if this move is or might have been intended to be a deceleration-only move
 // A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error
-inline bool DDA::IsAccelerationMove() const noexcept
+bool DDA::IsAccelerationMove() const noexcept
 {
 	return beforePrepare.accelDistance == totalDistance					// the simple case - is an acceleration-only move
 			|| (topSpeed < requestedSpeed								// can't have been intended as deceleration-only if it reaches the requested speed
@@ -1169,47 +1163,12 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				&& topSpeed > startSpeed && topSpeed > endSpeed
 				&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5);
 
-	InputShaperPlan plan;
 	PrepParams params;
-	if (useInputShaping)
-	{
-		plan = shaper.PlanShaping(*this, params);			// this may change the acceleration and deceleration, but does not update clocksNeeded, which still needs to be done
-	}
-	else
-	{
-		params.accelDistance = beforePrepare.accelDistance;
-		params.decelDistance = beforePrepare.decelDistance;
-		params.decelStartDistance = totalDistance - beforePrepare.decelDistance;
-		params.accelTime = (topSpeed - startSpeed)/acceleration;
-		params.accelClocks = params.accelTime * StepTimer::StepClockRate;
-		params.decelClocks = ((topSpeed - endSpeed) * StepTimer::StepClockRate)/deceleration;
-		params.steadyClocks = ((totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance) * StepTimer::StepClockRate)/topSpeed;
-		clocksNeeded = (uint32_t)(params.accelClocks + params.decelClocks + params.steadyClocks);
-	}
+	const InputShaperPlan plan = shaper.PlanShaping(*this, params, useInputShaping);
+	(void)plan;		//TODO will be needed for CAN
 
 	if (simMode == 0)
 	{
-		// Calculate the segments needed for axis movement
-		// Deceleration phase
-		MoveSegment * tempSegments = (beforePrepare.decelDistance > 0.0)
-										? shaper.GetDecelerationSegments(plan, *this, totalDistance, params.decelStartDistance/totalDistance, params.accelClocks + params.steadyClocks)
-										: nullptr;
-		// Steady speed phase
-		if (params.steadyClocks > 0.0)
-		{
-			tempSegments = MoveSegment::Allocate(tempSegments);
-			const float ts = topSpeed * StepTimer::StepClockRate;
-			tempSegments->SetLinear(params.decelStartDistance/totalDistance, params.accelClocks + beforePrepare.accelDistance/ts, totalDistance/ts);
-		}
-
-		// Acceleration phase
-		if (beforePrepare.accelDistance > 0.0)
-		{
-			tempSegments = shaper.GetAccelerationSegments(plan, *this, params.accelDistance/totalDistance, tempSegments);
-		}
-
-		segments = tempSegments;
-
 		if (flags.isDeltaMovement)
 		{
 			// This code assumes that the previous move in the DDA ring is the previously-executed move, because it fetches the X and Y end coordinates from that move.
