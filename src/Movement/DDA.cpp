@@ -115,14 +115,20 @@ void DDA::LogProbePosition() noexcept
 
 #endif
 
-void BasicPrepParams::SetFromDDA(DDA& dda) noexcept
+// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
+void BasicPrepParams::SetFromDDA(const DDA& dda) noexcept
 {
 	accelDistance = dda.beforePrepare.accelDistance;
 	decelDistance = dda.beforePrepare.decelDistance;
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	accelClocks = ((dda.topSpeed - dda.startSpeed) * StepTimer::StepClockRate)/dda.acceleration;
 	decelClocks = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/dda.deceleration;
-	steadyClocks = ((decelStartDistance - dda.beforePrepare.accelDistance) * StepTimer::StepClockRate)/dda.topSpeed;
+}
+
+// Calculate the steady clocks and set the total clocks in the DDA
+void BasicPrepParams::Finalise(DDA& dda) noexcept
+{
+	steadyClocks = ((decelStartDistance - accelDistance) * StepTimer::StepClockRate)/dda.topSpeed;
 	dda.clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
 }
 
@@ -678,11 +684,11 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks/(2 * StepTimer::StepClockRate);
 	params.decelStartDistance = 1.0 - params.decelDistance;
 	params.accelClocks = msg.accelerationClocks;
-	params.accelTime = msg.accelerationClocks/StepTimer::StepClockRate;
 	params.steadyClocks = msg.steadyClocks;
 	params.decelClocks = msg.decelClocks;
 
 	// Calculate the segments needed for axis movement
+	//TODO the message will include input shaping info
 	const InputShaper& shaper = reprap.GetMove().GetShaper();
 	shaper.GetSegments(*this, params);
 
@@ -1151,6 +1157,8 @@ pre(disableDeltaMapping || drive < MaxAxes)
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 {
+	flags.wasAccelOnlyMove = IsAccelerationMove();			// save this for the next move to look at
+
 #if SUPPORT_LASER
 	if (topSpeed < requestedSpeed && reprap.GetGCodes().GetMachineType() == MachineType::laser)
 	{
@@ -1162,7 +1170,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 	const InputShaper& shaper = reprap.GetMove().GetShaper();
 	const bool useInputShaping =
 				   flags.xyMoving
-				&& shaper.GetType() == InputShaperType::DAA
 				&& topSpeed > startSpeed && topSpeed > endSpeed
 				&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5);
 

@@ -27,18 +27,22 @@ constexpr ObjectModelTableEntry InputShaper::objectModelTable[] =
 	// 0. InputShaper members
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
+#if SUPPORT_DAA
 	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->daaMinimumAcceleration, 1),			ObjectModelEntryFlags::none },
+#endif
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t InputShaper::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t InputShaper::objectModelTableDescriptor[] = { 1, 3 + SUPPORT_DAA };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(InputShaper)
 
 InputShaper::InputShaper() noexcept
 	: frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
+#if SUPPORT_DAA
 	  daaMinimumAcceleration(DefaultDAAMinimumAcceleration),
+#endif
 	  type(InputShaperType::none),
 	  numImpulses(1)
 {
@@ -55,11 +59,13 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		seen = true;
 		frequency = gb.GetLimitedFValue('F', MinimumInputShapingFrequency, MaximumInputShapingFrequency);
 	}
+#if SUPPORT_DAA
 	if (gb.Seen('L'))
 	{
 		seen = true;
 		daaMinimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
 	}
+#endif
 	if (gb.Seen('S'))
 	{
 		seen = true;
@@ -73,8 +79,12 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	}
 	else if (seen && type == InputShaperType::none)
 	{
+#if SUPPORT_DAA
 		// For backwards compatibility, if we have set input shaping parameters but not defined shaping type, default to DAA for now. Change this when we support better types of input shaping.
 		type = InputShaperType::DAA;
+#else
+		type = InputShaperType::ZVD;
+#endif
 	}
 
 	if (seen)
@@ -86,13 +96,17 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		{
 		case InputShaperType::none:
 			numImpulses = 1;
+			shapingTime = 0.0;
 			break;
 
+#if SUPPORT_DAA
 		case InputShaperType::DAA:
 			numImpulses	= 1;
-			times[0] = 0.5/dampedFrequency;
 			times[1] = 1.0/dampedFrequency;
+			times[0] = 0.5 * times[1];
+			shapingTime = 0.0;
 			break;
+#endif
 
 		case InputShaperType::ZVD:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
 			{
@@ -101,9 +115,10 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				coefficients[1] = 2.0 * k/j;
 				coefficients[2] = fsquare(k)/j;
 			}
-			times[0] = 0.5/dampedFrequency;
 			times[1] = 1.0/dampedFrequency;
+			times[0] = 0.5 * times[1];
 			numImpulses = 3;
+			shapingTime = times[1];
 			break;
 
 		case InputShaperType::ZVDD:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
@@ -114,10 +129,11 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				coefficients[2] = 3.0 * fsquare(k)/j;
 				coefficients[3] = k * fsquare(k)/j;
 			}
-			times[0] = 0.5/dampedFrequency;
 			times[1] = 1.0/dampedFrequency;
-			times[2] = 1.5/dampedFrequency;
+			times[0] = 0.5 *times[1];
+			times[2] = times[0] + times[1];
 			numImpulses = 4;
+			shapingTime = times[2];
 			break;
 
 		case InputShaperType::EI2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
@@ -133,6 +149,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				times[2] = (1.49920 + -0.09297 * zeta + -0.28338 * zetaSquared + 1.85710 * zetaCubed)/dampedFrequency;
 			}
 			numImpulses = 4;
+			shapingTime = times[2];
 			break;
 
 		case InputShaperType::EI3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
@@ -150,14 +167,20 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				times[3] = (1.99960 + -0.28231 * zeta +  0.61536 * zetaSquared + 5.40450 * zetaCubed)/dampedFrequency;
 			}
 			numImpulses = 5;
+			shapingTime = times[3];
 			break;
 		}
 
-		timeLost = 0.0;
+		float tLostAtStart = 0.0;
+		float tLostAtEnd = 0.0;
 		for (uint8_t i = 0; i < numImpulses - 1; ++i)
 		{
-			timeLost += (1.0 - coefficients[i]) * times[i];
+			tLostAtStart += (1.0 - coefficients[i]) * times[i];
+			tLostAtEnd += coefficients[i] * times[i];
 		}
+		clocksLostAtStart = tLostAtStart * StepTimer::StepClockRate;
+		clocksLostAtEnd = tLostAtEnd * StepTimer::StepClockRate;
+
 		reprap.MoveUpdated();
 	}
 	else if (type == InputShaperType::none)
@@ -167,20 +190,23 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	else
 	{
 		reply.printf("%s input shaping at %.1fHz damping factor %.2f", type.ToString(), (double)frequency, (double)zeta);
+#if SUPPORT_DAA
 		if (type == InputShaperType::DAA)
 		{
 			reply.catf(", min. acceleration %.1f", (double)daaMinimumAcceleration);
 		}
+#endif
 	}
 	return GCodeResult::ok;
 }
 
 InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept
 {
-	InputShaperPlan plan;
+	InputShaperPlan plan;			// this clears out all the fields
 
 	switch ((shapingEnabled) ? type.RawValue() : InputShaperType::none)
 	{
+#if SUPPORT_DAA
 	case InputShaperType::DAA:
 		{
 			// Try to reduce the acceleration/deceleration of the move to cancel ringing
@@ -298,67 +324,237 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 
 				if (reprap.Debug(moduleMove))
 				{
-					debugPrintf("New a=%.1f d=%.1f\n", (double)dda.acceleration, (double)dda.deceleration);
+					debugPrintf("DAA: new a=%.1f d=%.1f\n", (double)dda.acceleration, (double)dda.deceleration);
 				}
 			}
 		}
+#endif
 		// no break
 	case InputShaperType::none:
 	default:
 		params.SetFromDDA(dda);
-		{
-			// Calculate the segments needed for axis movement
-			// Deceleration phase
-			MoveSegment * tempSegments;
-			if (dda.beforePrepare.decelDistance > 0.0)
-			{
-				tempSegments = MoveSegment::Allocate(nullptr);
-				const float uDivD = (dda.topSpeed * StepTimer::StepClockRate)/dda.deceleration;
-				const float twoDistDivD = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.deceleration;
-				tempSegments->SetNonLinear(1.0, params.decelClocks, -uDivD, -twoDistDivD, -(dda.deceleration/StepTimer::StepClockRateSquared));
-				plan.decelSegments = 1;
-			}
-			else
-			{
-				tempSegments = nullptr;
-				plan.decelSegments = 0;
-			}
-
-			// Steady speed phase
-			if (params.steadyClocks > 0.0)
-			{
-				tempSegments = MoveSegment::Allocate(tempSegments);
-				tempSegments->SetLinear(params.decelStartDistance/dda.totalDistance, params.steadyClocks, (dda.totalDistance * StepTimer::StepClockRate)/dda.topSpeed);
-			}
-
-			// Acceleration phase
-			if (dda.beforePrepare.accelDistance > 0.0)
-			{
-				tempSegments = MoveSegment::Allocate(tempSegments);
-				const float uDivA = (dda.startSpeed * StepTimer::StepClockRate)/dda.acceleration;
-				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.acceleration;
-				tempSegments->SetNonLinear(params.accelDistance/dda.totalDistance, params.accelClocks, uDivA, twoDistDivA, dda.acceleration/StepTimer::StepClockRateSquared);
-				plan.accelSegments = 1;
-			}
-			else
-			{
-				plan.accelSegments = 0;
-			}
-
-			dda.segments = tempSegments;
-		}
 		break;
 
-//	case InputShaperType::ZVD:
-//	case InputShaperType::ZVDD:
-//	case InputShaperType::EI2:
-//	case InputShaperType::EI3:
-		//TODO
-//		break;
+	// The other input shapers all have multiple impulses with varying coefficients
+	case InputShaperType::ZVD:
+	case InputShaperType::ZVDD:
+	case InputShaperType::EI2:
+	case InputShaperType::EI3:
+		// Set up the provisional parameters
+		params.SetFromDDA(dda);
+
+		// Set the plan to what we would like to do, if possible
+		plan.shapeAccelStart = params.accelClocks >= shapingTime && !dda.GetPrevious()->flags.wasAccelOnlyMove;
+		plan.shapeAccelEnd =   params.accelClocks >= shapingTime && params.steadyClocks != 0;
+		plan.shapeDecelStart = params.decelClocks >= shapingTime && params.steadyClocks != 0;
+		plan.shapeDecelEnd =   params.decelClocks >= shapingTime && !dda.GetNext()->IsDecelerationMove();
+
+		{
+			// See if we can shape the acceleration
+			if (plan.shapeAccelStart || plan.shapeAccelEnd)
+			{
+				if (plan.shapeAccelStart && plan.shapeAccelEnd && params.accelClocks < 2 * shapingTime)
+				{
+					// Acceleration segment is too short to shape both the start and the end
+					plan.shapeAccelStart = plan.shapeAccelEnd = false;
+				}
+				else
+				{
+					float extraAccelDistance = (plan.shapeAccelStart) ? GetExtraAccelStartDistance(dda) : 0.0;
+					if (plan.shapeAccelEnd)
+					{
+						extraAccelDistance += GetExtraAccelEndDistance(dda);
+					}
+					if (params.accelDistance + extraAccelDistance <= params.decelStartDistance)
+					{
+						params.accelDistance += extraAccelDistance;
+						if (plan.shapeAccelStart)
+						{
+							params.accelClocks += clocksLostAtStart;
+						}
+						if (plan.shapeAccelEnd)
+						{
+							params.accelClocks += clocksLostAtEnd;
+						}
+					}
+					else
+					{
+						// Not enough constant speed time to the acceleration shaping
+						// TODO look at overlapping accel start/accel end
+						plan.shapeAccelStart = plan.shapeAccelEnd = false;
+						if (reprap.Debug(Module::moduleDda))
+						{
+							debugPrintf("Can't shape acceleration\n");
+						}
+					}
+				}
+			}
+
+			// See if we can shape the deceleration
+			if (plan.shapeDecelStart || plan.shapeDecelEnd)
+			{
+				if (plan.shapeDecelStart && plan.shapeDecelEnd && params.decelClocks < 2 * shapingTime)
+				{
+					// Deceleration segment is too short to shape both the start and the end
+					plan.shapeDecelStart = plan.shapeDecelEnd = false;
+				}
+				else
+				{
+					float extraDecelDistance = (plan.shapeDecelStart) ? GetExtraDecelStartDistance(dda) : 0.0;
+					if (plan.shapeDecelEnd)
+					{
+						extraDecelDistance += GetExtraDecelEndDistance(dda);
+					}
+					if (params.accelDistance + extraDecelDistance <= params.decelStartDistance)
+					{
+						params.decelStartDistance -= extraDecelDistance;
+						if (plan.shapeDecelStart)
+						{
+							params.decelClocks += clocksLostAtStart;
+						}
+						if (plan.shapeDecelEnd)
+						{
+							params.decelClocks += clocksLostAtEnd;
+						}
+					}
+					else
+					{
+						// Not enough constant speed time to the acceleration shaping
+						// TODO look at overlapping decel start/decel end
+						plan.shapeDecelStart = plan.shapeDecelEnd = false;
+						if (reprap.Debug(Module::moduleDda))
+						{
+							debugPrintf("Can't shape deceleration\n");
+						}
+					}
+				}
+			}
+		}
+		break;
 	}
 
-	// If we get here then either we don't shape this move or we are using DAA, so just one acceleration and one deceleration segment
+	MoveSegment * const accelSegs = GetAccelerationSegments(dda, params, plan);
+	MoveSegment * const decelSegs = GetDecelerationSegments(dda, params, plan);
+
+	params.Finalise(dda);
+	FinishSegments(dda, params, accelSegs, decelSegs);
 	return plan;
+}
+
+// If there is an acceleration phase, generate the acceleration segments according to the plan, and set the number of acceleration segments in the plan
+MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& params, InputShaperPlan& plan) const noexcept
+{
+	if (dda.beforePrepare.accelDistance > 0.0)
+	{
+		MoveSegment * tempSegments = MoveSegment::Allocate(nullptr);
+		const float uDivA = (dda.startSpeed * StepTimer::StepClockRate)/dda.acceleration;
+		const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.acceleration;
+		tempSegments->SetNonLinear(params.accelDistance/dda.totalDistance, params.accelClocks, uDivA, twoDistDivA, dda.acceleration/StepTimer::StepClockRateSquared);
+		plan.accelSegments = 1;
+		return tempSegments;
+	}
+
+	return nullptr;
+}
+
+// If there is a deceleration phase, generate the deceleration segments according to the plan, and set the number of deceleration segments in the plan
+MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& params, InputShaperPlan& plan) const noexcept
+{
+	if (dda.beforePrepare.decelDistance > 0.0)
+	{
+		MoveSegment * tempSegments = MoveSegment::Allocate(nullptr);
+		const float uDivD = (dda.topSpeed * StepTimer::StepClockRate)/dda.deceleration;
+		const float twoDistDivD = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.deceleration;
+		tempSegments->SetNonLinear(1.0, params.decelClocks, -uDivD, -twoDistDivD, -(dda.deceleration/StepTimer::StepClockRateSquared));
+		plan.decelSegments = 1;
+		return tempSegments;
+	}
+
+	return nullptr;
+}
+
+// Generate the steady speed segment (if any), tack the segments together, and attach them to the DDA
+void InputShaper::FinishSegments(DDA& dda, BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept
+{
+	if (params.steadyClocks > 0.0)
+	{
+		// Insert a steady speed segment before the deceleration segments
+		decelSegs = MoveSegment::Allocate(decelSegs);
+		decelSegs->SetLinear(params.decelStartDistance/dda.totalDistance, params.steadyClocks, (dda.totalDistance * StepTimer::StepClockRate)/dda.topSpeed);
+	}
+
+	if (accelSegs != nullptr)
+	{
+		dda.segments = accelSegs;
+		if (decelSegs != nullptr)
+		{
+			while (accelSegs->GetNext() != nullptr)
+			{
+				accelSegs = accelSegs->GetNext();
+			}
+			accelSegs->SetNext(decelSegs);
+		}
+	}
+	else
+	{
+		dda.segments = decelSegs;
+	}
+}
+
+// Calculate the additional acceleration distance needed if we shape the start of acceleration
+float InputShaper::GetExtraAccelStartDistance(const DDA& dda) const noexcept
+{
+	float extraDistance = 0.0;
+	float u = dda.startSpeed;
+	for (int seg = 0; seg + 1 < numImpulses; ++seg)
+	{
+		const float speedChange = coefficients[seg] * dda.acceleration * times[seg];
+		extraDistance += (1.0 - coefficients[seg]) * (u + 0.5 * speedChange) * times[seg];
+		u += speedChange;
+	}
+	return extraDistance;
+}
+
+// Calculate the additional acceleration distance needed if we shape the end of acceleration
+float InputShaper::GetExtraAccelEndDistance(const DDA& dda) const noexcept
+{
+	float extraDistance = 0.0;
+	float v = dda.topSpeed;
+	for (int seg = numImpulses - 2; seg >= 0; --seg)
+	{
+		const float speedChange = coefficients[seg] * dda.acceleration * times[seg];
+		extraDistance += coefficients[seg] * (v - 0.5 * speedChange) * times[seg];
+		v -= speedChange;
+	}
+	return extraDistance;
+}
+
+// Calculate the additional deceleration distance needed if we shape the start of deceleration
+float InputShaper::GetExtraDecelStartDistance(const DDA& dda) const noexcept
+{
+	float extraDistance = 0.0;
+	float u = dda.topSpeed;
+	for (int seg = 0; seg + 1 < numImpulses; ++seg)
+	{
+		const float speedChange = coefficients[seg] * dda.deceleration * times[seg];
+		extraDistance += (1.0 - coefficients[seg]) * (u - 0.5 * speedChange) * times[seg];
+		u -= speedChange;
+	}
+	return extraDistance;
+}
+
+// Calculate the additional deceleration distance needed if we shape the end of deceleration
+float InputShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
+{
+	float extraDistance = 0.0;
+	float v = dda.endSpeed;
+	for (int seg = numImpulses - 2; seg >= 0; --seg)
+	{
+		const float speedChange = coefficients[seg] * dda.deceleration * times[seg];
+		extraDistance += coefficients[seg] * (v + 0.5 * speedChange) * times[seg];
+		v += speedChange;
+	}
+	return extraDistance;
 }
 
 #if SUPPORT_REMOTE_COMMANDS

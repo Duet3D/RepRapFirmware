@@ -8,28 +8,37 @@
 #ifndef SRC_MOVEMENT_INPUTSHAPER_H_
 #define SRC_MOVEMENT_INPUTSHAPER_H_
 
+#define SUPPORT_DAA		(1)
+
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
-
-class BasicPrepParams;
 
 NamedEnum(InputShaperType, uint8_t,
 	none,
 	ZVD,
 	ZVDD,
 	EI2,
-	EI3,
-	DAA
+	EI3
+#if SUPPORT_DAA
+	, DAA
+#endif
 );
 
 class DDA;
+class BasicPrepParams;
 class MoveSegment;
 
 struct InputShaperPlan
 {
-	uint32_t accelSegments : 4,				// number of acceleration segments
-			 decelSegments : 4;				// number of deceleration segments
+	uint32_t shapeAccelStart : 1,
+			 shapeAccelEnd : 1,
+			 shapeDecelStart : 1,
+			 shapeDecelEnd : 1,
+			 accelSegments : 4,
+			 decelSegments : 4;
+
+	InputShaperPlan() noexcept : shapeAccelStart(false), shapeAccelEnd(false), shapeDecelStart(false), shapeDecelEnd(false), accelSegments(0), decelSegments(0) { }
 };
 
 class InputShaper INHERIT_OBJECT_MODEL
@@ -39,7 +48,6 @@ public:
 
 	float GetFrequency() const noexcept { return frequency; }
 	float GetDamping() const noexcept { return zeta; }
-	float GetDAAMinimumAcceleration() const noexcept { return daaMinimumAcceleration; }
 	InputShaperType GetType() const noexcept { return type; }
 	InputShaperPlan PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept;
 
@@ -53,16 +61,29 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	MoveSegment *GetAccelerationSegments(DDA& dda, BasicPrepParams& params, InputShaperPlan& plan) const noexcept;
+	MoveSegment *GetDecelerationSegments(DDA& dda, BasicPrepParams& params, InputShaperPlan& plan) const noexcept;
+	void FinishSegments(DDA& dda, BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
+	float GetExtraAccelStartDistance(const DDA& dda) const noexcept;
+	float GetExtraAccelEndDistance(const DDA& dda) const noexcept;
+	float GetExtraDecelStartDistance(const DDA& dda) const noexcept;
+	float GetExtraDecelEndDistance(const DDA& dda) const noexcept;
+
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.1;
+#if SUPPORT_DAA
 	static constexpr float DefaultDAAMinimumAcceleration = 10.0;
+#endif
 
 	float frequency;								// the undamped frequency
 	float zeta;										// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
+#if SUPPORT_DAA
 	float daaMinimumAcceleration;					// the minimum value that we reduce acceleration to (DAA only)
+#endif
 	float coefficients[5];
-	float times[3];
-	float timeLost;									// the acceleration time lost due to input shaping. Multiply by 2 if shaping is used at both the start and end of acceleration.
+	float times[4];									// the time in step clocks for the second and subsequent impulses
+	float shapingTime;
+	float clocksLostAtStart, clocksLostAtEnd;		// the acceleration time lost due to input shaping. Multiply by 2 if shaping is used at both the start and end of acceleration.
 	InputShaperType type;
 	uint8_t numImpulses;
 };

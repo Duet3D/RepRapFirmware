@@ -32,8 +32,11 @@ struct BasicPrepParams
 	float decelStartDistance;
 	float accelClocks, steadyClocks, decelClocks;
 
-	// Set the parameters from the DDA and update clocksNeeded in the DDA
-	void SetFromDDA(DDA& dda) noexcept;
+	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
+	void SetFromDDA(const DDA& dda) noexcept;
+
+	// Calculate the steady clocks and set the total clocks in the DDA
+	void Finalise(DDA& dda) noexcept;
 };
 
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
@@ -271,7 +274,8 @@ private:
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
 					 hadHiccup : 1,	 	 	 		// True if we had a hiccup while executing a move from a remote master
-					 isRemote : 1;					// True if this move was commanded from a remote
+					 isRemote : 1,					// True if this move was commanded from a remote
+					 wasAccelOnlyMove : 1;			// set by Prepare if this was an acceleration-only move, for the next move to look at
 		};
 		uint16_t all;								// so that we can print all the flags at once for debugging
 	} flags;
