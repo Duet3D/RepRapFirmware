@@ -1168,10 +1168,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #endif
 
 	const InputShaper& shaper = reprap.GetMove().GetShaper();
-	const bool useInputShaping =
-				   flags.xyMoving
-				&& topSpeed > startSpeed && topSpeed > endSpeed
-				&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5);
+	const bool useInputShaping = flags.xyMoving && topSpeed > startSpeed && topSpeed > endSpeed;
 
 	PrepParams params;
 	const InputShaperPlan plan = shaper.PlanShaping(*this, params, useInputShaping);

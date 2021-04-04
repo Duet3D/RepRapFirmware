@@ -39,6 +39,8 @@ struct InputShaperPlan
 			 decelSegments : 4;
 
 	InputShaperPlan() noexcept : shapeAccelStart(false), shapeAccelEnd(false), shapeDecelStart(false), shapeDecelEnd(false), accelSegments(0), decelSegments(0) { }
+
+	uint32_t AsU32() const noexcept { return *reinterpret_cast<const uint32_t*>(this); }
 };
 
 class InputShaper INHERIT_OBJECT_MODEL
@@ -81,8 +83,8 @@ private:
 	float daaMinimumAcceleration;					// the minimum value that we reduce acceleration to (DAA only)
 #endif
 	float coefficients[5];
-	float times[4];									// the time in step clocks for the second and subsequent impulses
-	float shapingTime;
+	float times[4];									// the time in seconds for the second and subsequent impulses
+	float shapingTime;								// the time needed to send all the impulses, in step clocks
 	float clocksLostAtStart, clocksLostAtEnd;		// the acceleration time lost due to input shaping. Multiply by 2 if shaping is used at both the start and end of acceleration.
 	InputShaperType type;
 	uint8_t numImpulses;
