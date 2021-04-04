@@ -38,6 +38,16 @@ MoveSegment *MoveSegment::Allocate(MoveSegment *next) noexcept
 	return ms;
 }
 
+void MoveSegment::AddToTail(MoveSegment *tail) noexcept
+{
+	MoveSegment *seg = this;
+	while (seg->GetNext() != nullptr)
+	{
+		seg = seg->GetNext();
+	}
+	seg->SetNext(tail);
+}
+
 void MoveSegment::DebugPrint() const noexcept
 {
 	debugPrintf("f=%g t=%" PRIu32 " ", (double)endDistanceFraction, (uint32_t)segTime);

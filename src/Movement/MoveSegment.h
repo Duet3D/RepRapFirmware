@@ -57,6 +57,8 @@ public:
 	void SetLinear(float pDistanceLimit, float p_segTime, float p_dDivU) noexcept;
 	void SetNonLinear(float pDistanceLimit, float p_segTime, float p_uDivA, float p_twoDDivA, float a) noexcept;
 
+	void AddToTail(MoveSegment *tail) noexcept;
+
 	void DebugPrint() const noexcept;
 
 	// Allocate a MoveSegment, clearing the Linear and Last flags
