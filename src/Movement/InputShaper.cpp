@@ -344,12 +344,12 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 		params.SetFromDDA(dda);
 
 		// Set the plan to what we would like to do, if possible
-		plan.shapeAccelStart = params.accelClocks >= shapingTime && !dda.GetPrevious()->flags.wasAccelOnlyMove;
-		plan.shapeAccelEnd =   params.accelClocks >= shapingTime && params.decelStartDistance > params.accelDistance;
-		plan.shapeDecelStart = params.decelClocks >= shapingTime && params.decelStartDistance > params.accelDistance;
-		plan.shapeDecelEnd =   params.decelClocks >= shapingTime && (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove());
+		plan.shapeAccelStart = params.accelClocks + clocksLostAtStart >= shapingTime && !dda.GetPrevious()->flags.wasAccelOnlyMove;
+		plan.shapeAccelEnd =   params.accelClocks + clocksLostAtEnd >= shapingTime && params.decelStartDistance > params.accelDistance;
+		plan.shapeDecelStart = params.decelClocks + clocksLostAtStart >= shapingTime && params.decelStartDistance > params.accelDistance;
+		plan.shapeDecelEnd =   params.decelClocks + clocksLostAtEnd >= shapingTime && (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove());
 
-		debugPrintf("Original plan %04x ", (unsigned int)plan.AsU32());
+		debugPrintf("Original plan %03x ", (unsigned int)plan.all);
 		{
 			// See if we can shape the acceleration
 			if (plan.shapeAccelStart || plan.shapeAccelEnd)
@@ -438,9 +438,9 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 	MoveSegment * const accelSegs = GetAccelerationSegments(dda, params, plan);
 	MoveSegment * const decelSegs = GetDecelerationSegments(dda, params, plan);
 
-	params.Finalise(dda);
+	params.Finalise(dda);									// this sets up params.steadyClocks, which is needed by FinishSegments
 	FinishSegments(dda, params, accelSegs, decelSegs);
-	debugPrintf(" final plan %04x\n", (unsigned int)plan.AsU32());
+	debugPrintf(" final plan %03x\n", (unsigned int)plan.all);
 	return plan;
 }
 
@@ -462,7 +462,7 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 				++numAccelSegs;
 				endAccelSegs = MoveSegment::Allocate(endAccelSegs);
 				const float acceleration = dda.acceleration * (1.0 - coefficients[i]);
-				const float segTime = ((i == 0) ? times[0] : times[1] - times[i - 1]);
+				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
 				speed -= acceleration * segTime;
 				const float uDivA = (speed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
@@ -483,7 +483,7 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 				++numAccelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float acceleration = dda.acceleration * coefficients[i];
-				const float segTime = ((i == 0) ? times[0] : times[1] - times[i - 1]);
+				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
 				const float uDivA = (speed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
 				startDistance += (speed + (0.5 * acceleration * segTime)) * segTime;
@@ -546,7 +546,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 				++numDecelSegs;
 				endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 				const float acceleration = -dda.deceleration * (1.0 - coefficients[i]);
-				const float segTime = ((i == 0) ? times[0] : times[1] - times[i - 1]);
+				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
 				speed -= acceleration * segTime;
 				const float uDivA = (speed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
@@ -567,7 +567,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 				++numDecelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float acceleration = -dda.deceleration * coefficients[i];
-				const float segTime = ((i == 0) ? times[0] : times[1] - times[i - 1]);
+				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
 				const float uDivA = (speed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
 				startDistance += (speed + (0.5 * acceleration * segTime)) * segTime;

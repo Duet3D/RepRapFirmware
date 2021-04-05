@@ -119,7 +119,7 @@ inline bool MoveSegment::IsLinear() const noexcept
 
 inline bool MoveSegment::IsLast() const noexcept
 {
-	return (nextAndFlags & ~3u) == 0;
+	return (nextAndFlags & ~3u) == 0;								// this assumes that nullptr is zero
 }
 
 inline void MoveSegment::SetLinear(float pDistanceLimit, float p_segTime, float p_dDivU) noexcept

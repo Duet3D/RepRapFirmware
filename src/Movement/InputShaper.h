@@ -29,18 +29,20 @@ class DDA;
 class BasicPrepParams;
 class MoveSegment;
 
-struct InputShaperPlan
+union InputShaperPlan
 {
-	uint32_t shapeAccelStart : 1,
-			 shapeAccelEnd : 1,
-			 shapeDecelStart : 1,
-			 shapeDecelEnd : 1,
-			 accelSegments : 4,
-			 decelSegments : 4;
+	struct
+	{
+		uint32_t shapeAccelStart : 1,
+				 shapeAccelEnd : 1,
+				 shapeDecelStart : 1,
+				 shapeDecelEnd : 1,
+				 accelSegments : 4,
+				 decelSegments : 4;
+	};
+	uint32_t all;
 
-	InputShaperPlan() noexcept : shapeAccelStart(false), shapeAccelEnd(false), shapeDecelStart(false), shapeDecelEnd(false), accelSegments(0), decelSegments(0) { }
-
-	uint32_t AsU32() const noexcept { return *reinterpret_cast<const uint32_t*>(this); }
+	InputShaperPlan() noexcept : all(0) { }
 };
 
 class InputShaper INHERIT_OBJECT_MODEL

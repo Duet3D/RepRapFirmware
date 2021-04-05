@@ -128,7 +128,8 @@ void BasicPrepParams::SetFromDDA(const DDA& dda) noexcept
 // Calculate the steady clocks and set the total clocks in the DDA
 void BasicPrepParams::Finalise(DDA& dda) noexcept
 {
-	steadyClocks = ((decelStartDistance - accelDistance) * StepTimer::StepClockRate)/dda.topSpeed;
+	const float steadyDistance = decelStartDistance - accelDistance;
+	steadyClocks = (max<float>(0.0, steadyDistance) * StepTimer::StepClockRate)/dda.topSpeed;
 	dda.clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
 }
 
@@ -1458,9 +1459,27 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 			clocksNeeded = canClocksNeeded;
 		}
 #endif
-		if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))		// temp show the prepared DDA if debug enabled for both modules
+		if (params.decelStartDistance < params.accelDistance || (reprap.Debug(moduleDda) && reprap.Debug(moduleMove)))		// show the prepared DDA if debug enabled for both modules
 		{
 			DebugPrintAll("pr");
+#if 0
+			// Check that the segments are valid
+			float speed = startSpeed/StepTimer::StepClockRate;
+			float highestSpeed = speed;
+			float distance = 0.0;
+			for (const MoveSegment *seg = segments; seg != nullptr; seg = seg->GetNext())
+			{
+				if (seg->IsLinear())
+				{
+					qq;
+				}
+				else
+				{
+					qq;
+				}
+			}
+			debugPrintf("Computed top speed %f, end speed %f, distance %f\n", speed, highestSpeed, distance);
+#endif
 		}
 
 #if DDA_MOVE_DEBUG
