@@ -214,7 +214,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 
 			float proposedAcceleration = dda.acceleration, proposedAccelDistance = dda.beforePrepare.accelDistance;
 			bool adjustAcceleration = false;
-			if ((dda.prev->state != DDA::DDAState::frozen && dda.prev->state != DDA::DDAState::executing) || !dda.prev->IsAccelerationMove())
+			if (dda.topSpeed > dda.startSpeed && ((dda.GetPrevious()->state != DDA::DDAState::frozen && dda.GetPrevious()->state != DDA::DDAState::executing) || !dda.GetPrevious()->flags.wasAccelOnlyMove))
 			{
 				const float accelTime = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
 				if (accelTime < idealPeriod)
@@ -235,7 +235,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 
 			float proposedDeceleration = dda.deceleration, proposedDecelDistance = dda.beforePrepare.decelDistance;
 			bool adjustDeceleration = false;
-			if (dda.next->state != DDA::DDAState::provisional || !dda.next->IsDecelerationMove())
+			if (dda.GetNext()->state != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove())
 			{
 				const float decelTime = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
 				if (decelTime < idealPeriod)
@@ -344,12 +344,16 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 		params.SetFromDDA(dda);
 
 		// Set the plan to what we would like to do, if possible
-		plan.shapeAccelStart = params.accelClocks + clocksLostAtStart >= shapingTime && !dda.GetPrevious()->flags.wasAccelOnlyMove;
-		plan.shapeAccelEnd =   params.accelClocks + clocksLostAtEnd >= shapingTime && params.decelStartDistance > params.accelDistance;
-		plan.shapeDecelStart = params.decelClocks + clocksLostAtStart >= shapingTime && params.decelStartDistance > params.accelDistance;
-		plan.shapeDecelEnd =   params.decelClocks + clocksLostAtEnd >= shapingTime && (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove());
+		plan.shapeAccelStart = params.accelClocks + clocksLostAtStart >= shapingTime
+									&& ((dda.GetPrevious()->state != DDA::DDAState::frozen && dda.GetPrevious()->state != DDA::DDAState::executing) || !dda.GetPrevious()->flags.wasAccelOnlyMove);
+		plan.shapeAccelEnd =   params.accelClocks + clocksLostAtEnd >= shapingTime
+									&& params.decelStartDistance > params.accelDistance;
+		plan.shapeDecelStart = params.decelClocks + clocksLostAtStart >= shapingTime
+									&& params.decelStartDistance > params.accelDistance;
+		plan.shapeDecelEnd =   params.decelClocks + clocksLostAtEnd >= shapingTime
+									&& (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove());
 
-		debugPrintf("Original plan %03x ", (unsigned int)plan.all);
+//		debugPrintf("Original plan %03x ", (unsigned int)plan.all);
 		{
 			// See if we can shape the acceleration
 			if (plan.shapeAccelStart || plan.shapeAccelEnd)
@@ -366,7 +370,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 					{
 						extraAccelDistance += GetExtraAccelEndDistance(dda);
 					}
-					debugPrintf("Extra accel dist: %g, %g\n", (double)GetExtraAccelStartDistance(dda), (double)GetExtraAccelEndDistance(dda));
+//					debugPrintf("Extra accel dist: %g, %g\n", (double)GetExtraAccelStartDistance(dda), (double)GetExtraAccelEndDistance(dda));
 					if (params.accelDistance + extraAccelDistance <= params.decelStartDistance)
 					{
 						params.accelDistance += extraAccelDistance;
@@ -440,7 +444,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 
 	params.Finalise(dda);									// this sets up params.steadyClocks, which is needed by FinishSegments
 	FinishSegments(dda, params, accelSegs, decelSegs);
-	debugPrintf(" final plan %03x\n", (unsigned int)plan.all);
+//	debugPrintf(" final plan %03x\n", (unsigned int)plan.all);
 	return plan;
 }
 
@@ -456,37 +460,37 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 		if (plan.shapeAccelEnd)
 		{
 			// Shape the end of the acceleration
-			float speed = dda.topSpeed;
+			float segStartSpeed = dda.topSpeed;
 			for (int i = numImpulses - 2; i >= 0; --i)
 			{
 				++numAccelSegs;
 				endAccelSegs = MoveSegment::Allocate(endAccelSegs);
 				const float acceleration = dda.acceleration * (1.0 - coefficients[i]);
 				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
-				speed -= acceleration * segTime;
-				const float uDivA = (speed * StepTimer::StepClockRate)/acceleration;
+				segStartSpeed -= acceleration * segTime;
+				const float uDivA = (segStartSpeed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
 				endAccelSegs->SetNonLinear(endDistance/dda.totalDistance, segTime * StepTimer::StepClockRate, uDivA, twoDistDivA, acceleration/StepTimer::StepClockRateSquared);
-				endDistance -= (speed + (0.5 * acceleration * segTime)) * segTime;
+				endDistance -= (segStartSpeed + (0.5 * acceleration * segTime)) * segTime;
 			}
 			accumulatedSegTime += times[numImpulses - 2];
 		}
 
 		float startDistance = 0.0;
+		float startSpeed = dda.startSpeed;
 		MoveSegment *startAccelSegs = nullptr;
 		if (plan.shapeAccelStart)
 		{
 			// Shape the start of the acceleration
-			float speed = dda.startSpeed;
 			for (int i = 0; i < numImpulses - 1; ++i)
 			{
 				++numAccelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float acceleration = dda.acceleration * coefficients[i];
 				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
-				const float uDivA = (speed * StepTimer::StepClockRate)/acceleration;
+				const float uDivA = (startSpeed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
-				startDistance += (speed + (0.5 * acceleration * segTime)) * segTime;
+				startDistance += (startSpeed + (0.5 * acceleration * segTime)) * segTime;
 				seg->SetNonLinear(startDistance/dda.totalDistance, segTime * StepTimer::StepClockRate, uDivA, twoDistDivA, acceleration/StepTimer::StepClockRateSquared);
 				if (i == 0)
 				{
@@ -496,7 +500,7 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 				{
 					startAccelSegs->AddToTail(seg);
 				}
-				speed += acceleration * segTime;
+				startSpeed += acceleration * segTime;
 			}
 			accumulatedSegTime += times[numImpulses - 2];
 		}
@@ -506,9 +510,9 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 		{
 			++numAccelSegs;
 			endAccelSegs = MoveSegment::Allocate(endAccelSegs);
-			const float uDivA = (dda.startSpeed * StepTimer::StepClockRate)/dda.acceleration;
+			const float uDivA = (startSpeed * StepTimer::StepClockRate)/dda.acceleration;
 			const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.acceleration;
-			endAccelSegs->SetNonLinear((endDistance - startDistance)/dda.totalDistance, params.accelClocks - (accumulatedSegTime * StepTimer::StepClockRate), uDivA, twoDistDivA, dda.acceleration/StepTimer::StepClockRateSquared);
+			endAccelSegs->SetNonLinear(endDistance/dda.totalDistance, params.accelClocks - (accumulatedSegTime * StepTimer::StepClockRate), uDivA, twoDistDivA, dda.acceleration/StepTimer::StepClockRateSquared);
 		}
 
 		plan.accelSegments = numAccelSegs;
@@ -540,37 +544,37 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 		if (plan.shapeDecelEnd)
 		{
 			// Shape the end of the deceleration
-			float speed = dda.endSpeed;
+			float segStartSpeed = dda.endSpeed;
 			for (int i = numImpulses - 2; i >= 0; --i)
 			{
 				++numDecelSegs;
 				endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 				const float acceleration = -dda.deceleration * (1.0 - coefficients[i]);
 				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
-				speed -= acceleration * segTime;
-				const float uDivA = (speed * StepTimer::StepClockRate)/acceleration;
+				segStartSpeed -= acceleration * segTime;
+				const float uDivA = (segStartSpeed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
 				endDecelSegs->SetNonLinear(endDistance/dda.totalDistance, segTime * StepTimer::StepClockRate, uDivA, twoDistDivA, acceleration/StepTimer::StepClockRateSquared);
-				endDistance -= (speed + (0.5 * acceleration * segTime)) * segTime;
+				endDistance -= (segStartSpeed + (0.5 * acceleration * segTime)) * segTime;
 			}
 			accumulatedSegTime += times[numImpulses - 2];
 		}
 
 		float startDistance = params.decelStartDistance;
+		float startSpeed = dda.topSpeed;
 		MoveSegment *startDecelSegs = nullptr;
 		if (plan.shapeDecelStart)
 		{
 			// Shape the start of the deceleration
-			float speed = dda.topSpeed;
 			for (int i = 0; i < numImpulses - 1; ++i)
 			{
 				++numDecelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float acceleration = -dda.deceleration * coefficients[i];
 				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
-				const float uDivA = (speed * StepTimer::StepClockRate)/acceleration;
+				const float uDivA = (startSpeed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
-				startDistance += (speed + (0.5 * acceleration * segTime)) * segTime;
+				startDistance += (startSpeed + (0.5 * acceleration * segTime)) * segTime;
 				seg->SetNonLinear(startDistance/dda.totalDistance, segTime * StepTimer::StepClockRate, uDivA, twoDistDivA, acceleration/StepTimer::StepClockRateSquared);
 				if (i == 0)
 				{
@@ -580,7 +584,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 				{
 					startDecelSegs->AddToTail(seg);
 				}
-				speed += acceleration * segTime;
+				startSpeed += acceleration * segTime;
 			}
 			accumulatedSegTime += times[numImpulses - 2];
 		}
@@ -590,7 +594,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 		{
 			++numDecelSegs;
 			endDecelSegs = MoveSegment::Allocate(endDecelSegs);
-			const float uDivD = (dda.topSpeed * StepTimer::StepClockRate)/dda.deceleration;
+			const float uDivD = (startSpeed * StepTimer::StepClockRate)/dda.deceleration;
 			const float twoDistDivD = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.deceleration;
 			endDecelSegs->SetNonLinear(endDistance/dda.totalDistance, params.decelClocks - (accumulatedSegTime * StepTimer::StepClockRate), -uDivD, -twoDistDivD, -(dda.deceleration/StepTimer::StepClockRateSquared));
 		}

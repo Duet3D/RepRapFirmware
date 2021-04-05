@@ -1168,11 +1168,8 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 	}
 #endif
 
-	const InputShaper& shaper = reprap.GetMove().GetShaper();
-	const bool useInputShaping = flags.xyMoving && topSpeed > startSpeed && topSpeed > endSpeed;
-
 	PrepParams params;
-	const InputShaperPlan plan = shaper.PlanShaping(*this, params, useInputShaping);
+	const InputShaperPlan plan = reprap.GetMove().GetShaper().PlanShaping(*this, params, flags.xyMoving);
 	(void)plan;		//TODO will be needed for CAN
 
 	if (simMode == 0)
