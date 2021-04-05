@@ -674,7 +674,7 @@ float InputShaper::GetExtraDecelStartDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float u = dda.topSpeed;
-	for (int seg = 0; seg + 1 < numImpulses; ++seg)
+	for (int seg = 0; seg < numImpulses - 1; ++seg)
 	{
 		const float segTime = (seg == 0) ? times[0] : times[seg] - times[seg - 1];
 		const float speedChange = coefficients[seg] * dda.deceleration * segTime;
@@ -692,7 +692,7 @@ float InputShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 	for (int seg = numImpulses - 2; seg >= 0; --seg)
 	{
 		const float segTime = (seg == 0) ? times[0] : times[seg] - times[seg - 1];
-		const float speedChange = coefficients[seg] * dda.deceleration * segTime;
+		const float speedChange = (1.0 - coefficients[seg]) * dda.deceleration * segTime;
 		extraDistance += coefficients[seg] * (v + 0.5 * speedChange) * segTime;
 		v += speedChange;
 	}

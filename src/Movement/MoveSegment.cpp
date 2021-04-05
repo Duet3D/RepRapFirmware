@@ -50,14 +50,14 @@ void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 
 void MoveSegment::DebugPrint() const noexcept
 {
-	debugPrintf("f=%g t=%" PRIu32 " ", (double)endDistanceFraction, (uint32_t)segTime);
+	debugPrintf("f=%12g t=%6" PRIu32 " ", (double)endDistanceFraction, (uint32_t)segTime);
 	if (IsLinear())
 	{
-		debugPrintf("dDivU=%g\n", (double)linear.dDivU);
+		debugPrintf("dDivU=%14g\n", (double)linear.dDivU);
 	}
 	else
 	{
-		debugPrintf("uDivA=%g, twoDDivA=%g, a=%g\n", (double)quadratic.uDivA, (double)quadratic.twoDDivA, (double)quadratic.acceleration);
+		debugPrintf("uDivA=%14g twoDDivA=%14g a=%14g\n", (double)quadratic.uDivA, (double)quadratic.twoDDivA, (double)quadratic.acceleration);
 	}
 }
 
