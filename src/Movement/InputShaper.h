@@ -84,7 +84,7 @@ private:
 #if SUPPORT_DAA
 	float daaMinimumAcceleration;					// the minimum value that we reduce acceleration to (DAA only)
 #endif
-	float coefficients[5];
+	float coefficients[4];							// the coefficients of all the impulses, except the last which is 1
 	float times[4];									// the time in seconds for the second and subsequent impulses
 	float shapingTime;								// the time needed to send all the impulses, in step clocks
 	float clocksLostAtStart, clocksLostAtEnd;		// the acceleration time lost due to input shaping. Multiply by 2 if shaping is used at both the start and end of acceleration.

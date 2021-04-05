@@ -112,8 +112,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			{
 				const float j = 1.0 + 2.0 * k + fsquare(k);
 				coefficients[0] = 1.0/j;
-				coefficients[1] = 2.0 * k/j;
-				coefficients[2] = fsquare(k)/j;
+				coefficients[1] = coefficients[0] + 2.0 * k/j;
 			}
 			times[1] = 1.0/dampedFrequency;
 			times[0] = 0.5 * times[1];
@@ -125,9 +124,8 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			{
 				const float j = 1.0 + 3.0 * (k + fsquare(k)) + k * fsquare(k);
 				coefficients[0] = 1.0/j;
-				coefficients[1] = 3.0 * k/j;
-				coefficients[2] = 3.0 * fsquare(k)/j;
-				coefficients[3] = k * fsquare(k)/j;
+				coefficients[1] = coefficients[0] + 3.0 * k/j;
+				coefficients[2] = coefficients[1] + 3.0 * fsquare(k)/j;
 			}
 			times[1] = 1.0/dampedFrequency;
 			times[0] = 0.5 *times[1];
@@ -141,9 +139,9 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				const float zetaSquared = fsquare(zeta);
 				const float zetaCubed = zetaSquared * zeta;
 				coefficients[0] = 0.16054 +  0.76699 * zeta +  2.26560 * zetaSquared + -1.22750 * zetaCubed;
-				coefficients[1] = 0.33911 +  0.45081 * zeta + -2.58080 * zetaSquared +  1.73650 * zetaCubed;
-				coefficients[2] = 0.34089 + -0.61533 * zeta + -0.68765 * zetaSquared +  0.42261 * zetaCubed;
-				coefficients[3] = 0.15997 + -0.60246 * zeta +  1.00280 * zetaSquared + -0.93145 * zetaCubed;
+				//TODO avoid the extra addition
+				coefficients[1] = coefficients[0] + 0.33911 +  0.45081 * zeta + -2.58080 * zetaSquared +  1.73650 * zetaCubed;
+				coefficients[2] = coefficients[1] + 0.34089 + -0.61533 * zeta + -0.68765 * zetaSquared +  0.42261 * zetaCubed;
 				times[0] = (0.49890 +  0.16270 * zeta + -0.54262 * zetaSquared + 6.16180 * zetaCubed)/dampedFrequency;
 				times[1] = (0.99748 +  0.18382 * zeta + -1.58270 * zetaSquared + 8.17120 * zetaCubed)/dampedFrequency;
 				times[2] = (1.49920 + -0.09297 * zeta + -0.28338 * zetaSquared + 1.85710 * zetaCubed)/dampedFrequency;
@@ -157,10 +155,10 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				const float zetaSquared = fsquare(zeta);
 				const float zetaCubed = zetaSquared * zeta;
 				coefficients[0] = 0.11275 +  0.76632 * zeta +  3.29160 * zetaSquared + -1.44380 * zetaCubed;
-				coefficients[1] = 0.23698 +  0.61164 * zeta + -2.57850 * zetaSquared +  4.85220 * zetaCubed;
-				coefficients[2] = 0.30008 + -0.19062 * zeta + -2.14560 * zetaSquared +  0.13744 * zetaCubed;
-				coefficients[3] = 0.23775 + -0.73297 * zeta +  0.46885 * zetaSquared + -2.08650 * zetaCubed;
-				coefficients[4] = 0.11244 + -0.45439 * zeta +  0.96382 * zetaSquared + -1.46000 * zetaCubed;
+				//TODO avoid the extra addition
+				coefficients[1] = coefficients[0] + 0.23698 +  0.61164 * zeta + -2.57850 * zetaSquared +  4.85220 * zetaCubed;
+				coefficients[2] = coefficients[1] + 0.30008 + -0.19062 * zeta + -2.14560 * zetaSquared +  0.13744 * zetaCubed;
+				coefficients[3] = coefficients[2] + 0.23775 + -0.73297 * zeta +  0.46885 * zetaSquared + -2.08650 * zetaCubed;
 				times[0] = (0.49974 +  0.23834 * zeta +  0.44559 * zetaSquared + 12.4720 * zetaCubed)/dampedFrequency;
 				times[1] = (0.99849 +  0.29808 * zeta + -2.36460 * zetaSquared + 23.3990 * zetaCubed)/dampedFrequency;
 				times[2] = (1.49870 +  0.10306 * zeta + -2.01390 * zetaSquared + 17.0320 * zetaCubed)/dampedFrequency;
@@ -175,8 +173,9 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		float tLostAtEnd = 0.0;
 		for (uint8_t i = 0; i < numImpulses - 1; ++i)
 		{
-			tLostAtStart += (1.0 - coefficients[i]) * times[i];
-			tLostAtEnd += coefficients[i] * times[i];
+			const float segTime = (i == 0) ? times[0] : times[i] - times[i - 1];
+			tLostAtStart += (1.0 - coefficients[i]) * segTime;
+			tLostAtEnd += coefficients[i] * segTime;
 		}
 		clocksLostAtStart = tLostAtStart * StepTimer::StepClockRate;
 		clocksLostAtEnd = tLostAtEnd * StepTimer::StepClockRate;
