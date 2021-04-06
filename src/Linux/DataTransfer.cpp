@@ -674,6 +674,7 @@ bool DataTransfer::ReadMessage(MessageType& type, OutputBuffer *buf) noexcept
 
 void DataTransfer::ExchangeHeader() noexcept
 {
+	Cache::FlushBeforeDMASend(&txHeader, sizeof(txHeader));
 	state = SpiState::ExchangingHeader;
 	setup_spi(&rxHeader, &txHeader, sizeof(TransferHeader));
 }
@@ -681,12 +682,14 @@ void DataTransfer::ExchangeHeader() noexcept
 void DataTransfer::ExchangeResponse(uint32_t response) noexcept
 {
 	txResponse = response;
+	Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
 	state = (state == SpiState::ExchangingHeader) ? SpiState::ExchangingHeaderResponse : SpiState::ExchangingDataResponse;
 	setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
 }
 
 void DataTransfer::ExchangeData() noexcept
 {
+	Cache::FlushBeforeDMASend(txBuffer, txHeader.dataLength);
 	size_t bytesToExchange = max<size_t>(rxHeader.dataLength, txHeader.dataLength);
 	state = SpiState::ExchangingData;
 	setup_spi(rxBuffer, txBuffer, bytesToExchange);
@@ -704,8 +707,9 @@ void DataTransfer::ResetTransfer(bool ownRequest) noexcept
 	{
 		// Invalidate the data to send
 		txResponse = TransferResponse::BadResponse;
-		setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
+		Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
 		state = SpiState::Resetting;
+		setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
 	}
 	else
 	{

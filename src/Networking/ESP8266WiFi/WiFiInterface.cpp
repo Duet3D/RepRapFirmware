@@ -1780,7 +1780,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	espWaitingTask = TaskBase::GetCallerTaskHandle();
 	transferPending = true;
 
-	Cache::FlushBeforeDMASend(&bufferIn, sizeof(bufferIn));
+	Cache::FlushBeforeDMASend(bufferOut, (dataOut != nullptr) ? sizeof(bufferOut->hdr) + dataOutLength : sizeof(bufferOut->hdr));
 
 #if SAME5x
     spi_slave_dma_setup(dataOutLength, dataInLength);
@@ -1851,7 +1851,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #endif
 
 	// Look at the response
-	Cache::InvalidateAfterDMAReceive(&bufferIn, sizeof(MessageHeaderEspToSam));
+	Cache::InvalidateAfterDMAReceive(&bufferIn->hdr, sizeof(bufferIn->hdr));
 	if (bufferIn->hdr.formatVersion != MyFormatVersion)
 	{
 		if (reprap.Debug(moduleNetwork))
