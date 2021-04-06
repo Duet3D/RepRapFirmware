@@ -1127,7 +1127,6 @@ pre(disableDeltaMapping || drive < MaxAxes)
 }
 
 // Adjust the acceleration and deceleration to reduce ringing
-// Only called if topSpeed > startSpeed & topSpeed > endSpeed
 // This is only called once, so inlined for speed
 inline void DDA::AdjustAcceleration() noexcept
 {
@@ -1136,7 +1135,7 @@ inline void DDA::AdjustAcceleration() noexcept
 
 	float proposedAcceleration = acceleration, proposedAccelDistance = beforePrepare.accelDistance;
 	bool adjustAcceleration = false;
-	if ((prev->state != DDAState::frozen && prev->state != DDAState::executing) || !prev->IsAccelerationMove())
+	if (topSpeed > startSpeed && ((prev->state != DDAState::frozen && prev->state != DDAState::executing) || !prev->flags.wasAccelOnlyMove))
 	{
 		const float accelTime = (topSpeed - startSpeed)/acceleration;
 		if (accelTime < idealPeriod)
@@ -1157,7 +1156,7 @@ inline void DDA::AdjustAcceleration() noexcept
 
 	float proposedDeceleration = deceleration, proposedDecelDistance = beforePrepare.decelDistance;
 	bool adjustDeceleration = false;
-	if (next->state != DDAState::provisional || !next->IsDecelerationMove())
+	if (topSpeed > endSpeed && (next->state != DDAState::provisional || !next->IsDecelerationMove()))
 	{
 		const float decelTime = (topSpeed - endSpeed)/deceleration;
 		if (decelTime < idealPeriod)
@@ -1260,11 +1259,9 @@ inline void DDA::AdjustAcceleration() noexcept
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 {
-	if (   flags.xyMoving
-		&& reprap.GetMove().GetShaper().GetType() == InputShaperType::DAA
-		&& topSpeed > startSpeed && topSpeed > endSpeed
-		&& (fabsf(directionVector[X_AXIS]) > 0.5 || fabsf(directionVector[Y_AXIS]) > 0.5)
-	   )
+	flags.wasAccelOnlyMove = IsAccelerationMove();			// save this for the next move to look at
+
+	if (flags.xyMoving && reprap.GetMove().GetShaper().GetType() == InputShaperType::DAA)
 	{
 		AdjustAcceleration();
 	}
