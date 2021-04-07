@@ -196,6 +196,8 @@ public:
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
 	void DecreaseDepth() noexcept { --currentDepth; }
+	bool IncreaseArraysIterated() noexcept { ++arraysBeingIterated; return arraysBeingIterated == 1; }
+	void DecreaseArraysIterated() noexcept { --arraysBeingIterated; }
 	void AddIndex(int32_t index) THROWS(GCodeException);
 	void AddIndex() THROWS(GCodeException);
 	void RemoveIndex() THROWS(GCodeException);
@@ -203,6 +205,9 @@ public:
 	int32_t GetIndex(size_t n) const THROWS(GCodeException);
 	int32_t GetLastIndex() const THROWS(GCodeException);
 	size_t GetNumIndicesCounted() const noexcept { return numIndicesCounted; }
+	unsigned int GetStartElement() const noexcept { return startElement; }
+	void SetNextElement(int arg) noexcept { nextElement = arg; }
+	int GetNextElement() const noexcept { return nextElement; }
 	bool ShortFormReport() const noexcept { return shortForm; }
 	bool ShouldReport(const ObjectModelEntryFlags f) const noexcept;
 	bool WantArrayLength() const noexcept { return wantArrayLength; }
@@ -222,6 +227,9 @@ private:
 	uint64_t startMillis;							// the milliseconds counter when we started exploring the OM. Stored so that upTime and msUpTime are consistent.
 	unsigned int maxDepth;
 	unsigned int currentDepth;
+	unsigned int startElement;
+	int nextElement;
+	unsigned int arraysBeingIterated;
 	size_t numIndicesProvided;						// the number of indices provided, when we are doing a value lookup
 	size_t numIndicesCounted;						// the number of indices passed in the search string
 	int32_t indices[MaxIndices];

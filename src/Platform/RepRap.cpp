@@ -2369,7 +2369,7 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 		if (key == nullptr) { key = ""; }
 		if (flags == nullptr) { flags = ""; }
 
-		outBuf->printf("{\"key\":\"%.s\",\"flags\":\"%.s\"", key, flags);
+		outBuf->printf("{\"key\":\"%.s\",\"flags\":\"%.s\",\"result\":", key, flags);
 
 		const bool wantArrayLength = (*key == '#');
 		if (wantArrayLength)
@@ -2379,7 +2379,6 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 
 		try
 		{
-			outBuf->cat(",\"result\":");
 			reprap.ReportAsJson(outBuf, key, flags, wantArrayLength);
 			outBuf->cat("}\n");
 			if (outBuf->HadOverflow())
