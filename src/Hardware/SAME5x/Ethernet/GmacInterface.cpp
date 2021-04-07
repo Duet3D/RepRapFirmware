@@ -191,6 +191,7 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t star
 			{
 				p_gmac_dev->rx_desc[ul_index].addr.val = (u32_t) p->payload;
 			}
+			Cache::FlushBeforeDMASend(&p_gmac_dev->rx_desc[ul_index], sizeof(p_gmac_dev->rx_desc[ul_index]));
 			LWIP_DEBUGF(NETIF_DEBUG,
 					("gmac_rx_populate_queue: new pbuf allocated: %p [idx=%u]\n",
 					p, (unsigned int)ul_index));
@@ -359,6 +360,7 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 				memcpy(buffer, q->payload, q->len);
 				buffer += q->len;
 			}
+			Cache::FlushBeforeDMASend(reinterpret_cast<const uint8_t*>(txDescriptor.addr), totalLength);
 
 			// Set length and mark the buffer to be sent by GMAC
 			uint32_t txStat = totalLength | GMAC_TXD_LAST;
