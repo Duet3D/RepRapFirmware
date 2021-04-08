@@ -6,7 +6,7 @@
  */
 
 #include "Variable.h"
-#include <Platform/Outputmemory.h>
+#include <Platform/OutputMemory.h>
 
 Variable::Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept : name(str), val(pVal), scope(pScope)
 {
