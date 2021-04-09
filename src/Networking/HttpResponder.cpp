@@ -573,11 +573,8 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		bool success = false;
 		if (oldVal != nullptr && newVal != nullptr)
 		{
-			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && MassStorage::FileExists(oldVal) && MassStorage::FileExists(newVal))
-			{
-				MassStorage::Delete(newVal, false);
-			}
-			success = MassStorage::Rename(oldVal, newVal, false);
+			const bool deleteExisting = StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes");
+			success = MassStorage::Rename(oldVal, newVal, deleteExisting, false);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}

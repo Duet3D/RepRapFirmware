@@ -166,11 +166,16 @@ GCodeResult PrintMonitor::ProcessM73(GCodeBuffer& gb, const StringRef& reply) TH
 {
 	if (gb.Seen('R'))
 	{
-		slicerTimeLeft = gb.GetFValue() * MinutesToSeconds;
-		whenSlicerTimeLeftSet = millis64();
+		SetSlicerTimeLeft(gb.GetFValue() * MinutesToSeconds);
 	}
 	// M73 without P Q R or S parameters reports print progress in some implementations, but we don't currently do that
 	return GCodeResult::ok;
+}
+
+void PrintMonitor::SetSlicerTimeLeft(float seconds) noexcept
+{
+	slicerTimeLeft = seconds;
+	whenSlicerTimeLeftSet = millis64();
 }
 
 void PrintMonitor::Spin() noexcept

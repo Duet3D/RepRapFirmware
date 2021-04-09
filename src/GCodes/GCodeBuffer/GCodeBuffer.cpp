@@ -1010,6 +1010,8 @@ const char* GCodeBuffer::DataStart() const noexcept
 	return PARSER_OPERATION(DataStart());
 }
 
+// Return the length of the command.
+// WARNING! This may return the wrong value if the command has an unquoted string parameter and GetUnprecedentedString or GetPossiblyQuotedString hasn't been called yet.
 size_t GCodeBuffer::DataLength() const noexcept
 {
 	return PARSER_OPERATION(DataLength());
