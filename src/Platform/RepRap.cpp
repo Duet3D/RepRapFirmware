@@ -232,6 +232,14 @@ constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
 #endif
 };
 
+constexpr ObjectModelArrayDescriptor RepRap::volChangesArrayDescriptor =
+{
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumSdCards; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+																		{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
+};
+
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
@@ -377,6 +385,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC((int32_t)self->toolsSeq),								ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE
+	{ "volChanges",				OBJECT_MODEL_FUNC_NOSELF(&volChangesArrayDescriptor),					ObjectModelEntryFlags::live },
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 #endif
 };
@@ -394,7 +403,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	16 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
 	2,																		// state.beep
 	6,																		// state.messageBox
-	12 + HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE			// seqs
+	12 + HAS_NETWORKING + SUPPORT_SCANNER + 3 * HAS_MASS_STORAGE			// seqs
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -2369,7 +2378,7 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 		if (key == nullptr) { key = ""; }
 		if (flags == nullptr) { flags = ""; }
 
-		outBuf->printf("{\"key\":\"%.s\",\"flags\":\"%.s\"", key, flags);
+		outBuf->printf("{\"key\":\"%.s\",\"flags\":\"%.s\",\"result\":", key, flags);
 
 		const bool wantArrayLength = (*key == '#');
 		if (wantArrayLength)
@@ -2379,7 +2388,6 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 
 		try
 		{
-			outBuf->cat(",\"result\":");
 			reprap.ReportAsJson(outBuf, key, flags, wantArrayLength);
 			outBuf->cat("}\n");
 			if (outBuf->HadOverflow())
