@@ -1820,6 +1820,9 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		AnalogIn::GetDebugInfo(conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
 		MessageF(mtype, "MCU revision %u, ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 ", errs %" PRIu32 "\n",
 					chipVersion, conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
+		//DEBUG
+		extern unsigned int txDmaNotDisabledErrs, rxDmaNotDisabledErrs, wrongRxDmaFinishedStatusErrs, wrongTxDmaFinishedStatusErrs, wrongAdcRegisterErrs;
+		MessageF(mtype, "tnd=%u rnd=%u wrs=%u wrx=%u war=%u\n", txDmaNotDisabledErrs, rxDmaNotDisabledErrs, wrongRxDmaFinishedStatusErrs, wrongTxDmaFinishedStatusErrs, wrongAdcRegisterErrs);
 	}
 #endif
 
@@ -2160,7 +2163,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::AccessMemory:
 		{
 			gb.MustSee('A');
-			const uint32_t address = gb.GetUIValue();
+			uint32_t address = gb.GetUIValue();
 			uint32_t val;
 			bool dummy;
 			deliberateError = true;								// in case the memory access causes a fault
@@ -2171,7 +2174,14 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 			else
 			{
-				reply.printf("Address %08" PRIx32 " value %08" PRIx32, address, *reinterpret_cast<const uint32_t*>(address));
+				unsigned int numValues = (gb.Seen('R')) ? gb.GetUIValue() : 1;
+				reply.printf("%08" PRIx32 ":", address);
+				while (numValues != 0)
+				{
+					reply.catf(" %08" PRIx32, *reinterpret_cast<const uint32_t*>(address));
+					address += 4;
+					--numValues;
+				}
 			}
 			deliberateError = false;
 		}
