@@ -835,7 +835,14 @@ void StringParser::DecodeCommand() noexcept
 			}
 		}
 
+		// Skip any whitespace after the command letter/number. This speeds up searching for parameters and is assumed by GetUnprecedentedString.
+		while (parameterStart < gcodeLineEnd && (gb.buffer[parameterStart] == ' ' || gb.buffer[parameterStart] == '\t'))
+		{
+			++parameterStart;
+		}
+
 		// Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
+		// This isn't true if the command has an unquoted string argument, but we deal with that later.
 		bool inQuotes = false;
 		unsigned int localBraceCount = 0;
 		parametersPresent.Clear();
@@ -1328,19 +1335,11 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str) THROWS(
 }
 
 // This returns a string comprising the rest of the line, excluding any comment
-// It is provided for legacy use, in particular in the M23
-// command that sets the name of a file to be printed.  In
-// preference use GetString() which requires the string to have
-// been preceded by a tag letter.
+// It is provided for legacy use, in particular in the M23 and similar commands that set the name of a file to be printed.
+// Leading spaces and tabs have already been skipped in DecodeCommand.
 void StringParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
 	readPointer = parameterStart;
-	char c;
-	while ((unsigned int)readPointer < commandEnd && ((c = gb.buffer[readPointer]) == ' ' || c == '\t'))
-	{
-		++readPointer;	// skip leading spaces
-	}
-
 	InternalGetPossiblyQuotedString(str);
 	if (!allowEmpty && str.IsEmpty())
 	{

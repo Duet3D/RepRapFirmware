@@ -63,11 +63,17 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 				case 141:	// set chamber temperature and return immediately
 				case 144:	// bed standby
 				case 150:	// set LED colours
-				case 117:	// display message
 				case 280:	// set servo
 				case 300:	// beep
-				case 420:	// set RGB colour
 				case 568:	// spindle or temperature control
+					return true;
+
+				case 117:	// display message
+					{
+						// We need to call GetUnprecedentedString to ensure that if the string argument is not quoted, gb.DataLength() will return the correct value.
+						String<1> dummy;
+						gb.GetUnprecedentedString(dummy.GetRef());
+					}
 					return true;
 
 				case 291:
