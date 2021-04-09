@@ -65,6 +65,10 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # include <CoreIO.h>
 # include <Devices.h>
 
+// The following are needed by many other files, so include them here
+# include <Platform/MessageType.h>
+# include <GCodes/GCodeResult.h>
+
 #define SPEED_CRITICAL	__attribute__((optimize("O2")))
 
 // API level definition.
@@ -113,12 +117,22 @@ static_assert(MinVisibleAxes <= MinAxes);
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
 #if SUPPORT_CAN_EXPANSION
+
 # include <CanId.h>
 
 // We have to declare CanInterface::GetCanAddress here because CanInterface.h needs to include this file for the declaration of DriverId
 namespace CanInterface
 {
 	CanAddress GetCanAddress() noexcept;
+}
+
+#else
+
+typedef uint8_t CanAddress;
+
+namespace CanInterface
+{
+	inline CanAddress GetCanAddress() noexcept { return 0; }
 }
 
 #endif
@@ -440,7 +454,7 @@ constexpr size_t XY_AXES = 2;										// The number of Cartesian axes
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
 constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
-constexpr size_t NO_AXIS = 0x0F;									// A value to represent no axis, must fit in 4 bits (see Endstops) and not be a valid axis number
+constexpr size_t NO_AXIS = 0x3F;									// A value to represent no axis, must fit in 6 bits (see EndstopHitDetails and RemoteInputHandle) and not be a valid axis number
 
 static_assert(MaxAxesPlusExtruders <= MaxAxes + MaxExtruders);
 static_assert(MaxAxesPlusExtruders >= MinAxes + NumDefaultExtruders);

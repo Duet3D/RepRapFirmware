@@ -37,21 +37,19 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for standstill and fetch the current position
 		{
 			// Check whether we made any G1 S3 moves and need to set the axis limits
-			for (size_t axis = 0; axis < numTotalAxes; ++axis)
-			{
-				if (axesToSenseLength.IsBitSet(axis))
-				{
-					const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
-					if (stopType == EndStopPosition::highEndStop)
-					{
-						platform.SetAxisMaximum(axis, moveBuffer.coords[axis], true);
-					}
-					else if (stopType == EndStopPosition::lowEndStop)
-					{
-						platform.SetAxisMinimum(axis, moveBuffer.coords[axis], true);
-					}
-				}
-			}
+			axesToSenseLength.Iterate([this](unsigned int axis, unsigned int)
+										{
+											const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
+											if (stopType == EndStopPosition::highEndStop)
+											{
+												platform.SetAxisMaximum(axis, moveBuffer.coords[axis], true);
+											}
+											else if (stopType == EndStopPosition::lowEndStop)
+											{
+												platform.SetAxisMinimum(axis, moveBuffer.coords[axis], true);
+											}
+										}
+									);
 
 			if (gb.LatestMachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
 			{
@@ -92,88 +90,167 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::probingToolOffset:
+	case GCodeState::probingToolOffset2:					// Z probe has been deployed and recovery timer is running
+		{
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			if (millis() - lastProbedTime >= (uint32_t)(zp->GetRecoveryTime() * SecondsToMillis))
+			{
+				gb.AdvanceState();
+			}
+		}
+		break;
+
+	case GCodeState::probingToolOffset3:					// executing M585 with an endstop, or with a probe after deploying the probe and waiting for the recovery time
+		if (SetupM585ProbingMove(gb))
+		{
+			gb.AdvanceState();
+		}
+		else
+		{
+			AbortPrint(gb);
+			gb.SetState(GCodeState::checkError);
+			if (m585Settings.useProbe)
+			{
+				reprap.GetHeat().SuspendHeaters(false);
+				RetractZProbe(gb);
+			}
+		}
+		break;
+
+	case GCodeState::probingToolOffset4:					// executing M585, probing move has started
 		if (LockMovementAndWaitForStandstill(gb))
 		{
+			if (m585Settings.useProbe)
+			{
+				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				zp->SetProbing(false);
+				reprap.GetHeat().SuspendHeaters(false);
+				if (!zProbeTriggered)
+				{
+					gb.LatestMachineState().SetError("Probe was not triggered during probing move");
+					gb.SetState(GCodeState::checkError);
+					RetractZProbe(gb);
+					break;
+				}
+			}
+
 			Tool * const currentTool = reprap.GetCurrentTool();
 			if (currentTool != nullptr)
 			{
-				for (size_t axis = 0; axis < numTotalAxes; ++axis)
-				{
-					if (gb.Seen(axisLetters[axis]))
-					{
-						// We get here when the tool probe has been activated. In this case we know how far we
-						// went (i.e. the difference between our start and end positions) and if we need to
-						// incorporate any correction factors. That's why we only need to set the final tool
-						// offset to this value in order to finish the tool probing.
-						const float coord = toolChangeRestorePoint.moveCoords[axis] - currentUserPosition[axis] + gb.GetFValue();
-						currentTool->SetOffset(axis, coord, true);
-						break;
-					}
-				}
+				// We get here when the tool probe has been activated. In this case we know how far we
+				// went (i.e. the difference between our start and end positions) and if we need to
+				// incorporate any correction factors. That's why we only need to set the final tool
+				// offset to this value in order to finish the tool probing.
+				const float coord = toolChangeRestorePoint.moveCoords[m585Settings.axisNumber] - currentUserPosition[m585Settings.axisNumber] + m585Settings.offset;
+				currentTool->SetOffset(m585Settings.axisNumber, coord, true);
 			}
 			gb.SetState(GCodeState::normal);
+			if (m585Settings.useProbe)
+			{
+				RetractZProbe(gb);
+			}
 		}
 		break;
 
-	case GCodeState::findCenterOfCavityMin:
+
+	case GCodeState::findCenterOfCavity1:						// Executing M675 using a Z probe, have already deployed the probe
+	case GCodeState::probingToolOffset1:						// Executing M585 using a probe, which we have deployed
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			// We're trying to find the center of the cavity and we've moved all the way back until the corresponding
-			// endstop has been triggered. This means we can save the minimum position
-			SavePosition(findCenterOfCavityRestorePoint, gb);
-
-			// Move away from the endstop
-			const float rVal = gb.Seen('R') ? gb.GetFValue() : 5.0;
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			lastProbedTime = millis();							// start the recovery timer
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			if (zp->GetProbeType() != ZProbeType::none && zp->GetTurnHeatersOff())
 			{
-				if (gb.Seen(axisLetters[axis]))
+				reprap.GetHeat().SuspendHeaters(true);
+			}
+			gb.AdvanceState();
+		}
+		break;
+
+	case GCodeState::findCenterOfCavity2:						// Executing M675 using a Z probe, recovery timer is running
+		{
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			if (millis() - lastProbedTime >= (uint32_t)(zp->GetRecoveryTime() * SecondsToMillis))
+			{
+				if (SetupM675ProbingMove(gb, true))
 				{
-					moveBuffer.SetDefaults(numVisibleAxes);
-					ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-					moveBuffer.coords[axis] += rVal;					// add R to the current position
-
-					moveBuffer.feedRate = findCenterOfCavityRestorePoint.feedRate;
-					moveBuffer.canPauseAfter = false;
-
-					NewMoveAvailable(1);
-					break;
+					gb.AdvanceState();
+				}
+				else
+				{
+					AbortPrint(gb);
+					gb.SetState(GCodeState::checkError);
+					reprap.GetHeat().SuspendHeaters(false);
+					RetractZProbe(gb);
 				}
 			}
-			gb.SetState(GCodeState::findCenterOfCavityR);
 		}
 		break;
 
-	case GCodeState::findCenterOfCavityR:
+	case GCodeState::findCenterOfCavity3:						// Executing M675, min probing move has started
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			// Kick off another probing move to the axis maximum
-			FindCenterOfCavity(gb, reply, false);
-		}
-		break;
-
-	case GCodeState::findCenterOfCavityMax:
-		if (LockMovementAndWaitForStandstill(gb))
-		{
-			// We get here when both the minimum and maximum values have been probed
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			zp->SetProbing(false);
+			if (zProbeTriggered)
 			{
-				if (gb.Seen(axisLetters[axis]))
-				{
-					// Get the current position of the axis to calculate center-point below
-					float currentCoords[MaxAxesPlusExtruders];
-					ToolOffsetTransform(currentUserPosition, currentCoords);
-
-					moveBuffer.SetDefaults(numVisibleAxes);
-					RestorePosition(findCenterOfCavityRestorePoint, &gb);
-					ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-					moveBuffer.coords[axis] += (currentCoords[axis] - moveBuffer.coords[axis]) / 2;
-
-					NewMoveAvailable(1);
-					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
-					break;
-				}
+				m675Settings.minDistance = currentUserPosition[m675Settings.axisNumber];
+				SetupM675BackoffMove(gb, m675Settings.minDistance + m675Settings.backoffDistance);
+				gb.AdvanceState();
 			}
+			else
+			{
+				gb.LatestMachineState().SetError("Probe was not triggered during probing move");
+				gb.SetState(GCodeState::checkError);
+				reprap.GetHeat().SuspendHeaters(false);
+				RetractZProbe(gb);
+			}
+		}
+		break;
+
+	case GCodeState::findCenterOfCavity4:						// Executing M675, backoff move from min has started
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			if (SetupM675ProbingMove(gb, false))
+			{
+				gb.AdvanceState();
+			}
+			else
+			{
+				AbortPrint(gb);
+				gb.SetState(GCodeState::checkError);
+				reprap.GetHeat().SuspendHeaters(false);
+				RetractZProbe(gb);
+			}
+		}
+		break;
+
+	case GCodeState::findCenterOfCavity5:						// Executing M675, max probing move has started
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			reprap.GetHeat().SuspendHeaters(false);
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			zp->SetProbing(false);
+			if (zProbeTriggered)
+			{
+				const float centre = (m675Settings.minDistance + currentUserPosition[m675Settings.axisNumber])/2;
+				SetupM675BackoffMove(gb, centre);
+				gb.AdvanceState();
+			}
+			else
+			{
+				gb.LatestMachineState().SetError("Probe was not triggered during probing move");
+				gb.SetState(GCodeState::checkError);
+				RetractZProbe(gb);
+			}
+		}
+		break;
+
+	case GCodeState::findCenterOfCavity6:						// Executing M675, move to centre has started
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			gb.SetState(GCodeState::normal);
+			RetractZProbe(gb);
 		}
 		break;
 
@@ -625,7 +702,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					reprap.GetMove().heightMapLock.ReleaseWriter();
 					reprap.GetHeat().SuspendHeaters(false);
-					gb.LatestMachineState().SetError("Z probe already triggered before probing move started");
+					gb.LatestMachineState().SetError("Probe already triggered before probing move started");
 					gb.SetState(GCodeState::checkError);
 					RetractZProbe(gb);
 					break;
@@ -637,7 +714,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 					{
 						reprap.GetMove().heightMapLock.ReleaseWriter();
-						gb.LatestMachineState().SetError("Failed to enable Z probe");
+						gb.LatestMachineState().SetError("Failed to enable probe");
 						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb);
 						break;
@@ -671,7 +748,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if (!zProbeTriggered)
 				{
 					reprap.GetMove().heightMapLock.ReleaseWriter();
-					gb.LatestMachineState().SetError("Z probe was not triggered during probing move");
+					gb.LatestMachineState().SetError("Probe was not triggered during probing move");
 					gb.SetState(GCodeState::checkError);
 					RetractZProbe(gb);
 					break;
@@ -912,7 +989,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Z probe is already triggered at the start of the move, so abandon the probe and record an error
 					reprap.GetHeat().SuspendHeaters(false);
-					gb.LatestMachineState().SetError("Z probe already triggered at start of probing move");
+					gb.LatestMachineState().SetError("Probe already triggered at start of probing move");
 					if (g30ProbePointIndex >= 0)
 					{
 						reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(), true, true);
@@ -926,7 +1003,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					SetMoveBufferDefaults();
 					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 					{
-						gb.LatestMachineState().SetError("Failed to enable Z probe");
+						gb.LatestMachineState().SetError("Failed to enable probe");
 						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb);
 						break;
@@ -966,7 +1043,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->SetProbing(false);
 				if (!zProbeTriggered)
 				{
-					gb.LatestMachineState().SetError("Z probe was not triggered during probing move");
+					gb.LatestMachineState().SetError("Probe was not triggered during probing move");
 					g30zHeightErrorSum = g30zHeightError = 0.0;
 					hadProbingError = true;
 				}
@@ -975,7 +1052,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					// Successful probing
 					float m[MaxAxes];
 					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
-					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;					// save for later
+					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;		// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
 					if (tapsDone > 0)
 					{
@@ -1164,7 +1241,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
-			currentZProbeNumber = reprap.GetMove().GetStraightProbeSettings().GetZProbeToUse();
+			currentZProbeNumber = straightProbeSettings.GetZProbeToUse();
 			DeployZProbe(gb);
 		}
 		break;
@@ -1172,8 +1249,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::straightProbe1:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
-			const auto zp = platform.GetEndstops().GetZProbe(sps.GetZProbeToUse());
+			const auto zp = platform.GetEndstops().GetZProbe(straightProbeSettings.GetZProbeToUse());
 			lastProbedTime = millis();			// start the probe recovery timer
 			if (zp.IsNotNull() && zp->GetTurnHeatersOff())
 			{
@@ -1186,27 +1262,26 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::straightProbe2:
 		// Executing G38. The probe has been deployed and the recovery timer has been started.
 		{
-			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
-			if (millis() - lastProbedTime >= (uint32_t)(platform.GetZProbeOrDefault(sps.GetZProbeToUse())->GetRecoveryTime() * SecondsToMillis))
+			if (millis() - lastProbedTime >= (uint32_t)(platform.GetZProbeOrDefault(straightProbeSettings.GetZProbeToUse())->GetRecoveryTime() * SecondsToMillis))
 			{
 				// The probe recovery time has elapsed, so we can start the probing  move
-				const auto zp = platform.GetEndstops().GetZProbe(sps.GetZProbeToUse());
+				const auto zp = platform.GetEndstops().GetZProbe(straightProbeSettings.GetZProbeToUse());
 				if (zp.IsNull() || zp->GetProbeType() == ZProbeType::none)
 				{
 					// No Z probe, so we are doing manual 'probing'
 					UnlockAll(gb);															// release the movement lock to allow manual Z moves
 					gb.AdvanceState();														// resume at the next state when the user has finished
-					DoStraightManualProbe(gb, sps);											// call out to separate function because it used a lot of stack
+					DoStraightManualProbe(gb, straightProbeSettings);						// call out to separate function because it used a lot of stack
 				}
 				else
 				{
-					const bool probingAway = sps.ProbingAway();
+					const bool probingAway = straightProbeSettings.ProbingAway();
 					const bool atStop = zp->Stopped();
 					if (probingAway != atStop)
 					{
 						// Z probe is already in target state at the start of the move, so abandon the probe and signal an error if the type demands so
 						reprap.GetHeat().SuspendHeaters(false);
-						if (sps.SignalError())
+						if (straightProbeSettings.SignalError())
 						{
 							gb.LatestMachineState().SetError((probingAway) ? "Probe not triggered at start of probing move" : "Probe already triggered at start of probing move");
 						}
@@ -1217,9 +1292,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					{
 						zProbeTriggered = false;
 						SetMoveBufferDefaults();
-						if (!platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway) || !zp->SetProbing(true))
+						if (!platform.GetEndstops().EnableZProbe(straightProbeSettings.GetZProbeToUse(), probingAway) || !zp->SetProbing(true))
 						{
-							gb.LatestMachineState().SetError("Failed to enable Z probe");
+							gb.LatestMachineState().SetError("Failed to enable probe");
 							gb.SetState(GCodeState::checkError);
 							RetractZProbe(gb);
 							break;
@@ -1227,7 +1302,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 						moveBuffer.checkEndstops = true;
 						moveBuffer.reduceAcceleration = true;
-						sps.SetCoordsToTarget(moveBuffer.coords);
+						straightProbeSettings.SetCoordsToTarget(moveBuffer.coords);
 						moveBuffer.feedRate = zp->GetProbingSpeed(0);
 						NewMoveAvailable(1);
 						gb.AdvanceState();
@@ -1243,15 +1318,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// Probing move has stopped
 			reprap.GetHeat().SuspendHeaters(false);
-			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
-			const bool probingAway = sps.ProbingAway();
-			const auto zp = platform.GetEndstops().GetZProbe(sps.GetZProbeToUse());
+			const bool probingAway = straightProbeSettings.ProbingAway();
+			const auto zp = platform.GetEndstops().GetZProbe(straightProbeSettings.GetZProbeToUse());
 			if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none)
 			{
 				zp->SetProbing(false);
-				if (!zProbeTriggered && sps.SignalError())
+				if (!zProbeTriggered && straightProbeSettings.SignalError())
 				{
-					gb.LatestMachineState().SetError((probingAway) ? "Z probe did not lose contact during probing move" : "Z probe was not triggered during probing move");
+					gb.LatestMachineState().SetError((probingAway) ? "Probe did not lose contact during probing move" : "Probe was not triggered during probing move");
 				}
 			}
 

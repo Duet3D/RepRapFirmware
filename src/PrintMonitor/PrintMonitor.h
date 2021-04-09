@@ -21,7 +21,6 @@ Licence: GPL
 #define PRINTMONITOR_H
 
 #include <RepRapFirmware.h>
-#include <GCodes/GCodeResult.h>
 #include <GCodes/GCodeFileInfo.h>
 #include <ObjectModel/ObjectModel.h>
 
@@ -62,6 +61,7 @@ public:
 	void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
 
 	GCodeResult ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	void SetSlicerTimeLeft(float seconds) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL

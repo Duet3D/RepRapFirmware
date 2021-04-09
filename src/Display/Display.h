@@ -15,8 +15,7 @@
 #include "RotaryEncoder.h"
 #include "Lcd/Lcd.h"
 #include "Menu.h"
-#include "GCodes/GCodeResult.h"
-#include "ObjectModel/ObjectModel.h"
+#include <ObjectModel/ObjectModel.h>
 
 class Display INHERIT_OBJECT_MODEL
 {

@@ -1,10 +1,9 @@
 #ifndef TEMPERATURESENSOR_H
 #define TEMPERATURESENSOR_H
 
-#include "RepRapFirmware.h"
-#include "Heating/TemperatureError.h"		// for result codes
-#include "Hardware/IoPorts.h"
-#include "GCodes/GCodeResult.h"
+#include <RepRapFirmware.h>
+#include <Heating/TemperatureError.h>		// for result codes
+#include <Hardware/IoPorts.h>
 #include <ObjectModel/ObjectModel.h>
 
 class GCodeBuffer;
@@ -92,7 +91,7 @@ public:
 
 	// Try to get a temperature reading
 	virtual void Poll() noexcept = 0;
-	virtual bool PollInTask() noexcept { return false; };		// Classes implementing this method need to also call Heat::EnsureSensorsTask() after succesful configuration
+	virtual bool PollInTask() noexcept { return false; };		// Classes implementing this method need to also call Heat::EnsureSensorsTask() after successful configuration
 
 	static TemperatureError GetPT100Temperature(float& t, uint16_t ohmsx100) noexcept;		// shared function used by two derived classes and the ATE
 

@@ -267,9 +267,9 @@ ObjectModel::ObjectModel() noexcept
 
 // Constructor used when reporting the OM as JSON
 ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth) noexcept
-	: startMillis(millis()), maxDepth(initialMaxDepth), currentDepth(0), numIndicesProvided(0), numIndicesCounted(0),
+	: startMillis(millis()), maxDepth(initialMaxDepth), currentDepth(0), startElement(0), nextElement(-1), arraysBeingIterated(0), numIndicesProvided(0), numIndicesCounted(0),
 	  line(-1), column(-1),
-	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false), includeObsolete(false), obsoleteFieldQueried(false)
+	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false), includeObsolete(false), obsoleteFieldQueried(false), wantExists(false)
 {
 	while (true)
 	{
@@ -300,6 +300,14 @@ ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportF
 				++reportFlags;
 			}
 			break;
+		case 'a':
+			startElement = 0;
+			while (isdigit(*reportFlags))
+			{
+				startElement = (10 * startElement) + (*reportFlags - '0');
+				++reportFlags;
+			}
+			break;
 		case ' ':
 		case ',':
 			break;
@@ -311,10 +319,10 @@ ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportF
 }
 
 // Constructor when evaluating expressions
-ObjectExplorationContext::ObjectExplorationContext(bool wal, int p_line, int p_col) noexcept
-	: startMillis(millis()), maxDepth(99), currentDepth(0), numIndicesProvided(0), numIndicesCounted(0),
+ObjectExplorationContext::ObjectExplorationContext(bool wal, bool wex, int p_line, int p_col) noexcept
+	: startMillis(millis()), maxDepth(99), currentDepth(0), startElement(0), nextElement(-1), arraysBeingIterated(0), numIndicesProvided(0), numIndicesCounted(0),
 	  line(p_line), column(p_col),
-	  shortForm(false), onlyLive(false), includeVerbose(true), wantArrayLength(wal), includeNulls(false), includeObsolete(true), obsoleteFieldQueried(false)
+	  shortForm(false), onlyLive(false), includeVerbose(true), wantArrayLength(wal), includeNulls(false), includeObsolete(true), obsoleteFieldQueried(false), wantExists(wex)
 {
 }
 
@@ -422,6 +430,10 @@ void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char
 	const unsigned int defaultMaxDepth = (wantArrayLength) ? 99 : (filter[0] == 0) ? 1 : 99;
 	ObjectExplorationContext context(wantArrayLength, reportFlags, defaultMaxDepth);
 	ReportAsJson(buf, context, nullptr, 0, filter);
+	if (context.GetNextElement() >= 0)
+	{
+		buf->catf(",\"next\":%d", context.GetNextElement());
+	}
 }
 
 // Function to report a value or object as JSON
@@ -717,10 +729,19 @@ void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext&
 
 	buf->cat('[');
 	const size_t count = omad->GetNumElements(this, context);
-	for (size_t i = 0; i < count; ++i)
+	const bool isRootArray = context.IncreaseArraysIterated();
+	const size_t startElement = (isRootArray) ? context.GetStartElement() : 0;
+	for (size_t i = startElement; i < count; ++i)
 	{
-		if (i != 0)
+		// Support retrieving just part of the array in case it is too large to write all of it to the buffer
+		if (i != startElement)
 		{
+			if (isRootArray && buf->Length() >= (OUTPUT_BUFFER_SIZE * (OUTPUT_BUFFER_COUNT - RESERVED_OUTPUT_BUFFERS))/2)
+			{
+				// We've used half the buffer space already, so stop reporting
+				context.SetNextElement(i);
+				break;
+			}
 			buf->cat(',');
 		}
 		context.AddIndex(i);
@@ -728,6 +749,11 @@ void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext&
 		ReportItemAsJson(buf, context, classDescriptor, element, filter);
 		context.RemoveIndex();
 	}
+	if (isRootArray && context.GetNextElement() < 0)
+	{
+		context.SetNextElement(0);
+	}
+	context.DecreaseArraysIterated();
 	buf->cat(']');
 }
 
@@ -820,7 +846,7 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 		++n;
 	}
 	return (*n == 0 && (*id == 0 || *id == '.' || *id == '[' || *id == '^')) ? 0
-		: (*id > *n) ? 1
+		: (*id > *n && *id != '^') ? 1
 			: -1;
 }
 
@@ -852,11 +878,21 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 		classDescriptor = classDescriptor->parent;			// search parent class object model too
 	}
 
+	if (context.WantExists())
+	{
+		return ExpressionValue(false);
+	}
+
 	throw context.ConstructParseException("unknown value '%s'", idString);
 }
 
 ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const
 {
+	if (*idString == 0 && context.WantExists() && val.GetType() != TypeCode::None)
+	{
+		return ExpressionValue(true);
+	}
+
 	switch (val.GetType())
 	{
 	case TypeCode::Array:
@@ -880,6 +916,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 
 			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.omadVal->GetNumElements(this, context))
 			{
+				if (context.WantExists())
+				{
+					return ExpressionValue(false);
+				}
 				throw context.ConstructParseException("array index out of bounds");
 			}
 
@@ -902,6 +942,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 		break;
 
 	case TypeCode::None:
+		if (context.WantExists())
+		{
+			return ExpressionValue(false);
+		}
 		if (*idString == 0)
 		{
 			return val;				// a null value can be compared to null
@@ -925,6 +969,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 			if (*idString != 0)
 			{
 				break;
+			}
+			if (context.WantExists())
+			{
+				return ExpressionValue(true);
 			}
 			const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
 			return ExpressionValue((int32_t)bm.GetSetBitNumber(context.GetLastIndex()));
@@ -955,6 +1003,10 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 			if (*idString != 0)
 			{
 				break;
+			}
+			if (context.WantExists())
+			{
+				return ExpressionValue(true);
 			}
 			const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
 			return ExpressionValue((int32_t)bm.GetSetBitNumber(context.GetLastIndex()));

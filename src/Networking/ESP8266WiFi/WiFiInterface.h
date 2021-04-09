@@ -10,9 +10,7 @@
 
 #include <RepRapFirmware.h>
 #include <Networking/NetworkDefs.h>
-#include <Platform/MessageType.h>
 #include <Networking/NetworkInterface.h>
-#include <GCodes/GCodeResult.h>
 #include <MessageFormats.h>
 
 // Forward declarations
@@ -122,7 +120,7 @@ private:
 		uint8_t data[MaxDataLength];	// data to send
 	};
 
-	struct MessageBufferIn
+	struct alignas(16) MessageBufferIn
 	{
 		MessageHeaderEspToSam hdr;
 		uint8_t data[MaxDataLength];	// data to send

@@ -184,6 +184,14 @@
 # define ALLOCATE_DEFAULT_PORTS	0
 #endif
 
+#ifndef SUPPORT_ACCELEROMETERS
+# define SUPPORT_ACCELEROMETERS	0
+#endif
+
+#ifndef ATX_POWER_INVERTED
+# define ATX_POWER_INVERTED		false
+#endif
+
 // We must define MCU_HAS_UNIQUE_ID as either 0 or 1 so we can use it in maths
 #if SAM4E || SAM4S || SAME70 || SAME5x
 # define MCU_HAS_UNIQUE_ID		1

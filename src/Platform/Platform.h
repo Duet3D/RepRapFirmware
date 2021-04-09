@@ -24,18 +24,17 @@ Licence: GPL
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#include "RepRapFirmware.h"
-#include "ObjectModel/ObjectModel.h"
-#include "Hardware/IoPorts.h"
-#include "Fans/FansManager.h"
-#include "Heating/TemperatureError.h"
+#include <RepRapFirmware.h>
+#include <ObjectModel/ObjectModel.h>
+#include <Hardware/IoPorts.h>
+#include <Fans/FansManager.h>
+#include <Heating/TemperatureError.h>
 #include "OutputMemory.h"
-#include "Storage/FileStore.h"
-#include "Storage/FileData.h"
-#include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
-#include "MessageType.h"
-#include "Tools/Spindle.h"
-#include "Endstops/EndstopsManager.h"
+#include <Storage/FileStore.h>
+#include <Storage/FileData.h>
+#include <Storage/MassStorage.h>	// must be after Pins.h because it needs NumSdCards defined
+#include <Tools/Spindle.h>
+#include <Endstops/EndstopsManager.h>
 #include <GPIO/GpInPort.h>
 #include <GPIO/GpOutPort.h>
 #include <Comms/AuxDevice.h>
@@ -217,7 +216,7 @@ public:
 
 	void Init(uint16_t val) volatile noexcept
 	{
-		const irqflags_t flags = cpu_irq_save();
+		const irqflags_t flags = IrqSave();
 		sum = (uint32_t)val * (uint32_t)numAveraged;
 		index = 0;
 		isValid = false;
@@ -225,21 +224,23 @@ public:
 		{
 			readings[i] = val;
 		}
-		cpu_irq_restore(flags);
+		IrqRestore(flags);
 	}
 
 	// Call this to put a new reading into the filter
-	// This is only called by the ISR, so it not declared volatile to make it faster
-	void ProcessReading(uint16_t r) noexcept
+	// This is called by the ISR and by the ADC callback function
+	void ProcessReading(uint16_t r) volatile noexcept
 	{
-		sum = sum - readings[index] + r;
-		readings[index] = r;
-		++index;
-		if (index == numAveraged)
+		size_t locIndex = index;				// avoid repeatedly reloading volatile variable
+		sum = sum - readings[locIndex] + r;
+		readings[locIndex] = r;
+		++locIndex;
+		if (locIndex == numAveraged)
 		{
-			index = 0;
+			locIndex = 0;
 			isValid = true;
 		}
+		index = locIndex;
 	}
 
 	// Return the raw sum
@@ -252,14 +253,6 @@ public:
 	bool IsValid() const volatile noexcept
 	{
 		return isValid;
-	}
-
-	// Get the latest reading
-	uint16_t GetLatestReading() const volatile noexcept
-	{
-		size_t indexOfLastReading = index;			// capture volatile variable
-		indexOfLastReading =  (indexOfLastReading == 0) ? numAveraged - 1 : indexOfLastReading - 1;
-		return readings[indexOfLastReading];
 	}
 
 	static constexpr size_t NumAveraged() noexcept { return numAveraged; }
@@ -583,8 +576,10 @@ public:
 #endif
 
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
+	void ResetVoltageMonitors() noexcept;
 	bool HasVinPower() const noexcept;
 #else
+	void ResetVoltageMonitors() noexcept { }
 	bool HasVinPower() const noexcept { return true; }
 #endif
 

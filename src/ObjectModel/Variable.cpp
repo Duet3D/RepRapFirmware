@@ -6,6 +6,7 @@
  */
 
 #include "Variable.h"
+#include <Platform/OutputMemory.h>
 
 Variable::Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept : name(str), val(pVal), scope(pScope)
 {
@@ -20,6 +21,20 @@ Variable::~Variable()
 Variable* VariableSet::Lookup(const char *str) noexcept
 {
 	Variable *v;
+	for (v = root; v != nullptr; v = v->next)
+	{
+		auto vname = v->name.Get();
+		if (strcmp(vname.Ptr(), str) == 0)
+		{
+			break;
+		}
+	}
+	return v;
+}
+
+const Variable* VariableSet::Lookup(const char *str) const noexcept
+{
+	const Variable *v;
 	for (v = root; v != nullptr; v = v->next)
 	{
 		auto vname = v->name.Get();

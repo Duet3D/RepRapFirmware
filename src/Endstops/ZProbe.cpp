@@ -224,7 +224,7 @@ bool ZProbe::Stopped() const noexcept
 }
 
 // Check whether the probe is triggered and return the action that should be performed. Called from the step ISR.
-EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow) noexcept
+EndstopHitDetails ZProbe::CheckTriggered() noexcept
 {
 	bool b = Stopped();
 	if (misc.parts.probingAway)

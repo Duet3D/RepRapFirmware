@@ -558,7 +558,7 @@ void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 		&& addPointer->GetState() == DDA::DDAState::empty
 	   )
 	{
-		addPointer->GetPrevious()->SetPositions(move, MaxAxesPlusExtruders);
+		addPointer->GetPrevious()->SetPositions(move);
 	}
 	else
 	{
@@ -596,13 +596,13 @@ bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();			// do this before we disable interrupts
-	cpu_irq_disable();
+	IrqDisable();
 	if (liveCoordinatesValid)
 	{
 		// All coordinates are valid, so copy them across
 		memcpyf(m, const_cast<const float *>(liveCoordinates), MaxAxesPlusExtruders);
 		liveCoordinatesChanged = false;
-		cpu_irq_enable();
+		IrqEnable();
 	}
 	else
 	{
@@ -610,19 +610,19 @@ bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 		memcpyf(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), MaxAxesPlusExtruders - numTotalAxes);
 		int32_t tempEndPoints[MaxAxes];
 		memcpyi32(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), ARRAY_SIZE(tempEndPoints));
-		cpu_irq_enable();
+		IrqEnable();
 
 		reprap.GetMove().MotorStepsToCartesian(tempEndPoints, numVisibleAxes, numTotalAxes, m);		// this is slow, so do it with interrupts enabled
 
 		// If the ISR has not updated the endpoints, store the live coordinates back so that we don't need to do it again
-		cpu_irq_disable();
+		IrqDisable();
 		if (memcmp(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints)) == 0)
 		{
 			memcpyf(const_cast<float *>(liveCoordinates), m, numVisibleAxes);
 			liveCoordinatesValid = true;
 			liveCoordinatesChanged = false;
 		}
-		cpu_irq_enable();
+		IrqEnable();
 	}
 	return true;
 }
@@ -631,23 +631,24 @@ bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 // The caller must make sure that no moves are in progress or pending when calling this
 void DDARing::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept
 {
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
+	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
+	for (size_t drive = 0; drive < numAxes; drive++)
 	{
 		liveCoordinates[drive] = coords[drive];
 	}
 	liveCoordinatesValid = true;
 	liveCoordinatesChanged = true;
-	reprap.GetMove().EndPointToMachine(coords, const_cast<int32_t *>(liveEndPoints), reprap.GetGCodes().GetVisibleAxes());
+	(void)reprap.GetMove().CartesianToMotorSteps(coords, const_cast<int32_t *>(liveEndPoints), true);
 }
 
 void DDARing::ResetExtruderPositions() noexcept
 {
-	cpu_irq_disable();
+	IrqDisable();
 	for (size_t eDrive = reprap.GetGCodes().GetTotalAxes(); eDrive < MaxAxesPlusExtruders; eDrive++)
 	{
 		liveCoordinates[eDrive] = 0.0;
 	}
-	cpu_irq_enable();
+	IrqEnable();
 	liveCoordinatesChanged = true;
 }
 
@@ -707,7 +708,7 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 	const DDA * const savedDdaRingAddPointer = addPointer;
 	bool pauseOkHere;
 
-	cpu_irq_disable();
+	IrqDisable();
 	DDA *dda = currentDda;
 	if (dda == nullptr)
 	{
@@ -732,7 +733,7 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 		dda = dda->GetNext();
 	}
 
-	cpu_irq_enable();
+	IrqEnable();
 
 	// We may be going to skip some moves. Get the end coordinate of the previous move.
 	DDA * const prevDda = addPointer->GetPrevious();
@@ -784,7 +785,7 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 	const DDA * const savedDdaRingAddPointer = addPointer;
 	bool abortedMove = false;
 
-	cpu_irq_disable();
+	IrqDisable();
 	DDA *dda = currentDda;
 	if (dda != nullptr && dda->GetFilePosition() != noFilePosition)
 	{
@@ -819,7 +820,7 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 		}
 	}
 
-	cpu_irq_enable();
+	IrqEnable();
 
 	if (dda == savedDdaRingAddPointer)
 	{

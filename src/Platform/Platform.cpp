@@ -404,13 +404,15 @@ void Platform::Init() noexcept
 	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// hold the Ethernet Phy chip in reset, hopefully this will prevent it being too noisy if Ethernet is not enabled
 #endif
 
+#ifndef __LPC17xx__
 	// Deal with power first (we assume this doesn't depend on identifying the board type)
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
+#endif
 
 	// Make sure the on-board drivers are disabled
-#if defined(DUET_NG) || defined(PCCB_10) || defined(PCCB_08_X5)
+#if defined(DUET_NG) || defined(PCCB_10)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
-#elif defined(DUET_M) || defined(PCCB_08) || defined(PCCB_08_X5) || defined(DUET3MINI)
+#elif defined(DUET_M) || defined(DUET3MINI)
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #endif
 
@@ -471,10 +473,7 @@ void Platform::Init() noexcept
 #ifdef __LPC17xx__
 	// Load HW pin assignments from sdcard
 	BoardConfig::Init();
-	pinMode(ATX_POWER_PIN,(ATX_POWER_INVERTED==false)?OUTPUT_LOW:OUTPUT_HIGH);
-#else
-	// Deal with power first (we assume this doesn't depend on identifying the board type)
-	pinMode(ATX_POWER_PIN,OUTPUT_LOW);
+	pinMode(ATX_POWER_PIN, (ATX_POWER_INVERTED) ? OUTPUT_HIGH : OUTPUT_LOW);
 #endif
 
     // Ethernet networking defaults
@@ -833,6 +832,16 @@ void Platform::Init() noexcept
 	DuetExpansion::DueXnTaskInit();								// must initialise interrupt priorities before calling this
 #endif
 	active = true;
+}
+
+// Reset the min and max recorded voltages to the current values
+void Platform::ResetVoltageMonitors() noexcept
+{
+	lowestVin = highestVin = currentVin;
+
+#if HAS_12V_MONITOR
+	lowestV12 = highestV12 = currentV12;
+#endif
 }
 
 #if MCU_HAS_UNIQUE_ID
@@ -1387,6 +1396,8 @@ void Platform::Spin() noexcept
 			}
 			if (numVinUnderVoltageEvents != previousVinUnderVoltageEvents)
 			{
+				//DEBUG increased the number of d.p.
+//				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)(%u)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue), lastVinUnderVoltageValue);
 				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue));
 				previousVinUnderVoltageEvents = numVinUnderVoltageEvents;
 				reported = true;
@@ -1800,6 +1811,18 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	}
 #endif
 
+#ifdef DUET3MINI
+	// Report the processor revision level and analogIn status (trying to debug the spurious zero VIN issue)
+	{
+		// The DSU clocks are enabled by default so no need to enable them here
+		const unsigned int chipVersion = DSU->DID.bit.REVISION;
+		uint32_t conversionsStarted, conversionsCompleted, conversionTimeouts, errors;
+		AnalogIn::GetDebugInfo(conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
+		MessageF(mtype, "MCU revision %u, ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 ", errs %" PRIu32 "\n",
+					chipVersion, conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
+	}
+#endif
+
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
 	const float currentMcuTemperature = GetCpuTemperature();
@@ -1814,15 +1837,15 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
 				numVinUnderVoltageEvents, numVinOverVoltageEvents,
 				(HasVinPower()) ? "yes" : "no");
-	lowestVin = highestVin = currentVin;
 #endif
 
 #if HAS_12V_MONITOR
 	// Show the 12V rail voltage
 	MessageF(mtype, "12V rail voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 "\n",
 		(double)AdcReadingToPowerVoltage(lowestV12), (double)AdcReadingToPowerVoltage(currentV12), (double)AdcReadingToPowerVoltage(highestV12), numV12UnderVoltageEvents);
-	lowestV12 = highestV12 = currentV12;
 #endif
+
+	ResetVoltageMonitors();
 
 	StringHandle::Diagnostics(mtype);
 
@@ -1884,13 +1907,13 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 // Execute a timed square root that takes less than one millisecond
 static uint32_t TimedSqrt(uint64_t arg, uint32_t& timeAcc) noexcept
 {
-	cpu_irq_disable();
+	IrqDisable();
 	asm volatile("":::"memory");
 	uint32_t now1 = SysTick->VAL;
 	const uint32_t ret = isqrt64(arg);
 	uint32_t now2 = SysTick->VAL;
 	asm volatile("":::"memory");
-	cpu_irq_enable();
+	IrqEnable();
 	now1 &= 0x00FFFFFF;
 	now2 &= 0x00FFFFFF;
 	timeAcc += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -2200,13 +2223,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			{
 				const float angle = 0.01 * i;
 
-				cpu_irq_disable();
+				IrqDisable();
 				asm volatile("":::"memory");
 				uint32_t now1 = SysTick->VAL;
 				(void)RepRap::SinfCosf(angle);
 				uint32_t now2 = SysTick->VAL;
 				asm volatile("":::"memory");
-				cpu_irq_enable();
+				IrqEnable();
 				now1 &= 0x00FFFFFF;
 				now2 &= 0x00FFFFFF;
 				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -2224,13 +2247,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			for (unsigned int i = 0; i < iterations; ++i)
 			{
 
-				cpu_irq_disable();
+				IrqDisable();
 				asm volatile("":::"memory");
 				uint32_t now1 = SysTick->VAL;
 				val = RepRap::FastSqrtf(val);
 				uint32_t now2 = SysTick->VAL;
 				asm volatile("":::"memory");
-				cpu_irq_enable();
+				IrqEnable();
 				now1 &= 0x00FFFFFF;
 				now2 &= 0x00FFFFFF;
 				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -2326,7 +2349,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		{
 			const size_t length = (gb.Seen('S')) ? gb.GetUIValue() : 1024;
 			CRC32 crc;
-			cpu_irq_disable();
+			IrqDisable();
 			asm volatile("":::"memory");
 			uint32_t now1 = SysTick->VAL;
 			crc.Update(
@@ -2338,7 +2361,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 						length);
 			uint32_t now2 = SysTick->VAL;
 			asm volatile("":::"memory");
-			cpu_irq_enable();
+			IrqEnable();
 			now1 &= 0x00FFFFFF;
 			now2 &= 0x00FFFFFF;
 			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -2349,7 +2372,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::TimeGetTimerTicks:
 		{
 			unsigned int i = 100;
-			cpu_irq_disable();
+			IrqDisable();
 			asm volatile("":::"memory");
 			uint32_t now1 = SysTick->VAL;
 			do
@@ -2359,7 +2382,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			} while (i != 0);
 			uint32_t now2 = SysTick->VAL;
 			asm volatile("":::"memory");
-			cpu_irq_enable();
+			IrqEnable();
 			now1 &= 0x00FFFFFF;
 			now2 &= 0x00FFFFFF;
 			uint32_t tim1 = ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
@@ -3655,18 +3678,14 @@ void Platform::StopLogging() noexcept
 
 bool Platform::AtxPower() const noexcept
 {
-#ifdef __LPC17xx__
 	const bool val = IoPort::ReadPin(ATX_POWER_PIN);
 	return (ATX_POWER_INVERTED) ? !val : val;
-#else
-    return IoPort::ReadPin(ATX_POWER_PIN);
-#endif
 }
 
 void Platform::AtxPowerOn() noexcept
 {
 	deferredPowerDown = false;
-	IoPort::WriteDigital(ATX_POWER_PIN, true);
+	IoPort::WriteDigital(ATX_POWER_PIN, !ATX_POWER_INVERTED);
 }
 
 void Platform::AtxPowerOff(bool defer) noexcept
@@ -3682,11 +3701,7 @@ void Platform::AtxPowerOff(bool defer) noexcept
 			// We don't call logger->Stop() here because we don't know whether turning off the power will work
 		}
 #endif
-#ifdef __LPC17xx__
 		IoPort::WriteDigital(ATX_POWER_PIN, ATX_POWER_INVERTED);
-#else
-		IoPort::WriteDigital(ATX_POWER_PIN, false);
-#endif
 	}
 }
 
@@ -4305,25 +4320,17 @@ float Platform::GetCurrentV12Voltage() const noexcept
 float Platform::GetTmcDriversTemperature(unsigned int boardNumber) const noexcept
 {
 #if defined(DUET3MINI)
-	const DriversBitmap mask = (boardNumber == 0)
-							? DriversBitmap::MakeLowestNBits(5)							// drivers 0-4 are on the main board
-								: DriversBitmap::MakeLowestNBits(3).ShiftUp(5);			// drivers 5-7 are on the daughter board
+	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(7);						// report the 2-driver addon along with the main board
 #elif defined(DUET3)
 	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(6);						// there are 6 drivers, only one board
 #elif defined(DUET_NG)
 	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(5).ShiftUp(5 * boardNumber);	// there are 5 drivers on each board
 #elif defined(DUET_M)
-	const DriversBitmap mask = (boardNumber == 0)
-							? DriversBitmap::MakeLowestNBits(5)							// drivers 0-4 are on the main board
-								: DriversBitmap::MakeLowestNBits(2).ShiftUp(5);			// drivers 5-6 are on the daughter board
+	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(7);						// report the 2-driver addon along with the main board
 #elif defined(PCCB_10)
 	const DriversBitmap mask = (boardNumber == 0)
 							? DriversBitmap::MakeLowestNBits(2)							// drivers 0,1 are on-board
 								: DriversBitmap::MakeLowestNBits(5).ShiftUp(2);			// drivers 2-7 are on the DueX5
-#elif defined(PCCB_08_X5)
-	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(5);						// all drivers (0-4) are on the DueX, no further expansion supported
-#elif defined(PCCB_08)
-	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(2);						// drivers 0, 1 are on-board, no expansion supported
 #else
 # error Undefined board
 #endif

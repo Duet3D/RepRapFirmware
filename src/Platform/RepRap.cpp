@@ -241,6 +241,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
 #endif
 	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
+	{ "global",					OBJECT_MODEL_FUNC(&(self->globalVariables)),							ObjectModelEntryFlags::none },
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor),						ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
@@ -357,6 +358,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
 #endif
 	{ "fans",					OBJECT_MODEL_FUNC((int32_t)self->fansSeq),								ObjectModelEntryFlags::live },
+	{ "global",					OBJECT_MODEL_FUNC((int32_t)self->globalSeq),							ObjectModelEntryFlags::live },
 	{ "heat",					OBJECT_MODEL_FUNC((int32_t)self->heatSeq),								ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC((int32_t)self->inputsSeq),							ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC((int32_t)self->jobSeq),								ObjectModelEntryFlags::live },
@@ -382,7 +384,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
 	7,																		// number of sub-tables
-	14 + SUPPORT_SCANNER + HAS_MASS_STORAGE,								// root
+	15 + SUPPORT_SCANNER + HAS_MASS_STORAGE,								// root
 #if HAS_MASS_STORAGE
 	8, 																		// directories
 #else
@@ -392,7 +394,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	16 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
 	2,																		// state.beep
 	6,																		// state.messageBox
-	11 + HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE			// seqs
+	12 + HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE			// seqs
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -406,7 +408,7 @@ ReadWriteLock RepRap::toolListLock;
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
 RepRap::RepRap() noexcept
-	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), moveSeq(0),
+	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), moveSeq(0), globalSeq(0),
 	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
 	  toolList(nullptr), currentTool(nullptr), lastWarningMillis(0),
 	  activeExtruders(0), activeToolHeaters(0), numToolsToReport(0),
@@ -562,6 +564,9 @@ void RepRap::Init() noexcept
 #endif
 
 	active = true;										// must do this after we initialise the watchdog but before we start the network or call Spin(), else the watchdog may time out
+
+	delay(100);											// give the tick ISR time to collect voltage readings
+	platform->ResetVoltageMonitors();					// get rid of the spurious zero minimum voltage readings
 
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
@@ -825,33 +830,58 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 {
 	platform->Message(mtype, "=== Diagnostics ===\n");
 
-// DEBUG print the module addresses
-//	platform->MessageF(mtype, "platform %" PRIx32 ", network %" PRIx32 ", move %" PRIx32 ", heat %" PRIx32 ", gcodes %" PRIx32 ", scanner %"  PRIx32 ", pm %" PRIx32 ", portc %" PRIx32 "\n",
-//						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
-
-	// Print the firmware version and board type
+	// Print the firmware version, board type etc.
 
 #ifdef DUET_NG
-# if HAS_LINUX_INTERFACE
-	platform->MessageF(mtype, "%s version %s running on %s (%s mode)", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
-						(UsingLinuxInterface()) ? "SBC" : "standalone");
-# else
-	platform->MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
-# endif
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
-	platform->MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
-#elif defined(__LPC17xx__)
-	platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
-#elif HAS_LINUX_INTERFACE
-	platform->MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString(),
+#endif
+
+	platform->MessageF(mtype,
+		// Format string
+		"%s"											// firmware name
+#ifdef __LPC17xx__
+		" (%s)"											// lpcBoardName
+#endif
+		" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
+#ifdef DUET_NG
+		"%s%s"											// optional DueX expansion board
+#endif
+#ifdef __LPC17xx__
+		" at %uMhz"										// clock speed
+#endif
+#if HAS_LINUX_INTERFACE || SUPPORT_REMOTE_COMMANDS
+		" (%s mode)"									// standalone, SBC or expansion mode
+#endif
+		"\n",
+
+		// Parameters to match format string
+		FIRMWARE_NAME,
+#ifdef __LPC17xx__
+		lpcBoardName,
+#endif
+		VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
+#ifdef DUET_NG
+		, ((expansionName == nullptr) ? "" : " + ")
+		, ((expansionName == nullptr) ? "" : expansionName)
+#endif
+#ifdef __LPC17xx__
+		, (unsigned int)(SystemCoreClock/1000000)
+#endif
+#if HAS_LINUX_INTERFACE || SUPPORT_REMOTE_COMMANDS
+		,
 # if SUPPORT_REMOTE_COMMANDS
 						(CanInterface::InExpansionMode()) ? "expansion" :
 # endif
-						(UsingLinuxInterface()) ? "SBC" : "standalone"
-					);
-#else
-	platform->MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
+# if HAS_LINUX_INTERFACE
+						(UsingLinuxInterface()) ? "SBC" :
+# endif
+							"standalone"
 #endif
+	);
+
+	// DEBUG print the module addresses
+	//	platform->MessageF(mtype, "platform %" PRIx32 ", network %" PRIx32 ", move %" PRIx32 ", heat %" PRIx32 ", gcodes %" PRIx32 ", scanner %"  PRIx32 ", pm %" PRIx32 ", portc %" PRIx32 "\n",
+	//						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
 
 #if MCU_HAS_UNIQUE_ID
 	platform->MessageF(mtype, "Board ID: %s\n", platform->GetUniqueIdString());
@@ -2339,7 +2369,7 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 		if (key == nullptr) { key = ""; }
 		if (flags == nullptr) { flags = ""; }
 
-		outBuf->printf("{\"key\":\"%.s\",\"flags\":\"%.s\"", key, flags);
+		outBuf->printf("{\"key\":\"%.s\",\"flags\":\"%.s\",\"result\":", key, flags);
 
 		const bool wantArrayLength = (*key == '#');
 		if (wantArrayLength)
@@ -2349,7 +2379,6 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 
 		try
 		{
-			outBuf->cat(",\"result\":");
 			reprap.ReportAsJson(outBuf, key, flags, wantArrayLength);
 			outBuf->cat("}\n");
 			if (outBuf->HadOverflow())
@@ -2789,7 +2818,7 @@ void RepRap::StartIap(const char *filename) noexcept
 
 	// Disable all IRQs
 	SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk;	// disable the system tick exception
-	cpu_irq_disable();
+	IrqDisable();
 	for (size_t i = 0; i < 8; i++)
 	{
 		NVIC->ICER[i] = 0xFFFFFFFF;					// Disable IRQs
@@ -2848,7 +2877,7 @@ void RepRap::StartIap(const char *filename) noexcept
 	__DSB();
 	__ISB();
 
-	cpu_irq_enable();
+	IrqEnable();
 
 	__asm volatile ("mov r3, %0" : : "r" (IAP_IMAGE_START) : "r3");
 

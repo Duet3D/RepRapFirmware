@@ -9,7 +9,6 @@
 #define SRC_MOVEMENT_INPUTSHAPER_H_
 
 #include <RepRapFirmware.h>
-#include <GCodes/GCodeResult.h>
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
 

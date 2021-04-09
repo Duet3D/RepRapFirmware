@@ -602,7 +602,7 @@ void TmcDriverState::Enable(bool en) noexcept
 		enabled = en;
 		UpdateChopConfRegister();
 
-		const irqflags_t flags = cpu_irq_save();
+		const irqflags_t flags = IrqSave();
 		mstepPosition = 0xFFFFFFFF;								// microstep position is or is about to become invalid
 		if (en)
 		{
@@ -618,7 +618,7 @@ void TmcDriverState::Enable(bool en) noexcept
 		}
 		rdselState = 0xFF;
 		registersToUpdate |= 1 << DriveConfig;
-		cpu_irq_restore(flags);
+		IrqRestore(flags);
 	}
 }
 
@@ -640,10 +640,10 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 {
 	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~(TMC_RR_SG | TMC_RR_OLA | TMC_RR_OLB);
 	bitsToKeep &= mask;
-	const irqflags_t flags = cpu_irq_save();
+	const irqflags_t flags = IrqSave();
 	const uint32_t status = accumulatedStatus;
 	accumulatedStatus = (status & bitsToKeep) | lastReadStatus;		// so that the next call to ReadAccumulatedStatus isn't missing some bits
-	cpu_irq_restore(flags);
+	IrqRestore(flags);
 	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST) & mask;
 }
 
@@ -825,7 +825,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 	}
 
 	// Kick off a transfer for that register
-	const irqflags_t flags = cpu_irq_save();			// avoid race condition
+	const irqflags_t flags = IrqSave();			// avoid race condition
 
 #if TMC2660_USES_USART
 	USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
@@ -853,7 +853,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 	SPI_TMC2660->SPI_CR = SPI_CR_SPIEN;					// enable SPI
 #endif
 
-	cpu_irq_restore(flags);
+	IrqRestore(flags);
 }
 
 // ISR for the USART

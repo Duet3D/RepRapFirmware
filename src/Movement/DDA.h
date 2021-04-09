@@ -86,7 +86,7 @@ public:
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
 	bool FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]) noexcept;
-	void SetPositions(const float move[], size_t numDrives) noexcept;				// Force the endpoints to be these
+	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeed() const noexcept { return requestedSpeed; }
 	float GetTopSpeed() const noexcept { return topSpeed; }
@@ -227,7 +227,6 @@ private:
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
 					 xyMoving : 1,					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
-					 goingSlow : 1,					// True if we have slowed the movement because the Z probe is approaching its threshold
 					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
 					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is a fast extruder-only move, probably a retract/re-prime
@@ -235,7 +234,8 @@ private:
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
 					 hadHiccup : 1,	 	 	 		// True if we had a hiccup while executing a move from a remote master
-					 isRemote : 1;					// True if this move was commanded from a remote
+					 isRemote : 1,					// True if this move was commanded from a remote
+					 wasAccelOnlyMove : 1;			// set by Prepare if this was an acceleration-only move, for the next move to look at
 		};
 		uint16_t all;								// so that we can print all the flags at once for debugging
 	} flags;

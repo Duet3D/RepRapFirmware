@@ -75,7 +75,9 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
+#define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_OBJECT_MODEL	1
+#define SUPPORT_LED_STRIPS		1
 
 #define VARIABLE_NUM_DRIVERS	SUPPORT_12864_LCD	// nonzero means that some pins may only support drivers if not used for other purposes e.g. LCD
 
@@ -238,7 +240,7 @@ constexpr uint32_t LcdSpiClockFrequency = 2000000;             // 2.0MHz
 
 constexpr Pin EncoderPinB = PortCPin(7);		// connlcd.3	-> exp2.6
 constexpr Pin EncoderPinA = PortAPin(8);		// connlcd.4	-> exp2.8
-constexpr Pin LcdNeopixelPin = PortDPin(18);	// connlcd.5	-> exp1.5
+constexpr Pin LcdNeopixelOutPin = PortDPin(18);	// connlcd.5	-> exp1.5
 constexpr Pin LcdResetPin = PortCPin(28);		// connlcd.6	-> exp1.6
 constexpr Pin LcdA0Pin = PortDPin(19);			// connlcd.7	-> exp1.7
 constexpr Pin LcdCSPin = PortAPin(25);			// connlcd.8	-> exp1.8

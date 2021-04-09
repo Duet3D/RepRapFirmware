@@ -65,6 +65,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
 float Heater::tuningPwm;								// the PWM to use, 0..1
 float Heater::tuningTargetTemp;							// the target temperature
+float Heater::tuningHysteresis;
+float Heater::tuningFanPwm;
 
 DeviationAccumulator Heater::tuningStartTemp;			// the temperature when we turned on the heater
 DeviationAccumulator Heater::dHigh;
@@ -253,14 +255,6 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	gb.MustSee('S');
 	const float targetTemp = gb.GetFValue();
 
-	// Get the optional PWM
-	const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : GetModel().GetMaxPwm();
-	if (maxPwm < 0.1 || maxPwm > 1.0)
-	{
-		reply.copy("Invalid PWM value");
-		return GCodeResult::error;
-	}
-
 	if (!GetModel().IsEnabled())
 	{
 		reply.printf("heater %u cannot be auto tuned while it is disabled", GetHeaterNumber());
@@ -289,11 +283,18 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 		reply.printf("Target temperature must be at least 20C above ambient temperature");
 	}
 
-	const GCodeResult rslt = StartAutoTune(reply, fans, targetTemp, maxPwm, seenA, ambientTemp);
+	// Get abd store the optional parameters
+	tuningTargetTemp = targetTemp;
+	tuningFans = fans;
+	tuningPwm = (gb.Seen('P')) ? gb.GetLimitedFValue('P', 0.1, 1.0) : GetModel().GetMaxPwm();
+	tuningHysteresis = (gb.Seen('Y')) ? gb.GetLimitedFValue('Y', 1.0, 20.0) : DefaultTuningHysteresis;
+	tuningFanPwm = (gb.Seen('F')) ? gb.GetLimitedFValue('F', 0.1, 1.0) : 1.0;
+
+	const GCodeResult rslt = StartAutoTune(reply, seenA, ambientTemp);
 	if (rslt == GCodeResult::ok)
 	{
 		reply.printf("Auto tuning heater %u using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended",
-						GetHeaterNumber(), (double)targetTemp, (double)maxPwm);
+						GetHeaterNumber(), (double)targetTemp, (double)tuningPwm);
 	}
 	return rslt;
 }
@@ -365,8 +366,8 @@ void Heater::CalculateModel(HeaterParameters& params) noexcept
 	}
 
 	const float cycleTime = tOn.GetMean() + tOff.GetMean();		// in milliseconds
-	const float averageTemperatureRiseHeating = tuningTargetTemp - 0.5 * (TuningHysteresis - TuningPeakTempDrop) - tuningStartTemp.GetMean();
-	const float averageTemperatureRiseCooling = tuningTargetTemp - TuningPeakTempDrop - 0.5 * TuningHysteresis - tuningStartTemp.GetMean();
+	const float averageTemperatureRiseHeating = tuningTargetTemp - 0.5 * (tuningHysteresis - TuningPeakTempDrop) - tuningStartTemp.GetMean();
+	const float averageTemperatureRiseCooling = tuningTargetTemp - TuningPeakTempDrop - 0.5 * tuningHysteresis - tuningStartTemp.GetMean();
 	params.deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * MillisToSeconds)/cycleTime;	// in seconds
 	params.coolingRate = coolingRate.GetMean()/averageTemperatureRiseCooling;			// in seconds
 	params.heatingRate = (heatingRate.GetMean() + (coolingRate.GetMean() * averageTemperatureRiseHeating/averageTemperatureRiseCooling)) / tuningPwm;
@@ -377,7 +378,9 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 {
 	const float hRate = (usingFans) ? (fanOffParams.heatingRate + fanOnParams.heatingRate) * 0.5 : fanOffParams.heatingRate;
 	const float deadTime = (usingFans) ? (fanOffParams.deadTime + fanOnParams.deadTime) * 0.5 : fanOffParams.deadTime;
-	const float fanOnCoolingRate = (usingFans) ? fanOnParams.coolingRate : fanOffParams.coolingRate;
+	const float fanOnCoolingRate = (usingFans)
+										? fanOffParams.coolingRate + (fanOnParams.coolingRate - fanOffParams.coolingRate)/tuningFanPwm
+											: fanOffParams.coolingRate;
 	String<StringLength256> str;
 	const GCodeResult rslt = SetModel(	hRate,
 										fanOffParams.coolingRate, fanOnCoolingRate,
@@ -393,7 +396,7 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 	{
 		tuned = true;
 		str.printf("Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n"
-					" M307 H%u R%.3f C%.1f",
+					" M307 H%u B0 R%.3f C%.1f",
 					GetHeaterNumber(),
 					idleCyclesDone,
 					(usingFans) ? fanOffParams.numCycles + fanOnParams.numCycles : fanOffParams.numCycles,

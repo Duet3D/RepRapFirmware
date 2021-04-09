@@ -260,6 +260,7 @@ void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) cons
 #endif
 }
 
+// Send and receive data returning true if successful
 bool SharedSpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_t len) const noexcept
 {
 	// Clear any existing data

@@ -267,7 +267,7 @@ void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
 
 #if HAS_MASS_STORAGE
 
-// Write the object details to file, returning true of successful
+// Write the object details to file, returning true if successful
 bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 {
 	bool ok = true;

@@ -427,7 +427,7 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 			break;
 
 		case 3:
-			if (doingFile && StringStartsWith(command, "var"))
+			if (StringStartsWith(command, "var"))
 			{
 				ProcessVarOrGlobalCommand(false);
 				return true;
@@ -641,8 +641,10 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 	++readPointer;
 
 	// Check whether the identifier already exists
-	VariableSet& vset = (isGlobal) ? reprap.globalVariables : gb.GetVariables();
-	Variable * const v = vset.Lookup(varName.c_str());
+	WriteLockedPointer<VariableSet> vset = (isGlobal)
+											? reprap.GetGlobalVariablesForWriting()
+												: WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
+	Variable * const v = vset->Lookup(varName.c_str());
 	if (v != nullptr)
 	{
 		// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
@@ -652,16 +654,23 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 	SkipWhiteSpace();
 	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
-	vset.Insert(new Variable(varName.c_str(), ev, (isGlobal) ? 0 : gb.CurrentFileMachineState().GetBlockNesting()));
+	vset->Insert(new Variable(varName.c_str(), ev, (isGlobal) ? 0 : gb.CurrentFileMachineState().GetBlockNesting()));
+	if (isGlobal)
+	{
+		reprap.GlobalUpdated();
+	}
 }
 
 void StringParser::ProcessSetCommand() THROWS(GCodeException)
 {
 	// Skip the "var." or "global." prefix
 	SkipWhiteSpace();
-	VariableSet& vset = (StringStartsWith(gb.buffer + readPointer, "global.")) ? (readPointer += strlen("global."), reprap.globalVariables)
-						: (StringStartsWith(gb.buffer + readPointer, "var.")) ? (readPointer += strlen("var."), gb.GetVariables())
-							: throw ConstructParseException("expected a global or local variable");
+	const bool isGlobal = StringStartsWith(gb.buffer + readPointer, "global.");
+	WriteLockedPointer<VariableSet> vset = (isGlobal)
+											? (readPointer += strlen("global."), reprap.GetGlobalVariablesForWriting())
+											: (StringStartsWith(gb.buffer + readPointer, "var."))
+											  	? (readPointer += strlen("var."), WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables()))
+												: throw ConstructParseException("expected a global or local variable");
 
 	// Get the identifier
 	char c = gb.buffer[readPointer];
@@ -687,7 +696,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	++readPointer;
 
 	// Look up the identifier
-	Variable * const var = vset.Lookup(varName.c_str());
+	Variable * const var = vset->Lookup(varName.c_str());
 	if (var == nullptr)
 	{
 		throw ConstructParseException("unknown variable '%s'", varName.c_str());
@@ -697,6 +706,10 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
 	var->Assign(ev);
+	if (isGlobal)
+	{
+		reprap.GlobalUpdated();
+	}
 }
 
 void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept

@@ -161,7 +161,7 @@ bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDr
 
 // Check whether the endstop is triggered and return the action that should be performed. Don't update the state until Acknowledge is called.
 // Called from the step ISR.
-EndstopHitDetails SwitchEndstop::CheckTriggered(bool goingSlow) noexcept
+EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
 	if (portsLeftToTrigger.IsNonEmpty())

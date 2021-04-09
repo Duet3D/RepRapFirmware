@@ -13,7 +13,6 @@
 #if SUPPORT_CAN_EXPANSION
 
 #include <CanMessageFormats.h>
-#include <GCodes/GCodeResult.h>
 #include <GCodes/GCodeException.h>
 
 class GCodeBuffer;

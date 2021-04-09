@@ -25,9 +25,11 @@ public:
 	Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept;
 	~Variable();
 
+	ReadLockedPointer<const char> GetName() const noexcept { return name.Get(); }
 	ExpressionValue GetValue() const noexcept { return val; }
 	int8_t GetScope() const noexcept { return scope; }
 	void Assign(ExpressionValue ev) noexcept { val = ev; }
+	const Variable *GetNext() const noexcept { return next; }
 
 private:
 	Variable *next;
@@ -45,6 +47,8 @@ public:
 	~VariableSet();
 
 	Variable *Lookup(const char *str) noexcept;
+	const Variable *Lookup(const char *str) const noexcept;
+	const Variable *GetRoot() const noexcept { return root; }
 	void Insert(Variable *toInsert) noexcept;
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Clear() noexcept;

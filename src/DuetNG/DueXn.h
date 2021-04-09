@@ -8,9 +8,7 @@
 #ifndef SRC_DUETNG_DUEXN_H_
 #define SRC_DUETNG_DUEXN_H_
 
-#include <ecv.h>
-#include <CoreIO.h>
-#include <Platform/MessageType.h>
+#include <RepRapFirmware.h>
 
 enum class ExpansionBoardType : uint8_t
 {

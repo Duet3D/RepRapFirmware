@@ -1780,7 +1780,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	espWaitingTask = TaskBase::GetCallerTaskHandle();
 	transferPending = true;
 
-	Cache::FlushBeforeDMASend(&bufferIn, sizeof(bufferIn));
+	Cache::FlushBeforeDMASend(bufferOut, (dataOut != nullptr) ? sizeof(bufferOut->hdr) + dataOutLength : sizeof(bufferOut->hdr));
 
 #if SAME5x
     spi_slave_dma_setup(dataOutLength, dataInLength);
@@ -1850,9 +1850,8 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 #endif
 
-	Cache::InvalidateAfterDMAReceive(&bufferIn, sizeof(bufferIn));
-
 	// Look at the response
+	Cache::InvalidateAfterDMAReceive(&bufferIn->hdr, sizeof(bufferIn->hdr));
 	if (bufferIn->hdr.formatVersion != MyFormatVersion)
 	{
 		if (reprap.Debug(moduleNetwork))
@@ -1873,7 +1872,9 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	const int32_t response = bufferIn->hdr.response;
 	if (response > 0 && dataIn != nullptr)
 	{
-		memcpy(dataIn, bufferIn->data, min<size_t>(dataInLength, (size_t)response));
+		const size_t sizeToCopy = min<size_t>(dataInLength, (size_t)response);
+		Cache::InvalidateAfterDMAReceive(bufferIn->data, sizeToCopy);
+		memcpy(dataIn, bufferIn->data, sizeToCopy);
 	}
 
 	if (response < 0 && reprap.Debug(moduleNetwork))

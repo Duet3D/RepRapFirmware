@@ -13,7 +13,7 @@
 #include "ExpressionParser.h"
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
-#include <GCodes/Variable.h>
+#include <ObjectModel/Variable.h>
 #include <Networking/NetworkDefs.h>
 
 BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)

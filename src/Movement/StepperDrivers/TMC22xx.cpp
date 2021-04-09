@@ -686,7 +686,8 @@ constexpr size_t SendDataCRCIndex0 = 7;
 constexpr size_t SendDataCRCIndex1 = 11;
 
 // Buffer for the message we receive when reading data, dword-aligned so that we can use 32-bit mode on the SAME5x. The first 4 or 12 bytes bytes are our own transmitted data.
-alignas(4) volatile uint8_t TmcDriverState::receiveData[20];
+// Align on a 16-bit boundary to make sure it covers only 2 cache lines not 3
+alignas(16) volatile uint8_t TmcDriverState::receiveData[20];
 
 constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 {
@@ -1266,10 +1267,10 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 {
 	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~(TMC_RR_OLA | TMC_RR_OLB);
 	bitsToKeep &= mask;
-	const irqflags_t flags = cpu_irq_save();
+	const irqflags_t flags = IrqSave();
 	uint32_t status = accumulatedReadRegisters[ReadDrvStat];
 	accumulatedReadRegisters[ReadDrvStat] = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
-	cpu_irq_restore(flags);
+	IrqRestore(flags);
 	status &= (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST | TMC_RR_TEMPBITS) & mask;
 #if HAS_STALL_DETECT
 	if (IoPort::ReadPin(diagPin))
@@ -1859,7 +1860,7 @@ void SmartDrivers::Init() noexcept
 	// Set up the single UART that communicates with all TMC22xx drivers
 	SetPinFunction(TMC22xxUartTxPin, TMC22xxUartPeriphMode);
 	SetPinFunction(TMC22xxUartRxPin, TMC22xxUartPeriphMode);
-	SetPullup(TMC22xxUartRxPin, true);
+	EnablePullup(TMC22xxUartRxPin);
 
 	// Enable the clock to the UART
 	pmc_enable_periph_clk(ID_TMC22xx_UART);

@@ -32,8 +32,6 @@
 # define USE_DMAC_MANAGER	1		// use SAME5x DmacManager module
 constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 
-#define USE_32BIT_TRANSFERS		1
-
 #else
 # error Unknown board
 #endif
@@ -137,6 +135,7 @@ static bool spi_dma_check_rx_complete() noexcept
 
 // Set up the transmit DMA but don't enable it
 static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noexcept
+pre(bytesToTransfer <= outBuffer.limit)
 {
 #if USE_DMAC
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
@@ -183,19 +182,15 @@ static void spi_tx_dma_setup(const void *outBuffer, size_t bytesToTransfer) noex
 #if USE_DMAC_MANAGER
 	DmacManager::SetSourceAddress(DmacChanSbcTx, outBuffer);
 	DmacManager::SetDestinationAddress(DmacChanSbcTx, &(SbcSpiSercom->SPI.DATA.reg));
-# if USE_32BIT_TRANSFERS
 	DmacManager::SetBtctrl(DmacChanSbcTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
 	DmacManager::SetDataLength(DmacChanSbcTx, (bytesToTransfer + 3) >> 2);			// must do this one last
-# else
-	DmacManager::SetBtctrl(DmacChanSbcTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_BYTE | DMAC_BTCTRL_BLOCKACT_NOACT);
-	DmacManager::SetDataLength(DmacChanSbcTx, bytesToTransfer);						// must do this one last
-# endif
 	DmacManager::SetTriggerSourceSercomTx(DmacChanSbcTx, SbcSpiSercomNumber);
 #endif
 }
 
 // Set up the receive DMA but don't enable it
 static void spi_rx_dma_setup(void *inBuffer, size_t bytesToTransfer) noexcept
+pre(bytesToTransfer <= inBuffer.limit)
 {
 #if USE_DMAC
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
@@ -242,13 +237,8 @@ static void spi_rx_dma_setup(void *inBuffer, size_t bytesToTransfer) noexcept
 #if USE_DMAC_MANAGER
 	DmacManager::SetSourceAddress(DmacChanSbcRx, &(SbcSpiSercom->SPI.DATA.reg));
 	DmacManager::SetDestinationAddress(DmacChanSbcRx, inBuffer);
-# if USE_32BIT_TRANSFERS
 	DmacManager::SetBtctrl(DmacChanSbcRx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
 	DmacManager::SetDataLength(DmacChanSbcRx, (bytesToTransfer + 3) >> 2);			// must do this one last
-# else
-	DmacManager::SetBtctrl(DmacChanSbcRx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_BYTE | DMAC_BTCTRL_BLOCKACT_INT);
-	DmacManager::SetDataLength(DmacChanSbcRx, bytesToTransfer);						// must do this one last
-# endif
 	DmacManager::SetTriggerSourceSercomRx(DmacChanSbcRx, SbcSpiSercomNumber);
 #endif
 }
@@ -257,6 +247,7 @@ static void spi_rx_dma_setup(void *inBuffer, size_t bytesToTransfer) noexcept
  * \brief Set SPI slave transfer.
  */
 static void spi_slave_dma_setup(void *inBuffer, const void *outBuffer, size_t bytesToTransfer) noexcept
+pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 {
 	spi_dma_disable();
 	spi_tx_dma_setup(outBuffer, bytesToTransfer);
@@ -279,6 +270,7 @@ static void spi_slave_dma_setup(void *inBuffer, const void *outBuffer, size_t by
 }
 
 static void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer) noexcept
+pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 {
 #if !SAME5x
 	// Reset SPI
@@ -446,11 +438,7 @@ void DataTransfer::Init() noexcept
 	SbcSpiSercom->SPI.CTRLA.reg = SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_MODE(2);
 	SbcSpiSercom->SPI.CTRLB.reg = SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN;
 	while (SbcSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_MASK) { };
-# if USE_32BIT_TRANSFERS
 	SbcSpiSercom->SPI.CTRLC.reg = SERCOM_SPI_CTRLC_DATA32B;
-# else
-	hri_sercomspi_write_CTRLC_reg(SbcSpiSercom, 0);
-# endif
 #else
 	// Initialize SPI
 	SetPinFunction(APIN_SBC_SPI_MOSI, SBCPinPeriphMode);
@@ -686,6 +674,7 @@ bool DataTransfer::ReadMessage(MessageType& type, OutputBuffer *buf) noexcept
 
 void DataTransfer::ExchangeHeader() noexcept
 {
+	Cache::FlushBeforeDMASend(&txHeader, sizeof(txHeader));
 	state = SpiState::ExchangingHeader;
 	setup_spi(&rxHeader, &txHeader, sizeof(TransferHeader));
 }
@@ -693,12 +682,14 @@ void DataTransfer::ExchangeHeader() noexcept
 void DataTransfer::ExchangeResponse(uint32_t response) noexcept
 {
 	txResponse = response;
+	Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
 	state = (state == SpiState::ExchangingHeader) ? SpiState::ExchangingHeaderResponse : SpiState::ExchangingDataResponse;
 	setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
 }
 
 void DataTransfer::ExchangeData() noexcept
 {
+	Cache::FlushBeforeDMASend(txBuffer, txHeader.dataLength);
 	size_t bytesToExchange = max<size_t>(rxHeader.dataLength, txHeader.dataLength);
 	state = SpiState::ExchangingData;
 	setup_spi(rxBuffer, txBuffer, bytesToExchange);
@@ -716,8 +707,9 @@ void DataTransfer::ResetTransfer(bool ownRequest) noexcept
 	{
 		// Invalidate the data to send
 		txResponse = TransferResponse::BadResponse;
-		setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
+		Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
 		state = SpiState::Resetting;
+		setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
 	}
 	else
 	{
@@ -758,9 +750,7 @@ bool DataTransfer::IsReady() noexcept
 		{
 		case SpiState::ExchangingHeader:
 		{
-#if SAME5x
 			Cache::InvalidateAfterDMAReceive(&rxHeader, sizeof(rxHeader));
-#endif
 			// (1) Exchanged transfer headers
 			const uint32_t headerResponse = *reinterpret_cast<const uint32_t*>(&rxHeader);
 			if (headerResponse == TransferResponse::BadResponse)
@@ -803,9 +793,7 @@ bool DataTransfer::IsReady() noexcept
 
 		case SpiState::ExchangingHeaderResponse:
 			// (2) Exchanged response to transfer header
-#if SAME5x
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
-#endif
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
 			{
 				if (rxHeader.dataLength != 0 || txHeader.dataLength != 0)
@@ -841,9 +829,7 @@ bool DataTransfer::IsReady() noexcept
 
 		case SpiState::ExchangingData:
 		{
-#if SAME5x
-			Cache::InvalidateAfterDMAReceive(rxBuffer, LinuxTransferBufferSize);
-#endif
+			Cache::InvalidateAfterDMAReceive(rxBuffer, rxHeader.dataLength);
 			// (3) Exchanged data
 			if (*reinterpret_cast<uint32_t*>(rxBuffer) == TransferResponse::BadResponse)
 			{
@@ -872,9 +858,7 @@ bool DataTransfer::IsReady() noexcept
 
 		case SpiState::ExchangingDataResponse:
 			// (4) Exchanged response to data transfer
-#if SAME5x
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
-#endif
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
 			{
 				// Everything OK
@@ -1240,6 +1224,10 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();
 		break;
+	case TypeCode::HeapString:
+		payloadLength = expressionLength + value.shVal.GetLength();
+		break;
+
 	default:
 		rslt.printf("unsupported type code %d", (int)value.type);
 		payloadLength = expressionLength + rslt.strlen();
@@ -1289,6 +1277,11 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::Int32:
 		header->dataType = DataType::Int;
 		header->intValue = value.iVal;
+		break;
+	case TypeCode::HeapString:
+		header->dataType = DataType::String;
+		header->intValue = value.shVal.GetLength();
+		WriteData(value.shVal.Get().Ptr(), header->intValue);
 		break;
 	case TypeCode::DateTime:
 	case TypeCode::MacAddress:

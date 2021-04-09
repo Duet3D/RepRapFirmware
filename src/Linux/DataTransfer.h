@@ -15,7 +15,6 @@
 #include <GCodes/GCodeFileInfo.h>
 #include <GCodes/GCodeChannel.h>
 #include "LinuxMessageFormats.h"
-#include <Platform/MessageType.h>
 #include <RTOSIface/RTOSIface.h>
 
 class BinaryGCodeBuffer;
@@ -101,8 +100,9 @@ private:
 #else
 	// The other processors we support have write-through cache
 	// Allocate the buffers in the object so that we can delete the object and recycle the memory if the SBC interface is not being used
-	TransferHeader rxHeader;
-	TransferHeader txHeader;
+	// Align the headers on 16-byte boundaries so that they span only one cache line
+	alignas(16) TransferHeader rxHeader;
+	alignas(16) TransferHeader txHeader;
 	uint32_t rxResponse;
 	uint32_t txResponse;
 	char *rxBuffer;				// not allocated until we know we need it

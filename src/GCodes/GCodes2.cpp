@@ -51,6 +51,10 @@
 # include <CAN/ExpansionManager.h>
 #endif
 
+#if SUPPORT_ACCELEROMETERS
+# include <Accelerometers/Accelerometers.h>
+#endif
+
 #ifdef DUET3_ATE
 # include <Duet3Ate.h>
 #endif
@@ -258,10 +262,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 	case 20: // Inches (which century are we living in, here?)
 		gb.LatestMachineState().usingInches = true;
+		reprap.InputsUpdated();
 		break;
 
 	case 21: // mm
 		gb.LatestMachineState().usingInches = false;
+		reprap.InputsUpdated();
 		break;
 
 	case 28: // Home
@@ -416,10 +422,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 	case 90: // Absolute coordinates
 		gb.LatestMachineState().axesRelative = false;
+		reprap.InputsUpdated();
 		break;
 
 	case 91: // Relative coordinates
 		gb.LatestMachineState().axesRelative = true;   // Axis movements (i.e. X, Y and Z)
+		reprap.InputsUpdated();
 		break;
 
 	case 92: // Set position
@@ -1286,10 +1294,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 82:	// Use absolute extruder positioning
 			gb.LatestMachineState().drivesRelative = false;
+			reprap.InputsUpdated();
 			break;
 
 		case 83:	// Use relative extruder positioning
 			gb.LatestMachineState().drivesRelative = true;
+			reprap.InputsUpdated();
 			break;
 
 			// For case 84, see case 18
@@ -2089,6 +2099,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					volumetricExtrusionFactors[i] = (d <= 0.0) ? 1.0 : 4.0/(fsquare(d) * Pi);
 				}
 				gb.LatestMachineState().volumetricExtrusion = (diameters[0] > 0.0);
+				reprap.InputsUpdated();
 			}
 			else if (!gb.LatestMachineState().volumetricExtrusion)
 			{
@@ -3202,6 +3213,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			if (gb.Seen('P'))
 			{
 				gb.LatestMachineState().compatibility.Assign(gb.GetIValue());
+				reprap.InputsUpdated();
 			}
 			else
 			{
@@ -4533,9 +4545,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_REMOTE_COMMANDS
 		case 954:	// configure as expansion board
 			{
-				CanAddress addr = gb.GetLimitedUIValue('A', CanId::MaxCanAddress + 1, 1);
+				CanAddress addr = gb.GetLimitedUIValue('A', 1, CanId::MaxCanAddress + 1);
 				CanInterface::SwitchToExpansionMode(addr);
 			}
+			break;
+#endif
+
+#if SUPPORT_ACCELEROMETERS
+		case 955:
+			result = Accelerometers::ConfigureAccelerometer(gb, reply);
+			break;
+
+		case 956:
+			result = Accelerometers::StartAccelerometer(gb, reply);
 			break;
 #endif
 

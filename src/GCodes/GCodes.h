@@ -24,7 +24,6 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 #include <Platform/RepRap.h>			// for type ResponseSource
-#include "GCodeResult.h"
 #include "ObjectTracker.h"
 #include <Movement/RawMove.h>
 #include <Libraries/sha1/sha1.h>
@@ -35,6 +34,7 @@ Licence: GPL
 #include <Tools/Filament.h>
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RestorePoint.h"
+#include "StraightProbeSettings.h"
 #include <Movement/BedProbing/Grid.h>
 
 const char feedrateLetter = 'F';						// GCode feedrate
@@ -86,10 +86,24 @@ enum class PauseState : uint8_t
 	resuming
 };
 
-//****************************************************************************************************
+struct M585Settings
+{
+	size_t axisNumber;			// the axis we are moving
+	float feedRate;
+	float probingLimit;
+	float offset;
+	bool useProbe;				// true if using a probe (M585 only because M675 always uses a probe)
+};
+
+struct M675Settings
+{
+	size_t axisNumber;			// the axis we are moving
+	float feedRate;
+	float backoffDistance;		// back off distance
+	float minDistance;			// the position we reached when probing towards minimum
+};
 
 class LinuxInterface;
-class StraightProbeSettings;
 
 // The GCode interpreter
 
@@ -357,10 +371,19 @@ private:
 	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Deal with a G38.x
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Deal with a M584
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Deal with a M585
-	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin = true) THROWS(GCodeException);	// Deal with a M675
+	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with a M675
 	GCodeResult SetDateTime(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);			// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);		// Deal with G60
 	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M569
+#if SUPPORT_ACCELEROMETERS
+	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M955
+	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M956
+#endif
+
+	bool SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept;
+	void SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept;
+	bool SetupM585ProbingMove(GCodeBuffer& gb) noexcept;
+	size_t FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException);					// Search for and return an axis, throw if none found
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
@@ -424,7 +447,7 @@ private:
 #endif
 	void ClearBedMapping();														// Stop using bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start probing the grid, returning true if we didn't because of an error
-	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb) THROWS(GCodeException);		// Set up currentZProbeNumber and return the probe
+	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);		// Set up currentZProbeNumber and return the probe
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Probes at a given position - see the comment at the head of the function itself
 	void InitialiseTaps(bool fastThenSlow) noexcept;								// Set up to do the first of a possibly multi-tap probe
 	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
@@ -513,6 +536,13 @@ private:
 	static Mutex resourceMutex;
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 
+	StraightProbeSettings straightProbeSettings;						// G38 straight probe settings
+	union
+	{
+		M675Settings m675Settings;
+		M585Settings m585Settings;
+	};
+
 	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?
 #if HAS_LINUX_INTERFACE
@@ -553,7 +583,6 @@ private:
 	RestorePoint numberedRestorePoints[NumRestorePoints];				// Restore points accessible using the R parameter in the G0/G1 command
 	RestorePoint& pauseRestorePoint = numberedRestorePoints[1];			// The position and feed rate when we paused the print
 	RestorePoint& toolChangeRestorePoint = numberedRestorePoints[2];	// The position and feed rate when we freed a tool
-	RestorePoint& findCenterOfCavityRestorePoint = numberedRestorePoints[3];	// The position and feed rate when we found the lower boundary of cavity
 
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible

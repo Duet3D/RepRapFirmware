@@ -9,9 +9,7 @@
 #define MOVE_H_
 
 #include <RepRapFirmware.h>
-#include <Platform/MessageType.h>
 #include "InputShaper.h"
-#include "StraightProbeSettings.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
@@ -67,7 +65,6 @@ public:
 	bool WaitingForAllMovesFinished() noexcept;								// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;			// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept; // Set the current position to be this
-	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept;	// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions() noexcept;									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point
@@ -110,7 +107,6 @@ public:
 																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const noexcept;
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment
 	const char* GetGeometryString() const noexcept { return kinematics->GetName(true); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
@@ -152,7 +148,6 @@ public:
 #endif
 
 	const RandomProbePointSet& GetProbePoints() const noexcept { return probePoints; }		// Return the probe point set constructed from G30 commands
-	StraightProbeSettings& GetStraightProbeSettings() noexcept { return straightProbeSettings; }	// Return the settings for G38 straight probe
 
 	DDARing& GetMainDDARing() noexcept { return mainDDARing; }
 	float GetTopSpeed() const noexcept { return mainDDARing.GetTopSpeed(); }
@@ -269,7 +264,6 @@ private:
 	Kinematics *kinematics;								// What kinematics we are using
 
 	InputShaper shaper;
-	StraightProbeSettings straightProbeSettings;		// G38 straight probe settings
 
 	float latestLiveCoordinates[MaxAxesPlusExtruders];
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
@@ -304,13 +298,6 @@ inline int32_t Move::GetEndPoint(size_t drive) const noexcept
 inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
 {
 	mainDDARing.AdjustMotorPositions(adjustment, numMotors);
-}
-
-// These are the actual numbers that we want to be the coordinates, so don't transform them.
-// The caller must make sure that no moves are in progress or pending when calling this
-inline void Move::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept
-{
-	mainDDARing.SetLiveCoordinates(coords);
 }
 
 inline void Move::ResetExtruderPositions() noexcept

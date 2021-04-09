@@ -12,7 +12,6 @@
 #include <General/NamedEnum.h>
 #include "FOPDT.h"
 #include "HeaterMonitor.h"
-#include <GCodes/GCodeResult.h>
 #include <ObjectModel/ObjectModel.h>
 #include <Math/DeviationAccumulator.h>
 
@@ -63,7 +62,8 @@ public:
 	float GetStandbyTemperature() const noexcept { return standbyTemperature; }
 	GCodeResult Activate(const StringRef& reply) noexcept;				// Switch from idle to active
 	void Standby() noexcept;											// Switch from active to idle
-	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException);	// Start an auto tune cycle for this heater
+	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException);
+																		// Start an auto tune cycle for this heater
 	void GetAutoTuneStatus(const StringRef& reply) const noexcept;		// Get the auto tune status or last result
 
 	void GetFaultDetectionParameters(float& pMaxTempExcursion, float& pMaxFaultTime) const noexcept
@@ -125,7 +125,7 @@ protected:
 	virtual GCodeResult UpdateModel(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept = 0;
-	virtual GCodeResult StartAutoTune(const StringRef& reply, FansBitmap fans, float targetTemp, float pwm, bool seenA, float ambientTemp) noexcept = 0;
+	virtual GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
 	void SetSensorNumber(int sn) noexcept;
@@ -147,7 +147,7 @@ protected:
 	static constexpr unsigned int TuningHeaterMaxIdleCycles = 10;
 	static constexpr unsigned int MinTuningHeaterCycles = 5;
 	static constexpr unsigned int MaxTuningHeaterCycles = 25;
-	static constexpr float TuningHysteresis = 5.0;
+	static constexpr float DefaultTuningHysteresis = 5.0;
 	static constexpr float TuningPeakTempDrop = 2.0;		// must be well below TuningHysteresis
 	static constexpr float FeedForwardMultiplier = 1.3;		// how much we over-compensate feedforward to allow for heat reservoirs during tuning
 	static constexpr float HeaterSettledCoolingTimeRatio = 0.93;
@@ -155,6 +155,9 @@ protected:
 	// Variables used during heater tuning
 	static float tuningPwm;									// the PWM to use, 0..1
 	static float tuningTargetTemp;							// the target temperature
+	static float tuningHysteresis;
+	static float tuningFanPwm;
+
 	static DeviationAccumulator tuningStartTemp;			// the temperature when we turned on the heater
 	static uint32_t tuningBeginTime;						// when we started the tuning process
 	static DeviationAccumulator dHigh;
