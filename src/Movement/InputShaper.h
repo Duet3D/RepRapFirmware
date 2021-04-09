@@ -73,20 +73,18 @@ private:
 	float GetExtraDecelStartDistance(const DDA& dda) const noexcept;
 	float GetExtraDecelEndDistance(const DDA& dda) const noexcept;
 
+	static constexpr unsigned int MaxImpulses = 5;
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.1;
-#if SUPPORT_DAA
-	static constexpr float DefaultDAAMinimumAcceleration = 10.0;
-#endif
+	static constexpr float DefaultMinimumAcceleration = 10.0;
 
 	float frequency;								// the undamped frequency
 	float zeta;										// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
-#if SUPPORT_DAA
-	float daaMinimumAcceleration;					// the minimum value that we reduce acceleration to (DAA only)
-#endif
-	float coefficients[4];							// the coefficients of all the impulses, except the last which is 1
-	float times[4];									// the time in seconds for the second and subsequent impulses
-	float shapingTime;								// the time needed to send all the impulses, in step clocks
+	float minimumAcceleration;						// the minimum value that we reduce acceleration to (DAA only)
+	float coefficients[MaxImpulses - 1];			// the coefficients of all the impulses, except the last which is 1
+	float durations[MaxImpulses - 1];				// the duration in seconds of each impulse except the last
+	float totalDuration;							// the total input shaping time in seconds
+	float totalShapingClocks;						// the total input shaping time in step clocks
 	float clocksLostAtStart, clocksLostAtEnd;		// the acceleration time lost due to input shaping. Multiply by 2 if shaping is used at both the start and end of acceleration.
 	InputShaperType type;
 	uint8_t numImpulses;

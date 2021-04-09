@@ -27,22 +27,18 @@ constexpr ObjectModelTableEntry InputShaper::objectModelTable[] =
 	// 0. InputShaper members
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
-#if SUPPORT_DAA
-	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->daaMinimumAcceleration, 1),			ObjectModelEntryFlags::none },
-#endif
+	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t InputShaper::objectModelTableDescriptor[] = { 1, 3 + SUPPORT_DAA };
+constexpr uint8_t InputShaper::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(InputShaper)
 
 InputShaper::InputShaper() noexcept
 	: frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-#if SUPPORT_DAA
-	  daaMinimumAcceleration(DefaultDAAMinimumAcceleration),
-#endif
+	  minimumAcceleration(DefaultMinimumAcceleration),
 	  type(InputShaperType::none),
 	  numImpulses(1)
 {
@@ -59,13 +55,11 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		seen = true;
 		frequency = gb.GetLimitedFValue('F', MinimumInputShapingFrequency, MaximumInputShapingFrequency);
 	}
-#if SUPPORT_DAA
 	if (gb.Seen('L'))
 	{
 		seen = true;
-		daaMinimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
+		minimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
 	}
-#endif
 	if (gb.Seen('S'))
 	{
 		seen = true;
@@ -96,15 +90,12 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		{
 		case InputShaperType::none:
 			numImpulses = 1;
-			shapingTime = 0.0;
 			break;
 
 #if SUPPORT_DAA
 		case InputShaperType::DAA:
+			durations[0] = 1.0/dampedFrequency;
 			numImpulses	= 1;
-			times[1] = 1.0/dampedFrequency;
-			times[0] = 0.5 * times[1];
-			shapingTime = 0.0;
 			break;
 #endif
 
@@ -114,10 +105,8 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				coefficients[0] = 1.0/j;
 				coefficients[1] = coefficients[0] + 2.0 * k/j;
 			}
-			times[1] = 1.0/dampedFrequency;
-			times[0] = 0.5 * times[1];
+			durations[0] = durations[1] = 0.5/dampedFrequency;
 			numImpulses = 3;
-			shapingTime = times[1] * StepTimer::StepClockRate;
 			break;
 
 		case InputShaperType::ZVDD:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
@@ -127,58 +116,57 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				coefficients[1] = coefficients[0] + 3.0 * k/j;
 				coefficients[2] = coefficients[1] + 3.0 * fsquare(k)/j;
 			}
-			times[1] = 1.0/dampedFrequency;
-			times[0] = 0.5 *times[1];
-			times[2] = times[0] + times[1];
+			durations[0] = durations[1] = durations[2] = 0.5/dampedFrequency;
 			numImpulses = 4;
-			shapingTime = times[2] * StepTimer::StepClockRate;
 			break;
 
 		case InputShaperType::EI2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
 			{
 				const float zetaSquared = fsquare(zeta);
 				const float zetaCubed = zetaSquared * zeta;
-				coefficients[0] = 0.16054 +  0.76699 * zeta +  2.26560 * zetaSquared + -1.22750 * zetaCubed;
-				//TODO avoid the extra addition
-				coefficients[1] = coefficients[0] + 0.33911 +  0.45081 * zeta + -2.58080 * zetaSquared +  1.73650 * zetaCubed;
-				coefficients[2] = coefficients[1] + 0.34089 + -0.61533 * zeta + -0.68765 * zetaSquared +  0.42261 * zetaCubed;
-				times[0] = (0.49890 +  0.16270 * zeta + -0.54262 * zetaSquared + 6.16180 * zetaCubed)/dampedFrequency;
-				times[1] = (0.99748 +  0.18382 * zeta + -1.58270 * zetaSquared + 8.17120 * zetaCubed)/dampedFrequency;
-				times[2] = (1.49920 + -0.09297 * zeta + -0.28338 * zetaSquared + 1.85710 * zetaCubed)/dampedFrequency;
+				coefficients[0] = (0.16054)                     + (0.76699)                     * zeta + (2.26560)                     * zetaSquared + (-1.22750)                     * zetaCubed;
+				coefficients[1] = (0.16054 + 0.33911)           + (0.76699 + 0.45081)           * zeta + (2.26560 - 2.58080)           * zetaSquared + (-1.22750 + 1.73650)           * zetaCubed;
+				coefficients[2] = (0.16054 + 0.33911 + 0.34089) + (0.76699 + 0.45081 - 0.61533) * zeta + (2.26560 - 2.58080 - 0.68765) * zetaSquared + (-1.22750 + 1.73650 + 0.42261) * zetaCubed;
+
+				// TODO is it really worth using precise durations instead of setting them all to 0.5/frequency? If we don't, then we can condense the shaping when the acceleration time is short.
+				durations[0] = ((0.49890)           + ( 0.16270          ) * zeta + (          -0.54262) * zetaSquared + (          6.16180) * zetaCubed)/dampedFrequency;
+				durations[1] = ((0.99748 - 0.49890) + ( 0.18382 - 0.16270) * zeta + (-1.58270 + 0.54262) * zetaSquared + (8.17120 - 6.16180) * zetaCubed)/dampedFrequency;
+				durations[2] = ((1.49920 - 0.99748) + (-0.09297 - 0.18382) * zeta + (-0.28338 + 1.58270) * zetaSquared + (1.85710 - 8.17120) * zetaCubed)/dampedFrequency;
 			}
 			numImpulses = 4;
-			shapingTime = times[2] * StepTimer::StepClockRate;
 			break;
 
 		case InputShaperType::EI3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
 			{
 				const float zetaSquared = fsquare(zeta);
 				const float zetaCubed = zetaSquared * zeta;
-				coefficients[0] = 0.11275 +  0.76632 * zeta +  3.29160 * zetaSquared + -1.44380 * zetaCubed;
-				//TODO avoid the extra addition
-				coefficients[1] = coefficients[0] + 0.23698 +  0.61164 * zeta + -2.57850 * zetaSquared +  4.85220 * zetaCubed;
-				coefficients[2] = coefficients[1] + 0.30008 + -0.19062 * zeta + -2.14560 * zetaSquared +  0.13744 * zetaCubed;
-				coefficients[3] = coefficients[2] + 0.23775 + -0.73297 * zeta +  0.46885 * zetaSquared + -2.08650 * zetaCubed;
-				times[0] = (0.49974 +  0.23834 * zeta +  0.44559 * zetaSquared + 12.4720 * zetaCubed)/dampedFrequency;
-				times[1] = (0.99849 +  0.29808 * zeta + -2.36460 * zetaSquared + 23.3990 * zetaCubed)/dampedFrequency;
-				times[2] = (1.49870 +  0.10306 * zeta + -2.01390 * zetaSquared + 17.0320 * zetaCubed)/dampedFrequency;
-				times[3] = (1.99960 + -0.28231 * zeta +  0.61536 * zetaSquared + 5.40450 * zetaCubed)/dampedFrequency;
+				coefficients[0] = (0.11275)                               + 0.76632                                 * zeta + (3.29160)                               * zetaSquared + (-1.44380)                               * zetaCubed;
+				coefficients[1] = (0.11275 + 0.23698)                     + (0.76632 + 0.61164)                     * zeta + (3.29160 - 2.57850)                     * zetaSquared + (-1.44380 + 4.85220)                     * zetaCubed;
+				coefficients[2] = (0.11275 + 0.23698 + 0.30008)           + (0.76632 + 0.61164 - 0.19062)           * zeta + (3.29160 - 2.57850 - 2.14560)           * zetaSquared + (-1.44380 + 4.85220 + 0.13744)           * zetaCubed;
+				coefficients[3] = (0.11275 + 0.23698 + 0.30008 + 0.23775) + (0.76632 + 0.61164 - 0.19062 - 0.73297) * zeta + (3.29160 - 2.57850 - 2.14560 + 0.46885) * zetaSquared + (-1.44380 + 4.85220 + 0.13744 - 2.08650) * zetaCubed;
+
+				// TODO is it really worth using precise durations instead of setting them all to 0.5/frequency? If we don't, then we can condense the shaping when the acceleration time is short.
+				durations[0] = ((0.49974)           + (0.23834)            * zeta + (0.44559)            * zetaSquared + (12.4720)           * zetaCubed)/dampedFrequency;
+				durations[1] = ((0.99849 - 0.49974) + (0.29808 - 0.23834)  * zeta + (-2.36460 - 0.44559) * zetaSquared + (23.3990 - 12.4720) * zetaCubed)/dampedFrequency;
+				durations[2] = ((1.49870 - 0.99849) + (0.10306 - 0.29808)  * zeta + (-2.01390 + 2.36460) * zetaSquared + (17.0320 - 23.3990) * zetaCubed)/dampedFrequency;
+				durations[3] = ((1.99960 - 1.49870) + (-0.28231 - 0.10306) * zeta + (0.61536 + 2.01390)  * zetaSquared + (5.40450 - 17.0320) * zetaCubed)/dampedFrequency;
 			}
 			numImpulses = 5;
-			shapingTime = times[3] * StepTimer::StepClockRate;
 			break;
 		}
 
+		totalDuration = 0.0;
 		float tLostAtStart = 0.0;
 		float tLostAtEnd = 0.0;
 		for (uint8_t i = 0; i < numImpulses - 1; ++i)
 		{
-			const float segTime = (i == 0) ? times[0] : times[i] - times[i - 1];
-			tLostAtStart += (1.0 - coefficients[i]) * segTime;
-			tLostAtEnd += coefficients[i] * segTime;
+			totalDuration += durations[i];
+			tLostAtStart += (1.0 - coefficients[i]) * durations[i];
+			tLostAtEnd += coefficients[i] * durations[i];
 		}
 		clocksLostAtStart = tLostAtStart * StepTimer::StepClockRate;
 		clocksLostAtEnd = tLostAtEnd * StepTimer::StepClockRate;
+		totalShapingClocks = totalDuration * StepTimer::StepClockRate;
 
 		reprap.MoveUpdated();
 	}
@@ -188,13 +176,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	}
 	else
 	{
-		reply.printf("%s input shaping at %.1fHz damping factor %.2f", type.ToString(), (double)frequency, (double)zeta);
-#if SUPPORT_DAA
-		if (type == InputShaperType::DAA)
-		{
-			reply.catf(", min. acceleration %.1f", (double)daaMinimumAcceleration);
-		}
-#endif
+		reply.printf("%s input shaping at %.1fHz damping factor %.2f, min. acceleration %.1f", type.ToString(), (double)frequency, (double)zeta, (double)minimumAcceleration);
 	}
 	return GCodeResult::ok;
 }
@@ -209,7 +191,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 	case InputShaperType::DAA:
 		{
 			// Try to reduce the acceleration/deceleration of the move to cancel ringing
-			const float idealPeriod = times[1];					// this the full period
+			const float idealPeriod = durations[0];					// for DAA this the full period
 
 			float proposedAcceleration = dda.acceleration, proposedAccelDistance = dda.beforePrepare.accelDistance;
 			bool adjustAcceleration = false;
@@ -257,7 +239,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 			{
 				if (proposedAccelDistance + proposedDecelDistance <= dda.totalDistance)
 				{
-					if (proposedAcceleration < daaMinimumAcceleration || proposedDeceleration < daaMinimumAcceleration)
+					if (proposedAcceleration < minimumAcceleration || proposedDeceleration < minimumAcceleration)
 					{
 						break;
 					}
@@ -276,7 +258,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 					{
 						proposedAcceleration = (twiceTotalDistance - ((3 * dda.startSpeed + dda.endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
 						proposedDeceleration = (twiceTotalDistance - ((dda.startSpeed + 3 * dda.endSpeed) * idealPeriod))/(2 * fsquare(idealPeriod));
-						if (   proposedAcceleration < daaMinimumAcceleration || proposedDeceleration < daaMinimumAcceleration
+						if (   proposedAcceleration < minimumAcceleration || proposedDeceleration < minimumAcceleration
 							|| proposedAcceleration > dda.acceleration || proposedDeceleration > dda.deceleration
 						   )
 						{
@@ -292,7 +274,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 					{
 						// Change it into an accelerate-only move, accelerating as slowly as we can
 						proposedAcceleration = (fsquare(dda.endSpeed) - fsquare(dda.startSpeed))/twiceTotalDistance;
-						if (proposedAcceleration < daaMinimumAcceleration)
+						if (proposedAcceleration < minimumAcceleration)
 						{
 							break;		// avoid very small accelerations because they can be problematic
 						}
@@ -305,7 +287,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 					{
 						// Change it into a decelerate-only move, decelerating as slowly as we can
 						proposedDeceleration = (fsquare(dda.startSpeed) - fsquare(dda.endSpeed))/twiceTotalDistance;
-						if (proposedDeceleration < daaMinimumAcceleration)
+						if (proposedDeceleration < minimumAcceleration)
 						{
 							break;		// avoid very small accelerations because they can be problematic
 						}
@@ -343,13 +325,13 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 		params.SetFromDDA(dda);
 
 		// Set the plan to what we would like to do, if possible
-		plan.shapeAccelStart = params.accelClocks + clocksLostAtStart >= shapingTime
+		plan.shapeAccelStart = params.accelClocks + clocksLostAtStart >= totalShapingClocks
 									&& ((dda.GetPrevious()->state != DDA::DDAState::frozen && dda.GetPrevious()->state != DDA::DDAState::executing) || !dda.GetPrevious()->flags.wasAccelOnlyMove);
-		plan.shapeAccelEnd =   params.accelClocks + clocksLostAtEnd >= shapingTime
+		plan.shapeAccelEnd =   params.accelClocks + clocksLostAtEnd >= totalShapingClocks
 									&& params.decelStartDistance > params.accelDistance;
-		plan.shapeDecelStart = params.decelClocks + clocksLostAtStart >= shapingTime
+		plan.shapeDecelStart = params.decelClocks + clocksLostAtStart >= totalShapingClocks
 									&& params.decelStartDistance > params.accelDistance;
-		plan.shapeDecelEnd =   params.decelClocks + clocksLostAtEnd >= shapingTime
+		plan.shapeDecelEnd =   params.decelClocks + clocksLostAtEnd >= totalShapingClocks
 									&& (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove());
 
 //		debugPrintf("Original plan %03x ", (unsigned int)plan.all);
@@ -357,7 +339,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 			// See if we can shape the acceleration
 			if (plan.shapeAccelStart || plan.shapeAccelEnd)
 			{
-				if (plan.shapeAccelStart && plan.shapeAccelEnd && params.accelClocks < 2 * shapingTime)
+				if (plan.shapeAccelStart && plan.shapeAccelEnd && params.accelClocks < 2 * totalShapingClocks)
 				{
 					// Acceleration segment is too short to shape both the start and the end
 					plan.shapeAccelStart = plan.shapeAccelEnd = false;
@@ -398,7 +380,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 			// See if we can shape the deceleration
 			if (plan.shapeDecelStart || plan.shapeDecelEnd)
 			{
-				if (plan.shapeDecelStart && plan.shapeDecelEnd && params.decelClocks < 2 * shapingTime)
+				if (plan.shapeDecelStart && plan.shapeDecelEnd && params.decelClocks < 2 * totalShapingClocks)
 				{
 					// Deceleration segment is too short to shape both the start and the end
 					plan.shapeDecelStart = plan.shapeDecelEnd = false;
@@ -465,14 +447,14 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 				++numAccelSegs;
 				endAccelSegs = MoveSegment::Allocate(endAccelSegs);
 				const float acceleration = dda.acceleration * (1.0 - coefficients[i]);
-				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
+				const float segTime = durations[i];
 				segStartSpeed -= acceleration * segTime;
 				const float uDivA = (segStartSpeed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
 				endAccelSegs->SetNonLinear(endDistance/dda.totalDistance, segTime * StepTimer::StepClockRate, uDivA, twoDistDivA, acceleration/StepTimer::StepClockRateSquared);
 				endDistance -= (segStartSpeed + (0.5 * acceleration * segTime)) * segTime;
 			}
-			accumulatedSegTime += times[numImpulses - 2];
+			accumulatedSegTime += totalDuration;
 		}
 
 		float startDistance = 0.0;
@@ -486,7 +468,7 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 				++numAccelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float acceleration = dda.acceleration * coefficients[i];
-				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
+				const float segTime = durations[i];
 				const float uDivA = (startSpeed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
 				startDistance += (startSpeed + (0.5 * acceleration * segTime)) * segTime;
@@ -501,7 +483,7 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 				}
 				startSpeed += acceleration * segTime;
 			}
-			accumulatedSegTime += times[numImpulses - 2];
+			accumulatedSegTime += totalDuration;
 		}
 
 		// Do the constant acceleration part
@@ -549,14 +531,14 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 				++numDecelSegs;
 				endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 				const float acceleration = -dda.deceleration * (1.0 - coefficients[i]);
-				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
+				const float segTime = durations[i];
 				segStartSpeed -= acceleration * segTime;
 				const float uDivA = (segStartSpeed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
 				endDecelSegs->SetNonLinear(endDistance/dda.totalDistance, segTime * StepTimer::StepClockRate, uDivA, twoDistDivA, acceleration/StepTimer::StepClockRateSquared);
 				endDistance -= (segStartSpeed + (0.5 * acceleration * segTime)) * segTime;
 			}
-			accumulatedSegTime += times[numImpulses - 2];
+			accumulatedSegTime += totalDuration;
 		}
 
 		float startDistance = params.decelStartDistance;
@@ -570,7 +552,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 				++numDecelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float acceleration = -dda.deceleration * coefficients[i];
-				const float segTime = ((i == 0) ? times[0] : times[i] - times[i - 1]);
+				const float segTime = durations[i];
 				const float uDivA = (startSpeed * StepTimer::StepClockRate)/acceleration;
 				const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/acceleration;
 				startDistance += (startSpeed + (0.5 * acceleration * segTime)) * segTime;
@@ -585,7 +567,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 				}
 				startSpeed += acceleration * segTime;
 			}
-			accumulatedSegTime += times[numImpulses - 2];
+			accumulatedSegTime += totalDuration;
 		}
 
 		// Do the constant deceleration part
@@ -646,7 +628,7 @@ float InputShaper::GetExtraAccelStartDistance(const DDA& dda) const noexcept
 	float u = dda.startSpeed;
 	for (int seg = 0; seg < numImpulses - 1; ++seg)
 	{
-		const float segTime = (seg == 0) ? times[0] : times[seg] - times[seg - 1];
+		const float segTime = durations[seg];
 		const float speedChange = coefficients[seg] * dda.acceleration * segTime;
 		extraDistance += (1.0 - coefficients[seg]) * (u + 0.5 * speedChange) * segTime;
 		u += speedChange;
@@ -661,7 +643,7 @@ float InputShaper::GetExtraAccelEndDistance(const DDA& dda) const noexcept
 	float v = dda.topSpeed;
 	for (int seg = numImpulses - 2; seg >= 0; --seg)
 	{
-		const float segTime = (seg == 0) ? times[0] : times[seg] - times[seg - 1];
+		const float segTime = durations[seg];
 		const float speedChange = (1.0 - coefficients[seg]) * dda.acceleration * segTime;
 		extraDistance += coefficients[seg] * (v - 0.5 * speedChange) * segTime;
 		v -= speedChange;
@@ -676,7 +658,7 @@ float InputShaper::GetExtraDecelStartDistance(const DDA& dda) const noexcept
 	float u = dda.topSpeed;
 	for (int seg = 0; seg < numImpulses - 1; ++seg)
 	{
-		const float segTime = (seg == 0) ? times[0] : times[seg] - times[seg - 1];
+		const float segTime = durations[seg];
 		const float speedChange = coefficients[seg] * dda.deceleration * segTime;
 		extraDistance += (1.0 - coefficients[seg]) * (u - 0.5 * speedChange) * segTime;
 		u -= speedChange;
@@ -691,7 +673,7 @@ float InputShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 	float v = dda.endSpeed;
 	for (int seg = numImpulses - 2; seg >= 0; --seg)
 	{
-		const float segTime = (seg == 0) ? times[0] : times[seg] - times[seg - 1];
+		const float segTime = durations[seg];
 		const float speedChange = (1.0 - coefficients[seg]) * dda.deceleration * segTime;
 		extraDistance += coefficients[seg] * (v + 0.5 * speedChange) * segTime;
 		v += speedChange;
