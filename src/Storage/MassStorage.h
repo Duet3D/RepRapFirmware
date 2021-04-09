@@ -39,7 +39,7 @@ namespace MassStorage
 	bool Delete(const char* filePath, bool messageIfFailed) noexcept;
 	bool EnsurePath(const char* filePath, bool messageIfFailed) noexcept;
 	bool MakeDirectory(const char *directory, bool messageIfFailed) noexcept;
-	bool Rename(const char *oldFilePath, const char *newFilePath, bool messageIfFailed) noexcept;
+	bool Rename(const char *oldFilePath, const char *newFilePath, bool deleteExisting, bool messageIfFailed) noexcept;
 	bool DirectoryExists(const StringRef& path) noexcept;									// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
 	bool DirectoryExists(const char *path) noexcept;
 	time_t GetLastModifiedTime(const char *filePath) noexcept;
@@ -59,6 +59,7 @@ namespace MassStorage
 	void RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
 	FileWriteBuffer *AllocateWriteBuffer() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
+	uint16_t GetVolumeSeq(unsigned int volume) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 
 	enum class InfoResult : uint8_t

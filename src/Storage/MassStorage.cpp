@@ -48,6 +48,7 @@ struct SdCardInfo INHERIT_OBJECT_MODEL
 	uint32_t cdChangedTime;
 	uint32_t mountStartTime;
 	Mutex volMutex;
+	uint16_t seq;
 	Pin cdPin;
 	bool mounting;
 	bool isMounted;
@@ -127,6 +128,28 @@ static FileWriteBuffer *freeWriteBuffers;
 static Mutex fsMutex;
 static FileStore files[MAX_FILES];
 #endif
+
+// Sequence number management
+uint16_t MassStorage::GetVolumeSeq(unsigned int volume) noexcept
+{
+	return info[volume].seq;
+}
+
+// If 'path' is not the name of a temporary file, update the sequence number of its volume
+// Return true if we did update the sequence number
+static bool VolumeUpdated(const char *path) noexcept
+{
+	if (!StringEndsWithIgnoreCase(path, ".part"))
+	{
+		const unsigned int volume = (isdigit(path[0]) && path[1] == ':') ? path[0] - '0' : 0;
+		if (volume < ARRAY_SIZE(info))
+		{
+			++info[volume].seq;
+			return true;
+		}
+	}
+	return false;
+}
 
 // Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
 /*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept
@@ -291,6 +314,7 @@ void MassStorage::Init() noexcept
 		SdCardInfo& inf = info[card];
 		inf.Clear(card);
 		inf.mounting = inf.isMounted = false;
+		inf.seq = 0;
 		inf.cdPin = SdCardDetectPins[card];
 		inf.cardState = (inf.cdPin == NoPin) ? CardDetectState::present : CardDetectState::notPresent;
 		inf.volMutex.Create(VolMutexNames[card]);
@@ -310,7 +334,12 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 		{
 			if (files[i].IsFree())
 			{
-				return (files[i].Open(filePath, mode, preAllocSize)) ? &files[i]: nullptr;
+				FileStore * const ret = (files[i].Open(filePath, mode, preAllocSize)) ? &files[i]: nullptr;
+				if (ret != nullptr && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
+				{
+					(void)VolumeUpdated(filePath);
+				}
+				return ret;
 			}
 		}
 	}
@@ -421,7 +450,7 @@ const char* MassStorage::GetMonthName(const uint8_t month) noexcept
 }
 
 // Delete a file or directory
-bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
+static bool InternalDelete(const char* filePath, bool messageIfFailed) noexcept
 {
 	FRESULT unlinkReturn;
 	bool isOpen = false;
@@ -471,6 +500,17 @@ bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
 		return false;
 	}
 	return true;
+}
+
+// Delete a file or directory and update the volume sequence number returning true if successful
+bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
+{
+	const bool ok = InternalDelete(filePath, messageIfFailed);
+	if (ok)
+	{
+		(void)VolumeUpdated(filePath);
+	}
+	return ok;
 }
 
 // Ensure that the path up to the last '/' (excluding trailing '/' characters) in filePath exists, returning true if successful
@@ -526,12 +566,22 @@ bool MassStorage::MakeDirectory(const char *directory, bool messageIfFailed) noe
 		}
 		return false;
 	}
+	(void)VolumeUpdated(directory);
 	return true;
 }
 
-// Rename a file or directory
-bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool messageIfFailed) noexcept
+// Rename a file or directory, optionally deleting the existing one if it exists
+bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool deleteExisting, bool messageIfFailed) noexcept
 {
+	// Check the the old file exists before we possibly delete any existing file with the new name
+	if (!FileExists(oldFilename) && !DirectoryExists(oldFilename))
+	{
+		if (messageIfFailed)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to rename file %s: file not found\n", oldFilename);
+		}
+		return false;
+	}
 	if (newFilename[0] >= '0' && newFilename[0] <= '9' && newFilename[1] == ':')
 	{
 		// Workaround for DWC 1.13 which sends a volume specification at the start of the new path.
@@ -543,6 +593,13 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool 
 	{
 		return false;
 	}
+	if (deleteExisting && (FileExists(newFilename) || DirectoryExists(newFilename)))
+	{
+		if (!InternalDelete(newFilename, messageIfFailed))
+		{
+			return false;
+		}
+	}
 	if (f_rename(oldFilename, newFilename) != FR_OK)
 	{
 		if (messageIfFailed)
@@ -550,6 +607,11 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool 
 			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to rename file or directory %s to %s\n", oldFilename, newFilename);
 		}
 		return false;
+	}
+
+	if (!VolumeUpdated(oldFilename))				// only update the sequence number once
+	{
+		(void)VolumeUpdated(newFilename);
 	}
 	return true;
 }
@@ -729,6 +791,7 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 		reply.printf("%s card mounted in slot %u, capacity %.2f%s", TranslateCardType(sd_mmc_get_type(card)), card, (double)capacity, capUnits);
 	}
 
+	++inf.seq;
 	return GCodeResult::ok;
 }
 
@@ -748,6 +811,7 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 	{
 		reply.catf(" (%u file(s) were closed)", numFilesClosed);
 	}
+	++info[card].seq;
 	return GCodeResult::ok;
 }
 

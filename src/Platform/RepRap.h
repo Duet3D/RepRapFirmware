@@ -212,6 +212,7 @@ protected:
 	OBJECT_MODEL_ARRAY(tools)
 	OBJECT_MODEL_ARRAY(restorePoints)
 	OBJECT_MODEL_ARRAY(volumes)
+	OBJECT_MODEL_ARRAY(volChanges)
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;

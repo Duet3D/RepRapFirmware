@@ -635,7 +635,7 @@ void FtpResponder::ProcessLine() noexcept
 			String<MaxFilenameLength> location;
 			if (haveFileToMove
 				&& MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
-				&& MassStorage::Rename(filenameBeingProcessed.c_str(), location.c_str(), false))
+				&& MassStorage::Rename(filenameBeingProcessed.c_str(), location.c_str(), false, false))
 			{
 				outBuf->copy("250 Rename successful.\r\n");
 			}

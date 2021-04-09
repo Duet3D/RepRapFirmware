@@ -118,11 +118,8 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 				String<MaxFilenameLength> origFilename;
 				origFilename.catn(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
 
-				// Delete possibly existing files with that name (i.e. prepare "overwrite")
-				MassStorage::Delete(origFilename.c_str(), true);
-
 				// Rename the uploaded file to it's original name
-				MassStorage::Rename(uploadFilename, origFilename.c_str(), true);
+				MassStorage::Rename(uploadFilename, origFilename.c_str(), true, true);
 
 				if (fileLastModified != 0)
 				{
