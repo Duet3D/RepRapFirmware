@@ -2164,17 +2164,22 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		{
 			gb.MustSee('A');
 			uint32_t address = gb.GetUIValue();
+			unsigned int numValues = (gb.Seen('R')) ? gb.GetUIValue() : 1;
 			uint32_t val;
 			bool dummy;
 			deliberateError = true;								// in case the memory access causes a fault
 			if (gb.TryGetUIValue('V', val, dummy))
 			{
-				*reinterpret_cast<uint32_t*>(address) = val;
+				while (numValues != 0)
+				{
+					*reinterpret_cast<uint32_t*>(address) = val;
+					address += 4;
+					--numValues;
+				}
 				__DSB();										// allow the write to complete in case it raises a fault
 			}
 			else
 			{
-				unsigned int numValues = (gb.Seen('R')) ? gb.GetUIValue() : 1;
 				reply.printf("%08" PRIx32 ":", address);
 				while (numValues != 0)
 				{
