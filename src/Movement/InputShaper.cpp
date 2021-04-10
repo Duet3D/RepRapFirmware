@@ -39,8 +39,8 @@ InputShaper::InputShaper() noexcept
 	: frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
 	  minimumAcceleration(DefaultMinimumAcceleration),
-	  type(InputShaperType::none),
-	  numImpulses(1)
+	  numImpulses(1),
+	  type(InputShaperType::none)
 {
 }
 
@@ -92,6 +92,49 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			numImpulses = 1;
 			break;
 
+		case InputShaperType::Custom:
+			{
+				// Get the coefficients
+				size_t numAmplitudes = MaxImpulses - 1;
+				gb.MustSee('H');
+				gb.GetFloatArray(coefficients, numAmplitudes, false);
+
+				// Get the impulse durations, if provided
+				equalDurations = true;
+				if (gb.Seen('T'))
+				{
+					size_t numDurations = numAmplitudes;
+					gb.GetFloatArray(durations, numDurations, true);
+
+					// Check we have the same number of both
+					if (numDurations != numAmplitudes)
+					{
+						reply.copy("Too few durations given");
+						type = InputShaperType::none;
+						return GCodeResult::error;
+					}
+
+					// Test whether the durations are equal
+					for (unsigned int i = 1; i < numAmplitudes; ++i)
+					{
+						if (durations[i] != durations[0])
+						{
+							equalDurations = false;
+							break;
+						}
+					}
+				}
+				else
+				{
+					for (unsigned int i = 0; i < numAmplitudes; ++i)
+					{
+						durations[i] = 0.5/frequency;
+					}
+				}
+				numImpulses = numAmplitudes + 1;
+			}
+			break;
+
 #if SUPPORT_DAA
 		case InputShaperType::DAA:
 			durations[0] = 1.0/dampedFrequency;
@@ -106,6 +149,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				coefficients[1] = coefficients[0] + 2.0 * k/j;
 			}
 			durations[0] = durations[1] = 0.5/dampedFrequency;
+			equalDurations = true;
 			numImpulses = 3;
 			break;
 
@@ -117,6 +161,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				coefficients[2] = coefficients[1] + 3.0 * fsquare(k)/j;
 			}
 			durations[0] = durations[1] = durations[2] = 0.5/dampedFrequency;
+			equalDurations = true;
 			numImpulses = 4;
 			break;
 
@@ -133,6 +178,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				durations[1] = ((0.99748 - 0.49890) + ( 0.18382 - 0.16270) * zeta + (-1.58270 + 0.54262) * zetaSquared + (8.17120 - 6.16180) * zetaCubed)/dampedFrequency;
 				durations[2] = ((1.49920 - 0.99748) + (-0.09297 - 0.18382) * zeta + (-0.28338 + 1.58270) * zetaSquared + (1.85710 - 8.17120) * zetaCubed)/dampedFrequency;
 			}
+			equalDurations = false;
 			numImpulses = 4;
 			break;
 
@@ -151,6 +197,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				durations[2] = ((1.49870 - 0.99849) + (0.10306 - 0.29808)  * zeta + (-2.01390 + 2.36460) * zetaSquared + (17.0320 - 23.3990) * zetaCubed)/dampedFrequency;
 				durations[3] = ((1.99960 - 1.49870) + (-0.28231 - 0.10306) * zeta + (0.61536 + 2.01390)  * zetaSquared + (5.40450 - 17.0320) * zetaCubed)/dampedFrequency;
 			}
+			equalDurations = false;
 			numImpulses = 5;
 			break;
 		}
@@ -177,6 +224,19 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	else
 	{
 		reply.printf("%s input shaping at %.1fHz damping factor %.2f, min. acceleration %.1f", type.ToString(), (double)frequency, (double)zeta, (double)minimumAcceleration);
+		if (numImpulses > 1)
+		{
+			reply.cat(", impulses");
+			for (unsigned int i = 0; i < numImpulses - 1; ++i)
+			{
+				reply.catf(" %.3f", (double)coefficients[i]);
+			}
+			reply.cat(" with durations (ms)");
+			for (unsigned int i = 0; i < numImpulses - 1; ++i)
+			{
+				reply.catf(" %.2f", (double)(durations[i] * 1000.0));
+			}
+		}
 	}
 	return GCodeResult::ok;
 }
@@ -463,7 +523,7 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 		if (plan.shapeAccelStart)
 		{
 			// Shape the start of the acceleration
-			for (int i = 0; i < numImpulses - 1; ++i)
+			for (unsigned int i = 0; i < numImpulses - 1; ++i)
 			{
 				++numAccelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
@@ -547,7 +607,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 		if (plan.shapeDecelStart)
 		{
 			// Shape the start of the deceleration
-			for (int i = 0; i < numImpulses - 1; ++i)
+			for (unsigned int i = 0; i < numImpulses - 1; ++i)
 			{
 				++numDecelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
@@ -626,7 +686,7 @@ float InputShaper::GetExtraAccelStartDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float u = dda.startSpeed;
-	for (int seg = 0; seg < numImpulses - 1; ++seg)
+	for (unsigned int seg = 0; seg < numImpulses - 1; ++seg)
 	{
 		const float segTime = durations[seg];
 		const float speedChange = coefficients[seg] * dda.acceleration * segTime;
@@ -656,7 +716,7 @@ float InputShaper::GetExtraDecelStartDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float u = dda.topSpeed;
-	for (int seg = 0; seg < numImpulses - 1; ++seg)
+	for (unsigned int seg = 0; seg < numImpulses - 1; ++seg)
 	{
 		const float segTime = durations[seg];
 		const float speedChange = coefficients[seg] * dda.deceleration * segTime;
