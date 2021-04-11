@@ -1822,7 +1822,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 					chipVersion, conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
 		//DEBUG
 		extern unsigned int txDmaNotDisabledErrs, rxDmaNotDisabledErrs, wrongRxDmaFinishedStatusErrs, wrongTxDmaFinishedStatusErrs, wrongAdcRegisterErrs;
-		MessageF(mtype, "tnd=%u rnd=%u wrs=%u wrx=%u war=%u\n", txDmaNotDisabledErrs, rxDmaNotDisabledErrs, wrongRxDmaFinishedStatusErrs, wrongTxDmaFinishedStatusErrs, wrongAdcRegisterErrs);
+		MessageF(mtype, "tnd=%u rnd=%u wrd=%u wtd=%u war=%u\n", txDmaNotDisabledErrs, rxDmaNotDisabledErrs, wrongRxDmaFinishedStatusErrs, wrongTxDmaFinishedStatusErrs, wrongAdcRegisterErrs);
 	}
 #endif
 
