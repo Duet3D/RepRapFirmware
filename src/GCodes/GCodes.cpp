@@ -293,7 +293,7 @@ void GCodes::Reset() noexcept
 #if HAS_LINUX_INTERFACE
 	lastFilePosition = noFilePosition;
 #endif
-	pausePending = filamentChangePausePending = false;
+	deferredPauseCommandPending = nullptr;
 	moveBuffer.filePos = noFilePosition;
 	firmwareUpdateModuleMap.Clear();
 	isFlashing = false;
@@ -556,7 +556,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 // Start a new gcode, or continue to execute one that has already been started. Return true if we found something significant to do.
 bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-	if (&gb == fileGCode && ((pauseState != PauseState::notPaused && pauseState != PauseState::pausing) || (pausePending && !gb.IsDoingFileMacro())))
+	if (&gb == fileGCode && ((pauseState != PauseState::notPaused && pauseState != PauseState::pausing) || (deferredPauseCommandPending != nullptr && !gb.IsDoingFileMacro())))
 	{
 		// We are paused or pausing, so don't process any more gcodes from the file being printed.
 		// There is a potential issue here if fileGCode holds any locks, so unlock everything.
@@ -1004,9 +1004,31 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	}
 #endif
 
-	const GCodeState newState = (reason == PauseReason::filamentChange) ? GCodeState::filamentChangePause1
-								: (reason == PauseReason::filamentError) ? GCodeState::filamentErrorPause1
-									: GCodeState::pausing1;
+	GCodeState newState;
+	switch (reason)
+	{
+	case PauseReason::filamentChange:					// M600 command
+		newState = GCodeState::filamentChangePause1;
+		break;
+
+	case PauseReason::filamentError:					// filament monitor
+		newState = GCodeState::filamentErrorPause1;
+		break;
+
+	case PauseReason::user:								// M25 command received
+	case PauseReason::gcode:							// M25 or M226 command encountered in the file being printed
+		newState = (gb.Seen('P') && gb.GetUIValue() == 0) ? GCodeState::pausing2 : GCodeState::pausing1;
+		break;
+
+	case PauseReason::trigger:							// external switch
+	case PauseReason::heaterFault:						// heater fault detected
+#if HAS_SMART_DRIVERS
+	case PauseReason::stall:							// motor stall detected
+#endif
+	default:
+		newState = GCodeState::pausing1;
+		break;
+	}
 	gb.SetState(newState, param);
 	pauseState = PauseState::pausing;
 
@@ -1037,11 +1059,6 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 			pauseReason = PrintPausedReason::stall;
 			break;
 # endif
-# if HAS_VOLTAGE_MONITOR
-		case PauseReason::lowVoltage:
-			pauseReason = PrintPausedReason::lowVoltage;
-			break;
-# endif
 		default:
 			pauseReason = PrintPausedReason::user;
 			break;
@@ -1062,18 +1079,10 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 // Check if a pause is pending, action it if so
 void GCodes::CheckForDeferredPause(GCodeBuffer& gb) noexcept
 {
-	if (&gb == fileGCode && !gb.IsDoingFileMacro())
+	if (&gb == fileGCode && !gb.IsDoingFileMacro() && deferredPauseCommandPending != nullptr)
 	{
-		if (filamentChangePausePending)
-		{
-			gb.PutAndDecode("M600");
-			filamentChangePausePending = false;
-		}
-		else if (pausePending)
-		{
-			gb.PutAndDecode("M226");
-			pausePending = false;
-		}
+		gb.PutAndDecode(deferredPauseCommandPending);
+		deferredPauseCommandPending = nullptr;
 	}
 }
 
@@ -3988,7 +3997,7 @@ bool GCodes::IsCodeQueueIdle() const noexcept
 void GCodes::StopPrint(StopPrintReason reason) noexcept
 {
 	moveBuffer.segmentsLeft = 0;
-	pausePending = filamentChangePausePending = false;
+	deferredPauseCommandPending = nullptr;
 	pauseState = PauseState::notPaused;
 
 #if HAS_LINUX_INTERFACE
