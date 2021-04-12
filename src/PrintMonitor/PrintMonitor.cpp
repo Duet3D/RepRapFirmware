@@ -52,13 +52,13 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Job members
 #if TRACK_OBJECT_NAMES
-	{ "build",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), reprap.GetGCodes().GetBuildObjects(), 0), 									ObjectModelEntryFlags::live },
+	{ "build",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->gCodes.GetBuildObjects(), 0), 										ObjectModelEntryFlags::live },
 #endif
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintOrSimulatedDuration()), 										ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
-	{ "filePosition",		OBJECT_MODEL_FUNC_NOSELF((uint64_t)reprap.GetGCodes().GetFilePosition()),											ObjectModelEntryFlags::live },
+	{ "filePosition",		OBJECT_MODEL_FUNC((uint64_t)self->gCodes.GetFilePosition()),														ObjectModelEntryFlags::live },
 	{ "firstLayerDuration", OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
-	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)reprap.GetGCodes().GetLastDuration()), 							ObjectModelEntryFlags::none },
+	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)self->gCodes.GetLastDuration()), 								ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
 	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, (int32_t)self->currentLayer), 					ObjectModelEntryFlags::live },
@@ -93,7 +93,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
 int32_t PrintMonitor::GetPrintOrSimulatedDuration() const noexcept
 {
-	return lrintf((reprap.GetGCodes().IsSimulating()) ? reprap.GetGCodes().GetSimulationTime() + reprap.GetMove().GetSimulationTime() : GetPrintDuration());
+	return lrintf((gCodes.IsSimulating()) ? gCodes.GetSimulationTime() + reprap.GetMove().GetSimulationTime() : GetPrintDuration());
 }
 
 #endif
@@ -254,7 +254,8 @@ void PrintMonitor::Spin() noexcept
 
 				const uint64_t totalNonPrintingTime = warmUpDuration + totalPauseTime;
 				const uint32_t printTimeSinceLastSnapshot = (uint32_t)((now - lastSnapshotTime) - (totalNonPrintingTime - lastSnapshotNonPrintingTime));
-				if (printTimeSinceLastSnapshot >= SnapshotIntervalSeconds * 1000)
+				const uint32_t snaphotIntervalMillis = (gCodes.IsSimulating()) ? 1000 * SnapshotIntervalSecondsSimulating : 1000 * SnapshotIntervalSecondsPrinting;
+				if (printTimeSinceLastSnapshot >= snaphotIntervalMillis)
 				{
 					// Take a new snapshot
 					const float currentFraction = FractionOfFilePrinted();
@@ -292,12 +293,9 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 #if HAS_MASS_STORAGE
 	WriteLocker locker(printMonitorLock);
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
+	printingFileParsed = false;
 # if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		printingFileParsed = false;
-	}
-	else
+	if (!reprap.UsingLinuxInterface())
 # endif
 	{
 		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished)
@@ -356,7 +354,7 @@ float PrintMonitor::FractionOfFilePrinted() const noexcept
 	{
 		return -1.0;
 	}
-	return (float)reprap.GetGCodes().GetFilePosition() / (float)printingFileInfo.fileSize;
+	return (float)gCodes.GetFilePosition() / (float)printingFileInfo.fileSize;
 }
 
 // Estimate the print time left in seconds on a preset estimation method
@@ -380,7 +378,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 			break;
 
 		case filamentBased:
-			if (lastSnapshotTime != printStartTime)
+			if (lastSnapshotTime != printStartTime && filamentProgressRate > 0.0)
 			{
 				// Sum up the filament usage and the filament needed
 				const float extrRawTotal = gCodes.GetTotalRawExtrusion();
@@ -401,7 +399,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 			break;
 
 		case slicerBased:
-			if (slicerTimeLeft > 0.0)
+			if (slicerTimeLeft > 0.0 && !gCodes.IsSimulating())				// don't report slicer time if we are simulating
 			{
 				const int64_t now = millis64();
 				int64_t adjustment = (int64_t)(now - whenSlicerTimeLeftSet);			// add the time since we stored the slicer time left

@@ -814,6 +814,7 @@ void GCodes::EndSimulation(GCodeBuffer *gb) noexcept
 {
 	// Ending a simulation, so restore the position
 	RestorePosition(simulationRestorePoint, gb);
+	reprap.SelectTool(simulationRestorePoint.toolNumber, true);
 	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
 	reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
 	axesVirtuallyHomed = axesHomed;
@@ -4168,6 +4169,7 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcep
 	rp.feedRate = gb.LatestMachineState().feedRate;
 	rp.virtualExtruderPosition = virtualExtruderPosition;
 	rp.filePos = gb.GetFilePosition();
+	rp.toolNumber = reprap.GetCurrentToolNumber();
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;

@@ -1154,7 +1154,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 # if HAS_LINUX_INTERFACE
 			if (reprap.UsingLinuxInterface() && !gb.IsBinary())
 			{
-				reply.copy("M37 can be only started from the Linux interface");
+				reply.copy("M37 can be only started from the SBC interface");
 				result = GCodeResult::error;
 			}
 			else
