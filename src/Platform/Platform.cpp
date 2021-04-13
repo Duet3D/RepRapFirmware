@@ -1396,8 +1396,6 @@ void Platform::Spin() noexcept
 			}
 			if (numVinUnderVoltageEvents != previousVinUnderVoltageEvents)
 			{
-				//DEBUG increased the number of d.p.
-//				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)(%u)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue), lastVinUnderVoltageValue);
 				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue));
 				previousVinUnderVoltageEvents = numVinUnderVoltageEvents;
 				reported = true;
@@ -1820,9 +1818,6 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		AnalogIn::GetDebugInfo(conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
 		MessageF(mtype, "MCU revision %u, ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 ", errs %" PRIu32 "\n",
 					chipVersion, conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
-		//DEBUG
-		extern unsigned int txDmaNotDisabledErrs, rxDmaNotDisabledErrs, wrongRxDmaFinishedStatusErrs, wrongTxDmaFinishedStatusErrs, wrongAdcRegisterErrs;
-		MessageF(mtype, "tnd=%u rnd=%u wrd=%u wtd=%u war=%u\n", txDmaNotDisabledErrs, rxDmaNotDisabledErrs, wrongRxDmaFinishedStatusErrs, wrongTxDmaFinishedStatusErrs, wrongAdcRegisterErrs);
 	}
 #endif
 

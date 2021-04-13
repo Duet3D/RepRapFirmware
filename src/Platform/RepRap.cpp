@@ -385,7 +385,9 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC((int32_t)self->toolsSeq),								ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE
+# if 0	// this line confuses DSF
 	{ "volChanges",				OBJECT_MODEL_FUNC_NOSELF(&volChangesArrayDescriptor),					ObjectModelEntryFlags::live },
+# endif
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 #endif
 };
@@ -403,7 +405,11 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	16 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
 	2,																		// state.beep
 	6,																		// state.messageBox
+#if 0	// see volChanges above
 	12 + HAS_NETWORKING + SUPPORT_SCANNER + 3 * HAS_MASS_STORAGE			// seqs
+#else
+	12 + HAS_NETWORKING + SUPPORT_SCANNER + 2 * HAS_MASS_STORAGE			// seqs
+#endif
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)

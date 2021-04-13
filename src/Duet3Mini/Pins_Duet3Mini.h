@@ -204,11 +204,10 @@ constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
 // We send data via a 1K series resistor. Even if we assume a 200pF load on the shared UART line, this gives a 200ns time constant, which is much less than the 2us bit time @ 500kbaud.
-// To write a register we need to send 8 bytes. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
-// So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
-// In testing I found that 500kbaud was not reliable, so now using 200kbaud.
-constexpr uint32_t DriversBaudRate = 250000;
-constexpr uint32_t TransferTimeout = 2;										// any transfer should complete within 2 ticks @ 1ms/tick
+// To write a register we need to send 12 bytes and receive 8 bytes after a programmable delay. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
+// In testing I found that 500kbaud was not reliable. Minimum baud rate is 9000.
+constexpr uint32_t DriversBaudRate = 100000;								// at 100kbaud a transfer may take up to 2ms
+constexpr uint32_t TransferTimeout = 5;										// any transfer should complete within 5 ticks @ 1ms/tick
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 #if defined(DUET3MINI_V04)
@@ -709,35 +708,23 @@ static_assert(NumNamedPins == 32+32+32+13);
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
 // When static arbitration within a priority level is selected, lower channel number have higher priority.
 // So we use the low channel numbers for the highest priority sources.
-constexpr DmaChannel DmacChanTmcTx = 0;
-constexpr DmaChannel DmacChanTmcRx = 1;
-constexpr DmaChannel FirstAdcDmaChannel = 2;			// the ADCs use 4 DMA channels
-constexpr DmaChannel DmacChanWiFiTx = 6;
-constexpr DmaChannel DmacChanWiFiRx = 7;
-constexpr DmaChannel DmacChanSbcTx = 8;
-constexpr DmaChannel DmacChanSbcRx = 9;
-constexpr DmaChannel DmacChanDotStarTx = 10;
+constexpr DmaChannel DmacChanSbcTx = 0;
+constexpr DmaChannel DmacChanSbcRx = 1;
+constexpr DmaChannel DmacChanWiFiTx = 2;
+constexpr DmaChannel DmacChanWiFiRx = 3;
+constexpr DmaChannel DmacChanDotStarTx = 4;
+constexpr DmaChannel DmacChanTmcTx = 5;
+constexpr DmaChannel DmacChanTmcRx = 6;
 
-constexpr unsigned int NumDmaChannelsUsed = 11;
+constexpr unsigned int NumDmaChannelsUsed = 7;
 
-#if 0
 // The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
+// Fortunately, all our SAME54P20Achips seem to be revision D
 constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 0;				// the baud rate is 250kbps so this is not very critical
-constexpr DmaPriority DmacPrioAdcTx = 0;
-constexpr DmaPriority DmacPrioAdcRx = 0;
-constexpr DmaPriority DmacPrioWiFi = 0;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioSbc = 0;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioDotStar = 0;				// QSPI in master mode
-#else
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 250kbps so this is not very critical
-constexpr DmaPriority DmacPrioAdcTx = 0;
-constexpr DmaPriority DmacPrioAdcRx = 3;
+constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
 constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioDotStar = 1;				// QSPI in master mode
-#endif
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers
