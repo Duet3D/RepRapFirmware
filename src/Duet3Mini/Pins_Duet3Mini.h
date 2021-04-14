@@ -207,7 +207,7 @@ constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 // To write a register we need to send 12 bytes and receive 8 bytes after a programmable delay. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
 // In testing I found that 500kbaud was not reliable. Minimum baud rate is 9000.
 constexpr uint32_t DriversBaudRate = 100000;								// at 100kbaud a transfer may take up to 2ms
-constexpr uint32_t TransferTimeout = 5;										// any transfer should complete within 5 ticks @ 1ms/tick
+constexpr uint32_t TransferTimeout = 6;										// any transfer should complete within 6 ticks @ 1ms/tick. 5 wasn't quite enough.
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 #if defined(DUET3MINI_V04)
