@@ -950,7 +950,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						pauseState = PauseState::resuming;
 						gb.SetState(GCodeState::resuming1);
-						if (AllAxesAreHomed())
+						if (AllAxesAreHomed() && (!gb.Seen('P') || gb.GetUIValue() != 0))		// P0 parameter skips running resume.g
 						{
 							DoFileMacro(gb, RESUME_G, true, SystemHelperMacroCode);
 						}
@@ -995,7 +995,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				if (gb.IsDoingFileMacro())
 				{
-					pausePending = true;
+					if (deferredPauseCommandPending == nullptr)	// filament change pause takes priority
+					{
+						deferredPauseCommandPending = (gb.Seen('P') && gb.GetUIValue() == 0) ? "M226 P0" : "M226";
+					}
 				}
 				else
 				{
@@ -1013,7 +1016,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				if (fileGCode->IsDoingFileMacro())
 				{
-					filamentChangePausePending = true;
+					deferredPauseCommandPending = "M600";
 					if (&gb != fileGCode)
 					{
 						return false;							// wait for the current macro to finish
@@ -1043,7 +1046,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			else if (fileGCode->IsDoingFileMacro())
 			{
-				pausePending = true;
+				if (deferredPauseCommandPending == nullptr)		// filament change pause takes priority
+				{
+					deferredPauseCommandPending = (gb.Seen('P') && gb.GetUIValue() == 0) ? "M226 P0" : "M226";
+				}
 				if (&gb != fileGCode)
 				{
 					return false;								// wait for the current macro to finish
@@ -1148,7 +1154,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 # if HAS_LINUX_INTERFACE
 			if (reprap.UsingLinuxInterface() && !gb.IsBinary())
 			{
-				reply.copy("M37 can be only started from the Linux interface");
+				reply.copy("M37 can be only started from the SBC interface");
 				result = GCodeResult::error;
 			}
 			else
