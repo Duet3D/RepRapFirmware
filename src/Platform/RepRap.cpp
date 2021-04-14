@@ -675,6 +675,11 @@ void RepRap::Init() noexcept
 
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
+
+#if STEP_TIMER_DEBUG
+	(void)StepTimer::GetTimerTicks();
+	StepTimer::maxInterval = 0;
+#endif
 }
 
 // Run a startup file

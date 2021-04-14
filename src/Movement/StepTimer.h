@@ -10,6 +10,8 @@
 
 #include "RepRapFirmware.h"
 
+#define STEP_TIMER_DEBUG	1			// currently this only works for the SAME5x
+
 class CanMessageTimeSync;
 
 // Class to implement a software timer with a few microseconds resolution
@@ -87,6 +89,10 @@ public:
 	static constexpr uint32_t MinSyncInterval = 1000;							// maximum interval in milliseconds between sync messages for us to remain synced
 #endif
 
+#if STEP_TIMER_DEBUG
+	static uint32_t maxInterval;
+#endif
+
 private:
 	static bool ScheduleTimerInterrupt(uint32_t tim) noexcept;					// Schedule an interrupt at the specified clock count, or return true if it has passed already
 
@@ -97,6 +103,10 @@ private:
 	volatile bool active;
 
 	static StepTimer * volatile pendingList;									// list of pending callbacks, soonest first
+
+#if STEP_TIMER_DEBUG
+	static uint32_t lastTimerResult;
+#endif
 
 #if SUPPORT_REMOTE_COMMANDS
 	static volatile uint32_t localTimeOffset;									// local time minus master time
@@ -114,17 +124,11 @@ private:
 };
 
 // Function GetTimerTicks() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined
-#if !(SAM4S || SAME70)
+#if !(SAM4S || SAME70 || SAME5x)
 
 inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
-# if SAME5x
-	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
-	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
-	while (StepTc->CTRLBSET.bit.CMD != 0) { }
-	while (StepTc->SYNCBUSY.bit.COUNT) { }
-	return StepTc->COUNT.reg;
-# elif defined(__LPC17xx__)
+# if defined(__LPC17xx__)
 	return STEP_TC->TC;
 # else
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;

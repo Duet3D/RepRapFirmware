@@ -1819,6 +1819,13 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		MessageF(mtype, "MCU revision %u, ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 ", errs %" PRIu32 "\n",
 					chipVersion, conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
 	}
+
+#endif
+
+#if STEP_TIMER_DEBUG
+	// Report the step timer max interval
+	MessageF(mtype, "Step timer max interval %" PRIu32 "\n", StepTimer::maxInterval);
+	StepTimer::maxInterval = 0;
 #endif
 
 #if HAS_CPU_TEMP_SENSOR
