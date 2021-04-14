@@ -28,6 +28,11 @@
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
 
+#if STEP_TIMER_DEBUG
+uint32_t StepTimer::maxInterval = 0;
+uint32_t StepTimer::lastTimerResult = 0;
+#endif
+
 #if SUPPORT_REMOTE_COMMANDS
 
 volatile uint32_t StepTimer::localTimeOffset = 0;
@@ -149,11 +154,23 @@ void StepTimer::Init() noexcept
 #endif
 }
 
-#if SAM4S || SAME70
+#if SAM4S || SAME70 || SAME5x
 
-// Get the interrupt clock count. The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in a chained counter.
+// Get the interrupt clock count
 /*static*/ uint32_t StepTimer::GetTimerTicks() noexcept
 {
+	// Get the current timer value into 'rslt'
+	// If we don't disable interrupts here then maxInterval ends up at -3. Presumably, this means we get an interrupt while we are within this code and the ISR calls it again.
+	const irqflags_t flags = IrqSave();
+# if SAME5x
+	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
+	while (StepTc->CTRLBSET.bit.CMD != 0) { }
+	while (StepTc->SYNCBUSY.bit.COUNT) { }
+	const uint32_t rslt = StepTc->COUNT.reg;
+# else
+	// The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in a chained counter
+	uint32_t rslt;
 	uint16_t highWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN_UPPER].TC_CV;		// get the timer high word
 	do
 	{
@@ -161,10 +178,23 @@ void StepTimer::Init() noexcept
 		const uint16_t highWordAgain = STEP_TC->TC_CHANNEL[STEP_TC_CHAN_UPPER].TC_CV;
 		if (highWordAgain == highWord)
 		{
-			return ((uint32_t)highWord << 16) | lowWord;
+			rslt = ((uint32_t)highWord << 16) | lowWord;
+			break;
 		}
 		highWord = highWordAgain;
 	} while (true);
+# endif
+
+# if STEP_TIMER_DEBUG		//DEBUG
+	const uint32_t interval = rslt - lastTimerResult;
+	lastTimerResult = rslt;
+	if (interval > maxInterval)
+	{
+		maxInterval = interval;
+	}
+# endif
+	IrqRestore(flags);
+	return rslt;
 }
 
 #endif

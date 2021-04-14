@@ -373,6 +373,7 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 	if (b)
 	{
 		seenMetaCommand = true;
+		commandEnd = gcodeLineEnd;				// there are no more commands on this line
 		if (doingFile)
 		{
 			CheckForMixedSpacesAndTabs();

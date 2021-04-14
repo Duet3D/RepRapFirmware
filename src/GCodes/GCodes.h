@@ -65,9 +65,6 @@ enum class PauseReason
 #if HAS_SMART_DRIVERS
 	stall,			// motor stall detected
 #endif
-#if HAS_VOLTAGE_MONITOR
-	lowVoltage		// VIN voltage dropped below configured minimum
-#endif
 };
 
 // Keep this in sync with PrintStopReason in Linux/MessageFormats.h
@@ -548,9 +545,8 @@ private:
 #if HAS_LINUX_INTERFACE
 	FilePosition lastFilePosition;				// Last known file position
 #endif
+	const char *deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
-	bool pausePending;							// true if we have been asked to pause but we are running a macro
-	bool filamentChangePausePending;			// true if we have been asked to pause for a filament change but we are running a macro
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
 

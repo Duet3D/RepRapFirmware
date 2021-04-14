@@ -164,7 +164,7 @@ void DeviceInit() noexcept
 	UsbInit();
 	SdhcInit();
 
-	AnalogIn::Init(FirstAdcDmaChannel, DmacPrioAdcTx, DmacPrioAdcRx);
+	AnalogIn::Init(NvicPriorityAdc);
 	AnalogOut::Init();
 	analogInTask.Create(AnalogIn::TaskLoop, "AIN", nullptr, TaskPriority::AinPriority);
 }

@@ -412,6 +412,9 @@ static_assert(CRCAddFinalByte(CRCAddByte(CRCAddByte(0, 1), 2), 3) == 0x1E);
 // CRC of the first byte we send in any request
 static constexpr uint8_t InitialByteCRC = CRCAddByte(0, 0x05);
 
+// CRC of the first two bytes we receive in any reply
+static constexpr uint8_t InitialReceiveCrc = CRCAddByte(CRCAddByte(0, 0x05), 0xFF);
+
 #if !TMC22xx_USE_SLAVEADDR
 
 // CRC of the first 2 bytes we send in any request
@@ -1376,10 +1379,14 @@ inline void TmcDriverState::TransferDone() noexcept
 	}
 	else if (driversState != DriversState::noPower)		// we don't check the CRC, so only accept the result if power is still good
 	{
-		if (sendData[2] == ReadRegNumbers[registerToRead] && ReadRegNumbers[registerToRead] == receiveData[6] && receiveData[4] == 0x05 && receiveData[5] == 0xFF)
+		if (sendData[2] == ReadRegNumbers[registerToRead]
+			&& ReadRegNumbers[registerToRead] == receiveData[6]
+			&& receiveData[4] == 0x05
+			&& receiveData[5] == 0xFF
+			&& Reflect(CRCAddByte(CRCAddByte(CRCAddByte(CRCAddByte(CRCAddByte(InitialReceiveCrc, receiveData[6]), receiveData[7]), receiveData[8]), receiveData[9]), receiveData[10])) == receiveData[11]
+		   )
 		{
-			// We asked to read the scheduled read register, and the sync byte, slave address and register number in the received message match
-			//TODO here we could check the CRC of the received message, but for now we assume that we won't get any corruption in the 32-bit received data
+			// We asked to read the scheduled read register, and the sync byte, slave address and register number in the received message match, also the CRC is correct
 			uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
 			if (registerToRead == ReadDrvStat)
 			{
