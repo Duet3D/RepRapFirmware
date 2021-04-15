@@ -361,30 +361,31 @@ private:
 	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;						// Check that enough axes have been homed
 	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;								// Set up a move to travel to the resume point
 
-	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);									// Wait for a bit
-	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Home some axes
-	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply, int code) THROWS(GCodeException);	// Deal with a G10/M568
-	GCodeResult SetPositions(GCodeBuffer& gb) THROWS(GCodeException);								// Deal with a G92
-	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Deal with a G38.x
-	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Deal with a M584
-	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Deal with a M585
-	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with a M675
-	GCodeResult SetDateTime(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);			// Deal with a M905
-	GCodeResult SavePosition(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);		// Deal with G60
-	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M569
+	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
+	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);									// Home some axes
+	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply, int code) THROWS(GCodeException);			// Deal with a G10/M568
+	GCodeResult SetPositions(GCodeBuffer& gb) THROWS(GCodeException);													// Deal with a G92
+	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);							// Deal with a G38.x
+	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);							// Deal with a M584
+	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);								// Deal with a M585
+	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with a M675
+	GCodeResult SetDateTime(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);								// Deal with a M905
+	GCodeResult SavePosition(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);							// Deal with G60
+	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M569
+	GCodeResult ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException);	// Deal with M569
 #if SUPPORT_ACCELEROMETERS
-	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M955
-	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Deal with M956
+	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);					// Deal with M955
+	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M956
 #endif
 
 	bool SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept;
 	void SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept;
 	bool SetupM585ProbingMove(GCodeBuffer& gb) noexcept;
-	size_t FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException);					// Search for and return an axis, throw if none found
+	size_t FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException);									// Search for and return an axis, throw if none found
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
+	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);			// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile);								// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb, bool withinSameFile);									// Pop feedrate etc
