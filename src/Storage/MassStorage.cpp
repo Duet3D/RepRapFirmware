@@ -129,28 +129,6 @@ static Mutex fsMutex;
 static FileStore files[MAX_FILES];
 #endif
 
-// Sequence number management
-uint16_t MassStorage::GetVolumeSeq(unsigned int volume) noexcept
-{
-	return info[volume].seq;
-}
-
-// If 'path' is not the name of a temporary file, update the sequence number of its volume
-// Return true if we did update the sequence number
-static bool VolumeUpdated(const char *path) noexcept
-{
-	if (!StringEndsWithIgnoreCase(path, ".part"))
-	{
-		const unsigned int volume = (isdigit(path[0]) && path[1] == ':') ? path[0] - '0' : 0;
-		if (volume < ARRAY_SIZE(info))
-		{
-			++info[volume].seq;
-			return true;
-		}
-	}
-	return false;
-}
-
 // Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
 /*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept
 {
@@ -188,6 +166,29 @@ static bool VolumeUpdated(const char *path) noexcept
 }
 
 #if HAS_MASS_STORAGE
+
+// Sequence number management
+uint16_t MassStorage::GetVolumeSeq(unsigned int volume) noexcept
+{
+	return info[volume].seq;
+}
+
+// If 'path' is not the name of a temporary file, update the sequence number of its volume
+// Return true if we did update the sequence number
+static bool VolumeUpdated(const char *path) noexcept
+{
+	if (!StringEndsWithIgnoreCase(path, ".part"))
+	{
+		const unsigned int volume = (isdigit(path[0]) && path[1] == ':') ? path[0] - '0' : 0;
+		if (volume < ARRAY_SIZE(info))
+		{
+			++info[volume].seq;
+			return true;
+		}
+	}
+	return false;
+}
+
 // Static helper functions
 FileWriteBuffer *MassStorage::AllocateWriteBuffer() noexcept
 {
@@ -335,10 +336,12 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 			if (files[i].IsFree())
 			{
 				FileStore * const ret = (files[i].Open(filePath, mode, preAllocSize)) ? &files[i]: nullptr;
+#if HAS_MASS_STORAGE
 				if (ret != nullptr && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 				{
 					(void)VolumeUpdated(filePath);
 				}
+#endif
 				return ret;
 			}
 		}
