@@ -49,6 +49,11 @@
 # include <CAN/CanMotion.h>
 #endif
 
+constexpr unsigned int MoveTaskStackWords = 300;		// 250 is not enough when Move and DDA debug are enabled
+static Task<MoveTaskStackWords> moveTask;
+
+constexpr uint32_t MoveTimeout = 20;					// normal timeout when the Move process is waiting for a new move
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -150,12 +155,17 @@ constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 15, 2, 4 + SUPPORT_L
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
+// The Move task starts executing here
+[[noreturn]] static void MoveStart(void *param) noexcept
+{
+	static_cast<Move *>(param)->MoveLoop();
+}
+
 Move::Move() noexcept
 	:
 #if SUPPORT_ASYNC_MOVES
 	  heightController(nullptr),
 #endif
-	  active(false),
 	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
 	  jerkPolicy(0),
 	  numCalibratedFactors(0)
@@ -190,14 +200,13 @@ void Move::Init() noexcept
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
 	lastStateChangeTime = millis();
-	idleCount = 0;
 	idleStartTime = lastStateChangeTime;
 
 	simulationMode = 0;
 	longestGcodeWaitInterval = 0;
 	bedLevellingMoveAvailable = false;
 
-	active = true;
+	moveTask.Create(MoveStart, "Move", this, TaskPriority::Move);
 }
 
 void Move::Exit() noexcept
@@ -211,82 +220,42 @@ void Move::Exit() noexcept
 	delete laserTask;
 	laserTask = nullptr;
 #endif
-	active = false;												// don't accept any more moves
+	moveTask.TerminateAndUnlink();
 }
 
-void Move::Spin() noexcept
+[[noreturn]] void Move::MoveLoop() noexcept
 {
-	if (!active)
+	for (;;)
 	{
-		RawMove nextMove;
-		(void)reprap.GetGCodes().ReadMove(nextMove);			// throw away any move that GCodes tries to pass us
-		return;
-	}
-
-	if (idleCount < 1000)
-	{
-		++idleCount;
-	}
-
-	// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-	mainDDARing.RecycleDDAs();
+		// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
+		mainDDARing.RecycleDDAs();
 #if SUPPORT_ASYNC_MOVES
-	auxDDARing.RecycleDDAs();
+		auxDDARing.RecycleDDAs();
 #endif
 
-	// See if we can add another move to the ring
-	bool canAddMove = (
+		// See if we can add another move to the ring
+		bool moveRead = false;
+		const bool canAddMove = (
 #if SUPPORT_ROLAND
-						  !reprap.GetRoland()->Active() &&
+								 !reprap.GetRoland()->Active() &&
 #endif
-						  mainDDARing.CanAddMove()
-					  );
-	if (canAddMove)
-	{
-		// OK to add another move. First check if a special move is available.
-		if (bedLevellingMoveAvailable)
+								 	mainDDARing.CanAddMove()
+								);
+		if (canAddMove)
 		{
-			if (simulationMode < 2)
+			// OK to add another move. First check if a special move is available.
+			if (bedLevellingMoveAvailable)
 			{
-				if (mainDDARing.AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
+				moveRead = true;
+				if (simulationMode < 2)
 				{
-					if (moveState == MoveState::idle || moveState == MoveState::timing)
+					if (mainDDARing.AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
 					{
-						// We were previously idle, so we have a state change
-						moveState = MoveState::collecting;
-						const uint32_t now = millis();
-						const uint32_t timeWaiting = now - lastStateChangeTime;
-						if (timeWaiting > longestGcodeWaitInterval)
-						{
-							longestGcodeWaitInterval = timeWaiting;
-						}
-						lastStateChangeTime = now;
-					}
-				}
-			}
-			bedLevellingMoveAvailable = false;
-		}
-		else
-		{
-			// If there's a G Code move available, add it to the DDA ring for processing.
-			RawMove nextMove;
-			if (reprap.GetGCodes().ReadMove(nextMove))		// if we have a new move
-			{
-				if (simulationMode < 2)						// in simulation mode 2 and higher, we don't process incoming moves beyond this point
-				{
-					if (nextMove.moveType == 0)
-					{
-						AxisAndBedTransform(nextMove.coords, nextMove.tool, true);
-					}
-
-					if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
-					{
-						const uint32_t now = millis();
-						idleCount = 0;
-						idleStartTime = now;
 						if (moveState == MoveState::idle || moveState == MoveState::timing)
 						{
+							// We were previously idle, so we have a state change
 							moveState = MoveState::collecting;
+							const uint32_t now = millis();
 							const uint32_t timeWaiting = now - lastStateChangeTime;
 							if (timeWaiting > longestGcodeWaitInterval)
 							{
@@ -296,48 +265,95 @@ void Move::Spin() noexcept
 						}
 					}
 				}
+				bedLevellingMoveAvailable = false;
+			}
+			else
+			{
+				// If there's a G Code move available, add it to the DDA ring for processing.
+				RawMove nextMove;
+				if (reprap.GetGCodes().ReadMove(nextMove))				// if we have a new move
+				{
+					moveRead = true;
+					if (simulationMode < 2)								// in simulation mode 2 and higher, we don't process incoming moves beyond this point
+					{
+						if (nextMove.moveType == 0)
+						{
+							AxisAndBedTransform(nextMove.coords, nextMove.tool, true);
+						}
+
+						if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
+						{
+							const uint32_t now = millis();
+							idleStartTime = now;
+							if (moveState == MoveState::idle || moveState == MoveState::timing)
+							{
+								moveState = MoveState::collecting;
+								const uint32_t timeWaiting = now - lastStateChangeTime;
+								if (timeWaiting > longestGcodeWaitInterval)
+								{
+									longestGcodeWaitInterval = timeWaiting;
+								}
+								lastStateChangeTime = now;
+							}
+						}
+					}
+				}
 			}
 		}
-	}
 
-	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-	mainDDARing.Spin(simulationMode, idleCount > 10 && millis() - idleStartTime >= mainDDARing.GetGracePeriod());
+		// Let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
+		mainDDARing.Spin(simulationMode, !canAddMove || millis() - idleStartTime >= mainDDARing.GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
-	if (auxMoveAvailable && auxDDARing.CanAddMove())
-	{
-		if (auxDDARing.AddAsyncMove(auxMove))
+		if (auxMoveAvailable && auxDDARing.CanAddMove())
 		{
-			moveState = MoveState::collecting;
+			if (auxDDARing.AddAsyncMove(auxMove))
+			{
+				moveState = MoveState::collecting;
+			}
+			auxMoveAvailable = false;
 		}
-		auxMoveAvailable = false;
-	}
-	auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
+		auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
 #endif
 
-	// Reduce motor current to standby if the rings have been idle for long enough
-	if (   mainDDARing.IsIdle()
+		// Reduce motor current to standby if the rings have been idle for long enough
+		if (   mainDDARing.IsIdle()
 #if SUPPORT_ASYNC_MOVES
-		&& auxDDARing.IsIdle()
+			&& auxDDARing.IsIdle()
 #endif
-	   )
-	{
-		if (   moveState == MoveState::executing
-			&& reprap.GetGCodes().GetPauseState() == PauseState::notPaused	// for now we don't go into idle hold when we are paused (is this sensible?)
 		   )
 		{
-			lastStateChangeTime = millis();				// record when we first noticed that the machine was idle
-			moveState = MoveState::timing;
+			if (   moveState == MoveState::executing
+				&& reprap.GetGCodes().GetPauseState() == PauseState::notPaused	// for now we don't go into idle hold when we are paused (is this sensible?)
+			   )
+			{
+				lastStateChangeTime = millis();				// record when we first noticed that the machine was idle
+				moveState = MoveState::timing;
+			}
+			else if (moveState == MoveState::timing && millis() - lastStateChangeTime >= idleTimeout)
+			{
+				reprap.GetPlatform().SetDriversIdle();		// put all drives in idle hold
+				moveState = MoveState::idle;
+			}
 		}
-		else if (moveState == MoveState::timing && millis() - lastStateChangeTime >= idleTimeout)
+		else
 		{
-			reprap.GetPlatform().SetDriversIdle();		// put all drives in idle hold
-			moveState = MoveState::idle;
+			moveState = MoveState::executing;
+		}
+
+		if (!moveRead)
+		{
+			TaskBase::Take(MoveTimeout);
 		}
 	}
-	else
+}
+
+// This is called from GCodes to tell the Move task that a move is available
+void Move::MoveAvailable() noexcept
+{
+	if (moveTask.IsRunning())
 	{
-		moveState = MoveState::executing;
+		moveTask.Give();
 	}
 }
 
@@ -1067,6 +1083,14 @@ void Move::WakeLaserTaskFromISR() noexcept
 	if (laserTask != nullptr)
 	{
 		laserTask->GiveFromISR();
+	}
+}
+
+void Move::WakeMoveTaskFromISR() noexcept
+{
+	if (moveTask.IsRunning())
+	{
+		moveTask.GiveFromISR();
 	}
 }
 

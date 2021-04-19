@@ -708,25 +708,6 @@ private:
 	static constexpr int8_t ObjectModelAuxStatusReportType = 100;		// A non-negative value distinct from any M408 report type
 };
 
-// Flag that a new move is available for consumption by the Move subsystem
-// Code that sets up a new move should ensure that segmentsLeft is zero, then set up all the move parameters,
-// then call this function to update SegmentsLeft safely in a multi-threaded environment
-inline void GCodes::NewMoveAvailable(unsigned int sl) noexcept
-{
-	moveBuffer.totalSegments = sl;
-	__DMB();									// make sure that all the move details have been written first
-	moveBuffer.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
-}
-
-// Flag that a new move is available for consumption by the Move subsystem
-// This version is for when totalSegments has already be set up.
-inline void GCodes::NewMoveAvailable() noexcept
-{
-	const unsigned int sl = moveBuffer.totalSegments;
-	__DMB();									// make sure that the move details have been written first
-	moveBuffer.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
-}
-
 // Get the total baby stepping offset for an axis
 inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept
 {

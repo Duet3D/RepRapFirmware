@@ -740,10 +740,6 @@ void RepRap::Spin() noexcept
 	spinningModule = moduleGcodes;
 	gCodes->Spin();
 
-	ticksInSpinState = 0;
-	spinningModule = moduleMove;
-	move->Spin();
-
 #if SUPPORT_ROLAND
 	ticksInSpinState = 0;
 	spinningModule = moduleRoland;

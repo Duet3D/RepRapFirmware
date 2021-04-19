@@ -300,6 +300,8 @@ constexpr float SegmentsPerFulArcCalculation = 8;		// we do the full sine/cosine
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold
 
+constexpr uint32_t DefaultGracePeriod = 10;				// how long we wait for more moves to become available before starting movement
+
 constexpr float DefaultNonlinearExtrusionLimit = 0.2;	// Maximum additional commanded extrusion to compensate for nonlinearity
 constexpr size_t NumRestorePoints = 6;					// Number of restore points, must be at least 3
 

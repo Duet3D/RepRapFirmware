@@ -38,7 +38,7 @@ constexpr uint8_t DDARing::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(DDARing)
 
-DDARing::DDARing() noexcept : gracePeriod(0), scheduledMoves(0), completedMoves(0), numHiccups(0)
+DDARing::DDARing() noexcept : gracePeriod(DefaultGracePeriod), scheduledMoves(0), completedMoves(0), numHiccups(0)
 {
 }
 
@@ -496,15 +496,20 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 // This is called from the step ISR when the current move has been completed
 void DDARing::CurrentMoveCompleted() noexcept
 {
+	DDA * const cdda = currentDda;					// capture volatile variable
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
-	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
+	liveCoordinatesValid = cdda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 	liveCoordinatesChanged = true;
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 	{
-		extrusionAccumulators[extruder] += currentDda->GetStepsTaken(LogicalDriveToExtruder(extruder));
+		extrusionAccumulators[extruder] += cdda->GetStepsTaken(LogicalDriveToExtruder(extruder));
 	}
 	currentDda = nullptr;
+	if (cdda->IsCheckingEndstops())
+	{
+		Move::WakeMoveTaskFromISR();				// wake the Move task if we were checking endstops
+	}
 
 	getPointer = getPointer->GetNext();
 	completedMoves++;
@@ -678,6 +683,7 @@ float DDARing::GetDeceleration() const noexcept
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
+// Called from GCodes by the Main task
 bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 {
 	// Find a move we can pause after.
@@ -705,6 +711,8 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 	// In general, we can pause after a move if it is the last segment and its end speed is slow enough.
 	// We can pause before a move if it is the first segment in that move.
 	// The caller should set up rp.feedrate to the default feed rate for the file gcode source before calling this.
+
+	TaskCriticalSectionLocker lock;						// prevent the Move task changing data while we look at it
 
 	const DDA * const savedDdaRingAddPointer = addPointer;
 	bool pauseOkHere;
@@ -783,6 +791,8 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 // Pause the print immediately, returning true if we were able to
 bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 {
+	TaskCriticalSectionLocker lock;						// prevent the Move task changing data while we look at it
+
 	const DDA * const savedDdaRingAddPointer = addPointer;
 	bool abortedMove = false;
 
