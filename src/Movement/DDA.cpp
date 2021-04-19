@@ -1452,7 +1452,11 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 						}
 					}
 
-					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
+					if (   platform.GetDriversBitmap(drive) != 0				// if any of the drives is local
+#if SUPPORT_CAN_EXPANSION
+						|| flags.checkEndstops									// if checking endstops, create a DM even if there are no local drives involved
+#endif
+					   )
 					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::accel0);
 						pdm->totalSteps = labs(delta);
@@ -1970,7 +1974,7 @@ uint32_t DDA::stepsDone[NumDirectDrivers];
 
 // Generate the step pulses of internal drivers used by this DDA
 // Sets the status to 'completed' if the move is complete and the next move should be started
-void DDA::StepDrivers(Platform& p) noexcept
+void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 {
 	// Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
 	if (flags.checkEndstops)		// if any homing switches or the Z probe is enabled in this move
@@ -1984,7 +1988,6 @@ void DDA::StepDrivers(Platform& p) noexcept
 
 	uint32_t driversStepping = 0;
 	DriveMovement* dm = activeDMs;
-	uint32_t now = StepTimer::GetTimerTicks();
 	const uint32_t elapsedTime = (now - afterPrepare.moveStartTime) + StepTimer::MinInterruptInterval;
 	while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 	{
@@ -1996,7 +1999,7 @@ void DDA::StepDrivers(Platform& p) noexcept
 	}
 
 	driversStepping &= p.GetSteppingEnabledDrivers();
-#if 1	// if supporting slow drivers
+#if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers
 	if ((driversStepping & p.GetSlowDriversBitmap()) != 0)			// if using some slow drivers
 	{
 		// Wait until step low and direction setup time have elapsed
@@ -2045,7 +2048,7 @@ void DDA::StepDrivers(Platform& p) noexcept
 			if (dmToInsert->directionChanged)
 			{
 				dmToInsert->directionChanged = false;
-				reprap.GetPlatform().SetDirection(dmToInsert->drive, dmToInsert->direction);
+				p.SetDirection(dmToInsert->drive, dmToInsert->direction);
 			}
 		}
 		else

@@ -387,14 +387,15 @@ float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 // ISR for the step interrupt
 void DDARing::Interrupt(Platform& p) noexcept
 {
-	const uint16_t isrStartTime = StepTimer::GetTimerTicks16();
 	DDA* cdda = currentDda;								// capture volatile variable
 	if (cdda != nullptr)
 	{
+		uint32_t now = StepTimer::GetTimerTicks();
+		const uint32_t isrStartTime = now;
 		for (;;)
 		{
 			// Generate a step for the current move
-			cdda->StepDrivers(p);						// check endstops if necessary and step the drivers
+			cdda->StepDrivers(p, now);						// check endstops if necessary and step the drivers
 			if (cdda->GetState() == DDA::completed)
 			{
 				OnMoveCompleted(cdda, p);
@@ -412,8 +413,8 @@ void DDARing::Interrupt(Platform& p) noexcept
 			}
 
 			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
-			uint32_t now = StepTimer::GetTimerTicks();
-			const uint16_t clocksTaken = now - isrStartTime;
+			now = StepTimer::GetTimerTicks();
+			const uint32_t clocksTaken = now - isrStartTime;
 			if (clocksTaken >= DDA::MaxStepInterruptTime)
 			{
 				// Force a break by updating the move start time.
