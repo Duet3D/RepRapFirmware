@@ -2802,7 +2802,14 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 																		// running a system macro e.g. homing, so don't use workplace coordinates
 	gb.SetState(GCodeState::normal);
 	gb.Init();
-	reprap.InputsUpdated();
+
+# if HAS_LINUX_INTERFACE
+	if (!reprap.UsingLinuxInterface() && codeRunning != AsyncSystemMacroCode)
+# endif
+	{
+		// Don't notify DSF when files are requested asynchronously, it creates excessive traffic
+		reprap.InputsUpdated();
+	}
 	return true;
 #endif
 }

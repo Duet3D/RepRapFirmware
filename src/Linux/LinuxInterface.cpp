@@ -206,10 +206,8 @@ void LinuxInterface::Init() noexcept
 				case LinuxRequest::GetObjectModel:
 				{
 					String<StringLength100> key;
-					StringRef keyRef = key.GetRef();
 					String<StringLength20> flags;
-					StringRef flagsRef = flags.GetRef();
-					transfer.ReadGetObjectModel(packet->length, keyRef, flagsRef);
+					transfer.ReadGetObjectModel(packet->length, key.GetRef(), flags.GetRef());
 
 					try
 					{
@@ -258,8 +256,7 @@ void LinuxInterface::Init() noexcept
 				case LinuxRequest::PrintStarted:
 				{
 					String<MaxFilenameLength> filename;
-					StringRef filenameRef = filename.GetRef();
-					transfer.ReadPrintStartedInfo(packet->length, filenameRef, fileInfo);
+					transfer.ReadPrintStartedInfo(packet->length, filename.GetRef(), fileInfo);
 					reprap.GetPrintMonitor().SetPrintingFileInfo(filename.c_str(), fileInfo);
 					printStarted = true;
 					break;
@@ -457,8 +454,7 @@ void LinuxInterface::Init() noexcept
 				{
 					int extruder;
 					String<FilamentNameLength> filamentName;
-					StringRef filamentRef = filamentName.GetRef();
-					transfer.ReadAssignFilament(extruder, filamentRef);
+					transfer.ReadAssignFilament(extruder, filamentName.GetRef());
 
 					Filament *filament = Filament::GetFilamentByExtruder(extruder);
 					if (filament != nullptr)
@@ -576,6 +572,11 @@ void LinuxInterface::Init() noexcept
 						{
 							reprap.GetPlatform().MessageF(WarningMessage, "Macro file has been started on channel %s but none was requested\n", channel.ToString());
 						}
+						else
+						{
+							// dameon.g is running, now the OM may report the file is being executed
+							reprap.InputsUpdated();
+						}
 					}
 					else
 					{
@@ -611,6 +612,115 @@ void LinuxInterface::Init() noexcept
 					{
 						REPORT_INTERNAL_ERROR;
 					}
+					break;
+				}
+
+				// Set the content of a variable
+				case LinuxRequest::SetVariable:
+				{
+					bool createVariable;
+					String<MaxVariableNameLength> varName;
+					String<StringLength256> expression;
+					const GCodeChannel channel = transfer.ReadSetVariable(createVariable, varName.GetRef(), expression.GetRef());
+
+					// Make sure we can access the gb safely...
+					if (!channel.IsValid())
+					{
+						REPORT_INTERNAL_ERROR;
+						break;
+					}
+
+					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+					MutexLocker lock(gb->mutex, 10);
+					if (!lock)
+					{
+						packetAcknowledged = false;
+						break;
+					}
+
+					// Get the variable set
+					const bool isGlobal = StringStartsWith(varName.c_str(), "global.");
+					if (!isGlobal && !StringStartsWith(varName.c_str(), "var."))
+					{
+						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), "expected a global or local variable");
+						break;
+					}
+					WriteLockedPointer<VariableSet> vset = (isGlobal) ? reprap.GetGlobalVariablesForWriting() : WriteLockedPointer<VariableSet>(nullptr, &gb->GetVariables());
+
+					// Check if the variable is valid
+					const char *shortVarName = varName.c_str() + strlen(isGlobal ? "global." : "var.");
+					Variable * const v = vset->Lookup(shortVarName);
+					if (createVariable && v != nullptr)
+					{
+						// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
+						String<StringLength100> errorMessage;
+						errorMessage.printf("variable '%s' already exists", varName.c_str());
+						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), errorMessage.c_str());
+						break;
+					}
+					if (!createVariable && v == nullptr)
+					{
+						String<StringLength100> errorMessage;
+						errorMessage.printf("unknown variable '%s'", varName.c_str());
+						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), errorMessage.c_str());
+						break;
+					}
+
+					// Evaluate the expression and assign it
+					try
+					{
+						ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
+						ExpressionValue ev = parser.Parse();
+						if (v == nullptr)
+						{
+							// DSF doesn't provide indent values but instructs RRF to delete local variables when the current block ends
+							vset->Insert(new Variable(shortVarName, ev, 0));
+						}
+						else
+						{
+							v->Assign(ev);
+						}
+
+						transfer.WriteSetVariableResult(varName.c_str(), ev);
+						if (isGlobal)
+						{
+							reprap.GlobalUpdated();
+						}
+					}
+					catch (const GCodeException& e)
+					{
+						// Get the error message and send it back to DSF
+						String<StringLength100> errorMessage;
+						e.GetMessage(errorMessage.GetRef(), nullptr);
+						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), errorMessage.c_str());
+					}
+					break;
+				}
+
+				// Delete a local variable
+				case LinuxRequest::DeleteLocalVariable:
+				{
+					String<MaxVariableNameLength> varName;
+					const GCodeChannel channel = transfer.ReadDeleteLocalVariable(varName.GetRef());
+
+					// Make sure we can access the gb safely...
+					if (!channel.IsValid())
+					{
+						REPORT_INTERNAL_ERROR;
+						break;
+					}
+
+					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+					MutexLocker lock(gb->mutex, 10);
+					if (!lock)
+					{
+						packetAcknowledged = false;
+						break;
+					}
+
+					// Try to delete the variable again
+					WriteLockedPointer<VariableSet> vset = WriteLockedPointer<VariableSet>(nullptr, &gb->GetVariables());
+					vset.Ptr()->Delete(varName.c_str());
 					break;
 				}
 
