@@ -17,7 +17,8 @@ namespace TaskPriority
     constexpr int TcpPriority  = 2;
     //EMAC priority = 3 defined in FreeRTOSIPConfig.h
 #endif
-    constexpr int HeatPriority = 4;
+    constexpr int HeatPriority = 3;
+	constexpr int Move = 4;
 	constexpr int SensorsPriority = 4;
 	constexpr int TmcPriority = 4;
 	constexpr int AinPriority = 4;

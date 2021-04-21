@@ -54,14 +54,16 @@ class Move INHERIT_OBJECT_MODEL
 public:
 	Move() noexcept;
 	void Init() noexcept;													// Start me up
-	void Spin() noexcept;													// Called in a tight loop to keep the class going
 	void Exit() noexcept;													// Shut down
+
+	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const noexcept;					 	// Get the current position of a motor
 	float LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept; // Gives the last point at the end of the last complete DDA
+	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished() noexcept;								// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;			// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept; // Set the current position to be this
@@ -190,8 +192,10 @@ public:
 	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
 #endif
 
+	static void WakeMoveTaskFromISR() noexcept;
+
 #if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept							// add a move from the ATE to the movement queue
+	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
 	{
 		mainDDARing.AddMoveFromRemote(msg);
 	}
@@ -230,7 +234,6 @@ private:
 
 	DDARing& mainDDARing = rings[0];					// The DDA ring used for regular moves
 
-	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
 

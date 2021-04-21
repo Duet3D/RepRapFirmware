@@ -23,6 +23,8 @@ struct RawMove
 	const Tool *tool;												// which tool (if any) is being used
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
+#else
+	uint16_t padding;
 #endif
 	uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
 
@@ -34,8 +36,16 @@ struct RawMove
 			usingStandardFeedrate : 1,								// true if this move uses the standard feed rate
 			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
 			reduceAcceleration : 1;									// true if Z probing so we should limit the Z acceleration
+	// If adding any more fields, keep the total size a multiple of 4 bytes so that we can use our optimised assignment operator
 
 	void SetDefaults(size_t firstDriveToZero) noexcept;				// set up default values
+
+	// GCC normally calls memcpy to assign objects of this class. We can do better because we know they must be 32-bit aligned.
+	RawMove& operator=(const RawMove& arg) noexcept
+	{
+		memcpyu32(reinterpret_cast<uint32_t*>(this), reinterpret_cast<const uint32_t*>(&arg), sizeof(*this)/4);
+		return *this;
+	}
 };
 
 enum class SegmentedMoveState : uint8_t

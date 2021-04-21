@@ -38,7 +38,7 @@ constexpr uint8_t DDARing::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(DDARing)
 
-DDARing::DDARing() noexcept : gracePeriod(0), scheduledMoves(0), completedMoves(0), numHiccups(0)
+DDARing::DDARing() noexcept : gracePeriod(DefaultGracePeriod), scheduledMoves(0), completedMoves(0), numHiccups(0)
 {
 }
 
@@ -387,14 +387,15 @@ float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 // ISR for the step interrupt
 void DDARing::Interrupt(Platform& p) noexcept
 {
-	const uint16_t isrStartTime = StepTimer::GetTimerTicks16();
 	DDA* cdda = currentDda;								// capture volatile variable
 	if (cdda != nullptr)
 	{
+		uint32_t now = StepTimer::GetTimerTicks();
+		const uint32_t isrStartTime = now;
 		for (;;)
 		{
 			// Generate a step for the current move
-			cdda->StepDrivers(p);						// check endstops if necessary and step the drivers
+			cdda->StepDrivers(p, now);						// check endstops if necessary and step the drivers
 			if (cdda->GetState() == DDA::completed)
 			{
 				OnMoveCompleted(cdda, p);
@@ -412,8 +413,8 @@ void DDARing::Interrupt(Platform& p) noexcept
 			}
 
 			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
-			uint32_t now = StepTimer::GetTimerTicks();
-			const uint16_t clocksTaken = now - isrStartTime;
+			now = StepTimer::GetTimerTicks();
+			const uint32_t clocksTaken = now - isrStartTime;
 			if (clocksTaken >= DDA::MaxStepInterruptTime)
 			{
 				// Force a break by updating the move start time.
@@ -495,15 +496,20 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 // This is called from the step ISR when the current move has been completed
 void DDARing::CurrentMoveCompleted() noexcept
 {
+	DDA * const cdda = currentDda;					// capture volatile variable
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
-	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
+	liveCoordinatesValid = cdda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 	liveCoordinatesChanged = true;
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 	{
-		extrusionAccumulators[extruder] += currentDda->GetStepsTaken(LogicalDriveToExtruder(extruder));
+		extrusionAccumulators[extruder] += cdda->GetStepsTaken(LogicalDriveToExtruder(extruder));
 	}
 	currentDda = nullptr;
+	if (cdda->IsCheckingEndstops())
+	{
+		Move::WakeMoveTaskFromISR();				// wake the Move task if we were checking endstops
+	}
 
 	getPointer = getPointer->GetNext();
 	completedMoves++;
@@ -677,6 +683,7 @@ float DDARing::GetDeceleration() const noexcept
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
+// Called from GCodes by the Main task
 bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 {
 	// Find a move we can pause after.
@@ -704,6 +711,8 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 	// In general, we can pause after a move if it is the last segment and its end speed is slow enough.
 	// We can pause before a move if it is the first segment in that move.
 	// The caller should set up rp.feedrate to the default feed rate for the file gcode source before calling this.
+
+	TaskCriticalSectionLocker lock;						// prevent the Move task changing data while we look at it
 
 	const DDA * const savedDdaRingAddPointer = addPointer;
 	bool pauseOkHere;
@@ -782,6 +791,8 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 // Pause the print immediately, returning true if we were able to
 bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 {
+	TaskCriticalSectionLocker lock;						// prevent the Move task changing data while we look at it
+
 	const DDA * const savedDdaRingAddPointer = addPointer;
 	bool abortedMove = false;
 

@@ -288,9 +288,9 @@ void CanInterface::SwitchToExpansionMode(CanAddress addr) noexcept
 #endif
 
 // Allocate a CAN request ID
+// Currently we reserve the top bit of the 12-bit request ID so that CanRequestIdAcceptAlways is distinct from any genuine request ID.
 CanRequestId CanInterface::AllocateRequestId(CanAddress destination) noexcept
 {
-	// We probably want to have special request IDs to tell the destination to resync. But for now just increment the ID. Reserve the top bit for future use.
 	static uint16_t rid = 0;
 
 	CanRequestId rslt = rid & 0x07FF;
@@ -610,7 +610,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 			buf->DebugPrint("Rx1:");
 		}
 
-		const bool matchesRequest = buf->id.Src() == dest && buf->msg.standardReply.requestId == rid;
+		const bool matchesRequest = buf->id.Src() == dest && (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
 		if (matchesRequest && buf->id.MsgType() == CanMessageType::standardReply && buf->msg.standardReply.fragmentNumber == fragmentsReceived)
 		{
 			if (fragmentsReceived == 0)

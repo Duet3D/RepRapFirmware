@@ -914,7 +914,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 		// Pausing a file print via another input source or for some other reason
 		pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;				// set up the default
 
-		const bool movesSkipped = reprap.GetMove().PausePrint(pauseRestorePoint);		// tell Move we wish to pause the current print
+		const bool movesSkipped = reprap.GetMove().PausePrint(pauseRestorePoint);			// tell Move we wish to pause the current print
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates
@@ -2672,6 +2672,27 @@ void GCodes::ClearMove() noexcept
 	moveBuffer.moveType = 0;
 	moveBuffer.applyM220M221 = false;
 	moveFractionToSkip = 0.0;
+}
+
+// Flag that a new move is available for consumption by the Move subsystem
+// Code that sets up a new move should ensure that segmentsLeft is zero, then set up all the move parameters,
+// then call this function to update SegmentsLeft safely in a multi-threaded environment
+void GCodes::NewMoveAvailable(unsigned int sl) noexcept
+{
+	moveBuffer.totalSegments = sl;
+	__DMB();									// make sure that all the move details have been written first
+	moveBuffer.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
+	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
+}
+
+// Flag that a new move is available for consumption by the Move subsystem
+// This version is for when totalSegments has already be set up.
+void GCodes::NewMoveAvailable() noexcept
+{
+	const unsigned int sl = moveBuffer.totalSegments;
+	__DMB();									// make sure that the move details have been written first
+	moveBuffer.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
+	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
 }
 
 // Cancel any macro or print in progress

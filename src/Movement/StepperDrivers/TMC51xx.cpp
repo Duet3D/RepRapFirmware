@@ -292,6 +292,8 @@ public:
 
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
+	GCodeResult GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept;
+	GCodeResult SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
@@ -335,6 +337,7 @@ private:
 #else
 	static constexpr unsigned int NumWriteRegisters = 8;	// the number of registers that we write to
 #endif
+	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
@@ -347,11 +350,12 @@ private:
 	static constexpr unsigned int ReadMsCnt = 2;
 	static constexpr unsigned int ReadPwmScale = 3;
 	static constexpr unsigned int ReadPwmAuto = 4;
+	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
 	static constexpr uint8_t NoRegIndex = 0xFF;				// this means no register updated, or no register requested
 
-	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
-	volatile uint32_t readRegisters[NumReadRegisters];		// the last values read from the TMC22xx readable registers
+	volatile uint32_t writeRegisters[NumWriteRegisters + 1];	// the values we want the TMC22xx writable registers to have
+	volatile uint32_t readRegisters[NumReadRegisters + 1];		// the last values read from the TMC22xx readable registers
 	volatile uint32_t accumulatedDriveStatus;				// the accumulated drive status bits
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
@@ -373,6 +377,8 @@ private:
 	uint8_t regIndexBeingUpdated;							// which register we are sending
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
 	uint8_t previousRegIndexRequested;						// the register we asked to read in the previous transaction, or 0xFF
+	volatile uint8_t specialReadRegisterNumber;
+	volatile uint8_t specialWriteRegisterNumber;
 	bool enabled;											// true if driver is enabled
 };
 
@@ -412,6 +418,7 @@ pre(!driversPowered)
 	driverBit = DriversBitmap::MakeFromBits(p_driverNumber);
 	enabled = false;
 	registersToUpdate = newRegistersToUpdate = 0;
+	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0;
 	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
 
@@ -583,6 +590,37 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 	default:
 		return 0;
 	}
+}
+
+GCodeResult TmcDriverState::GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept
+{
+	if (specialReadRegisterNumber == 0xFE)
+	{
+		reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
+		specialReadRegisterNumber = 0xFF;
+		return GCodeResult::ok;
+	}
+
+	if (specialReadRegisterNumber == 0xFF)
+	{
+		specialReadRegisterNumber = regNum;
+	}
+	return GCodeResult::notFinished;
+}
+
+GCodeResult TmcDriverState::SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept
+{
+	for (size_t i = 0; i < NumWriteRegisters; ++i)
+	{
+		if (regNum == WriteRegNumbers[i])
+		{
+			UpdateRegister(i, regVal);
+			return GCodeResult::ok;
+		}
+	}
+	specialWriteRegisterNumber = regNum;
+	UpdateRegister(WriteSpecial, regVal);
+	return GCodeResult::ok;
 }
 
 // Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
@@ -825,8 +863,20 @@ void TmcDriverState::GetSpiCommand(uint8_t *sendDataBlock) noexcept
 	{
 		// Read a register
 		regIndexBeingUpdated = NoRegIndex;
-		regIndexRequested = (regIndexRequested >= NumReadRegisters - 1) ? 0 : regIndexRequested + 1;
-		sendDataBlock[0] = ReadRegNumbers[regIndexRequested];
+		if (regIndexRequested >= ReadSpecial)
+		{
+			regIndexRequested = 0;
+		}
+		else
+		{
+			++regIndexRequested;
+			if (regIndexRequested == ReadSpecial && specialReadRegisterNumber >= 0x80)
+			{
+				regIndexRequested = 0;
+			}
+		}
+
+		sendDataBlock[0] = (regIndexRequested == ReadSpecial) ? specialReadRegisterNumber : ReadRegNumbers[regIndexRequested];
 		sendDataBlock[1] = 0;
 		sendDataBlock[2] = 0;
 		sendDataBlock[3] = 0;
@@ -837,7 +887,7 @@ void TmcDriverState::GetSpiCommand(uint8_t *sendDataBlock) noexcept
 		// Write a register
 		const size_t regNum = LowestSetBit(registersToUpdate);
 		regIndexBeingUpdated = regNum;
-		sendDataBlock[0] = WriteRegNumbers[regNum] | 0x80;
+		sendDataBlock[0] = ((regNum == WriteSpecial) ? specialWriteRegisterNumber : WriteRegNumbers[regNum]) | 0x80;
 		StoreBE32(sendDataBlock + 1, writeRegisters[regNum]);
 	}
 }
@@ -845,7 +895,7 @@ void TmcDriverState::GetSpiCommand(uint8_t *sendDataBlock) noexcept
 void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 {
 	// If we wrote a register, mark it up to date
-	if (regIndexBeingUpdated < NumWriteRegisters)
+	if (regIndexBeingUpdated <= NumWriteRegisters)
 	{
 		registersToUpdate &= ~(1u << regIndexBeingUpdated);
 		++numWrites;
@@ -855,7 +905,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	const uint32_t interval = GetMoveInstance().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
 
 	// If we read a register, update our copy
-	if (previousRegIndexRequested < NumReadRegisters)
+	if (previousRegIndexRequested <= NumReadRegisters)
 	{
 		++numReads;
 		uint32_t regVal = LoadBE32(rcvDataBlock + 1);
@@ -896,6 +946,10 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 		else
 		{
 			readRegisters[previousRegIndexRequested] = regVal;
+			if (previousRegIndexRequested == ReadSpecial)
+			{
+				specialReadRegisterNumber = 0xFE;
+			}
 		}
 	}
 
@@ -1518,6 +1572,28 @@ bool SmartDrivers::SetRegister(size_t driver, SmartDriverRegister reg, uint32_t 
 uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexcept
 {
 	return (driver < numTmc51xxDrivers) ? driverStates[driver].GetRegister(reg) : 0;
+}
+
+// Read any register from a driver
+// This will return GCodeResult:notFinished for at least the first call, so it must be called repeatedly until it returns a different value.
+GCodeResult SmartDrivers::GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept
+{
+	if (driver < numTmc51xxDrivers)
+	{
+		return driverStates[driver].GetAnyRegister(reply, regNum);
+	}
+	reply.copy("Invalid smart driver number");
+	return GCodeResult::error;
+}
+
+GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept
+{
+	if (driver < numTmc51xxDrivers)
+	{
+		return driverStates[driver].SetAnyRegister(reply, regNum, regVal);
+	}
+	reply.copy("Invalid smart driver number");
+	return GCodeResult::error;
 }
 
 #endif
