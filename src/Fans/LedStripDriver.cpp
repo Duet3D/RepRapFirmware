@@ -51,7 +51,7 @@
 
 namespace LedStripDriver
 {
-	constexpr uint32_t DefaultDotStarSpiClockFrequency = 100000;		// try sending at 100kHz
+	constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default
 	constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2500000;		// must be between about 2MHz and about 4MHz
 	constexpr uint32_t MinNeoPixelResetTicks = (250 * StepTimer::StepClockRate)/1000000;		// 250us minimum Neopixel reset time on later chips
 
@@ -59,6 +59,8 @@ namespace LedStripDriver
 #ifdef DUET3_V06
 	// We have plenty of non-cached RAM left on Duet 3
 	constexpr size_t ChunkBufferSize = 240 * 16;						// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED.
+#elif defined(DUET3MINI)
+	constexpr size_t ChunkBufferSize = 80 * 16;							// increased for Justin
 #elif defined(DUET_NG)
 	constexpr size_t ChunkBufferSize = 60 * 3;							// NeoPixel RGB use 3 bytes/LED
 #else
@@ -610,7 +612,7 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 
 # if USE_16BIT_SPI
 			// Swap bytes for 16-bit SPI
-			const uint32_t data = ((brightness >> 11) | (0xE0 << 8)) | ((blue & 255)) | ((green & 255) << 24) | ((red & 255) << 16);
+			const uint32_t data = ((brightness << 5) | (0xE0 << 8)) | ((blue & 255)) | ((green & 255) << 24) | ((red & 255) << 16);
 # else
 			const uint32_t data = ((brightness >> 3) | 0xE0) | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);
 # endif

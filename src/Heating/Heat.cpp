@@ -1160,14 +1160,14 @@ void Heat::InsertSensor(TemperatureSensor *newSensor) noexcept
 // We assume that the bed and chamber heaters are either on and active, or off (not on standby).
 bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const noexcept
 {
-	String<100> bufSpace;
+	String<StringLength256> bufSpace;
 	const StringRef buf = bufSpace.GetRef();
 	for (size_t index : ARRAY_INDICES(bedHeaters))
 	{
 		const auto h = FindHeater(bedHeaters[index]);
 		if (h.IsNotNull() && h->GetStatus() == HeaterStatus::active)
 		{
-			buf.printf("M140 P%u S%.1f\n", index, (double)h->GetActiveTemperature());
+			buf.catf("M140 P%u S%.1f\n", index, (double)h->GetActiveTemperature());
 		}
 	}
 	for (size_t index : ARRAY_INDICES(chamberHeaters))
@@ -1175,7 +1175,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const noexcept
 		const auto h = FindHeater(chamberHeaters[index]);
 		if (h.IsNotNull() && h->GetStatus() == HeaterStatus::active)
 		{
-			buf.printf("M141 P%u S%.1f\n", index, (double)h->GetActiveTemperature());
+			buf.catf("M141 P%u S%.1f\n", index, (double)h->GetActiveTemperature());
 		}
 	}
 	return (buf.strlen() == 0) || f->Write(buf.c_str());

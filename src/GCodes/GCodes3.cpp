@@ -1344,8 +1344,13 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 #endif
 
 	const uint8_t drive = id.localDriver;
-	if (gb.GetCommandFraction() > 0)
+	switch (gb.GetCommandFraction())
 	{
+	case 0:
+	case -1:
+		return ConfigureLocalDriver(gb, reply, drive);
+
+	case 1:
 		// Main board drivers do not support closed loop modes
 		if (gb.Seen('S'))
 		{
@@ -1358,8 +1363,28 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 		}
 		reply.copy("Driver %u mode is open loop", drive);
 		return GCodeResult::ok;
-	}
 
+#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+	case 2:			// read/write smart driver register
+		{
+			gb.MustSee('R');
+			const uint8_t regNum = gb.GetLimitedUIValue('R', 0, 0x80);
+			if (gb.Seen('V'))
+			{
+				const uint32_t regVal = gb.GetUIValue();
+				return SmartDrivers::SetAnyRegister(drive, reply, regNum, regVal);
+			}
+			return SmartDrivers::GetAnyRegister(drive, reply, regNum);
+		}
+#endif
+
+	default:
+		return GCodeResult::warningNotSupported;
+	}
+}
+
+GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
+{
 	if (drive < platform.GetNumActualDirectDrivers())
 	{
 		bool seen = false;

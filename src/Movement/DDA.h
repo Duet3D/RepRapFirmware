@@ -92,7 +92,7 @@ public:
 #endif
 
 	void Start(Platform& p, uint32_t tim) noexcept SPEED_CRITICAL;					// Start executing the DDA, i.e. move the move.
-	void StepDrivers(Platform& p) noexcept SPEED_CRITICAL;							// Take one step of the DDA, called by timed interrupt.
+	void StepDrivers(Platform& p, uint32_t now) noexcept SPEED_CRITICAL;			// Take one step of the DDA, called by timer interrupt.
 	bool ScheduleNextStepInterrupt(StepTimer& timer) const noexcept SPEED_CRITICAL;	// Schedule the next interrupt, returning true if we can't because it is already due
 
 	void SetNext(DDA *n) noexcept { next = n; }

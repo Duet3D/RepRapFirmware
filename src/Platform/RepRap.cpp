@@ -232,6 +232,7 @@ constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
 #endif
 };
 
+#if HAS_MASS_STORAGE
 constexpr ObjectModelArrayDescriptor RepRap::volChangesArrayDescriptor =
 {
 	nullptr,
@@ -239,6 +240,7 @@ constexpr ObjectModelArrayDescriptor RepRap::volChangesArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 																		{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
 };
+#endif
 
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
@@ -385,7 +387,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC((int32_t)self->toolsSeq),								ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE
-# if 0	// this line confuses DSF
+# if 0	// the next line confuses DSF 3.3beta2 so remove it for now
 	{ "volChanges",				OBJECT_MODEL_FUNC_NOSELF(&volChangesArrayDescriptor),					ObjectModelEntryFlags::live },
 # endif
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
@@ -737,10 +739,6 @@ void RepRap::Spin() noexcept
 	ticksInSpinState = 0;
 	spinningModule = moduleGcodes;
 	gCodes->Spin();
-
-	ticksInSpinState = 0;
-	spinningModule = moduleMove;
-	move->Spin();
 
 #if SUPPORT_ROLAND
 	ticksInSpinState = 0;
