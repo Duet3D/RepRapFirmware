@@ -470,6 +470,14 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	p.Message(mtype, "\n");
 #endif
 
+	// DEBUG
+#if 0
+	extern uint32_t maxDelay;
+	extern uint32_t maxDelayIncrease;
+	p.MessageF(mtype, "Max delay %" PRIu32 ", increase %" PRIu32 "\n", maxDelay, maxDelayIncrease);
+	maxDelay = maxDelayIncrease = 0;
+#endif
+
 #if SUPPORT_ASYNC_MOVES
 	mainDDARing.Diagnostics(mtype, "Main");
 	auxDDARing.Diagnostics(mtype, "Aux");
@@ -1046,6 +1054,14 @@ const char *Move::GetCompensationTypeString() const noexcept
 	return (usingMesh) ? "mesh" : "none";
 }
 
+void Move::WakeMoveTaskFromISR() noexcept
+{
+	if (moveTask.IsRunning())
+	{
+		moveTask.GiveFromISR();
+	}
+}
+
 #if SUPPORT_LASER || SUPPORT_IOBITS
 
 // Laser and IOBits support
@@ -1083,14 +1099,6 @@ void Move::WakeLaserTaskFromISR() noexcept
 	if (laserTask != nullptr)
 	{
 		laserTask->GiveFromISR();
-	}
-}
-
-void Move::WakeMoveTaskFromISR() noexcept
-{
-	if (moveTask.IsRunning())
-	{
-		moveTask.GiveFromISR();
 	}
 }
 
