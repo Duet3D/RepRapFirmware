@@ -519,7 +519,7 @@ template<typename T> const T *DataTransfer::ReadDataHeader() noexcept
 	return header;
 }
 
-void DataTransfer::ReadGetObjectModel(size_t packetLength, StringRef &key, StringRef &flags) noexcept
+void DataTransfer::ReadGetObjectModel(size_t packetLength, const StringRef &key, const StringRef &flags) noexcept
 {
 	// Read header
 	const GetObjectModelHeader *header = ReadDataHeader<GetObjectModelHeader>();
@@ -533,7 +533,7 @@ void DataTransfer::ReadGetObjectModel(size_t packetLength, StringRef &key, Strin
 	flags.copy(data, header->flagsLength);
 }
 
-void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo& info) noexcept
+void DataTransfer::ReadPrintStartedInfo(size_t packetLength, const StringRef& filename, GCodeFileInfo& info) noexcept
 {
 	// Read header
 	const PrintStartedHeader *header = ReadDataHeader<PrintStartedHeader>();
@@ -623,7 +623,7 @@ GCodeChannel DataTransfer::ReadCodeChannel() noexcept
 	return GCodeChannel(header->channel);
 }
 
-void DataTransfer::ReadAssignFilament(int& extruder, StringRef& filamentName) noexcept
+void DataTransfer::ReadAssignFilament(int& extruder, const StringRef& filamentName) noexcept
 {
 	// Read header
 	const AssignFilamentHeader *header = ReadDataHeader<AssignFilamentHeader>();
@@ -670,6 +670,32 @@ bool DataTransfer::ReadMessage(MessageType& type, OutputBuffer *buf) noexcept
 	// Read message data and check if the it could be fully read
 	const char *messageData = ReadData(header->length);
 	return buf->copy(messageData, header->length) == header->length;
+}
+
+GCodeChannel DataTransfer::ReadSetVariable(bool& createVariable, const StringRef& varName, const StringRef& expression) noexcept
+{
+	// Read header
+	const SetVariableHeader *header = ReadDataHeader<SetVariableHeader>();
+	createVariable = header->createVariable;
+
+	// Read variable name and expression
+	const char *data = ReadData(header->variableLength + header->expressionLength);
+	varName.copy(data, header->variableLength);
+	expression.copy(data + header->variableLength, header->expressionLength);
+
+	return GCodeChannel(header->channel);
+}
+
+GCodeChannel DataTransfer::ReadDeleteLocalVariable(const StringRef& varName) noexcept
+{
+	// Read header
+	const DeleteLocalVariableHeader *header = ReadDataHeader<DeleteLocalVariableHeader>();
+
+	// Read variable name
+	const char *varNameData = ReadData(header->variableLength);
+	varName.copy(varNameData, header->variableLength);
+
+	return GCodeChannel(header->channel);
 }
 
 void DataTransfer::ExchangeHeader() noexcept
@@ -1376,6 +1402,127 @@ bool DataTransfer::WriteMessageAcknowledged(GCodeChannel channel) noexcept
 	return true;
 }
 
+bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionValue& value) noexcept
+{
+	// Calculate payload length
+	const size_t varNameLength = strlen(varName);
+	size_t payloadLength;
+	String<StringLength50> rslt;
+	switch (value.GetType())
+	{
+	// FIXME Add support for arrays
+	case TypeCode::Bool:
+	case TypeCode::DriverId:
+	case TypeCode::Uint32:
+	case TypeCode::Float:
+	case TypeCode::Int32:
+		payloadLength = varNameLength;
+		break;
+	case TypeCode::CString:
+		payloadLength = varNameLength + strlen(value.sVal);
+		break;
+	case TypeCode::IPAddress:
+	case TypeCode::MacAddress:
+	case TypeCode::DateTime:
+		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
+		value.AppendAsString(rslt.GetRef());
+		payloadLength = varNameLength + rslt.strlen();
+		break;
+	case TypeCode::HeapString:
+		payloadLength = varNameLength + value.shVal.GetLength();
+		break;
+
+	default:
+		rslt.printf("unsupported type code %d", (int)value.type);
+		payloadLength = varNameLength + rslt.strlen();
+		break;
+	}
+
+	// Check if it fits
+	if (!CanWritePacket(sizeof(EvaluationResultHeader) + payloadLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::VariableResult, sizeof(EvaluationResultHeader) + payloadLength);
+
+	// Write partial header
+	EvaluationResultHeader *header = WriteDataHeader<EvaluationResultHeader>();
+	header->expressionLength = varNameLength;
+
+	// Write variable name
+	WriteData(varName, varNameLength);
+
+	// Write data type and expression value
+	switch (value.GetType())
+	{
+	case TypeCode::Bool:
+		header->dataType = DataType::Bool;
+		header->intValue = value.bVal ? 1 : 0;
+		break;
+	case TypeCode::CString:
+		header->dataType = DataType::String;
+		header->intValue = strlen(value.sVal);
+		WriteData(value.sVal, header->intValue);
+		break;
+	case TypeCode::DriverId:
+		header->dataType = DataType::DriverId;
+		header->uintValue = value.uVal;
+		break;
+	case TypeCode::Uint32:
+		header->dataType = DataType::UInt;
+		header->uintValue = value.uVal;
+		break;
+	case TypeCode::Float:
+		header->dataType = DataType::Float;
+		header->floatValue = value.fVal;
+		break;
+	case TypeCode::Int32:
+		header->dataType = DataType::Int;
+		header->intValue = value.iVal;
+		break;
+	case TypeCode::HeapString:
+		header->dataType = DataType::String;
+		header->intValue = value.shVal.GetLength();
+		WriteData(value.shVal.Get().Ptr(), header->intValue);
+		break;
+	case TypeCode::DateTime:
+	case TypeCode::MacAddress:
+	case TypeCode::IPAddress:
+	default:
+		// We have already converted the value to a string in 'rslt'
+		header->dataType = DataType::String;
+		header->intValue = rslt.strlen();
+		WriteData(rslt.c_str(), rslt.strlen());
+		break;
+	}
+	return true;
+}
+
+bool DataTransfer::WriteSetVariableError(const char *varName, const char *errorMessage) noexcept
+{
+	// Check if it fits
+	size_t varNameLength = strlen(varName), errorLength = strlen(errorMessage);
+	if (!CanWritePacket(sizeof(EvaluationResultHeader) + varNameLength + errorLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::VariableResult, sizeof(EvaluationResultHeader) + varNameLength + errorLength);
+
+	// Write partial header
+	EvaluationResultHeader *header = WriteDataHeader<EvaluationResultHeader>();
+	header->dataType = DataType::Expression;
+	header->expressionLength = varNameLength;
+	header->intValue = errorLength;
+
+	// Write expression and error message
+	WriteData(varName, varNameLength);
+	WriteData(errorMessage, errorLength);
+	return true;
+}
 
 PacketHeader *DataTransfer::WritePacketHeader(FirmwareRequest request, size_t dataLength, uint16_t resendPacketId) noexcept
 {

@@ -51,6 +51,7 @@ public:
 	const Variable *GetRoot() const noexcept { return root; }
 	void Insert(Variable *toInsert) noexcept;
 	void EndScope(uint8_t blockNesting) noexcept;
+	void Delete(const char *str) noexcept;
 	void Clear() noexcept;
 
 private:

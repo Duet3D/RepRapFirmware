@@ -18,7 +18,7 @@ constexpr uint8_t LinuxFormatCode = 0x5F;			// standard format code for RRF SPI 
 constexpr uint8_t LiunxFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode
 constexpr uint8_t InvalidFormatCode = 0xC9;			// must be different from any other format code
 
-constexpr uint16_t LinuxProtocolVersion = 4;
+constexpr uint16_t LinuxProtocolVersion = 5;
 
 constexpr size_t LinuxTransferBufferSize = 8192;	// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
 static_assert(LinuxTransferBufferSize % sizeof(uint32_t) == 0, "LinuxTransferBufferSize must be a whole number of dwords");
@@ -179,7 +179,8 @@ enum class FirmwareRequest : uint16_t
 	DoCode = 12,						// Perform a G/M/T-code from a code input
 	WaitForMessageAcknowledgment = 13,	// Wait for a message to be acknowledged
 	MacroFileClosed = 14,				// Last macro file has been closed
-	MessageAcknowledged = 15			// Pending message prompt has been acknowledged
+	MessageAcknowledged = 15,			// Pending message prompt has been acknowledged
+	VariableResult = 16					// Result of a variable get or set request
 };
 
 enum class PrintPausedReason : uint8_t
@@ -225,8 +226,10 @@ enum class LinuxRequest : uint16_t
 	Message = 17,								// Send an arbitrary message
 	MacroStarted = 18,							// Macro file has been started
 	FilesAborted = 19,							// All files on the given channel have been aborted by DSF
+	SetVariable = 20,							// Assign a variable (global, set, var)
+	DeleteLocalVariable = 21,					// Delete an existing local variable at the end of a code block
 
-	InvalidRequest = 20
+	InvalidRequest = 22
 };
 
 struct AssignFilamentHeader
@@ -324,7 +327,8 @@ struct PrintStoppedHeader
 	uint16_t paddingB;
 };
 
-struct SetObjectModelHeader
+#if false
+struct SetObjectModelHeader		// unused
 {
 	DataType type;
 	uint8_t fieldLength;
@@ -334,6 +338,22 @@ struct SetObjectModelHeader
 		uint32_t uintValue;
 		float floatValue;
 	};
+};
+#endif
+
+struct SetVariableHeader
+{
+	uint8_t channel;
+	bool createVariable;
+	uint8_t variableLength;
+	uint8_t expressionLength;
+};
+
+struct DeleteLocalVariableHeader
+{
+	uint8_t channel;
+	uint8_t variableLength;
+	uint16_t padding;
 };
 
 #endif /* SRC_LINUX_MESSAGEFORMATS_H_ */

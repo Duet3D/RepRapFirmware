@@ -80,6 +80,29 @@ void VariableSet::EndScope(uint8_t blockNesting) noexcept
 	}
 }
 
+void VariableSet::Delete(const char *str) noexcept
+{
+	Variable *prev = nullptr;
+	for (Variable *v = root; v != nullptr; v = v->next)
+	{
+		auto vname = v->name.Get();
+		if (strcmp(vname.Ptr(), str) == 0)
+		{
+			if (prev == nullptr)
+			{
+				root = v->next;
+			}
+			else
+			{
+				prev->next = v->next;
+			}
+			delete v;
+			break;
+		}
+		prev = v;
+	}
+}
+
 void VariableSet::Clear() noexcept
 {
 	while (root != nullptr)

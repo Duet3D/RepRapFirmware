@@ -228,6 +228,8 @@ public:
 
 	void SetParameters(int codeRunning) noexcept;
 	VariableSet& GetVariables() const noexcept;
+	void ProcessGlobalOrVarCommand(const char *payload, bool isGlobal) THROWS(GCodeException);
+	void ProcessSetCommand(const char *payload, bool isGlobal) THROWS(GCodeException);
 
 	Mutex mutex;
 
