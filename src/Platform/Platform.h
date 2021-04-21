@@ -258,7 +258,7 @@ public:
 	static constexpr size_t NumAveraged() noexcept { return numAveraged; }
 
 	// Function used as an ADC callback to feed a result into an averaging filter
-	static void CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val);
+	static void CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val) noexcept;
 
 private:
 	uint16_t readings[numAveraged];
@@ -269,7 +269,7 @@ private:
 	//invariant(index < numAveraged)
 };
 
-template<size_t numAveraged> void AveragingFilter<numAveraged>::CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val)
+template<size_t numAveraged> void AveragingFilter<numAveraged>::CallbackFeedIntoFilter(CallbackParameter cp, uint16_t val) noexcept
 {
 	static_cast<AveragingFilter<numAveraged>*>(cp.vp)->ProcessReading(val);
 }
