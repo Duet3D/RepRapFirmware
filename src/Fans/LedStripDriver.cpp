@@ -59,6 +59,8 @@ namespace LedStripDriver
 #ifdef DUET3_V06
 	// We have plenty of non-cached RAM left on Duet 3
 	constexpr size_t ChunkBufferSize = 240 * 16;						// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED.
+#elif defined(DUET3MINI)
+	constexpr size_t ChunkBufferSize = 80 * 16;							// increased for Justin
 #elif defined(DUET_NG)
 	constexpr size_t ChunkBufferSize = 60 * 3;							// NeoPixel RGB use 3 bytes/LED
 #else
