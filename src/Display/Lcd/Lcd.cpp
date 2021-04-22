@@ -525,7 +525,7 @@ void Lcd::Bitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNumber 
 // Draw a single bitmap row. 'left' and 'width' do not need to be divisible by 8.
 void Lcd::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept
 {
-	if (width != 0)														// avoid possible arithmetic underflow
+	if (width != 0 && top < numRows)									// avoid possible arithmetic underflow or overflowing the buffer
 	{
 		const uint8_t inv = (invert) ? 0xFF : 0;
 		uint8_t firstColIndex = left/8;									// column index of the first byte to write
