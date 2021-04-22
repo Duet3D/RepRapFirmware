@@ -188,7 +188,7 @@ class ObjectExplorationContext
 {
 public:
 	// Constructor used when reporting the OM as JSON
-	ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth) noexcept;
+	ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept;
 
 	// Constructor used when evaluating expressions
 	ObjectExplorationContext(bool wal, bool wex, int p_line, int p_col) noexcept;
@@ -196,8 +196,6 @@ public:
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
 	void DecreaseDepth() noexcept { --currentDepth; }
-	bool IncreaseArraysIterated() noexcept { ++arraysBeingIterated; return arraysBeingIterated == 1; }
-	void DecreaseArraysIterated() noexcept { --arraysBeingIterated; }
 	void AddIndex(int32_t index) THROWS(GCodeException);
 	void AddIndex() THROWS(GCodeException);
 	void RemoveIndex() THROWS(GCodeException);
@@ -214,6 +212,7 @@ public:
 	bool WantExists() const noexcept { return wantExists; }
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 	uint64_t GetStartMillis() const { return startMillis; }
+	size_t GetInitialBufferOffset() const noexcept { return initialBufOffset; }
 
 	bool ObsoleteFieldQueried() const noexcept { return obsoleteFieldQueried; }
 	void SetObsoleteFieldQueried() noexcept { obsoleteFieldQueried = true; }
@@ -225,11 +224,11 @@ private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
 
 	uint64_t startMillis;							// the milliseconds counter when we started exploring the OM. Stored so that upTime and msUpTime are consistent.
+	size_t initialBufOffset;
 	unsigned int maxDepth;
 	unsigned int currentDepth;
 	unsigned int startElement;
 	int nextElement;
-	unsigned int arraysBeingIterated;
 	size_t numIndicesProvided;						// the number of indices provided, when we are doing a value lookup
 	size_t numIndicesCounted;						// the number of indices passed in the search string
 	int32_t indices[MaxIndices];
