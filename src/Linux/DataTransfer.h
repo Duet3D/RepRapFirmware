@@ -41,16 +41,18 @@ public:
 	size_t PacketsToRead() const noexcept;
 	const PacketHeader *ReadPacket() noexcept;												// Attempt to read the next packet header or return null. Advances the read pointer to the next packet or the packet's data
 	const char *ReadData(size_t packetLength) noexcept;										// Read the packet data and advance to the next packet (if any)
-	void ReadGetObjectModel(size_t packetLength, StringRef &key, StringRef &flags) noexcept;	// Read an object model request
-	void ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo &info) noexcept;	// Read info about the started file print
+	void ReadGetObjectModel(size_t packetLength, const StringRef &key, const StringRef &flags) noexcept;		// Read an object model request
+	void ReadPrintStartedInfo(size_t packetLength, const StringRef& filename, GCodeFileInfo &info) noexcept;	// Read info about the started file print
 	PrintStoppedReason ReadPrintStoppedInfo() noexcept;										// Read info about why the print has been stopped
 	GCodeChannel ReadMacroCompleteInfo(bool &error) noexcept;								// Read info about a completed macro file
 	bool ReadHeightMap() noexcept;															// Read heightmap parameters
 	GCodeChannel ReadCodeChannel() noexcept;												// Read a code channel
-	void ReadAssignFilament(int& extruder, StringRef& filamentName) noexcept;				// Read a request to assign the given filament to an extruder drive
+	void ReadAssignFilament(int& extruder, const StringRef& filamentName) noexcept;			// Read a request to assign the given filament to an extruder drive
 	void ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept;	// Read another chunk of a file
 	GCodeChannel ReadEvaluateExpression(size_t packetLength, const StringRef& expression) noexcept;	// Read an expression request
 	bool ReadMessage(MessageType& type, OutputBuffer *buf) noexcept;						// Read a request to output a message
+	GCodeChannel ReadSetVariable(bool& createVariable, const StringRef& varName, const StringRef& expression) noexcept;	// Read a variable set request
+	GCodeChannel ReadDeleteLocalVariable(const StringRef& varName) noexcept;				// Read a variable deletion request
 
 	void ResendPacket(const PacketHeader *packet) noexcept;
 	bool WriteObjectModel(OutputBuffer *data) noexcept;
@@ -68,6 +70,8 @@ public:
 	bool WriteDoCode(GCodeChannel channel, const char *code, size_t length) noexcept;
 	bool WriteWaitForAcknowledgement(GCodeChannel channel) noexcept;
 	bool WriteMessageAcknowledged(GCodeChannel channel) noexcept;
+	bool WriteSetVariableResult(const char *varName, const ExpressionValue& value) noexcept;
+	bool WriteSetVariableError(const char *varName, const char *errorMessage) noexcept;
 
 private:
 	enum class SpiState

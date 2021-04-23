@@ -168,7 +168,7 @@ void GCodes::Init() noexcept
 		f = 0.0;
 	}
 
-	runningConfigFile = false;
+	runningConfigFile = daemonRunning = false;
 	m501SeenInConfigFile = false;
 	doingToolChange = false;
 	active = true;
@@ -577,11 +577,12 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 			)
 	{
-		// Delay 1 second, then try to open and run daemon.g. No error if it is not found.
+		// Delay 1 or 10 seconds, then try to open and run daemon.g. No error if it is not found.
 		if (   !reprap.IsProcessingConfig()
-			&& gb.DoDwellTime(1000)
+			&& gb.DoDwellTime((daemonRunning) ? 10000 : 1000)
 		   )
 		{
+			daemonRunning = true;
 			return DoFileMacro(gb, DAEMON_G, false, AsyncSystemMacroCode);
 		}
 	}
@@ -2801,7 +2802,14 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 																		// running a system macro e.g. homing, so don't use workplace coordinates
 	gb.SetState(GCodeState::normal);
 	gb.Init();
-	reprap.InputsUpdated();
+
+# if HAS_LINUX_INTERFACE
+	if (!reprap.UsingLinuxInterface() && codeRunning != AsyncSystemMacroCode)
+# endif
+	{
+		// Don't notify DSF when files are requested asynchronously, it creates excessive traffic
+		reprap.InputsUpdated();
+	}
 	return true;
 #endif
 }
