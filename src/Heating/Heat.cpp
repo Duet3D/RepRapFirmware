@@ -62,7 +62,7 @@ extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
 	reprap.GetHeat().HeaterTask();
 }
 
-static constexpr uint16_t SensorsTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
+static constexpr uint16_t SensorsTaskStackWords = 150;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
 static Task<SensorsTaskStackWords> *sensorsTask = nullptr;
 
 extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters) noexcept

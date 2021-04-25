@@ -49,7 +49,7 @@
 # include <CAN/CanMotion.h>
 #endif
 
-constexpr unsigned int MoveTaskStackWords = 300;		// 250 is not enough when Move and DDA debug are enabled
+constexpr unsigned int MoveTaskStackWords = 500;		// 250 is not enough when Move and DDA debug are enabled
 static Task<MoveTaskStackWords> moveTask;
 
 constexpr uint32_t MoveTimeout = 20;					// normal timeout when the Move process is waiting for a new move
