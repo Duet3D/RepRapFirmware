@@ -2752,6 +2752,10 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			gb.AbortFile(false, true);
 			return true;
 		}
+		if (codeRunning >= 0)
+		{
+			gb.SetParameters(codeRunning);
+		}
 		gb.StartNewFile();
 		if (gb.IsMacroEmpty())
 		{
