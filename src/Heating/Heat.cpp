@@ -932,7 +932,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	if (gb.Seen('P'))
 	{
-		String<StringLength20> portName;
+		String<StringLength50> portName;							// StringLength20 is too short for "thermocouple-max31856"
 		gb.GetReducedString(portName.GetRef());
 #if SUPPORT_CAN_EXPANSION
 		boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());

@@ -373,8 +373,11 @@ unsigned int Move::GetNumProbedProbePoints() const noexcept
 }
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
+// This is called by the Main task, so we need to lock out the Move task while doing this
 float Move::PushBabyStepping(size_t axis, float amount) noexcept
 {
+	TaskCriticalSectionLocker lock;						// lock out the Move task
+
 	return mainDDARing.PushBabyStepping(axis, amount);
 }
 
