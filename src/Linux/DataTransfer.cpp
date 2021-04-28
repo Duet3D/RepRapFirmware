@@ -480,7 +480,7 @@ void DataTransfer::Init() noexcept
 #endif
 }
 
-void DataTransfer::SetLinuxTask(TaskHandle handle) noexcept
+void DataTransfer::SetSBCTask(TaskHandle handle) noexcept
 {
 	linuxTaskHandle = handle;
 }
