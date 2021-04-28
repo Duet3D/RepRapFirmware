@@ -1022,7 +1022,8 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 // Process M595
 GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-	return mainDDARing.ConfigureMovementQueue(gb, reply);
+	const size_t ringNumber = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', ARRAY_SIZE(rings)) : 0;
+	return rings[ringNumber].ConfigureMovementQueue(gb, reply);
 }
 
 // Return the current live XYZ and extruder coordinates
