@@ -352,7 +352,7 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 	const float C = fsquare(S) + fsquare(T) + (anchorA[1] * T - anchorA[0] * S) * P * 2 + (Da2 - fsquare(La)) * P2;
 
 	// Solve the quadratic equation for z
-	machinePos[2] = (- halfB - fastSqrtf(fsquare(halfB) - A * C))/A;
+	machinePos[2] = (- halfB - fastSqrtf(fabs(fsquare(halfB) - A * C)))/A;
 
 	// Substitute back for X and Y
 	machinePos[0] = (Q * machinePos[2] + S)/P;
