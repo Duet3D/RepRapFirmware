@@ -1732,7 +1732,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 				// Note, if this is an extruder-only movement then the feed rate will apply to the total of all active extruders
 				if (gb.LatestMachineState().drivesRelative)
 				{
-					for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
+					for (size_t eDrive = 0; eDrive < mc; eDrive++)
 					{
 						const int extruder = tool->Drive(eDrive);
 						float extrusionAmount = gb.ConvertDistance(eMovement[eDrive]);
