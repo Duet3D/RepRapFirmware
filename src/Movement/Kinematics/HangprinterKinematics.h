@@ -57,6 +57,7 @@ private:
 	void Recalc() noexcept;
 	float LineLengthSquared(const float machinePos[3], const float anchor[3]) const noexcept;		// Calculate the square of the line length from a spool from a Cartesian coordinate
 	void InverseTransform(float La, float Lb, float Lc, float machinePos[3]) const noexcept;
+	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept;
 
 	floatc_t ComputeDerivative(unsigned int deriv, float La, float Lb, float Lc) const noexcept;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
 	void Adjust(size_t numFactors, const floatc_t v[]) noexcept;									// Perform 3-, 6- or 9-factor adjustment
@@ -64,8 +65,15 @@ private:
 
 	float anchors[HANGPRINTER_AXES][3];				// XYZ coordinates of the anchors
 	float printRadius;
+	// Line buildup compensation
+	float spoolBuildupFactor;
+	float spoolRadii[HANGPRINTER_AXES];
+	uint32_t mechanicalAdvantage[HANGPRINTER_AXES], linesPerSpool[HANGPRINTER_AXES];
+	uint32_t motorGearTeeth[HANGPRINTER_AXES], spoolGearTeeth[HANGPRINTER_AXES], fullStepsPerMotorRev[HANGPRINTER_AXES];
 
 	// Derived parameters
+	float k0[HANGPRINTER_AXES], spoolRadiiSq[HANGPRINTER_AXES], k2[HANGPRINTER_AXES], lineLengthsOrigin[HANGPRINTER_AXES];
+	float printRadiusSquared;
 	float Da2, Db2, Dc2;
 	float Xab, Xbc, Xca;
 	float Yab, Ybc, Yca;
