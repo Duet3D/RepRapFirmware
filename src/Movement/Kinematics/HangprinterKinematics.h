@@ -43,9 +43,7 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(anchorA)
-	OBJECT_MODEL_ARRAY(anchorB)
-	OBJECT_MODEL_ARRAY(anchorC)
+	OBJECT_MODEL_ARRAY(anchors)
 
 private:
 	// Basic facts about movement system
@@ -64,8 +62,7 @@ private:
 	void Adjust(size_t numFactors, const floatc_t v[]) noexcept;									// Perform 3-, 6- or 9-factor adjustment
 	void PrintParameters(const StringRef& reply) const noexcept;									// Print all the parameters for debugging
 
-	float anchorA[3], anchorB[3], anchorC[3];				// XYZ coordinates of the anchors
-	float anchorDz;
+	float anchors[HANGPRINTER_AXES][3];				// XYZ coordinates of the anchors
 	float printRadius;
 
 	// Derived parameters
