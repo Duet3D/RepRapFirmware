@@ -55,7 +55,7 @@ static Task<MainTaskStackWords> mainTask;
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 
 // Idle task data
-constexpr unsigned int IdleTaskStackWords = 40;				// currently we don't use the idle talk for anything, so this can be quite small
+constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle talk for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 
 extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize) noexcept

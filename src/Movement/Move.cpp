@@ -49,7 +49,10 @@
 # include <CAN/CanMotion.h>
 #endif
 
-constexpr unsigned int MoveTaskStackWords = 300;		// 250 is not enough when Move and DDA debug are enabled
+// Move task stack size
+// 250 is not enough when Move and DDA debug are enabled
+// deckingman's system (MB6HC with CAN expansion) needs at least 365 in 3.3beta3
+constexpr unsigned int MoveTaskStackWords = 450;
 static Task<MoveTaskStackWords> moveTask;
 
 constexpr uint32_t MoveTimeout = 20;					// normal timeout when the Move process is waiting for a new move
@@ -370,8 +373,11 @@ unsigned int Move::GetNumProbedProbePoints() const noexcept
 }
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
+// This is called by the Main task, so we need to lock out the Move task while doing this
 float Move::PushBabyStepping(size_t axis, float amount) noexcept
 {
+	TaskCriticalSectionLocker lock;						// lock out the Move task
+
 	return mainDDARing.PushBabyStepping(axis, amount);
 }
 
@@ -1016,7 +1022,8 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 // Process M595
 GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-	return mainDDARing.ConfigureMovementQueue(gb, reply);
+	const size_t ringNumber = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', ARRAY_SIZE(rings)) : 0;
+	return rings[ringNumber].ConfigureMovementQueue(gb, reply);
 }
 
 // Return the current live XYZ and extruder coordinates

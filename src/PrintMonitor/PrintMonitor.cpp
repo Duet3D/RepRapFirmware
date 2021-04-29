@@ -64,6 +64,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, (int32_t)self->currentLayer), 					ObjectModelEntryFlags::live },
 	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, self->GetCurrentLayerTime(), 1), 				ObjectModelEntryFlags::live },
 	{ "pauseDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetPauseDuration())),											ObjectModelEntryFlags::live },
+	{ "rawExtrusion",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), ExpressionValue(self->gCodes.GetTotalRawExtrusion(), 1)),					ObjectModelEntryFlags::live },
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::live },
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
 
@@ -87,7 +88,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 11 + TRACK_OBJECT_NAMES, 11, 4 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 12 + TRACK_OBJECT_NAMES, 11, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 

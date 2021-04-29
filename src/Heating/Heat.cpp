@@ -50,9 +50,9 @@ Licence: GPL
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-constexpr uint32_t HeaterTaskStackWords = 420;			// task stack size in dwords, must be large enough for auto tuning and a local CAN buffer
+constexpr uint32_t HeaterTaskStackWords = 440;			// task stack size in dwords, must be large enough for auto tuning and a local CAN buffer
 #else
-constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
+constexpr uint32_t HeaterTaskStackWords = 420;			// task stack size in dwords, must be large enough for auto tuning. 400 was not quite enough for one Duet WiFi user running 3.2.2.
 #endif
 
 static Task<HeaterTaskStackWords> heaterTask;
@@ -62,7 +62,7 @@ extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
 	reprap.GetHeat().HeaterTask();
 }
 
-static constexpr uint16_t SensorsTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
+static constexpr uint16_t SensorsTaskStackWords = 150;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
 static Task<SensorsTaskStackWords> *sensorsTask = nullptr;
 
 extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters) noexcept
@@ -932,7 +932,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	if (gb.Seen('P'))
 	{
-		String<StringLength20> portName;
+		String<StringLength50> portName;							// StringLength20 is too short for "thermocouple-max31856"
 		gb.GetReducedString(portName.GetRef());
 #if SUPPORT_CAN_EXPANSION
 		boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
