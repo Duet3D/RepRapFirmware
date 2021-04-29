@@ -1070,39 +1070,52 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 		else
 		{
 			// List remembered networks
-			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;	// enough for all the remembered SSID data
+			if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
+			{
+				return GCodeResult::notFinished;			// try again later
+			}
+
+			const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
+
+			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;		// enough for all the remembered SSID data
 			uint32_t buffer[NumDwords(declaredBufferLength)];
 			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, 0, nullptr, 0, buffer, declaredBufferLength);
 			if (rslt >= 0)
 			{
-				size_t offset = ReducedWirelessConfigurationDataSize;		// skip own SSID details
+				longReply->copy((jsonFormat) ? "{\"rememberedNetworks\":[" : "Remembered networks:");
+				size_t offset = (jsonFormat) ? 0 : ReducedWirelessConfigurationDataSize;		// skip own SSID details unless reporting in JSON format
+				bool found = false;
 				while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
 				{
 					WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
-					if (wp->ssid[0] != 0)
+					if (wp->ssid[0] != 0 || (offset == 0 && jsonFormat))
 					{
-						if (longReply == nullptr)
-						{
-							if (!OutputBuffer::Allocate(longReply))
-							{
-								return GCodeResult::notFinished;			// try again later
-							}
-							longReply->copy("Remembered networks:");
-						}
 						wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-						longReply->catf("\n%s IP=%s GW=%s NM=%s", wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+						if (jsonFormat && found)
+						{
+							longReply->cat(',');
+						}
+						longReply->catf((jsonFormat)
+										? "{\"ssid\":\"%.s\",\"ip\":\"%s\",\"gw\":\"%s\",\"mask\":\"%s\"}"
+											: "\n%s IP=%s GW=%s NM=%s",
+											  	 wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+						found = true;
 					}
 					offset += ReducedWirelessConfigurationDataSize;
 				}
 
-				if (longReply == nullptr)
+				if (jsonFormat)
 				{
-					reply.copy("No remembered networks");
+					longReply->cat("],\"err\":0}\n");
+				}
+				else if (!found)
+				{
+					longReply->cat(" none");
 				}
 				return GCodeResult::ok;
 			}
 
-			reply.printf("Failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
+			longReply->printf((jsonFormat) ? "{\"rememberedNetworks\":[],\"err\":1,\"errText\":\"%.s\"}" : "Failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
 		}
 		return GCodeResult::error;
 
