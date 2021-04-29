@@ -96,6 +96,10 @@
 # define SUPPORT_CAN_EXPANSION	0
 #endif
 
+#ifndef DUAL_CAN
+# define DUAL_CAN				0
+#endif
+
 #ifndef SUPPORT_OBJECT_MODEL
 # define SUPPORT_OBJECT_MODEL	0
 #endif

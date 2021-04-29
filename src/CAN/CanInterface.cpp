@@ -113,7 +113,7 @@ static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (
 
 static CanDevice *can0dev = nullptr;
 
-#if SAME70 && defined(DUAL_CAN)
+#if DUAL_CAN
 
 constexpr CanDevice::Config Can1Config =
 {
@@ -123,8 +123,8 @@ constexpr CanDevice::Config Can1Config =
 	.numRxBuffers =  0,
 	.rxFifo0Size = 16,
 	.rxFifo1Size = 16,
-	.numShortFilterElements = 0,
-	.numExtendedFilterElements = 3,
+	.numShortFilterElements = 1,
+	.numExtendedFilterElements = 1,
 	.txEventFifoSize = 16
 };
 
@@ -235,9 +235,9 @@ void CanInterface::Init() noexcept
 # error Unsupported MCU
 #endif
 
-// Initialise the CAN hardware
+	// Initialise the CAN hardware
 	CanTiming timing;
-	timing.SetDefaults();
+	timing.SetDefaults_1Mb();
 	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, nullptr);
 	InitReceiveFilters();
 	can0dev->Enable();
@@ -248,6 +248,14 @@ void CanInterface::Init() noexcept
 	canClockTask.Create(CanClockLoop, "CanClock", nullptr, TaskPriority::CanClockPriority);
 	canSenderTask.Create(CanSenderLoop, "CanSender", nullptr, TaskPriority::CanSenderPriority);
 	canReceiverTask.Create(CanReceiverLoop, "CanReceiver", nullptr, TaskPriority::CanReceiverPriority);
+
+#if DUAL_CAN
+	timing.SetDefaults_250kb();
+	can1dev = CanDevice::Init(1, SecondaryCanDeviceNumber, Can1Config, can1Memory, timing, nullptr);
+	can1dev->SetShortFilterElement(0, CanDevice::RxBufferNumber::fifo0, 0, 0);			// set up a filter to receive all messages in FIFO 0
+	can1dev->SetExtendedFilterElement(0, CanDevice::RxBufferNumber::fifo0, 0, 0);
+	can1dev->Enable();
+#endif
 }
 
 void CanInterface::Shutdown() noexcept
@@ -693,6 +701,23 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 		can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
 	}
 }
+
+#if DUAL_CAN
+
+void CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept
+{
+	if (can1dev != nullptr)
+	{
+		can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf);
+	}
+}
+
+bool CanInterface::ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout) noexcept
+{
+	return can1dev != nullptr && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, timeout, buf);
+}
+
+#endif
 
 // The CanReceiver task
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
