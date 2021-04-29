@@ -87,9 +87,13 @@ private:
 	float totalDuration;							// the total input shaping time in seconds
 	float totalShapingClocks;						// the total input shaping time in step clocks
 	float clocksLostAtStart, clocksLostAtEnd;		// the acceleration time lost due to input shaping. Multiply by 2 if shaping is used at both the start and end of acceleration.
-	unsigned int numImpulses;
+	float overlappedCoefficients[MaxImpulses - 1][2 * MaxImpulses - 1];
+	float overlappedShapingClocks[MaxImpulses - 1];
+	float overlappedClocksLost[MaxImpulses - 1];
+	float averageAcceleration[MaxImpulses - 1];
+	unsigned int numImpulses;						// the total number of impulses
+	unsigned int maxOverlap;						// the maximum number of acceleration and deceleration segments that can be overlapped
 	InputShaperType type;
-	bool equalDurations;
 };
 
 #endif /* SRC_MOVEMENT_INPUTSHAPER_H_ */

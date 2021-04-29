@@ -100,7 +100,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				gb.GetFloatArray(coefficients, numAmplitudes, false);
 
 				// Get the impulse durations, if provided
-				equalDurations = true;
+				maxOverlap = numAmplitudes;							// assume we can overlap, until we find otherwise
 				if (gb.Seen('T'))
 				{
 					size_t numDurations = numAmplitudes;
@@ -119,7 +119,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 					{
 						if (durations[i] != durations[0])
 						{
-							equalDurations = false;
+							maxOverlap = 0;
 							break;
 						}
 					}
@@ -149,8 +149,8 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				coefficients[1] = coefficients[0] + 2.0 * k/j;
 			}
 			durations[0] = durations[1] = 0.5/dampedFrequency;
-			equalDurations = true;
 			numImpulses = 3;
+			maxOverlap = 2;
 			break;
 
 		case InputShaperType::ZVDD:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
@@ -161,8 +161,8 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				coefficients[2] = coefficients[1] + 3.0 * fsquare(k)/j;
 			}
 			durations[0] = durations[1] = durations[2] = 0.5/dampedFrequency;
-			equalDurations = true;
 			numImpulses = 4;
+			maxOverlap = 3;
 			break;
 
 		case InputShaperType::EI2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
@@ -178,8 +178,8 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				durations[1] = ((0.99748 - 0.49890) + ( 0.18382 - 0.16270) * zeta + (-1.58270 + 0.54262) * zetaSquared + (8.17120 - 6.16180) * zetaCubed)/dampedFrequency;
 				durations[2] = ((1.49920 - 0.99748) + (-0.09297 - 0.18382) * zeta + (-0.28338 + 1.58270) * zetaSquared + (1.85710 - 8.17120) * zetaCubed)/dampedFrequency;
 			}
-			equalDurations = false;
 			numImpulses = 4;
+			maxOverlap = 0;
 			break;
 
 		case InputShaperType::EI3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
@@ -197,8 +197,8 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 				durations[2] = ((1.49870 - 0.99849) + (0.10306 - 0.29808)  * zeta + (-2.01390 + 2.36460) * zetaSquared + (17.0320 - 23.3990) * zetaCubed)/dampedFrequency;
 				durations[3] = ((1.99960 - 1.49870) + (-0.28231 - 0.10306) * zeta + (0.61536 + 2.01390)  * zetaSquared + (5.40450 - 17.0320) * zetaCubed)/dampedFrequency;
 			}
-			equalDurations = false;
 			numImpulses = 5;
+			maxOverlap = 0;
 			break;
 		}
 
@@ -214,6 +214,40 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		clocksLostAtStart = tLostAtStart * StepTimer::StepClockRate;
 		clocksLostAtEnd = tLostAtEnd * StepTimer::StepClockRate;
 		totalShapingClocks = totalDuration * StepTimer::StepClockRate;
+
+		// Calculate the clocks and coefficients needed for various degrees of overlapping
+		for (unsigned int overlap = 0; overlap < maxOverlap; ++overlap)
+		{
+			const unsigned int overlapStart = numImpulses - overlap;
+			float maxVal = 0.0;
+			float totalAcceleration = 0.0;
+			for (unsigned int i = 0; i < numImpulses + overlapStart; ++i)
+			{
+				float val = (i < numImpulses) ? coefficients[i] : 1.0;
+				if (i >= overlapStart)
+				{
+					val -= coefficients[i - overlapStart];
+				}
+				if (maxVal > val)
+				{
+					maxVal = val;
+				}
+				overlappedCoefficients[overlap][i] = val;
+				totalAcceleration += val;
+			}
+
+			// Now scale the values by maxVal
+			if (maxVal < 1.0)
+			{
+				const float scaling = 1.0/maxVal;
+				for (unsigned int i = 0; i < numImpulses + overlapStart; ++i)
+				{
+					overlappedCoefficients[overlap][i] *= scaling;
+				}
+				totalAcceleration *= scaling;
+			}
+			averageAcceleration[overlap] = totalAcceleration/numImpulses + overlapStart;
+		}
 
 		reprap.MoveUpdated();
 	}
