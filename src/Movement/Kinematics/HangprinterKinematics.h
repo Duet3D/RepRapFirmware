@@ -44,6 +44,7 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(anchors)
+	OBJECT_MODEL_ARRAY(anchorCoordinates)
 
 private:
 	// Basic facts about movement system
