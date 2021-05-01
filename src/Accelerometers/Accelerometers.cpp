@@ -28,6 +28,8 @@
 # include <Duet3Ate.h>
 #endif
 
+constexpr uint32_t DefaultAccelerometerSpiFrequency = 2000000;
+
 // Get the number of binary digits after the decimal point
 static inline unsigned int GetBitsAfterPoint(uint8_t dataResolution) noexcept
 {
@@ -86,6 +88,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 		if (f != nullptr)
 		{
 			f->Write("Data incomplete\n");
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			f = nullptr;
 		}
@@ -102,12 +105,14 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 		if (msgLen < msg.GetActualDataLength())
 		{
 			f->Write("Received bad data\n");
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			f = nullptr;
 		}
 		else if (msg.axes != axesReceived || msg.firstSampleNumber != expectedSampleNumber || src != currentBoard)
 		{
 			f->Write("Received mismatched data\n");
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			f = nullptr;
 		}
@@ -173,6 +178,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				String<StringLength50> temp;
 				temp.printf("Rate %u, overflows %u\n", msg.actualSampleRate, numOverflows);
 				f->Write(temp.c_str());
+				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
 				f = nullptr;
 				expectedSampleNumber = 0;
@@ -242,6 +248,7 @@ static IoPort irqPort;
 							if (f != nullptr)
 							{
 								f->Write("Failed to collect data from accelerometer\n");
+								f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 								f->Close();
 								f = nullptr;
 							}
@@ -321,6 +328,7 @@ static IoPort irqPort;
 
 				if (f != nullptr)
 				{
+					f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 					f->Close();
 					f = nullptr;
 				}
@@ -415,7 +423,8 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			return GCodeResult::error;
 		}
 
-		temp = new LIS3DH(SharedSpiDevice::GetMainSharedSpiDevice(), spiCsPort.GetPin(), irqPort.GetPin());
+		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetUIValue() : DefaultAccelerometerSpiFrequency;
+		temp = new LIS3DH(SharedSpiDevice::GetMainSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
 		if (temp->CheckPresent())
 		{
 			accelerometer = temp;

@@ -1054,7 +1054,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
 					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;		// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
-					if (tapsDone > 0)
+					if (tapsDone > 0)											// don't accumulate the result of we are doing fast-then-slow probing and this was the fast probe
 					{
 						g30zHeightError = g30zStoppedHeight - zp->GetActualTriggerHeight();
 						g30zHeightErrorSum += g30zHeightError;
@@ -1073,7 +1073,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					break;
 				}
 
-				if (tapsDone == 1 && !hadProbingError)
+				if (tapsDone <= 1 && !hadProbingError)
 				{
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
 					moveBuffer.coords[Z_AXIS] = zp->GetActualTriggerHeight();
@@ -1120,7 +1120,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// See whether we need to do any more taps
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			bool acceptReading = false;
-			if (zp->GetMaxTaps() < 2)
+			if (zp->GetMaxTaps() < 2 && tapsDone == 1)
 			{
 				acceptReading = true;
 			}
