@@ -932,7 +932,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	if (gb.Seen('P'))
 	{
-		String<StringLength50> portName;							// StringLength20 is too short for "thermocouple-max31856"
+		String<StringLength50> portName;
 		gb.GetReducedString(portName.GetRef());
 #if SUPPORT_CAN_EXPANSION
 		boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
@@ -958,13 +958,13 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 
 		DeleteSensor(sensorNum);
 
-		String<StringLength20> typeName;
+		String<StringLength50> typeName;							// StringLength20 is too short for "thermocouple-max31856"
 		gb.GetReducedString(typeName.GetRef());
 
 #if SUPPORT_CAN_EXPANSION
 		if (boardAddress == CanId::NoAddress)
 		{
-			boardAddress = CanInterface::GetCanAddress();		// no port name was given, so default to local
+			boardAddress = CanInterface::GetCanAddress();			// no port name was given, so default to local
 		}
 		TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
 #else
