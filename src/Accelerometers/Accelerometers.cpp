@@ -88,6 +88,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 		if (f != nullptr)
 		{
 			f->Write("Data incomplete\n");
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			f = nullptr;
 		}
@@ -104,12 +105,14 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 		if (msgLen < msg.GetActualDataLength())
 		{
 			f->Write("Received bad data\n");
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			f = nullptr;
 		}
 		else if (msg.axes != axesReceived || msg.firstSampleNumber != expectedSampleNumber || src != currentBoard)
 		{
 			f->Write("Received mismatched data\n");
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			f = nullptr;
 		}
@@ -175,6 +178,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				String<StringLength50> temp;
 				temp.printf("Rate %u, overflows %u\n", msg.actualSampleRate, numOverflows);
 				f->Write(temp.c_str());
+				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
 				f = nullptr;
 				expectedSampleNumber = 0;
@@ -244,6 +248,7 @@ static IoPort irqPort;
 							if (f != nullptr)
 							{
 								f->Write("Failed to collect data from accelerometer\n");
+								f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 								f->Close();
 								f = nullptr;
 							}
@@ -323,6 +328,7 @@ static IoPort irqPort;
 
 				if (f != nullptr)
 				{
+					f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 					f->Close();
 					f = nullptr;
 				}
