@@ -15,13 +15,12 @@
 constexpr uint32_t Lis3dSpiTimeout = 25;							// timeout while waiting for the SPI bus
 constexpr uint32_t DataCollectionTimeout = (1000 * 32)/400 + 2;		// timeout whole collecting data, enough to fill the FIFO at 400Hz
 constexpr uint8_t FifoInterruptLevel = 20;							// how full the FIFO must get before we want an interrupt
-constexpr uint32_t SpiFrequency = 4000000;
 const SpiMode lisMode = SpiMode::mode3;
 
 static constexpr uint8_t WhoAmIValue = 0x33;
 
-LIS3DH::LIS3DH(SharedSpiDevice& dev, Pin p_csPin, Pin p_int1Pin) noexcept
-	: SharedSpiClient(dev, SpiFrequency, lisMode, p_csPin, false), taskWaiting(nullptr), int1Pin(p_int1Pin)
+LIS3DH::LIS3DH(SharedSpiDevice& dev, uint32_t freq, Pin p_csPin, Pin p_int1Pin) noexcept
+	: SharedSpiClient(dev, freq, lisMode, p_csPin, false), taskWaiting(nullptr), int1Pin(p_int1Pin)
 {
 }
 

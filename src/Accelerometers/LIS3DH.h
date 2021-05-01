@@ -17,7 +17,7 @@
 class LIS3DH : public SharedSpiClient
 {
 public:
-	LIS3DH(SharedSpiDevice& dev, Pin p_csPin, Pin p_int1Pin) noexcept;
+	LIS3DH(SharedSpiDevice& dev, uint32_t freq, Pin p_csPin, Pin p_int1Pin) noexcept;
 
 	// Do a quick test to check whether the accelerometer is present, returning true if it is
 	bool CheckPresent() noexcept;
