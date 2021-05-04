@@ -413,7 +413,9 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 		}
 	}
 
-	if (i >= 2 && i < 9 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{'))		// if the command word is properly terminated
+	if (i >= 2 && i < 9
+		&& (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{' || gb.buffer[i] == '"' || gb.buffer[i] == '(')	// if the command word is properly terminated
+	   )
 	{
 		readPointer = i;
 		const char * const command = gb.buffer;

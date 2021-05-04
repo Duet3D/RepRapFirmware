@@ -35,7 +35,7 @@ ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, co
 // Evaluate a bracketed expression
 ExpressionValue ExpressionParser::ParseExpectKet(bool evaluate, char closingBracket) THROWS(GCodeException)
 {
-	auto rslt = Parse(evaluate);
+	auto rslt = ParseInternal(evaluate, 0);
 	if (CurrentCharacter() != closingBracket)
 	{
 		throw ConstructParseException("expected '%c'", (uint32_t)closingBracket);
@@ -48,7 +48,7 @@ ExpressionValue ExpressionParser::ParseExpectKet(bool evaluate, char closingBrac
 ExpressionValue ExpressionParser::Parse(bool evaluate) THROWS(GCodeException)
 {
 	obsoleteField.Clear();
-	ExpressionValue result = ParseInternal(evaluate);
+	ExpressionValue result = ParseInternal(evaluate, 0);
 	if (!obsoleteField.IsEmpty())
 	{
 		reprap.GetPlatform().MessageF(WarningMessage, "obsolete object model field %s queried\n", obsoleteField.c_str());
@@ -56,26 +56,8 @@ ExpressionValue ExpressionParser::Parse(bool evaluate) THROWS(GCodeException)
 	return result;
 }
 
-// Evaluate an expression that must either be a numeric or string literal or enclosed in { }
-ExpressionValue ExpressionParser::ParseSimple() THROWS(GCodeException)
-{
-	const char c = CurrentCharacter();
-	if (c == '{')
-	{
-		return ParseExpectKet(true, '}');
-	}
-	if (c == '"')
-	{
-		return ParseQuotedString();
-	}
-	if (isDigit(c))
-	{
-		return ParseNumber();
-	}
-	throw ConstructParseException("expected simple expression");
-}
-
 // Evaluate an expression internally, stopping before any binary operators with priority 'priority' or lower
+// This is recursive, so avoid allocating large amounts of data on the stack
 ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority) THROWS(GCodeException)
 {
 	// Lists of binary operators and their priorities
@@ -481,19 +463,23 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 					break;
 
 				case '^':
-					{
-						String<MaxStringExpressionLength> str;
-						val.AppendAsString(str.GetRef());
-						val2.AppendAsString(str.GetRef());
-						StringHandle sh(str.c_str());
-						val.Set(sh);
-						val2.Release();
-					}
+					StringConcat(val, val2);
 					break;
 				}
 			}
 		}
 	} while (true);
+}
+
+// Concatenate val1 and val2 and assign the result to val1
+// This is written as a separate function because it needs a temporary string buffer, and its caller is recursive. Its declaration must be declared 'noinline'.
+/*static*/ void  ExpressionParser::StringConcat(ExpressionValue &val, ExpressionValue &val2) noexcept
+{
+    String<MaxStringExpressionLength> str;
+    val.AppendAsString(str.GetRef());
+    val2.AppendAsString(str.GetRef());
+    StringHandle sh(str.c_str());
+    val.Set(sh);
 }
 
 bool ExpressionParser::ParseBoolean() THROWS(GCodeException)

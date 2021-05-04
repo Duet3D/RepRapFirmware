@@ -20,7 +20,6 @@ public:
 	ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column = -1) noexcept;
 
 	ExpressionValue Parse(bool evaluate = true) THROWS(GCodeException);
-	ExpressionValue ParseSimple() THROWS(GCodeException);
 	bool ParseBoolean() THROWS(GCodeException);
 	float ParseFloat() THROWS(GCodeException);
 	int32_t ParseInteger() THROWS(GCodeException);
@@ -35,7 +34,7 @@ private:
 	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
 	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;
 
-	ExpressionValue ParseInternal(bool evaluate = true, uint8_t priority = 0) THROWS(GCodeException);
+	ExpressionValue ParseInternal(bool evaluate, uint8_t priority) THROWS(GCodeException);
 	ExpressionValue ParseExpectKet(bool evaluate, char expectedKet) THROWS(GCodeException);
 	ExpressionValue ParseNumber() noexcept
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
@@ -47,6 +46,9 @@ private:
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToString(ExpressionValue& val, bool evaluate) THROWS(GCodeException);
+
+	// The following must be declared 'noinline' because it allocates a large buffer on the stack and its caller is recursive
+	static void __attribute__((noinline)) StringConcat(ExpressionValue &val, ExpressionValue &val2) noexcept;
 
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException);
