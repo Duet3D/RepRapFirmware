@@ -30,18 +30,18 @@ public:
 	const char *GetEndptr() const noexcept { return currentp; }
 
 private:
-	GCodeException ConstructParseException(const char *str) const noexcept;
-	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
-	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;
+	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *str) const THROWS(GCodeException);
+	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *str, const char *param) const THROWS(GCodeException);
+	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *str, uint32_t param) const THROWS(GCodeException);
 
-	ExpressionValue ParseInternal(bool evaluate, uint8_t priority) THROWS(GCodeException);
-	ExpressionValue ParseExpectKet(bool evaluate, char expectedKet) THROWS(GCodeException);
-	ExpressionValue ParseNumber() noexcept
+	void ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException);
+	void ParseExpectKet(ExpressionValue& rslt, bool evaluate, char expectedKet) THROWS(GCodeException);
+	void __attribute__((noinline)) ParseNumber(ExpressionValue& rslt) noexcept
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
-	ExpressionValue ParseIdentifierExpression(bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
+	void __attribute__((noinline)) ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
-	ExpressionValue ParseQuotedString() THROWS(GCodeException);
-	ExpressionValue GetVariableValue(const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException);
+	void __attribute__((noinline)) ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeException);
+	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
