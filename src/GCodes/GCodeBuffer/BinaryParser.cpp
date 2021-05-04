@@ -773,7 +773,7 @@ void BinaryParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
 				{
 				case DataType::String:
 					{
-						StringHandle sh(seenParameterValue, seenParameter->intValue);
+						StringHandle sh(seenParameterValue, param->intValue);
 						ev.Set(sh);
 					}
 					break;
@@ -781,22 +781,22 @@ void BinaryParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
 				case DataType::Expression:
 					try
 					{
-						ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
-						ev.Set(parser.ParseFloat());
+						ExpressionParser parser(gb, seenParameterValue, seenParameterValue + param->intValue, -1);
+						ev = parser.Parse();
 					}
-					catch (const GCodeException&) { }
+					catch (const GCodeException&) { }			// TODO error handling
 					break;
 
 				case DataType::Float:
-					ev.Set(seenParameter->floatValue);
+					ev.Set(param->floatValue);
 					break;
 
 				case DataType::Int:
-					ev.Set(seenParameter->intValue);
+					ev.Set(param->intValue);
 					break;
 
 				case DataType::UInt:
-					ev.Set((int32_t)seenParameter->uintValue);
+					ev.Set((int32_t)param->uintValue);
 					break;
 
 				default:
@@ -824,7 +824,6 @@ void BinaryParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
 			}
 		}
 	}
-	//TODO
 }
 
 GCodeException BinaryParser::ConstructParseException(const char *str) const noexcept

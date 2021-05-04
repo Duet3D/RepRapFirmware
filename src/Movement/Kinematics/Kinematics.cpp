@@ -24,7 +24,8 @@ const char * const Kinematics::HomeAllFileName = "homeall.g";
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
 Kinematics::Kinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept
-	: segmentsPerSecond(DefaultSegmentsPerSecond), minSegmentLength(DefaultMinSegmentLength), useSegmentation(doUseSegmentation), useRawG0(doUseRawG0), type(t)
+	: segmentsPerSecond(DefaultSegmentsPerSecond), minSegmentLength(DefaultMinSegmentLength), reciprocalMinSegmentLength(1.0/DefaultMinSegmentLength),
+	  useSegmentation(doUseSegmentation), useRawG0(doUseRawG0), type(t)
 {
 }
 

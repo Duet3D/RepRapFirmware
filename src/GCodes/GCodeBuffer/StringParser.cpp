@@ -894,10 +894,8 @@ void StringParser::DecodeCommand() noexcept
 	}
 	else if (   hasCommandNumber
 			 && commandLetter == 'G'
-			 && commandNumber <= 3
-			 && (   strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr
-				 || ((cl == 'I' || cl == 'J') && commandNumber >= 2)
-				)
+			 && commandNumber <= 1
+			 && strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr
 			 && (   reprap.GetGCodes().GetMachineType() == MachineType::cnc			// Fanuc style CNC
 				 || reprap.GetGCodes().GetMachineType() == MachineType::laser		// LaserWeb style
 				)
