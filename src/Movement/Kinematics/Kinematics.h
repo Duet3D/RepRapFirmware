@@ -229,16 +229,16 @@ protected:
 	static void PrintVector(const char *s, const float *v, size_t numElems) noexcept;
 	static void PrintVector(const char *s, const double *v, size_t numElems) noexcept;
 
-	float segmentsPerSecond;				// if we are using segmentation, the target number of segments/second
-	float minSegmentLength;					// if we are using segmentation, the minimum segment size
-	float reciprocalMinSegmentLength;		// if we are using segmentation, the reciprocal of minimum segment size
-
 	static const char * const HomeAllFileName;
 
 private:
 	// Default values for those kinematics that always use segmentation
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
 	static constexpr float DefaultMinSegmentLength = 0.2;
+
+	float segmentsPerSecond;				// if we are using segmentation, the target number of segments/second
+	float minSegmentLength;					// if we are using segmentation, the minimum segment size
+	float reciprocalMinSegmentLength;		// if we are using segmentation, the reciprocal of minimum segment size
 
 	bool useSegmentation;					// true if we have to approximate linear movement using segmentation
 	bool useRawG0;							// true if we normally use segmentation but we do not need to segment travel moves

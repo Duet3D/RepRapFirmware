@@ -226,7 +226,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS],
 				(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS],
 				(double)printRadius,
-				(int)segmentsPerSecond, (double)minSegmentLength
+				(int)GetSegmentsPerSecond(), (double)GetMinSegmentLength()
 				);
 		}
 	}
