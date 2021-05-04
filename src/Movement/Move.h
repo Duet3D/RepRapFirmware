@@ -214,10 +214,11 @@ private:
 		timing			// no moves being executed or in queue, motors are at full current
 	};
 
-	void BedTransform(float move[MaxAxes], const Tool *tool) const noexcept;			// Take a position and apply the bed compensations
-	void InverseBedTransform(float move[MaxAxes],const  Tool *tool) const noexcept;		// Go from a bed-transformed point back to user coordinates
-	void AxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;			// Take a position and apply the axis-angle compensations
-	void InverseAxisTransform(float move[MaxAxes], const Tool *tool) const noexcept;	// Go from an axis transformed point back to user coordinates
+	void BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the bed compensations
+	void InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;			// Go from a bed-transformed point back to user coordinates
+	void AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the axis-angle compensations
+	void InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;		// Go from an axis transformed point back to user coordinates
+	float ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;	// Compute the height correction needed at a point, ignoring taper
 
 	const char *GetCompensationTypeString() const noexcept;
 
