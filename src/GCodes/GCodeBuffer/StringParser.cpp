@@ -1765,13 +1765,18 @@ void StringParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
 									{
 										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);
+										ExpressionValue ev;
 										try
 										{
-											ExpressionValue ev = parser.Parse();
-											char paramName[2] = { letter, 0 };
-											vs.Insert(new Variable(paramName, ev, -1));
+											ev = parser.Parse();
 										}
-										catch (const GCodeException&) { }
+										catch (const GCodeException&)
+										{
+											//TODO can we report the error anywhere?
+											ev.Set(nullptr);
+										}
+										char paramName[2] = { letter, 0 };
+										vs.Insert(new Variable(paramName, ev, -1));
 									}
 								}
 							  );
