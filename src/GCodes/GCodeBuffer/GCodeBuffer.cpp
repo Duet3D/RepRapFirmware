@@ -1029,7 +1029,12 @@ void GCodeBuffer::AppendFullCommand(const StringRef &s) const noexcept
 
 void GCodeBuffer::SetParameters(int codeRunning) noexcept
 {
-	PARSER_OPERATION(SetParameters(GetVariables(), codeRunning));
+	// This is called after we have pushed the state.
+	// We need to add the parameters to the local variables in the new state, but the parameter expressions may refer to local variables and parameters in the old state.
+	VariableSet& vars = GetVariables();							// get a reference to the new variables and parameters
+	machineState->localPush = true;								// tell the system to fetch variables and parameters from the old state record
+	PARSER_OPERATION(SetParameters(vars, codeRunning));
+	machineState->localPush = false;							// go back to using the new state record
 }
 
 VariableSet& GCodeBuffer::GetVariables() const noexcept

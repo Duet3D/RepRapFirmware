@@ -413,7 +413,9 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 		}
 	}
 
-	if (i >= 2 && i < 9 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{'))		// if the command word is properly terminated
+	if (i >= 2 && i < 9
+		&& (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{' || gb.buffer[i] == '"' || gb.buffer[i] == '(')	// if the command word is properly terminated
+	   )
 	{
 		readPointer = i;
 		const char * const command = gb.buffer;
@@ -1763,13 +1765,18 @@ void StringParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
 									{
 										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);
+										ExpressionValue ev;
 										try
 										{
-											ExpressionValue ev = parser.Parse();
-											char paramName[2] = { letter, 0 };
-											vs.Insert(new Variable(paramName, ev, -1));
+											ev = parser.Parse();
 										}
-										catch (const GCodeException&) { }
+										catch (const GCodeException&)
+										{
+											//TODO can we report the error anywhere?
+											ev.Set(nullptr);
+										}
+										char paramName[2] = { letter, 0 };
+										vs.Insert(new Variable(paramName, ev, -1));
 									}
 								}
 							  );

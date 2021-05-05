@@ -45,6 +45,8 @@ class VariableSet
 public:
 	VariableSet() noexcept : root(nullptr) { }
 	~VariableSet();
+	VariableSet(const VariableSet&) = delete;
+	VariableSet& operator=(const VariableSet& other) = delete;
 
 	Variable *Lookup(const char *str) noexcept;
 	const Variable *Lookup(const char *str) const noexcept;

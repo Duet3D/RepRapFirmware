@@ -33,22 +33,22 @@ ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, co
 }
 
 // Evaluate a bracketed expression
-ExpressionValue ExpressionParser::ParseExpectKet(bool evaluate, char closingBracket) THROWS(GCodeException)
+void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char closingBracket) THROWS(GCodeException)
 {
-	auto rslt = Parse(evaluate);
+	ParseInternal(rslt, evaluate, 0);
 	if (CurrentCharacter() != closingBracket)
 	{
-		throw ConstructParseException("expected '%c'", (uint32_t)closingBracket);
+		ThrowParseException("expected '%c'", (uint32_t)closingBracket);
 	}
 	AdvancePointer();
-	return rslt;
 }
 
 // Evaluate an expression
 ExpressionValue ExpressionParser::Parse(bool evaluate) THROWS(GCodeException)
 {
 	obsoleteField.Clear();
-	ExpressionValue result = ParseInternal(evaluate);
+	ExpressionValue result;
+	ParseInternal(result, evaluate, 0);
 	if (!obsoleteField.IsEmpty())
 	{
 		reprap.GetPlatform().MessageF(WarningMessage, "obsolete object model field %s queried\n", obsoleteField.c_str());
@@ -56,27 +56,9 @@ ExpressionValue ExpressionParser::Parse(bool evaluate) THROWS(GCodeException)
 	return result;
 }
 
-// Evaluate an expression that must either be a numeric or string literal or enclosed in { }
-ExpressionValue ExpressionParser::ParseSimple() THROWS(GCodeException)
-{
-	const char c = CurrentCharacter();
-	if (c == '{')
-	{
-		return ParseExpectKet(true, '}');
-	}
-	if (c == '"')
-	{
-		return ParseQuotedString();
-	}
-	if (isDigit(c))
-	{
-		return ParseNumber();
-	}
-	throw ConstructParseException("expected simple expression");
-}
-
 // Evaluate an expression internally, stopping before any binary operators with priority 'priority' or lower
-ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority) THROWS(GCodeException)
+// This is recursive, so avoid allocating large amounts of data on the stack
+void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException)
 {
 	// Lists of binary operators and their priorities
 	static constexpr const char *operators = "?^&|!=<>+-*/";				// for multi-character operators <= and >= and != this is the first character
@@ -87,16 +69,15 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 	// Start by looking for a unary operator or opening bracket
 	SkipWhiteSpace();
 	const char c = CurrentCharacter();
-	ExpressionValue val;
 	switch (c)
 	{
 	case '"':
-		val = ParseQuotedString();
+		ParseQuotedString(val);
 		break;
 
 	case '-':
 		AdvancePointer();
-		val = ParseInternal(evaluate, UnaryPriority);
+		ParseInternal(val, evaluate, UnaryPriority);
 		switch (val.GetType())
 		{
 		case TypeCode::Int32:
@@ -108,13 +89,13 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 			break;
 
 		default:
-			throw ConstructParseException("expected numeric value after '-'");
+			ThrowParseException("expected numeric value after '-'");
 		}
 		break;
 
 	case '+':
 		AdvancePointer();
-		val = ParseInternal(evaluate, UnaryPriority);
+		ParseInternal(val, evaluate, UnaryPriority);
 		switch (val.GetType())
 		{
 		case TypeCode::Uint32:
@@ -128,7 +109,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 			break;
 
 		default:
-			throw ConstructParseException("expected numeric or enumeration value after '+'");
+			ThrowParseException("expected numeric or enumeration value after '+'");
 		}
 		break;
 
@@ -138,11 +119,11 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 		if (isalpha(CurrentCharacter()))
 		{
 			// Probably applying # to an object model array, so optimise by asking the OM for just the length
-			val = ParseIdentifierExpression(evaluate, true, false);
+			ParseIdentifierExpression(val, evaluate, true, false);
 		}
 		else
 		{
-			val = ParseInternal(evaluate, UnaryPriority);
+			ParseInternal(val, evaluate, UnaryPriority);
 			if (val.GetType() == TypeCode::CString)
 			{
 				val.Set((int32_t)strlen(val.sVal));
@@ -153,24 +134,24 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 			}
 			else
 			{
-				throw ConstructParseException("expected object model value or string after '#");
+				ThrowParseException("expected object model value or string after '#");
 			}
 		}
 		break;
 
 	case '{':
 		AdvancePointer();
-		val = ParseExpectKet(evaluate, '}');
+		ParseExpectKet(val, evaluate, '}');
 		break;
 
 	case '(':
 		AdvancePointer();
-		val = ParseExpectKet(evaluate, ')');
+		ParseExpectKet(val, evaluate, ')');
 		break;
 
 	case '!':
 		AdvancePointer();
-		val = ParseInternal(evaluate, UnaryPriority);
+		ParseInternal(val, evaluate, UnaryPriority);
 		ConvertToBool(val, evaluate);
 		val.bVal = !val.bVal;
 		break;
@@ -178,15 +159,15 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 	default:
 		if (isdigit(c))						// looks like a number
 		{
-			val = ParseNumber();
+			ParseNumber(val);
 		}
 		else if (isalpha(c))				// looks like a variable name
 		{
-			val = ParseIdentifierExpression(evaluate, false, false);
+			ParseIdentifierExpression(val, evaluate, false, false);
 		}
 		else
 		{
-			throw ConstructParseException("expected an expression");
+			ThrowParseException("expected an expression");
 		}
 		break;
 	}
@@ -198,20 +179,19 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 		char opChar = CurrentCharacter();
 		if (opChar == 0)	// don't pass null to strchr
 		{
-
-			return val;
+			return;
 		}
 
 		const char * const q = strchr(operators, opChar);
 		if (q == nullptr)
 		{
-			return val;
+			return;
 		}
 		const size_t index = q - operators;
 		const uint8_t opPrio = priorities[index];
 		if (opPrio <= priority)
 		{
-			return val;
+			return;
 		}
 
 		AdvancePointer();								// skip the [first] operator character
@@ -222,7 +202,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 		{
 			if (CurrentCharacter() != '=')
 			{
-				throw ConstructParseException("expected '='");
+				ThrowParseException("expected '='");
 			}
 			invert = true;
 			AdvancePointer();
@@ -247,11 +227,12 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 		case '&':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = ParseInternal(evaluate && val.bVal, opPrio);		// get the next operand
+				ExpressionValue val2;
+				ParseInternal(val2, evaluate && val.bVal, opPrio);		// get the next operand
 				if (val.bVal)
 				{
 					ConvertToBool(val2, evaluate);
-					val.bVal = val.bVal && val2.bVal;
+					val.bVal = val2.bVal;
 				}
 			}
 			break;
@@ -259,11 +240,12 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 		case '|':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = ParseInternal(evaluate && !val.bVal, opPrio);		// get the next operand
+				ExpressionValue val2;
+				ParseInternal(val2, evaluate && !val.bVal, opPrio);		// get the next operand
 				if (!val.bVal)
 				{
 					ConvertToBool(val2, evaluate);
-					val.bVal = val.bVal || val2.bVal;
+					val.bVal = val2.bVal;
 				}
 			}
 			break;
@@ -271,20 +253,23 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 		case '?':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = ParseInternal(evaluate && val.bVal, opPrio);		// get the second operand
+				const bool b = val.bVal;
+				ExpressionValue val2;
+				ParseInternal(((b) ? val : val2), evaluate && b, opPrio);		// get the second operand
 				if (CurrentCharacter() != ':')
 				{
-					throw ConstructParseException("expected ':'");
+					ThrowParseException("expected ':'");
 				}
 				AdvancePointer();
-				ExpressionValue val3 = ParseInternal(evaluate && !val.bVal, opPrio - 1);	// get the third operand, which may be a further conditional expression
-				return (val.bVal) ? val2 : val3;
+				ParseInternal(((b) ? val2 : val), evaluate && !b, opPrio - 1);	// get the third operand, which may be a further conditional expression
+				return;
 			}
 
 		default:
 			// Handle binary operators that always evaluate both operands
 			{
-				ExpressionValue val2 = ParseInternal(evaluate, opPrio);	// get the next operand
+				ExpressionValue val2;
+				ParseInternal(val2, evaluate, opPrio);	// get the next operand
 				switch(opChar)
 				{
 				case '+':
@@ -300,7 +285,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 						}
 						else
 						{
-							throw ConstructParseException("invalid operand types");
+							ThrowParseException("invalid operand types");
 						}
 					}
 					else
@@ -337,7 +322,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 						}
 						else
 						{
-							throw ConstructParseException("invalid operand types");
+							ThrowParseException("invalid operand types");
 						}
 					}
 					else
@@ -392,7 +377,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 						break;
 
 					default:
-						throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
+						ThrowParseException("expected numeric or Boolean operands to comparison operator");
 					}
 					val.SetType(TypeCode::Bool);
 					if (invert)
@@ -418,7 +403,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 						break;
 
 					default:
-						throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
+						ThrowParseException("expected numeric or Boolean operands to comparison operator");
 					}
 					val.SetType(TypeCode::Bool);
 					if (invert)
@@ -443,7 +428,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 						switch (val.GetType())
 						{
 						case TypeCode::ObjectModel:
-							throw ConstructParseException("cannot compare objects");
+							ThrowParseException("cannot compare objects");
 
 						case TypeCode::Int32:
 							val.bVal = (val.iVal == val2.iVal);
@@ -470,7 +455,7 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 							break;
 
 						default:
-							throw ConstructParseException("unexpected operand type to equality operator");
+							ThrowParseException("unexpected operand type to equality operator");
 						}
 					}
 					val.SetType(TypeCode::Bool);
@@ -481,19 +466,23 @@ ExpressionValue ExpressionParser::ParseInternal(bool evaluate, uint8_t priority)
 					break;
 
 				case '^':
-					{
-						String<MaxStringExpressionLength> str;
-						val.AppendAsString(str.GetRef());
-						val2.AppendAsString(str.GetRef());
-						StringHandle sh(str.c_str());
-						val.Set(sh);
-						val2.Release();
-					}
+					StringConcat(val, val2);
 					break;
 				}
 			}
 		}
 	} while (true);
+}
+
+// Concatenate val1 and val2 and assign the result to val1
+// This is written as a separate function because it needs a temporary string buffer, and its caller is recursive. Its declaration must be declared 'noinline'.
+/*static*/ void  ExpressionParser::StringConcat(ExpressionValue &val, ExpressionValue &val2) noexcept
+{
+    String<MaxStringExpressionLength> str;
+    val.AppendAsString(str.GetRef());
+    val2.AppendAsString(str.GetRef());
+    StringHandle sh(str.c_str());
+    val.Set(sh);
 }
 
 bool ExpressionParser::ParseBoolean() THROWS(GCodeException)
@@ -521,12 +510,12 @@ int32_t ExpressionParser::ParseInteger() THROWS(GCodeException)
 	case TypeCode::Uint32:
 		if (val.uVal > (uint32_t)std::numeric_limits<int32_t>::max())
 		{
-			throw ConstructParseException("unsigned integer too large");
+			ThrowParseException("unsigned integer too large");
 		}
 		return (int32_t)val.uVal;
 
 	default:
-		throw ConstructParseException("expected integer value");
+		ThrowParseException("expected integer value");
 	}
 }
 
@@ -543,10 +532,10 @@ uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 		{
 			return (uint32_t)val.iVal;
 		}
-		throw ConstructParseException("value must be non-negative");
+		ThrowParseException("value must be non-negative");
 
 	default:
-		throw ConstructParseException("expected non-negative integer value");
+		ThrowParseException("expected non-negative integer value");
 	}
 }
 
@@ -564,7 +553,7 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 	{
 		if (evaluate)
 		{
-			throw ConstructParseException("expected numeric operands");
+			ThrowParseException("expected numeric operands");
 		}
 		val1.Set((int32_t)0);
 		val2.Set((int32_t)0);
@@ -603,7 +592,7 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 	{
 		if (evaluate)
 		{
-			throw ConstructParseException("cannot convert operands to same type");
+			ThrowParseException("cannot convert operands to same type");
 		}
 		val1.Set((int32_t)0);
 		val2.Set((int32_t)0);
@@ -626,7 +615,7 @@ void ExpressionParser::EnsureNumeric(ExpressionValue& val, bool evaluate) const 
 	default:
 		if (evaluate)
 		{
-			throw ConstructParseException("expected numeric operand");
+			ThrowParseException("expected numeric operand");
 		}
 		val.Set((int32_t)0);
 	}
@@ -648,9 +637,9 @@ void ExpressionParser::ConvertToFloat(ExpressionValue& val, bool evaluate) const
 	default:
 		if (evaluate)
 		{
-			throw ConstructParseException("expected numeric operand");
+			ThrowParseException("expected numeric operand");
 		}
-		val.Set(0.0f);
+		val.Set(0.0f, 1);
 	}
 }
 
@@ -660,7 +649,7 @@ void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const 
 	{
 		if (evaluate)
 		{
-			throw ConstructParseException("expected Boolean operand");
+			ThrowParseException("expected Boolean operand");
 		}
 		val.Set(false);
 	}
@@ -698,28 +687,34 @@ void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 	SkipWhiteSpace();
 	if (CurrentCharacter() != 0)
 	{
-		throw ConstructParseException("Unexpected characters after expression");
+		ThrowParseException("Unexpected characters after expression");
 	}
 }
 
 // Parse a number. The initial character of the string is a decimal digit.
-ExpressionValue ExpressionParser::ParseNumber() noexcept
+void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
 {
 	NumericConverter conv;
-	conv.Accumulate(CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex, [this]()->char { AdvancePointer(); return CurrentCharacter(); });		// must succeed because CurrentCharacter is a decimal digit
-	return (conv.FitsInInt32())
-			? ExpressionValue(conv.GetInt32())
-				: ExpressionValue(conv.GetFloat(), constrain<unsigned int>(conv.GetDigitsAfterPoint(), 1, MaxFloatDigitsDisplayedAfterPoint));
+	conv.Accumulate(CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex, [this]()->char { AdvancePointer(); return CurrentCharacter(); });	// must succeed because CurrentCharacter is a decimal digit
+
+	if (conv.FitsInInt32())
+	{
+		rslt.Set(conv.GetInt32());
+	}
+	else
+	{
+		rslt.Set(conv.GetFloat(), constrain<unsigned int>(conv.GetDigitsAfterPoint(), 1, MaxFloatDigitsDisplayedAfterPoint));
+	}
 }
 
 // Parse an identifier expression
 // If 'evaluate' is false then the object model path may not exist, in which case we must ignore error that and parse it all anyway
 // This means we can use expressions such as: if {a.b == null || a.b.c == 1}
-ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
+void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 {
 	if (!isalpha(CurrentCharacter()))
 	{
-		throw ConstructParseException("expected an identifier");
+		ThrowParseException("expected an identifier");
 	}
 
 	String<MaxVariableNameLength> id;
@@ -733,14 +728,15 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		AdvancePointer();
 		if (c == '[')
 		{
-			const ExpressionValue index = Parse(evaluate);
+			ExpressionValue index;
+			ParseInternal(index, evaluate, 0);
 			if (CurrentCharacter() != ']')
 			{
-				throw ConstructParseException("expected ']'");
+				ThrowParseException("expected ']'");
 			}
 			if (index.GetType() != TypeCode::Int32)
 			{
-				throw ConstructParseException("expected integer expression");
+				ThrowParseException("expected integer expression");
 			}
 			AdvancePointer();										// skip the ']'
 			context.ProvideIndex(index.iVal);
@@ -748,7 +744,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		}
 		if (id.cat(c))
 		{
-			throw ConstructParseException("variable name too long");;
+			ThrowParseException("variable name too long");;
 		}
 	}
 
@@ -758,56 +754,63 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 	{
 		if (context.WantExists())
 		{
-			throw ConstructParseException(InvalidExistsMessage);
+			ThrowParseException(InvalidExistsMessage);
 		}
 
 		switch (whichConstant.RawValue())
 		{
 		case NamedConstant::_true:
-			return ExpressionValue(true);
+			rslt.Set(true);
+			return;
 
 		case NamedConstant::_false:
-			return ExpressionValue(false);
+			rslt.Set(false);
+			return;
 
 		case NamedConstant::_null:
-			return ExpressionValue(nullptr);
+			rslt.Set(nullptr);
+			return;
 
 		case NamedConstant::pi:
-			return ExpressionValue(Pi);
+			rslt.Set(Pi);
+			return;
 
 		case NamedConstant::iterations:
 			{
 				const int32_t v = gb.CurrentFileMachineState().GetIterations();
 				if (v < 0)
 				{
-					throw ConstructParseException("'iterations' used when not inside a loop");
+					ThrowParseException("'iterations' used when not inside a loop");
 				}
-				return ExpressionValue(v);
+				rslt.Set(v);
 			}
+			return;
 
 		case NamedConstant::_result:
 			{
-				int32_t rslt;
+				int32_t res;
 				switch (gb.GetLastResult())
 				{
 				case GCodeResult::ok:
-					rslt = 0;
+					res = 0;
 					break;
 
 				case GCodeResult::warning:
 				case GCodeResult::warningNotSupported:
-					rslt = 1;
+					res = 1;
 					break;
 
 				default:
-					rslt = 2;
+					res = 2;
 					break;
 				}
-				return ExpressionValue(rslt);
+				rslt.Set(res);
 			}
+			return;
 
 		case NamedConstant::line:
-			return ExpressionValue((int32_t)gb.GetLineNumber());
+			rslt.Set((int32_t)gb.GetLineNumber());
+			return;
 
 		default:
 			THROW_INTERNAL_ERROR;
@@ -821,24 +824,23 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		// It's a function call
 		if (context.WantExists())
 		{
-			throw ConstructParseException(InvalidExistsMessage);
+			ThrowParseException(InvalidExistsMessage);
 		}
 
 		const Function func(id.c_str());
 		if (!func.IsValid())
 		{
-			throw ConstructParseException("unknown function");
+			ThrowParseException("unknown function");
 		}
 
 		AdvancePointer();
-		ExpressionValue rslt;
 		if (func == Function::exists)
 		{
-			rslt = ParseIdentifierExpression(evaluate, false, true);
+			ParseIdentifierExpression(rslt, evaluate, false, true);
 		}
 		else
 		{
-			rslt = Parse(evaluate);					// evaluate the first operand
+			ParseInternal(rslt, evaluate, 0);					// evaluate the first operand
 
 			switch (func.RawValue())
 			{
@@ -856,7 +858,7 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 				default:
 					if (evaluate)
 					{
-						throw ConstructParseException("expected numeric operand");
+						ThrowParseException("expected numeric operand");
 					}
 					rslt.Set((int32_t)0);
 				}
@@ -904,11 +906,12 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 					SkipWhiteSpace();
 					if (CurrentCharacter() != ',')
 					{
-						throw ConstructParseException("expected ','");
+						ThrowParseException("expected ','");
 					}
 					AdvancePointer();
 					SkipWhiteSpace();
-					ExpressionValue nextOperand = Parse(evaluate);
+					ExpressionValue nextOperand;
+					ParseInternal(nextOperand, evaluate, 0);
 					ConvertToFloat(nextOperand, evaluate);
 					rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
 					rslt.param = MaxFloatDigitsDisplayedAfterPoint;
@@ -960,11 +963,12 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 					SkipWhiteSpace();
 					if (CurrentCharacter() != ',')
 					{
-						throw ConstructParseException("expected ','");
+						ThrowParseException("expected ','");
 					}
 					AdvancePointer();
 					SkipWhiteSpace();
-					ExpressionValue nextOperand = Parse(evaluate);
+					ExpressionValue nextOperand;
+					ParseInternal(nextOperand, evaluate, 0);
 					BalanceNumericTypes(rslt, nextOperand, evaluate);
 					if (rslt.GetType() == TypeCode::Float)
 					{
@@ -991,7 +995,8 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 					}
 					AdvancePointer();
 					SkipWhiteSpace();
-					ExpressionValue nextOperand = Parse(evaluate);
+					ExpressionValue nextOperand;
+					ParseInternal(nextOperand, evaluate, 0);
 					BalanceNumericTypes(rslt, nextOperand, evaluate);
 					if (rslt.GetType() == TypeCode::Float)
 					{
@@ -1015,7 +1020,8 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 					}
 					AdvancePointer();
 					SkipWhiteSpace();
-					ExpressionValue nextOperand = Parse(evaluate);
+					ExpressionValue nextOperand;
+					ParseInternal(nextOperand, evaluate, 0);
 					BalanceNumericTypes(rslt, nextOperand, evaluate);
 					if (rslt.GetType() == TypeCode::Float)
 					{
@@ -1031,11 +1037,20 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 
 			case Function::random:
 				{
-					const uint32_t limit = (rslt.GetType() == TypeCode::Uint32) ? rslt.uVal
-											: (rslt.GetType() == TypeCode::Int32 && rslt.iVal > 0) ? rslt.iVal
-												: throw ConstructParseException("expected positive integer");
-					rslt.SetType(TypeCode::Int32);
-					rslt.iVal = random(limit);
+					uint32_t limit;
+					if (rslt.GetType() == TypeCode::Uint32)
+					{
+						limit = rslt.uVal;
+					}
+					else if (rslt.GetType() == TypeCode::Int32 && rslt.iVal > 0)
+					{
+						limit = rslt.iVal;
+					}
+					else
+					{
+						ThrowParseException("expected positive integer");
+					}
+					rslt.Set((int32_t)random(limit));
 				}
 				break;
 
@@ -1047,10 +1062,10 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		SkipWhiteSpace();
 		if (CurrentCharacter() != ')')
 		{
-			throw ConstructParseException("expected ')'");
+			ThrowParseException("expected ')'");
 		}
 		AdvancePointer();
-		return rslt;
+		return;
 	}
 
 	// If we are not evaluating then the object expression doesn't have to exist, so don't retrieve it because that might throw an error
@@ -1059,58 +1074,64 @@ ExpressionValue ExpressionParser::ParseIdentifierExpression(bool evaluate, bool 
 		// Check for a parameter, local or global variable
 		if (StringStartsWith(id.c_str(), "param."))
 		{
-			return GetVariableValue(&gb.GetVariables(), id.c_str() + strlen("param."), true, context.WantExists());
+			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("param."), true, applyExists);
+			return;
 		}
 
 		if (StringStartsWith(id.c_str(), "global."))
 		{
 			auto vars = reprap.GetGlobalVariablesForReading();
-			return GetVariableValue(vars.Ptr(), id.c_str() + strlen("global."), false, context.WantExists());
+			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("global."), false, applyExists);
+			return;
 		}
 
 		if (StringStartsWith(id.c_str(), "var."))
 		{
-			return GetVariableValue(&gb.GetVariables(), id.c_str() + strlen("var."), false, context.WantExists());
+			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("var."), false, applyExists);
+			return;
 		}
 
 		// "exists(var)", "exists(param)" and "exists(global)" should return true.
 		// "exists(global)" will anyway because "global" is a root key in the object model. Handle the other two here.
-		if (context.WantExists() && (strcmp(id.c_str(), "param") == 0 || strcmp(id.c_str(), "var") == 0))
+		if (applyExists && (strcmp(id.c_str(), "param") == 0 || strcmp(id.c_str(), "var") == 0))
 		{
-			return ExpressionValue(true);
+			rslt.Set(true);
+			return;
 		}
 
 		// Else assume an object model value
-		ExpressionValue value = reprap.GetObjectValue(context, nullptr, id.c_str());
+		rslt = reprap.GetObjectValue(context, nullptr, id.c_str());
 		if (context.ObsoleteFieldQueried() && obsoleteField.IsEmpty())
 		{
 			obsoleteField.copy(id.c_str());
 		}
-		return value;
+		return;
 	}
-	return ExpressionValue(nullptr);
+	rslt.Set(nullptr);
 }
 
 // Get the value of a variable
-ExpressionValue ExpressionParser::GetVariableValue(const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException)
+void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException)
 {
 	const Variable* var = vars->Lookup(name);
 	if (wantExists)
 	{
-		return ExpressionValue(var != nullptr);
+		rslt.Set(var != nullptr);
+		return;
 	}
 
 	if (var != nullptr && (!parameter || var->GetScope() < 0))
 	{
-		return var->GetValue();
+		rslt = var->GetValue();
+		return;
 	}
 
-	throw ConstructParseException((parameter) ? "unknown parameter '%s'" : "unknown variable '%s'", name);
+	ThrowParseException((parameter) ? "unknown parameter '%s'" : "unknown variable '%s'", name);
 }
 
 // Parse a quoted string, given that the current character is double-quote
 // This is almost a copy of InternalGetQuotedString in class StringParser
-ExpressionValue ExpressionParser::ParseQuotedString() THROWS(GCodeException)
+void ExpressionParser::ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeException)
 {
 	String<MaxStringExpressionLength> str;
 	AdvancePointer();
@@ -1120,14 +1141,15 @@ ExpressionValue ExpressionParser::ParseQuotedString() THROWS(GCodeException)
 		AdvancePointer();
 		if (c < ' ')
 		{
-			throw ConstructParseException("control character in string");
+			ThrowParseException("control character in string");
 		}
 		if (c == '"')
 		{
 			if (CurrentCharacter() != c)
 			{
 				StringHandle sh(str.c_str());
-				return ExpressionValue(sh);
+				rslt.Set(sh);
+				return;
 			}
 			AdvancePointer();
 		}
@@ -1147,7 +1169,7 @@ ExpressionValue ExpressionParser::ParseQuotedString() THROWS(GCodeException)
 		}
 		if (str.cat(c))
 		{
-			throw ConstructParseException("string too long");
+			ThrowParseException("string too long");
 		}
 	}
 }
@@ -1163,19 +1185,19 @@ int ExpressionParser::GetColumn() const noexcept
 	return (column < 0) ? column : (currentp - startp) + column;
 }
 
-GCodeException ExpressionParser::ConstructParseException(const char *str) const noexcept
+void ExpressionParser::ThrowParseException(const char *str) const THROWS(GCodeException)
 {
-	return GCodeException(gb.GetLineNumber(), GetColumn(), str);
+	throw GCodeException(gb.GetLineNumber(), GetColumn(), str);
 }
 
-GCodeException ExpressionParser::ConstructParseException(const char *str, const char *param) const noexcept
+void ExpressionParser::ThrowParseException(const char *str, const char *param) const THROWS(GCodeException)
 {
-	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
+	throw GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
 }
 
-GCodeException ExpressionParser::ConstructParseException(const char *str, uint32_t param) const noexcept
+void ExpressionParser::ThrowParseException(const char *str, uint32_t param) const THROWS(GCodeException)
 {
-	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
+	throw GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
 }
 
 // End
