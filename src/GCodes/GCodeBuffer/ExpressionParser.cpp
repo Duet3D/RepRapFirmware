@@ -834,7 +834,6 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 		}
 
 		AdvancePointer();
-		ExpressionValue rslt;
 		if (func == Function::exists)
 		{
 			ParseIdentifierExpression(rslt, evaluate, false, true);
@@ -1075,26 +1074,26 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 		// Check for a parameter, local or global variable
 		if (StringStartsWith(id.c_str(), "param."))
 		{
-			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("param."), true, context.WantExists());
+			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("param."), true, applyExists);
 			return;
 		}
 
 		if (StringStartsWith(id.c_str(), "global."))
 		{
 			auto vars = reprap.GetGlobalVariablesForReading();
-			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("global."), false, context.WantExists());
+			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("global."), false, applyExists);
 			return;
 		}
 
 		if (StringStartsWith(id.c_str(), "var."))
 		{
-			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("var."), false, context.WantExists());
+			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("var."), false, applyExists);
 			return;
 		}
 
 		// "exists(var)", "exists(param)" and "exists(global)" should return true.
 		// "exists(global)" will anyway because "global" is a root key in the object model. Handle the other two here.
-		if (context.WantExists() && (strcmp(id.c_str(), "param") == 0 || strcmp(id.c_str(), "var") == 0))
+		if (applyExists && (strcmp(id.c_str(), "param") == 0 || strcmp(id.c_str(), "var") == 0))
 		{
 			rslt.Set(true);
 			return;
