@@ -15,6 +15,13 @@
 #include <cstring>
 #include <General/SafeStrtod.h>
 #include <General/IP4String.h>
+#include <Hardware/ExceptionHandlers.h>
+
+namespace StackUsage
+{
+	constexpr uint32_t GetObjectValue_noTable = 56;
+	constexpr uint32_t GetObjectValue_withTable = 48;
+}
 
 ExpressionValue::ExpressionValue(const MacAddress& mac) noexcept : type((uint32_t)TypeCode::MacAddress), param(mac.HighWord()), uVal(mac.LowWord())
 {
@@ -359,6 +366,26 @@ GCodeException ObjectExplorationContext::ConstructParseException(const char *msg
 GCodeException ObjectExplorationContext::ConstructParseException(const char *msg, const char *sparam) const noexcept
 {
 	return GCodeException(line, column, msg, sparam);
+}
+
+// Call this before making a recursive call, or before calling a function that needs a lot of stack from a recursive function
+void ObjectExplorationContext::CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException)
+{
+	register const char * stackPtr asm ("sp");
+	const char *stackLimit = (const char*)TaskBase::GetCallerTaskHandle() + sizeof(TaskBase);
+	if (stackLimit + calledFunctionStackUsage + (StackUsage::Throw + StackUsage::Margin) < stackPtr)
+	{
+		return;
+	}
+
+	// The stack is in danger of overflowing. Throw an exception if we have enough stack to do so (ideally, this should always be the case)
+	if (stackLimit + StackUsage::Throw <= stackPtr)
+	{
+		throw GCodeException(line, column, "Expression nesting too deep");
+	}
+
+	// Not enough stack left to throw an exception
+	SoftwareReset(SoftwareResetReason::stackOverflow, (const uint32_t *)stackPtr);
 }
 
 // Report this object
@@ -850,7 +877,8 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 }
 
 // Get the value of an object
-ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const
+ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException)
+decrease(strlen(idString))	// recursion variant
 {
 	if (classDescriptor == nullptr)
 	{
@@ -868,6 +896,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 			}
 			idString = GetNextElement(idString);
 			const ExpressionValue val = e->func(this, context);
+			context.CheckStack(StackUsage::GetObjectValue_noTable);
 			return GetObjectValue(context, classDescriptor, val, idString);
 		}
 		if (tableNumber != 0)
@@ -885,7 +914,8 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 	throw context.ConstructParseException("unknown value '%s'", idString);
 }
 
-ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const
+ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const THROWS(GCodeException)
+decrease(strlen(idString))	// recursion variant
 {
 	if (*idString == 0 && context.WantExists() && val.GetType() != TypeCode::None)
 	{
@@ -923,6 +953,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 			}
 
 			const ExpressionValue arrayElement = val.omadVal->GetElement(this, context);
+			context.CheckStack(StackUsage::GetObjectValue_noTable);
 			return GetObjectValue(context, classDescriptor, arrayElement, idString + 1);
 		}
 
@@ -932,6 +963,7 @@ ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, c
 		case 0:
 			return val;
 		case '.':
+			context.CheckStack(StackUsage::GetObjectValue_withTable);
 			return val.omVal->GetObjectValue(context, (val.omVal == this) ? classDescriptor : nullptr, idString + 1, val.param);
 		case '^':
 			throw context.ConstructParseException("object is not an array");

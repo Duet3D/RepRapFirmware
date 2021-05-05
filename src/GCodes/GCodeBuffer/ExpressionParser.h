@@ -45,7 +45,9 @@ private:
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
-	void ConvertToString(ExpressionValue& val, bool evaluate) THROWS(GCodeException);
+	void ConvertToString(ExpressionValue& val, bool evaluate) noexcept;
+
+	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
 	// The following must be declared 'noinline' because it allocates a large buffer on the stack and its caller is recursive
 	static void __attribute__((noinline)) StringConcat(ExpressionValue &val, ExpressionValue &val2) noexcept;
