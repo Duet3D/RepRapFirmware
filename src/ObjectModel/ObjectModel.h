@@ -221,6 +221,7 @@ public:
 
 	GCodeException ConstructParseException(const char *msg) const noexcept;
 	GCodeException ConstructParseException(const char *msg, const char *sparam) const noexcept;
+	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
 private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
@@ -268,7 +269,7 @@ public:
 	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException);
 
 	// Function to report a value or object as JSON. This does not need to handle 'var' or 'global' because those are checked for before this is called.
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
