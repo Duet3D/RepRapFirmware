@@ -147,9 +147,11 @@ struct ExpressionValue
 	void Set(bool b) noexcept { Release(); type = (uint32_t)TypeCode::Bool; bVal = b; }
 	void Set(char c) noexcept { Release(); type = (uint32_t)TypeCode::Char; cVal = c; }
 	void Set(int32_t i) noexcept { Release(); type = (uint32_t)TypeCode::Int32; iVal = i; }
-	void Set(float f) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = 1; }
+	void Set(float f) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = MaxFloatDigitsDisplayedAfterPoint; }
+	void Set(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
 	void Set(const char *s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
 	void Set(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
+	void Set(nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
 
 	// Store a 56-bit value
 	void Set56BitValue(uint64_t v) { Release(); param = (uint32_t)(v >> 32) & 0x00FFFFFF; uVal = (uint32_t)v; }
@@ -219,6 +221,7 @@ public:
 
 	GCodeException ConstructParseException(const char *msg) const noexcept;
 	GCodeException ConstructParseException(const char *msg, const char *sparam) const noexcept;
+	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
 private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
@@ -266,7 +269,7 @@ public:
 	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber = 0) const THROWS(GCodeException);
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException);
 
 	// Function to report a value or object as JSON. This does not need to handle 'var' or 'global' because those are checked for before this is called.
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,

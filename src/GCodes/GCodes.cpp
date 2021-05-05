@@ -2101,12 +2101,11 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 
 		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
-		// Note for when we use RTOS: as soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
+		// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
 		if (kin.UseSegmentation() && simulationMode != 1 && (moveBuffer.hasPositiveExtrusion || moveBuffer.isCoordinated || !kin.UseRawG0()))
 		{
 			// This kinematics approximates linear motion by means of segmentation.
-			// We assume that the segments will be smaller than the mesh spacing.
 			const float xyLength = fastSqrtf(fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]));
 			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
 			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(xyLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
@@ -2257,7 +2256,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	}
 	else
 	{
-		if (gb.Seen('I'))
+		if (gb.Seen((char)('I' + axis0)))
 		{
 			iParam = gb.GetDistance();
 		}
@@ -2266,7 +2265,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 			iParam = 0.0;
 		}
 
-		if (gb.Seen('J'))
+		if (gb.Seen((char)('I' + axis1)))
 		{
 			jParam = gb.GetDistance();
 		}
@@ -2275,9 +2274,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 			jParam = 0.0;
 		}
 
-		if (iParam == 0.0 && jParam == 0.0)			// at least one of IJ must be specified and nonzero
+		if (iParam == 0.0 && jParam == 0.0)			// at least one of IJK must be specified and nonzero
 		{
-			err = "G2/G3: no I or J or R parameter";
+			err = "G2/G3: no I J K or R parameter";
 			return true;
 		}
 	}

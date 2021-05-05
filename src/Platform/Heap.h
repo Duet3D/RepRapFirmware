@@ -26,6 +26,10 @@ public:
 	StringHandle(const char *s) noexcept;
 	StringHandle(const char *s, size_t len) noexcept;
 
+#if 0	// unused
+	StringHandle(const char *s1, const char *s2) noexcept;
+#endif
+
 	ReadLockedPointer<const char> Get() const noexcept;
 	size_t GetLength() const noexcept;
 	void Delete() noexcept;

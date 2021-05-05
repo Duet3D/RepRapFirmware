@@ -10,6 +10,12 @@
 
 #include <RepRapFirmware.h>
 
+namespace StackUsage
+{
+	constexpr uint32_t Throw = 1050;					// how much stack we need to throw an exception
+	constexpr uint32_t Margin = 300;					// the margin we allow for calls to non-recursive functions that can throw
+}
+
 class GCodeException
 {
 public:
