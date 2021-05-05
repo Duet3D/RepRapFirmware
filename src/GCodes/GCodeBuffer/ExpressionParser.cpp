@@ -1234,7 +1234,7 @@ void ExpressionParser::CheckStack(uint32_t calledFunctionStackUsage) const THROW
 {
 	register const char * stackPtr asm ("sp");
 	const char *stackLimit = (const char*)TaskBase::GetCallerTaskHandle() + sizeof(TaskBase);
-	debugPrintf("Margin: %u\n", stackPtr - stackLimit);
+	//debugPrintf("Margin: %u\n", stackPtr - stackLimit);
 	if (stackLimit + calledFunctionStackUsage + (StackUsage::Throw + StackUsage::Margin) <= stackPtr)
 	{
 		return;
