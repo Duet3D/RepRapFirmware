@@ -226,7 +226,7 @@ public:
 	void MotionStopped() noexcept { motionCommanded = false; }
 	bool WasMotionCommanded() const noexcept { return motionCommanded; }
 
-	void SetParameters(int codeRunning) noexcept;
+	void AddParameters(VariableSet& vars, int codeRunning) noexcept;
 	VariableSet& GetVariables() const noexcept;
 
 	Mutex mutex;
