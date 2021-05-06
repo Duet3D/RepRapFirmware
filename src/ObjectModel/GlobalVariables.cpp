@@ -20,16 +20,15 @@ void GlobalVariables::ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 	buf->cat('{');
 	if (context.IncreaseDepth())
 	{
-		bool needComma = false;
 		{
 			ReadLocker locker(lock);			// make sure that no other task modifies the list while we are traversing it
-
-			for (const Variable *v = vars.GetRoot(); v != nullptr; v = v->GetNext())
-			{
-				buf->catf((needComma) ? ",\"%s\":" : "\"%s\":", v->GetName().Ptr());
-				ReportItemAsJsonFull(buf, context, classDescriptor, v->GetValue(), filter);
-				needComma = true;
-			}
+			vars.IterateWhile([this, buf, &context, classDescriptor, filter](unsigned int index, const Variable& v) noexcept -> bool
+								{
+									buf->catf((index != 0) ? ",\"%s\":" : "\"%s\":", v.GetName().Ptr());
+									ReportItemAsJsonFull(buf, context, classDescriptor, v.GetValue(), filter);
+									return true;
+								}
+							 );
 		}
 		context.DecreaseDepth();
 	}

@@ -36,6 +36,7 @@
 #include <Platform/Tasks.h>
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
+#include <ObjectModel/Variable.h>
 
 #if SUPPORT_LED_STRIPS
 # include <Fans/LedStripDriver.h>
@@ -1295,8 +1296,8 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 		return false;								// can't handle it yet
 	}
 
-	// Evaluate which machine axes have stalled.
-	AxesBitmap machineAxesNotHomed;
+	// Evaluate which machine axes have stalled and create parameters for them
+	VariableSet vars;
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		const AxisDriversConfig& cfg = platform.GetAxisDriversConfig(axis);
@@ -1305,18 +1306,16 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 			//TODO handle remote stalled drivers
 			if (cfg.driverNumbers[i].IsLocal() && stalledDrivers.IsBitSet(cfg.driverNumbers[i].localDriver))
 			{
-				machineAxesNotHomed.SetBit(axis);
+				char str[2] = { axisLetters[axis], 0 };
+				vars.Insert(new Variable(str, ExpressionValue((int32_t)1), -1));		// create a parameter with value 1 for the axis
 				break;
 			}
 		}
 	}
 
-	// Now pass the machine axes to the rehome.g file
-	// TODO
-
 	autoPauseGCode->SetState(GCodeState::resuming1);					// set up to resume after rehoming
 	pauseState = PauseState::resuming;
-	DoFileMacro(*autoPauseGCode, REHOME_G, true, AsyncSystemMacroCode);	// run the SD card rehome-and-resume script
+	DoFileMacro(*autoPauseGCode, REHOME_G, true, AsyncSystemMacroCode, vars);	// run the SD card rehome-and-resume script
 	return true;
 }
 
@@ -2720,6 +2719,17 @@ void GCodes::EmergencyStop() noexcept
 #endif
 }
 
+// Simplified version of DoFileMacro, see below
+bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept
+{
+	VariableSet vars;
+	if (codeRunning >= 0)
+	{
+		gb.AddParameters(vars, codeRunning);
+	}
+	return DoFileMacro(gb, fileName, reportMissing, codeRunning, vars);
+}
+
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
 // Return true if the file was found or it wasn't and we were asked to report that fact.
 // 'codeRunning' is the G or M command we are running, or 0 for a tool change file. In particular:
@@ -2727,7 +2737,7 @@ void GCodes::EmergencyStop() noexcept
 // 502 = running M502
 // 98 = running a macro explicitly via M98
 // otherwise it is either the G- or M-code being executed, or ToolChangeMacroCode for a tool change file, or SystemMacroCode for another system file
-bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept
+bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -2751,10 +2761,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			gb.AbortFile(false, true);
 			return true;
 		}
-		if (codeRunning >= 0)
-		{
-			gb.SetParameters(codeRunning);
-		}
+		gb.GetVariables().AssignFrom(initialVariables);
 		gb.StartNewFile();
 		if (gb.IsMacroEmpty())
 		{
@@ -2781,10 +2788,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			f->Close();
 			return true;
 		}
-		if (codeRunning >= 0)
-		{
-			gb.SetParameters(codeRunning);
-		}
+		gb.GetVariables().AssignFrom(initialVariables);
 		gb.LatestMachineState().fileState.Set(f);
 		gb.StartNewFile();
 		gb.GetFileInput()->Reset(gb.LatestMachineState().fileState);

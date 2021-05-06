@@ -754,7 +754,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 	}
 }
 
-void BinaryParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
+void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 {
 	if (bufferLength != 0 && header->numParameters != 0)
 	{

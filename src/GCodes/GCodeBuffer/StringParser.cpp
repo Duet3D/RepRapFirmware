@@ -1757,7 +1757,7 @@ void StringParser::SkipWhiteSpace() noexcept
 	}
 }
 
-void StringParser::SetParameters(VariableSet& vs, int codeRunning) noexcept
+void StringParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 {
 	parametersPresent.Iterate([this, &vs, codeRunning](unsigned int bit, unsigned int count)
 								{
