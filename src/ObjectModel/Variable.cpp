@@ -118,4 +118,25 @@ VariableSet::~VariableSet()
 	Clear();
 }
 
+// Delete any existing variables and instead use the variables from the argument, taking ownership of them
+void VariableSet::AssignFrom(VariableSet& other) noexcept
+{
+	Clear();
+	root = other.root;
+	other.root = nullptr;
+}
+
+void VariableSet::IterateWhile(stdext::inplace_function<bool(unsigned int, const Variable&) /*noexcept*/ > func) const noexcept
+{
+	unsigned int num = 0;
+	for (const Variable *v = root; v != nullptr; v = v->GetNext())
+	{
+		if (!func(num, *v))
+		{
+			break;
+		}
+		++num;
+	}
+}
+
 // End

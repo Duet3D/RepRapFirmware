@@ -186,7 +186,7 @@ void ExpressionValue::Release() noexcept
 
 #if SUPPORT_CAN_EXPANSION
 
-// Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter
+// Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter and append it to the string
 // sVal is a string of the form shortName|version
 void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 {
@@ -199,22 +199,15 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 		switch((ExpansionDetail)param)
 		{
 		case ExpansionDetail::shortName:
-			rslt.copy(sVal, indexOfDivider);
+			rslt.catn(sVal, indexOfDivider);
 			break;
 
 		case ExpansionDetail::firmwareVersion:
-			if (p == nullptr)
-			{
-				rslt.Clear();
-			}
-			else
-			{
-				rslt.copy(sVal + indexOfDivider + 1);
-			}
+			rslt.cat((p == nullptr) ? "unknown" : sVal + indexOfDivider + 1);
 			break;
 
 		case ExpansionDetail::firmwareFileName:
-			rslt.copy("Duet3Firmware_");
+			rslt.cat("Duet3Firmware_");
 			rslt.catn(sVal, indexOfDivider);
 			rslt.cat(".bin");
 			break;

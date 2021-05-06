@@ -48,13 +48,16 @@ public:
 	VariableSet(const VariableSet&) = delete;
 	VariableSet& operator=(const VariableSet& other) = delete;
 
+	void AssignFrom(VariableSet& other) noexcept;
+
 	Variable *Lookup(const char *str) noexcept;
 	const Variable *Lookup(const char *str) const noexcept;
-	const Variable *GetRoot() const noexcept { return root; }
 	void Insert(Variable *toInsert) noexcept;
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Delete(const char *str) noexcept;
 	void Clear() noexcept;
+
+	void IterateWhile(stdext::inplace_function<bool(unsigned int index, const Variable& v) /*noexcept*/ > func) const noexcept;
 
 private:
 	Variable *root;
