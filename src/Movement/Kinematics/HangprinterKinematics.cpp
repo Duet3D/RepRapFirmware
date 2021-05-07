@@ -60,7 +60,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(HangprinterKinematics)
 
 // Constructor
 HangprinterKinematics::HangprinterKinematics() noexcept
-	: RoundBedKinematics(KinematicsType::scara, true, true)
+	: RoundBedKinematics(KinematicsType::hangprinter, SegmentationType(true, true, true))
 {
 	Init();
 }

@@ -69,12 +69,12 @@ DEFINE_GET_OBJECT_MODEL_TABLE(ZLeadscrewKinematics)
 #endif
 
 ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k) noexcept
-	: Kinematics(k, false, true), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
+	: Kinematics(k, SegmentationType(false, false, false)), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 
-ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, bool doUseSegmentation, bool doUseRawG0) noexcept
-	: Kinematics(k, doUseSegmentation, doUseRawG0), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
+ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, SegmentationType segType) noexcept
+	: Kinematics(k, segType), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 

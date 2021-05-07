@@ -63,6 +63,19 @@ enum class LimitPositionResult : uint8_t
 	adjustedAndIntermediateUnreachable	// we adjusted the final position to make it reachable, but intermediate positions are still urreachable
 };
 
+struct SegmentationType
+{
+	uint8_t useSegmentation : 1,
+			useZSegmentation : 1,
+			useG0Segmentation : 1,
+			zero : 5;
+
+	constexpr SegmentationType(bool useSeg, bool useZSeg, bool useG0Seg) noexcept
+		: useSegmentation(useSeg), useZSegmentation(useZSeg), useG0Segmentation(useG0Seg), zero(0)
+	{
+	}
+};
+
 class Kinematics INHERIT_OBJECT_MODEL
 {
 public:
@@ -204,8 +217,7 @@ public:
 	// Functions that return information held in this base class
 	KinematicsType GetKinematicsType() const noexcept { return type; }
 
-	bool UseSegmentation() const noexcept { return useSegmentation; }
-	bool UseRawG0() const noexcept { return useRawG0; }
+	SegmentationType GetSegmentationType() const noexcept { return segmentationType; }
 	float GetSegmentsPerSecond() const noexcept pre(UseSegmentation()) { return segmentsPerSecond; }
 	float GetMinSegmentLength() const noexcept pre(UseSegmentation()) { return minSegmentLength; }
 	float GetReciprocalMinSegmentLength() const noexcept pre(UseSegmentation()) { return reciprocalMinSegmentLength; }
@@ -213,8 +225,7 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL_VIRTUAL
 
-	// Constructor. Pass segsPerSecond <= 0.0 to get non-segmented motion.
-	Kinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept;
+	Kinematics(KinematicsType t, SegmentationType segType) noexcept;
 
 	// Apply the M208 limits to the Cartesian position that the user wants to move to for all axes from the specified one upwards
 	// Return true if any coordinates were changed
@@ -240,8 +251,7 @@ private:
 	float minSegmentLength;					// if we are using segmentation, the minimum segment size
 	float reciprocalMinSegmentLength;		// if we are using segmentation, the reciprocal of minimum segment size
 
-	bool useSegmentation;					// true if we have to approximate linear movement using segmentation
-	bool useRawG0;							// true if we normally use segmentation but we do not need to segment travel moves
+	SegmentationType segmentationType;		// the type of segmentation we are using
 	KinematicsType type;
 };
 

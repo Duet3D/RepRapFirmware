@@ -42,7 +42,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(FiveBarScaraKinematics, ZLeadscrewKine
 #endif
 
 FiveBarScaraKinematics::FiveBarScaraKinematics() noexcept
-	: ZLeadscrewKinematics(KinematicsType::scara, true, true)
+	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false))
 {
 	Recalc();
 }

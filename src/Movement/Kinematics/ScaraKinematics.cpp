@@ -37,7 +37,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics)
 #endif
 
 ScaraKinematics::ScaraKinematics() noexcept
-	: ZLeadscrewKinematics(KinematicsType::scara, true, true),
+	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false)),
 	  proximalArmLength(DefaultProximalArmLength), distalArmLength(DefaultDistalArmLength), xOffset(0.0), yOffset(0.0)
 {
 	thetaLimits[0] = DefaultMinTheta;
