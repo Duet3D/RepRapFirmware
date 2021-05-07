@@ -2146,9 +2146,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 // If an error occurs, return true with 'err' assigned
 bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 {
+	// The plans are XY, ZX and YZ depending on the G17/G18/G19 setting. We must use ZX instead of XZ to get the correct arc direction.
 	const unsigned int selectedPlane = gb.LatestMachineState().selectedPlane;
-	const unsigned int axis0 = (selectedPlane == 2) ? Y_AXIS : X_AXIS;
-	const unsigned int axis1 = (selectedPlane == 0) ? Y_AXIS : Z_AXIS;
+	const unsigned int axis0 = (unsigned int[]){ X_AXIS, Z_AXIS, Y_AXIS }[selectedPlane];
+	const unsigned int axis1 = (axis0 + 1) % 3;
 
 	if (moveFractionToSkip > 0.0)
 	{
@@ -3228,7 +3229,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	buildObjects.Init();
 	reprap.GetMove().ResetMoveCounters();
 
-	if (fromStart)													// if not resurrecting a print
+	if (fromStart)															// if not resurrecting a print
 	{
 		fileGCode->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 		virtualExtruderPosition = 0.0;
@@ -3263,8 +3264,8 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 							reprap.GetPrintMonitor().GetPrintingFilename());
 	if (fromStart)
 	{
-		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
-		DoFileMacro(*fileGCode, START_G, false, AsyncSystemMacroCode);
+		fileGCode->LatestMachineState().selectedPlane = 0;					// default G2 and G3 moves to XY plane
+		DoFileMacro(*fileGCode, START_G, false, AsyncSystemMacroCode);		// get fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
 	}
 }
 
