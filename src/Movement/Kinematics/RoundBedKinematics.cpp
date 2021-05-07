@@ -9,8 +9,8 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 
-RoundBedKinematics::RoundBedKinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept
-: Kinematics(t, doUseSegmentation, doUseRawG0), printRadiusSquared(0.0)
+RoundBedKinematics::RoundBedKinematics(KinematicsType t, SegmentationType segType) noexcept
+	: Kinematics(t, segType), printRadiusSquared(0.0)
 {
 }
 

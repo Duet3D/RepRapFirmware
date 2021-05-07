@@ -37,7 +37,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(PolarKinematics)
 
 // Constructor
 PolarKinematics::PolarKinematics() noexcept
-	: Kinematics(KinematicsType::polar, true, true),
+	: Kinematics(KinematicsType::polar, SegmentationType(true, false, false)),
 	  minRadius(0.0), maxRadius(DefaultMaxRadius), homedRadius(0.0),
 	  maxTurntableSpeed(DefaultMaxTurntableSpeed), maxTurntableAcceleration(DefaultMaxTurntableAcceleration)
 {
