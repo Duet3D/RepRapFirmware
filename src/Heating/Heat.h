@@ -83,9 +83,6 @@ public:
 	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException); // Set the P/I/D parameters for a heater
 	GCodeResult HandleM143(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException);	// Configure heater protection (M143)
 
-	[[noreturn]] void SensorsTask() noexcept;
-	static void EnsureSensorsTask() noexcept;
-
 	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const noexcept;	// Get a pointer to the temperature sensor entry
 	ReadLockedPointer<TemperatureSensor> FindSensorAtOrAbove(unsigned int sn) const noexcept;	// Get a pointer to the first temperature sensor with the specified or higher number
 
