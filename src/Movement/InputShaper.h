@@ -14,16 +14,17 @@
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
 
+// These names must be in alphabetical order and lowercase
 NamedEnum(InputShaperType, uint8_t,
-	none,
-	Custom,
-	ZVD,
-	ZVDD,
-	EI2,
-	EI3
+	custom,
 #if SUPPORT_DAA
-	, DAA
+	daa,
 #endif
+	ei2,
+	ei3
+	none,
+	zvd,
+	zvdd,
 );
 
 class DDA;

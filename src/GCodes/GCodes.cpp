@@ -180,7 +180,7 @@ void GCodes::Init() noexcept
 	{
 		f = 0.0;
 	}
-	lastDefaultFanSpeed = pausedDefaultFanSpeed = 0.0;
+	lastDefaultFanSpeed = 0.0;
 
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
@@ -999,6 +999,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
 #if HAS_MASS_STORAGE
 	if (simulationMode == 0)
@@ -1181,6 +1182,7 @@ bool GCodes::DoEmergencyPause() noexcept
 
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 	pauseState = PauseState::paused;
 
 	return true;
@@ -2102,12 +2104,18 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
 		// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
-		if (kin.UseSegmentation() && simulationMode != 1 && (moveBuffer.hasPositiveExtrusion || moveBuffer.isCoordinated || !kin.UseRawG0()))
+		const SegmentationType st = kin.GetSegmentationType();
+		if (st.useSegmentation && simulationMode != 1 && (moveBuffer.hasPositiveExtrusion || moveBuffer.isCoordinated || st.useG0Segmentation))
 		{
-			// This kinematics approximates linear motion by means of segmentation.
-			const float xyLength = fastSqrtf(fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]));
-			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
-			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(xyLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+			// This kinematics approximates linear motion by means of segmentation
+			float moveLengthSquared = fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
+			if (st.useZSegmentation)
+			{
+				moveLengthSquared += fsquare(currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
+			}
+			const float moveLength = fastSqrtf(moveLengthSquared);
+			const float moveTime = moveLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
+			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else
 		{
@@ -3630,13 +3638,13 @@ bool GCodes::IsMappedFan(unsigned int fanNumber) noexcept
 }
 
 // Save the speeds of all fans
+// The speed of the default printing fan (i.e. S parameter of the last M106 command with no P parameter) is no longer included because we save that in a restore point.
 void GCodes::SaveFanSpeeds() noexcept
 {
 	for (size_t i = 0; i < MaxFans; ++i)
 	{
 		pausedFanSpeeds[i] = reprap.GetFansManager().GetFanValue(i);
 	}
-	pausedDefaultFanSpeed = lastDefaultFanSpeed;
 }
 
 // Handle sending a reply back to the appropriate interface(s) and update lastResult
@@ -4207,6 +4215,7 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcep
 	rp.virtualExtruderPosition = virtualExtruderPosition;
 	rp.filePos = gb.GetFilePosition();
 	rp.toolNumber = reprap.GetCurrentToolNumber();
+	rp.fanSpeed = lastDefaultFanSpeed;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;

@@ -38,7 +38,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RotaryDeltaKinematics)
 #endif
 
 // Constructor
-RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::rotaryDelta, true, false)
+RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::rotaryDelta, SegmentationType(true, true, true))
 {
 	Init();
 }

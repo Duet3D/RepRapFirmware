@@ -68,16 +68,24 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (gb.Seen('P'))
 	{
+		String<StringLength20> shaperName;
+		gb.GetReducedString(shaperName.GetRef());
+		const InputShaperType newType(shaperName.c_str());
+		if (!newType.IsValid())
+		{
+			reply.printf("Unsupported input shaper type '%s'", shaperName.c_str());
+			return GCodeResult::error;
+		}
 		seen = true;
-		type = (InputShaperType)gb.GetLimitedUIValue('P', InputShaperType::NumValues);
+		type = newType;
 	}
 	else if (seen && type == InputShaperType::none)
 	{
 #if SUPPORT_DAA
 		// For backwards compatibility, if we have set input shaping parameters but not defined shaping type, default to DAA for now. Change this when we support better types of input shaping.
-		type = InputShaperType::DAA;
+		type = InputShaperType::daa;
 #else
-		type = InputShaperType::ZVD;
+		type = InputShaperType::zvd;
 #endif
 	}
 
@@ -257,7 +265,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	}
 	else
 	{
-		reply.printf("%s input shaping at %.1fHz damping factor %.2f, min. acceleration %.1f", type.ToString(), (double)frequency, (double)zeta, (double)minimumAcceleration);
+		reply.printf(Input shaping '%s' at %.1fHz damping factor %.2f, min. acceleration %.1f", type.ToString(), (double)frequency, (double)zeta, (double)minimumAcceleration);
 		if (numImpulses > 1)
 		{
 			reply.cat(", impulses");
