@@ -100,7 +100,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			numImpulses = 1;
 			break;
 
-		case InputShaperType::Custom:
+		case InputShaperType::custom:
 			{
 				// Get the coefficients
 				size_t numAmplitudes = MaxImpulses - 1;
@@ -144,13 +144,13 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			break;
 
 #if SUPPORT_DAA
-		case InputShaperType::DAA:
+		case InputShaperType::daa:
 			durations[0] = 1.0/dampedFrequency;
 			numImpulses	= 1;
 			break;
 #endif
 
-		case InputShaperType::ZVD:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
+		case InputShaperType::zvd:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
 			{
 				const float j = 1.0 + 2.0 * k + fsquare(k);
 				coefficients[0] = 1.0/j;
@@ -161,7 +161,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			maxOverlap = 2;
 			break;
 
-		case InputShaperType::ZVDD:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
+		case InputShaperType::zvdd:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
 			{
 				const float j = 1.0 + 3.0 * (k + fsquare(k)) + k * fsquare(k);
 				coefficients[0] = 1.0/j;
@@ -173,7 +173,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			maxOverlap = 3;
 			break;
 
-		case InputShaperType::EI2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
+		case InputShaperType::ei2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
 			{
 				const float zetaSquared = fsquare(zeta);
 				const float zetaCubed = zetaSquared * zeta;
@@ -190,7 +190,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			maxOverlap = 0;
 			break;
 
-		case InputShaperType::EI3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
+		case InputShaperType::ei3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
 			{
 				const float zetaSquared = fsquare(zeta);
 				const float zetaCubed = zetaSquared * zeta;
@@ -265,7 +265,7 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	}
 	else
 	{
-		reply.printf(Input shaping '%s' at %.1fHz damping factor %.2f, min. acceleration %.1f", type.ToString(), (double)frequency, (double)zeta, (double)minimumAcceleration);
+		reply.printf("Input shaping '%s' at %.1fHz damping factor %.2f, min. acceleration %.1f", type.ToString(), (double)frequency, (double)zeta, (double)minimumAcceleration);
 		if (numImpulses > 1)
 		{
 			reply.cat(", impulses");
@@ -290,7 +290,7 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 	switch ((shapingEnabled) ? type.RawValue() : InputShaperType::none)
 	{
 #if SUPPORT_DAA
-	case InputShaperType::DAA:
+	case InputShaperType::daa:
 		{
 			// Try to reduce the acceleration/deceleration of the move to cancel ringing
 			const float idealPeriod = durations[0];					// for DAA this the full period
@@ -419,10 +419,10 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 		break;
 
 	// The other input shapers all have multiple impulses with varying coefficients
-	case InputShaperType::ZVD:
-	case InputShaperType::ZVDD:
-	case InputShaperType::EI2:
-	case InputShaperType::EI3:
+	case InputShaperType::zvd:
+	case InputShaperType::zvdd:
+	case InputShaperType::ei2:
+	case InputShaperType::ei3:
 		// Set up the provisional parameters
 		params.SetFromDDA(dda);
 

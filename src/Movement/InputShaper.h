@@ -21,7 +21,7 @@ NamedEnum(InputShaperType, uint8_t,
 	daa,
 #endif
 	ei2,
-	ei3
+	ei3,
 	none,
 	zvd,
 	zvdd,
