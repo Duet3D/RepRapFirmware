@@ -116,6 +116,10 @@ public:
 
 	void SetFansPwm(float f) const noexcept;
 
+	void HeatersToOff() const noexcept;
+	void HeatersToActive() const noexcept;
+	void HeatersToStandby() const noexcept;
+
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(activeTemps)
