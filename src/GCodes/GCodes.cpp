@@ -176,10 +176,6 @@ void GCodes::Init() noexcept
 	limitAxes = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
 
-	for (float& f : pausedFanSpeeds)
-	{
-		f = 0.0;
-	}
 	lastDefaultFanSpeed = 0.0;
 
 	lastAuxStatusReportType = -1;						// no status reports requested yet
@@ -997,7 +993,6 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	}
 #endif
 
-	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
@@ -1180,7 +1175,6 @@ bool GCodes::DoEmergencyPause() noexcept
 		pauseRestorePoint.moveCoords[axis] = currentUserPosition[axis];
 	}
 
-	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 	pauseState = PauseState::paused;
@@ -3656,16 +3650,6 @@ bool GCodes::IsMappedFan(unsigned int fanNumber) noexcept
 	return (ct == nullptr)
 			? fanNumber == 0
 				: ct->GetFanMapping().IsBitSet(fanNumber);
-}
-
-// Save the speeds of all fans
-// The speed of the default printing fan (i.e. S parameter of the last M106 command with no P parameter) is no longer included because we save that in a restore point.
-void GCodes::SaveFanSpeeds() noexcept
-{
-	for (size_t i = 0; i < MaxFans; ++i)
-	{
-		pausedFanSpeeds[i] = reprap.GetFansManager().GetFanValue(i);
-	}
 }
 
 // Handle sending a reply back to the appropriate interface(s) and update lastResult

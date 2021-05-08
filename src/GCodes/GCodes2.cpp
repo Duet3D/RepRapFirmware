@@ -1462,18 +1462,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 
 				// ConfigureFan doesn't process R parameters
-				if (gb.Seen('R'))
+				if (!seenFanNum && gb.Seen('R'))
 				{
-					// Restore fan speed to value when print was paused
-					if (seenFanNum)
-					{
-						result = reprap.GetFansManager().SetFanValue(fanNum, pausedFanSpeeds[fanNum], reply);
-					}
-					else
-					{
-						const size_t restorePointNumber = gb.GetLimitedUIValue('R', NumRestorePoints);
-						SetMappedFanSpeed(numberedRestorePoints[restorePointNumber].fanSpeed);
-					}
+					const size_t restorePointNumber = gb.GetLimitedUIValue('R', NumRestorePoints);
+					SetMappedFanSpeed(numberedRestorePoints[restorePointNumber].fanSpeed);
 				}
 			}
 			break;
