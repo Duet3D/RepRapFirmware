@@ -477,7 +477,7 @@ void LedStripDriver::Init() noexcept
 // This function handles M150
 // For DotStar LEDs:
 // 	We can handle an unlimited length LED strip, because we can send the data in multiple chunks.
-//	So whenever we receive a m150 command, we send the data immediately, in multiple chunks if our DMA buffer is too small to send it as a single chunk.
+//	So whenever we receive a M150 command, we send the data immediately, in multiple chunks if our DMA buffer is too small to send it as a single chunk.
 //	To send multiple chunks, we process the command once per chunk, using numRemaining to keep track of how many more LEDs need to be written to
 // For NeoPixel LEDs:
 //	If there is a gap or more then about 9us in transmission, the string will reset and the next command will be taken as applying to the start of the strip.
