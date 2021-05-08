@@ -18,7 +18,6 @@
 
 enum class DhtSensorType
 {
-	Dht11,
 	Dht21,
 	Dht22
 };
@@ -34,14 +33,12 @@ public:
 	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
 	void Poll() noexcept override;
-	bool PollInTask() noexcept override;
 	const char *GetShortSensorType() const noexcept override;
 
 	void Interrupt() noexcept;
 	void TakeReading() noexcept;
 	TemperatureError ProcessReadings(float& t, float& h) noexcept;
 
-	static constexpr const char *TypeNameDht11 = "dht11";
 	static constexpr const char *TypeNameDht21 = "dht21";
 	static constexpr const char *TypeNameDht22 = "dht22";
 

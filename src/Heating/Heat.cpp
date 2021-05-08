@@ -62,14 +62,6 @@ extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
 	reprap.GetHeat().HeaterTask();
 }
 
-static constexpr uint16_t SensorsTaskStackWords = 150;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
-static Task<SensorsTaskStackWords> *sensorsTask = nullptr;
-
-extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters) noexcept
-{
-	reprap.GetHeat().SensorsTask();
-}
-
 #if SUPPORT_OBJECT_MODEL
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -357,67 +349,6 @@ void Heat::Exit() noexcept
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
-	}
-}
-
-
-/* static */ void Heat::EnsureSensorsTask() noexcept
-{
-	TaskCriticalSectionLocker lock; // make sure we don't create the task more than once
-
-	if (sensorsTask == nullptr)
-	{
-		sensorsTask = new Task<SensorsTaskStackWords>;
-		sensorsTask->Create(SensorsTaskStart, "SENSORS", nullptr, TaskPriority::SensorsPriority);
-	}
-}
-
-// Code executed by the SensorsTask.
-// This is run at the same priority as the Heat task, so it must not sit in any spin loops.
-/*static*/ [[noreturn]] void Heat::SensorsTask() noexcept
-{
-	auto lastWakeTime = xTaskGetTickCount();
-	for (;;)
-	{
-		unsigned int sensorNumber = 0;
-		uint8_t sensorCountSinceLastDelay = 0;
-		uint8_t totalWaitTime = 0;
-		// Walk the sensor list one by one and poll each sensor
-		for (;;)
-		{
-			uint8_t delay = 0;
-
-			// We need this block to have the ReadLockPointer below go out of scope as early as possible
-			{
-				const auto sensor = FindSensorAtOrAbove(sensorNumber);
-
-				// End of the list reached - start over after short delay
-				if (sensor.IsNull())
-				{
-					break;
-				}
-				++sensorCountSinceLastDelay;
-				sensorNumber = sensor->GetSensorNumber() + 1;
-
-				if (sensor->PollInTask())
-				{
-					// Coming here sensorCount cannot be 0 since we got at least one sensor returning true
-					delay = ((SensorsTaskTotalDelay/sensorCount)*sensorCountSinceLastDelay);
-				}
-			}
-
-			if (delay > 0)
-			{
-				vTaskDelayUntil(&lastWakeTime, delay);
-				totalWaitTime += delay;
-			}
-		}
-
-		// Delay until it is time again
-		if (totalWaitTime < SensorsTaskTotalDelay)
-		{
-			vTaskDelayUntil(&lastWakeTime, (SensorsTaskTotalDelay-totalWaitTime));
-		}
 	}
 }
 
