@@ -2858,8 +2858,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				String<StringLength100> key;
 				String<StringLength20> flags;
 				bool dummy;
-				gb.TryGetQuotedString('K', key.GetRef(), dummy);
-				gb.TryGetQuotedString('F', flags.GetRef(), dummy);
+				gb.TryGetQuotedString('K', key.GetRef(), dummy, true);
+				gb.TryGetQuotedString('F', flags.GetRef(), dummy, true);
 				if (&gb == auxGCode)
 				{
 					lastAuxStatusReportType = ObjectModelAuxStatusReportType;

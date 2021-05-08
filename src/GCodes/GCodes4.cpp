@@ -554,8 +554,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			bool updating = false;
 			String<MaxFilenameLength> filenameString;
-			bool dummy;
-			gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
+			try
+			{
+				bool dummy;
+				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
+			}
+			catch (const GCodeException&) { }
 			for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
 			{
 				if (firmwareUpdateModuleMap.IsBitSet(module))
@@ -594,10 +598,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// Update main firmware
 			firmwareUpdateModuleMap.Clear();
 			String<MaxFilenameLength> filenameString;
-			bool dummy;
-			gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
-			reprap.UpdateFirmware(filenameString.GetRef());
-			// The above call does not return unless an error occurred
+			try
+			{
+				bool dummy;
+				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
+				reprap.UpdateFirmware(filenameString.GetRef());
+				// The above call does not return unless an error occurred
+			}
+			catch (const GCodeException&) { }
 		}
 		isFlashing = false;
 		gb.SetState(GCodeState::normal);

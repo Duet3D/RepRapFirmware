@@ -626,18 +626,18 @@ bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const S
 
 // Try to get a quoted string after parameter letter.
 // If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
-bool GCodeBuffer::TryGetQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException)
+bool GCodeBuffer::TryGetQuotedString(char c, const StringRef& str, bool& seen, bool allowEmpty) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
 		seen = true;
-		GetQuotedString(str);
+		GetQuotedString(str, allowEmpty);
 		return true;
 	}
 	return false;
 }
 
-// Try to get a string, which may be quoted, after parameter letter.
+// Try to get a non-empty string, which may be quoted, after parameter letter.
 // If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
 bool GCodeBuffer::TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException)
 {
