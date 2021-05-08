@@ -1261,7 +1261,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 {
 	flags.wasAccelOnlyMove = IsAccelerationMove();			// save this for the next move to look at
 
-	if (flags.xyMoving && reprap.GetMove().GetShaper().GetType() == InputShaperType::DAA)
+	if (flags.xyMoving && reprap.GetMove().GetShaper().GetType() == InputShaperType::daa)
 	{
 		AdjustAcceleration();
 	}
