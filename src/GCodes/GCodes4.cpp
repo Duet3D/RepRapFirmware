@@ -310,8 +310,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::toolChange0: 						// run tfree for the old tool (if any)
 	case GCodeState::m109ToolChange0:					// run tfree for the old tool (if any)
 		doingToolChange = true;
-		SaveFanSpeeds();
 		SavePosition(toolChangeRestorePoint, gb);
+		toolChangeRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+		toolChangeRestorePoint.fanSpeed = lastDefaultFanSpeed;
 		reprap.SetPreviousToolNumber();
 		gb.AdvanceState();
 
@@ -529,10 +530,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::resuming3:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			for (size_t i = 0; i < MaxFans; ++i)
-			{
-				reprap.GetFansManager().SetFanValue(i, pausedFanSpeeds[i]);
-			}
+			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
+			// They can be restored manually in resume.g if required
 			virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
 			moveBuffer.virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;
 			fileGCode->LatestMachineState().feedRate = pauseRestorePoint.feedRate;
@@ -554,8 +553,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			bool updating = false;
 			String<MaxFilenameLength> filenameString;
-			bool dummy;
-			gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
+			try
+			{
+				bool dummy;
+				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
+			}
+			catch (const GCodeException&) { }
 			for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
 			{
 				if (firmwareUpdateModuleMap.IsBitSet(module))
@@ -594,10 +597,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// Update main firmware
 			firmwareUpdateModuleMap.Clear();
 			String<MaxFilenameLength> filenameString;
-			bool dummy;
-			gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
-			reprap.UpdateFirmware(filenameString.GetRef());
-			// The above call does not return unless an error occurred
+			try
+			{
+				bool dummy;
+				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
+				reprap.UpdateFirmware(filenameString.GetRef());
+				// The above call does not return unless an error occurred
+			}
+			catch (const GCodeException&) { }
 		}
 		isFlashing = false;
 		gb.SetState(GCodeState::normal);

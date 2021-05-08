@@ -33,6 +33,7 @@ constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 	// 0. LaserFilamentMonitor members
 	{ "coords", 			OBJECT_MODEL_FUNC_NOSELF(&coordinatesArrayDescriptor), 								ObjectModelEntryFlags::none },
 	{ "extruderPos",		OBJECT_MODEL_FUNC(self->virtualExtruderPosition, 1),	 							ObjectModelEntryFlags::none },
+	{ "fanPwm", 			OBJECT_MODEL_FUNC(self->fanSpeed, 2), 												ObjectModelEntryFlags::none },
 	{ "feedRate", 			OBJECT_MODEL_FUNC(self->feedRate, 1), 												ObjectModelEntryFlags::none },
 #if SUPPORT_IOBITS
 	{ "ioBits",				OBJECT_MODEL_FUNC_IF(reprap.GetGCodes().GetMachineType() != MachineType::laser,
@@ -45,7 +46,7 @@ constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 	{ "toolNumber",			OBJECT_MODEL_FUNC((int32_t)self->toolNumber),										ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RestorePoint::objectModelTableDescriptor[] = { 1, 4 + SUPPORT_LASER + SUPPORT_IOBITS };
+constexpr uint8_t RestorePoint::objectModelTableDescriptor[] = { 1, 5 + SUPPORT_LASER + SUPPORT_IOBITS };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RestorePoint)
 
@@ -69,6 +70,7 @@ void RestorePoint::Init() noexcept
 	proportionDone = 0.0;
 	initialUserC0 = initialUserC1 = 0.0;
 	toolNumber = -1;
+	fanSpeed = 0.0;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();

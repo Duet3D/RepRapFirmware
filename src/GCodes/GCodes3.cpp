@@ -44,16 +44,11 @@
 // Deal with G60
 GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const uint32_t sParam = (gb.Seen('S')) ? gb.GetUIValue() : 0;
-	if (sParam < ARRAY_SIZE(numberedRestorePoints))
-	{
-		SavePosition(numberedRestorePoints[sParam], gb);
-		numberedRestorePoints[sParam].toolNumber = reprap.GetCurrentToolNumber();
-		return GCodeResult::ok;
-	}
-
-	reply.copy("Bad restore point number");
-	return GCodeResult::error;
+	uint32_t sParam = 0;
+	bool dummySeen;
+	gb.TryGetLimitedUIValue('S', sParam, dummySeen, NumRestorePoints);
+	SavePosition(numberedRestorePoints[sParam], gb);
+	return GCodeResult::ok;
 }
 
 // This handles G92. Return true if completed, false if it needs to be called again.

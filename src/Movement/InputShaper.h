@@ -12,12 +12,10 @@
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
 
+// These names must be in alphabetical order and lowercase
 NamedEnum(InputShaperType, uint8_t,
+	daa,
 	none,
-	ZVD,
-	ZVDD,
-	EI2,
-	DAA
 );
 
 class InputShaper INHERIT_OBJECT_MODEL

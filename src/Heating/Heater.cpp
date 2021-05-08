@@ -440,11 +440,13 @@ GCodeResult Heater::SetFaultDetectionParameters(float pMaxTempExcursion, float p
 GCodeResult Heater::ConfigureMonitor(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	// Get any parameters that have been provided
-	const bool seenP = gb.Seen('P');
-	const size_t index = (seenP) ? gb.GetLimitedUIValue('P', MaxMonitorsPerHeater) : 0;
+	uint32_t index = 0;
+	bool seenP = false;
+	gb.TryGetLimitedUIValue('P', index, seenP, MaxMonitorsPerHeater);
 
-	const bool seenSensor = gb.Seen('T');
-	const int monitoringSensor = (seenSensor) ? gb.GetLimitedUIValue('T', MaxSensors) : GetSensorNumber();
+	bool seenSensor = false;
+	uint32_t monitoringSensor = GetSensorNumber();
+	gb.TryGetLimitedUIValue('T', monitoringSensor, seenSensor, MaxSensors);
 
 	const bool seenAction = gb.Seen('A');
 	const HeaterMonitorAction action = (seenAction)
