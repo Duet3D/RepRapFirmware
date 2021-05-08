@@ -436,7 +436,6 @@ private:
 #endif
 
 	bool IsMappedFan(unsigned int fanNumber) noexcept;							// Return true if this fan number is currently being used as a print cooling fan
-	void SaveFanSpeeds() noexcept;												// Save the speeds of all fans
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE
@@ -610,7 +609,6 @@ private:
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
 
-	float pausedFanSpeeds[MaxFans];				// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with no fan number
 	float speedFactor;							// speed factor as a fraction (normally 1.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
