@@ -157,6 +157,10 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 			else
 			{
 				reply.catf("version %u, ", version);
+				if (switchOpenMask != 0)
+				{
+					reply.cat(((sensorValue & switchOpenMask) != 0) ? "no filament, " : "filament present, ");
+				}
 				if (imageQuality != 0)
 				{
 					reply.catf("quality %u, ", imageQuality);
