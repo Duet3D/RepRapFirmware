@@ -969,7 +969,7 @@ bool Move::WriteResumeSettings(FileStore *f) const noexcept
 #endif
 
 // Process M204
-GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept
+GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('S'))
@@ -1000,7 +1000,7 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 }
 
 // Process M595
-GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const size_t ringNumber = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', ARRAY_SIZE(rings)) : 0;
 	return rings[ringNumber].ConfigureMovementQueue(gb, reply);
