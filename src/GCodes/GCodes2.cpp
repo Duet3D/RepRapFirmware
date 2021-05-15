@@ -3479,25 +3479,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 572: // Set/report pressure advance
-			if (gb.Seen('S'))
-			{
-				const float advance = gb.GetFValue();
-				if (!LockMovementAndWaitForStandstill(gb))
-				{
-					return false;
-				}
-				result = platform.SetPressureAdvance(advance, gb, reply);
-			}
-			else
-			{
-				reply.copy("Extruder pressure advance");
-				char c = ':';
-				for (size_t i = 0; i < numExtruders; ++i)
-				{
-					reply.catf("%c %.3f", c, (double)platform.GetPressureAdvance(i));
-					c = ',';
-				}
-			}
+			result = reprap.GetMove().ConfigurePressureAdvance(gb, reply);
 			break;
 
 		case 573: // Report heater average PWM
@@ -3767,7 +3749,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
-			result = reprap.GetMove().GetShaper().Configure(gb, reply);
+			result = reprap.GetMove().GetAxisShaper().Configure(gb, reply);
 			break;
 
 #if SUPPORT_ASYNC_MOVES

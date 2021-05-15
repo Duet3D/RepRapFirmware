@@ -64,7 +64,7 @@ struct PrepParams : public BasicPrepParams
 class DDA
 {
 	friend class DriveMovement;
-	friend class InputShaper;
+	friend class AxisShaper;
 	friend class BasicPrepParams;
 
 public:

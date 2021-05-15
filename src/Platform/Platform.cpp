@@ -295,7 +295,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 8),																			ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																			ObjectModelEntryFlags::none },
 	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(context.GetLastIndex()), reprap.GetCurrentTool()), 1)),	ObjectModelEntryFlags::live },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvance(context.GetLastIndex()), 2),								ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvance(context.GetLastIndex()), 2),			ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), ObjectModelEntryFlags::live },
 	{ "speed",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex())), 1),	ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[ExtruderToLogicalDrive(context.GetLastIndex())], 2),		ObjectModelEntryFlags::none },
@@ -616,9 +616,6 @@ void Platform::Init() noexcept
 		directions[driver] = true;								// drive moves forwards by default
 		enableValues[driver] = 0;								// assume active low enable signal
 
-#if SUPPORT_REMOTE_COMMANDS
-		remotePressureAdvance[driver] = 0.0;
-#endif
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
@@ -662,7 +659,6 @@ void Platform::Init() noexcept
 	{
 		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
 		driveDriverBits[ExtruderToLogicalDrive(extr)] = StepPins::CalcDriverBitmap(extr + MinAxes);
-		pressureAdvance[extr] = 0.0;
 #if SUPPORT_NONLINEAR_EXTRUSION
 		nonlinearExtrusionA[extr] = nonlinearExtrusionB[extr] = 0.0;
 		nonlinearExtrusionLimit[extr] = DefaultNonlinearExtrusionLimit;
@@ -3722,74 +3718,6 @@ void Platform::AtxPowerOff(bool defer) noexcept
 	}
 }
 
-GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply)
-{
-	GCodeResult rslt = GCodeResult::ok;
-
-#if SUPPORT_CAN_EXPANSION
-	CanDriversData<float> canDriversToUpdate;
-#endif
-
-	if (gb.Seen('D'))
-	{
-		uint32_t eDrive[MaxExtruders];
-		size_t eCount = MaxExtruders;
-		gb.GetUnsignedArray(eDrive, eCount, false);
-		for (size_t i = 0; i < eCount; i++)
-		{
-			const uint32_t extruder = eDrive[i];
-			if (extruder >= reprap.GetGCodes().GetNumExtruders())
-			{
-				reply.printf("Invalid extruder number '%" PRIu32 "'", extruder);
-				rslt = GCodeResult::error;
-				break;
-			}
-			pressureAdvance[extruder] = advance;
-#if SUPPORT_CAN_EXPANSION
-			if (extruderDrivers[extruder].IsRemote())
-			{
-				canDriversToUpdate.AddEntry(extruderDrivers[extruder], advance);
-			}
-#endif
-		}
-	}
-	else
-	{
-		const Tool * const ct = reprap.GetCurrentTool();
-		if (ct == nullptr)
-		{
-			reply.copy("No tool selected");
-			rslt = GCodeResult::error;
-		}
-		else
-		{
-#if SUPPORT_CAN_EXPANSION
-			ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
-									{
-										pressureAdvance[extruder] = advance;
-										if (extruderDrivers[extruder].IsRemote())
-										{
-											canDriversToUpdate.AddEntry(extruderDrivers[extruder], advance);
-										}
-									}
-								);
-#else
-			ct->IterateExtruders([this, advance](unsigned int extruder)
-									{
-										pressureAdvance[extruder] = advance;
-									}
-								);
-#endif
-		}
-	}
-
-#if SUPPORT_CAN_EXPANSION
-	return max(rslt, CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply));
-#else
-	return rslt;
-#endif
-}
-
 #if SUPPORT_NONLINEAR_EXTRUSION
 
 bool Platform::GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const noexcept
@@ -4863,37 +4791,6 @@ GCodeResult Platform::EutHandleSetDriverStates(const CanMessageMultipleDrivesReq
 			}
 		});
 	return GCodeResult::ok;
-}
-
-float Platform::EutGetRemotePressureAdvance(size_t driver) const noexcept
-{
-	return (driver < ARRAY_SIZE(remotePressureAdvance)) ? remotePressureAdvance[driver] : 0.0;
-}
-
-GCodeResult Platform::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
-{
-	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
-	{
-		reply.copy("bad data length");
-		return GCodeResult::error;
-	}
-
-	GCodeResult rslt = GCodeResult::ok;
-	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
-						{
-							if (driver >= NumDirectDrivers)
-							{
-								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
-								rslt = GCodeResult::error;
-							}
-							else
-							{
-								remotePressureAdvance[driver] = msg.values[count];
-							}
-						}
-				   );
-	return rslt;
 }
 
 GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept

@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_MOVEMENT_INPUTSHAPER_H_
-#define SRC_MOVEMENT_INPUTSHAPER_H_
+#ifndef SRC_MOVEMENT_AXISSHAPER_H_
+#define SRC_MOVEMENT_AXISSHAPER_H_
 
 #define SUPPORT_DAA		(1)
 
@@ -47,10 +47,10 @@ union InputShaperPlan
 	InputShaperPlan() noexcept : all(0) { }
 };
 
-class InputShaper INHERIT_OBJECT_MODEL
+class AxisShaper INHERIT_OBJECT_MODEL
 {
 public:
-	InputShaper() noexcept;
+	AxisShaper() noexcept;
 
 	float GetFrequency() const noexcept { return frequency; }
 	float GetDamping() const noexcept { return zeta; }
@@ -67,9 +67,9 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	MoveSegment *GetAccelerationSegments(DDA& dda, BasicPrepParams& params, InputShaperPlan& plan) const noexcept;
-	MoveSegment *GetDecelerationSegments(DDA& dda, BasicPrepParams& params, InputShaperPlan& plan) const noexcept;
-	void FinishSegments(DDA& dda, BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
+	MoveSegment *GetAccelerationSegments(const DDA& dda, const BasicPrepParams& params, InputShaperPlan& plan) const noexcept;
+	MoveSegment *GetDecelerationSegments(const DDA& dda, const BasicPrepParams& params, InputShaperPlan& plan) const noexcept;
+	MoveSegment *FinishSegments(const DDA& dda, const BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
 	float GetExtraAccelStartDistance(const DDA& dda) const noexcept;
 	float GetExtraAccelEndDistance(const DDA& dda) const noexcept;
 	float GetExtraDecelStartDistance(const DDA& dda) const noexcept;
@@ -97,4 +97,4 @@ private:
 	InputShaperType type;
 };
 
-#endif /* SRC_MOVEMENT_INPUTSHAPER_H_ */
+#endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

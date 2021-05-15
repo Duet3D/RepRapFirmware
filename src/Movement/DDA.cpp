@@ -367,7 +367,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationTime = reprap.GetPlatform().GetPressureAdvance(LogicalDriveToExtruder(drive));
+					const float compensationTime = reprap.GetMove().GetPressureAdvance(LogicalDriveToExtruder(drive));
 					if (compensationTime > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
@@ -690,7 +690,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 	// Calculate the segments needed for axis movement
 	//TODO the message will include input shaping info
-	const InputShaper& shaper = reprap.GetMove().GetShaper();
+	const AxisShaper& shaper = reprap.GetMove().GetAxisShaper();
 	shaper.GetSegments(*this, params);
 
 	activeDMs = completedDMs = nullptr;
@@ -1169,7 +1169,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #endif
 
 	PrepParams params;
-	const InputShaperPlan plan = reprap.GetMove().GetShaper().PlanShaping(*this, params, flags.xyMoving);
+	const InputShaperPlan plan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
 	(void)plan;		//TODO will be needed for CAN
 
 	if (simMode == 0)
@@ -1369,6 +1369,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				// It's an extruder drive
 				if (directionVector[drive] != 0.0)
 				{
+					// We don't apply input shaping to extruders. We generate separate MoveSegment objects for each extruder in case they have different pressure advance.
 					// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
 					// Pass the speed change to PrepareExtruder
 					float speedChange;
@@ -1399,7 +1400,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #endif
 					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[extruder], speedChange, flags.usePressureAdvance);
+						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[extruder], speedChange);
 
 						if (stepsToDo)
 						{
@@ -2148,7 +2149,7 @@ int32_t DDA::PrepareRemoteExtruder(size_t drive, float& extrusionPending, float 
 	if (flags.usePressureAdvance && extrusionRequired >= 0.0)
 	{
 		// Calculate the pressure advance parameters
-		const float compensationTime = reprap.GetPlatform().GetPressureAdvance(LogicalDriveToExtruder(drive));
+		const float compensationTime = reprap.GetMove().GetPressureAdvance(LogicalDriveToExtruder(drive));
 
 		// Calculate the net total extrusion to allow for compensation. It may be negative.
 		const float dv = extrusionRequired/totalDistance;

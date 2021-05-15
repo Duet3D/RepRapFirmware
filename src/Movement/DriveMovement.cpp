@@ -53,22 +53,6 @@ DriveMovement::DriveMovement(DriveMovement *next) noexcept : nextDM(next)
 
 // Non static members
 
-// Prepare this DM for a Cartesian axis move, returning true if there are steps to do
-bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept
-{
-	currentSegment = dda.segments;
-	phaseStartTime = 0.0;
-	NewCartesianSegment(0.0, 0.0);
-
-	// Prepare for the first step
-	nextStep = 0;
-	nextStepTime = 0;
-	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
-	stepsTillRecalc = 0;							// so that we don't skip the calculation
-	reverseStartStep = totalSteps + 1;				// no reverse phase
-	return CalcNextStepTime(dda);
-}
-
 // This is called when currentSegment has just been changed to a new segment
 void DriveMovement::NewCartesianSegment(float startFraction, float startTime) noexcept
 {
@@ -85,6 +69,7 @@ void DriveMovement::NewCartesianSegment(float startFraction, float startTime) no
 	{
 		// Set up pA, pB, pC such that for forward motion, time = sqrt(pA + pb * stepNumber) + pC
 		// time = startTime - currentSegment->GetUDivA() + sqrt(currentSegment->GetUDivA()^2 + currentSegment->GetTwoDDivA() * (moveFraction - startFraction))
+		//qq;	// TODO pressure advance!
 		pB = currentSegment->GetTwoDDivA()/(float)totalSteps;
 		pA = fsquare(currentSegment->GetUDivA()) - (currentSegment->GetTwoDDivA() * startFraction);
 		pC = startTime - currentSegment->GetUDivA();
@@ -124,8 +109,8 @@ void DriveMovement::NewDeltaSegment(const DDA& dda, float startFraction, float s
 	const float sDx = distanceLimit * dda.directionVector[0];
 	const float sDy = distanceLimit * dda.directionVector[1];
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-	const float netStepsAtEnd = fastSqrtf(delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + delta.fTwoA) + sDy * (sDy + delta.fTwoB)))
-							 + (distanceLimit * dda.directionVector[2] - delta.h0MinusZ0) * stepsPerMm;
+	const float netStepsAtEnd = fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
+							 + (distanceLimit * dda.directionVector[2] -mp. delta.h0MinusZ0) * stepsPerMm;
 	if (direction)
 	{
 		// Going up
@@ -160,6 +145,26 @@ void DriveMovement::NewDeltaSegment(const DDA& dda, float startFraction, float s
 	}
 }
 
+// Prepare this DM for a Cartesian axis move, returning true if there are steps to do
+bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept
+{
+	usesCommonSegments = true;
+	isDelta = false;
+	mp.cart.pressureAdvance = 0.0;
+
+	currentSegment = dda.segments;
+	phaseStartTime = 0.0;
+	NewCartesianSegment(0.0, 0.0);
+
+	// Prepare for the first step
+	nextStep = 0;
+	nextStepTime = 0;
+	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
+	stepsTillRecalc = 0;							// so that we don't skip the calculation
+	reverseStartStep = totalSteps + 1;				// no reverse phase
+	return CalcNextStepTime(dda);
+}
+
 // Prepare this DM for a Delta axis move, returning true if there are steps to do
 bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept
 {
@@ -168,17 +173,18 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	const float B = params.initialY - params.dparams->GetTowerY(drive);
 	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
 	const float dSquaredMinusAsquaredMinusBsquared = params.dparams->GetDiagonalSquared(drive) - fsquare(A) - fsquare(B);
-	delta.h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
+	mp.delta.h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
 #if DM_USE_FPU
-	delta.fTwoA = 2.0 * A;
-	delta.fTwoB = 2.0 * B;
-	delta.fHmz0s = delta.h0MinusZ0 * stepsPerMm;
-	delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
-	delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
+	mp.delta.fTwoA = 2.0 * A;
+	mp.delta.fTwoB = 2.0 * B;
+	mp.delta.fHmz0s = mp.delta.h0MinusZ0 * stepsPerMm;
+	mp.delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
+	mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
 #else
-	delta.hmz0sK = roundS32(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
-	delta.minusAaPlusBbTimesKs = -roundS32(aAplusbB * stepsPerMm * DriveMovement::K2);
-	delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared = roundS64(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
+	qq;	// incomplete!
+	mp.delta.hmz0sK = roundS32(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
+	mp.delta.minusAaPlusBbTimesKs = -roundS32(aAplusbB * stepsPerMm * DriveMovement::K2);
+	mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared = roundS64(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
 #endif
 
 	// Calculate the distance at which we need to reverse direction.
@@ -200,7 +206,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 			// Calculate how many steps we need to move up before reversing
 			reverseStartDistance = drev;
 			const float hrev = dda.directionVector[Z_AXIS] * drev + fastSqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
-			const int32_t numStepsUp = (int32_t)((hrev - delta.h0MinusZ0) * stepsPerMm);
+			const int32_t numStepsUp = (int32_t)((hrev - mp.delta.h0MinusZ0) * stepsPerMm);
 
 			// We may be almost at the peak height already, in which case we don't really have a reversal.
 			if (numStepsUp < 1 || (direction && (uint32_t)numStepsUp <= totalSteps))
@@ -245,11 +251,12 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	isDelta = true;
+	usesCommonSegments = true;
 	return CalcNextStepTime(dda);
 }
 
 // Prepare this DM for an extruder move, returning true if there are steps to do
-bool DriveMovement::PrepareExtruder(DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) noexcept
+bool DriveMovement::PrepareExtruder(DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange) noexcept
 {
 	// Calculate the requested extrusion amount and a few other things
 	float dv = dda.directionVector[drive];
@@ -277,10 +284,10 @@ bool DriveMovement::PrepareExtruder(DDA& dda, const PrepParams& params, float& e
 
 	float compensationTime;
 
-	if (doCompensation && direction)
+	if (dda.flags.usePressureAdvance && direction)
 	{
 		// Calculate the pressure advance parameters
-		compensationTime = reprap.GetPlatform().GetPressureAdvance(extruder);
+		compensationTime = reprap.GetMove().GetPressureAdvance(extruder);
 
 		// Calculate the net total extrusion to allow for compensation. It may be negative.
 		extrusionRequired += (dda.endSpeed - dda.startSpeed) * compensationTime * dv;
@@ -295,7 +302,7 @@ bool DriveMovement::PrepareExtruder(DDA& dda, const PrepParams& params, float& e
 	const int32_t netSteps = int32_t(extrusionRequired * rawStepsPerMm);
 	extrusionPending = extrusionRequired - (float)netSteps/rawStepsPerMm;
 
-	return PrepareExtruderCommon(dda, params, effectiveStepsPerMm, netSteps, compensationTime);
+	return PrepareExtruderCommon(dda, params, effectiveStepsPerMm, netSteps, reprap.GetMove().GetExtruderShaper(extruder));
 }
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -304,31 +311,38 @@ bool DriveMovement::PrepareExtruder(DDA& dda, const PrepParams& params, float& e
 bool DriveMovement::PrepareRemoteExtruder(DDA& dda, const PrepParams& params) noexcept
 {
 	// Calculate the pressure advance parameters
-	const float compensationTime = reprap.GetPlatform().EutGetRemotePressureAdvance(drive);
+	const ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(drive);
+	const float compensationTime = shaper.GetK();
 
 	// Recalculate the net total step count to allow for compensation. It may be negative.
 	const float compensationDistance = (dda.endSpeed - dda.startSpeed) * compensationTime;
 	const int32_t netSteps = (int32_t)((1.0 + compensationDistance) * totalSteps);
 
 	const float effectiveStepsPerMm = 1.0/totalSteps;
-	return PrepareExtruderCommon(dda, params, effectiveStepsPerMm, netSteps, compensationTime);
+	return PrepareExtruderCommon(dda, params, effectiveStepsPerMm, netSteps, shaper);
 }
 
 #endif
 
-// Common code for preparing extruder moves generated local and those received via CAN
-bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, float effectiveStepsPerMm, int32_t netSteps, float compensationTime) noexcept
+// Common code for preparing extruder moves generated locally and those received via CAN
+bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, float effectiveStepsPerMm, int32_t netSteps, const ExtruderShaper& shaper) noexcept
 {
-#if 1
+#if 0
 	return PrepareCartesianAxis(dda, params);
 #else
+	// Use the pressure advance shaper to compute the segments
+	currentSegment = shaper.GetSegments(dda, params);
+
+#if 0
+	//TODO compute everything in step clocks?
 	const float compensationClocks = compensationTime * StepTimer::StepClockRate;
-	const float accelExtraDistance = compensationTime * dda.acceleration * params.accelTime;
+	const float accelExtraDistance = compensationTime * dda.acceleration * params.accelClocks;
 	const float totalAccelDistance = params.accelDistance + accelExtraDistance;
 	float actualTotalDistance = params.decelStartDistance + accelExtraDistance;			// this starts off being the decel start distance and ends up being the total distance
 
 	// Deceleration phase
 	bool hasReversePhase;
+	MoveSegment *segs = nullptr;
 	if (params.decelDistance > 0.0)
 	{
 		// If we are using pressure advance then there may be a reverse phase. The motion constants are the same for both forward and reverse phases.
@@ -409,17 +423,20 @@ bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, fl
 		reverseStartStep = totalSteps + 1;
 	}
 
-	// Prepare for the first step
 	currentSegment = segs;
-	dda.AppendSegments(segs);
+#endif
+
+	isDelta = false;
+	usesCommonSegments = false;
+	phaseStartTime = 0.0;
+	NewExtruderSegment(dda, 0.0, 0.0);
+
+	// Prepare for the first step
 	nextStep = 0;
 	nextStepTime = 0;
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
-	state = (segs == nullptr) ? DMState::idle
-			: (segs->IsLast() && reverseStartStep == 1) ? DMState::reversing
-				: DMState::forwards;
-	isDelta = false;
+	reverseStartStep = totalSteps + 1;				// no reverse phase
 	return CalcNextStepTime(dda);
 #endif
 }
@@ -434,7 +451,11 @@ void DriveMovement::DebugPrint() const noexcept
 		if (isDelta)
 		{
 			debugPrintf("hmz0s=%.2f minusAaPlusBbTimesS=%.2f dSquaredMinusAsquaredMinusBsquared=%.2f\n",
-							(double)delta.fHmz0s, (double)delta.fMinusAaPlusBbTimesS, (double)delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
+							(double)mp.delta.fHmz0s, (double)mp.delta.fMinusAaPlusBbTimesS, (double)mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
+		}
+		else
+		{
+			debugPrintf("pa=%.2f\n", (double)mp.cart.pressureAdvance);
 		}
 	}
 	else
@@ -603,14 +624,14 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			{
 				steps = -steps;
 			}
-			delta.fHmz0s += steps;									// get new carriage height above Z in steps
+			mp.delta.fHmz0s += steps;									// get new carriage height above Z in steps
 		}
 
 		{
-			const float hmz0sc = delta.fHmz0s * dda.directionVector[Z_AXIS];
-			const float t1 = delta.fMinusAaPlusBbTimesS + hmz0sc;
+			const float hmz0sc = mp.delta.fHmz0s * dda.directionVector[Z_AXIS];
+			const float t1 = mp.delta.fMinusAaPlusBbTimesS + hmz0sc;
 			// Due to rounding error we can end up trying to take the square root of a negative number if we do not take precautions here
-			const float t2a = delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(delta.fHmz0s) + fsquare(t1);
+			const float t2a = mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(mp.delta.fHmz0s) + fsquare(t1);
 			const float t2 = (t2a > 0.0) ? fastSqrtf(t2a) : 0.0;
 			const float ds = (direction) ? t1 - t2 : t1 + t2;
 
@@ -676,7 +697,13 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	{
 		const float startDistance = currentSegment->GetDistanceLimit();
 		phaseStartTime += currentSegment->GetSegmentTime();
+		MoveSegment * const oldCurrentSegment = currentSegment;
 		currentSegment = currentSegment->GetNext();
+		if (!usesCommonSegments)
+		{
+			MoveSegment::Release(oldCurrentSegment);
+		}
+
 		if (currentSegment == nullptr)
 		{
 			state = DMState::stepError;

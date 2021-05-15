@@ -14,6 +14,7 @@
 
 class LinearDeltaKinematics;
 class PrepParams;
+class ExtruderShaper;
 
 #define DM_USE_FPU			(__FPU_USED)
 #define EVEN_STEPS			(1)			// 1 to generate steps at even intervals when doing double/quad/octal stepping
@@ -23,11 +24,12 @@ enum class DMState : uint8_t
 {
 	idle = 0,
 	stepError,
+
 	// All higher values are various states of motion
 	firstMotionState,
 	cartAccel = firstMotionState,				// linear accelerating motion
-	cartDecelNoReverse,							// linear decelerating motion
 	cartLinear,									// linear steady speed
+	cartDecelNoReverse,							// linear decelerating motion
 	cartDecelExpectReverse,						// linear decelerating, reversal later
 	cartDecelReversing,							// linear decelerating, reverse on next step
 	cartDecelReverse,							// linear decelerating, reverse motion
@@ -52,8 +54,8 @@ public:
 	bool CalcNextStepTime(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
-	bool PrepareExtruder(DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) noexcept SPEED_CRITICAL;
-	bool PrepareExtruderCommon(DDA& dda, const PrepParams& params, float effectiveStepsPerMm, int32_t netSteps, float compensationTime) noexcept SPEED_CRITICAL;
+	bool PrepareExtruder(DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange) noexcept SPEED_CRITICAL;
+	bool PrepareExtruderCommon(DDA& dda, const PrepParams& params, float effectiveStepsPerMm, int32_t netSteps, const ExtruderShaper& shaper) noexcept SPEED_CRITICAL;
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool PrepareRemoteExtruder(DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
@@ -92,8 +94,8 @@ private:
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
-			fullCurrent : 1,							// true if the drivers are set to the full current, false if they are set to the standstill current
-			isDelta : 1;								// true if this DM uses segment-free delta kinematics
+			isDelta : 1,								// true if this DM uses segment-free delta kinematics
+			usesCommonSegments : 1;						// true if currentSegment refers to the commo0n segment list linked from the DDA
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
 	uint32_t totalSteps;								// total number of steps for this move
@@ -110,22 +112,30 @@ private:
 	float pA, pB, pC;
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
-	struct DeltaParameters								// Parameters for delta movement
+	union
 	{
-		// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
+		struct DeltaParameters								// Parameters for delta movement
+		{
+			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
 #if DM_USE_FPU
-		float fTwoA;
-		float fTwoB;
-		float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
-		float h0MinusZ0;								// the height subtended by the rod at the start of the move
-		float fHmz0s;									// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
-		float fMinusAaPlusBbTimesS;
+			float fTwoA;
+			float fTwoB;
+			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
+			float h0MinusZ0;								// the height subtended by the rod at the start of the move
+			float fHmz0s;									// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
+			float fMinusAaPlusBbTimesS;
 #else
-		int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
-		int32_t hmz0sK;									// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
-		int32_t minusAaPlusBbTimesKs;
+			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
+			int32_t hmz0sK;									// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
+			int32_t minusAaPlusBbTimesKs;
 #endif
-	} delta;
+		} delta;
+
+		struct CartesianParameters
+		{
+			float pressureAdvance;							// how much pressure advance is applied to this move
+		} cart;
+	} mp;
 
 	static constexpr uint32_t NoStepTime = 0xFFFFFFFF;	// value to indicate that no further steps are needed when calculating the next step time
 

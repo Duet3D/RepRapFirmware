@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "InputShaper.h"
+#include "AxisShaper.h"
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Platform/RepRap.h>
@@ -18,10 +18,10 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(InputShaper, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(InputShaper, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(AxisShaper, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(AxisShaper, __VA_ARGS__)
 
-constexpr ObjectModelTableEntry InputShaper::objectModelTable[] =
+constexpr ObjectModelTableEntry AxisShaper::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. InputShaper members
@@ -31,11 +31,11 @@ constexpr ObjectModelTableEntry InputShaper::objectModelTable[] =
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t InputShaper::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t AxisShaper::objectModelTableDescriptor[] = { 1, 4 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(InputShaper)
+DEFINE_GET_OBJECT_MODEL_TABLE(AxisShaper)
 
-InputShaper::InputShaper() noexcept
+AxisShaper::AxisShaper() noexcept
 	: frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
 	  minimumAcceleration(DefaultMinimumAcceleration),
@@ -45,7 +45,7 @@ InputShaper::InputShaper() noexcept
 }
 
 // Process M593
-GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const float MinimumInputShapingFrequency = (float)StepTimer::StepClockRate/(2 * 65535);			// we use a 16-bit number of step clocks to represent half the input shaping period
 	const float MaximumInputShapingFrequency = 1000.0;
@@ -283,7 +283,9 @@ GCodeResult InputShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	return GCodeResult::ok;
 }
 
-InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept
+// Plan input shaping, generate the MoveSegment, and set up the basic move parameters.
+// Currently we use a single input shaper for all axes, so the move segments are attached to the DDA not the DM
+InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept
 {
 	InputShaperPlan plan;			// this clears out all the fields
 
@@ -526,13 +528,13 @@ InputShaperPlan InputShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool
 	MoveSegment * const decelSegs = GetDecelerationSegments(dda, params, plan);
 
 	params.Finalise(dda);									// this sets up params.steadyClocks, which is needed by FinishSegments
-	FinishSegments(dda, params, accelSegs, decelSegs);
+	dda.segments = FinishSegments(dda, params, accelSegs, decelSegs);
 //	debugPrintf(" final plan %03x\n", (unsigned int)plan.all);
 	return plan;
 }
 
 // If there is an acceleration phase, generate the acceleration segments according to the plan, and set the number of acceleration segments in the plan
-MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& params, InputShaperPlan& plan) const noexcept
+MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrepParams& params, InputShaperPlan& plan) const noexcept
 {
 	if (dda.beforePrepare.accelDistance > 0.0)
 	{
@@ -616,7 +618,7 @@ MoveSegment *InputShaper::GetAccelerationSegments(DDA& dda, BasicPrepParams& par
 }
 
 // If there is a deceleration phase, generate the deceleration segments according to the plan, and set the number of deceleration segments in the plan
-MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& params, InputShaperPlan& plan) const noexcept
+MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const BasicPrepParams& params, InputShaperPlan& plan) const noexcept
 {
 	if (dda.beforePrepare.decelDistance > 0.0)
 	{
@@ -700,7 +702,7 @@ MoveSegment *InputShaper::GetDecelerationSegments(DDA& dda, BasicPrepParams& par
 }
 
 // Generate the steady speed segment (if any), tack the segments together, and attach them to the DDA
-void InputShaper::FinishSegments(DDA& dda, BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept
+MoveSegment *AxisShaper::FinishSegments(const DDA& dda, const BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept
 {
 	if (params.steadyClocks > 0.0)
 	{
@@ -715,16 +717,14 @@ void InputShaper::FinishSegments(DDA& dda, BasicPrepParams& params, MoveSegment 
 		{
 			accelSegs->AddToTail(decelSegs);
 		}
-		dda.segments = accelSegs;
+		return accelSegs;
 	}
-	else
-	{
-		dda.segments = decelSegs;
-	}
+
+	return decelSegs;
 }
 
 // Calculate the additional acceleration distance needed if we shape the start of acceleration
-float InputShaper::GetExtraAccelStartDistance(const DDA& dda) const noexcept
+float AxisShaper::GetExtraAccelStartDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float u = dda.startSpeed;
@@ -739,7 +739,7 @@ float InputShaper::GetExtraAccelStartDistance(const DDA& dda) const noexcept
 }
 
 // Calculate the additional acceleration distance needed if we shape the end of acceleration
-float InputShaper::GetExtraAccelEndDistance(const DDA& dda) const noexcept
+float AxisShaper::GetExtraAccelEndDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float v = dda.topSpeed;
@@ -754,7 +754,7 @@ float InputShaper::GetExtraAccelEndDistance(const DDA& dda) const noexcept
 }
 
 // Calculate the additional deceleration distance needed if we shape the start of deceleration
-float InputShaper::GetExtraDecelStartDistance(const DDA& dda) const noexcept
+float AxisShaper::GetExtraDecelStartDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float u = dda.topSpeed;
@@ -769,7 +769,7 @@ float InputShaper::GetExtraDecelStartDistance(const DDA& dda) const noexcept
 }
 
 // Calculate the additional deceleration distance needed if we shape the end of deceleration
-float InputShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
+float AxisShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float v = dda.endSpeed;
@@ -785,7 +785,7 @@ float InputShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 
 #if SUPPORT_REMOTE_COMMANDS
 
-void InputShaper::GetSegments(DDA& dda, const BasicPrepParams& params) const noexcept
+void AxisShaper::GetSegments(DDA& dda, const BasicPrepParams& params) const noexcept
 {
 	// Deceleration phase
 	MoveSegment * tempSegments;

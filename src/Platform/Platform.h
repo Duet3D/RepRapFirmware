@@ -469,9 +469,6 @@ public:
 	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisTotalLength(size_t axis) const noexcept;
 
-	float GetPressureAdvance(size_t extruder) const noexcept;
-	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
 	inline bool IsAxisRotational(size_t axis) const noexcept { return rotationalAxes.IsBitSet(axis); }
@@ -633,8 +630,6 @@ public:
 	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
-	float EutGetRemotePressureAdvance(size_t driver) const noexcept;
-	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 #endif
 
@@ -661,10 +656,6 @@ private:
 #else
 	void IterateDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
 	void IterateLocalDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
-#endif
-
-#if SUPPORT_REMOTE_COMMANDS
-	float remotePressureAdvance[NumDirectDrivers];
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -732,7 +723,6 @@ private:
 	AxesBitmap shortcutAxes;								// axes that wrap modulo 360 and for which G0 may choose the shortest direction
 #endif
 
-	float pressureAdvance[MaxExtruders];
 #if SUPPORT_NONLINEAR_EXTRUSION
 	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
 #endif
@@ -1063,11 +1053,6 @@ inline IPAddress Platform::NetMask() const noexcept
 inline IPAddress Platform::GateWay() const noexcept
 {
 	return gateWay;
-}
-
-inline float Platform::GetPressureAdvance(size_t extruder) const noexcept
-{
-	return (extruder < MaxExtruders) ? pressureAdvance[extruder] : 0.0;
 }
 
 inline float Platform::GetFilamentWidth() const noexcept

@@ -47,6 +47,7 @@
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanMotion.h>
+# include <CAN/CanInterface.h>
 #endif
 
 // Move task stack size
@@ -99,7 +100,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),										ObjectModelEntryFlags::none },
-	{ "shaping",				OBJECT_MODEL_FUNC(&self->shaper, 0),													ObjectModelEntryFlags::none },
+	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),												ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),						ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),			ObjectModelEntryFlags::live },
@@ -969,7 +970,7 @@ bool Move::WriteResumeSettings(FileStore *f) const noexcept
 #endif
 
 // Process M204
-GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept
+GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('S'))
@@ -1000,10 +1001,125 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 }
 
 // Process M595
-GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const size_t ringNumber = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', ARRAY_SIZE(rings)) : 0;
 	return rings[ringNumber].ConfigureMovementQueue(gb, reply);
+}
+
+// Process M572
+GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (gb.Seen('S'))
+	{
+		const float advance = gb.GetFValue();
+		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+
+		GCodeResult rslt = GCodeResult::ok;
+
+#if SUPPORT_CAN_EXPANSION
+		CanDriversData<float> canDriversToUpdate;
+#endif
+		if (gb.Seen('D'))
+		{
+			uint32_t eDrive[MaxExtruders];
+			size_t eCount = MaxExtruders;
+			gb.GetUnsignedArray(eDrive, eCount, false);
+			Platform& platform = reprap.GetPlatform();
+			for (size_t i = 0; i < eCount; i++)
+			{
+				const uint32_t extruder = eDrive[i];
+				if (extruder >= reprap.GetGCodes().GetNumExtruders())
+				{
+					reply.printf("Invalid extruder number '%" PRIu32 "'", extruder);
+					rslt = GCodeResult::error;
+					break;
+				}
+				extruderShapers[extruder].SetK(advance);
+#if SUPPORT_CAN_EXPANSION
+				const DriverId did = platform.GetExtruderDriver(extruder);
+				if (did.IsRemote())
+				{
+					canDriversToUpdate.AddEntry(did, advance);
+				}
+#endif
+			}
+		}
+		else
+		{
+			const Tool * const ct = reprap.GetCurrentTool();
+			if (ct == nullptr)
+			{
+				reply.copy("No tool selected");
+				rslt = GCodeResult::error;
+			}
+			else
+			{
+#if SUPPORT_CAN_EXPANSION
+				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
+										{
+											extruderShapers[extruder].SetK(advance);
+											const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
+											if (did.IsRemote())
+											{
+												canDriversToUpdate.AddEntry(did, advance);
+											}
+										}
+									);
+#else
+				ct->IterateExtruders([this, advance](unsigned int extruder)
+										{
+											extruderShapers[extruder].SetK(advance);
+										}
+									);
+#endif
+			}
+		}
+
+#if SUPPORT_CAN_EXPANSION
+		return max(rslt, CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply));
+#else
+		return rslt;
+#endif
+	}
+
+	reply.copy("Extruder pressure advance");
+	char c = ':';
+	for (size_t i = 0; i < reprap.GetGCodes().GetNumExtruders(); ++i)
+	{
+		reply.catf("%c %.3f", c, (double)extruderShapers[i].GetK());
+		c = ',';
+	}
+	return GCodeResult::ok;
+}
+
+GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								extruderShapers[driver].SetK(msg.values[count]);
+							}
+						}
+				   );
+	return rslt;
 }
 
 // Return the current live XYZ and extruder coordinates

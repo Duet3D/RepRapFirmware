@@ -9,7 +9,8 @@
 #define MOVE_H_
 
 #include <RepRapFirmware.h>
-#include "InputShaper.h"
+#include "AxisShaper.h"
+#include "ExtruderShaper.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
@@ -93,12 +94,17 @@ public:
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
-	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept;		// process M204
-	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;		// process M595
+	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);		// process M204
+	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
+	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
+
+	float GetPressureAdvance(size_t extruder) const noexcept;
+	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 
 	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
 	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
-	InputShaper& GetShaper() noexcept { return shaper; }
+	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
+	const ExtruderShaper& GetExtruderShaper(size_t extruder) const noexcept { return extruderShapers[extruder]; }
 
 	void Diagnostics(MessageType mtype) noexcept;							// Report useful stuff
 
@@ -267,7 +273,13 @@ private:
 
 	Kinematics *kinematics;								// What kinematics we are using
 
-	InputShaper shaper;
+	AxisShaper axisShaper;
+
+#if SUPPORT_REMOTE_COMMANDS
+	ExtruderShaper extruderShapers[max<size_t>(MaxExtruders, NumDirectDrivers)];
+#else
+	ExtruderShaper extruderShapers[MaxExtruders];
+#endif
 
 	float latestLiveCoordinates[MaxAxesPlusExtruders];
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
@@ -307,6 +319,11 @@ inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotor
 inline void Move::ResetExtruderPositions() noexcept
 {
 	mainDDARing.ResetExtruderPositions();
+}
+
+inline float Move::GetPressureAdvance(size_t extruder) const noexcept
+{
+	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetK() : 0.0;
 }
 
 #if HAS_SMART_DRIVERS
