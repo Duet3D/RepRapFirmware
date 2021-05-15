@@ -579,7 +579,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						switch (machineType)
 						{
-#if SUPPORT_LASER
+	#if SUPPORT_LASER
 						case MachineType::laser:
 							if (moveBuffer.segmentsLeft != 0)
 							{
@@ -587,16 +587,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 							moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 							break;
-#endif
+	#endif
 
 						default:
-#if SUPPORT_ROLAND
+	#if SUPPORT_ROLAND
 							if (reprap.GetRoland()->Active())
 							{
 								result = reprap.GetRoland()->ProcessSpindle(gb.GetFValue());
 							}
 							else
-#endif
+	#endif
 							{
 								result = GCodeResult::notSupportedInCurrentMode;
 							}
@@ -677,7 +677,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					break;
 
-#if SUPPORT_LASER
+	#if SUPPORT_LASER
 				case MachineType::laser:
 					if (moveBuffer.segmentsLeft != 0)
 					{
@@ -685,16 +685,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					moveBuffer.laserPwmOrIoBits.Clear();
 					break;
-#endif
+	#endif
 
 				default:
-#if SUPPORT_ROLAND
+	#if SUPPORT_ROLAND
 					if (reprap.GetRoland()->Active())
 					{
 						result = reprap.GetRoland()->ProcessSpindle(0.0);
 					}
 					else
-#endif
+	#endif
 					{
 						result = GCodeResult::notSupportedInCurrentMode;
 					}
@@ -791,7 +791,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 			case 20:		// List files on SD card
 				if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
 				{
@@ -932,7 +932,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
+	#endif
 
 			case 24: // Print/resume-printing the selected file
 				if (pauseState == PauseState::pausing || pauseState == PauseState::resuming)
@@ -948,14 +948,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (pauseState == PauseState::paused)
 					{
-#if HAS_VOLTAGE_MONITOR
+	#if HAS_VOLTAGE_MONITOR
 						if (!platform.IsPowerOk())
 						{
 							reply.copy("Cannot resume while power voltage is low");
 							result = GCodeResult::error;
 						}
 						else
-#endif
+	#endif
 						{
 							pauseState = PauseState::resuming;
 							gb.SetState(GCodeState::resuming1);
@@ -965,7 +965,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 						}
 					}
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 					else if (!fileToPrint.IsLive())
 					{
 						reply.copy("Cannot print, because no file is selected!");
@@ -973,14 +973,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-# if HAS_VOLTAGE_MONITOR
+	# if HAS_VOLTAGE_MONITOR
 						if (!platform.IsPowerOk())
 						{
 							reply.copy("Cannot start a print while power voltage is low");
 							result = GCodeResult::error;
 						}
 						else
-# endif
+	# endif
 						{
 							bool fromStart = (fileOffsetToPrint == 0);
 							if (!fromStart)
@@ -994,7 +994,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							StartPrinting(fromStart);
 						}
 					}
-#endif
+	#endif
 				}
 				break;
 
@@ -1074,7 +1074,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 			case 26: // Set SD position
 				// This is used between executing M23 to set up the file to print, and M25 to print it
 				gb.MustSee('S');
@@ -1132,21 +1132,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = (platform.Delete(platform.GetGCodeDir(), filename.c_str())) ? GCodeResult::ok : GCodeResult::warning;
 				}
 				break;
-#endif
+	#endif
 
 			// For case 32, see case 23
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 36:	// Return file information
-# if HAS_LINUX_INTERFACE
+	# if HAS_LINUX_INTERFACE
 				if (reprap.UsingLinuxInterface())
 				{
 					reprap.GetFileInfoResponse(nullptr, outBuf, true);
 				}
 				else
-# endif
+	# endif
 				{
-# if HAS_MASS_STORAGE
+	# if HAS_MASS_STORAGE
 					if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
 					{
 						return false;
@@ -1155,19 +1155,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef(), true);
 					result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
-# endif
+	# endif
 				}
 				break;
 
 			case 37:	// Simulation mode on/off, or simulate a whole file
-# if HAS_LINUX_INTERFACE
+	# if HAS_LINUX_INTERFACE
 				if (reprap.UsingLinuxInterface() && !gb.IsBinary())
 				{
 					reply.copy("M37 can be only started from the SBC interface");
 					result = GCodeResult::error;
 				}
 				else
-# endif
+	# endif
 				{
 					bool seen = false;
 					String<MaxFilenameLength> simFileName;
@@ -1194,9 +1194,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
+	#endif
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 			case 38: // Report SHA1 of file
 				if (!LockFileSystem(gb))								// getting file hash takes several calls and isn't reentrant
 				{
@@ -1279,7 +1279,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
+	#endif
 
 			case 42:	// Turn an output pin on or off
 				{
@@ -1329,9 +1329,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.TryGetUIValue('S', ustepMultiplier, seenUstepMultiplier);
 
 					bool seen = false;
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 					AxesBitmap axesToUpdate;
-#endif
+	#endif
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
@@ -1341,9 +1341,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								return false;
 							}
 							platform.SetDriveStepsPerUnit(axis, gb.GetFValue(), ustepMultiplier);
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(axis);
-#endif
+	#endif
 							seen = true;
 						}
 					}
@@ -1363,9 +1363,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						for (size_t e = 0; e < eCount; e++)
 						{
 							const size_t drive = ExtruderToLogicalDrive(e);
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(drive);
-#endif
+	#endif
 							platform.SetDriveStepsPerUnit(drive, eVals[e], ustepMultiplier);
 						}
 					}
@@ -1374,9 +1374,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
 						reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 						result = platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
-#endif
+	#endif
 					}
 					else
 					{
@@ -1471,18 +1471,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 					// ConfigureFan doesn't process R parameters
-					if (gb.Seen('R'))
+					if (gb.Seen('R') && !seenFanNum)
 					{
-						// Restore fan speed to value when print was paused
-						if (seenFanNum)
-						{
-							result = reprap.GetFansManager().SetFanValue(fanNum, pausedFanSpeeds[fanNum], reply);
-						}
-						else
-						{
-							const size_t restorePointNumber = gb.GetLimitedUIValue('R', NumRestorePoints);
-							SetMappedFanSpeed(numberedRestorePoints[restorePointNumber].fanSpeed);
-						}
+						const size_t restorePointNumber = gb.GetLimitedUIValue('R', NumRestorePoints);
+						SetMappedFanSpeed(numberedRestorePoints[restorePointNumber].fanSpeed);
 					}
 				}
 				break;
@@ -1669,7 +1661,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 115: // Print firmware version or set hardware type
-#if defined(DUET_NG) || defined(DUET_06_85)
+	#if defined(DUET_NG) || defined(DUET_06_85)
 				if (gb.Seen('P'))
 				{
 					if (runningConfigFile)
@@ -1683,9 +1675,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				else
-#endif
+	#endif
 				{
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 					if (gb.Seen('B'))
 					{
 						const uint32_t board = gb.GetUIValue();
@@ -1695,9 +1687,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 						}
 					}
-#endif
+	#endif
 					reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
-#ifdef DUET_NG
+	#ifdef DUET_NG
 					const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 					if (expansionName != nullptr)
 					{
@@ -1708,7 +1700,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						reply.catf(" + %s", additionalExpansionName);
 					}
-#endif
+	#endif
 					reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
 				}
 				break;
@@ -1820,14 +1812,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.GetQuotedString(message.GetRef());
 
 					MessageType type = GenericMessage;
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 					bool seenP = false;
-#endif
+	#endif
 					if (gb.Seen('P'))
 					{
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 						seenP = true;
-#endif
+	#endif
 						const int32_t param = gb.GetIValue();
 						switch (param)
 						{
@@ -1846,11 +1838,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						case 4:		// Telnet
 							type = TelnetMessage;
 							break;
-#ifdef SERIAL_AUX2_DEVICE
+	#ifdef SERIAL_AUX2_DEVICE
 						case 5:		// AUX2
 							type = Aux2Message;
 							break;
-#endif
+	#endif
 						default:
 							reply.printf("Invalid message type: %" PRIi32, param);
 							result = GCodeResult::error;
@@ -1858,7 +1850,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 					if (gb.Seen('L'))
 					{
 						// If we haven't seen a P parameter but seen the L parameter we are going to log
@@ -1884,7 +1876,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 						}
 					}
-#endif
+	#endif
 
 					if (result != GCodeResult::error)
 					{
@@ -1911,14 +1903,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					const unsigned int type = (gb.Seen('P')) ? gb.GetIValue() : 0;
 					const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);	// set the Push flag to combine multiple messages into a single OutputBuffer chain
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 					const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
 					if (board != CanInterface::GetCanAddress())
 					{
 						result = CanInterface::RemoteDiagnostics(mt, board, type, gb, reply);
 						break;
 					}
-#endif
+	#endif
 					if (type == 0)
 					{
 						reprap.Diagnostics(mt);
@@ -2050,11 +2042,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_LED_STRIPS
+	#if SUPPORT_LED_STRIPS
 			case 150:
 				result = LedStripDriver::SetColours(gb, reply);
 				break;
-#endif
+	#endif
 
 			case 190: // Set bed temperature and wait
 			case 191: // Set chamber temperature and wait
@@ -2558,12 +2550,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 					if (sParam == 2 || sParam == 3)
 					{
-#if HAS_LINUX_INTERFACE
+	#if HAS_LINUX_INTERFACE
 						if (reprap.UsingLinuxInterface())
 						{
 							gb.SetState(GCodeState::waitingForAcknowledgement);
 						}
-#endif
+	#endif
 						if (Push(gb, true))					// stack the machine state including the file position
 						{
 							UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
@@ -2673,9 +2665,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 350: // Set/report microstepping
 				{
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 					AxesBitmap axesToUpdate;
-#endif
+	#endif
 					bool interp = (gb.Seen('I') && gb.GetIValue() > 0);
 					bool seen = false;
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
@@ -2687,9 +2679,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								return false;
 							}
 							seen = true;
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(axis);
-#endif
+	#endif
 							const unsigned int microsteps = gb.GetUIValue();
 							if (ChangeMicrostepping(axis, microsteps, interp, reply))
 							{
@@ -2715,9 +2707,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						for (size_t e = 0; e < eCount; e++)
 						{
 							const size_t drive = ExtruderToLogicalDrive(e);
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(drive);
-#endif
+	#endif
 							if (!ChangeMicrostepping(drive, eVals[e], interp, reply))
 							{
 								result = GCodeResult::error;
@@ -2727,9 +2719,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (seen)
 					{
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 						result = max(result, platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
-#endif
+	#endif
 					}
 					else
 					{
@@ -2751,7 +2743,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 			case 374: // Save grid and height map to file
 				result = SaveHeightMap(gb, reply);
 				break;
@@ -2763,7 +2755,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				result = LoadHeightMap(gb, reply);
 				break;
-#endif
+	#endif
 
 			case 376: // Set taper height
 				{
@@ -2840,14 +2832,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 408: // Get status in JSON format
 				{
 					const unsigned int type = gb.Seen('S') ? gb.GetUIValue() : 0;
-#if SUPPORT_CAN_EXPANSION
+	#if SUPPORT_CAN_EXPANSION
 					const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
 					if (board != 0)
 					{
 						result = CanInterface::RemoteM408(board, type, gb, reply);
 						break;
 					}
-#endif
+	#endif
 					const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
 					if (&gb == auxGCode && (type == 0 || type == 2))
 					{
@@ -2862,7 +2854,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_OBJECT_MODEL
+	#if SUPPORT_OBJECT_MODEL
 			case 409: // Get object model values in JSON format
 				{
 					String<StringLength100> key;
@@ -2887,7 +2879,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
+	#endif
 
 			case 450: // Report printer mode
 				reply.printf("PrinterMode:%s", GetMachineModeString());
@@ -2902,7 +2894,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				reprap.StateUpdated();
 				break;
 
-#if SUPPORT_LASER
+	#if SUPPORT_LASER
 			case 452: // Select laser mode
 				if (!LockMovementAndWaitForStandstill(gb))
 				{
@@ -2936,7 +2928,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				reprap.StateUpdated();
 				break;
-#endif
+	#endif
 
 			case 453: // Select CNC mode
 				if (!LockMovementAndWaitForStandstill(gb))
@@ -2958,7 +2950,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 			case 470: // mkdir
 				{
 					gb.MustSee('P');
@@ -2988,7 +2980,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 500: // Store parameters in config-override.g
 				result = WriteConfigOverrideFile(gb, reply);
 				break;
-#endif
+	#endif
 
 			case 501: // Load parameters from config-override.g
 				if (!gb.LatestMachineState().runningM502 && !gb.LatestMachineState().runningM501)		// when running M502 we ignore config-override.g
@@ -3016,7 +3008,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 			case 503: // List variable settings
 				{
 					if (!LockFileSystem(gb))
@@ -3083,7 +3075,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.printf("Sys file path is %s", path.c_str());
 				}
 				break;
-#endif
+	#endif
 
 			case 540: // Set/report MAC address
 				if (CheckNetworkCommandAllowed(gb, reply, result))
@@ -3104,13 +3096,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 550: // Set/report machine name
-#if HAS_LINUX_INTERFACE
+	#if HAS_LINUX_INTERFACE
 				if (reprap.UsingLinuxInterface() && !gb.IsBinary())
 				{
 					result = GCodeResult::errorNotSupported;
 				}
 				else
-#endif
+	#endif
 				{
 					String<MachineNameLength> name;
 					bool seen = false;
@@ -3273,7 +3265,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = platform.GetEndstops().HandleM558(gb, reply);
 				break;
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 			case 559:
 			case 560: // Binary writing
 				{
@@ -3303,7 +3295,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
+	#endif
 
 			case 561: // Set identity transform and disable height map
 				if (!LockMovementAndWaitForStandstill(gb))
@@ -3551,7 +3543,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							usbGCode->SetCommsProperties(val);
 						}
-#if HAS_AUX_DEVICES
+	#if HAS_AUX_DEVICES
 						else if (chan < NumSerialChannels)
 						{
 							GCodeBuffer *& gbp = (chan == 1) ? auxGCode : aux2GCode;
@@ -3566,13 +3558,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								}
 							}
 						}
-#endif
+	#endif
 						seen = true;
 					}
 
 					if (seen)
 					{
-#if HAS_AUX_DEVICES
+	#if HAS_AUX_DEVICES
 						if (chan != 0 && !platform.IsAuxEnabled(chan - 1))
 						{
 							platform.EnableAux(chan - 1);
@@ -3585,7 +3577,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else if (chan != 0 && !platform.IsAuxEnabled(chan - 1))
 					{
 						reply.printf("Channel %u is disabled", chan);
-#endif
+	#endif
 					}
 					else
 					{
@@ -3595,12 +3587,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							reply.cat(", connected");
 						}
-#if HAS_AUX_DEVICES
+	#if HAS_AUX_DEVICES
 						else if (chan != 0 && platform.IsAuxRaw(chan - 1))
 						{
 							reply.cat(", raw mode");
 						}
-#endif
+	#endif
 					}
 				}
 				break;
@@ -3609,7 +3601,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = WaitForPin(gb, reply);
 				break;
 
-#if SUPPORT_INKJET
+	#if SUPPORT_INKJET
 			case 578: // Fire Inkjet bits
 				if (!LockMovementAndWaitForStandstill())
 				{
@@ -3621,7 +3613,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					platform.Inkjet(gb.GetIValue());
 				}
 				break;
-#endif
+	#endif
 
 			case 579: // Scale Cartesian axes (mostly for Delta configurations)
 				{
@@ -3644,7 +3636,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_ROLAND
+	#if SUPPORT_ROLAND
 			case 580: // (De)Select Roland mill
 				if (gb.Seen('R'))
 				{
@@ -3666,7 +3658,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.printf("Roland is %s.", reprap.GetRoland()->Active() ? "active" : "inactive");
 				}
 				break;
-#endif
+	#endif
 
 			case 581: // Configure external trigger
 				result = ConfigureTrigger(gb, reply);
@@ -3690,7 +3682,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 
 					bool seen = false;
-#if SUPPORT_HTTP
+	#if SUPPORT_HTTP
 					if (gb.Seen('C'))
 					{
 						String<StringLength20> corsSite;
@@ -3698,7 +3690,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reprap.GetNetwork().SetCorsSite(corsSite.c_str());
 						seen = true;
 					}
-#endif
+	#endif
 
 					if (gb.Seen('P'))
 					{
@@ -3723,7 +3715,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (!seen)
 					{
-#if SUPPORT_HTTP
+	#if SUPPORT_HTTP
 						if (reprap.GetNetwork().GetCorsSite() != nullptr)
 						{
 							reply.printf("CORS enabled for site '%s'", reprap.GetNetwork().GetCorsSite());
@@ -3732,14 +3724,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							reply.copy("CORS disabled");
 						}
-#endif
+	#endif
 						// Default to reporting current protocols if P or S parameter missing
 						result = reprap.GetNetwork().ReportProtocols(interface, reply);
 					}
 				}
 				break;
 
-#if HAS_WIFI_NETWORKING
+	#if HAS_WIFI_NETWORKING
 			case 587:	// Add WiFi network or list remembered networks
 			case 588:	// Forget WiFi network
 			case 589:	// Configure access point
@@ -3748,7 +3740,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = reprap.GetNetwork().HandleWiFiCode(code, gb, reply, outBuf);
 				}
 				break;
-#endif
+	#endif
 
 			case 591: // Configure filament sensor
 				{
@@ -3757,7 +3749,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_NONLINEAR_EXTRUSION
+	#if SUPPORT_NONLINEAR_EXTRUSION
 			case 592: // Configure nonlinear extrusion
 				{
 					const unsigned int extruder = gb.GetLimitedUIValue('D', MaxExtruders);
@@ -3777,7 +3769,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
+	#endif
 
 			case 593: // Configure dynamic ringing cancellation
 				if (!LockMovementAndWaitForStandstill(gb))
@@ -3787,11 +3779,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = reprap.GetMove().GetShaper().Configure(gb, reply);
 				break;
 
-#if SUPPORT_ASYNC_MOVES
+	#if SUPPORT_ASYNC_MOVES
 			case 594:	// Enter or leave height following mode
 				result = reprap.GetMove().StartHeightFollowing(gb, reply);
 				break;
-#endif
+	#endif
 
 			case 595:	// Configure movement queue size
 				result = reprap.GetMove().ConfigureMovementQueue(gb, reply);
@@ -3965,12 +3957,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_IOBITS
+	#if SUPPORT_IOBITS
 			case 670:
 				Move::CreateLaserTask();
 				result = GetGCodeResultFromError(reprap.GetPortControl().Configure(gb, reply));
 				break;
-#endif
+	#endif
 
 			case 671:	// Set Z leadscrew positions
 				if (!LockMovementAndWaitForStandstill(gb))
@@ -4084,7 +4076,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if false
+	#if false
 			// This code is not finished yet
 			case 674: // Set Z to center point
 				if (LockMovementAndWaitForStandstill(gb))
@@ -4119,7 +4111,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
+	#endif
 
 			case 675: // Find center of cavity
 				result = FindCenterOfCavity(gb, reply);
@@ -4151,7 +4143,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_SCANNER
+	#if SUPPORT_SCANNER
 			case 750: // Enable 3D scanner extension
 				reprap.GetScanner().Enable();
 				break;
@@ -4286,7 +4278,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = GCodeResult::error;
 				}
 				break;
-#else
+	#else
 			case 750:
 			case 751:
 			case 752:
@@ -4297,7 +4289,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				reply.copy("Scanner support not built-in");
 				result = GCodeResult::error;
 				break;
-#endif
+	#endif
 
 			case 851: // Set Z probe offset, only for Marlin compatibility
 				{
@@ -4321,12 +4313,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 906: // Set/report Motor currents
 			case 913: // Set/report motor current percent
-#if HAS_SMART_DRIVERS
+	#if HAS_SMART_DRIVERS
 			case 917: // Set/report standstill motor current percentage
-#endif
-#if HAS_VOLTAGE_MONITOR
+	#endif
+	#if HAS_VOLTAGE_MONITOR
 				if (gb.GetState() != GCodeState::powerFailPausing1)			// we don't wait for movement to stop if we are running the power fail script
-#endif
+	#endif
 				{
 					if (!LockMovementAndWaitForStandstill(gb))
 					{
@@ -4365,9 +4357,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (!seen)
 					{
 						reply.copy(	(code == 913) ? "Motor current % of normal - "
-#if HAS_SMART_DRIVERS
+	#if HAS_SMART_DRIVERS
 									: (code == 917) ? "Motor standstill current % of normal - "
-#endif
+	#endif
 											: "Motor current (mA) - "
 								);
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
@@ -4387,7 +4379,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_VOLTAGE_MONITOR
+	#if HAS_VOLTAGE_MONITOR
 			case 911: // Enable auto save on loss of power
 				if (gb.Seen('S'))
 				{
@@ -4436,9 +4428,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
+	#endif
 
-#if HAS_CPU_TEMP_SENSOR
+	#if HAS_CPU_TEMP_SENSOR
 			case 912: // Set electronics temperature monitor adjustment
 				// Currently we ignore the P parameter (i.e. temperature measurement channel)
 				if (gb.Seen('S'))
@@ -4450,11 +4442,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.printf("MCU temperature calibration adjustment is %.1f" DEGREE_SYMBOL "C", (double)platform.GetMcuTemperatureAdjust());
 				}
 				break;
-#endif
+	#endif
 
 		// For case 913, see 906
 
-#if defined(__ALLIGATOR__)
+	#if defined(__ALLIGATOR__)
 			case 914: 				// Set/Get J14 Expansion Voltage Level Translator on Port J5, 5.5V or 3.3V
 									// Get Piggy module presence status
 				if (gb.Seen('S'))
@@ -4478,15 +4470,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							digitalRead(ExpansionPiggyDetectPin) ? "not detected" : "detected");
 				}
 				break;
-#endif
+	#endif
 
-#if HAS_STALL_DETECT
+	#if HAS_STALL_DETECT
 			case 915:
 				result = platform.ConfigureStallDetection(gb, reply, outBuf);
 				break;
-#endif
+	#endif
 
-#if HAS_MASS_STORAGE
+	#if HAS_MASS_STORAGE
 			case 916:
 				if (!platform.SysFileExists(RESUME_AFTER_POWER_FAIL_G))
 				{

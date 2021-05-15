@@ -84,7 +84,7 @@ public:
 
 	bool SetWaitingToEmpty() noexcept;
 
-	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue

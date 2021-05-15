@@ -39,7 +39,6 @@ const char *DhtTemperatureSensor::GetShortSensorType() const noexcept
 {
 	switch (type)
 	{
-	case DhtSensorType::Dht11:			return TypeNameDht11;
 	case DhtSensorType::Dht21:			return TypeNameDht21;
 	case DhtSensorType::Dht22:			return TypeNameDht22;
 	default:							return "unknown";
@@ -89,7 +88,6 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 	{
 		changed = true;
 		TakeReading();
-		reprap.GetHeat().EnsureSensorsTask();
 	}
 
 	if (!changed)
@@ -111,9 +109,6 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 		const char *sensorTypeString;
 		switch (type)
 		{
-		case DhtSensorType::Dht11:
-			sensorTypeString = "DHT11";
-			break;
 		case DhtSensorType::Dht21:
 			sensorTypeString = "DHT21";
 			break;
@@ -163,18 +158,12 @@ void DhtTemperatureSensor::Interrupt() noexcept
 
 void DhtTemperatureSensor::Poll() noexcept
 {
-	SetResult(GetStoredReading(), TemperatureError::success);
-}
-
-bool DhtTemperatureSensor::PollInTask() noexcept
-{
 	const auto now = millis();
 	if ((now - lastReadTime) >= MinimumReadInterval)
 	{
 		TakeReading();
-		return true;
 	}
-	return false;
+	SetResult(GetStoredReading(), TemperatureError::success);
 }
 
 void DhtTemperatureSensor::TakeReading() noexcept
@@ -186,9 +175,9 @@ void DhtTemperatureSensor::TakeReading() noexcept
 		port;
 #endif
 
-	// Send the start bit. This must be at least 18ms for the DHT11, 0.8ms for the DHT21, and 1ms long for the DHT22.
+	// Send the start bit. This must be at least 0.8ms for the DHT21 and 1ms for the DHT22. We no longer support DHT11 because it needed 18ms.
 	port.SetMode(PinAccess::write0);
-	delay(20);
+	delay(2);
 
 	{
 		TaskCriticalSectionLocker lock;		// make sure the Heat task doesn't interrupt the sequence
@@ -272,11 +261,6 @@ TemperatureError DhtTemperatureSensor::ProcessReadings(float& t, float& h) noexc
 	// Generate final results
 	switch (type)
 	{
-	case DhtSensorType::Dht11:
-		h = data[0];
-		t = data[2];
-		return TemperatureError::success;
-
 	case DhtSensorType::Dht21:
 	case DhtSensorType::Dht22:
 		h = ((data[0] * 256) + data[1]) * 0.1;

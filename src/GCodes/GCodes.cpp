@@ -176,10 +176,6 @@ void GCodes::Init() noexcept
 	limitAxes = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
 
-	for (float& f : pausedFanSpeeds)
-	{
-		f = 0.0;
-	}
 	lastDefaultFanSpeed = 0.0;
 
 	lastAuxStatusReportType = -1;						// no status reports requested yet
@@ -997,7 +993,6 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	}
 #endif
 
-	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
@@ -1180,7 +1175,6 @@ bool GCodes::DoEmergencyPause() noexcept
 		pauseRestorePoint.moveCoords[axis] = currentUserPosition[axis];
 	}
 
-	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 	pauseState = PauseState::paused;
@@ -3320,23 +3314,23 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	return (gb.DoDwellTime((uint32_t)dwell)) ? GCodeResult::ok : GCodeResult::notFinished;
 }
 
-// Set offset, working and standby temperatures for a tool. I.e. handle a G10.
+// Set offset, working and standby temperatures for a tool. i.e. handle a G10 or M568.
 GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, int code) THROWS(GCodeException)
 {
-	int32_t toolNumber = 0;
+	uint32_t toolNumber = 0;
 	bool seenP = false;
-	gb.TryGetIValue('P', toolNumber, seenP);
+	gb.TryGetUIValue('P', toolNumber, seenP);
 
 	ReadLockedPointer<Tool> const tool = (seenP) ? reprap.GetTool(toolNumber) : reprap.GetLockedCurrentTool();
 	if (tool.IsNull())
 	{
 		if (seenP)
 		{
-			reply.printf("Attempt to set/report offsets and temperatures for non-existent tool: %" PRIi32, toolNumber);
+			reply.printf("Tool %" PRIu32 " not found", toolNumber);
 		}
 		else
 		{
-			reply.printf("Attempt to set/report offsets and temperatures for no selected tool");
+			reply.printf("No tool selected");
 		}
 		return GCodeResult::error;
 	}
@@ -3396,23 +3390,44 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 		}
 	}
 
-	bool settingSpindleRpm = false;
-	if (code == 568)					// Only M568 can set spindle RPM
+	bool settingOther = false;
+	if (code == 568)					// Only M568 can set spindle RPM and change tool heater states
 	{
+		// Deal with spindle RPM
 		if (tool->GetSpindleNumber() > -1)
 		{
 			if (gb.Seen('F'))
 			{
-				settingSpindleRpm = true;
+				settingOther = true;
 				if (simulationMode == 0)
 				{
 					tool->SetSpindleRpm(gb.GetUIValue());
 				}
 			}
 		}
+
+		// Deal with tool heater states
+		uint32_t newHeaterState;
+		if (gb.TryGetLimitedUIValue('A', newHeaterState, settingOther, 3))
+		{
+			switch (newHeaterState)
+			{
+			case 0:			// turn heaters off
+				tool->HeatersToOff();
+				break;
+
+			case 1:			// turn heaters to standby, except any that are used by a different active tool
+				tool->HeatersToStandby();
+				break;
+
+			case 2:			// set heaters to their active temperatures, except any that are used by a different active tool
+				tool->HeatersToActive();
+				break;
+			}
+		}
 	}
 
-	if (!settingOffset && !settingTemps && !settingSpindleRpm)
+	if (!settingOffset && !settingTemps && !settingOther)
 	{
 		// Print offsets and temperatures
 		reply.printf("Tool %d offsets:", tool->Number());
@@ -3635,16 +3650,6 @@ bool GCodes::IsMappedFan(unsigned int fanNumber) noexcept
 	return (ct == nullptr)
 			? fanNumber == 0
 				: ct->GetFanMapping().IsBitSet(fanNumber);
-}
-
-// Save the speeds of all fans
-// The speed of the default printing fan (i.e. S parameter of the last M106 command with no P parameter) is no longer included because we save that in a restore point.
-void GCodes::SaveFanSpeeds() noexcept
-{
-	for (size_t i = 0; i < MaxFans; ++i)
-	{
-		pausedFanSpeeds[i] = reprap.GetFansManager().GetFanValue(i);
-	}
 }
 
 // Handle sending a reply back to the appropriate interface(s) and update lastResult

@@ -93,8 +93,8 @@ public:
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
-	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept;		// process M204
-	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept;		// process M595
+	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);		// process M204
+	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
 
 	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
 	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
@@ -120,7 +120,7 @@ public:
 	bool IsRawMotorMove(uint8_t moveType) const noexcept;									// Return true if this is a raw motor move
 
 	float IdleTimeout() const noexcept;														// Returns the idle timeout in seconds
-	void SetIdleTimeout(float timeout) noexcept;												// Set the idle timeout in seconds
+	void SetIdleTimeout(float timeout) noexcept;											// Set the idle timeout in seconds
 
 	void Simulate(uint8_t simMode) noexcept;												// Enter or leave simulation mode
 	float GetSimulationTime() const noexcept { return mainDDARing.GetSimulationTime(); }	// Get the accumulated simulation time
