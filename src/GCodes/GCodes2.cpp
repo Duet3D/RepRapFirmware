@@ -3498,13 +3498,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-			case 573: // Report heater average PWM
-				{
-					const unsigned int heater = gb.GetLimitedUIValue('P', MaxHeaters);
-					reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
-				}
-				break;
-
 			case 574: // Set endstop configuration
 				// We may be about to delete endstops, so make sure we are not executing a move that uses them
 				if (!LockMovementAndWaitForStandstill(gb))
