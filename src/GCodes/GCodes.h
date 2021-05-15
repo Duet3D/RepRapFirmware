@@ -355,6 +355,8 @@ private:
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
 	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
 
+	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;								// Try to find a macro file that implements a G or M command
+
 	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) SPEED_CRITICAL;	// Execute a straight move
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)				// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
