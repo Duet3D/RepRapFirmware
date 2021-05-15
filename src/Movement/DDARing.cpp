@@ -113,7 +113,7 @@ void DDARing::Exit() noexcept
 	}
 }
 
-GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	uint32_t numDdasWanted = 0, numDMsWanted = 0;

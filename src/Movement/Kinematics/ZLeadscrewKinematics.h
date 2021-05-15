@@ -33,7 +33,7 @@ protected:
 private:
 	void AppendCorrections(const floatc_t corrections[], const StringRef& reply) const noexcept;
 
-	static const unsigned int MaxLeadscrews = 8;			// some Folgertech FT5 printers have 8 bed adjusting screws
+	static const unsigned int MaxLeadscrews = 4;			// the maximum we support for auto bed levelling
 
 	unsigned int numLeadscrews;
 	float leadscrewX[MaxLeadscrews], leadscrewY[MaxLeadscrews];
