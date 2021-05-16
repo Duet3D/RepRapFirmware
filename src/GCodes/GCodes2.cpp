@@ -537,67 +537,72 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 3: // Spin spindle clockwise
+			if (machineType == MachineType::cnc)
 			{
-				if (machineType == MachineType::cnc)
+				// Determine what spindle number we are using
+				Tool * const currentTool = reprap.GetCurrentTool();
+				uint32_t slot;
+				if (gb.Seen('P'))
 				{
-					Tool * const currentTool = reprap.GetCurrentTool();
-					if (gb.Seen('S'))
-					{
-						if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1)
-						{
-							currentTool->SetSpindleRpm(gb.GetUIValue());
-							platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::forward);
-						}
-						else
-						{
-							const uint32_t slot = gb.GetLimitedUIValue('P', MaxSpindles);			// Direct spindle speed can only be set when slot is provided as well
-							Spindle& spindle = platform.AccessSpindle(slot);
-							spindle.SetConfiguredRpm(gb.GetIValue(), false);
-							spindle.SetState(SpindleState::forward);
-						}
-					}
-					else if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1)
-					{
-						platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::forward);
-					}
-					else
-					{
-						reply.copy("No spindle selected via P and no active tool with spindle");
-						result = GCodeResult::warning;
-					}
+					slot = gb.GetLimitedUIValue('P', MaxSpindles);
 				}
-				else if (gb.Seen('S'))
+				else if (currentTool != nullptr && currentTool->GetSpindleNumber() >= 0)
 				{
-					switch (machineType)
-					{
-#if SUPPORT_LASER
-					case MachineType::laser:
-						if (moveBuffer.segmentsLeft != 0)
-						{
-							return false;						// don't modify moves that haven't gone yet
-						}
-						moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
-						break;
-#endif
-
-					default:
-#if SUPPORT_ROLAND
-						if (reprap.GetRoland()->Active())
-						{
-							result = reprap.GetRoland()->ProcessSpindle(gb.GetFValue());
-						}
-						else
-#endif
-						{
-							result = GCodeResult::notSupportedInCurrentMode;
-						}
-						break;
-					}
+					slot = currentTool->GetSpindleNumber();
 				}
 				else
 				{
-					result = GCodeResult::notSupportedInCurrentMode;
+					reply.copy("No P parameter and no active tool with spindle");
+					result = GCodeResult::error;
+					break;
 				}
+
+				Spindle& spindle = platform.AccessSpindle(slot);
+				if (gb.Seen('S'))
+				{
+					const uint32_t rpm = gb.GetUIValue();
+					if (currentTool != nullptr && currentTool->GetSpindleNumber() == (int)slot)
+					{
+						currentTool->SetSpindleRpm(rpm);
+					}
+					else
+					{
+						spindle.SetConfiguredRpm(rpm, false);
+					}
+				}
+				spindle.SetState(SpindleState::forward);
+			}
+			else if (gb.Seen('S'))
+			{
+				switch (machineType)
+				{
+#if SUPPORT_LASER
+				case MachineType::laser:
+					if (moveBuffer.segmentsLeft != 0)
+					{
+						return false;						// don't modify moves that haven't gone yet
+					}
+					moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+					break;
+#endif
+
+				default:
+#if SUPPORT_ROLAND
+					if (reprap.GetRoland()->Active())
+					{
+						result = reprap.GetRoland()->ProcessSpindle(gb.GetFValue());
+					}
+					else
+#endif
+					{
+						result = GCodeResult::notSupportedInCurrentMode;
+					}
+					break;
+				}
+			}
+			else
+			{
+				result = GCodeResult::notSupportedInCurrentMode;
 			}
 			break;
 
