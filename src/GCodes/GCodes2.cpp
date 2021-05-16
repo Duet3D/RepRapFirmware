@@ -537,6 +537,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 3: // Spin spindle clockwise
+		case 4: // Spin spindle counter clockwise
 			if (machineType == MachineType::cnc)
 			{
 				// Determine what spindle number we are using
@@ -570,9 +571,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						spindle.SetConfiguredRpm(rpm, false);
 					}
 				}
-				spindle.SetState(SpindleState::forward);
+				spindle.SetState((code == 4) ? SpindleState::reverse : SpindleState::forward);
 			}
-			else if (gb.Seen('S'))
+			else if (code == 3 && gb.Seen('S'))
 			{
 				switch (machineType)
 				{
@@ -606,70 +607,33 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			break;
 
-		case 4: // Spin spindle counter clockwise
-			if (machineType == MachineType::cnc)
-			{
-				Tool * const currentTool = reprap.GetCurrentTool();
-				if (gb.Seen('S'))
-				{
-					if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1)
-					{
-						currentTool->SetSpindleRpm(gb.GetUIValue());
-						platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::reverse);
-					}
-					else
-					{
-						const uint32_t slot = gb.GetLimitedUIValue('P', MaxSpindles);			// Direct spindle speed can only be set when slot is provided as well
-						Spindle& spindle = platform.AccessSpindle(slot);
-						spindle.SetConfiguredRpm(gb.GetIValue(), false);
-						spindle.SetState(SpindleState::reverse);
-					}
-				}
-				else if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1)
-				{
-					// At this point slot = currentTool->GetSpindleNumber()
-					platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::reverse);
-				}
-				else
-				{
-					reply.copy("No spindle selected via P and no active tool with spindle");
-					result = GCodeResult::warning;
-				}
-			}
-			else
-			{
-				result = GCodeResult::notSupportedInCurrentMode;
-			}
-			break;
-
 		case 5: // Spindle motor off
 			switch (machineType)
 			{
 			case MachineType::cnc:
 				{
+					// Determine what spindle number we are using
+					Tool * const currentTool = reprap.GetCurrentTool();
+					uint32_t slot;
 					if (gb.Seen('P'))
 					{
-						// Turn off specific spindle
-						const uint32_t slot = gb.GetLimitedUIValue('P', MaxSpindles);
-						platform.AccessSpindle(slot).SetState(SpindleState::stopped);
+						slot = gb.GetLimitedUIValue('P', MaxSpindles);
+					}
+					else if (currentTool != nullptr && currentTool->GetSpindleNumber() >= 0)
+					{
+						slot = currentTool->GetSpindleNumber();
 					}
 					else
 					{
-						Tool * const currentTool = reprap.GetCurrentTool();
-						if (currentTool != nullptr && currentTool->GetSpindleNumber() > -1) // Turn off spindle of current tool
+						// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
+						for (size_t i = 0; i < MaxSpindles; i++)
 						{
-							platform.AccessSpindle(currentTool->GetSpindleNumber()).SetState(SpindleState::stopped);
+							platform.AccessSpindle(i).SetState(SpindleState::stopped);
 						}
-						else
-						{
-							// Turn off every spindle if no 'P' parameter is present and the current tool
-							// does not have a spindle
-							for (size_t i = 0; i < MaxSpindles; i++)
-							{
-								platform.AccessSpindle(i).SetState(SpindleState::stopped);
-							}
-						}
+						break;
 					}
+
+					platform.AccessSpindle(slot).SetState(SpindleState::stopped);
 				}
 				break;
 
