@@ -56,7 +56,7 @@
 constexpr unsigned int MoveTaskStackWords = 450;
 static Task<MoveTaskStackWords> moveTask;
 
-constexpr uint32_t MoveTimeout = 20;					// normal timeout when the Move process is waiting for a new move
+constexpr uint32_t MoveTimeout = 20;					// normal timeout in milliseconds when the Move process is waiting for a new move
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -1028,7 +1028,9 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 			uint32_t eDrive[MaxExtruders];
 			size_t eCount = MaxExtruders;
 			gb.GetUnsignedArray(eDrive, eCount, false);
+#if SUPPORT_CAN_EXPANSION
 			Platform& platform = reprap.GetPlatform();
+#endif
 			for (size_t i = 0; i < eCount; i++)
 			{
 				const uint32_t extruder = eDrive[i];
@@ -1096,6 +1098,8 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 	return GCodeResult::ok;
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
 GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
@@ -1121,6 +1125,8 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 				   );
 	return rslt;
 }
+
+#endif
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry

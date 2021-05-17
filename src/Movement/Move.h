@@ -99,7 +99,10 @@ public:
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
 
 	float GetPressureAdvance(size_t extruder) const noexcept;
+
+#if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+#endif
 
 	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
 	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
