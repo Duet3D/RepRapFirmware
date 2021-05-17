@@ -126,7 +126,7 @@ void VariableSet::AssignFrom(VariableSet& other) noexcept
 	other.root = nullptr;
 }
 
-void VariableSet::IterateWhile(stdext::inplace_function<bool(unsigned int, const Variable&) /*noexcept*/ > func) const noexcept
+void VariableSet::IterateWhile(function_ref<bool(unsigned int, const Variable&) /*noexcept*/ > func) const noexcept
 {
 	unsigned int num = 0;
 	for (const Variable *v = root; v != nullptr; v = v->GetNext())
