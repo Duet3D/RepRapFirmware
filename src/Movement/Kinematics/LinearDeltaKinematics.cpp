@@ -55,7 +55,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LinearDeltaKinematics)
 
 #endif
 
-LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::linearDelta, false, true), numTowers(UsualNumTowers)
+LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::linearDelta, SegmentationType(false, false, false)), numTowers(UsualNumTowers)
 {
 	Init();
 }

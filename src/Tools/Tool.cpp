@@ -442,7 +442,7 @@ void Tool::Activate() noexcept
 	state = ToolState::active;
 }
 
-void Tool::Standby() noexcept
+void Tool::HeatersToStandby() const noexcept
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	for (size_t heater = 0; heater < heaterCount; heater++)
@@ -463,6 +463,48 @@ void Tool::Standby() noexcept
 			}
 		}
 	}
+}
+
+void Tool::HeatersToActive() const noexcept
+{
+	const Tool * const currentTool = reprap.GetCurrentTool();
+	for (size_t heater = 0; heater < heaterCount; heater++)
+	{
+		// Don't switch a heater to active if the active tool is using it and is different from this tool
+		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
+		{
+			try
+			{
+				reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
+				String<1> dummy;
+				(void)reprap.GetHeat().Activate(heaters[heater], dummy.GetRef());
+			}
+			catch (const GCodeException& exc)
+			{
+				String<StringLength100> message;
+				exc.GetMessage(message.GetRef(), nullptr);
+				reprap.GetPlatform().Message(ErrorMessage, message.c_str());
+			}
+		}
+	}
+}
+
+void Tool::HeatersToOff() const noexcept
+{
+	const Tool * const currentTool = reprap.GetCurrentTool();
+	for (size_t heater = 0; heater < heaterCount; heater++)
+	{
+		// Don't switch a heater to standby if the active tool is using it and is different from this tool
+		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
+		{
+			reprap.GetHeat().SwitchOff(heaters[heater]);
+		}
+	}
+}
+
+void Tool::Standby() noexcept
+{
+	HeatersToStandby();
 
 	// NIST Standard M6 says "When the tool change is complete: * The spindle will be stopped. [...]"
 	// We don't have M6 but Tn already does tool change so we need
@@ -472,6 +514,7 @@ void Tool::Standby() noexcept
 		Spindle& spindle = reprap.GetPlatform().AccessSpindle(spindleNumber);
 		spindle.SetState(SpindleState::stopped);
 	}
+
 	state = ToolState::standby;
 }
 

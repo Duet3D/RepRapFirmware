@@ -338,7 +338,8 @@ private:
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
 	void StopPrint(StopPrintReason reason) noexcept;							// Stop the current print
 
-	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;			// Get G Codes from a file and print them
+	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
+	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept;
 	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept;
 																						// Run a GCode macro file, optionally report error if not found
 	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro
@@ -610,8 +611,7 @@ private:
 	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
 
 	float pausedFanSpeeds[MaxFans];				// Fan speeds when the print was paused or a tool change started
-	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
-	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
+	float lastDefaultFanSpeed;					// Last speed given in a M106 command with no fan number
 	float speedFactor;							// speed factor as a fraction (normally 1.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors

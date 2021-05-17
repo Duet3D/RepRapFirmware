@@ -110,7 +110,7 @@ public:
 	bool TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException);
 	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS(GCodeException);
 	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS(GCodeException);
-	bool TryGetQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException);
+	bool TryGetQuotedString(char c, const StringRef& str, bool& seen, bool allowEmpty = false) THROWS(GCodeException);
 	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException);
 
 	bool IsIdle() const noexcept;
@@ -226,7 +226,7 @@ public:
 	void MotionStopped() noexcept { motionCommanded = false; }
 	bool WasMotionCommanded() const noexcept { return motionCommanded; }
 
-	void SetParameters(int codeRunning) noexcept;
+	void AddParameters(VariableSet& vars, int codeRunning) noexcept;
 	VariableSet& GetVariables() const noexcept;
 
 	Mutex mutex;

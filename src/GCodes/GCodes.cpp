@@ -36,6 +36,7 @@
 #include <Platform/Tasks.h>
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
+#include <ObjectModel/Variable.h>
 
 #if SUPPORT_LED_STRIPS
 # include <Fans/LedStripDriver.h>
@@ -179,7 +180,7 @@ void GCodes::Init() noexcept
 	{
 		f = 0.0;
 	}
-	lastDefaultFanSpeed = pausedDefaultFanSpeed = 0.0;
+	lastDefaultFanSpeed = 0.0;
 
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
@@ -998,6 +999,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
 #if HAS_MASS_STORAGE
 	if (simulationMode == 0)
@@ -1180,6 +1182,7 @@ bool GCodes::DoEmergencyPause() noexcept
 
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 	pauseState = PauseState::paused;
 
 	return true;
@@ -1295,8 +1298,8 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 		return false;								// can't handle it yet
 	}
 
-	// Evaluate which machine axes have stalled.
-	AxesBitmap machineAxesNotHomed;
+	// Evaluate which machine axes have stalled and create parameters for them
+	VariableSet vars;
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		const AxisDriversConfig& cfg = platform.GetAxisDriversConfig(axis);
@@ -1305,18 +1308,16 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 			//TODO handle remote stalled drivers
 			if (cfg.driverNumbers[i].IsLocal() && stalledDrivers.IsBitSet(cfg.driverNumbers[i].localDriver))
 			{
-				machineAxesNotHomed.SetBit(axis);
+				char str[2] = { axisLetters[axis], 0 };
+				vars.Insert(new Variable(str, ExpressionValue((int32_t)1), -1));		// create a parameter with value 1 for the axis
 				break;
 			}
 		}
 	}
 
-	// Now pass the machine axes to the rehome.g file
-	// TODO
-
 	autoPauseGCode->SetState(GCodeState::resuming1);					// set up to resume after rehoming
 	pauseState = PauseState::resuming;
-	DoFileMacro(*autoPauseGCode, REHOME_G, true, AsyncSystemMacroCode);	// run the SD card rehome-and-resume script
+	DoFileMacro(*autoPauseGCode, REHOME_G, true, AsyncSystemMacroCode, vars);	// run the SD card rehome-and-resume script
 	return true;
 }
 
@@ -2101,15 +2102,20 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 
 		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
-		// Note for when we use RTOS: as soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
+		// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
-		if (kin.UseSegmentation() && simulationMode != 1 && (moveBuffer.hasPositiveExtrusion || moveBuffer.isCoordinated || !kin.UseRawG0()))
+		const SegmentationType st = kin.GetSegmentationType();
+		if (st.useSegmentation && simulationMode != 1 && (moveBuffer.hasPositiveExtrusion || moveBuffer.isCoordinated || st.useG0Segmentation))
 		{
-			// This kinematics approximates linear motion by means of segmentation.
-			// We assume that the segments will be smaller than the mesh spacing.
-			const float xyLength = fastSqrtf(fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]));
-			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
-			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(xyLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+			// This kinematics approximates linear motion by means of segmentation
+			float moveLengthSquared = fsquare(currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
+			if (st.useZSegmentation)
+			{
+				moveLengthSquared += fsquare(currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
+			}
+			const float moveLength = fastSqrtf(moveLengthSquared);
+			const float moveTime = moveLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
+			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else
 		{
@@ -2148,9 +2154,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 // If an error occurs, return true with 'err' assigned
 bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 {
+	// The plans are XY, ZX and YZ depending on the G17/G18/G19 setting. We must use ZX instead of XZ to get the correct arc direction.
 	const unsigned int selectedPlane = gb.LatestMachineState().selectedPlane;
-	const unsigned int axis0 = (selectedPlane == 2) ? Y_AXIS : X_AXIS;
-	const unsigned int axis1 = (selectedPlane == 0) ? Y_AXIS : Z_AXIS;
+	const unsigned int axis0 = (unsigned int[]){ X_AXIS, Z_AXIS, Y_AXIS }[selectedPlane];
+	const unsigned int axis1 = (axis0 + 1) % 3;
 
 	if (moveFractionToSkip > 0.0)
 	{
@@ -2257,7 +2264,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	}
 	else
 	{
-		if (gb.Seen('I'))
+		if (gb.Seen((char)('I' + axis0)))
 		{
 			iParam = gb.GetDistance();
 		}
@@ -2266,7 +2273,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 			iParam = 0.0;
 		}
 
-		if (gb.Seen('J'))
+		if (gb.Seen((char)('I' + axis1)))
 		{
 			jParam = gb.GetDistance();
 		}
@@ -2275,9 +2282,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 			jParam = 0.0;
 		}
 
-		if (iParam == 0.0 && jParam == 0.0)			// at least one of IJ must be specified and nonzero
+		if (iParam == 0.0 && jParam == 0.0)			// at least one of IJK must be specified and nonzero
 		{
-			err = "G2/G3: no I or J or R parameter";
+			err = "G2/G3: no I J K or R parameter";
 			return true;
 		}
 	}
@@ -2721,6 +2728,17 @@ void GCodes::EmergencyStop() noexcept
 #endif
 }
 
+// Simplified version of DoFileMacro, see below
+bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept
+{
+	VariableSet vars;
+	if (codeRunning >= 0)
+	{
+		gb.AddParameters(vars, codeRunning);
+	}
+	return DoFileMacro(gb, fileName, reportMissing, codeRunning, vars);
+}
+
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
 // Return true if the file was found or it wasn't and we were asked to report that fact.
 // 'codeRunning' is the G or M command we are running, or 0 for a tool change file. In particular:
@@ -2728,7 +2746,7 @@ void GCodes::EmergencyStop() noexcept
 // 502 = running M502
 // 98 = running a macro explicitly via M98
 // otherwise it is either the G- or M-code being executed, or ToolChangeMacroCode for a tool change file, or SystemMacroCode for another system file
-bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept
+bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -2752,10 +2770,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			gb.AbortFile(false, true);
 			return true;
 		}
-		if (codeRunning >= 0)
-		{
-			gb.SetParameters(codeRunning);
-		}
+		gb.GetVariables().AssignFrom(initialVariables);
 		gb.StartNewFile();
 		if (gb.IsMacroEmpty())
 		{
@@ -2782,10 +2797,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 			f->Close();
 			return true;
 		}
-		if (codeRunning >= 0)
-		{
-			gb.SetParameters(codeRunning);
-		}
+		gb.GetVariables().AssignFrom(initialVariables);
 		gb.LatestMachineState().fileState.Set(f);
 		gb.StartNewFile();
 		gb.GetFileInput()->Reset(gb.LatestMachineState().fileState);
@@ -3225,7 +3237,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	buildObjects.Init();
 	reprap.GetMove().ResetMoveCounters();
 
-	if (fromStart)													// if not resurrecting a print
+	if (fromStart)															// if not resurrecting a print
 	{
 		fileGCode->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 		virtualExtruderPosition = 0.0;
@@ -3260,8 +3272,8 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 							reprap.GetPrintMonitor().GetPrintingFilename());
 	if (fromStart)
 	{
-		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
-		DoFileMacro(*fileGCode, START_G, false, AsyncSystemMacroCode);
+		fileGCode->LatestMachineState().selectedPlane = 0;					// default G2 and G3 moves to XY plane
+		DoFileMacro(*fileGCode, START_G, false, AsyncSystemMacroCode);		// get fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
 	}
 }
 
@@ -3308,23 +3320,23 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	return (gb.DoDwellTime((uint32_t)dwell)) ? GCodeResult::ok : GCodeResult::notFinished;
 }
 
-// Set offset, working and standby temperatures for a tool. I.e. handle a G10.
+// Set offset, working and standby temperatures for a tool. i.e. handle a G10 or M568.
 GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, int code) THROWS(GCodeException)
 {
-	int32_t toolNumber = 0;
+	uint32_t toolNumber = 0;
 	bool seenP = false;
-	gb.TryGetIValue('P', toolNumber, seenP);
+	gb.TryGetUIValue('P', toolNumber, seenP);
 
 	ReadLockedPointer<Tool> const tool = (seenP) ? reprap.GetTool(toolNumber) : reprap.GetLockedCurrentTool();
 	if (tool.IsNull())
 	{
 		if (seenP)
 		{
-			reply.printf("Attempt to set/report offsets and temperatures for non-existent tool: %" PRIi32, toolNumber);
+			reply.printf("Tool %" PRIu32 " not found", toolNumber);
 		}
 		else
 		{
-			reply.printf("Attempt to set/report offsets and temperatures for no selected tool");
+			reply.printf("No tool selected");
 		}
 		return GCodeResult::error;
 	}
@@ -3384,23 +3396,44 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 		}
 	}
 
-	bool settingSpindleRpm = false;
-	if (code == 568)					// Only M568 can set spindle RPM
+	bool settingOther = false;
+	if (code == 568)					// Only M568 can set spindle RPM and change tool heater states
 	{
+		// Deal with spindle RPM
 		if (tool->GetSpindleNumber() > -1)
 		{
 			if (gb.Seen('F'))
 			{
-				settingSpindleRpm = true;
+				settingOther = true;
 				if (simulationMode == 0)
 				{
 					tool->SetSpindleRpm(gb.GetUIValue());
 				}
 			}
 		}
+
+		// Deal with tool heater states
+		uint32_t newHeaterState;
+		if (gb.TryGetLimitedUIValue('A', newHeaterState, settingOther, 3))
+		{
+			switch (newHeaterState)
+			{
+			case 0:			// turn heaters off
+				tool->HeatersToOff();
+				break;
+
+			case 1:			// turn heaters to standby, except any that are used by a different active tool
+				tool->HeatersToStandby();
+				break;
+
+			case 2:			// set heaters to their active temperatures, except any that are used by a different active tool
+				tool->HeatersToActive();
+				break;
+			}
+		}
 	}
 
-	if (!settingOffset && !settingTemps && !settingSpindleRpm)
+	if (!settingOffset && !settingTemps && !settingOther)
 	{
 		// Print offsets and temperatures
 		reply.printf("Tool %d offsets:", tool->Number());
@@ -3626,13 +3659,13 @@ bool GCodes::IsMappedFan(unsigned int fanNumber) noexcept
 }
 
 // Save the speeds of all fans
+// The speed of the default printing fan (i.e. S parameter of the last M106 command with no P parameter) is no longer included because we save that in a restore point.
 void GCodes::SaveFanSpeeds() noexcept
 {
 	for (size_t i = 0; i < MaxFans; ++i)
 	{
 		pausedFanSpeeds[i] = reprap.GetFansManager().GetFanValue(i);
 	}
-	pausedDefaultFanSpeed = lastDefaultFanSpeed;
 }
 
 // Handle sending a reply back to the appropriate interface(s) and update lastResult
@@ -4203,6 +4236,7 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcep
 	rp.virtualExtruderPosition = virtualExtruderPosition;
 	rp.filePos = gb.GetFilePosition();
 	rp.toolNumber = reprap.GetCurrentToolNumber();
+	rp.fanSpeed = lastDefaultFanSpeed;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;

@@ -1149,35 +1149,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 		}
 
 	case 589:	// Configure access point
-		if (gb.Seen('T'))
-		{
-			// Special code to set max transmitter power, 0 to 20.5dBm
-			const float powerTimes4 = gb.GetFValue() * 4;
-			if (powerTimes4 < 0.0 || powerTimes4 > 82.0)
-			{
-				reply.copy("Power setting out of range");
-			}
-			else
-			{
-				const int32_t rslt = SendCommand(NetworkCommand::networkSetTxPower, 0, (uint8_t)powerTimes4, 0, nullptr, 0, nullptr, 0);
-				if (rslt == ResponseEmpty)
-				{
-					return GCodeResult::ok;
-				}
-				reply.printf("Failed to set maximum transmit power: %s", TranslateWiFiResponse(rslt));
-			}
-		}
-		else if (gb.Seen('C'))
-		{
-			const uint32_t clockVal = gb.GetUIValue();
-			const int32_t rslt = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, clockVal, nullptr, 0, nullptr, 0);
-			if (rslt == ResponseEmpty)
-			{
-				return GCodeResult::ok;
-			}
-			reply.printf("Failed to set clock: %s", TranslateWiFiResponse(rslt));
-		}
-		else if (gb.Seen('S'))
+		if (gb.Seen('S'))
 		{
 			// Configure access point parameters
 			WirelessConfigurationData config;
@@ -1216,6 +1188,35 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			}
 
 			reply.printf("Failed to configure access point parameters: %s", TranslateWiFiResponse(rslt));
+		}
+		else if (gb.Seen('T'))
+		{
+			// Special code to set max transmitter power, 0 to 20.5dBm
+			const float powerTimes4 = gb.GetFValue() * 4;
+			if (powerTimes4 < 0.0 || powerTimes4 > 82.0)
+			{
+				reply.copy("Power setting out of range");
+			}
+			else
+			{
+				const int32_t rslt = SendCommand(NetworkCommand::networkSetTxPower, 0, (uint8_t)powerTimes4, 0, nullptr, 0, nullptr, 0);
+				if (rslt == ResponseEmpty)
+				{
+					return GCodeResult::ok;
+				}
+				reply.printf("Failed to set maximum transmit power: %s", TranslateWiFiResponse(rslt));
+			}
+		}
+		else if (gb.Seen('L'))
+		{
+			// Special code to configure SPI clock speed
+			const uint32_t clockVal = gb.GetUIValue();
+			const int32_t rslt = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, clockVal, nullptr, 0, nullptr, 0);
+			if (rslt == ResponseEmpty)
+			{
+				return GCodeResult::ok;
+			}
+			reply.printf("Failed to set clock: %s", TranslateWiFiResponse(rslt));
 		}
 		else
 		{

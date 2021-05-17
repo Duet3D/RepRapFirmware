@@ -37,7 +37,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(PolarKinematics)
 
 // Constructor
 PolarKinematics::PolarKinematics() noexcept
-	: Kinematics(KinematicsType::polar, true, true),
+	: Kinematics(KinematicsType::polar, SegmentationType(true, false, false)),
 	  minRadius(0.0), maxRadius(DefaultMaxRadius), homedRadius(0.0),
 	  maxTurntableSpeed(DefaultMaxTurntableSpeed), maxTurntableAcceleration(DefaultMaxTurntableAcceleration)
 {
@@ -98,7 +98,7 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		{
 			reply.printf("Kinematics is Polar with radius %.1f to %.1fmm, homed radius %.1fmm, segments/sec %d, min. segment length %.2f",
 							(double)minRadius, (double)maxRadius, (double)homedRadius,
-							(int)segmentsPerSecond, (double)minSegmentLength);
+							(int)GetSegmentsPerSecond(), (double)GetMinSegmentLength());
 		}
 		return seen;
 	}

@@ -423,7 +423,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			return GCodeResult::error;
 		}
 
-		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetUIValue() : DefaultAccelerometerSpiFrequency;
+		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
 		temp = new LIS3DH(SharedSpiDevice::GetMainSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
 		if (temp->CheckPresent())
 		{

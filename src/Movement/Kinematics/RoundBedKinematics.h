@@ -19,7 +19,7 @@ public:
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
 	AxesBitmap GetLinearAxes() const noexcept override;
 protected:
-	RoundBedKinematics(KinematicsType t, bool doUseSegmentation, bool doUseRawG0) noexcept;
+	RoundBedKinematics(KinematicsType t, SegmentationType segType) noexcept;
 
 	float printRadiusSquared;
 };

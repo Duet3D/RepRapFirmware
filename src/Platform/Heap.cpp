@@ -353,6 +353,29 @@ StringHandle::StringHandle(const char *s, size_t len) noexcept
 	}
 }
 
+#if 0	// This constructor is currently unused, but may be useful in future
+// Build a handle by concatenating two strings
+StringHandle::StringHandle(const char *s1, const char *s2) noexcept
+{
+	const size_t len = strlen(s1) + strlen(s2);
+	if (len == 0)
+	{
+		slotPtr = nullptr;
+	}
+	else
+	{
+		WriteLocker locker(heapLock);							// prevent other tasks modifying the heap
+		IndexSlot * const slot = AllocateHandle();
+		StorageSpace * const space = AllocateSpace(len + 1);
+		SafeStrncpy(space->data, s1, space->length);
+		SafeStrncat(space->data, s2, space->length);
+		slot->storage = space;
+		slot->refCount = 1;
+		slotPtr = slot;
+	}
+}
+#endif
+
 void StringHandle::Assign(const char *s) noexcept
 {
 	Delete();
@@ -366,11 +389,9 @@ void StringHandle::Assign(const char *s) noexcept
 
 void StringHandle::InternalAssign(const char *s, size_t len) noexcept
 {
-	IndexSlot * const slot = AllocateHandle();					// allocate a handle
+	IndexSlot * const slot = AllocateHandle();
 	StorageSpace * const space = AllocateSpace(len + 1);
-	const size_t lengthToCopy = min<size_t>(len, space->length - 1);	// truncate the string if it won't fit
-	memcpy(space->data, s, lengthToCopy);
-	space->data[lengthToCopy] = 0;
+	SafeStrncpy(space->data, s, space->length);
 	slot->storage = space;
 	slot->refCount = 1;
 	slotPtr = slot;
@@ -380,7 +401,7 @@ void StringHandle::Delete() noexcept
 {
 	if (slotPtr != nullptr)
 	{
-		ReadLocker locker(heapLock);						// prevent other tasks modifying the heap
+		ReadLocker locker(heapLock);							// prevent other tasks modifying the heap
 		InternalDelete();
 	}
 }
