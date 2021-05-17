@@ -40,7 +40,7 @@ Licence: GPL
 #include <Comms/AuxDevice.h>
 #include <Comms/PanelDueUpdater.h>
 #include <General/IPAddress.h>
-#include <General/inplace_function.h>
+#include <General/function_ref.h>
 
 #if defined(DUET_NG)
 # include "DueXn.h"
@@ -655,12 +655,12 @@ private:
 	float GetCpuTemperature() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	void IterateDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t) /*noexcept*/ > localFunc, stdext::inplace_function<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
-	void IterateRemoteDrivers(size_t axisOrExtruder, stdext::inplace_function<void(DriverId) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
+	void IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > localFunc, function_ref<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
+	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref<void(DriverId) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
 #else
-	void IterateDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, stdext::inplace_function<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
+	void IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

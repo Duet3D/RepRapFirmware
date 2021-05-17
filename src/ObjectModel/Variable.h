@@ -12,6 +12,7 @@
 #include <General/FreelistManager.h>
 #include <Platform/Heap.h>
 #include <ObjectModel/ObjectModel.h>
+#include <General/function_ref.h>
 
 // Class to represent a variable having a name and a value
 class Variable
@@ -57,7 +58,7 @@ public:
 	void Delete(const char *str) noexcept;
 	void Clear() noexcept;
 
-	void IterateWhile(stdext::inplace_function<bool(unsigned int index, const Variable& v) /*noexcept*/ > func) const noexcept;
+	void IterateWhile(function_ref<bool(unsigned int index, const Variable& v) /*noexcept*/ > func) const noexcept;
 
 private:
 	Variable *root;
