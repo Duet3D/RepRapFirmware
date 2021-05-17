@@ -582,32 +582,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					spindle.SetState((code == 4) ? SpindleState::reverse : SpindleState::forward);
 				}
-				else if (code == 3 && gb.Seen('S'))
-				{
-					switch (machineType)
-					{
 #if SUPPORT_LASER
-					case MachineType::laser:
+				else if (machineType == MachineType::laser && code == 3 && gb.Seen('S'))
+				{
 						if (moveBuffer.segmentsLeft != 0)
 						{
 							return false;						// don't modify moves that haven't gone yet
 						}
 						moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
-						break;
+				}
 #endif
-
-					default:
-#if SUPPORT_ROLAND
-						if (reprap.GetRoland()->Active())
-						{
-							result = reprap.GetRoland()->ProcessSpindle(gb.GetFValue());
-						}
-						else
-#endif
-						{
-							result = GCodeResult::notSupportedInCurrentMode;
-						}
-						break;
+				else
+				{
+					result = GCodeResult::notSupportedInCurrentMode;
 				}
 				break;
 
@@ -652,16 +639,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 				default:
-#if SUPPORT_ROLAND
-					if (reprap.GetRoland()->Active())
-					{
-						result = reprap.GetRoland()->ProcessSpindle(0.0);
-					}
-					else
-#endif
-					{
-						result = GCodeResult::notSupportedInCurrentMode;
-					}
+					result = GCodeResult::notSupportedInCurrentMode;
 					break;
 				}
 				break;
@@ -3582,29 +3560,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_ROLAND
-			case 580: // (De)Select Roland mill
-				if (gb.Seen('R'))
-				{
-					if (gb.GetIValue())
-					{
-						reprap.GetRoland()->Activate();
-						if (gb.Seen('P'))
-						{
-							result = reprap.GetRoland()->RawWrite(gb.GetString());
-						}
-					}
-					else
-					{
-						result = reprap.GetRoland()->Deactivate();
-					}
-				}
-				else
-				{
-					reply.printf("Roland is %s.", reprap.GetRoland()->Active() ? "active" : "inactive");
-				}
-				break;
-#endif
+			// case 580 was (De)Select Roland mill
 
 			case 581: // Configure external trigger
 				result = ConfigureTrigger(gb, reply);
