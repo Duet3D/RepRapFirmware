@@ -865,7 +865,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 	ToolOffsetTransform(userPositionTarget, straightProbeSettings.GetTarget());
 
 	// See whether we are using a user-defined Z probe or just current one
-	const size_t probeToUse = gb.Seen('P') ? gb.GetUIValue() : 0;
+	const size_t probeToUse = (gb.Seen('K') || gb.Seen('P')) ? gb.GetUIValue() : 0;
 
 	// Check if this probe exists to not run into a nullptr dereference later
 	if (platform.GetEndstops().GetZProbe(probeToUse).IsNull())
