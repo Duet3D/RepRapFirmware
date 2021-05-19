@@ -77,6 +77,7 @@ enum class StopPrintReason
 
 enum class PauseState : uint8_t
 {
+	// Do not change the order of these! We rely on notPaused < pausing < { paused, resuming}
 	notPaused = 0,
 	pausing,
 	paused,
