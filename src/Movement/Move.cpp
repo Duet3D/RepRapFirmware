@@ -50,11 +50,7 @@
 # include <CAN/CanInterface.h>
 #endif
 
-// Move task stack size
-// 250 is not enough when Move and DDA debug are enabled
-// deckingman's system (MB6HC with CAN expansion) needs at least 365 in 3.3beta3
-constexpr unsigned int MoveTaskStackWords = 450;
-static Task<MoveTaskStackWords> moveTask;
+Task<Move::MoveTaskStackWords> Move::moveTask;
 
 constexpr uint32_t MoveTimeout = 20;					// normal timeout in milliseconds when the Move process is waiting for a new move
 

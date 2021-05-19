@@ -203,6 +203,8 @@ public:
 
 	static void WakeMoveTaskFromISR() noexcept;
 
+	static const TaskBase *GetMoveTaskHandle() noexcept { return &moveTask; }
+
 #if SUPPORT_REMOTE_COMMANDS
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
 	{
@@ -230,6 +232,12 @@ private:
 	float ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;	// Compute the height correction needed at a point, ignoring taper
 
 	const char *GetCompensationTypeString() const noexcept;
+
+	// Move task stack size
+	// 250 is not enough when Move and DDA debug are enabled
+	// deckingman's system (MB6HC with CAN expansion) needs at least 365 in 3.3beta3
+	static constexpr unsigned int MoveTaskStackWords = 450;
+	static Task<MoveTaskStackWords> moveTask;
 
 #if SUPPORT_ASYNC_MOVES
 	DDARing rings[2];

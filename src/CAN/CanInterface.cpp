@@ -16,6 +16,7 @@
 #include <Movement/DDA.h>
 #include <Movement/DriveMovement.h>
 #include <Movement/StepTimer.h>
+#include <Movement/Move.h>
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/TaskPriorities.h>
 #include <GCodes/GCodeException.h>
@@ -159,7 +160,7 @@ static Task<CanSenderTaskStackWords> canSenderTask;
 constexpr size_t CanReceiverTaskStackWords = 1000;
 static Task<CanReceiverTaskStackWords> canReceiverTask;
 
-constexpr size_t CanClockTaskStackWords = 300;
+constexpr size_t CanClockTaskStackWords = 400;			// used to be 300 but RD had a stack overflow
 static Task<CanSenderTaskStackWords> canClockTask;
 
 static CanMessageBuffer * volatile pendingBuffers;
@@ -301,7 +302,7 @@ CanRequestId CanInterface::AllocateRequestId(CanAddress destination) noexcept
 {
 	static uint16_t rid = 0;
 
-	CanRequestId rslt = rid & 0x07FF;
+	CanRequestId rslt = rid & CanRequestIdMask;
 	++rid;
 	return rslt;
 }
@@ -533,9 +534,14 @@ template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<
 	return rslt;
 }
 
+// Set remote drivers to enabled, disabled, or idle
+// This function is called by both the main task and the Move task.
+// As there is no mutual exclusion on putting messages in buffers or receiving replies, when this is called by the Move task
+// we send the commands through the FIFO and we use a special RequestId to say that we do not expect a response
 static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const StringRef& reply, DriverStateControl state) noexcept
 {
 	GCodeResult rslt = GCodeResult::ok;
+	const bool fromMoveTask = TaskBase::GetCallerTaskHandle() == Move::GetMoveTaskHandle();
 	size_t start = 0;
 	for (;;)
 	{
@@ -551,7 +557,7 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 			reply.lcat(NoCanBufferMessage);
 			return GCodeResult::error;
 		}
-		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+		const CanRequestId rid = (fromMoveTask) ? CanRequestIdNoReplyNeeded : CanInterface::AllocateRequestId(boardAddress);
 		const auto msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<DriverStateControl>>(rid, CanInterface::GetCanAddress(), boardAddress, CanMessageType::setDriverStates);
 		msg->driversToUpdate = driverBits.GetRaw();
 		const size_t numDrivers = driverBits.CountSetBits();
@@ -560,7 +566,14 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 			msg->values[i] = state;
 		}
 		buf->dataLength = msg->GetActualDataLength(numDrivers);
-		rslt = max(rslt, CanInterface::SendRequestAndGetStandardReply(buf, rid, reply));
+		if (fromMoveTask)
+		{
+			CanInterface::SendMotion(buf);														// if it's coming from the Move task then we must send the command via the fifo
+		}
+		else
+		{
+			rslt = max(rslt, CanInterface::SendRequestAndGetStandardReply(buf, rid, reply));	// send the command via the usual mechanism
+		}
 	}
 	return rslt;
 }
@@ -598,13 +611,25 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 	if (can0dev == nullptr)
 	{
 		// Transactions sometimes get requested after we have shut down CAN, e.g. when we destroy filament monitors
+		CanMessageBuffer::Free(buf);
 		return GCodeResult::error;
 	}
+
 	const CanAddress dest = buf->id.Dst();
+	const CanMessageType msgType = buf->id.MsgType();								// save for possible error message
+
+	// This code isn't re-entrant, so check that we are the main task
+	if (TaskBase::GetCallerTaskHandle() != Tasks::GetMainTask())
+	{
+		reply.printf("SendReq call from wrong task type=%u dst=%u",(unsigned int)msgType, (unsigned int)dest);
+		reprap.GetPlatform().MessageF(ErrorMessage, "%s\n", reply.c_str());			// send it directly in case the caller discards the reply
+		CanMessageBuffer::Free(buf);
+		return GCodeResult::error;
+	}
+
 	can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
 	const uint32_t whenStartedWaiting = millis();
 	unsigned int fragmentsReceived = 0;
-	const CanMessageType msgType = buf->id.MsgType();								// save for possible error message
 	for (;;)
 	{
 		const uint32_t timeWaiting = millis() - whenStartedWaiting;
@@ -651,7 +676,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 			}
 			++fragmentsReceived;
 		}
-		else if (matchesRequest &&buf->id.MsgType() == replyType && fragmentsReceived == 0)
+		else if (matchesRequest && buf->id.MsgType() == replyType && fragmentsReceived == 0)
 		{
 			callback(buf);
 			CanMessageBuffer::Free(buf);
@@ -743,7 +768,7 @@ GCodeResult CanInterface::EnableRemoteDrivers(const CanDriversList& drivers, con
 	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverActive));
 }
 
-// This one is used by Prepare
+// This one is used by Prepare and by M17
 void CanInterface::EnableRemoteDrivers(const CanDriversList& drivers) noexcept
 {
 	String<1> dummy;

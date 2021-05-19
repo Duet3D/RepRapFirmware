@@ -2498,10 +2498,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							gb.SetState(GCodeState::waitingForAcknowledgement);
 						}
 #endif
-						if (Push(gb, true))					// stack the machine state including the file position
+						if (Push(gb, true))												// stack the machine state including the file position
 						{
-							UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
-							gb.WaitForAcknowledgement();						// flag that we are waiting for acknowledgement
+							UnlockMovement(gb);											// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
+							gb.WaitForAcknowledgement();								// flag that we are waiting for acknowledgement
 						}
 					}
 
