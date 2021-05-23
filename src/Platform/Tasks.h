@@ -21,6 +21,7 @@ namespace Tasks
 	const char* GetHeapTop() noexcept;
 	Mutex *GetI2CMutex() noexcept;
 	Mutex *GetFilamentsMutex() noexcept;
+	void *GetNVMBuffer(const uint32_t *stk) noexcept;
 }
 
 #if SUPPORT_CAN_EXPANSION
