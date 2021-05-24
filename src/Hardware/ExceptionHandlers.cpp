@@ -8,6 +8,7 @@
 #include "ExceptionHandlers.h"
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Platform/Tasks.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Cache.h>
 #if SAME70 || SAM4S || SAM4E
@@ -62,10 +63,10 @@
 		}
 
 		// Record the reason for the software reset
-		NonVolatileMemory mem;
-		SoftwareResetData * const srd = mem.AllocateResetDataSlot();
+		NonVolatileMemory * const mem = new(Tasks::GetNVMBuffer(stk)) NonVolatileMemory;
+		SoftwareResetData * const srd = mem->AllocateResetDataSlot();
         srd->Populate(fullReason, stk);
-        mem.EnsureWritten();
+        mem->EnsureWritten();
 	}
 
 #if defined(__LPC17xx__)
