@@ -39,7 +39,8 @@ volatile uint32_t StepTimer::localTimeOffset = 0;
 volatile uint32_t StepTimer::whenLastSynced;
 uint32_t StepTimer::prevMasterTime;												// the previous master time received
 uint32_t StepTimer::prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
-uint32_t StepTimer::peakJitter = 0;
+int32_t StepTimer::peakPosJitter = 0;
+int32_t StepTimer::peakNegJitter = 0;
 uint32_t StepTimer::peakReceiveDelay = 0;
 volatile unsigned int StepTimer::syncCount = 0;
 unsigned int StepTimer::numResyncs = 0;
@@ -245,10 +246,15 @@ void StepTimer::DisableTimerInterrupt() noexcept
 
 /*static*/ bool StepTimer::IsSynced() noexcept
 {
-	if (syncCount == MaxSyncCount && millis() - whenLastSynced > MinSyncInterval)
+	if (syncCount == MaxSyncCount)
 	{
-		syncCount = 0;
-		++numResyncs;
+		// Check that we received a sync message recently
+		const uint32_t wls = whenLastSynced;						// capture whenLastSynced before we call millis in case we get interrupted
+		if (millis() - wls > MinSyncInterval)
+		{
+			syncCount = 0;
+			++numResyncs;
+		}
 	}
 	return syncCount == MaxSyncCount;
 }
@@ -297,11 +303,11 @@ void StepTimer::DisableTimerInterrupt() noexcept
 		const uint32_t correctedMasterTime = oldMasterTime + msg.lastTimeAcknowledgeDelay;
 		const uint32_t newOffset = oldLocalTime - correctedMasterTime;
 
-		//TODO convert this to a PLL
+		//TODO convert this to a PLL, but note that there could be a constant offset if the clocks run at slightly different speeds
 		const uint32_t oldOffset = localTimeOffset;
 		localTimeOffset = newOffset;
-		const uint32_t diff = abs((int32_t)(newOffset - oldOffset));
-		if (diff > MaxSyncJitter && locSyncCount > 1)
+		const int32_t diff = (int32_t)(newOffset - oldOffset);
+		if ((uint32_t)labs(diff) > MaxSyncJitter && locSyncCount > 1)
 		{
 			syncCount = 0;
 			++numResyncs;
@@ -311,9 +317,13 @@ void StepTimer::DisableTimerInterrupt() noexcept
 			whenLastSynced = millis();
 			if (locSyncCount == MaxSyncCount)
 			{
-				if (diff > peakJitter)
+				if (diff > peakPosJitter)
 				{
-					peakJitter = diff;
+					peakPosJitter = diff;
+				}
+				else if (diff < peakNegJitter)
+				{
+					peakNegJitter = diff;
 				}
 				reprap.GetGCodes().SetRemotePrinting(msg.isPrinting);
 				if (msgLen >= 16)										// if real time is included
@@ -503,8 +513,8 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 // Remote diagnostics
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply) noexcept
 {
-	reply.lcatf("Peak sync jitter %" PRIu32 ", peak Rx sync delay %" PRIu32 ", resyncs %u, ", peakJitter, peakReceiveDelay, numResyncs);
-	peakJitter = 0;
+	reply.lcatf("Peak sync jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u, ", peakNegJitter, peakPosJitter, peakReceiveDelay, numResyncs);
+	peakNegJitter = peakPosJitter = 0;
 	numResyncs = 0;
 	peakReceiveDelay = 0;
 
