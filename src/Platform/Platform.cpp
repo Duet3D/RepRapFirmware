@@ -1706,8 +1706,6 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(TIMER3_IRQn, NvicPriorityTimerPWM);    //Timer 3 runs the microsecond free running timer to generate heater/fan PWM
 #endif
 
-	StepTimer::Init();										// initialise the step pulse timer
-
    // Tick interrupt for ADC conversions
 	tickState = 0;
 	currentFilterNumber = 0;

@@ -57,6 +57,8 @@ constexpr float DefaultJumpWidth = 0.25;
 
 constexpr const char *NoCanBufferMessage = "no CAN buffer available";
 
+static Mutex transactionMutex;
+
 static uint32_t lastTimeSent = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
@@ -219,6 +221,8 @@ void CanInterface::Init() noexcept
 {
 	CanMessageBuffer::Init(NumCanBuffers);
 	pendingBuffers = nullptr;
+
+	transactionMutex.Create("CanTrans");
 
 #if SAME70
 # ifdef USE_CAN0
@@ -610,82 +614,78 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 	const CanAddress dest = buf->id.Dst();
 	const CanMessageType msgType = buf->id.MsgType();								// save for possible error message
 
-	// This code isn't re-entrant, so check that we are the main task
-	if (TaskBase::GetCallerTaskHandle() != Tasks::GetMainTask())
 	{
-		reply.printf("SendReq call from wrong task type=%u dst=%u",(unsigned int)msgType, (unsigned int)dest);
-		reprap.GetPlatform().MessageF(ErrorMessage, "%s\n", reply.c_str());			// send it directly in case the caller discards the reply
-		CanMessageBuffer::Free(buf);
-		return GCodeResult::error;
-	}
+		// This code isn't re-entrant and it can get called from a task other than Main to shut the system down, so we need to use a mutex
+		MutexLocker lock(transactionMutex);
 
-	can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
-	const uint32_t whenStartedWaiting = millis();
-	unsigned int fragmentsReceived = 0;
-	for (;;)
-	{
-		const uint32_t timeWaiting = millis() - whenStartedWaiting;
-		if (!can0dev->ReceiveMessage(RxBufferIndexResponse, CanResponseTimeout - timeWaiting, buf))
+		can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
+		const uint32_t whenStartedWaiting = millis();
+		unsigned int fragmentsReceived = 0;
+		for (;;)
 		{
-			break;
-		}
-
-		if (reprap.Debug(moduleCan))
-		{
-			buf->DebugPrint("Rx1:");
-		}
-
-		const bool matchesRequest = buf->id.Src() == dest && (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
-		if (matchesRequest && buf->id.MsgType() == CanMessageType::standardReply && buf->msg.standardReply.fragmentNumber == fragmentsReceived)
-		{
-			if (fragmentsReceived == 0)
+			const uint32_t timeWaiting = millis() - whenStartedWaiting;
+			if (!can0dev->ReceiveMessage(RxBufferIndexResponse, CanResponseTimeout - timeWaiting, buf))
 			{
-				const size_t textLength = buf->msg.standardReply.GetTextLength(buf->dataLength);
-				if (textLength != 0)			// avoid concatenating blank lines to existing output
-				{
-					reply.lcatn(buf->msg.standardReply.text, textLength);
-				}
-				if (extra != nullptr)
-				{
-					*extra = buf->msg.standardReply.extra;
-				}
-				uint32_t waitedFor = millis() - whenStartedWaiting;
-				if (waitedFor > longestWaitTime)
-				{
-					longestWaitTime = waitedFor;
-					longestWaitMessageType = (uint16_t)msgType;
-				}
+				break;
 			}
-			else
+
+			if (reprap.Debug(moduleCan))
 			{
-				reply.catn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+				buf->DebugPrint("Rx1:");
 			}
-			if (!buf->msg.standardReply.moreFollows)
+
+			const bool matchesRequest = buf->id.Src() == dest && (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
+			if (matchesRequest && buf->id.MsgType() == CanMessageType::standardReply && buf->msg.standardReply.fragmentNumber == fragmentsReceived)
 			{
-				const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
+				if (fragmentsReceived == 0)
+				{
+					const size_t textLength = buf->msg.standardReply.GetTextLength(buf->dataLength);
+					if (textLength != 0)			// avoid concatenating blank lines to existing output
+					{
+						reply.lcatn(buf->msg.standardReply.text, textLength);
+					}
+					if (extra != nullptr)
+					{
+						*extra = buf->msg.standardReply.extra;
+					}
+					uint32_t waitedFor = millis() - whenStartedWaiting;
+					if (waitedFor > longestWaitTime)
+					{
+						longestWaitTime = waitedFor;
+						longestWaitMessageType = (uint16_t)msgType;
+					}
+				}
+				else
+				{
+					reply.catn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+				}
+				if (!buf->msg.standardReply.moreFollows)
+				{
+					const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
+					CanMessageBuffer::Free(buf);
+					return rslt;
+				}
+				++fragmentsReceived;
+			}
+			else if (matchesRequest && buf->id.MsgType() == replyType && fragmentsReceived == 0)
+			{
+				callback(buf);
 				CanMessageBuffer::Free(buf);
-				return rslt;
-			}
-			++fragmentsReceived;
-		}
-		else if (matchesRequest && buf->id.MsgType() == replyType && fragmentsReceived == 0)
-		{
-			callback(buf);
-			CanMessageBuffer::Free(buf);
-			return GCodeResult::ok;
-		}
-		else
-		{
-			// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
-			if (buf->id.MsgType() == CanMessageType::standardReply)
-			{
-				reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
-												buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
+				return GCodeResult::ok;
 			}
 			else
 			{
-				reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
-												buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
+				// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
+				if (buf->id.MsgType() == CanMessageType::standardReply)
+				{
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
+													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
+				}
+				else
+				{
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
+													buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
+				}
 			}
 		}
 	}
@@ -1064,6 +1064,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;
+	peakTimeSyncTxDelay = 0;
 }
 
 GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) noexcept
