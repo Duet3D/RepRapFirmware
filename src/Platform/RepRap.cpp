@@ -2315,7 +2315,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 
 // Helper functions to write JSON arrays
 // Append float array using 1 decimal place
-void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<float(size_t)> func, unsigned int numDecimalDigits) noexcept
+void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2333,7 +2333,7 @@ void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numVal
 	buf->cat(']');
 }
 
-void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<int(size_t)> func) noexcept
+void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<int(size_t)> func) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2351,7 +2351,7 @@ void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValue
 	buf->cat(']');
 }
 
-void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, stdext::inplace_function<const char *(size_t)> func) noexcept
+void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<const char *(size_t)> func) noexcept
 {
 	if (name != nullptr)
 	{

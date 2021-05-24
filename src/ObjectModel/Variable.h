@@ -57,7 +57,7 @@ public:
 	void Delete(const char *str) noexcept;
 	void Clear() noexcept;
 
-	void IterateWhile(stdext::inplace_function<bool(unsigned int index, const Variable& v) /*noexcept*/ > func) const noexcept;
+	void IterateWhile(function_ref<bool(unsigned int index, const Variable& v) /*noexcept*/ > func) const noexcept;
 
 private:
 	Variable *root;
