@@ -27,9 +27,9 @@ namespace TaskPriority
 	constexpr int LaserPriority = 5;
 	constexpr int CanSenderPriority = 5;
 	constexpr int CanReceiverPriority = 5;
-	constexpr int CanClockPriority = 5;
 	constexpr int EthernetPriority = 5;
 	constexpr int Accelerometer = 6;
+	constexpr int CanClockPriority = 7;
 }
 
 #endif /* SRC_TASKPRIORITIES_H_ */

@@ -38,9 +38,10 @@ const unsigned int NumCanBuffers = 2 * MaxCanBoards + 10;
 
 constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
 constexpr uint32_t MaxUrgentSendWait = 20;		// milliseconds
-constexpr uint32_t MaxTimeSyncSendWait = 20;	// milliseconds
+constexpr uint32_t MaxTimeSyncSendWait = 2;		// milliseconds
 constexpr uint32_t MaxResponseSendWait = 50;	// milliseconds
 constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
+constexpr uint16_t MaxTimeSyncDelay = 300;		// the maximum normal delay before a can time sync message is sent
 
 #define USE_BIT_RATE_SWITCH		0
 
@@ -63,13 +64,6 @@ static uint32_t lastTimeSent = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
-// Time sync and transmit message markers
-enum TxMarkerType : uint8_t
-{
-	MarkerNone = 0,					// default marker, we don't get callbacks for Tx messages with this marker
-	MarkerTimeSync					// marker for time sync messages
-};
-
 static uint32_t peakTimeSyncTxDelay = 0;
 static volatile uint16_t timeSyncTxTimeStamp;
 static volatile bool gotTimeSyncTxTimeStamp = false;
@@ -84,6 +78,8 @@ static CanAddress myAddress =
 #else
 						CanId::MasterAddress;
 #endif
+
+static uint8_t currentTimeSyncMarker = 0xFF;
 
 #if SUPPORT_REMOTE_COMMANDS
 static bool inExpansionMode = false;
@@ -210,7 +206,7 @@ static void ReInit() noexcept
 // This is the function called by the transmit event handler when the message marker is nonzero
 void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 {
-	if (marker == MarkerTimeSync)
+	if (marker == currentTimeSyncMarker)
 	{
 		timeSyncTxTimeStamp = timeStamp;
 		gotTimeSyncTxTimeStamp = true;
@@ -395,31 +391,35 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #endif
 		{
 			CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
-			buf.marker = MarkerTimeSync;
-			can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);
 			msg->lastTimeSent = lastTimeSent;
+			msg->lastTimeAcknowledgeDelay = 0;									// assume we don't have the transmit delay available
 
-			can0dev->PollTxEventFifo(TxCallback);
+			currentTimeSyncMarker = ((currentTimeSyncMarker + 1) & 0x0F) | 0xA0;
+			buf.marker = currentTimeSyncMarker;
+			buf.reportInFifo = 1;
+
 			if (gotTimeSyncTxTimeStamp)
 			{
 # if SAME70
 				// On the SAME70 the step clock is also the external time stamp counter
 				const uint32_t timeSyncTxDelay = (timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
 # else
-				// On the SAME5x the time stamp counter counts CAN but times divided by 64
+				// On the SAME5x the time stamp counter counts CAN bit times divided by 64
 				const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
 # endif
 				if (timeSyncTxDelay > peakTimeSyncTxDelay)
 				{
 					peakTimeSyncTxDelay = timeSyncTxDelay;
 				}
-				msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
+
+				// Occasionally on the SAME70 we get very large delays reported. These delays are not genuine.
+				if (timeSyncTxDelay < MaxTimeSyncDelay)
+				{
+					msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
+				}
 				gotTimeSyncTxTimeStamp = false;
 			}
-			else
-			{
-				msg->lastTimeAcknowledgeDelay = 0;
-			}
+
 			msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
 
 			// Send the real time just once a second
@@ -449,6 +449,18 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
+
+		// Check that the message was sent and get the time stamp
+		if (can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, 0))		// if the buffer is free already then the message was sent
+		{
+			can0dev->PollTxEventFifo(TxCallback);
+		}
+		else
+		{
+			(void)can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);		// free the buffer
+			can0dev->PollTxEventFifo(TxCallback);								// empty the fifo
+			gotTimeSyncTxTimeStamp = false;										// ignore any values read from it
+		}
 	}
 }
 
