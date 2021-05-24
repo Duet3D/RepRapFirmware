@@ -59,7 +59,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "filePosition",		OBJECT_MODEL_FUNC((uint64_t)self->gCodes.GetFilePosition()),														ObjectModelEntryFlags::live },
 	{ "firstLayerDuration", OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)self->gCodes.GetLastDuration()), 								ObjectModelEntryFlags::none },
-	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty(), self->filenameBeingPrinted.c_str()), 					ObjectModelEntryFlags::none },
+	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty() && !self->IsPrinting(), self->filenameBeingPrinted.c_str()), ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
 	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, (int32_t)self->currentLayer), 					ObjectModelEntryFlags::live },
 	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, self->GetCurrentLayerTime(), 1), 				ObjectModelEntryFlags::live },
@@ -116,7 +116,7 @@ void PrintMonitor::Reset() noexcept
 
 	heatingUp = paused = false;
 	currentLayer = 0;
-	printStartTime = pauseStartTime = lastSnapshotTime = lastLayerChangeTime = heatingStartedTime = millis64();
+	printStartTime = pauseStartTime = lastSnapshotTime = lastLayerChangeTime = heatingStartedTime = whenSlicerTimeLeftSet = millis64();
 	totalPauseTime = warmUpDuration = lastSnapshotNonPrintingTime = lastLayerChangeNonPrintingTime = 0;
 	lastLayerDuration = 0;
 	lastSnapshotFileFraction = lastSnapshotFilamentUsed = 0.0;
@@ -316,16 +316,15 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 // Tell this class that the file set for printing is now actually processed
 void PrintMonitor::StartedPrint() noexcept
 {
-	Reset();
 	isPrinting = true;
-	printStartTime = lastSnapshotTime = whenSlicerTimeLeftSet = millis64();
 	SetLayerNumber(0);
+	Reset();
 }
 
 void PrintMonitor::StoppedPrint() noexcept
 {
-	Reset();
 	isPrinting = printingFileParsed = false;
+	Reset();
 }
 
 // Set the current layer number as given in a comment
