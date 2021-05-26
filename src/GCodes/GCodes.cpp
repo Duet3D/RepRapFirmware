@@ -3968,7 +3968,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 }
 
 // Load the specified filament into a tool
-GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	Tool * const tool = reprap.GetCurrentTool();
 	if (tool == nullptr)
@@ -4031,7 +4031,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Unload the current filament from a tool
-GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	Tool * const tool = reprap.GetCurrentTool();
 	if (tool == nullptr)
@@ -4617,7 +4617,7 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const noexcept
 
 // Check whether we need to report temperatures or status.
 // 'reply' is a convenient buffer that is free for us to use.
-void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
+void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept
 {
 	if (&gb == usbGCode)
 	{

@@ -456,7 +456,7 @@ void Heat::Diagnostics(MessageType mtype) noexcept
 }
 
 // Configure a heater. Invoked by M950.
-GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const size_t heater = gb.GetLimitedUIValue('H', MaxHeaters);
 
@@ -811,7 +811,7 @@ bool Heat::WriteModelParameters(FileStore *f) const noexcept
 #endif
 
 // Process M570
-GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNull())

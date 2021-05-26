@@ -16,7 +16,7 @@ class SpiTemperatureSensor : public SensorWithPort
 protected:
 	SpiTemperatureSensor(unsigned int sensorNum, const char *name, SpiMode spiMode, uint32_t clockFrequency) noexcept;
 
-	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen);
+	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool ConfigurePort(const CanMessageGenericParser& parser, const StringRef& reply, bool& seen) noexcept;

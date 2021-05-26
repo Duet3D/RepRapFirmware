@@ -42,7 +42,7 @@ public:
 	EndstopHitDetails CheckEndstops() noexcept;
 
 	// Configure the endstops in response to M574
-	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) noexcept;
+	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) THROWS(GCodeException);
 
 	EndStopPosition GetEndStopPosition(size_t axis) const pre(axis < MaxAxes) noexcept;
 	bool HomingZWithProbe() const noexcept;
