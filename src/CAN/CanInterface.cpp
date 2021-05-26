@@ -36,7 +36,7 @@
 
 const unsigned int NumCanBuffers = 2 * MaxCanBoards + 10;
 
-constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
+constexpr uint32_t MaxMotionSendWait = 100;		// milliseconds
 constexpr uint32_t MaxUrgentSendWait = 20;		// milliseconds
 constexpr uint32_t MaxTimeSyncSendWait = 2;		// milliseconds
 constexpr uint32_t MaxResponseSendWait = 50;	// milliseconds
@@ -44,6 +44,7 @@ constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
 constexpr uint16_t MaxTimeSyncDelay = 300;		// the maximum normal delay before a can time sync message is sent
 
 #define USE_BIT_RATE_SWITCH		0
+#define USE_TX_FIFO				1
 
 constexpr uint32_t MinBitRate = 15;				// MCP2542 has a minimum bite rate of 14.4kbps
 constexpr uint32_t MaxBitRate = 5000;
@@ -65,6 +66,13 @@ static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
 static uint32_t peakTimeSyncTxDelay = 0;
+
+// Debug
+static unsigned int goodTimeStamps = 0;
+static unsigned int badTimeStamps = 0;
+static unsigned int timeSyncMessagesSent = -0;
+// End debug
+
 static volatile uint16_t timeSyncTxTimeStamp;
 static volatile bool gotTimeSyncTxTimeStamp = false;
 
@@ -91,8 +99,13 @@ static bool inExpansionMode = false;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,
+#if USE_TX_FIFO
 	.numTxBuffers = 5,
 	.txFifoSize = 16,
+#else
+	.numTxBuffers = 6,
+	.txFifoSize = 2,
+#endif
 	.numRxBuffers =  0,
 	.rxFifo0Size = 16,
 	.rxFifo1Size = 16,
@@ -142,7 +155,12 @@ constexpr auto TxBufferIndexTimeSync = CanDevice::TxBufferNumber::buffer1;
 constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer2;
 constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer3;
 constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer4;
+
+#if USE_TX_FIFO
 constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::fifo;				// we send lots of movement messages so use the FIFO for them
+#else
+constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer5;				// we send lots of movement messages so use the FIFO for them
+#endif
 
 // Receive buffer/FIFO usage. All dedicated buffer numbers must be < Can0Config.numRxBuffers.
 constexpr auto RxBufferIndexBroadcast = CanDevice::RxBufferNumber::fifo0;
@@ -210,6 +228,11 @@ void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 	{
 		timeSyncTxTimeStamp = timeStamp;
 		gotTimeSyncTxTimeStamp = true;
+		++goodTimeStamps;
+	}
+	else
+	{
+		++badTimeStamps;
 	}
 }
 
@@ -445,6 +468,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #endif
 			msg->timeSent = lastTimeSent;
 			can0dev->SendMessage(TxBufferIndexTimeSync, 0, &buf);
+			++timeSyncMessagesSent;
 		}
 
 		// Delay until it is time again
@@ -1063,10 +1087,18 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	reprap.GetPlatform().MessageF(mtype,
 				"=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
 				", peak Tx sync delay %" PRIu32
-				", free buffers %u (min %u)\n",
+				", free buffers %u (min %u)"
+	//debug
+				", ts %u/%u/%u"
+	//end debug
+				"\n",
 					messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
 					peakTimeSyncTxDelay,
-					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers());
+					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers()
+	//debug
+					, timeSyncMessagesSent, goodTimeStamps, badTimeStamps
+	//end debug
+				);
 	if (lastCancelledId != 0)
 	{
 		CanId id;
@@ -1077,6 +1109,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;
 	peakTimeSyncTxDelay = 0;
+	timeSyncMessagesSent = goodTimeStamps = badTimeStamps = 0;
 }
 
 GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) noexcept
