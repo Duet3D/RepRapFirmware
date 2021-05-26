@@ -134,7 +134,7 @@ uint32_t CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 		buf->msg.moveLinear.whenToExecute = moveStartTime;
 		uint8_t& seq = nextSeq[buf->id.Dst()];
 		buf->msg.moveLinear.seq = seq;
-		seq = (seq + 1) & 7;
+		seq = (seq + 1) & 0x7F;
 		buf->dataLength = buf->msg.moveLinear.GetActualDataLength();
 		CanMessageBuffer * const nextBuffer = buf->next;				// must get this before sending the buffer, because sending the buffer releases it
 		CanInterface::SendMotion(buf);									// queues the buffer for sending and frees it when done
