@@ -43,7 +43,8 @@ int32_t StepTimer::peakPosJitter = 0;
 int32_t StepTimer::peakNegJitter = 0;
 uint32_t StepTimer::peakReceiveDelay = 0;
 volatile unsigned int StepTimer::syncCount = 0;
-unsigned int StepTimer::numResyncs = 0;
+unsigned int StepTimer::numJitterResyncs = 0;
+unsigned int StepTimer::numTimeoutResyncs = 0;
 
 #endif
 
@@ -253,7 +254,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 		if (millis() - wls > MinSyncInterval)
 		{
 			syncCount = 0;
-			++numResyncs;
+			++numTimeoutResyncs;
 		}
 	}
 	return syncCount == MaxSyncCount;
@@ -310,7 +311,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 		if ((uint32_t)labs(diff) > MaxSyncJitter && locSyncCount > 1)
 		{
 			syncCount = 0;
-			++numResyncs;
+			++numJitterResyncs;
 		}
 		else
 		{
@@ -513,9 +514,9 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 // Remote diagnostics
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply) noexcept
 {
-	reply.lcatf("Peak sync jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u, ", peakNegJitter, peakPosJitter, peakReceiveDelay, numResyncs);
+	reply.lcatf("Peak sync jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u/%u, ", peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
 	peakNegJitter = peakPosJitter = 0;
-	numResyncs = 0;
+	numTimeoutResyncs = numJitterResyncs = 0;
 	peakReceiveDelay = 0;
 
 	StepTimer *pst = pendingList;
