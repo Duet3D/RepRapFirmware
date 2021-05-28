@@ -19,7 +19,7 @@ protected:
 	~SensorWithPort() noexcept;
 
 	// Try to configure the port
-	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinAccess access, bool& seen);
+	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinAccess access, bool& seen) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
 	// Try to configure the port

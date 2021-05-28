@@ -36,13 +36,15 @@
 
 const unsigned int NumCanBuffers = 2 * MaxCanBoards + 10;
 
-constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
+constexpr uint32_t MaxMotionSendWait = 100;		// milliseconds
 constexpr uint32_t MaxUrgentSendWait = 20;		// milliseconds
-constexpr uint32_t MaxTimeSyncSendWait = 20;	// milliseconds
+constexpr uint32_t MaxTimeSyncSendWait = 2;		// milliseconds
 constexpr uint32_t MaxResponseSendWait = 50;	// milliseconds
 constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
+constexpr uint16_t MaxTimeSyncDelay = 300;		// the maximum normal delay before a can time sync message is sent
 
 #define USE_BIT_RATE_SWITCH		0
+#define USE_TX_FIFO				1
 
 constexpr uint32_t MinBitRate = 15;				// MCP2542 has a minimum bite rate of 14.4kbps
 constexpr uint32_t MaxBitRate = 5000;
@@ -57,18 +59,20 @@ constexpr float DefaultJumpWidth = 0.25;
 
 constexpr const char *NoCanBufferMessage = "no CAN buffer available";
 
+static Mutex transactionMutex;
+
 static uint32_t lastTimeSent = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
-// Time sync and transmit message markers
-enum TxMarkerType : uint8_t
-{
-	MarkerNone = 0,					// default marker, we don't get callbacks for Tx messages with this marker
-	MarkerTimeSync					// marker for time sync messages
-};
-
 static uint32_t peakTimeSyncTxDelay = 0;
+
+// Debug
+static unsigned int goodTimeStamps = 0;
+static unsigned int badTimeStamps = 0;
+static unsigned int timeSyncMessagesSent = -0;
+// End debug
+
 static volatile uint16_t timeSyncTxTimeStamp;
 static volatile bool gotTimeSyncTxTimeStamp = false;
 
@@ -83,6 +87,8 @@ static CanAddress myAddress =
 						CanId::MasterAddress;
 #endif
 
+static uint8_t currentTimeSyncMarker = 0xFF;
+
 #if SUPPORT_REMOTE_COMMANDS
 static bool inExpansionMode = false;
 #endif
@@ -93,8 +99,13 @@ static bool inExpansionMode = false;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,
+#if USE_TX_FIFO
 	.numTxBuffers = 5,
 	.txFifoSize = 16,
+#else
+	.numTxBuffers = 6,
+	.txFifoSize = 2,
+#endif
 	.numRxBuffers =  0,
 	.rxFifo0Size = 16,
 	.rxFifo1Size = 16,
@@ -144,7 +155,12 @@ constexpr auto TxBufferIndexTimeSync = CanDevice::TxBufferNumber::buffer1;
 constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer2;
 constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer3;
 constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer4;
+
+#if USE_TX_FIFO
 constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::fifo;				// we send lots of movement messages so use the FIFO for them
+#else
+constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer5;				// we send lots of movement messages so use the FIFO for them
+#endif
 
 // Receive buffer/FIFO usage. All dedicated buffer numbers must be < Can0Config.numRxBuffers.
 constexpr auto RxBufferIndexBroadcast = CanDevice::RxBufferNumber::fifo0;
@@ -208,10 +224,15 @@ static void ReInit() noexcept
 // This is the function called by the transmit event handler when the message marker is nonzero
 void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 {
-	if (marker == MarkerTimeSync)
+	if (marker == currentTimeSyncMarker)
 	{
 		timeSyncTxTimeStamp = timeStamp;
 		gotTimeSyncTxTimeStamp = true;
+		++goodTimeStamps;
+	}
+	else
+	{
+		++badTimeStamps;
 	}
 }
 
@@ -219,6 +240,8 @@ void CanInterface::Init() noexcept
 {
 	CanMessageBuffer::Init(NumCanBuffers);
 	pendingBuffers = nullptr;
+
+	transactionMutex.Create("CanTrans");
 
 #if SAME70
 # ifdef USE_CAN0
@@ -399,31 +422,35 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #endif
 		{
 			CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
-			buf.marker = MarkerTimeSync;
-			can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);
 			msg->lastTimeSent = lastTimeSent;
+			msg->lastTimeAcknowledgeDelay = 0;									// assume we don't have the transmit delay available
 
-			can0dev->PollTxEventFifo(TxCallback);
+			currentTimeSyncMarker = ((currentTimeSyncMarker + 1) & 0x0F) | 0xA0;
+			buf.marker = currentTimeSyncMarker;
+			buf.reportInFifo = 1;
+
 			if (gotTimeSyncTxTimeStamp)
 			{
 # if SAME70
 				// On the SAME70 the step clock is also the external time stamp counter
 				const uint32_t timeSyncTxDelay = (timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
 # else
-				// On the SAME5x the time stamp counter counts CAN but times divided by 64
+				// On the SAME5x the time stamp counter counts CAN bit times divided by 64
 				const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
 # endif
 				if (timeSyncTxDelay > peakTimeSyncTxDelay)
 				{
 					peakTimeSyncTxDelay = timeSyncTxDelay;
 				}
-				msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
+
+				// Occasionally on the SAME70 we get very large delays reported. These delays are not genuine.
+				if (timeSyncTxDelay < MaxTimeSyncDelay)
+				{
+					msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
+				}
 				gotTimeSyncTxTimeStamp = false;
 			}
-			else
-			{
-				msg->lastTimeAcknowledgeDelay = 0;
-			}
+
 			msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
 
 			// Send the real time just once a second
@@ -449,10 +476,23 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #endif
 			msg->timeSent = lastTimeSent;
 			can0dev->SendMessage(TxBufferIndexTimeSync, 0, &buf);
+			++timeSyncMessagesSent;
 		}
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
+
+		// Check that the message was sent and get the time stamp
+		if (can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, 0))		// if the buffer is free already then the message was sent
+		{
+			can0dev->PollTxEventFifo(TxCallback);
+		}
+		else
+		{
+			(void)can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);		// free the buffer
+			can0dev->PollTxEventFifo(TxCallback);								// empty the fifo
+			gotTimeSyncTxTimeStamp = false;										// ignore any values read from it
+		}
 	}
 }
 
@@ -618,82 +658,78 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 	const CanAddress dest = buf->id.Dst();
 	const CanMessageType msgType = buf->id.MsgType();								// save for possible error message
 
-	// This code isn't re-entrant, so check that we are the main task
-	if (TaskBase::GetCallerTaskHandle() != Tasks::GetMainTask())
 	{
-		reply.printf("SendReq call from wrong task type=%u dst=%u",(unsigned int)msgType, (unsigned int)dest);
-		reprap.GetPlatform().MessageF(ErrorMessage, "%s\n", reply.c_str());			// send it directly in case the caller discards the reply
-		CanMessageBuffer::Free(buf);
-		return GCodeResult::error;
-	}
+		// This code isn't re-entrant and it can get called from a task other than Main to shut the system down, so we need to use a mutex
+		MutexLocker lock(transactionMutex);
 
-	can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
-	const uint32_t whenStartedWaiting = millis();
-	unsigned int fragmentsReceived = 0;
-	for (;;)
-	{
-		const uint32_t timeWaiting = millis() - whenStartedWaiting;
-		if (!can0dev->ReceiveMessage(RxBufferIndexResponse, CanResponseTimeout - timeWaiting, buf))
+		can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
+		const uint32_t whenStartedWaiting = millis();
+		unsigned int fragmentsReceived = 0;
+		for (;;)
 		{
-			break;
-		}
-
-		if (reprap.Debug(moduleCan))
-		{
-			buf->DebugPrint("Rx1:");
-		}
-
-		const bool matchesRequest = buf->id.Src() == dest && (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
-		if (matchesRequest && buf->id.MsgType() == CanMessageType::standardReply && buf->msg.standardReply.fragmentNumber == fragmentsReceived)
-		{
-			if (fragmentsReceived == 0)
+			const uint32_t timeWaiting = millis() - whenStartedWaiting;
+			if (!can0dev->ReceiveMessage(RxBufferIndexResponse, CanResponseTimeout - timeWaiting, buf))
 			{
-				const size_t textLength = buf->msg.standardReply.GetTextLength(buf->dataLength);
-				if (textLength != 0)			// avoid concatenating blank lines to existing output
-				{
-					reply.lcatn(buf->msg.standardReply.text, textLength);
-				}
-				if (extra != nullptr)
-				{
-					*extra = buf->msg.standardReply.extra;
-				}
-				uint32_t waitedFor = millis() - whenStartedWaiting;
-				if (waitedFor > longestWaitTime)
-				{
-					longestWaitTime = waitedFor;
-					longestWaitMessageType = (uint16_t)msgType;
-				}
+				break;
 			}
-			else
+
+			if (reprap.Debug(moduleCan))
 			{
-				reply.catn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+				buf->DebugPrint("Rx1:");
 			}
-			if (!buf->msg.standardReply.moreFollows)
+
+			const bool matchesRequest = buf->id.Src() == dest && (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
+			if (matchesRequest && buf->id.MsgType() == CanMessageType::standardReply && buf->msg.standardReply.fragmentNumber == fragmentsReceived)
 			{
-				const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
+				if (fragmentsReceived == 0)
+				{
+					const size_t textLength = buf->msg.standardReply.GetTextLength(buf->dataLength);
+					if (textLength != 0)			// avoid concatenating blank lines to existing output
+					{
+						reply.lcatn(buf->msg.standardReply.text, textLength);
+					}
+					if (extra != nullptr)
+					{
+						*extra = buf->msg.standardReply.extra;
+					}
+					uint32_t waitedFor = millis() - whenStartedWaiting;
+					if (waitedFor > longestWaitTime)
+					{
+						longestWaitTime = waitedFor;
+						longestWaitMessageType = (uint16_t)msgType;
+					}
+				}
+				else
+				{
+					reply.catn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+				}
+				if (!buf->msg.standardReply.moreFollows)
+				{
+					const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
+					CanMessageBuffer::Free(buf);
+					return rslt;
+				}
+				++fragmentsReceived;
+			}
+			else if (matchesRequest && buf->id.MsgType() == replyType && fragmentsReceived == 0)
+			{
+				callback(buf);
 				CanMessageBuffer::Free(buf);
-				return rslt;
-			}
-			++fragmentsReceived;
-		}
-		else if (matchesRequest && buf->id.MsgType() == replyType && fragmentsReceived == 0)
-		{
-			callback(buf);
-			CanMessageBuffer::Free(buf);
-			return GCodeResult::ok;
-		}
-		else
-		{
-			// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
-			if (buf->id.MsgType() == CanMessageType::standardReply)
-			{
-				reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
-												buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
+				return GCodeResult::ok;
 			}
 			else
 			{
-				reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
-												buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
+				// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
+				if (buf->id.MsgType() == CanMessageType::standardReply)
+				{
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
+													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
+				}
+				else
+				{
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
+													buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
+				}
 			}
 		}
 	}
@@ -1076,10 +1112,18 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	reprap.GetPlatform().MessageF(mtype,
 				"=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
 				", peak Tx sync delay %" PRIu32
-				", free buffers %u (min %u)\n",
+				", free buffers %u (min %u)"
+	//debug
+				", ts %u/%u/%u"
+	//end debug
+				"\n",
 					messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
 					peakTimeSyncTxDelay,
-					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers());
+					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers()
+	//debug
+					, timeSyncMessagesSent, goodTimeStamps, badTimeStamps
+	//end debug
+				);
 	if (lastCancelledId != 0)
 	{
 		CanId id;
@@ -1089,6 +1133,8 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;
+	peakTimeSyncTxDelay = 0;
+	timeSyncMessagesSent = goodTimeStamps = badTimeStamps = 0;
 }
 
 GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) noexcept

@@ -86,7 +86,8 @@ public:
 	static bool IsSynced() noexcept;
 	static void Diagnostics(const StringRef& reply) noexcept;
 
-	static constexpr uint32_t MinSyncInterval = 1000;							// maximum interval in milliseconds between sync messages for us to remain synced
+	static constexpr uint32_t MinSyncInterval = 2000;							// maximum interval in milliseconds between sync messages for us to remain synced
+																				// increased from 1000 because of workaround we added for bad Tx time stamps on SAME70
 #endif
 
 #if STEP_TIMER_DEBUG
@@ -113,10 +114,10 @@ private:
 	static volatile uint32_t whenLastSynced;									// the millis tick count when we last synced
 	static uint32_t prevMasterTime;												// the previous master time received
 	static uint32_t prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
-	static uint32_t peakJitter;													// the maximum correction we made to local time offset while synced
+	static int32_t peakPosJitter, peakNegJitter;								// the max and min corrections we made to local time offset while synced
 	static uint32_t peakReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
 	static volatile unsigned int syncCount;										// the number of messages we have received since starting sync
-	static unsigned int numResyncs;
+	static unsigned int numJitterResyncs, numTimeoutResyncs;
 
 	static constexpr uint32_t MaxSyncJitter = StepClockRate/100;				// 10ms
 	static constexpr unsigned int MaxSyncCount = 10;
