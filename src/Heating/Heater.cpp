@@ -43,6 +43,7 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	{ "min",		OBJECT_MODEL_FUNC(self->GetLowestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
 	{ "model",		OBJECT_MODEL_FUNC((const FopDt *)&self->GetModel()),									ObjectModelEntryFlags::verbose },
 	{ "monitors",	OBJECT_MODEL_FUNC_NOSELF(&monitorsArrayDescriptor), 									ObjectModelEntryFlags::none },
+	{ "pwm",		OBJECT_MODEL_FUNC(self->lastPwm, 1), 													ObjectModelEntryFlags::live },
 	{ "sensor",		OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 									ObjectModelEntryFlags::none },
 	{ "standby",	OBJECT_MODEL_FUNC(self->GetStandbyTemperature(), 1), 									ObjectModelEntryFlags::live },
 	{ "state",		OBJECT_MODEL_FUNC(self->GetStatus().ToString()), 										ObjectModelEntryFlags::live },
@@ -55,7 +56,7 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 										self->monitors[context.GetLastIndex()].GetTemperatureLimit(), 1),	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 9, 3 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 10, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
@@ -103,7 +104,7 @@ Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
 }
 
 Heater::Heater(unsigned int num) noexcept
-	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
+	: lastPwm(0.0), tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
 	  active(false), modelSetByUser(false), monitorsSetByUser(false)
 {
