@@ -66,7 +66,6 @@ private:
 	float previousTemperatures[NumPreviousTemperatures]; 	// The temperatures of the previous NumDerivativeSamples measurements, used for calculating the derivative
 	size_t previousTemperatureIndex;						// Which slot in previousTemperature we fill in next
 	float iAccumulator;										// The integral LocalHeater component
-	float lastPwm;											// The last PWM value we output, before scaling by kS
 	float averagePWM;										// The running average of the PWM, after scaling.
 	uint32_t timeSetHeating;								// When we turned on the heater
 	uint32_t lastSampleTime;								// Time when the temperature was last sampled by Spin()
