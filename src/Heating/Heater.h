@@ -139,7 +139,6 @@ protected:
 	void SetAndReportModel(bool usingFans) noexcept;
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];			// embedding them in the Heater uses less memory than dynamic allocation
-	float lastPwm;											// the last PWM value set for this heater
 	bool tuned;												// true if tuning was successful
 
 	// Constants used during heater tuning
