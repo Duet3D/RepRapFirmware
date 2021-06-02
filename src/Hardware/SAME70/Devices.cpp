@@ -11,8 +11,32 @@
 #include <AnalogOut.h>
 #include <matrix/matrix.h>
 
-AsyncSerial Serial(UART2, UART2_IRQn, ID_UART2, 512, 512, 		[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
-USARTClass Serial1(USART2, USART2_IRQn, ID_USART2, 512, 512,	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
+AsyncSerial Serial(UART2, UART2_IRQn, ID_UART2, 512, 512,
+					[](AsyncSerial*) noexcept
+					{
+						SetPinFunction(APIN_Serial0_RXD, Serial0PinFunction);
+						SetPinFunction(APIN_Serial0_TXD, Serial0PinFunction);
+					},
+					[](AsyncSerial*) noexcept
+					{
+						ClearPinFunction(APIN_Serial0_RXD);
+						ClearPinFunction(APIN_Serial0_TXD);
+					}
+				);
+
+USARTClass Serial1(USART2, USART2_IRQn, ID_USART2, 512, 512,
+					[](AsyncSerial*) noexcept
+					{
+						SetPinFunction(APIN_Serial1_RXD, Serial1PinFunction);
+						SetPinFunction(APIN_Serial1_TXD, Serial1PinFunction);
+					},
+					[](AsyncSerial*) noexcept
+					{
+						ClearPinFunction(APIN_Serial1_RXD);
+						ClearPinFunction(APIN_Serial1_TXD);
+					}
+				);
+
 SerialCDC SerialUSB;
 
 void UART2_Handler(void) noexcept
@@ -23,17 +47,6 @@ void UART2_Handler(void) noexcept
 void USART2_Handler(void) noexcept
 {
 	Serial1.IrqHandler();
-}
-
-void SerialInit() noexcept
-{
-	SetPinFunction(APIN_Serial0_RXD, Serial0PinFunction);
-	SetPinFunction(APIN_Serial0_TXD, Serial0PinFunction);
-	EnablePullup(APIN_Serial0_RXD);
-
-	SetPinFunction(APIN_Serial1_RXD, Serial1PinFunction);
-	SetPinFunction(APIN_Serial1_TXD, Serial1PinFunction);
-	EnablePullup(APIN_Serial1_RXD);
 }
 
 void SdhcInit() noexcept
@@ -62,7 +75,6 @@ void DeviceInit() noexcept
 	LegacyAnalogIn::AnalogInInit();
 	AnalogOut::Init();
 
-	SerialInit();
 	SdhcInit();
 	EthernetInit();
 
