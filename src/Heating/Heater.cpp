@@ -379,9 +379,21 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 {
 	const float hRate = (usingFans) ? (fanOffParams.heatingRate + fanOnParams.heatingRate) * 0.5 : fanOffParams.heatingRate;
 	const float deadTime = (usingFans) ? (fanOffParams.deadTime + fanOnParams.deadTime) * 0.5 : fanOffParams.deadTime;
-	const float fanOnCoolingRate = (usingFans)
-										? fanOffParams.coolingRate + (fanOnParams.coolingRate - fanOffParams.coolingRate)/tuningFanPwm
-											: fanOffParams.coolingRate;
+
+	float fanOnCoolingRate = fanOffParams.coolingRate;
+	if (usingFans)
+	{
+		// Sometimes the print cooling fan makes no difference to the cooling rate. The SetModel call will fail if the rate with fan on is lower than the rate with fan off.
+		if (fanOnParams.coolingRate > fanOffParams.coolingRate)
+		{
+			fanOnCoolingRate = fanOffParams.coolingRate + (fanOnParams.coolingRate - fanOffParams.coolingRate)/tuningFanPwm;
+		}
+		else
+		{
+			reprap.GetPlatform().Message(WarningMessage, "Turning on the print cooling fan did not increase hot end cooling. Check that the correct fan has been configured.\n");
+		}
+	}
+
 	String<StringLength256> str;
 	const GCodeResult rslt = SetModel(	hRate,
 										fanOffParams.coolingRate, fanOnCoolingRate,
