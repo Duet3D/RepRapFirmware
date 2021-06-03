@@ -225,6 +225,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 	filamentsMutex.Create("Filaments");
 	mainTask.Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
 
+	StepTimer::Init();				// initialise the step pulse timer now because we use it for measuring task CPU usage
 	vTaskStartScheduler();			// doesn't return
 	for (;;) { }					// keep gcc happy
 }

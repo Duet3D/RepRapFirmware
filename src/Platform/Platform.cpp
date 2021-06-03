@@ -1706,8 +1706,6 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(TIMER3_IRQn, NvicPriorityTimerPWM);    //Timer 3 runs the microsecond free running timer to generate heater/fan PWM
 #endif
 
-	StepTimer::Init();										// initialise the step pulse timer
-
    // Tick interrupt for ADC conversions
 	tickState = 0;
 	currentFilterNumber = 0;
@@ -4193,12 +4191,23 @@ float Platform::GetLaserPwm() const noexcept
 
 bool Platform::AssignLaserPin(GCodeBuffer& gb, const StringRef& reply)
 {
-	const bool ok = laserPort.AssignPort(gb, reply, PinUsedBy::laser, PinAccess::pwm);
-	if (ok)
+	if (!laserPort.AssignPort(gb, reply, PinUsedBy::laser, PinAccess::pwm))
 	{
-		SetLaserPwm(0);
+		return false;
 	}
-	return ok;
+
+#ifdef DUET_NG
+	// We can't use DueX fan pins because we need to set the PWM from within the tick ISR
+	if (laserPort.GetPin() >= DueXnExpansionStart)
+	{
+		reply.copy("DueX fan or GPIO pins may not be used to control lasers");
+		laserPort.Release();
+		return false;
+	}
+#endif
+
+	SetLaserPwm(0);
+	return true;
 }
 
 void Platform::SetLaserPwmFrequency(PwmFrequency freq) noexcept

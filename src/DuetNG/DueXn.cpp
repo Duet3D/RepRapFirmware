@@ -275,18 +275,21 @@ bool DuetExpansion::DigitalRead(Pin pin) noexcept
 // Write a pin
 void DuetExpansion::DigitalWrite(Pin pin, bool high) noexcept
 {
-	if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
+	if (!inInterrupt() && __get_BASEPRI() == 0)										// we must not call expander.digitalWrite() from within an ISR
 	{
-		if (dueXnBoardType != ExpansionBoardType::none)
+		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 		{
-			dueXnExpander.digitalWrite(pin - DueXnExpansionStart, high);
+			if (dueXnBoardType != ExpansionBoardType::none)
+			{
+				dueXnExpander.digitalWrite(pin - DueXnExpansionStart, high);
+			}
 		}
-	}
-	else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
-	{
-		if (additionalIoExpanderPresent)
+		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
 		{
-			additionalIoExpander.digitalWrite(pin - AdditionalIoExpansionStart, high);
+			if (additionalIoExpanderPresent)
+			{
+				additionalIoExpander.digitalWrite(pin - AdditionalIoExpansionStart, high);
+			}
 		}
 	}
 }
@@ -294,18 +297,21 @@ void DuetExpansion::DigitalWrite(Pin pin, bool high) noexcept
 // Set the PWM value on this pin
 void DuetExpansion::AnalogOut(Pin pin, float pwm) noexcept
 {
-	if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
+	if (!inInterrupt() && __get_BASEPRI() == 0)										// we must not call expander.analogWrite() from within an ISR
 	{
-		if (dueXnBoardType != ExpansionBoardType::none)
+		if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 		{
-			dueXnExpander.analogWrite(pin - DueXnExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
+			if (dueXnBoardType != ExpansionBoardType::none)
+			{
+				dueXnExpander.analogWrite(pin - DueXnExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
+			}
 		}
-	}
-	else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
-	{
-		if (additionalIoExpanderPresent)
+		else if (pin >= AdditionalIoExpansionStart && pin < AdditionalIoExpansionStart + 16)
 		{
-			additionalIoExpander.analogWrite(pin - AdditionalIoExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
+			if (additionalIoExpanderPresent)
+			{
+				additionalIoExpander.analogWrite(pin - AdditionalIoExpansionStart, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
+			}
 		}
 	}
 }

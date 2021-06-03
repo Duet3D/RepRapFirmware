@@ -314,7 +314,7 @@ EndstopHitDetails EndstopsManager::CheckEndstops() noexcept
 }
 
 // Configure the endstops in response to M574
-GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) noexcept
+GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) THROWS(GCodeException)
 {
 	// First count how many axes we are configuring, and lock movement if necessary
 	unsigned int axesSeen = 0;
