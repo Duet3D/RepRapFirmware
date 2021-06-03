@@ -99,6 +99,8 @@ constexpr size_t MaxCanDrivers = 7;					// enough to support another Mini5+ as a
 constexpr unsigned int MaxCanBoards = 4;
 #endif
 
+constexpr size_t MaxPortsPerHeater = 2;
+
 constexpr size_t MaxBedHeaters = 2;
 constexpr size_t MaxChamberHeaters = 2;
 constexpr int8_t DefaultBedHeater = 0;

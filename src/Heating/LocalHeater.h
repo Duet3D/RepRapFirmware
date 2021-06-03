@@ -61,7 +61,7 @@ private:
 	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
 	void RaiseHeaterFault(const char *format, ...) noexcept;
 
-	PwmPort port;											// The port that drives the heater
+	PwmPort ports[MaxPortsPerHeater];						// The port(s) that drive the heater
 	float temperature;										// The current temperature
 	float previousTemperatures[NumPreviousTemperatures]; 	// The temperatures of the previous NumDerivativeSamples measurements, used for calculating the derivative
 	size_t previousTemperatureIndex;						// Which slot in previousTemperature we fill in next
