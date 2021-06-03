@@ -77,6 +77,7 @@ enum class StopPrintReason
 
 enum class PauseState : uint8_t
 {
+	// Do not change the order of these! We rely on notPaused < pausing < { paused, resuming}
 	notPaused = 0,
 	pausing,
 	paused,
@@ -395,10 +396,10 @@ private:
 	void DisableDrives() noexcept;													// Turn the motors off
 	bool SendConfigToLine();														// Deal with M503
 
-	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply);				// Set/report offsets
+	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Set/report offsets
 
 #if SUPPORT_WORKPLACE_COORDINATES
-	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates
+	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute) THROWS(GCodeException);	// Set workspace coordinates
 # if HAS_MASS_STORAGE
 	bool WriteWorkplaceCoordinates(FileStore *f) const noexcept;
 # endif
@@ -410,7 +411,7 @@ private:
 																				// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const StringRef& reply) const noexcept;		// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
-	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const;			// Check whether we need to report temperatures or status
+	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;		// Restore user position from a restore point
 
@@ -421,8 +422,8 @@ private:
 	float GetCurrentToolOffset(size_t axis) const noexcept;						// Get an axis offset of the current tool
 
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments
-	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);			// Load the specified filament into a tool
-	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		// Unload the current filament from a tool
+	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Load the specified filament into a tool
+	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept; // Change microstepping on the specified drive
 	void CheckTriggers() noexcept;												// Check for and execute triggers
 	void CheckFilament() noexcept;												// Check for and respond to filament errors
@@ -441,7 +442,7 @@ private:
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE
-	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply);			// Load the height map from file
+	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the height map from file
 	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;	// Save the height map to the specified file
 	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;	// Save the height map to the file specified by P parameter
 #endif
@@ -452,16 +453,16 @@ private:
 	void InitialiseTaps(bool fastThenSlow) noexcept;								// Set up to do the first of a possibly multi-tap probe
 	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
 
-	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply);		// Handle M581
-	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply);			// Handle M582
-	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
-	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
-	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
+	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
+	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
+	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
+	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
+	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
-	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
+	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile) THROWS(GCodeException);	// Handle M37 to simulate a whole file
+	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode) THROWS(GCodeException);		// Handle M37 to change the simulation mode
 #endif
-	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply);			// Handle M577
+	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 
 #if HAS_MASS_STORAGE
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept; // Write the config-override file

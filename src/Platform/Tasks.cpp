@@ -11,6 +11,7 @@
 #include <Cache.h>
 #include <Platform/TaskPriorities.h>
 #include <Hardware/SoftwareReset.h>
+#include <Hardware/NonVolatileMemory.h>
 #include <Storage/CRC32.h>
 #include <Movement/StepTimer.h>
 
@@ -100,6 +101,31 @@ extern "C" void ReleaseMallocMutex() noexcept
 	{
 		mallocMutex.Release();
 	}
+}
+
+// Get a 4-byte aligned NonVolatileMemory buffer suitable for the crash handler to use for reading/writing flash memory.
+// We don't want to use a static buffer because that is wasteful of RAM, given that only the crash handler uses it, we have interrupts disabled while we use it,
+// and we reset immediately afterwards.
+// Instead we use either the bottom or top of the main task stack.
+// Parameter 'stk' is the stack we are interested in, which we must not overwrite. The caller is either using the same stack a little lower, or the exception stack.
+void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
+{
+	constexpr size_t stackAllowance = 128;
+	static_assert((sizeof(NonVolatileMemory) & 3) == 0);
+	static_assert(MainTaskStackWords * 4 >= 2 * sizeof(NonVolatileMemory) + stackAllowance + 4);
+	const char * const cStack = reinterpret_cast<const char*>(stk);
+
+	// See if we can use the bottom of the main task stack
+	char *ret = (char *)&mainTask + sizeof(TaskBase);
+	if (cStack > ret + (sizeof(NonVolatileMemory) + stackAllowance + 4))	// allow space for the buffer + 128b in case we are on that stack
+	{
+		ret += 4;															// the +4 is so that we leave the stack marker alone in case the main task raised the exception
+	}
+	else
+	{
+		ret += (MainTaskStackWords * 4) - sizeof(NonVolatileMemory);		// use the top area instead
+	}
+	return ret;
 }
 
 // Application entry point
@@ -199,6 +225,7 @@ extern "C" void ReleaseMallocMutex() noexcept
 	filamentsMutex.Create("Filaments");
 	mainTask.Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
 
+	StepTimer::Init();				// initialise the step pulse timer now because we use it for measuring task CPU usage
 	vTaskStartScheduler();			// doesn't return
 	for (;;) { }					// keep gcc happy
 }

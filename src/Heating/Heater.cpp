@@ -38,6 +38,7 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Heater members
 	{ "active",		OBJECT_MODEL_FUNC(self->GetActiveTemperature(), 1), 									ObjectModelEntryFlags::live },
+	{ "avgPwm",		OBJECT_MODEL_FUNC(self->GetAveragePWM(), 2), 											ObjectModelEntryFlags::live },
 	{ "current",	OBJECT_MODEL_FUNC(self->GetTemperature(), 1), 											ObjectModelEntryFlags::live },
 	{ "max",		OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
 	{ "min",		OBJECT_MODEL_FUNC(self->GetLowestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
@@ -55,7 +56,7 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 										self->monitors[context.GetLastIndex()].GetTemperatureLimit(), 1),	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 9, 3 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 10, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
@@ -378,9 +379,21 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 {
 	const float hRate = (usingFans) ? (fanOffParams.heatingRate + fanOnParams.heatingRate) * 0.5 : fanOffParams.heatingRate;
 	const float deadTime = (usingFans) ? (fanOffParams.deadTime + fanOnParams.deadTime) * 0.5 : fanOffParams.deadTime;
-	const float fanOnCoolingRate = (usingFans)
-										? fanOffParams.coolingRate + (fanOnParams.coolingRate - fanOffParams.coolingRate)/tuningFanPwm
-											: fanOffParams.coolingRate;
+
+	float fanOnCoolingRate = fanOffParams.coolingRate;
+	if (usingFans)
+	{
+		// Sometimes the print cooling fan makes no difference to the cooling rate. The SetModel call will fail if the rate with fan on is lower than the rate with fan off.
+		if (fanOnParams.coolingRate > fanOffParams.coolingRate)
+		{
+			fanOnCoolingRate = fanOffParams.coolingRate + (fanOnParams.coolingRate - fanOffParams.coolingRate)/tuningFanPwm;
+		}
+		else
+		{
+			reprap.GetPlatform().Message(WarningMessage, "Turning on the print cooling fan did not increase hot end cooling. Check that the correct fan has been configured.\n");
+		}
+	}
+
 	String<StringLength256> str;
 	const GCodeResult rslt = SetModel(	hRate,
 										fanOffParams.coolingRate, fanOnCoolingRate,
