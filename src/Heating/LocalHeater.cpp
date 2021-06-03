@@ -68,16 +68,26 @@ void LocalHeater::ResetHeater() noexcept
 // Configure the heater port and the sensor number
 GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
 {
-	PinAccess access[MaxPortsPerHeater];
-	IoPort* portAddrs[MaxPortsPerHeater];
-	for (size_t i = 0; i < MaxPortsPerHeater; ++i)
+	if constexpr (MaxPortsPerHeater == 1)
 	{
-		access[i] = PinAccess::pwm;
-		portAddrs[i] = &ports[i];
+		if (!ports[0].AssignPort(portName, reply, PinUsedBy::heater, PinAccess::pwm))
+		{
+			return GCodeResult::error;
+		}
 	}
-	if (IoPort::AssignPorts(portName, reply, PinUsedBy::heater, MaxPortsPerHeater, portAddrs, access) == 0)
+	else
 	{
-		return GCodeResult::error;
+		PinAccess access[MaxPortsPerHeater];
+		IoPort* portAddrs[MaxPortsPerHeater];
+		for (size_t i = 0; i < MaxPortsPerHeater; ++i)
+		{
+			access[i] = PinAccess::pwm;
+			portAddrs[i] = &ports[i];
+		}
+		if (IoPort::AssignPorts(portName, reply, PinUsedBy::heater, MaxPortsPerHeater, portAddrs, access) == 0)
+		{
+			return GCodeResult::error;
+		}
 	}
 
 	for (auto& port : ports)
@@ -106,11 +116,15 @@ GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 {
 	reply.printf("Heater %u", GetHeaterNumber());
 	ports[0].AppendDetails(reply);
-	for (size_t i = 1; i < MaxPortsPerHeater && ports[i].IsValid(); ++i)
+	if constexpr (MaxPortsPerHeater > 1)
 	{
-		reply.cat('+');
-		ports[i].AppendDetails(reply);
+		for (size_t i = 1; i < MaxPortsPerHeater && ports[i].IsValid(); ++i)
+		{
+			reply.cat('+');
+			ports[i].AppendDetails(reply);
+		}
 	}
+
 	if (GetSensorNumber() >= 0)
 	{
 		reply.catf(", sensor %d", GetSensorNumber());
