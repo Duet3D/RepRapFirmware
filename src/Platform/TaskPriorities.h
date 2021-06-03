@@ -13,6 +13,9 @@ namespace TaskPriority
 {
 	constexpr int IdlePriority = 0;
 	constexpr int SpinPriority = 1;							// priority for tasks that rarely block
+#if HAS_LINUX_INTERFACE
+	constexpr int SbcPriority = 1;							// priority for SBC task
+#endif
 #if defined(LPC_NETWORKING)
     constexpr int TcpPriority  = 2;
     //EMAC priority = 3 defined in FreeRTOSIPConfig.h
