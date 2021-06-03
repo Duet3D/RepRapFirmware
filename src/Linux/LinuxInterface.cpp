@@ -69,7 +69,7 @@ void LinuxInterface::Init() noexcept
 
 	transfer.Init();
 	sbcTask = new Task<SBCTaskStackWords>;
-	sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SpinPriority);
+	sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
 	iapRamAvailable = &_estack - Tasks::GetHeapTop();
 }
 
