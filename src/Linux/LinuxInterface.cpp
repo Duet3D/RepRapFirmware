@@ -47,7 +47,7 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 	reprap.GetLinuxInterface().TaskLoop();
 }
 
-LinuxInterface::LinuxInterface() noexcept : isConnected(false), numDisconnects(0),
+LinuxInterface::LinuxInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0),
 	reportPause(false), reportPauseWritten(false), printStarted(false), printStopped(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true),
 	iapWritePointer(IAP_IMAGE_START), waitingForFileChunk(false)
@@ -897,6 +897,10 @@ void LinuxInterface::Init() noexcept
 		{
 			isConnected = false;
 			numDisconnects++;
+			if (!hadReset)
+			{
+				numTimeouts++;
+			}
 			reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to Linux\n");
 
 			rxPointer = txPointer = txEnd = 0;
@@ -963,7 +967,7 @@ void LinuxInterface::Diagnostics(MessageType mtype) noexcept
 {
 	reprap.GetPlatform().Message(mtype, "=== SBC interface ===\n");
 	transfer.Diagnostics(mtype);
-	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 ", IAP RAM available 0x%05" PRIx32 "\n", numDisconnects, iapRamAvailable);
+	reprap.GetPlatform().MessageF(mtype, "Disconnects: %" PRIu32 ", timeouts: %" PRIu32 ", IAP RAM available 0x%05" PRIx32 "\n", numDisconnects, numTimeouts, iapRamAvailable);
 	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d\n", (int)rxPointer, (int)txPointer, (int)txEnd);
 #ifdef TRACK_FILE_CODES
 	reprap.GetPlatform().MessageF(mtype, "File codes read/handled: %d/%d, file macros open/closing: %d %d\n", (int)fileCodesRead, (int)fileCodesHandled, (int)fileMacrosRunning, (int)fileMacrosClosing);
