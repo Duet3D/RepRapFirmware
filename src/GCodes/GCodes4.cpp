@@ -262,14 +262,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		else
 		{
 			String<StringLength20> nextHomingFileName;
-			AxesBitmap mustHomeFirst = reprap.GetMove().GetKinematics().GetHomingFileName(toBeHomed, axesHomed, numVisibleAxes, nextHomingFileName.GetRef());
+			const AxesBitmap mustHomeFirst = reprap.GetMove().GetKinematics().GetHomingFileName(toBeHomed, axesHomed, numVisibleAxes, nextHomingFileName.GetRef());
 			if (mustHomeFirst.IsNonEmpty())
 			{
 				// Error, can't home this axes
-				reply.copy("Must home these axes:");
+				reply.copy("Must home axes [");
 				AppendAxes(reply, mustHomeFirst);
-				reply.cat(" before homing these:");
+				reply.cat("] before homing [");
 				AppendAxes(reply, toBeHomed);
+				reply.cat(']');
 				stateMachineResult = GCodeResult::error;
 				toBeHomed.Clear();
 				gb.SetState(GCodeState::normal);

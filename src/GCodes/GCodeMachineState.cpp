@@ -189,6 +189,17 @@ void GCodeMachineState::RetrieveStateMachineResult(GCodeResult& rslt, const Stri
 	}
 }
 
+GCodeMachineState *GCodeMachineState::Pop() const noexcept
+{
+	GCodeMachineState * const rslt = GetPrevious();
+	if (errorMessage != nullptr)
+	{
+		rslt->errorMessage = errorMessage;
+		rslt->stateMachineResult = stateMachineResult;
+	}
+	return rslt;
+}
+
 void GCodeMachineState::SetState(GCodeState newState) noexcept
 {
 	if (state == GCodeState::normal && newState != GCodeState::normal)

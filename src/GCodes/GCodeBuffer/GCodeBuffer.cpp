@@ -771,7 +771,7 @@ bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 		return false;
 	}
 
-	machineState = ms->GetPrevious();
+	machineState = ms->Pop();						// get the previous state and copy down any error message
 	delete ms;
 
 	return true;
