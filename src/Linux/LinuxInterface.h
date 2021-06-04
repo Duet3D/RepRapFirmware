@@ -57,7 +57,7 @@ public:
 private:
 	DataTransfer transfer;
 	bool isConnected;
-	uint32_t numDisconnects;
+	uint32_t numDisconnects, numTimeouts;
 
 	GCodeFileInfo fileInfo;
 	FilePosition pauseFilePosition;
