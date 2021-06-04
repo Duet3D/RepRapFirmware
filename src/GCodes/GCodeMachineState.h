@@ -191,6 +191,7 @@ public:
 	inline void AdvanceState() noexcept { state = static_cast<GCodeState>(static_cast<uint8_t>(state) + 1); }
 
 	GCodeMachineState *GetPrevious() const noexcept { return previous; }
+	GCodeMachineState *Pop() const noexcept;
 	uint8_t GetBlockNesting() const noexcept { return blockNesting; }
 
 	VariableSet variables;											// local variables and parameters

@@ -50,7 +50,7 @@ Licence: GPL
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-constexpr uint32_t HeaterTaskStackWords = 440;			// task stack size in dwords, must be large enough for auto tuning and a local CAN buffer
+constexpr uint32_t HeaterTaskStackWords = 470;			// task stack size in dwords, must be large enough for auto tuning and a local CAN buffer
 #else
 constexpr uint32_t HeaterTaskStackWords = 420;			// task stack size in dwords, must be large enough for auto tuning. 400 was not quite enough for one Duet WiFi user running 3.2.2.
 #endif
