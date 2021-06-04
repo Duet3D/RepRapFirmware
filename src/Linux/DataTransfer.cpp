@@ -393,7 +393,7 @@ alignas(4) __nocache char DataTransfer::rxBuffer[LinuxTransferBufferSize];
 alignas(4) __nocache char DataTransfer::txBuffer[LinuxTransferBufferSize];
 #endif
 
-DataTransfer::DataTransfer() noexcept : state(SpiState::ExchangingData), lastTransferTime(0), lastTransferNumber(0), failedTransfers(0),
+DataTransfer::DataTransfer() noexcept : state(SpiState::ExchangingData), lastTransferTime(0), lastTransferNumber(0), failedTransfers(0), checksumErrors(0),
 #if SAME5x
 	rxBuffer(nullptr), txBuffer(nullptr),
 #endif
@@ -487,7 +487,7 @@ void DataTransfer::SetSBCTask(TaskHandle handle) noexcept
 
 void DataTransfer::Diagnostics(MessageType mtype) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "State: %d, failed transfers: %u\n", (int)state, failedTransfers);
+	reprap.GetPlatform().MessageF(mtype, "State: %d, failed transfers: %u, checksum errors: %u\n", (int)state, failedTransfers, checksumErrors);
 	reprap.GetPlatform().MessageF(mtype, "Last transfer: %" PRIu32 "ms ago\n", millis() - lastTransferTime);
 	reprap.GetPlatform().MessageF(mtype, "RX/TX seq numbers: %d/%d\n", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
 	reprap.GetPlatform().MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
@@ -727,7 +727,6 @@ void DataTransfer::ResetTransfer(bool ownRequest) noexcept
 	{
 		debugPrintf(ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Linux request\n");
 	}
-	failedTransfers++;
 
 	if (ownRequest)
 	{
@@ -844,6 +843,7 @@ bool DataTransfer::IsReady() noexcept
 			else if (rxResponse == TransferResponse::BadHeaderChecksum || txResponse == TransferResponse::BadHeaderChecksum)
 			{
 				// Failed to exchange header, restart the full transfer
+				checksumErrors++;
 				ExchangeHeader();
 			}
 			else
@@ -863,6 +863,7 @@ bool DataTransfer::IsReady() noexcept
 				{
 					debugPrintf("Resetting state due to Linux request\n");
 				}
+				failedTransfers++;
 				ExchangeHeader();
 				break;
 			}
@@ -902,6 +903,7 @@ bool DataTransfer::IsReady() noexcept
 			else if (rxResponse == TransferResponse::BadDataChecksum || txResponse == TransferResponse::BadDataChecksum)
 			{
 				// Resend the data if a checksum error occurred
+				checksumErrors++;
 				ExchangeData();
 			}
 			else
@@ -928,6 +930,7 @@ bool DataTransfer::IsReady() noexcept
 		// Reset failed transfers automatically after a certain period of time
 		transferReadyHigh = false;
 		disable_spi();
+		failedTransfers++;
 		ExchangeHeader();
 	}
 	else if (!IsConnected() && lastTransferNumber != 0)
@@ -939,7 +942,8 @@ bool DataTransfer::IsReady() noexcept
 		lastTransferNumber = 0;
 		rxHeader.sequenceNumber = 0;
 		txHeader.sequenceNumber = 0;
-		txPointer = 0;
+		rxPointer = txPointer = 0;
+		packetId = 0;
 
 		// Kick off a new transfer
 		if (transferReadyHigh)

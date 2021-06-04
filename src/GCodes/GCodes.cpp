@@ -1712,7 +1712,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 						{
 							extrusionAmount *= volumetricExtrusionFactors[extruder];
 						}
-						if (moveBuffer.moveType == 0 && !gb.IsDoingFileMacro())
+						if (eDrive == 0 && moveBuffer.moveType == 0 && !gb.IsDoingFileMacro())
 						{
 							rawExtruderTotalByDrive[extruder] += extrusionAmount;
 						}
@@ -1751,7 +1751,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 								extrusionAmount *= volumetricExtrusionFactors[extruder];
 							}
 
-							if (moveBuffer.moveType == 0 && !gb.IsDoingFileMacro())
+							if (eDrive < mc && moveBuffer.moveType == 0 && !gb.IsDoingFileMacro())
 							{
 								rawExtruderTotalByDrive[extruder] += extrusionAmount;
 								rawExtruderTotal += extrusionAmount;

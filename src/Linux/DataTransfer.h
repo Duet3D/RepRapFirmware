@@ -87,7 +87,7 @@ private:
 	// Transfer properties
 	uint32_t lastTransferTime;
 	uint16_t lastTransferNumber;
-	unsigned int failedTransfers;
+	unsigned int failedTransfers, checksumErrors;
 
 	// Transfer buffers
 
@@ -169,7 +169,6 @@ inline size_t DataTransfer::AddPadding(size_t length) const noexcept
 	size_t extraBytes = (length & 3);
 	return (extraBytes == 0) ? length : length + 4 - extraBytes;
 }
-
 #endif	// HAS_LINUX_INTERFACE
 
 #endif /* SRC_LINUX_DATATRANSFER_H_ */
