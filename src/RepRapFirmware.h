@@ -508,10 +508,10 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 // ISRs with better (numerically lower) priorities than this value cannot make FreeRTOS calls, but those interrupts wont be disabled even in FreeRTOS critical sections.
 
 #if __NVIC_PRIO_BITS == 3
-// We have only 8 interrupt priority levels on the SAME70
+// We have only 8 interrupt priority levels on the SAME70 and SAME5x
 // Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
-const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
+const uint32_t NvicPriorityWatchdog = 0;			// the secondary watchdog has the highest priority
 
 #if SAME5x
 const NvicPriority NvicPriorityAuxUartRx = 1;		// UART used to receive data from PanelDue or other serial input
@@ -521,34 +521,34 @@ const NvicPriority NvicPriorityWiFiUartTx = 3;		// the SAME5x driver makes FreeR
 const NvicPriority NvicPriorityDriverDiag = 4;
 const NvicPriority NvicPriorityAdc = 4;
 #else
-const NvicPriority NvicPriorityAuxUart = 1;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
-const NvicPriority NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
+const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const NvicPriority NvicPriorityWiFiUart = 3;		// UART used to receive debug data from the WiFi module
 #endif
 
-const NvicPriority NvicPriorityCan = 3;				// CAN interface
-const NvicPriority NvicPriorityPins = 3;			// priority for GPIO pin interrupts - filament sensors must be higher than step
-const NvicPriority NvicPriorityDriversSerialTMC = 3; // USART or UART used to control and monitor the smart drivers
-const NvicPriority NvicPriorityStep = 4;			// step interrupt is next highest, it can preempt most other interrupts
-const NvicPriority NvicPriorityUSB = 5;				// USB interrupt
-const NvicPriority NvicPriorityHSMCI = 5;			// HSMCI command complete interrupt
+const NvicPriority NvicPriorityCan = 4;				// CAN interface
+const NvicPriority NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
+const NvicPriority NvicPriorityDriversSerialTMC = 4; // USART or UART used to control and monitor the smart drivers
+const NvicPriority NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityUSB = 6;				// USB interrupt
+const NvicPriority NvicPriorityHSMCI = 6;			// HSMCI command complete interrupt
 
 # if HAS_LWIP_NETWORKING
-const NvicPriority NvicPriorityNetworkTick = 6;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
-const NvicPriority NvicPriorityEthernet = 6;		// priority for Ethernet interface
+const NvicPriority NvicPriorityNetworkTick = 7;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
+const NvicPriority NvicPriorityEthernet = 7;		// priority for Ethernet interface
 # endif
 
-const NvicPriority NvicPriorityDMA = 6;				// end-of-DMA interrupt used by TMC drivers and HSMCI
-const NvicPriority NvicPrioritySpi = 6;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+const NvicPriority NvicPriorityDMA = 7;				// end-of-DMA interrupt used by TMC drivers and HSMCI
+const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 
 #elif __NVIC_PRIO_BITS >= 4
 // We have at least 16 priority levels
-// Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
+// Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
 # if SAM4E || defined(__LPC17xx__)
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 
-const NvicPriority NvicPriorityAuxUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 
 # if defined(__LPC17xx__)
 constexpr NvicPriority NvicPriorityTimerPWM = 4;
