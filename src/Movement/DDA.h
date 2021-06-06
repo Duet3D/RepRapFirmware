@@ -65,6 +65,7 @@ class DDA
 {
 	friend class DriveMovement;
 	friend class AxisShaper;
+	friend class ExtruderShaper;
 	friend class BasicPrepParams;
 
 public:
