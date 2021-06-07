@@ -1425,17 +1425,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 			const size_t drive = additionalAxisMotorsToEnable.LowestSetBit();
 			additionalAxisMotorsToEnable.ClearBit(drive);
 			platform.EnableDrivers(drive);
-#if SUPPORT_CAN_EXPANSION
-			const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
-			for (size_t i = 0; i < config.numDrivers; ++i)
-			{
-				const DriverId driver = config.driverNumbers[i];
-				if (driver.IsRemote())
-				{
-					CanMotion::AddMovement(params, driver, 0, false);
-				}
-			}
-#endif
 		}
 
 		const DDAState st = prev->state;
