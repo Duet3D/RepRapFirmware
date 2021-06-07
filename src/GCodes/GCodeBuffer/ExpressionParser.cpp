@@ -562,13 +562,23 @@ uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 
 void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
 {
-	if (val1.GetType() == TypeCode::Float)
+	// First convert any Uint64 or Uint32 operands to float
+	if (val1.GetType() == TypeCode::Uint64 || val1.GetType() == TypeCode::Uint32)
+	{
+		ConvertToFloat(val1, evaluate);
+	}
+	if (val2.GetType() == TypeCode::Uint64 || val2.GetType() == TypeCode::Uint32)
 	{
 		ConvertToFloat(val2, evaluate);
 	}
+
+	if (val1.GetType() == TypeCode::Float)
+	{
+		ConvertToFloat(val2, evaluate);						// both are now float
+	}
 	else if (val2.GetType() == TypeCode::Float)
 	{
-		ConvertToFloat(val1, evaluate);
+		ConvertToFloat(val1, evaluate);						// both are now float
 	}
 	else if (val1.GetType() != TypeCode::Int32 || val2.GetType() != TypeCode::Int32)
 	{
@@ -589,6 +599,16 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 // Balance types for a comparison operator
 void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException)
 {
+	// First convert any Uint64 or Uint32 operands to float
+	if (val1.GetType() == TypeCode::Uint64 || val1.GetType() == TypeCode::Uint32)
+	{
+		ConvertToFloat(val1, evaluate);
+	}
+	if (val2.GetType() == TypeCode::Uint64 || val2.GetType() == TypeCode::Uint32)
+	{
+		ConvertToFloat(val2, evaluate);
+	}
+
 	if ((val1.GetType() == val2.GetType()) || (val1.IsStringType() && val2.IsStringType()))			// handle the common case first
 	{
 		// nothing to do
@@ -620,32 +640,22 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 	}
 }
 
-void ExpressionParser::EnsureNumeric(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
-{
-	switch (val.GetType())
-	{
-	case TypeCode::Uint32:
-		val.SetType(TypeCode::Int32);
-		val.iVal = val.uVal;
-		break;
-
-	case TypeCode::Int32:
-	case TypeCode::Float:
-		break;
-
-	default:
-		if (evaluate)
-		{
-			ThrowParseException("expected numeric operand");
-		}
-		val.Set((int32_t)0);
-	}
-}
-
 void ExpressionParser::ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
 {
 	switch (val.GetType())
 	{
+	case TypeCode::Uint32:
+		val.SetType(TypeCode::Float);
+		val.fVal = (float)val.uVal;
+		val.param = 1;
+		break;
+
+	case TypeCode::Uint64:
+		val.SetType(TypeCode::Float);
+		val.fVal = (float)val.Get56BitValue();
+		val.param = 1;
+		break;
+
 	case TypeCode::Int32:
 		val.fVal = (float)val.iVal;
 		val.SetType(TypeCode::Float);
