@@ -54,12 +54,7 @@ public:
 	bool CalcNextStepTime(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
-	bool PrepareExtruder(DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange) noexcept SPEED_CRITICAL;
-	bool PrepareExtruderCommon(DDA& dda, const PrepParams& params, float effectiveStepsPerMm, int32_t netSteps, const ExtruderShaper& shaper) noexcept SPEED_CRITICAL;
-
-#if SUPPORT_REMOTE_COMMANDS
-	bool PrepareRemoteExtruder(DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
-#endif
+	bool PrepareExtruder(const DDA& dda, MoveSegment *segs) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
 	int32_t GetNetStepsLeft() const noexcept;

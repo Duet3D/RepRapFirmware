@@ -15,7 +15,7 @@ class MoveSegment;
 class ExtruderShaper
 {
 public:
-	ExtruderShaper() : k(0.0) { }
+	ExtruderShaper() : k(0.0), extrusionPending(0.0), lastSpeed(0.0) { }
 
 	// Temporary functions until we support more sophisticated pressure advance
 	float GetK() const noexcept { return k; }
@@ -28,7 +28,9 @@ private:
 	MoveSegment *GetDecelerationSegments(const DDA& dda, const BasicPrepParams& params) const noexcept;
 	MoveSegment *FinishSegments(const DDA& dda, const BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
 
-	float k;
+	float k;								// the pressure advance constant
+	float extrusionPending;					// extrusion we have been asked to do but haven't because it is less than one microstep
+	float lastSpeed;						// the speed we were mocintg at at the end of the last extrusion
 };
 
 #endif /* SRC_MOVEMENT_EXTRUDERSHAPER_H_ */

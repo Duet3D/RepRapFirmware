@@ -12,6 +12,7 @@
 #include "DriveMovement.h"
 #include "StepTimer.h"
 #include "MoveSegment.h"
+#include "InputShaperPlan.h"
 #include <Platform/Tasks.h>
 #include <GCodes/GCodes.h>			// for class RawMove
 
@@ -48,6 +49,7 @@ struct PrepParams : public BasicPrepParams
 #if SUPPORT_CAN_EXPANSION
 	// Parameters used by CAN expansion
 	float initialSpeedFraction, finalSpeedFraction;
+	InputShaperPlan shapingPlan;
 #endif
 
 	// Parameters used only for delta moves
@@ -100,7 +102,7 @@ public:
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	void Complete() noexcept { state = completed; }
 	bool Free() noexcept;
-	void Prepare(uint8_t simMode, float extrusionPending[]) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
+	void Prepare(uint8_t simMode) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
 	bool HasStepError() const noexcept;
 	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
@@ -119,7 +121,7 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
+	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
 #endif
 
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates

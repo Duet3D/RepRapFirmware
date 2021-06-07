@@ -403,8 +403,8 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
 				return;							// no reply needed
 
-			case CanMessageType::movementLinear:
-				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
+			case CanMessageType::movementLinearShaped:
+				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
 				return;							// no reply needed
 
 			case CanMessageType::returnInfo:

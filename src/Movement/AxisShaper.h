@@ -13,6 +13,7 @@
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
+#include "InputShaperPlan.h"
 
 // These names must be in alphabetical order and lowercase
 NamedEnum(InputShaperType, uint8_t,
@@ -30,22 +31,6 @@ NamedEnum(InputShaperType, uint8_t,
 class DDA;
 class BasicPrepParams;
 class MoveSegment;
-
-union InputShaperPlan
-{
-	struct
-	{
-		uint32_t shapeAccelStart : 1,
-				 shapeAccelEnd : 1,
-				 shapeDecelStart : 1,
-				 shapeDecelEnd : 1,
-				 accelSegments : 4,
-				 decelSegments : 4;
-	};
-	uint32_t all;
-
-	InputShaperPlan() noexcept : all(0) { }
-};
 
 class AxisShaper INHERIT_OBJECT_MODEL
 {

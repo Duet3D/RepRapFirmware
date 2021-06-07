@@ -77,7 +77,7 @@ void DriveMovement::NewCartesianSegment(float startFraction, float startTime) no
 	}
 
 	// Work out the movement limit in steps
-	phaseStepLimit =  (currentSegment->IsLast()) ? totalSteps + 1 : (currentSegment->GetDistanceLimit() * totalSteps) + 1;
+	phaseStepLimit = (currentSegment->IsLast()) ? totalSteps + 1 : (currentSegment->GetDistanceLimit() * totalSteps) + 1;
 }
 
 void DriveMovement::NewExtruderSegment(const DDA& dda, float startFraction, float startTime) noexcept
@@ -154,7 +154,10 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 
 	currentSegment = dda.segments;
 	phaseStartTime = 0.0;
-	NewCartesianSegment(0.0, 0.0);
+	do
+	{
+		NewCartesianSegment(0.0, 0.0);
+	} while (phaseStepLimit == 0);
 
 	// Prepare for the first step
 	nextStep = 0;
@@ -256,176 +259,9 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 }
 
 // Prepare this DM for an extruder move, returning true if there are steps to do
-bool DriveMovement::PrepareExtruder(DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange) noexcept
+bool DriveMovement::PrepareExtruder(const DDA& dda, MoveSegment *segs) noexcept
 {
-	// Calculate the requested extrusion amount and a few other things
-	float dv = dda.directionVector[drive];
-	float extrusionRequired = dda.totalDistance * dv;
-	const size_t extruder = LogicalDriveToExtruder(drive);
-
-#if SUPPORT_NONLINEAR_EXTRUSION
-	// Add the nonlinear extrusion correction to totalExtrusion
-	if (dda.flags.isPrintingMove)
-	{
-		float a, b, limit;
-		if (reprap.GetPlatform().GetExtrusionCoefficients(extruder, a, b, limit))
-		{
-			const float averageExtrusionSpeed = (extrusionRequired * StepTimer::StepClockRate)/dda.clocksNeeded;
-			const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
-			extrusionRequired *= factor;
-		}
-	}
-#endif
-
-	// Add on any fractional extrusion pending from the previous move
-	extrusionRequired += extrusionPending;
-	dv = extrusionRequired/dda.totalDistance;
-	direction = (extrusionRequired >= 0.0);
-
-	float compensationTime;
-
-	if (dda.flags.usePressureAdvance && direction)
-	{
-		// Calculate the pressure advance parameters
-		compensationTime = reprap.GetMove().GetPressureAdvance(extruder);
-
-		// Calculate the net total extrusion to allow for compensation. It may be negative.
-		extrusionRequired += (dda.endSpeed - dda.startSpeed) * compensationTime * dv;
-	}
-	else
-	{
-		compensationTime = 0.0;
-	}
-
-	const float rawStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-	const float effectiveStepsPerMm = fabsf(dv) * rawStepsPerMm;
-	const int32_t netSteps = int32_t(extrusionRequired * rawStepsPerMm);
-	extrusionPending = extrusionRequired - (float)netSteps/rawStepsPerMm;
-
-	return PrepareExtruderCommon(dda, params, effectiveStepsPerMm, netSteps, reprap.GetMove().GetExtruderShaper(extruder));
-}
-
-#if SUPPORT_REMOTE_COMMANDS
-
-// Prepare this DM for an extruder move. The caller has already checked that pressure advance is enabled.
-bool DriveMovement::PrepareRemoteExtruder(DDA& dda, const PrepParams& params) noexcept
-{
-	// Calculate the pressure advance parameters
-	const ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(drive);
-	const float compensationTime = shaper.GetK();
-
-	// Recalculate the net total step count to allow for compensation. It may be negative.
-	const float compensationDistance = (dda.endSpeed - dda.startSpeed) * compensationTime;
-	const int32_t netSteps = (int32_t)((1.0 + compensationDistance) * totalSteps);
-
-	const float effectiveStepsPerMm = 1.0/totalSteps;
-	return PrepareExtruderCommon(dda, params, effectiveStepsPerMm, netSteps, shaper);
-}
-
-#endif
-
-// Common code for preparing extruder moves generated locally and those received via CAN
-bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, float effectiveStepsPerMm, int32_t netSteps, const ExtruderShaper& shaper) noexcept
-{
-#if 0
-	return PrepareCartesianAxis(dda, params);
-#else
-	// Use the pressure advance shaper to compute the segments
-	currentSegment = shaper.GetSegments(dda, params);
-
-#if 0
-	//TODO compute everything in step clocks?
-	const float compensationClocks = compensationTime * StepTimer::StepClockRate;
-	const float accelExtraDistance = compensationTime * dda.acceleration * params.accelClocks;
-	const float totalAccelDistance = params.accelDistance + accelExtraDistance;
-	float actualTotalDistance = params.decelStartDistance + accelExtraDistance;			// this starts off being the decel start distance and ends up being the total distance
-
-	// Deceleration phase
-	bool hasReversePhase;
-	MoveSegment *segs = nullptr;
-	if (params.decelDistance > 0.0)
-	{
-		// If we are using pressure advance then there may be a reverse phase. The motion constants are the same for both forward and reverse phases.
-		// If there is a reverse phase then the stored distance limit is the point at which we reverse. The reverse phase will the be executed until the step count is correct.
-		const float decelCompensationSpeedReduction = dda.deceleration * compensationTime;
-		float distanceLimit;
-		reverseStartDistance = fsquare(dda.topSpeed - decelCompensationSpeedReduction)/(2.0 * dda.deceleration) + actualTotalDistance;
-		hasReversePhase = dda.endSpeed < decelCompensationSpeedReduction;
-		bool hasForwardPhase = dda.topSpeed > decelCompensationSpeedReduction;
-		if (hasForwardPhase && hasReversePhase)
-		{
-			const float forwardDistance = fsquare(dda.topSpeed - decelCompensationSpeedReduction)/(2.0 * dda.deceleration);
-			const float reverseDistance = fsquare(decelCompensationSpeedReduction - dda.endSpeed)/(2.0 * dda.deceleration);
-			distanceLimit = actualTotalDistance + forwardDistance;
-			actualTotalDistance = distanceLimit + reverseDistance;
-		}
-		else if (hasForwardPhase)
-		{
-			const float forwardDistance = (fsquare(decelCompensationSpeedReduction - dda.topSpeed) - fsquare(decelCompensationSpeedReduction - dda.endSpeed))/(2.0 * dda.deceleration);
-			distanceLimit = actualTotalDistance + forwardDistance;
-			actualTotalDistance = distanceLimit;
-		}
-		else if (hasReversePhase)
-		{
-			const float reverseDistance = (fsquare(decelCompensationSpeedReduction - dda.endSpeed) - fsquare(decelCompensationSpeedReduction - dda.topSpeed))/(2.0 * dda.deceleration);
-			distanceLimit = actualTotalDistance;
-			actualTotalDistance += reverseDistance;
-		}
-
-		const float uDivDminusP = (dda.topSpeed * StepTimer::StepClockRate)/dda.deceleration - compensationClocks;
-		segs = MoveSegment::Allocate(nullptr);
-		segs->SetNonLinear(actualTotalDistance/dda.totalDistance,
-							reverseStartDistance,
-								(2.0 * actualTotalDistance)/(dda.deceleration * StepTimer::StepClockRate),
-								params.accelClocks + params.steadyClocks + uDivDminusP);
-		segs->SetLast();
-	}
-
-	// Steady phase
-	if (params.steadyClocks > 0.0)
-	{
-		const float ts = dda.topSpeed * StepTimer::StepClockRate;
-		MoveSegment * const oldSegs = segs;
-		segs = MoveSegment::Allocate(segs);
-		segs->SetLinear((params.decelStartDistance + accelExtraDistance)/dda.totalDistance, dda.totalDistance/ts, totalAccelDistance);
-		if (oldSegs == nullptr)
-		{
-			segs->SetLast();
-		}
-	}
-
-	// Acceleration phase
-	if (params.accelDistance > 0)
-	{
-		const float uDivAplusP = (dda.startSpeed/dda.acceleration + compensationTime) * StepTimer::StepClockRate;
-		MoveSegment * const oldSegs = segs;
-		segs = MoveSegment::Allocate(segs);
-		segs->SetNonLinear(totalAccelDistance/dda.totalDistance,
-							fsquare(uDivAplusP),
-							(2.0 * dda.totalDistance)/(dda.acceleration * StepTimer::StepClockRateSquared),
-							-uDivAplusP);
-		if (oldSegs == nullptr)
-		{
-			segs->SetLast();
-		}
-	}
-
-	// Calculate the total movement, adjusted for pressure advance
-	if (hasReversePhase)
-	{
-		const uint32_t forwardSteps = (uint32_t)(reverseStartDistance * effectiveStepsPerMm);
-		reverseStartStep = forwardSteps + 1;
-		totalSteps = 2 * forwardSteps - netSteps;
-	}
-	else
-	{
-		totalSteps = netSteps;
-		reverseStartStep = totalSteps + 1;
-	}
-
 	currentSegment = segs;
-#endif
-
 	isDelta = false;
 	usesCommonSegments = false;
 	phaseStartTime = 0.0;
@@ -438,7 +274,6 @@ bool DriveMovement::PrepareExtruderCommon(DDA& dda, const PrepParams& params, fl
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	reverseStartStep = totalSteps + 1;				// no reverse phase
 	return CalcNextStepTime(dda);
-#endif
 }
 
 void DriveMovement::DebugPrint() const noexcept
@@ -693,7 +528,9 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		}
 	}
 
-	if (stepsToLimit == 0)
+	// If there are no more steps left in this segment, skip to the next segment
+	// A shared segment may have no more steps for a particular drive, so we may need to skip more segments
+	while (stepsToLimit == 0)
 	{
 		const float startDistance = currentSegment->GetDistanceLimit();
 		phaseStartTime += currentSegment->GetSegmentTime();
@@ -708,8 +545,10 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		{
 			state = DMState::stepError;
 			stepInterval = 20000000 + nextStepTime;				// so we can tell what happened in the debug print
+			return false;
 		}
-		else if (isDelta)
+
+		if (isDelta)
 		{
 			NewDeltaSegment(dda, startDistance, phaseStartTime);
 		}
@@ -717,6 +556,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		{
 			NewCartesianSegment(startDistance, phaseStartTime);
 		}
+		stepsToLimit = phaseStepLimit - nextStep;
 
 	}
 	return true;

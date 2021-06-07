@@ -88,7 +88,6 @@ void DDARing::Init2() noexcept
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
 		extrusionAccumulators[i] = 0;
-		extrusionPending[i] = 0.0;
 	}
 	extrudersPrinting = false;
 	simulationTime = 0.0;
@@ -365,7 +364,7 @@ void DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsig
 #endif
 		  )
 	{
-		firstUnpreparedMove->Prepare(simulationMode, extrusionPending);
+		firstUnpreparedMove->Prepare(simulationMode);
 		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
 		++alreadyPrepared;
 		firstUnpreparedMove = firstUnpreparedMove->GetNext();
@@ -910,7 +909,7 @@ uint32_t DDARing::ManageLaserPower() const noexcept
 #if SUPPORT_REMOTE_COMMANDS
 
 // Add a move from the ATE to the movement queue
-void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
+void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 {
 	if (addPointer->GetState() == DDA::empty)
 	{

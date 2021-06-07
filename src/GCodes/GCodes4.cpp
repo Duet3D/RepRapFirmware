@@ -384,7 +384,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (currentTool != nullptr)
 			{
 				const float newZPos = (moveBuffer.coords[Z_AXIS] - currentTool->GetOffset(Z_AXIS));
-				if(newZPos > platform.AxisMaximum(Z_AXIS) || newZPos < platform.AxisMinimum(Z_AXIS))
+				if (newZPos > platform.AxisMaximum(Z_AXIS) || newZPos < platform.AxisMinimum(Z_AXIS))
 				{
 					gb.LatestMachineState().feedRate = toolChangeRestorePoint.feedRate;
 					doingToolChange = false;
@@ -394,8 +394,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					break;
 				}
 			}
+
 			// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
-			// Only do this if we are running as an FDM printer, because it's not appropriate for CNC machines.
 			SetMoveBufferDefaults();
 			currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
@@ -408,7 +408,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChangeComplete:
 	case GCodeState::m109ToolChangeComplete:
-		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing or the move to height to finish
+		if (LockMovementAndWaitForStandstill(gb))		// wait for the move to height to finish
 		{
 			gb.LatestMachineState().feedRate = toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool

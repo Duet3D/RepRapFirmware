@@ -87,7 +87,7 @@ public:
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue
+	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;			// add a move from the ATE to the movement queue
 #endif
 
 protected:
@@ -123,7 +123,6 @@ private:
 	unsigned int stepErrors;													// count of step errors, for diagnostics
 
 	float simulationTime;														// Print time since we started simulating
-	float extrusionPending[MaxExtruders];										// Extrusion not done due to rounding to nearest step
 	volatile int32_t extrusionAccumulators[MaxExtruders]; 						// Accumulated extruder motor steps
 	volatile uint32_t extrudersPrintingSince;									// The milliseconds clock time when extrudersPrinting was set to true
 

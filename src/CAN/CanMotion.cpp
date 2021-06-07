@@ -49,72 +49,88 @@ void CanMotion::StartMovement() noexcept
 	}
 }
 
-// This is called by DDA::Prepare for each active CAN DM in the move
-// If steps == 0 then the drivers just need to be enabled
-void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
+CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexcept
 {
-	if (canDriver.localDriver < MaxLinearDriversPerCanSlave)
+	if (canDriver.localDriver >= MaxLinearDriversPerCanSlave)
 	{
-		// Search for the correct movement buffer
-		CanMessageBuffer* buf = movementBufferList;
-		while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
-		{
-			buf = buf->next;
-		}
+		return nullptr;
+	}
 
+	CanMessageBuffer* buf = movementBufferList;
+	while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
+	{
+		buf = buf->next;
+	}
+
+	if (buf == nullptr)
+	{
+		// Allocate a new movement buffer
+		buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			// Allocate a new movement buffer
-			buf = CanMessageBuffer::Allocate();
-			if (buf == nullptr)
-			{
-				reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
-				return;		//TODO error handling
-			}
-
-			buf->next = movementBufferList;
-			movementBufferList = buf;
-
-			auto move = buf->SetupRequestMessage<CanMessageMovementLinear>(0, CanId::MasterAddress, canDriver.boardAddress);
-
-			// Common parameters
-			if (buf->next == nullptr)
-			{
-				// This is the first CAN-connected board for this movement
-				move->accelerationClocks = (uint32_t)params.accelClocks;
-				move->steadyClocks = (uint32_t)params.steadyClocks;
-				move->decelClocks = (uint32_t)params.decelClocks;
-				currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
-			}
-			else
-			{
-				// Save some maths by using the values from the previous buffer
-				move->accelerationClocks = buf->next->msg.moveLinear.accelerationClocks;
-				move->steadyClocks = buf->next->msg.moveLinear.steadyClocks;
-				move->decelClocks = buf->next->msg.moveLinear.decelClocks;
-			}
-			move->initialSpeedFraction = params.initialSpeedFraction;
-			move->finalSpeedFraction = params.finalSpeedFraction;
-			move->pressureAdvanceDrives = 0;
-			move->numDrivers = canDriver.localDriver + 1;
-			move->zero = 0;
-
-			// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
-			for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
-			{
-				move->perDrive[drive].Init();
-			}
+			reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
+			return  nullptr;		//TODO error handling
 		}
-		else if (canDriver.localDriver >= buf->msg.moveLinear.numDrivers)
+
+		buf->next = movementBufferList;
+		movementBufferList = buf;
+
+		auto move = buf->SetupRequestMessage<CanMessageMovementLinearShaped>(0, CanId::MasterAddress, canDriver.boardAddress);
+
+		// Common parameters
+		if (buf->next == nullptr)
 		{
-			buf->msg.moveLinear.numDrivers = canDriver.localDriver + 1;
+			// This is the first CAN-connected board for this movement
+			move->accelerationClocks = (uint32_t)params.accelClocks;
+			move->steadyClocks = (uint32_t)params.steadyClocks;
+			move->decelClocks = (uint32_t)params.decelClocks;
+			currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
 		}
-
-		buf->msg.moveLinear.perDrive[canDriver.localDriver].steps = steps;
-		if (usePressureAdvance)
+		else
 		{
-			buf->msg.moveLinear.pressureAdvanceDrives |= 1u << canDriver.localDriver;
+			// Save some maths by using the values from the previous buffer
+			move->accelerationClocks = buf->next->msg.moveLinear.accelerationClocks;
+			move->steadyClocks = buf->next->msg.moveLinear.steadyClocks;
+			move->decelClocks = buf->next->msg.moveLinear.decelClocks;
 		}
+		move->initialSpeedFraction = params.initialSpeedFraction;
+		move->finalSpeedFraction = params.finalSpeedFraction;
+		move->numDriversMinusOne = canDriver.localDriver;
+		move->moveTypes = 0;
+		move->shaperAccelPhasesMinusOne = params.shapingPlan.accelSegments - 1;
+		move->shaperDecelPhasesMinusOne = params.shapingPlan.decelSegments - 1;
+
+		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
+		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
+		{
+			move->perDrive[drive].Init();
+		}
+	}
+	else if (canDriver.localDriver >= buf->msg.moveLinear.numDrivers)
+	{
+		buf->msg.moveLinearShaped.numDriversMinusOne = canDriver.localDriver;
+	}
+	return buf;
+}
+
+// This is called by DDA::Prepare for each active CAN DM in the move
+void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
+{
+	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
+	if (buf != nullptr)
+	{
+		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].iSteps = steps;
+	}
+}
+
+void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept
+{
+	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
+	if (buf != nullptr)
+	{
+		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].fDist = extrusion;
+		const auto mt = (usePressureAdvance) ? CanMessageMovementLinearShaped::MoveType::extruderWithPa : CanMessageMovementLinearShaped::MoveType::extruderNoPa;
+		buf->msg.moveLinearShaped.ChangeMoveTypeFromDefault(canDriver.localDriver, mt);
 	}
 }
 

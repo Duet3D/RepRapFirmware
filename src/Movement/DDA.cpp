@@ -146,7 +146,7 @@ DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 		ep = 0;
 	}
 
-	flags.all = 0;						// in particular we need to set endCoordinatesValid to false
+	flags.all = 0;						// in particular we need to set endCoordinatesValid and usePressureAdvance to false
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 
@@ -662,13 +662,12 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 // Set up a remote move. Return true if it represents real movement, else false.
 // All values have already been converted to step clocks and the total distance has been normalised to 1.0.
 //TODO pass the input shaping plan in the message. For now we don't use input shaping.
-bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
+bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 {
 	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
 	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 	flags.all = 0;
 	flags.isRemote = true;
-	flags.isPrintingMove = (msg.pressureAdvanceDrives != 0);
 
 	// Normalise the move to unit distance and convert time units from step clocks to seconds
 	totalDistance = 1.0;
@@ -695,48 +694,74 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 	activeDMs = completedDMs = nullptr;
 
-	const size_t numDrivers = min<size_t>(msg.numDrivers, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
+	const size_t numDrivers = min<size_t>(msg.numDriversMinusOne + 1, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
 	for (size_t drive = 0; drive < numDrivers; drive++)
 	{
-		endPoint[drive] = prev->endPoint[drive];		// the steps for this move will be added later
-		const int32_t delta = msg.perDrive[drive].steps;
-
-		if (delta != 0)
+		endPoint[drive] = prev->endPoint[drive];				// the steps for this move will be added later
+		switch (msg.GetMoveType(drive))
 		{
-			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
-			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
-
-			reprap.GetPlatform().EnableDrivers(drive);
-			const bool stepsToDo = ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
-						? pdm->PrepareRemoteExtruder(*this, params)
-							: pdm->PrepareCartesianAxis(*this, params);
-			if (stepsToDo)
+		case CanMessageMovementLinearShaped::shapedAxis:
+			// Note, drivers that are not moving are set to shapeeAxis, so we need to check that the driver really is moving
 			{
-				pdm->directionChanged = false;
-				InsertDM(pdm);
-				const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
-				if (pdm->direction)
+				const int32_t delta = msg.perDrive[drive].iSteps;
+				if (delta != 0)
 				{
-					endPoint[drive] += netSteps;
-				}
-				else
-				{
-					endPoint[drive] -= netSteps;
-				}
+					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+					pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
+					pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 
-				// Check for sensible values, print them if they look dubious
-				if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
-				{
-					DebugPrintAll("rem");
-				}
+					reprap.GetPlatform().EnableDrivers(drive);
+					const bool stepsToDo = pdm->PrepareCartesianAxis(*this, params);
+					if (stepsToDo)
+					{
+						pdm->directionChanged = false;
+						InsertDM(pdm);
+						const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
+						if (pdm->direction)
+						{
+							endPoint[drive] += netSteps;
+						}
+						else
+						{
+							endPoint[drive] -= netSteps;
+						}
 
+						// Check for sensible values, print them if they look dubious
+						if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+						{
+							DebugPrintAll("rem");
+						}
+					}
+					else
+					{
+						DriveMovement::Release(pdm);
+					}
+				}
 			}
-			else
+			break;
+
+		case CanMessageMovementLinearShaped::shapedDelta:
 			{
-				DriveMovement::Release(pdm);
+				//TODO
 			}
+			break;
+
+		case CanMessageMovementLinearShaped::extruderWithPa:
+			flags.usePressureAdvance = true;					// either all extruder use pressure advance, or none do
+			// no break
+		case CanMessageMovementLinearShaped::MoveType::extruderNoPa:
+			{
+				MoveSegment * const segs = reprap.GetMove().GetExtruderShaper(drive).GetSegments(*this, params);
+				if (segs != nullptr)
+				{
+					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+					pdm->PrepareExtruder(*this, segs);
+					InsertDM(pdm);
+				}
+			}
+			break;
 		}
+
 	}
 
 	// 2. Throw it away if there's no real movement.
@@ -1156,7 +1181,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 
 // Prepare this DDA for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
-void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
+void DDA::Prepare(uint8_t simMode) noexcept
 {
 	flags.wasAccelOnlyMove = IsAccelerationMove();			// save this for the next move to look at
 
@@ -1169,8 +1194,9 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #endif
 
 	PrepParams params;
-	const InputShaperPlan plan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
-	(void)plan;		//TODO will be needed for CAN
+#if SUPPORT_CAN_EXPANSION
+	params.shapingPlan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
+#endif
 
 	if (simMode == 0)
 	{
@@ -1228,7 +1254,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #if SUPPORT_CAN_EXPANSION
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(params, driver, delta, false);
+						CanMotion::AddMovement(params, driver, delta);
 					}
 					else
 #endif
@@ -1294,7 +1320,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(params, driver, delta, false);
+						CanMotion::AddMovement(params, driver, delta);
 					}
 				}
 #endif
@@ -1356,7 +1382,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 						const DriverId driver = config.driverNumbers[i];
 						if (driver.IsRemote())
 						{
-							CanMotion::AddMovement(params, driver, delta, false);
+							CanMotion::AddMovement(params, driver, delta);
 						}
 					}
 #endif
@@ -1370,48 +1396,39 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				if (directionVector[drive] != 0.0)
 				{
 					// We don't apply input shaping to extruders. We generate separate MoveSegment objects for each extruder in case they have different pressure advance.
-					// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
-					// Pass the speed change to PrepareExtruder
-					float speedChange;
-					if (flags.usePressureAdvance)
-					{
-						const float prevEndSpeed = (prev->flags.usePressureAdvance) ? prev->endSpeed * prev->directionVector[drive] : 0.0;
-						speedChange = (startSpeed * directionVector[drive]) - prevEndSpeed;
-					}
-					else
-					{
-						speedChange = 0.0;
-					}
-
 					platform.EnableDrivers(drive);
 					const size_t extruder = LogicalDriveToExtruder(drive);
+#if SUPPORT_NONLINEAR_EXTRUSION
+					// Add the nonlinear extrusion correction to totalExtrusion
+					if (flags.isPrintingMove)
+					{
+						float a, b, limit;
+						if (reprap.GetPlatform().GetExtrusionCoefficients(extruder, a, b, limit))
+						{
+							float& dv = directionVector[drive];
+							const float averageExtrusionSpeed = (totalDistance * dv * StepTimer::StepClockRate)/clocksNeeded;
+							const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
+							dv *= factor;
+						}
+					}
+#endif
 #if SUPPORT_CAN_EXPANSION
 					afterPrepare.drivesMoving.SetBit(drive);
 					const DriverId driver = platform.GetExtruderDriver(extruder);
 					if (driver.IsRemote())
 					{
-						const int32_t rawSteps = PrepareRemoteExtruder(drive, extrusionPending[extruder], speedChange);
-						if (rawSteps != 0)
-						{
-							CanMotion::AddMovement(params, driver, rawSteps, flags.usePressureAdvance);
-						}
+						CanMotion::AddExtruderMovement(params, driver, directionVector[drive], flags.usePressureAdvance);
 					}
 					else
 #endif
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[extruder], speedChange);
-
-						if (stepsToDo)
+						MoveSegment *segs = reprap.GetMove().GetExtruderShaper(extruder).GetSegments(*this, params);
+						if (segs != nullptr)
 						{
+							DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+							pdm->PrepareExtruder(*this, segs);
 							pdm->directionChanged = false;
 							InsertDM(pdm);
-						}
-						else
-						{
-							pdm->state = DMState::idle;
-							pdm->nextDM = completedDMs;
-							completedDMs = pdm;
 						}
 					}
 				}
@@ -1425,17 +1442,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 			const size_t drive = additionalAxisMotorsToEnable.LowestSetBit();
 			additionalAxisMotorsToEnable.ClearBit(drive);
 			platform.EnableDrivers(drive);
-#if SUPPORT_CAN_EXPANSION
-			const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
-			for (size_t i = 0; i < config.numDrivers; ++i)
-			{
-				const DriverId driver = config.driverNumbers[i];
-				if (driver.IsRemote())
-				{
-					CanMotion::AddMovement(params, driver, 0, false);
-				}
-			}
-#endif
 		}
 
 		const DDAState st = prev->state;
@@ -2116,56 +2122,6 @@ void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexc
 		deceleration = maxAcceleration;
 	}
 }
-
-#if SUPPORT_CAN_EXPANSION
-
-// Prepare a remote extruder, returning the number of steps we are going to do before allowing for pressure advance.
-// This replicates some of the functionality that DriveMovement::PrepareExtruder does for local extruder drives.
-int32_t DDA::PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const noexcept
-{
-	// Calculate the requested extrusion amount and a few other things
-	float extrusionRequired = totalDistance * directionVector[drive];
-
-#if SUPPORT_NONLINEAR_EXTRUSION
-	// Add the nonlinear extrusion correction to totalExtrusion
-	if (flags.isPrintingMove)
-	{
-		float a, b, limit;
-		if (reprap.GetPlatform().GetExtrusionCoefficients(LogicalDriveToExtruder(drive), a, b, limit))
-		{
-			const float averageExtrusionSpeed = (extrusionRequired * StepTimer::StepClockRate)/clocksNeeded;
-			const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
-			extrusionRequired *= factor;
-		}
-	}
-#endif
-
-	// Add on any fractional extrusion pending from the previous move
-	extrusionRequired += extrusionPending;
-	const float rawStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-	const int32_t originalSteps = lrintf(extrusionRequired * rawStepsPerMm);
-	int32_t netSteps;
-
-	if (flags.usePressureAdvance && extrusionRequired >= 0.0)
-	{
-		// Calculate the pressure advance parameters
-		const float compensationTime = reprap.GetMove().GetPressureAdvance(LogicalDriveToExtruder(drive));
-
-		// Calculate the net total extrusion to allow for compensation. It may be negative.
-		const float dv = extrusionRequired/totalDistance;
-		extrusionRequired += (endSpeed - startSpeed) * compensationTime * dv;
-		netSteps = lrintf(extrusionRequired * rawStepsPerMm);
-	}
-	else
-	{
-		netSteps = originalSteps;
-	}
-
-	extrusionPending = extrusionRequired - (float)netSteps/rawStepsPerMm;
-	return originalSteps;
-}
-
-#endif
 
 #if SUPPORT_LASER
 
