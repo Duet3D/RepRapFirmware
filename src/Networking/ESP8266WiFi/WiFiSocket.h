@@ -21,20 +21,21 @@ public:
 	WiFiSocket(NetworkInterface *iface) noexcept;
 	void Init(SocketNumber n) noexcept;
 	int State() const noexcept { return (int)state; }				// used only for reporting debug info, hence the 'int' return
-	void Poll() noexcept;
-	void Close() noexcept;
-	bool IsClosing() const noexcept { return (state == SocketState::closing); }
-	void Terminate() noexcept;
-	void TerminateAndDisable() noexcept { Terminate(); }
-	bool ReadChar(char& c) noexcept;
-	bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept;
-	void Taken(size_t len) noexcept;
-	bool CanRead() const noexcept;
-	bool CanSend() const noexcept;
-	size_t Send(const uint8_t *data, size_t length) noexcept;
-	void Send() noexcept;
 	void SetNeedsPolling() noexcept { needsPolling = true; }
 	bool NeedsPolling() const noexcept;
+
+	void Poll() noexcept override;
+	void Close() noexcept override;
+	bool IsClosing() const noexcept { return (state == SocketState::closing); }
+	void Terminate() noexcept override;
+	void TerminateAndDisable() noexcept override { Terminate(); }
+	bool ReadChar(char& c) noexcept override;
+	bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept override;
+	void Taken(size_t len) noexcept override;
+	bool CanRead() const noexcept override;
+	bool CanSend() const noexcept override;
+	size_t Send(const uint8_t *data, size_t length) noexcept override;
+	void Send() noexcept override;
 
 private:
 	enum class SocketState : uint8_t
