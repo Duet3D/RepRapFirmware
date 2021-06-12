@@ -179,8 +179,12 @@ static Task<CanReceiverTaskStackWords> canReceiverTask;
 constexpr size_t CanClockTaskStackWords = 400;			// used to be 300 but RD had a stack overflow
 static Task<CanSenderTaskStackWords> canClockTask;
 
-static CanMessageBuffer * volatile pendingBuffers;
-static CanMessageBuffer * volatile lastBuffer;			// only valid when pendingBuffers != nullptr
+static CanMessageBuffer * volatile pendingMotionBuffers = nullptr;
+static CanMessageBuffer * volatile lastMotionBuffer;			// only valid when pendingBuffers != nullptr
+
+#if 0	//unused
+static unsigned int numPendingMotionBuffers = 0;
+#endif
 
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
@@ -239,7 +243,7 @@ void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 void CanInterface::Init() noexcept
 {
 	CanMessageBuffer::Init(NumCanBuffers);
-	pendingBuffers = nullptr;
+	pendingMotionBuffers = nullptr;
 
 	transactionMutex.Create("CanTrans");
 
@@ -369,13 +373,16 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 			{
 				can0dev->SendMessage(TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
 			}
-			else if (pendingBuffers != nullptr)
+			else if (pendingMotionBuffers != nullptr)
 			{
 				CanMessageBuffer *buf;
 				{
 					TaskCriticalSectionLocker lock;
-					buf = pendingBuffers;
-					pendingBuffers = buf->next;
+					buf = pendingMotionBuffers;
+					pendingMotionBuffers = buf->next;
+#if 0	//unused
+					--numPendingMotionBuffers;
+#endif
 				}
 
 				// Send the message
@@ -617,19 +624,32 @@ void CanInterface::SendMotion(CanMessageBuffer *buf) noexcept
 	{
 		TaskCriticalSectionLocker lock;
 
-		if (pendingBuffers == nullptr)
+		if (pendingMotionBuffers == nullptr)
 		{
-			pendingBuffers = buf;
+			pendingMotionBuffers = buf;
 		}
 		else
 		{
-			lastBuffer->next = buf;
+			lastMotionBuffer->next = buf;
 		}
-		lastBuffer = buf;
+		lastMotionBuffer = buf;
+#if 0	//unused
+		++numPendingMotionBuffers;
+#endif
 	}
 
 	canSenderTask.Give();
 }
+
+#if 0	// not currently used
+
+// Get the number of motion messages waiting to be sent through the Tx fifo
+unsigned int CanInterface::GetNumPendingMotionMessages() noexcept
+{
+	return can0dev->NumTxMessagesPending(TxBufferIndexMotion) + numPendingMotionBuffers;
+}
+
+#endif
 
 // Send a request to an expansion board and append the response to 'reply'
 GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra) noexcept

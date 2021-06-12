@@ -106,6 +106,9 @@ namespace CanInterface
 	GCodeResult SetRemoteDriverStepsPerMmAndMicrostepping(const CanDriversData<StepsPerUnitAndMicrostepping>& data, const StringRef& reply) noexcept;
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
+#if 0	// not currently used
+	unsigned int GetNumPendingMotionMessages() noexcept;
+#endif
 	void WakeAsyncSenderFromIsr() noexcept;
 
 	// Remote handle functions

@@ -346,6 +346,14 @@ void PrintMonitor::SetLayerZ(float layerZ) noexcept
 	// Currently we don't use the layerZ value
 }
 
+// Report that a new layer has started
+void PrintMonitor::LayerChange() noexcept
+{
+	++currentLayer;
+	lastLayerChangeTime = millis64();
+	lastLayerChangeNonPrintingTime = GetWarmUpDuration() + GetPauseDuration();
+}
+
 float PrintMonitor::FractionOfFilePrinted() const noexcept
 {
 	ReadLocker locker(printMonitorLock);

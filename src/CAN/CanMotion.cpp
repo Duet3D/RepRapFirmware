@@ -17,6 +17,10 @@ static CanMessageBuffer *movementBufferList = nullptr;
 static CanMessageBuffer *urgentMessageBuffer = nullptr;
 static uint32_t currentMoveClocks;
 
+#if 0
+static unsigned int numMotionMessagesSentLast = 0;
+#endif
+
 static volatile uint32_t hiccupToInsert = 0;
 static CanDriversList driversToStop[2];
 static size_t driversToStopIndexBeingFilled = 0;
@@ -128,6 +132,9 @@ uint32_t CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 		return 0;
 	}
 
+#if 0
+	numMotionMessagesSentLast = 0;
+#endif
 	do
 	{
 		boardsActiveInLastMove.SetBit(buf->id.Dst());					//TODO should we set this if there were no steps for drives on the board, just drives to be enabled?
@@ -138,6 +145,9 @@ uint32_t CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 		buf->dataLength = buf->msg.moveLinear.GetActualDataLength();
 		CanMessageBuffer * const nextBuffer = buf->next;				// must get this before sending the buffer, because sending the buffer releases it
 		CanInterface::SendMotion(buf);									// queues the buffer for sending and frees it when done
+#if 0
+		++numMotionMessagesSentLast;
+#endif
 		buf = nextBuffer;
 	} while (buf != nullptr);
 
