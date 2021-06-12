@@ -44,6 +44,7 @@ public:
 	void StoppedPrint() noexcept;							// Called whenever a file print has stopped
 	void SetLayerNumber(uint32_t layerNumber) noexcept;		// Set the current layer number
 	void SetLayerZ(float layerZ) noexcept;					// Set the printing height of the new layer
+	void LayerChange() noexcept;							// Report that a new layer has started
 	float FractionOfFilePrinted() const noexcept;			// Return the fraction printed (0..1)
 
 	// Return an estimate in seconds based on a specific estimation method

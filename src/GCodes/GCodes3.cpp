@@ -38,8 +38,10 @@
 #endif
 
 #ifdef I2C_IFACE
-# include "Wire.h"
+# include <Wire.h>
 #endif
+
+#include <cctype>
 
 // Deal with G60
 GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -1650,29 +1652,29 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 		"BEGIN_LAYER_OBJECT z=",	// KISSlicer (followed by Z height)
 		"HEIGHT",					// Ideamaker
 		"PRINTING",					// Ideamaker
-		"REMAINING_TIME"			// Ideamaker
+		"REMAINING_TIME",			// Ideamaker
+		"LAYER_CHANGE"				// SuperSlicer
 	};
 
 	String<StringLength100> comment;
 	gb.GetCompleteParameters(comment.GetRef());
-	const char *text = comment.c_str();
-	while (*text == ' ')
+	const char *fullText = comment.c_str();
+	while (*fullText == ' ')
 	{
-		++text;
+		++fullText;
 	}
 
 	for (size_t i = 0; i < ARRAY_SIZE(StartStrings); ++i)
 	{
-		if (StringStartsWith(text, StartStrings[i]))
+		if (StringStartsWith(fullText, StartStrings[i]))
 		{
-			text += strlen(StartStrings[i]);
-			if (*text == ' ' || *text == ':')			// need this test to avoid recognising "processName" as "process"
+			const char *text = fullText + strlen(StartStrings[i]);
+			if (!isalpha(*text) && *text != '_')			// need this test to avoid recognising "processName" as "process"
 			{
-				do
+				while (*text == ' ' || *text == ':')
 				{
 					++text;
 				}
-				while (*text == ' ' || *text == ':');
 
 				switch (i)
 				{
@@ -1717,7 +1719,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 
 				case 4:		// layer (counting from 1)
 				case 5:		// layer (counting from 0)
-				case 6:		// later (counting from 0)
+				case 6:		// layer (counting from 0)
 					{
 						const char *endptr;
 						const int32_t layer = StrToI32(text, &endptr);		// IdeaMaker uses negative layer numbers for the raft, so read a signed number here
@@ -1755,6 +1757,10 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 							reprap.GetPrintMonitor().SetSlicerTimeLeft(secondsRemaining);
 						}
 					}
+					break;
+
+				case 11:	// LAYER_CHANGE (SuperSlicer). No layer number provided.
+					reprap.GetPrintMonitor().LayerChange();
 					break;
 				}
 				break;

@@ -21,20 +21,20 @@ public:
 	bool open(int baud = 115200,
 			  int data = 8,
 			  SerialPort::Parity parity = SerialPort::ParityNone,
-			  SerialPort::StopBit stop = SerialPort::StopBitOne) noexcept { return true; }
-	void close() noexcept {}
+			  SerialPort::StopBit stop = SerialPort::StopBitOne) noexcept override { return true; }
+	void close() noexcept override {}
 
-	bool isUsb() noexcept { return false; }
+	bool isUsb() noexcept override { return false; }
 
-	int read(uint8_t* data, int size) noexcept;
-	int write(const uint8_t* data, int size) noexcept { return this->uart.write(data, size); }
-	int get() noexcept;
-	int put(int c) noexcept { return this->uart.write(c); }
+	int read(uint8_t* data, int size) noexcept override;
+	int write(const uint8_t* data, int size) noexcept override { return this->uart.write(data, size); }
+	int get() noexcept override;
+	int put(int c) noexcept override { return this->uart.write(c); }
 
-	bool timeout(int millisecs) noexcept { _timeout = millisecs; return true; }
-	void flush() noexcept { this->uart.flush(); }
-	void setDTR(bool dtr) noexcept {}
-	void setRTS(bool rts) noexcept {}
+	bool timeout(int millisecs) noexcept override { _timeout = millisecs; return true; }
+	void flush() noexcept override { this->uart.flush(); }
+	void setDTR(bool dtr) noexcept override {}
+	void setRTS(bool rts) noexcept override {}
 private:
 	UARTClass& uart;
 	int _timeout;
@@ -71,9 +71,9 @@ public:
 	DebugObserver() noexcept : lastPercentage(0) {}
 	virtual ~DebugObserver() {}
 
-	virtual void onStatus(const char *message, ...) noexcept;
-	virtual void onProgress(int num, int div) noexcept;
-    virtual void Reset() noexcept { lastPercentage = 0; };
+	void onStatus(const char *message, ...) noexcept override;
+	void onProgress(int num, int div) noexcept override;
+    void Reset() noexcept override { lastPercentage = 0; };
 private:
 	uint8_t lastPercentage;
 };

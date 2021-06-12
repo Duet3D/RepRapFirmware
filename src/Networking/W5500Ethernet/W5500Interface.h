@@ -41,7 +41,7 @@ public:
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
 	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept override;
-	bool IsProtocolEnabled(NetworkProtocol protocol) noexcept;
+	bool IsProtocolEnabled(NetworkProtocol protocol) noexcept override;
 	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept override;
 	GCodeResult ReportProtocols(const StringRef& reply) const noexcept override;
 
