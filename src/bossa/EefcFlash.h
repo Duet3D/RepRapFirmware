@@ -49,30 +49,30 @@ public:
               bool canBrownout) THROWS(GCodeException);
     virtual ~EefcFlash();
 
-    void eraseAll(uint32_t offset) THROWS(GCodeException);
-    void eraseAuto(bool enable) noexcept;
+    void eraseAll(uint32_t offset) THROWS(GCodeException) override;
+    void eraseAuto(bool enable) noexcept override;
 
-    Vector<bool, 16> getLockRegions() THROWS(GCodeException);
+    Vector<bool, 16> getLockRegions() THROWS(GCodeException) override;
 
 #if ORIGINAL_BOSSA_CODE
     bool getSecurity();
 
     bool getBod();
 #endif
-    bool canBod() noexcept { return _canBrownout; }
+    bool canBod() noexcept override { return _canBrownout; }
 
 #if ORIGINAL_BOSSA_CODE
     bool getBor();
 #endif
-    bool canBor() noexcept { return _canBrownout; }
+    bool canBor() noexcept override { return _canBrownout; }
 
-    bool getBootFlash() THROWS(GCodeException);
-    bool canBootFlash() noexcept { return true; }
+    bool getBootFlash() THROWS(GCodeException) override;
+    bool canBootFlash() noexcept override { return true; }
 
-    void writeOptions() THROWS(GCodeException);
+    void writeOptions() THROWS(GCodeException) override;
 
-    void writePage(uint32_t page) THROWS(GCodeException);
-    void readPage(uint32_t page, uint8_t* data) THROWS(GCodeException);
+    void writePage(uint32_t page) THROWS(GCodeException) override;
+    void readPage(uint32_t page, uint8_t* data) THROWS(GCodeException) override;
 
     static const uint32_t PagesPerErase;
 

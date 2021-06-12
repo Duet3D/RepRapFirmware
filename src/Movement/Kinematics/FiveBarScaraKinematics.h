@@ -42,8 +42,8 @@ public:
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
 	bool IsContinuousRotationAxis(size_t axis) const noexcept override;
-	AxesBitmap GetLinearAxes() const noexcept;
-	AxesBitmap GetConnectedAxes(size_t axis) const noexcept;
+	AxesBitmap GetLinearAxes() const noexcept override;
+	AxesBitmap GetConnectedAxes(size_t axis) const noexcept override;
 
 protected:
 	DECLARE_OBJECT_MODEL

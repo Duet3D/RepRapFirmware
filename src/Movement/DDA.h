@@ -156,6 +156,7 @@ public:
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
+	bool ControlLaser() const noexcept { return flags.controlLaser; }
 #endif
 
 #if SUPPORT_LASER
@@ -177,6 +178,8 @@ public:
 
 	void DebugPrint(const char *tag) const noexcept;								// print the DDA only
 	void DebugPrintAll(const char *tag) const noexcept;								// print the DDA and active DMs
+
+	static void PrintMoves() noexcept;												// print saved moves for debugging
 
 	// Note on the following constant:
 	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
@@ -206,16 +209,13 @@ public:
 	static constexpr uint32_t WakeupTime = (100 * StepTimer::StepClockRate)/1000000;				// stop resting 100us before the move is due to end
 	static constexpr uint32_t HiccupIncrement = HiccupTime/2;										// how much we increase the hiccup time by on each attempt
 
-	static void PrintMoves() noexcept;																// print saved moves for debugging
+	static constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;				// 100ms
+	static constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;			// 50ms
 
 #if DDA_LOG_PROBE_CHANGES
 	static const size_t MaxLoggedProbePositions = 40;
 	static size_t numLoggedProbePositions;
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
-#endif
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-	bool ControlLaser() const noexcept { return flags.controlLaser; }
 #endif
 
 	static uint32_t lastStepLowTime;										// when we last completed a step pulse to a slow driver
