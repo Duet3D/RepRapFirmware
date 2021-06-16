@@ -648,9 +648,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
-					&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
-				   )
+				if (LockMovementAndWaitForStandstill(gb))				// wait until movement has finished and deferred command queue has caught up
 				{
 					StopPrint(StopPrintReason::normalCompletion);
 				}
@@ -786,9 +784,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
-					&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
-				   )
+				if (LockMovementAndWaitForStandstill(gb))					// wait until movement has finished and deferred command queue has caught up
 				{
 					StopPrint(StopPrintReason::normalCompletion);
 				}
@@ -1577,7 +1573,12 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 		return false;
 	}
 
-	gb.MotionStopped();								// must do this after we have finished waiting, so that we don't stop waiting when executing G4
+	if (&gb != queuedGCode && !IsCodeQueueIdle())		// wait for deferred command queue to catch up
+	{
+		return false;
+	}
+
+	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
 	if (RTOSIface::GetCurrentTask() == Tasks::GetMainTask())
 	{
