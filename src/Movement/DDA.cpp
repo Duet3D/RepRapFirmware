@@ -751,7 +751,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			// no break
 		case CanMessageMovementLinearShaped::MoveType::extruderNoPa:
 			{
-				MoveSegment * const segs = reprap.GetMove().GetExtruderShaper(drive).GetSegments(*this, params);
+				MoveSegment * const segs = reprap.GetMove().GetExtruderShaper(drive).GetSegments(*this, params, msg.perDrive[drive].fDist);
 				if (segs != nullptr)
 				{
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
@@ -1412,6 +1412,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						}
 					}
 #endif
+
 #if SUPPORT_CAN_EXPANSION
 					afterPrepare.drivesMoving.SetBit(drive);
 					const DriverId driver = platform.GetExtruderDriver(extruder);
@@ -1422,7 +1423,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 					else
 #endif
 					{
-						MoveSegment *segs = reprap.GetMove().GetExtruderShaper(extruder).GetSegments(*this, params);
+						MoveSegment *segs = reprap.GetMove().GetExtruderShaper(extruder).GetSegments(*this, params, directionVector[drive] * totalDistance);
 						if (segs != nullptr)
 						{
 							DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
