@@ -1448,7 +1448,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 		const DDAState st = prev->state;
 		afterPrepare.moveStartTime = (st == DDAState::executing || st == DDAState::frozen)
 						? prev->afterPrepare.moveStartTime + prev->clocksNeeded			// this move will follow the previous one, so calculate the start time assuming no more hiccups
-							: StepTimer::GetTimerTicks() + MovementStartDelayClocks;	// else this move is the first so start it after a short delay
+							: StepTimer::GetTimerTicks() + AbsoluteMinimumPreparedTime;	// else this move is the first so start it after a short delay
 
 		if (flags.checkEndstops)
 		{

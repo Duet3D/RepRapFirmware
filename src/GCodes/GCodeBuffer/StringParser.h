@@ -92,7 +92,7 @@ private:
 
 	void AddToChecksum(char c) noexcept;
 	void StoreAndAddToChecksum(char c) noexcept;
-	bool LineFinished() THROWS(GCodeException);									// Deal with receiving end-of-line and return true if we have a command
+	bool LineFinished() noexcept;											// Deal with receiving end-of-line and return true if we have a command
 	void InternalGetQuotedString(const StringRef& str) THROWS(GCodeException)
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
 	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)

@@ -385,7 +385,14 @@ GCodeResult RemoteHeater::SwitchOn(const StringRef& reply) noexcept
 	msg->heaterNumber = GetHeaterNumber();
 	msg->setPoint = GetTargetTemperature();
 	msg->command = CanMessageSetHeaterTemperature::commandOn;
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	if (lastMode == HeaterMode::off && rslt <= GCodeResult::warning)
+	{
+		// If the heater was previously off then we need to change lastMode, otherwise if M116 is executed before we get an update from the expansion board
+		// then it will treat the heater as inactive and not wait for it to reach temperature
+		lastMode = HeaterMode::heating;
+	}
+	return rslt;
 }
 
 // This is called when the heater model has been updated

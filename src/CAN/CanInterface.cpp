@@ -36,11 +36,11 @@
 
 const unsigned int NumCanBuffers = 2 * MaxCanBoards + 10;
 
-constexpr uint32_t MaxMotionSendWait = 100;		// milliseconds
+constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
 constexpr uint32_t MaxUrgentSendWait = 20;		// milliseconds
 constexpr uint32_t MaxTimeSyncSendWait = 2;		// milliseconds
-constexpr uint32_t MaxResponseSendWait = 50;	// milliseconds
-constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
+constexpr uint32_t MaxResponseSendWait = 200;	// milliseconds
+constexpr uint32_t MaxRequestSendWait = 200;	// milliseconds
 constexpr uint16_t MaxTimeSyncDelay = 300;		// the maximum normal delay before a can time sync message is sent
 
 #define USE_BIT_RATE_SWITCH		0
@@ -125,6 +125,9 @@ static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (
 
 static CanDevice *can0dev = nullptr;
 
+static unsigned int txTimeouts[Can0Config.numTxBuffers + 1] = { 0 };
+static uint32_t lastCancelledId = 0;
+
 #if DUAL_CAN
 
 constexpr CanDevice::Config Can1Config =
@@ -179,8 +182,12 @@ static Task<CanReceiverTaskStackWords> canReceiverTask;
 constexpr size_t CanClockTaskStackWords = 400;			// used to be 300 but RD had a stack overflow
 static Task<CanSenderTaskStackWords> canClockTask;
 
-static CanMessageBuffer * volatile pendingBuffers;
-static CanMessageBuffer * volatile lastBuffer;			// only valid when pendingBuffers != nullptr
+static CanMessageBuffer * volatile pendingMotionBuffers = nullptr;
+static CanMessageBuffer * volatile lastMotionBuffer;			// only valid when pendingBuffers != nullptr
+
+#if 0	//unused
+static unsigned int numPendingMotionBuffers = 0;
+#endif
 
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
@@ -239,7 +246,7 @@ void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 void CanInterface::Init() noexcept
 {
 	CanMessageBuffer::Init(NumCanBuffers);
-	pendingBuffers = nullptr;
+	pendingMotionBuffers = nullptr;
 
 	transactionMutex.Create("CanTrans");
 
@@ -363,6 +370,17 @@ uint16_t CanInterface::GetTimeStampPeriod() noexcept
 
 #endif
 
+// Send a message on the CAN FD channel and reord any errors
+static void SendCanMessage(CanDevice::TxBufferNumber whichBuffer, uint32_t timeout, CanMessageBuffer *buffer) noexcept
+{
+	const uint32_t cancelledId = can0dev->SendMessage(whichBuffer, timeout, buffer);
+	if (cancelledId != 0)
+	{
+		++txTimeouts[(unsigned int)whichBuffer];
+		lastCancelledId = cancelledId;
+	}
+}
+
 //TODO can we get rid of the CanSender task if we send movement messages via the Tx FIFO?
 // This task picks up motion messages and sends them
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
@@ -375,19 +393,22 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 			CanMessageBuffer * const urgentMessage = CanMotion::GetUrgentMessage();
 			if (urgentMessage != nullptr)
 			{
-				can0dev->SendMessage(TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
+				SendCanMessage(TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
 			}
-			else if (pendingBuffers != nullptr)
+			else if (pendingMotionBuffers != nullptr)
 			{
 				CanMessageBuffer *buf;
 				{
 					TaskCriticalSectionLocker lock;
-					buf = pendingBuffers;
-					pendingBuffers = buf->next;
+					buf = pendingMotionBuffers;
+					pendingMotionBuffers = buf->next;
+#if 0	//unused
+					--numPendingMotionBuffers;
+#endif
 				}
 
 				// Send the message
-				can0dev->SendMessage(TxBufferIndexMotion, MaxMotionSendWait, buf);
+				SendCanMessage(TxBufferIndexMotion, MaxMotionSendWait, buf);
 
 #ifdef CAN_DEBUG
 				// Display a debug message too
@@ -475,7 +496,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			}
 #endif
 			msg->timeSent = lastTimeSent;
-			can0dev->SendMessage(TxBufferIndexTimeSync, 0, &buf);
+			SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
 			++timeSyncMessagesSent;
 		}
 
@@ -625,19 +646,32 @@ void CanInterface::SendMotion(CanMessageBuffer *buf) noexcept
 	{
 		TaskCriticalSectionLocker lock;
 
-		if (pendingBuffers == nullptr)
+		if (pendingMotionBuffers == nullptr)
 		{
-			pendingBuffers = buf;
+			pendingMotionBuffers = buf;
 		}
 		else
 		{
-			lastBuffer->next = buf;
+			lastMotionBuffer->next = buf;
 		}
-		lastBuffer = buf;
+		lastMotionBuffer = buf;
+#if 0	//unused
+		++numPendingMotionBuffers;
+#endif
 	}
 
 	canSenderTask.Give();
 }
+
+#if 0	// not currently used
+
+// Get the number of motion messages waiting to be sent through the Tx fifo
+unsigned int CanInterface::GetNumPendingMotionMessages() noexcept
+{
+	return can0dev->NumTxMessagesPending(TxBufferIndexMotion) + numPendingMotionBuffers;
+}
+
+#endif
 
 // Send a request to an expansion board and append the response to 'reply'
 GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra) noexcept
@@ -662,7 +696,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 		// This code isn't re-entrant and it can get called from a task other than Main to shut the system down, so we need to use a mutex
 		MutexLocker lock(transactionMutex);
 
-		can0dev->SendMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
+		SendCanMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
 		const uint32_t whenStartedWaiting = millis();
 		unsigned int fragmentsReceived = 0;
 		for (;;)
@@ -742,7 +776,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 // Send a response to an expansion board and free the buffer
 void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 {
-	can0dev->SendMessage(TxBufferIndexResponse, MaxResponseSendWait, buf);
+	SendCanMessage(TxBufferIndexResponse, MaxResponseSendWait, buf);
 }
 
 // Send a broadcast message and free the buffer
@@ -750,7 +784,7 @@ void CanInterface::SendBroadcastNoFree(CanMessageBuffer *buf) noexcept
 {
 	if (can0dev != nullptr)
 	{
-		can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+		SendCanMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
 	}
 }
 
@@ -759,7 +793,7 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 {
 	if (can0dev != nullptr)
 	{
-		can0dev->SendMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+		SendCanMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
 	}
 }
 
@@ -1106,31 +1140,41 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 
 void CanInterface::Diagnostics(MessageType mtype) noexcept
 {
-	unsigned int messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount;
-	uint32_t lastCancelledId;
-	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, txTimeouts, messagesLost, busOffCount, lastCancelledId);
+	unsigned int messagesQueuedForSending, messagesReceived, messagesLost, busOffCount;
+	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, messagesLost, busOffCount);
 	reprap.GetPlatform().MessageF(mtype,
-				"=== CAN ===\nMessages queued %u, send timeouts %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
+				"=== CAN ===\nMessages queued %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
 				", peak Tx sync delay %" PRIu32
 				", free buffers %u (min %u)"
 	//debug
 				", ts %u/%u/%u"
 	//end debug
 				"\n",
-					messagesQueuedForSending, txTimeouts, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
+					messagesQueuedForSending, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
 					peakTimeSyncTxDelay,
 					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers()
 	//debug
 					, timeSyncMessagesSent, goodTimeStamps, badTimeStamps
 	//end debug
 				);
+	String<StringLength100> str;
+	char c = ' ';
+	for (unsigned int& txt : txTimeouts)
+	{
+		str.catf("%c%u", c, txt);
+		txt = 0;
+		c = ',';
+	}
+
 	if (lastCancelledId != 0)
 	{
 		CanId id;
 		id.SetReceivedId(lastCancelledId);
-		reprap.GetPlatform().MessageF(mtype, "Last cancelled message type %u dest %u\n", (unsigned int)id.MsgType(), id.Dst());
+		lastCancelledId = 0;
+		str.catf(" last cancelled message type %u dest %u\n", (unsigned int)id.MsgType(), id.Dst());
 	}
 
+	reprap.GetPlatform().MessageF(mtype, "Tx timeouts%s\n", str.c_str());
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;
 	peakTimeSyncTxDelay = 0;

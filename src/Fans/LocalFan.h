@@ -46,7 +46,7 @@ private:
 	float lastVal;											// the last PWM value we sent to the fan, not allowing for blipping, or -1 if we don't know it
 
 	// Variables used to read the tacho
-	static constexpr uint32_t fanMaxInterruptCount = 32;	// number of fan interrupts that we average over
+	static constexpr uint32_t fanMaxInterruptCount = 16;	// number of fan interrupts that we average over. We time out after 3 seconds, so a count of 16 allows us to read rpm down to (16/3) * (60/2) = 160.
 	uint32_t fanInterruptCount;								// accessed only in ISR, so no need to declare it volatile
 	volatile uint32_t fanLastResetTime;						// time (in step clocks) at which we last reset the interrupt count, accessed inside and outside ISR
 	volatile uint32_t fanInterval;							// written by ISR, read outside the ISR

@@ -266,7 +266,7 @@ bool StringParser::Put(char c) noexcept
 
 // This is called when we are fed a null, CR or LF character.
 // Return true if there is a completed command ready to be executed.
-bool StringParser::LineFinished()
+bool StringParser::LineFinished() noexcept
 {
 	if (hadLineNumber)
 	{
@@ -1486,9 +1486,21 @@ void StringParser::PrintCommand(const StringRef& s) const noexcept
 }
 
 // Append the full command content to a string
+// This is called when we report a "Bad command" error, so make sure we display any control characters.
 void StringParser::AppendFullCommand(const StringRef &s) const noexcept
 {
-	s.cat(gb.buffer);
+	for (size_t i = commandStart; i < commandEnd; ++i)
+	{
+		const char c = gb.buffer[i];
+		if (c < 0x20)
+		{
+			s.catf("[0x%02x]", (unsigned int)c);
+		}
+		else
+		{
+			s.cat(c);
+		}
+	}
 }
 
 // Called when we start a new file
