@@ -114,16 +114,18 @@ GCodeResult LocalHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& rep
 
 GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 {
-	reply.printf("Heater %u", GetHeaterNumber());
-	ports[0].AppendDetails(reply);
+	reply.printf("Heater %u pins(s) ", GetHeaterNumber());
+	ports[0].AppendPinName(reply);
 	if constexpr (MaxPortsPerHeater > 1)
 	{
 		for (size_t i = 1; i < MaxPortsPerHeater && ports[i].IsValid(); ++i)
 		{
 			reply.cat('+');
-			ports[i].AppendDetails(reply);
+			ports[i].AppendPinName(reply);
 		}
 	}
+
+	ports[0].AppendFrequency(reply);
 
 	if (GetSensorNumber() >= 0)
 	{
