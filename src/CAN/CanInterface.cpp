@@ -16,6 +16,7 @@
 #include <CanMessageGenericTables.h>
 #include <Movement/DDA.h>
 #include <Movement/DriveMovement.h>
+#include <Movement/Kinematics/HangprinterKinematics.h>
 #include <Movement/StepTimer.h>
 #include <Movement/Move.h>
 #include <RTOSIface/RTOSIface.h>
@@ -23,6 +24,7 @@
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <ClosedLoop/ClosedLoop.h>
+
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
@@ -806,12 +808,12 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 
 #if DUAL_CAN
 
-uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept
+uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t const timeout) noexcept
 {
 	return (can1dev != nullptr) ? can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf) : 0;
 }
 
-bool CanInterface::ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout) noexcept
+bool CanInterface::ReceivePlainMessage(CanMessageBuffer *buf, uint32_t const timeout) noexcept
 {
 	return can1dev != nullptr && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, timeout, buf);
 }
@@ -930,6 +932,25 @@ pre(driver.IsRemote())
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p2, driver.boardAddress, reply);
 		}
+
+#if DUAL_CAN
+	case 3:			// read driver encoder via secondary CAN
+		{
+			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter) {
+				return HangprinterKinematics::ReadODrive3Encoder(driver, gb, reply);
+			}
+			return GCodeResult::errorNotSupported;
+		}
+	case 4:			// set driver torque mode via secondary CAN
+		{
+			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter) {
+				gb.MustSee('T');
+				const float torque = gb.GetFValue();
+				return HangprinterKinematics::SetODrive3TorqueMode(driver, torque, reply);
+			}
+			return GCodeResult::errorNotSupported;
+		}
+#endif
 
 	case 5:
 		return ClosedLoop::StartDataCollection(driver, gb, reply);
@@ -1423,6 +1444,77 @@ GCodeResult CanInterface::StartClosedLoopDataCollection(DriverId device, uint16_
 	msg->deviceNumber = device.localDriver;
 	return SendRequestAndGetStandardReply(buf, rid, reply);
 }
+
+#if DUAL_CAN
+CanId CanInterface::ODrive::ArbitrationId(DriverId const driver, uint8_t const cmd) noexcept {
+	const auto arbitration_id = (driver.boardAddress << 5) + cmd;
+	CanId canId;
+	canId.SetReceivedId(arbitration_id);
+	return canId;
+}
+#endif
+
+#if DUAL_CAN
+CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept
+{
+	// Detect any early return conditions
+	if (can1dev == nullptr)
+	{
+		return nullptr;
+	}
+	if (cmd & 0xE0) // Top three bits must be zero
+	{
+		reply.copy("Simple CAN command not supported");
+		return nullptr;
+	}
+	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy(NoCanBufferMessage);
+		return nullptr;
+	}
+
+	// Find the correct arbitration id
+
+ 	// Flush CAN receive hardware
+	while (CanInterface::ReceivePlainMessage(buf , 0)) { }
+
+	// Build the message
+	buf->id = ArbitrationId(driver, cmd);
+	buf->marker = 0;
+	buf->extId = false; // ODrive uses 11-bit IDs
+	buf->fdMode = false;
+	buf->useBrs = false;
+	buf->dataLength = 0;
+	buf->remote = true; // set RTR bit
+	buf->reportInFifo = false;
+
+	return buf;
+}
+#endif
+
+#if DUAL_CAN
+bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept
+{
+	CanId const expectedId = ArbitrationId(driver, cmd);
+
+	int count = 0;
+	bool ok = true;
+	do{
+		ok = ReceivePlainMessage(buf, MaxResponseSendWait);
+		count++;
+	} while (ok && buf->id != expectedId && count < 5);
+
+	ok = ok && buf->id == expectedId;
+
+	if (!ok)
+	{
+		reply.printf("Message not received");
+	}
+
+	return ok;
+}
+#endif
 
 #endif
 

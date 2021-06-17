@@ -10,7 +10,9 @@
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
-//#include "Movement/BedProbing/RandomProbePointSet.h"
+#include <CAN/CanInterface.h>
+
+#include <General/Portability.h>
 
 // Default anchor coordinates
 // These are only placeholders. Each machine must have these values calibrated in order to work correctly.
@@ -76,13 +78,13 @@ void HangprinterKinematics::Init() noexcept
 	 * In practice you might want to compensate a bit more or a bit less */
 	constexpr float DefaultSpoolBuildupFactor = 0.007;
 	/* Measure and set spool radii with M669 to achieve better accuracy */
-	constexpr float DefaultSpoolRadii[4] = { 65.0, 65.0, 65.0, 65.0}; // HP4 default
+	constexpr float DefaultSpoolRadii[4] = { 75.0, 75.0, 75.0, 75.0}; // HP4 default
 	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
-	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 2, 2, 2, 2}; // HP4 default
+	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 2, 2, 2, 4}; // HP4 default
 	constexpr uint32_t DefaultLinesPerSpool[4] = { 1, 1, 1, 1}; // HP4 default
 	constexpr uint32_t DefaultMotorGearTeeth[4] = {  20,  20,  20,  20}; // HP4 default
 	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 255, 255, 255, 255}; // HP4 default
-	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 200, 200, 200, 200};
+	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 25, 25, 25, 25};
 	ARRAY_INIT(anchors, DefaultAnchors);
 	printRadius = DefaultPrintRadius;
 	spoolBuildupFactor = DefaultSpoolBuildupFactor;
@@ -163,7 +165,7 @@ void HangprinterKinematics::Recalc() noexcept
 		platform.SetDriveStepsPerUnit(i, stepsPerUnitTimesRTmp[i] / spoolRadii[i], 0);
 	}
 
-	debugPrintf("Recalced params\nDa2: %.2f, Db2: %.2f, Dc2: %.2f, Xab: %.2f, Xbc: %.2f, Xca: %.2f, Yab: %.2f, Ybc: %.2f, Yca: %.2f, Zab: %.2f, Zbc: %.2f, Zca: %.2f, P: %.2f, P2: %.2f, Q: %.2f, R: %.2f, U: %.2f, A: %.2f\n", (double)Da2, (double)Db2, (double)Dc2, (double)Xab, (double)Xbc, (double)Xca, (double)Yab, (double)Ybc, (double)Yca, (double)Zab, (double)Zbc, (double)Zca, (double)P, (double)P2, (double)Q, (double)R, (double)U, (double)A);
+	//debugPrintf("Recalced params\nDa2: %.2f, Db2: %.2f, Dc2: %.2f, Xab: %.2f, Xbc: %.2f, Xca: %.2f, Yab: %.2f, Ybc: %.2f, Yca: %.2f, Zab: %.2f, Zbc: %.2f, Zca: %.2f, P: %.2f, P2: %.2f, Q: %.2f, R: %.2f, U: %.2f, A: %.2f\n", (double)Da2, (double)Db2, (double)Dc2, (double)Xab, (double)Xbc, (double)Xca, (double)Yab, (double)Ybc, (double)Yca, (double)Zab, (double)Zbc, (double)Zca, (double)P, (double)P2, (double)Q, (double)R, (double)U, (double)A);
 }
 
 // Return the name of the current kinematics
@@ -340,6 +342,38 @@ void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 		machinePos);
 }
 
+
+static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], float const v3[3], float const p[3]){
+	float const h0[3] = {v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]};
+	float const h1[3] = {v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]};
+
+	float const normal[3] = {
+		h0[1]*h1[2] - h0[2]*h1[1],
+		h0[2]*h1[0] - h0[0]*h1[2],
+		h0[0]*h1[1] - h0[1]*h1[0]
+	};
+
+	float const dh0[3] = {v3[0] - v0[0], v3[1] - v0[1], v3[2] - v0[2]};
+	float const dh1[3] = { p[0] - v0[0],  p[1] - v0[1],  p[2] - v0[2]};
+
+	float const dot0 = dh0[0]*normal[0] + dh0[1]*normal[1] + dh0[2]*normal[2];
+	float const dot1 = dh1[0]*normal[0] + dh1[1]*normal[1] + dh1[2]*normal[2];
+	return dot0*dot1 > 0.0F;
+}
+
+static bool isInsideTetrahedron(float const point[3], float const tetrahedron[4][3]){
+	return isSameSide(tetrahedron[0], tetrahedron[1], tetrahedron[2], tetrahedron[3], point) &&
+	       isSameSide(tetrahedron[2], tetrahedron[1], tetrahedron[3], tetrahedron[0], point) &&
+	       isSameSide(tetrahedron[2], tetrahedron[3], tetrahedron[0], tetrahedron[1], point) &&
+	       isSameSide(tetrahedron[0], tetrahedron[3], tetrahedron[1], tetrahedron[2], point);
+}
+
+bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
+{
+	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
+	return isInsideTetrahedron(coords, anchors);
+}
+
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
 LimitPositionResult HangprinterKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
 															size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
@@ -499,6 +533,7 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 	// Calculate quadratic equation coefficients
 	const float halfB = (S * Q) - (R * T) - U;
 	const float C = fsquare(S) + fsquare(T) + (anchors[A_AXIS][Y_AXIS] * T - anchors[A_AXIS][X_AXIS] * S) * P * 2 + (Da2 - fsquare(La)) * P2;
+	//debugPrintf("S: %.2f, T: %.2f, halfB: %.2f, C: %.2f, P: %.2f, A: %.2f\n", (double)S, (double)T, (double)halfB, (double)C, (double)P, (double) A);
 
 	// Solve the quadratic equation for z
 	machinePos[2] = (- halfB - fastSqrtf(fabsf(fsquare(halfB) - A * C)))/A;
@@ -507,7 +542,7 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 	machinePos[0] = (Q * machinePos[2] + S)/P;
 	machinePos[1] = (R * machinePos[2] + T)/P;
 
-	debugPrintf("Motor %.2f,%.2f,%.2f to Cartesian %.2f,%.2f,%.2f\n", (double)La, (double)Lb, (double)Lc, (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
+	//debugPrintf("Motor %.2f,%.2f,%.2f to Cartesian %.2f,%.2f,%.2f\n", (double)La, (double)Lb, (double)Lc, (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
 }
 
 // Auto calibrate from a set of probe points returning true if it failed
@@ -531,7 +566,7 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
-		debugPrintf("%s\n", scratchString.c_str());
+		//debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	// The following is for printing out the calculation time, see later
@@ -627,7 +662,7 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 			// Calculate and display the residuals
 			// Save a little stack by not allocating a residuals vector, because stack for it doesn't only get reserved when debug is enabled.
-			debugPrintf("Residuals:");
+			//debugPrintf("Residuals:");
 			for (size_t i = 0; i < numPoints; ++i)
 			{
 				floatc_t residual = probePoints.GetZHeight(i);
@@ -635,10 +670,10 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 				{
 					residual += solution[j] * derivativeMatrix(i, j);
 				}
-				debugPrintf(" %7.4f", (double)residual);
+				//debugPrintf(" %7.4f", (double)residual);
 			}
 
-			debugPrintf("\n");
+			//debugPrintf("\n");
 		}
 
 		Adjust(numFactors, solution);								// adjust the delta parameters
@@ -689,7 +724,7 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
-		debugPrintf("%s\n", scratchString.c_str());
+		//debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
@@ -708,8 +743,8 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		reprap.GetPlatform().Message(LogWarn, scratchString.c_str());
 	}
 
-    doneAutoCalibration = true;
-    return false;
+	doneAutoCalibration = true;
+	return false;
 }
 
 // Compute the derivative of height with respect to a parameter at the specified motor endpoints.
@@ -826,5 +861,192 @@ void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexce
 					(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
 					(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS]);
 }
+
+#if DUAL_CAN
+HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference) THROWS(GCodeException)
+{
+	const uint8_t cmd = CANSimple::MSG_GET_ENCODER_ESTIMATES;
+	static CanAddress seenDrives[HANGPRINTER_AXES] = { 0, 0, 0, 0 };
+	static float referencePositions[HANGPRINTER_AXES] = { 0.0, 0.0, 0.0, 0.0 };
+	static size_t numSeenDrives = 0;
+	size_t thisDriveIdx = 0;
+
+	while (thisDriveIdx < numSeenDrives && seenDrives[thisDriveIdx] != driver.boardAddress)
+	{
+		thisDriveIdx++;
+	}
+	bool const newOne = (thisDriveIdx == numSeenDrives);
+	if (newOne)
+	{
+		if (numSeenDrives < HANGPRINTER_AXES)
+		{
+			seenDrives[thisDriveIdx] = driver.boardAddress;
+			numSeenDrives++;
+		}
+		else // we don't have space for a new one
+		{
+			reply.printf("Max CAN addresses we can reference is %d. Can't reference board %d.", HANGPRINTER_AXES, driver.boardAddress);
+			numSeenDrives = HANGPRINTER_AXES;
+			return {};
+		}
+	}
+
+	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, cmd, reply);
+	if (buf == nullptr)
+	{
+		return {};
+	}
+
+	CanInterface::SendPlainMessageNoFree(buf);
+
+	bool ok = CanInterface::ODrive::GetExpectedSimpleMessage(buf, driver, cmd, reply);
+	float encoderEstimate = 0.0;
+	if (ok)
+	{
+		size_t const expectedResponseLength = 8;
+		ok = (buf->dataLength == expectedResponseLength);
+		if (ok)
+		{
+			encoderEstimate = LoadLEFloat(buf->msg.raw);
+			if (makeReference)
+			{
+				referencePositions[thisDriveIdx] = encoderEstimate;
+			}
+			// Subtract reference value
+			if (subtractReference)
+			{
+				encoderEstimate = encoderEstimate - referencePositions[thisDriveIdx];
+			}
+		}
+		else
+		{
+			reply.printf("Unexpected response length: %d", buf->dataLength);
+		}
+	}
+
+	if (newOne && !ok)
+	{
+		seenDrives[thisDriveIdx] = 0;
+		numSeenDrives--;
+	}
+
+	CanMessageBuffer::Free(buf);
+	if (ok)
+	{
+		return {true, encoderEstimate};
+	}
+
+	return {};
+}
+#endif // DUAL_CAN
+
+#if DUAL_CAN
+GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	HangprinterKinematics::ODriveAnswer const estimate = GetODrive3EncoderEstimate(driver, gb.Seen('S'), reply, true);
+	if (estimate.valid)
+	{
+		float directionCorrectedEncoderValue = estimate.value;
+		if (driver.boardAddress == 42 || driver.boardAddress == 43) // Driver direction is not stored on main board!! (will be in the future)
+		{
+			directionCorrectedEncoderValue *= -1.0;
+		}
+		reply.catf("%.2f, ", (double)(directionCorrectedEncoderValue * 360.0));
+		return GCodeResult::ok;
+	}
+	return GCodeResult::error;
+}
+#endif // DUAL_CAN
+
+#if DUAL_CAN
+GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque, const StringRef& reply) noexcept
+{
+	// Set the right target torque
+	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, CANSimple::MSG_SET_INPUT_TORQUE, reply);
+	if (buf == nullptr)
+	{
+		return GCodeResult::error;
+	}
+	buf->dataLength = 4;
+	buf->remote = false;
+	memcpy(buf->msg.raw, &torque, sizeof(torque));
+	CanInterface::SendPlainMessageNoFree(buf);
+
+	// Enable Torque Control Mode
+	buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_CONTROLLER_MODES);
+	buf->dataLength = 8;
+	buf->remote = false;
+	buf->msg.raw32[0] = CANSimple::CONTROL_MODE_TORQUE_CONTROL;
+	buf->msg.raw32[1] = CANSimple::INPUT_MODE_PASSTHROUGH;
+	CanInterface::SendPlainMessageNoFree(buf);
+
+	CanMessageBuffer::Free(buf);
+	return GCodeResult::ok;
+}
+#endif // DUAL_CAN
+
+#if DUAL_CAN
+GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, const StringRef& reply) noexcept
+{
+	HangprinterKinematics::ODriveAnswer const estimate = GetODrive3EncoderEstimate(driver, false, reply, false);
+	if (estimate.valid)
+	{
+		float const desiredPos = estimate.value;
+		CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, CANSimple::MSG_SET_INPUT_POS, reply);
+		if (buf == nullptr)
+		{
+			return GCodeResult::error;
+		}
+		buf->dataLength = 8;
+		buf->remote = false;
+		memset(buf->msg.raw32, 0, buf->dataLength); // four last bytes are velocity and torque setpoints. Zero them.
+		memcpy(buf->msg.raw32, &desiredPos, sizeof(desiredPos));
+		CanInterface::SendPlainMessageNoFree(buf);
+
+		// Enable Position Control Mode
+		buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_CONTROLLER_MODES);
+		buf->dataLength = 8;
+		buf->remote = false;
+		buf->msg.raw32[0] = CANSimple::CONTROL_MODE_POSITION_CONTROL;
+		buf->msg.raw32[1] = CANSimple::INPUT_MODE_PASSTHROUGH;
+		CanInterface::SendPlainMessageNoFree(buf);
+
+		CanMessageBuffer::Free(buf);
+		return GCodeResult::ok;
+	}
+	return GCodeResult::error;
+}
+#endif // DUAL_CAN
+
+#if DUAL_CAN
+GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, float torque, const StringRef& reply) noexcept
+{
+	GCodeResult res = GCodeResult::ok;
+	constexpr double MIN_TORQUE_NM = 0.0001;
+	if (fabs(torque) < MIN_TORQUE_NM)
+	{
+		res = SetODrive3PosMode(driver, reply);
+		if (res == GCodeResult::ok)
+		{
+			reply.cat("pos_mode, ");
+		}
+	}
+	else
+	{
+		// Set the right sign
+		torque = std::abs(torque);
+		if (driver.boardAddress == 40 || driver.boardAddress == 41) // Driver direction is not stored on main board!! (will be in the future)
+		{
+			torque = -torque;
+		}
+		res = SetODrive3TorqueModeInner(driver, torque, reply);
+		if (res == GCodeResult::ok)
+		{
+			reply.catf("%.6f Nm, ", (double)torque);
+		}
+	}
+	return res;
+}
+#endif // DUAL_CAN
 
 // End
