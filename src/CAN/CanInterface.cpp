@@ -251,12 +251,11 @@ void CanInterface::Init() noexcept
 	transactionMutex.Create("CanTrans");
 
 #if SAME70
-# ifdef USE_CAN0
-	SetPinFunction(APIN_CAN0_TX, CAN0PinPeriphMode);
-	SetPinFunction(APIN_CAN0_RX, CAN0PinPeriphMode);
-# else
 	SetPinFunction(APIN_CAN1_TX, CAN1TXPinPeriphMode);
 	SetPinFunction(APIN_CAN1_RX, CAN1RXPinPeriphMode);
+# if DUAL_CAN
+	SetPinFunction(APIN_CAN0_TX, CAN0PinPeriphMode);
+	SetPinFunction(APIN_CAN0_RX, CAN0PinPeriphMode);
 # endif
 	pmc_enable_upll_clock();			// configure_mcan sets up PCLK5 to be the UPLL divided by something, so make sure the UPLL is running
 #elif SAME5x
