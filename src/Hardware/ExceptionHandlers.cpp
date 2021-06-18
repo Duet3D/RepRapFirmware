@@ -11,6 +11,7 @@
 #include <Platform/Tasks.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Cache.h>
+#include <exception>
 #if SAME70 || SAM4S || SAM4E
 # include <Reset.h>
 #endif
