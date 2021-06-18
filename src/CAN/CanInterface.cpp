@@ -798,12 +798,9 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 
 #if DUAL_CAN
 
-void CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept
+uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept
 {
-	if (can1dev != nullptr)
-	{
-		can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf);
-	}
+	return (can1dev != nullptr) ? can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf) : 0;
 }
 
 bool CanInterface::ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout) noexcept
