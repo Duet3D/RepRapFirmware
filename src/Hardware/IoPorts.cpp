@@ -645,13 +645,19 @@ PwmPort::PwmPort() noexcept
 	frequency = DefaultPinWritePwmFreq;
 }
 
-void PwmPort::AppendDetails(const StringRef& str) const noexcept
+// Append the frequency if the port is valid
+void PwmPort::AppendFrequency(const StringRef& str) const noexcept
 {
-	IoPort::AppendDetails(str);
 	if (IsValid())
 	{
 		str.catf(" frequency %uHz", frequency);
 	}
+}
+
+void PwmPort::AppendDetails(const StringRef& str) const noexcept
+{
+	IoPort::AppendDetails(str);
+	AppendFrequency(str);
 }
 
 void PwmPort::WriteAnalog(float pwm) const noexcept
