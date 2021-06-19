@@ -85,7 +85,7 @@ namespace CanInterface
 	uint16_t GetTimeStampCounter() noexcept;
 
 #if DUAL_CAN
-	void SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept;
+	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept;
 	bool ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout) noexcept;
 #endif
 

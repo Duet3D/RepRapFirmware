@@ -101,7 +101,8 @@ class PwmPort : public IoPort
 public:
 	PwmPort() noexcept;
 
-	void AppendDetails(const StringRef& str) const noexcept;			// hides the one in IoPort
+	void AppendDetails(const StringRef& str) const noexcept;		// hides the one in IoPort
+	void AppendFrequency(const StringRef& str) const noexcept;		// append the frequency if the port is valid
 	void SetFrequency(PwmFrequency freq) noexcept { frequency = freq; }
 	void WriteAnalog(float pwm) const noexcept;
 
