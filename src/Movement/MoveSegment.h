@@ -47,7 +47,6 @@ public:
 	float GetDDivU() const noexcept { return linear.dDivU; }
 	float GetUDivA() const noexcept { return quadratic.uDivA; }
 	float GetTwoDDivA() const noexcept { return quadratic.twoDDivA; }
-	float GetAcceleration() const noexcept { return quadratic.acceleration; }
 
 	MoveSegment *GetNext() const noexcept;
 	bool IsLinear() const noexcept;
@@ -55,7 +54,7 @@ public:
 
 	void SetNext(MoveSegment *p_next) noexcept;
 	void SetLinear(float pDistanceLimit, float p_segTime, float p_dDivU) noexcept;
-	void SetNonLinear(float pDistanceLimit, float p_segTime, float p_uDivA, float p_twoDDivA, float a) noexcept;
+	void SetNonLinear(float pDistanceLimit, float p_segTime, float p_uDivA, float p_twoDDivA) noexcept;
 
 	void AddToTail(MoveSegment *tail) noexcept;
 
@@ -84,13 +83,12 @@ private:
 	{
 		struct						// parameters for quadratic (accelerating/decelerating) moves
 		{
-			float uDivA;			// initial speed divided by acceleration
-			float twoDDivA;			// twice the movement distance divided by the acceleration
-			float acceleration;		// the acceleration of this move
+			float uDivA;			// initial speed divided by acceleration (number of clocks since or until zero speed)
+			float twoDDivA;			// Reciprocal of the acceleration, scaled by twice the distance of the complete move
 		} quadratic;
 		struct						// parameters for linear moves
 		{
-			uint32_t dDivU;			// the movement distance divided by the speed
+			uint32_t dDivU;			// the reciprocal of the speed, scaled by the distance of the complete move
 		} linear;
 	};
 };
@@ -131,13 +129,12 @@ inline void MoveSegment::SetLinear(float pDistanceLimit, float p_segTime, float 
 }
 
 // Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
-inline void MoveSegment::SetNonLinear(float pDistanceLimit, float p_segTime, float p_uDivA, float p_twoDDivA, float a) noexcept
+inline void MoveSegment::SetNonLinear(float pDistanceLimit, float p_segTime, float p_uDivA, float p_twoDDivA) noexcept
 {
 	endDistanceFraction = pDistanceLimit;
 	segTime = p_segTime;
 	quadratic.uDivA = p_uDivA;
 	quadratic.twoDDivA = p_twoDDivA;
-	quadratic.acceleration = a;
 }
 
 // Release a single MoveSegment. Not thread-safe.

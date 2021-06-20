@@ -1423,7 +1423,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 					else
 #endif
 					{
-						MoveSegment *segs = reprap.GetMove().GetExtruderShaper(extruder).GetSegments(*this, params, directionVector[drive] * totalDistance);
+						MoveSegment *segs = reprap.GetMove().GetExtruderShaper(extruder).GetSegments(*this, params, directionVector[drive]);
 						if (segs != nullptr)
 						{
 							DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
