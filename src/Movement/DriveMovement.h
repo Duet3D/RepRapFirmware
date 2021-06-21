@@ -17,8 +17,8 @@ class PrepParams;
 class ExtruderShaper;
 
 #define DM_USE_FPU			(__FPU_USED)
-#define EVEN_STEPS			(1)			// 1 to generate steps at even intervals when doing double/quad/octal stepping
-#define ROUND_TO_NEAREST	(0)			// 1 for round to nearest (as used in 1.20beta10), 0 for round down (as used prior to 1.20beta10)
+#define EVEN_STEPS			(1)					// 1 to generate steps at even intervals when doing double/quad/octal stepping
+#define ROUND_TO_NEAREST	(0)					// 1 for round to nearest (as used in 1.20beta10), 0 for round down (as used prior to 1.20beta10)
 
 enum class DMState : uint8_t
 {
@@ -29,10 +29,8 @@ enum class DMState : uint8_t
 	firstMotionState,
 	cartAccel = firstMotionState,				// linear accelerating motion
 	cartLinear,									// linear steady speed
-	cartDecelNoReverse,							// linear decelerating motion
-	cartDecelExpectReverse,						// linear decelerating, reversal later
-	cartDecelReversing,							// linear decelerating, reverse on next step
-	cartDecelReverse,							// linear decelerating, reverse motion
+	cartDecelForwards,							// linear decelerating motion
+	cartDecelReverse,							// linear decelerating motion
 
 	deltaForwards,								// moving forwards
 	deltaReverse,								// reversing on this and subsequent steps

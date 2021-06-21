@@ -50,11 +50,13 @@ public:
 
 	MoveSegment *GetNext() const noexcept;
 	bool IsLinear() const noexcept;
+	bool IsReverse() const noexcept;
 	bool IsLast() const noexcept;
 
 	void SetNext(MoveSegment *p_next) noexcept;
 	void SetLinear(float pDistanceLimit, float p_segTime, float p_dDivU) noexcept;
 	void SetNonLinear(float pDistanceLimit, float p_segTime, float p_uDivA, float p_twoDDivA) noexcept;
+	void SetReverse() noexcept;
 
 	void AddToTail(MoveSegment *tail) noexcept;
 
@@ -115,9 +117,19 @@ inline bool MoveSegment::IsLinear() const noexcept
 	return nextAndFlags & 1u;
 }
 
+inline bool MoveSegment::IsReverse() const noexcept
+{
+	return nextAndFlags & 2u;
+}
+
+inline void MoveSegment::SetReverse() noexcept
+{
+	nextAndFlags |= 2u;
+}
+
 inline bool MoveSegment::IsLast() const noexcept
 {
-	return (nextAndFlags & ~3u) == 0;								// this assumes that nullptr is zero
+	return GetNext() == nullptr;
 }
 
 inline void MoveSegment::SetLinear(float pDistanceLimit, float p_segTime, float p_dDivU) noexcept

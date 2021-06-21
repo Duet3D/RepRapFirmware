@@ -57,7 +57,7 @@ void MoveSegment::DebugPrint() const noexcept
 	}
 	else
 	{
-		debugPrintf("uDivA=%14g twoDDivA=%14g a=%14g\n", (double)quadratic.uDivA, (double)quadratic.twoDDivA, (double)quadratic.acceleration);
+		debugPrintf("uDivA=%14g twoDDivA=%14g\n", (double)quadratic.uDivA, (double)quadratic.twoDDivA);
 	}
 }
 

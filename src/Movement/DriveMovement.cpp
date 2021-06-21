@@ -69,11 +69,23 @@ void DriveMovement::NewCartesianSegment(float startFraction, float startTime) no
 	{
 		// Set up pA, pB, pC such that for forward motion, time = sqrt(pA + pb * stepNumber) + pC
 		// time = startTime - currentSegment->GetUDivA() + sqrt(currentSegment->GetUDivA()^2 + currentSegment->GetTwoDDivA() * (moveFraction - startFraction))
-		//qq;	// TODO pressure advance!
 		pB = currentSegment->GetTwoDDivA()/(float)totalSteps;
 		pA = fsquare(currentSegment->GetUDivA()) - (currentSegment->GetTwoDDivA() * startFraction);
 		pC = startTime - currentSegment->GetUDivA();
-		state = (currentSegment->GetTwoDDivA() > 0.0) ? DMState::cartAccel : DMState::cartDecelNoReverse;
+		if (currentSegment->GetTwoDDivA() > 0.0)
+		{
+			state = DMState::cartAccel;
+		}
+		else if (currentSegment->IsReverse())
+		{
+			direction = !direction;
+			directionChanged = true;
+			state = DMState:: cartDecelReverse;
+		}
+		else
+		{
+			state = DMState::cartDecelForwards;
+		}
 	}
 
 	// Work out the movement limit in steps
@@ -314,49 +326,20 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	// Work out the time of the step
 	switch (state)
 	{
-	case DMState::cartDecelReversing:				// Cartesian decelerating, reverse on next step
-		// no break
-		direction = !direction;
-		directionChanged = true;
-		phaseStepLimit = nextStep + 1;	//TODO!!!
-		state = DMState::cartDecelReverse;
-		// no break
-	case DMState::cartDecelReverse:			// Cartesian decelerating, reverse motion
-	case DMState::cartDecelNoReverse:		// Cartesian decelerating
+	case DMState::cartAccel:				// Cartesian accelerating
 		if (stepsToLimit > 1 && stepInterval < DDA::MinCalcIntervalCartesian)
 		{
 			if (stepInterval < DDA::MinCalcIntervalCartesian/4 && stepsToLimit > 8)
 			{
-				shiftFactor = 3;		// octal stepping
+				shiftFactor = 3;			// octal stepping
 			}
 			else if (stepInterval < DDA::MinCalcIntervalCartesian/2 && stepsToLimit > 4)
 			{
-				shiftFactor = 2;		// quad stepping
+				shiftFactor = 2;			// quad stepping
 			}
 			else if (stepsToLimit > 2)
 			{
-				shiftFactor = 1;		// double stepping
-			}
-		}
-
-		stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
-		nextCalcStepTime = pC - fastSqrtf(pA + pB * (float)(nextStep + stepsTillRecalc));
-		break;
-
-	case DMState::cartAccel:			// Cartesian accelerating
-		if (stepsToLimit > 1 && stepInterval < DDA::MinCalcIntervalCartesian)
-		{
-			if (stepInterval < DDA::MinCalcIntervalCartesian/4 && stepsToLimit > 8)
-			{
-				shiftFactor = 3;		// octal stepping
-			}
-			else if (stepInterval < DDA::MinCalcIntervalCartesian/2 && stepsToLimit > 4)
-			{
-				shiftFactor = 2;		// quad stepping
-			}
-			else if (stepsToLimit > 2)
-			{
-				shiftFactor = 1;		// double stepping
+				shiftFactor = 1;			// double stepping
 			}
 		}
 
@@ -369,15 +352,15 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		{
 			if (stepInterval < DDA::MinCalcIntervalCartesian/4 && stepsToLimit > 8)
 			{
-				shiftFactor = 3;		// octal stepping
+				shiftFactor = 3;			// octal stepping
 			}
 			else if (stepInterval < DDA::MinCalcIntervalCartesian/2 && stepsToLimit > 4)
 			{
-				shiftFactor = 2;		// quad stepping
+				shiftFactor = 2;			// quad stepping
 			}
 			else if (stepsToLimit > 2)
 			{
-				shiftFactor = 1;		// double stepping
+				shiftFactor = 1;			// double stepping
 			}
 		}
 
@@ -385,34 +368,28 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		nextCalcStepTime = (float)(nextStep + stepsTillRecalc) * pB + pC;
 		break;
 
-	case DMState::cartDecelExpectReverse:	// linear decelerating, reverse expected in this segment
+	case DMState::cartDecelReverse:			// Cartesian decelerating, reverse motion
 		if (stepsToLimit > 1 && stepInterval < DDA::MinCalcIntervalCartesian)
 		{
 			if (stepInterval < DDA::MinCalcIntervalCartesian/4 && stepsToLimit > 8)
 			{
-				shiftFactor = 3;		// octal stepping
+				shiftFactor = 3;			// octal stepping
 			}
 			else if (stepInterval < DDA::MinCalcIntervalCartesian/2 && stepsToLimit > 4)
 			{
-				shiftFactor = 2;		// quad stepping
+				shiftFactor = 2;			// quad stepping
 			}
 			else if (stepsToLimit > 2)
 			{
-				shiftFactor = 1;		// double stepping
+				shiftFactor = 1;			// double stepping
 			}
 		}
 
 		stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
-		nextCalcStepTime = fastSqrtf(pA + pB * (float)(nextStep + stepsTillRecalc)) + pC;
-		if (stepsToLimit == 1)
-		{
-			// This is the last step in this phase
-			state = DMState::cartDecelReversing;
-			stepsToLimit = 2;	//TODO TEMP stop us starting a new segment
-		}
+		nextCalcStepTime = pC - fastSqrtf(pA + pB * (float)(nextStep + stepsTillRecalc));
 		break;
 
-	case DMState::deltaForwards:		// moving forwards
+	case DMState::deltaForwards:			// moving forwards
 		if (reverseStartStep <= totalSteps)
 		{
 			if (nextStep == reverseStartStep)
@@ -481,10 +458,12 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			switch (state)
 			{
 			case DMState::deltaForwards:
+				//TODO
 //				nextCalcStepTime = currentSegment->CalcForwardStepTime(ds);
 				break;
 
 			case DMState::deltaReverse:
+				//TODO
 //				nextCalcStepTime = currentSegment->CalcReverseStepTime(ds);
 				break;
 
