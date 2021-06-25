@@ -15,80 +15,54 @@
 
 MoveSegment *ExtruderShaper::GetSegments(const DDA &dda, const BasicPrepParams &params, float extrusionProportion) const noexcept
 {
-	const float compensationClocks = k * StepTimer::StepClockRate;
+//	const float compensationClocks = k * StepTimer::StepClockRate;
 	const float accelExtraDistance = k * dda.acceleration * params.accelClocks;
 	const float totalAccelDistance = params.accelDistance + accelExtraDistance;
-	float actualTotalDistance = params.decelStartDistance + accelExtraDistance;			// this starts off being the decel start distance and ends up being the total distance
+	const float actualDecelStartDistance = params.decelStartDistance + accelExtraDistance;
 
 	// Deceleration phase
-	float reverseStartDistance;
 	float forwardExtrusion, reverseExtrusion;			// these need to be multiplied by extrusionProportion to get actual distances, then by steps/mm to get actual steps
 	MoveSegment *segs = nullptr;
+
 	if (params.decelDistance > 0.0)
 	{
 		// If we are using pressure advance then there may be a reverse phase. The motion constants are the same for both forward and reverse phases.
-		// If there is a reverse phase then the stored distance limit is the point at which we reverse. The reverse phase will the be executed until the step count is correct.
+		// We split the deceleration phase into two in this case.
 		const float decelCompensationSpeedReduction = dda.deceleration * k;
 		const bool hasReversePhase = dda.endSpeed < decelCompensationSpeedReduction;
 		const bool hasForwardPhase = dda.topSpeed > decelCompensationSpeedReduction;
-		const float initialDecelSpeed = dda.topSpeed - decelCompensationSpeedReduction;
-		reverseStartDistance = fsquare(initialDecelSpeed)/(2.0 * dda.deceleration) + actualTotalDistance;
-		const float uDivDminusP = (dda.topSpeed * StepTimer::StepClockRate)/dda.deceleration - compensationClocks;
 		const float twoDistDivA = (2 * StepTimer::StepClockRateSquared * dda.totalDistance)/dda.deceleration;
-		if (hasForwardPhase && hasReversePhase)
+		const float forwardClocks = (!hasForwardPhase) ? 0.0
+										: (hasReversePhase) ? (dda.topSpeed - decelCompensationSpeedReduction)/(dda.deceleration * StepTimer::StepClockRate)
+											: params.decelClocks;
+		if (hasReversePhase)
 		{
-			// Generate both forward and reverse deceleration segments
-			forwardExtrusion = actualTotalDistance + fsquare(dda.topSpeed - decelCompensationSpeedReduction)/(2.0 * dda.deceleration);
 			reverseExtrusion = fsquare(decelCompensationSpeedReduction - dda.endSpeed)/(2.0 * dda.deceleration);
-			actualTotalDistance += forwardExtrusion + reverseExtrusion;
-			const float forwardClocks = initialDecelSpeed/(dda.deceleration * StepTimer::StepClockRate);
+			const float initialDecelSpeed = dda.topSpeed - decelCompensationSpeedReduction;
+			const float reverseStartDistance = (hasForwardPhase) ? actualDecelStartDistance + fsquare(initialDecelSpeed)/(2.0 * dda.deceleration) : actualDecelStartDistance;
+			forwardExtrusion = reverseStartDistance;
+			reverseExtrusion = fsquare(decelCompensationSpeedReduction - dda.endSpeed)/(2.0 * dda.deceleration);
 			segs = MoveSegment::Allocate(nullptr);
-			segs->SetNonLinear((params.decelStartDistance + fsquare(initialDecelSpeed)/(2.0 * dda.deceleration))/dda.totalDistance,
+			segs->SetNonLinear(forwardExtrusion/dda.totalDistance,		// movement limit
 								params.decelClocks - forwardClocks,
-								0.0,						// initial speed is zero
-								twoDistDivA);
-			segs->SetReverse();
-			segs = MoveSegment::Allocate(segs);
-			segs->SetNonLinear(1.0,
-								forwardClocks,
-								forwardClocks,				// clocks to zero speed is the same as the segment time
-								twoDistDivA);
-		}
-		else if (hasForwardPhase)
-		{
-			// Generate a forward deceleration segment only
-			forwardExtrusion = (fsquare(decelCompensationSpeedReduction - dda.topSpeed) - fsquare(decelCompensationSpeedReduction - dda.endSpeed))/(2.0 * dda.deceleration);
-			reverseExtrusion = 0.0;
-			actualTotalDistance += forwardExtrusion;
-			segs = MoveSegment::Allocate(nullptr);
-			segs->SetNonLinear(1.0,
-								params.decelClocks,
-								(dda.topSpeed - decelCompensationSpeedReduction)/(dda.deceleration * StepTimer::StepClockRate),
-								twoDistDivA);
-		}
-		else if (hasReversePhase)
-		{
-			// Generate a reverse deceleration segment only
-			forwardExtrusion = 0.0;
-			reverseExtrusion = (fsquare(decelCompensationSpeedReduction - dda.endSpeed) - fsquare(decelCompensationSpeedReduction - dda.topSpeed))/(2.0 * dda.deceleration);
-			actualTotalDistance -= reverseExtrusion;
-			segs = MoveSegment::Allocate(nullptr);
-			segs->SetNonLinear(1.0,
-								params.decelClocks,
-								(decelCompensationSpeedReduction - dda.topSpeed)/(dda.deceleration * StepTimer::StepClockRate),
+								0.0,									// initial speed is zero
 								twoDistDivA);
 			segs->SetReverse();
 		}
 
-		segs = MoveSegment::Allocate(nullptr);
-		segs->SetNonLinear(actualTotalDistance/dda.totalDistance,
-							reverseStartDistance,
-								(2.0 * actualTotalDistance)/(dda.deceleration * StepTimer::StepClockRate),
-								params.accelClocks + params.steadyClocks + uDivDminusP);
+		if (hasForwardPhase)
+		{
+			segs = MoveSegment::Allocate(segs);
+			segs->SetNonLinear(1.0,
+								forwardClocks,
+								(hasReversePhase) ? forwardClocks : (dda.topSpeed - decelCompensationSpeedReduction)/(dda.deceleration * StepTimer::StepClockRate),
+								twoDistDivA);
+		}
 	}
 	else
 	{
-		forwardExtrusion = reverseExtrusion = 0.0;
+		forwardExtrusion = actualDecelStartDistance;
+		reverseExtrusion = 0.0;
 	}
 
 	// Steady phase
