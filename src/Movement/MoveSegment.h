@@ -4,26 +4,106 @@
  *  Created on: 26 Feb 2021
  *      Author: David
  *
- * This class holds the parameters of a segment of a move.
+ * This class holds the parameters of a segment of a move. The idea is that when preparing the move, we pre-calculate as much as possible so that the step time calculation in the step ISR is fast.
+ * In particular, we wish to avoid division as much as possible when generating steps.
  *
- * Accelerating moves obey t^2/2 + (u/a)t - (s/a) = 0 where t = time, a = acceleration, u = initial speed, s = distance moved
- * from which t = sqrt(A + Bs) + C
- * where A = (u/a)^2, B = 2/a, C = -u/a
- * We can interpret A/B as the distance at which the move reversed, C is the time at which it reversed (in the past)
+ * To save memory, we wish to share move segments between motors as far as possible. We can do this if all axes use the same input shaping, at the expense of an additional multiplication in the step ISR.
+ * The move segments for axes refer to the move as a whole e.g. the composite linear axis movement. For each axis, when starting the move segment we scale the C factor by 1.0/(f*m)
+ * where f is the move fraction and m s the steps/mm. We can do this using a multiplication if we precalculate 1.0/(f*m) when preparing the move and store it in the DM.
  *
- * Decelerating moves obey t^2/2 - (u/d)t + (s/d) = 0 where t = time, d = deceleration, u = initial speed, s = distance moved
- * from which t = sqrt(A + Bs) + C
- * where A = (u/a)^2, B = -2/d, C = u/d
- * We can interpret -(A/B) as the distance at which the move will reverse, C is the time at which it will reverse (in the future)
+ * To handle extruders with pressure advance, we have a few options:
+ * 1. Use separate MoveSegments for the extruders. Each extruder will need its own MoveSegment chain, except that multiple extruders using the same pressure advance constant could share a chain if we
+ *    scale by 1.0/(f*m) again. We don't need to apply input shaping to extruders.
+ * 2. Use the axis move segments. When starting a new segment, each extruder will need to calculate and store that modified A B C coefficients to take account of PA. When input shaping is used,
+ *    shaping will be applied to extruders (so there will be more MoveSegments to process). This would save memory by using fewer MoveSegments, but require more computation.
+ * 3. Use a common MoveSegment chain without input shaping for all extruders (which could be shared with the axes when the move does not use input shaping), and adjust the A B C coefficients to account for PA.
  *
- * When a decelerating move reverses, s gets replaced by sr - (s - sr) = 2sr - s where sr is the distance at reverse
- * from which t = sqrt(A + B(2sr - s)) + C = sqrt(A + 2Bsr - Bs)
- * but A = -Bsr, therefore t = sqrt(-A - Bs) + C
- * so we can just change the sign of A and B and use the same parameters for the reverse phase
+ * Let:
+ *   s = distance travelled by this axis or extruder since the start of the entire move
+ *   s0 = distance travelled by this axis or extruder at the start of this segment
+ *   a = acceleration of the move as a whole taking multiple axes into account
+ *   d = deceleration of the move as a whole taking multiple axes into account (so d is positive)
+ *   u = initial speed of the move segment as a whole
+ *   f = the fraction of the move that this axis/extruder uses
+ *   m = the steps/mm for this axis or extruder
+ *   n = number of steps taken since start of move
+ * The basic motion equation for an acceleration segment is:
+ *   s = s0 + u*f*t + 0.5*a*f*t^2
+ * Solving for t:
+ *   t = -(u/a) + sqrt((u/a)^2 + 2*(s-s0)/(a*f))
+ * If we take s0 = S0 * f:
+ *   t = -(u/a) + sqrt((u/a)^2 + 2*s/(a*f) - 2*S0/a)
+ * Substituting s = n/m:
+ *   t = -(u/a) + sqrt((u/a)^2 + 2*n/(f*m*a) - 2*S0/a)
+ * For a deceleration segment, just set a = -d:
+ *   t = (u/d) + sqrt((u/d)^2 - 2*n/(f*m*d) + 2*S0/d)
+ * For a linear segment:
+ *   s = s0 + u*f*t
+ * from which:
+ *   t = (s - s0)/(u*f)
+ * If we take s0 = S0 * f:
+ *   t = s/(u*f) - S0/u
+ * Substituting s = n/m:
+ *   t = n/(u*f*m) - S0/u
  *
- * Linear moves obey ut = s where t = time, u = speed, s = distance moved
- * from which t = Bs + C
- * where B = 1/u, C is the time at which the segment started
+ * Now add pressure advance with constant k seconds.
+ * For the acceleration segment, u is replaced by u+(k*a):
+ *   t = -(u/a) - k + sqrt((u/a + k)^2 + 2*n/(f*m*a) - 2*S0/a)
+ * For the deceleration segment, u is replaced by u-(k*d). Additionally, S0 is replaced by S0 + EAD where EAD stands for extra acceleration distance, EAD = (vaccel-uaccel)*k = a*T*k where T was the acceleration time:
+ *   t = (u/d) - k + sqrt((u/d - k)^2 - 2*n/(f*m*d) + 2*(S0 + EAD)/d)
+ * For the linear segment, S0 must include EAD again:
+ *   t = n/(u*f*m) - (S0 + EAD)/u
+ * Now assume that there is also a fractional step p brought forward, where 0 <= p < 1.0. This must be subtracted from s0. Equivalently, add p/f to S0.
+ * Acceleration segment:
+ *   t = -(u/a) - k + sqrt((u/a + k)^2 + 2*n/(f*m*a) - 2*(S0 + p/f)/a)
+ * Deceleration segment:
+ *   t = (u/d) - k + sqrt((u/d - k)^2 - 2*n/(f*m*d) + 2*(S0 + p/f + EAD)/d)
+ * Linear segment:
+ *   t = n/(u*f*m) - (S0 + p/f + EAD)/u
+ *
+ * We can summarise like this. For an acceleration or deceleration segment:
+ *   t = B + sqrt(A + C*n/(f*m))
+ * where for an acceleration segment:
+ *   B = -u/a + k
+ *   A = B^2 - 2*(S0 + p/f)/a
+ *   C = 2/a
+ * and for a deceleration segment:
+ *   B = u/d - k
+ *   A = B^2 + 2*(S0 + p/f + EAD)/d
+ *   C = -2/d
+ * For a linear segment:
+ *   t = B + C*n/(f*m)
+ * where:
+ *   B = -(S0 + p/f + EAD)/u
+ *   C = 1/u
+ *
+ * The move segment stores a flag indicating whether the segment is accel/decel or linear, and the coefficients A B and C.
+ * It also stores the distance limit for the segment, i.e. S + EAD at the end of the segment. From this we can work out the step limit N = (S + EAD)/(f*m).
+ *
+ * For accelerating moves we can interpret (-A/C) as the (negative) distance at which the move reversed, and B is the time at which it reversed (negative so in the past)
+ * For decelerating moves we can interpret (A/C) as the distance at which the move will reverse, B is the time at which it will reverse (positive so in the future)
+ *
+ * When starting a new axis segment we calculate actual coefficients A' B' C' as follows:
+ *   A' = A (only used for acceleration/deceleration segments)
+ *   B' = B
+ *   C' = C * 1/(f*m)
+ *
+ * If we share common move segments between all extruders and account for PA and fractional steps when starting them, we will need to modify the coefficients as follows.
+ * For acceleration segments:
+ *   A' = A - 2*k*u/a - (p/f)/a
+ * or:
+ *   A' = B'^2 - (p/f)/a
+ *   B' = B - k
+ *   C' = C * 1/(f*m)
+ * For deceleration segments:
+ *   A' = A - 2*k*u/d + k^2 + 2*(p/f + EAD)/d
+ * alternatively, if instead of storing A we store Amod where Amod = 2*S0/d (so that A = B'2 + Amod):
+ *   A' = B'^2 + Amod  + 2*(p/f + EAD)/d
+ *   B' = B - k
+ *   C' = C * 1/(f*m)
+ * For linear segments:
+ *   B' = B - (p/f + EAD)
+ *   C' = C * 1/(f*m)
  */
 
 #ifndef SRC_MOVEMENT_MOVESEGMENT_H_
