@@ -56,15 +56,15 @@ namespace LedStripDriver
 	constexpr uint32_t MinNeoPixelResetTicks = (250 * StepTimer::StepClockRate)/1000000;		// 250us minimum Neopixel reset time on later chips
 
 	// Define the size of the buffer used to accumulate a sequence of colours to send to the string
-#ifdef DUET3_V06
+#if defined(DUET3_V06)
 	// We have plenty of non-cached RAM left on Duet 3
-	constexpr size_t ChunkBufferSize = 240 * 16;						// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED.
+	constexpr size_t ChunkBufferSize = 240 * 16;						// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED
 #elif defined(DUET3MINI)
-	constexpr size_t ChunkBufferSize = 80 * 16;							// increased for Justin
+	constexpr size_t ChunkBufferSize = 80 * 16;							// NeoPixel RGBW use 16 bytes/LED (increased to 80 LEDs for Justin)
 #elif defined(DUET_NG)
-	constexpr size_t ChunkBufferSize = 60 * 3;							// NeoPixel RGB use 3 bytes/LED
+	constexpr size_t ChunkBufferSize = 80 * 3;							// NeoPixel RGB use 3 bytes/LED
 #else
-	constexpr size_t ChunkBufferSize = 60 * 16;							// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED.
+	constexpr size_t ChunkBufferSize = 60 * 16;							// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED
 #endif
 
 	enum class LedType : unsigned int
