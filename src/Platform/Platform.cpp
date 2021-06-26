@@ -842,6 +842,8 @@ void Platform::ResetVoltageMonitors() noexcept
 #if HAS_12V_MONITOR
 	lowestV12 = highestV12 = currentV12;
 #endif
+
+	reprap.BoardsUpdated();
 }
 
 #if MCU_HAS_UNIQUE_ID
@@ -1109,10 +1111,12 @@ void Platform::Spin() noexcept
 		if (currentMcuTemperature > highestMcuTemperature)
 		{
 			highestMcuTemperature= currentMcuTemperature;
+			reprap.BoardsUpdated();
 		}
 		if (currentMcuTemperature < lowestMcuTemperature)
 		{
 			lowestMcuTemperature = currentMcuTemperature;
+			reprap.BoardsUpdated();
 		}
 	}
 #endif
@@ -1832,6 +1836,12 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	MessageF(mtype, "MCU temperature: min %.1f, current %.1f, max %.1f\n",
 		(double)lowestMcuTemperature, (double)currentMcuTemperature, (double)highestMcuTemperature);
 	lowestMcuTemperature = highestMcuTemperature = currentMcuTemperature;
+
+# if HAS_VOLTAGE_MONITOR
+	// No need to call reprap.BoardsUpdated() here because that is done in ResetVoltageMonitors which is called later
+# else
+	reprap.BoardsUpdated();
+# endif
 #endif
 
 #if HAS_VOLTAGE_MONITOR
@@ -5146,10 +5156,12 @@ void Platform::Tick() noexcept
 		if (currentVin > highestVin)
 		{
 			highestVin = currentVin;
+			reprap.BoardsUpdated();
 		}
 		if (currentVin < lowestVin)
 		{
 			lowestVin = currentVin;
+			reprap.BoardsUpdated();
 		}
 # endif
 
@@ -5158,10 +5170,12 @@ void Platform::Tick() noexcept
 		if (currentV12 > highestV12)
 		{
 			highestV12 = currentV12;
+			reprap.BoardsUpdated();
 		}
 		if (currentV12 < lowestV12)
 		{
 			lowestV12 = currentV12;
+			reprap.BoardsUpdated();
 		}
 # endif
 
