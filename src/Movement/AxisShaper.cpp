@@ -528,7 +528,7 @@ InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool 
 	MoveSegment * const decelSegs = GetDecelerationSegments(dda, params, plan);
 
 	params.Finalise(dda);									// this sets up params.steadyClocks, which is needed by FinishSegments
-	dda.segments = FinishSegments(dda, params, accelSegs, decelSegs);
+	dda.axisSegments = FinishSegments(dda, params, accelSegs, decelSegs);
 //	debugPrintf(" final plan %03x\n", (unsigned int)plan.all);
 	return plan;
 }
@@ -784,15 +784,12 @@ float AxisShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 	return extraDistance;
 }
 
-#if SUPPORT_REMOTE_COMMANDS
-
-void AxisShaper::GetSegments(DDA& dda, const BasicPrepParams& params) const noexcept
+/*static*/ MoveSegment *AxisShaper::GetUnshapedSegments(DDA& dda, const BasicPrepParams& params) noexcept
 {
 	// Deceleration phase
 	MoveSegment * tempSegments;
 	if (params.decelClocks > 0.0)
 	{
-		//TODO for now we assume just one deceleration segment
 		tempSegments = MoveSegment::Allocate(nullptr);
 		const float b = -dda.topSpeed/dda.deceleration;
 		const float c = -2.0/dda.deceleration;
@@ -814,16 +811,13 @@ void AxisShaper::GetSegments(DDA& dda, const BasicPrepParams& params) const noex
 	// Acceleration phase
 	if (params.accelClocks > 0.0)
 	{
-		//TODO for now we assume just one acceleration segment
 		tempSegments = MoveSegment::Allocate(tempSegments);
 		const float b = dda.startSpeed/dda.acceleration;
 		const float c = 2.0/dda.acceleration;
 		tempSegments->SetNonLinear(params.accelDistance, params.accelClocks, b, c);
 	}
 
-	dda.segments = tempSegments;
+	return tempSegments;
 }
-
-#endif
 
 // End

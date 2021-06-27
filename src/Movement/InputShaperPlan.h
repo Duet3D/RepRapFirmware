@@ -24,6 +24,8 @@ union InputShaperPlan
 	uint32_t all;
 
 	InputShaperPlan() noexcept : all(0) { }
+
+	void SetNoShaping() noexcept { all = 0; }
 };
 
 

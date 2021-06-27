@@ -164,7 +164,7 @@ public:
 
 	void AddToTail(MoveSegment *tail) noexcept;
 
-	void DebugPrint() const noexcept;
+	void DebugPrint(char c) const noexcept;
 
 	// Allocate a MoveSegment, clearing the Linear and Last flags
 	static MoveSegment *Allocate(MoveSegment *next) noexcept;

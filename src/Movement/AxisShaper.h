@@ -14,7 +14,6 @@
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
 #include "InputShaperPlan.h"
-#include "DDA.h"
 
 // These names must be in alphabetical order and lowercase
 NamedEnum(InputShaperType, uint8_t,
@@ -29,6 +28,7 @@ NamedEnum(InputShaperType, uint8_t,
 	zvdd,
 );
 
+class DDA;
 class BasicPrepParams;
 class MoveSegment;
 
@@ -40,15 +40,11 @@ public:
 	float GetFrequency() const noexcept { return frequency; }
 	float GetDamping() const noexcept { return zeta; }
 	InputShaperType GetType() const noexcept { return type; }
-	InputShaperPlan PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept
-		pre(dda.segments == nullptr);		// axis segments are generated and stored before extruder segments
+	InputShaperPlan PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 
-#if SUPPORT_REMOTE_COMMANDS
-	void GetSegments(DDA& dda, const BasicPrepParams& params) const noexcept
-		pre(dda.segments == nullptr);		// axis segments are generated and stored before extruder segments
-#endif
+	static MoveSegment *GetUnshapedSegments(DDA& dda, const BasicPrepParams& params) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL

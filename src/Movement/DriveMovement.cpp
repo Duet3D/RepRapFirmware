@@ -53,100 +53,132 @@ DriveMovement::DriveMovement(DriveMovement *next) noexcept : nextDM(next)
 
 // Non static members
 
-// This is called when currentSegment has just been changed to a new segment
-void DriveMovement::NewAxisOrExtruderSegment() noexcept
+// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
+bool DriveMovement::NewAxisOrExtruderSegment() noexcept
 {
-	pC = currentSegment->CalcC(effectiveMmPerStep);
-	if (currentSegment->IsLinear())
+	while(true)
 	{
-		// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
-		pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
-		state = DMState::cartLinear;
-	}
-	else
-	{
-		// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
-		pA = currentSegment->CalcNonlinearA(distanceSoFar);
-		pB = currentSegment->CalcNonlinearB(timeSoFar, mp.cart.pressureAdvanceK);
-		if (currentSegment->IsAccelerating())
+		if (currentSegment == nullptr)
 		{
-			state = DMState::cartAccel;
+			return false;
 		}
-		else if (currentSegment->IsReverse())
-		{
-			direction = !direction;
-			directionChanged = true;
-			state = DMState:: cartDecelReverse;
-		}
-		else
-		{
-			state = DMState::cartDecelForwards;
-		}
-	}
 
-	// Work out the movement limit in steps
-	distanceSoFar += currentSegment->GetSegmentLength();
-	phaseStepLimit = distanceSoFar * mp.cart.effectiveStepsPerMm;
-	timeSoFar += currentSegment->GetSegmentTime();
+		const float startDistance = distanceSoFar;
+		const float startTime = timeSoFar;
+
+		// Work out the movement limit in steps
+		distanceSoFar += currentSegment->GetSegmentLength();
+		timeSoFar += currentSegment->GetSegmentTime();
+		phaseStepLimit = distanceSoFar * mp.cart.effectiveStepsPerMm;
+
+		if (nextStep < phaseStepLimit)
+		{
+			pC = currentSegment->CalcC(effectiveMmPerStep);
+			if (currentSegment->IsLinear())
+			{
+				// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
+				pB = currentSegment->CalcLinearB(startDistance, startTime);
+				state = DMState::cartLinear;
+			}
+			else
+			{
+				// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
+				pA = currentSegment->CalcNonlinearA(startDistance);
+				pB = currentSegment->CalcNonlinearB(startTime, mp.cart.pressureAdvanceK);
+				if (currentSegment->IsAccelerating())
+				{
+					state = DMState::cartAccel;
+				}
+				else if (currentSegment->IsReverse())
+				{
+					direction = !direction;
+					directionChanged = true;
+					state = DMState:: cartDecelReverse;
+				}
+				else
+				{
+					state = DMState::cartDecelForwards;
+				}
+			}
+			return true;
+		}
+
+		currentSegment = currentSegment->GetNext();						// skip this segment
+	}
 }
 
-void DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
+// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
+bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 {
-	pC = currentSegment->CalcC(effectiveMmPerStep);
-	if (currentSegment->IsLinear())
+	while(true)
 	{
-		// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
-		pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
-		state = DMState::cartLinear;
-	}
-	else
-	{
-		// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
-		pA = currentSegment->CalcNonlinearA(distanceSoFar);
-		pB = currentSegment->CalcNonlinearB(timeSoFar, 0.0);
-	}
-
-	// Work out the movement limit in steps
-	distanceSoFar += currentSegment->GetSegmentLength();
-	const float sDx = distanceSoFar * dda.directionVector[0];
-	const float sDy = distanceSoFar * dda.directionVector[1];
-	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-	const float netStepsAtEnd = fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
-							 + (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm;
-	if (direction)
-	{
-		// Going up
-		state = DMState::deltaForwards;
-		if ((uint32_t)netStepsAtEnd > reverseStartStep)
+		if (currentSegment == nullptr)
 		{
-			// We reverse direction during this segment
-			//reverseInThisSegment = true;
-			phaseStepLimit = reverseStartStep;
+			return false;
 		}
-		else if (currentSegment->IsLast())
+
+		pC = currentSegment->CalcC(effectiveMmPerStep);
+		if (currentSegment->IsLinear())
 		{
-			phaseStepLimit = totalSteps + 1;
+			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
+			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
+			state = DMState::cartLinear;
 		}
 		else
 		{
-			phaseStepLimit = (uint32_t)netStepsAtEnd + 1;
+			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
+			pA = currentSegment->CalcNonlinearA(distanceSoFar);
+			pB = currentSegment->CalcNonlinearB(timeSoFar, 0.0);
 		}
-	}
-	else
-	{
-		// Going down
-		state = DMState::deltaReverse;
-		if (currentSegment->IsLast())
-		{
-			phaseStepLimit = totalSteps + 1;
-		}
-		else
-		{
-			phaseStepLimit = (uint32_t)(netStepsAtEnd);
-		}
-	}
 
-	timeSoFar += currentSegment->GetSegmentTime();
+		// Work out the movement limit in steps
+		distanceSoFar += currentSegment->GetSegmentLength();
+		const float sDx = distanceSoFar * dda.directionVector[0];
+		const float sDy = distanceSoFar * dda.directionVector[1];
+		const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
+		const float netStepsAtEnd = fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
+								 + (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm;
+		timeSoFar += currentSegment->GetSegmentTime();
+
+		if (netStepsAtEnd > nextStep)
+		{
+			if (direction)
+			{
+				// Going up
+				state = DMState::deltaForwards;
+				if ((uint32_t)netStepsAtEnd > reverseStartStep)
+				{
+					// We reverse direction during this segment
+					//reverseInThisSegment = true;
+					phaseStepLimit = reverseStartStep;
+				}
+				else if (currentSegment->IsLast())
+				{
+					phaseStepLimit = totalSteps + 1;
+				}
+				else
+				{
+					phaseStepLimit = (uint32_t)netStepsAtEnd + 1;
+				}
+			}
+			else
+			{
+				// Going down
+				state = DMState::deltaReverse;
+				if (currentSegment->IsLast())
+				{
+					phaseStepLimit = totalSteps + 1;
+				}
+				else
+				{
+					phaseStepLimit = (uint32_t)(netStepsAtEnd);
+				}
+			}
+			return true;
+		}
+
+		currentSegment = currentSegment->GetNext();
+	}
 }
 
 // Prepare this DM for a Cartesian axis move, returning true if there are steps to do
@@ -158,12 +190,12 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	mp.cart.effectiveStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * dda.directionVector[drive];
 	effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
 	isDelta = false;
-	currentSegment = dda.segments;
+	currentSegment = dda.axisSegments;
 
-	do
+	if (!NewAxisOrExtruderSegment())
 	{
-		NewAxisOrExtruderSegment();
-	} while (phaseStepLimit == 0);
+		return false;
+	}
 
 	// Prepare for the first step
 	nextStep = 0;
@@ -251,9 +283,12 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	timeSoFar = 0.0;
 	effectiveMmPerStep = 1.0/(reprap.GetPlatform().DriveStepsPerUnit(drive) * dda.directionVector[drive]);
 	isDelta = true;
-	currentSegment = dda.segments;
+	currentSegment = dda.axisSegments;
 
-	NewAxisOrExtruderSegment();
+	if (!NewAxisOrExtruderSegment())
+	{
+		return false;
+	}
 
 	// Prepare for the first step
 	nextStep = 0;
@@ -264,7 +299,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 }
 
 // Prepare this DM for an extruder move, returning true if there are steps to do
-bool DriveMovement::PrepareExtruder(const DDA& dda, MoveSegment *segs) noexcept
+bool DriveMovement::PrepareExtruder(const DDA& dda) noexcept
 {
 	const ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
 	distanceSoFar = shaper.GetExtrusionPending();
@@ -273,9 +308,12 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, MoveSegment *segs) noexcept
 	mp.cart.effectiveStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * dda.directionVector[drive];
 	effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
 	isDelta = false;
-	currentSegment = segs;
+	currentSegment = dda.extruderSegments;
 
-	NewAxisOrExtruderSegment();
+	if (!NewAxisOrExtruderSegment())
+	{
+		return false;
+	}
 
 	// Prepare for the first step
 	nextStep = 0;
@@ -312,12 +350,11 @@ void DriveMovement::DebugPrint() const noexcept
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // We have already incremented nextStep
 // Return true if all OK, false to abort this move because the calculation has gone wrong
-// This is also used for extruders on delta machines.
 bool DriveMovement::CalcNextStepTimeFull(const DDA &dda) noexcept
 pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
-	uint32_t shiftFactor = 0;		// assume single stepping
+	uint32_t shiftFactor = 0;				// assume single stepping
 	uint32_t nextCalcStepTime;
 	uint32_t stepsToLimit = phaseStepLimit - nextStep;
 
@@ -506,27 +543,18 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	}
 
 	// If there are no more steps left in this segment, skip to the next segment
-	// A shared segment may have no more steps for a particular drive, so we may need to skip more segments
-	while (stepsToLimit == 0)
+	if (stepsToLimit == 0)
 	{
 		currentSegment = currentSegment->GetNext();
-		if (currentSegment == nullptr)
+		const bool more = (isDelta) ? NewDeltaSegment(dda) : NewAxisOrExtruderSegment();
+		if (!more)
 		{
 			state = DMState::stepError;
 			stepInterval = 20000000 + nextStepTime;				// so we can tell what happened in the debug print
 			return false;
 		}
 
-		if (isDelta)
-		{
-			NewDeltaSegment(dda);
-		}
-		else
-		{
-			NewAxisOrExtruderSegment();
-		}
 		stepsToLimit = phaseStepLimit - nextStep;
-
 	}
 	return true;
 }
