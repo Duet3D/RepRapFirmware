@@ -346,7 +346,7 @@ private:
 	// These three could possibly be moved into afterPrepare
 	DriveMovement* activeDMs;						// list of associated DMs that need steps, in step time order
 	DriveMovement* completedDMs;					// list of associated DMs that don't need any more steps
-	MoveSegment *segments;							// linked list of all move segments used by all DMs
+	MoveSegment *segments;							// linked list of all move segments used by all DMs. All axis segments are first, then all extruder segments.
 };
 
 // Find the DriveMovement record for a given drive even if it is completed, or return nullptr if there isn't one

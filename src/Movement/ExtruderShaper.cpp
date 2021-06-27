@@ -86,6 +86,7 @@ MoveSegment *ExtruderShaper::GetSegments(const DDA &dda, const BasicPrepParams &
 							-uDivAplusP);
 	}
 
+	(void)reverseExtrusion;		//TODO use this
 	return segs;
 }
 
