@@ -147,14 +147,15 @@ public:
 	float GetSegmentLength() const noexcept { return segmentLength; }
 	float GetSegmentTime() const noexcept { return segTime; }
 	float CalcNonlinearA(float startDistance) const noexcept;
+	float CalcNonlinearB(float startTime) const noexcept;
 	float CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept;
 	float CalcLinearB(float startDistance, float startTime) const noexcept;
 	float CalcC(float mmPerStep) const noexcept;
+	float CalcCDelta() const noexcept;
 
 	MoveSegment *GetNext() const noexcept;
 	bool IsLinear() const noexcept;
 	bool IsAccelerating() const noexcept pre(!IsLinear());
-	bool IsReverse() const noexcept;
 	bool IsLast() const noexcept;
 
 	void SetNext(MoveSegment *p_next) noexcept;
@@ -164,7 +165,7 @@ public:
 
 	void AddToTail(MoveSegment *tail) noexcept;
 
-	void DebugPrint(char c) const noexcept;
+	void DebugPrint(char ch) const noexcept;
 
 	// Allocate a MoveSegment, clearing the Linear and Last flags
 	static MoveSegment *Allocate(MoveSegment *next) noexcept;
@@ -177,7 +178,7 @@ public:
 
 private:
 	static constexpr uint32_t LinearFlag = 0x01;
-	static constexpr uint32_t ReverseFlag = 0x02;
+	static constexpr uint32_t AllFlags = 0x03;
 
 	static MoveSegment *freeList;
 	static unsigned int numCreated;
@@ -200,12 +201,12 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 
 inline MoveSegment *MoveSegment::GetNext() const noexcept
 {
-	return reinterpret_cast<MoveSegment*>(nextAndFlags & (~(LinearFlag | ReverseFlag)));
+	return reinterpret_cast<MoveSegment*>(nextAndFlags & (~AllFlags));
 }
 
 inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 {
-	nextAndFlags = (nextAndFlags & (LinearFlag | ReverseFlag)) | reinterpret_cast<uint32_t>(p_next);
+	nextAndFlags = (nextAndFlags & AllFlags) | reinterpret_cast<uint32_t>(p_next);
 }
 
 inline bool MoveSegment::IsLinear() const noexcept
@@ -213,15 +214,6 @@ inline bool MoveSegment::IsLinear() const noexcept
 	return nextAndFlags & LinearFlag;
 }
 
-inline bool MoveSegment::IsReverse() const noexcept
-{
-	return nextAndFlags & ReverseFlag;
-}
-
-inline void MoveSegment::SetReverse() noexcept
-{
-	nextAndFlags |= ReverseFlag;
-}
 
 inline bool MoveSegment::IsLast() const noexcept
 {
@@ -251,6 +243,11 @@ inline float MoveSegment::CalcNonlinearA(float startDistance) const noexcept
 	return fsquare(b) + startDistance * c;
 }
 
+inline float MoveSegment::CalcNonlinearB(float startTime) const noexcept
+{
+	return b + startTime;
+}
+
 inline float MoveSegment::CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept
 {
 	return b - pressureAdvanceK + startTime;
@@ -264,6 +261,11 @@ inline float MoveSegment::CalcLinearB(float startDistance, float startTime) cons
 inline float MoveSegment::CalcC(float mmPerStep) const noexcept
 {
 	return c * mmPerStep;
+}
+
+inline float MoveSegment::CalcCDelta() const noexcept
+{
+	return c;
 }
 
 // Given that this is an accelerating or decelerating move, return true if it is accelerating

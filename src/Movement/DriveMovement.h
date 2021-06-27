@@ -17,8 +17,7 @@ class PrepParams;
 class ExtruderShaper;
 
 #define DM_USE_FPU			(__FPU_USED)
-#define EVEN_STEPS			(1)					// 1 to generate steps at even intervals when doing double/quad/octal stepping
-#define ROUND_TO_NEAREST	(0)					// 1 for round to nearest (as used in 1.20beta10), 0 for round down (as used prior to 1.20beta10)
+#define EVEN_STEPS			(1)						// 1 to generate steps at even intervals when doing double/quad/octal stepping
 
 enum class DMState : uint8_t
 {
@@ -27,13 +26,14 @@ enum class DMState : uint8_t
 
 	// All higher values are various states of motion
 	firstMotionState,
-	cartAccel = firstMotionState,				// linear accelerating motion
-	cartLinear,									// linear steady speed
-	cartDecelForwards,							// linear decelerating motion
-	cartDecelReverse,							// linear decelerating motion
+	cartAccelOrDecelNoReverse = firstMotionState,	// linear accelerating motion
+	cartLinear,										// linear steady speed
+	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
+	cartDecelReverse,								// linear decelerating motion, reversed
 
-	deltaForwards,								// moving forwards
-	deltaReverse,								// reversing on this and subsequent steps
+	deltaForwardsNoReverse,							// moving forwards, no reversal in this segment
+	deltaForwardsReversing,							// moving forwards but reversing in this segment
+	deltaReverse,									// moving in reverse
 };
 
 // This class describes a single movement of one drive
@@ -69,7 +69,8 @@ public:
 
 private:
 	bool CalcNextStepTimeFull(const DDA &dda) noexcept SPEED_CRITICAL;
-	bool NewAxisOrExtruderSegment() noexcept SPEED_CRITICAL;
+	bool NewCartesianSegment() noexcept SPEED_CRITICAL;
+	bool NewExtruderSegment() noexcept SPEED_CRITICAL;
 	bool NewDeltaSegment(const DDA& dda) noexcept SPEED_CRITICAL;
 
 	static DriveMovement *freeList;
@@ -84,10 +85,9 @@ private:
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
-			isDelta : 1;								// true if this DM uses segment-free delta kinematics
+			isDelta : 1,								// true if this DM uses segment-free delta kinematics
+			isExtruder : 1;								// true if this DM is for an extruder (only matters if !isDelta)
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
-
-	float effectiveMmPerStep;							// reciprocal of [the steps/mm multiplied by the movement fraction]
 
 	uint32_t totalSteps;								// total number of steps for this move
 
@@ -115,6 +115,7 @@ private:
 			float h0MinusZ0;							// the height subtended by the rod at the start of the move
 			float fHmz0s;								// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
 			float fMinusAaPlusBbTimesS;
+			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
 #else
 			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
@@ -126,6 +127,8 @@ private:
 		{
 			float pressureAdvanceK;						// how much pressure advance is applied to this move
 			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
+			float effectiveMmPerStep;					// reciprocal of [the steps/mm multiplied by the movement fraction]
+			float extraExtrusionDistance;				// the extra extrusion distance in the acceleration phase
 		} cart;
 	} mp;
 
