@@ -280,39 +280,41 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		const float currentTemperature = reprap.GetHeat().GetSensorTemperature(newSensor, terr);
 		if (terr == TemperatureError::unknownSensor)
 		{
-			reply.printf("Cannot set a temperature coefficient with invalid sensor number %d", newSensor);
-			return GCodeResult::error;
-		}
-
-		size_t numValues = ARRAY_SIZE(temperatureCoefficients);
-		gb.GetFloatArray(temperatureCoefficients, numValues, false);
-		float newCalibTemperature = DefaultZProbeTemperature;
-
-		if (gb.Seen('S'))
-		{
-			newCalibTemperature = gb.GetFValue();
-		}
-		else if (terr == TemperatureError::success)
-		{
-			newCalibTemperature = currentTemperature;
-		}
-		else if (!gb.IsTimerRunning())				// the sensor may have only just been configured, so give it 500ms to produce a reading
-		{
-			gb.StartTimer();
-			return GCodeResult::notFinished;
-		}
-		else if (millis() - gb.WhenTimerStarted() < 500)
-		{
-			return GCodeResult::notFinished;
+			reply.printf("Temperature coefficients ignored due to invalid sensor number %d", newSensor);
+			err = GCodeResult::warning;
 		}
 		else
 		{
+			size_t numValues = ARRAY_SIZE(temperatureCoefficients);
+			gb.GetFloatArray(temperatureCoefficients, numValues, false);
+			float newCalibTemperature = DefaultZProbeTemperature;
+
+			if (gb.Seen('S'))
+			{
+				newCalibTemperature = gb.GetFValue();
+			}
+			else if (terr == TemperatureError::success)
+			{
+				newCalibTemperature = currentTemperature;
+			}
+			else if (!gb.IsTimerRunning())				// the sensor may have only just been configured, so give it 500ms to produce a reading
+			{
+				gb.StartTimer();
+				return GCodeResult::notFinished;
+			}
+			else if (millis() - gb.WhenTimerStarted() < 500)
+			{
+				return GCodeResult::notFinished;
+			}
+			else
+			{
+				gb.StopTimer();
+				reply.printf("Sensor %d did not provide a valid temperature reading, using default", newSensor);
+				err = GCodeResult::warning;
+			}
 			gb.StopTimer();
-			reply.printf("Sensor %d did not provide a valid temperature reading", newSensor);
-			err = GCodeResult::error;
+			calibTemperature = newCalibTemperature;
 		}
-		gb.StopTimer();
-		calibTemperature = newCalibTemperature;
 	}
 
 	// After this we don't return notFinished, so it is safe to amend values directly
