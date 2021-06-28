@@ -11,7 +11,6 @@ void GCodeFileInfo::Init() noexcept
 {
 	isValid = false;
 	incomplete = true;
-	firstLayerHeight = 0.0;
 	objectHeight = 0.0;
 	layerHeight = 0.0;
 	printTime = simulatedTime = 0;
@@ -19,19 +18,10 @@ void GCodeFileInfo::Init() noexcept
 	lastModifiedTime = 0;
 	generatedBy.Clear();
 	fileSize = 0;
-	for (size_t extr = 0; extr < MaxExtruders; extr++)
+	for (float& f : filamentNeeded)
 	{
-		filamentNeeded[extr] = 0.0;
+		f = 0.0;
 	}
-}
-
-unsigned int GCodeFileInfo::GetNumLayers() const noexcept
-{
-	if (layerHeight <= 0.0) { return 0; }
-	const float nl = (firstLayerHeight > 0.0)
-						? (objectHeight - firstLayerHeight)/layerHeight + 1
-							: objectHeight/layerHeight;
-	return (unsigned int)lrintf(max<float>(nl, 0.0));
 }
 
 // End

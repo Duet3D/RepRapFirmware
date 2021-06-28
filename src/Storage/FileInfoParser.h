@@ -53,7 +53,6 @@ private:
 
 	// G-Code parser methods
 	bool FindHeight(const char* bufp, size_t len) noexcept;
-	bool FindFirstLayerHeight(const char* bufp, size_t len) noexcept;
 	bool FindLayerHeight(const char* bufp) noexcept;
 	bool FindSlicerInfo(const char* bufp) noexcept;
 	bool FindPrintTime(const char* bufp) noexcept;

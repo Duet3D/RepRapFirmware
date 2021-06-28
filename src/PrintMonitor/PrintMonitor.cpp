@@ -71,12 +71,10 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	// 1. ParsedFileInfo members
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 										ObjectModelEntryFlags::none },
 	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->filenameBeingPrinted.c_str()),										ObjectModelEntryFlags::none },
-	{ "firstLayerHeight",	OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight, 2), 														ObjectModelEntryFlags::none },
 	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
 	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight, 2), 															ObjectModelEntryFlags::none },
 	{ "lastModified",		OBJECT_MODEL_FUNC(DateTime(self->printingFileInfo.lastModifiedTime)), 												ObjectModelEntryFlags::none },
 	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight, 2), 															ObjectModelEntryFlags::none },
-	{ "numLayers",			OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.GetNumLayers()), 													ObjectModelEntryFlags::none },
 	{ "printTime",			OBJECT_MODEL_FUNC_IF(self->printingFileInfo.printTime != 0, (int32_t)self->printingFileInfo.printTime), 			ObjectModelEntryFlags::none },
 	{ "simulatedTime",		OBJECT_MODEL_FUNC_IF(self->printingFileInfo.simulatedTime != 0, (int32_t)self->printingFileInfo.simulatedTime), 	ObjectModelEntryFlags::none },
 	{ "size",				OBJECT_MODEL_FUNC((uint64_t)self->printingFileInfo.fileSize),														ObjectModelEntryFlags::none },
@@ -88,7 +86,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 12 + TRACK_OBJECT_NAMES, 11, 4 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 12 + TRACK_OBJECT_NAMES, 9, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 

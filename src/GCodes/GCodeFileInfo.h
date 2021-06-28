@@ -15,12 +15,10 @@ struct GCodeFileInfo
 {
 	GCodeFileInfo() noexcept { Init(); }
 	void Init() noexcept;
-	unsigned int GetNumLayers() const noexcept;
 
 	FilePosition fileSize;
 	time_t lastModifiedTime;
 	float layerHeight;
-	float firstLayerHeight;
 	float objectHeight;
 	float filamentNeeded[MaxExtruders];
 	uint32_t printTime;
