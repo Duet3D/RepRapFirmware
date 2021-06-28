@@ -137,12 +137,6 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 					headerInfoComplete &= (parsedFileInfo.numFilaments != 0);
 				}
 
-				// Look for first layer height
-				if (parsedFileInfo.firstLayerHeight == 0.0)
-				{
-					headerInfoComplete &= FindFirstLayerHeight(buf, sizeToScan);
-				}
-
 				// Look for layer height
 				if (parsedFileInfo.layerHeight == 0.0)
 				{
@@ -348,71 +342,6 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 		return GCodeResult::ok;
 	}
 	return GCodeResult::notFinished;
-}
-
-// Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
-bool FileInfoParser::FindFirstLayerHeight(const char* bufp, size_t len) noexcept
-{
-	if (len < 4)
-	{
-		// Don't start if the buffer is not big enough
-		return false;
-	}
-	parsedFileInfo.firstLayerHeight = 0.0;
-
-	bool inComment = false, inRelativeMode = false, foundHeight = false;
-	for(size_t i = 0; i < len - 4; i++)
-	{
-		if (bufp[i] == ';')
-		{
-			inComment = true;
-		}
-		else if (inComment)
-		{
-			if (bufp[i] == '\n')
-			{
-				inComment = false;
-			}
-		}
-		else if (bufp[i] == 'G')
-		{
-			// See if we can switch back to absolute mode
-			if (inRelativeMode)
-			{
-				inRelativeMode = !(bufp[i + 1] == '9' && bufp[i + 2] == '0' && bufp[i + 3] <= ' ');
-			}
-			// Ignore G0/G1 codes if in relative mode
-			else if (bufp[i + 1] == '9' && bufp[i + 2] == '1' && bufp[i + 3] <= ' ')
-			{
-				inRelativeMode = true;
-			}
-			// Look for "G0/G1 ... Z#HEIGHT#" command
-			else if ((bufp[i + 1] == '0' || bufp[i + 1] == '1') && bufp[i + 2] == ' ')
-			{
-				for(i += 3; i < len - 4; i++)
-				{
-					if (bufp[i] == 'Z')
-					{
-						//debugPrintf("Found at offset %u text: %.100s\n", i, &buf[i + 1]);
-						const float flHeight = SafeStrtof(&bufp[i + 1], nullptr);
-						if ((parsedFileInfo.firstLayerHeight == 0.0 || flHeight < parsedFileInfo.firstLayerHeight) && (flHeight <= reprap.GetPlatform().GetNozzleDiameter() * 3.0))
-						{
-							parsedFileInfo.firstLayerHeight = flHeight;				// Only report first Z height if it's somewhat reasonable
-							foundHeight = true;
-							// NB: Don't stop here, because some slicers generate two Z moves at the beginning
-						}
-						break;
-					}
-					else if (bufp[i] == ';')
-					{
-						// Ignore comments
-						break;
-					}
-				}
-			}
-		}
-	}
-	return foundHeight;
 }
 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.

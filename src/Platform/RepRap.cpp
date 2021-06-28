@@ -2273,8 +2273,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 					timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 		}
 
-		response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
-					(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
+		response->catf("\"height\":%.2f,\"layerHeight\":%.2f,", (double)info.objectHeight, (double)info.layerHeight);
 		if (info.printTime != 0)
 		{
 			response->catf("\"printTime\":%" PRIu32 ",", info.printTime);

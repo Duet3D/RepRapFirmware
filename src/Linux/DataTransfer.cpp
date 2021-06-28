@@ -541,7 +541,6 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, const StringRef& fi
 	info.numFilaments = header->numFilaments;
 	info.lastModifiedTime = header->lastModifiedTime;
 	info.fileSize = header->fileSize;
-	info.firstLayerHeight = header->firstLayerHeight;
 	info.layerHeight = header->layerHeight;
 	info.objectHeight = header->objectHeight;
 	info.printTime = header->printTime;
