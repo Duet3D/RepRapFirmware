@@ -403,9 +403,7 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 		{
 			// Setting the pin name to "nil" deletes the heater
 			WriteLocker lock(heatersLock);
-			Heater *oldHeater = nullptr;
-			std::swap(oldHeater, heaters[heater]);
-			delete oldHeater;
+			DeleteObject(heaters[heater]);
 			reprap.HeatUpdated();
 			return GCodeResult::ok;
 		}
@@ -414,10 +412,7 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 		const unsigned int sensorNumber = gb.GetUIValue();
 
 		WriteLocker lock(heatersLock);
-
-		Heater *oldHeater = nullptr;
-		std::swap(oldHeater, heaters[heater]);
-		delete oldHeater;
+		DeleteObject(heaters[heater]);
 
 		const PwmFrequency freq = (gb.Seen('Q')) ? min<PwmFrequency>(gb.GetPwmFrequency(), MaxHeaterPwmFrequency) : DefaultHeaterPwmFreq;
 

@@ -115,11 +115,11 @@ PanelDueUpdater::PanelDueUpdater() noexcept
 
 PanelDueUpdater::~PanelDueUpdater() noexcept
 {
-	DeleteAndClear(samba);
-	DeleteAndClear(serialPort);
-	DeleteAndClear(device);
-	DeleteAndClear(flasherObserver);
-	DeleteAndClear(flasher);
+	DeleteObject(samba);
+	DeleteObject(serialPort);
+	DeleteObject(device);
+	DeleteObject(flasherObserver);
+	DeleteObject(flasher);
 }
 
 void PanelDueUpdater::Start(const StringRef& filenameRef, const uint32_t serialChan) noexcept
@@ -270,11 +270,11 @@ void PanelDueUpdater::Spin() noexcept
 				currentBaudRate = 0;
 
 				// Delete all objects we new'd
-				DeleteAndClear(samba);
-				DeleteAndClear(serialPort);
-				DeleteAndClear(device);
-				DeleteAndClear(flasherObserver);
-				DeleteAndClear(flasher);
+				DeleteObject(samba);
+				DeleteObject(serialPort);
+				DeleteObject(device);
+				DeleteObject(flasherObserver);
+				DeleteObject(flasher);
 
 				offset = 0;
 				erasedAndResetAt = 0;
@@ -310,11 +310,11 @@ void PanelDueUpdater::Spin() noexcept
 		}
 
 		// Delete all objects we new'd
-		DeleteAndClear(samba);
-		DeleteAndClear(serialPort);
-		DeleteAndClear(device);
-		DeleteAndClear(flasherObserver);
-		DeleteAndClear(flasher);
+		DeleteObject(samba);
+		DeleteObject(serialPort);
+		DeleteObject(device);
+		DeleteObject(flasherObserver);
+		DeleteObject(flasher);
 
 		state = FlashState::done;
 	}

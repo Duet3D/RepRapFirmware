@@ -409,9 +409,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		seen = true;
 
 		// Creating a new accelerometer. First delete any existing accelerometer.
-		LIS3DH *temp = nullptr;
-		std::swap(temp, accelerometer);
-		delete temp;
+		DeleteObject(accelerometer);
 		spiCsPort.Release();
 		irqPort.Release();
 
@@ -424,7 +422,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		}
 
 		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
-		temp = new LIS3DH(SharedSpiDevice::GetMainSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
+		auto temp = new LIS3DH(SharedSpiDevice::GetMainSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
 		if (temp->CheckPresent())
 		{
 			accelerometer = temp;

@@ -422,9 +422,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 
 			if (pos == EndStopPosition::noEndStop)
 			{
-				Endstop *es = nullptr;
-				std::swap(es, axisEndstops[axis]);
-				delete es;
+				DeleteObject(axisEndstops[axis]);
 			}
 			else
 			{
@@ -433,39 +431,23 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 #if HAS_STALL_DETECT
 				case EndStopType::motorStallAny:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					{
-						Endstop *es = new StallDetectionEndstop(axis, pos, false);
-						std::swap(es, axisEndstops[axis]);
-						delete es;
-					}
+					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, false));
 					break;
 
 				case EndStopType::motorStallIndividual:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					{
-						Endstop *es = new StallDetectionEndstop(axis, pos, true);
-						std::swap(es, axisEndstops[axis]);
-						delete es;
-					}
+					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, true));
 					break;
 #else
 				case EndStopType::motorStallAny:
 				case EndStopType::motorStallIndividual:
-					{
-						Endstop *es = nullptr;
-						std::swap(es, axisEndstops[axis]);
-						delete es;
-					}
+					DeleteObject(axisEndstops[axis]);
 					reply.copy("Stall detection not supported by this hardware");
 					return GCodeResult::error;
 #endif
 				case EndStopType::zProbeAsEndstop:
 					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					{
-						Endstop *es = new ZProbeEndstop(axis, pos);
-						std::swap(es, axisEndstops[axis]);
-						delete es;
-					}
+					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos));
 					break;
 
 				case EndStopType::inputPin:
@@ -539,7 +521,7 @@ void EndstopsManager::SetZProbeDefaults() noexcept
 	zProbes[0]->SetDefaults();
 	for (size_t i = 0; i < MaxZProbes; ++i)
 	{
-		delete zProbes[i];
+		DeleteObject(zProbes[i]);
 	}
 }
 
@@ -648,8 +630,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 			return GCodeResult::error;
 		}
 
-		zProbes[probeNumber] = nullptr;
-		delete existingProbe;					// delete the old probe first, the new one might use the same ports
+		DeleteObject(zProbes[probeNumber]);		// delete the old probe first, the new one might use the same ports
 
 		ZProbe *newProbe;
 		switch ((ZProbeType)probeType)

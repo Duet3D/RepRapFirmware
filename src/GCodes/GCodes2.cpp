@@ -63,8 +63,6 @@
 # include <Platform/Logger.h>
 #endif
 
-#include <utility>			// for std::swap
-
 // If the code to act on is completed, this returns true, otherwise false.
 // It is called repeatedly for a given code until it returns true for that code.
 bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
@@ -4322,8 +4320,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// Replace the power fail script atomically
 							char *newPowerFailScript = new char[powerFailString.strlen() + 1];
 							strcpy(newPowerFailScript, powerFailString.c_str());
-							std::swap(newPowerFailScript, powerFailScript);
-							delete[] newPowerFailScript;
+							ReplaceObject(powerFailScript, newPowerFailScript);
 							reprap.StateUpdated();
 						}
 						else if (powerFailScript == nullptr)
