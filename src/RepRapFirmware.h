@@ -448,6 +448,14 @@ private:
 	bool running;
 };
 
+// Function to delete an object and clear the pointer. Safe to call even if the pointer is already null.
+template <typename T> void DeleteAndClear(T*& ptr) noexcept
+{
+	T* p2 = nullptr;
+	std::swap(ptr, p2);
+	delete p2;
+}
+
 // Common definitions used by more than one module
 
 constexpr size_t XY_AXES = 2;										// The number of Cartesian axes
