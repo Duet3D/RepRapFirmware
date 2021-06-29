@@ -30,6 +30,15 @@
 
 constexpr uint32_t DefaultAccelerometerSpiFrequency = 2000000;
 
+#if SUPPORT_CAN_EXPANSION
+
+static unsigned int expectedRemoteSampleNumber = 0;
+static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
+static uint8_t expectedRemoteAxes;
+static unsigned int numRemoteOverflows;
+
+#endif
+
 // Get the number of binary digits after the decimal point
 static inline unsigned int GetBitsAfterPoint(uint8_t dataResolution) noexcept
 {
@@ -41,153 +50,6 @@ static unsigned int GetDecimalPlaces(uint8_t dataResolution) noexcept
 {
 	return (GetBitsAfterPoint(dataResolution) >= 11) ? 4 : (GetBitsAfterPoint(dataResolution) >= 8) ? 3 : 2;
 }
-
-static FileStore *CreateFile(CanAddress src, uint8_t axesToWrite, uint32_t preallocSize) noexcept
-{
-	const time_t time = reprap.GetPlatform().GetDateTime();
-	tm timeInfo;
-	gmtime_r(&time, &timeInfo);
-	String<StringLength50> temp;
-	temp.printf("0:/sys/accelerometer/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
-					(unsigned int)src,
-					timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-	FileStore * const f = MassStorage::OpenFile(temp.c_str(), OpenMode::write, preallocSize);
-	if (f != nullptr)
-	{
-		temp.printf("Sample");
-		if (axesToWrite & 1u) { temp.cat(",X"); }
-		if (axesToWrite & 2u) { temp.cat(",Y"); }
-		if (axesToWrite & 4u) { temp.cat(",Z"); }
-		temp.cat('\n');
-		f->Write(temp.c_str());
-	}
-	return f;
-}
-
-#if SUPPORT_CAN_EXPANSION
-
-// Process accelerometer data received over CAN
-void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept
-{
-# ifdef DUET3_ATE
-	if (Duet3Ate::ProcessAccelerometerData(src, msg, msgLen))
-	{
-		return;								// ATE has processed the data
-	}
-# endif
-
-	static FileStore *f = nullptr;
-	static unsigned int expectedSampleNumber = 0;
-	static CanAddress currentBoard = CanId::NoAddress;
-	static uint8_t axesReceived;
-	static unsigned int numOverflows;
-
-	if (msg.firstSampleNumber == 0)
-	{
-		// Close any existing file
-		if (f != nullptr)
-		{
-			f->Write("Data incomplete\n");
-			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-			f->Close();
-			f = nullptr;
-		}
-
-		currentBoard = src;
-		axesReceived = msg.axes;
-		expectedSampleNumber = 0;
-		numOverflows = 0;
-		f = CreateFile(src, msg.axes, 0);
-	}
-
-	if (f != nullptr)
-	{
-		if (msgLen < msg.GetActualDataLength())
-		{
-			f->Write("Received bad data\n");
-			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-			f->Close();
-			f = nullptr;
-		}
-		else if (msg.axes != axesReceived || msg.firstSampleNumber != expectedSampleNumber || src != currentBoard)
-		{
-			f->Write("Received mismatched data\n");
-			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-			f->Close();
-			f = nullptr;
-		}
-		else
-		{
-			unsigned int numSamples = msg.numSamples;
-			const unsigned int numAxes = (axesReceived & 1u) + ((axesReceived >> 1) & 1u) + ((axesReceived >> 2) & 1u);
-			size_t dataIndex = 0;
-			uint16_t currentBits = 0;
-			unsigned int bitsLeft = 0;
-			const unsigned int receivedResolution = msg.bitsPerSampleMinusOne + 1;
-			const uint16_t mask = (1u << receivedResolution) - 1;
-			const int decimalPlaces = GetDecimalPlaces(receivedResolution);
-			if (msg.overflowed)
-			{
-				++numOverflows;
-			}
-
-			while (numSamples != 0)
-			{
-				String<StringLength50> temp;
-				temp.printf("%u", expectedSampleNumber);
-				++expectedSampleNumber;
-
-				for (unsigned int axis = 0; axis < numAxes; ++axis)
-				{
-					// Extract one value from the message. A value spans at most two words in the buffer.
-					uint16_t val = currentBits;
-					if (bitsLeft >= receivedResolution)
-					{
-						bitsLeft -= receivedResolution;
-						currentBits >>= receivedResolution;
-					}
-					else
-					{
-						currentBits = msg.data[dataIndex++];
-						val |= currentBits << bitsLeft;
-						currentBits >>= receivedResolution - bitsLeft;
-						bitsLeft += 16 - receivedResolution;
-					}
-					val &= mask;
-
-					// Sign-extend it
-					if (val & (1u << (receivedResolution - 1)))
-					{
-						val |= ~mask;
-					}
-
-					// Convert it to a float number of g
-					const float fVal = (float)(int16_t)val/(float)(1u << GetBitsAfterPoint(receivedResolution));
-
-					// Append it to the buffer
-					temp.catf(",%.*f", decimalPlaces, (double)fVal);
-				}
-
-				temp.cat('\n');
-				f->Write(temp.c_str());
-				--numSamples;
-			}
-
-			if (msg.lastPacket)
-			{
-				String<StringLength50> temp;
-				temp.printf("Rate %u, overflows %u\n", msg.actualSampleRate, numOverflows);
-				f->Write(temp.c_str());
-				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-				f->Close();
-				f = nullptr;
-				expectedSampleNumber = 0;
-			}
-		}
-	}
-}
-
-#endif
 
 // Local accelerometer handling
 
@@ -206,7 +68,7 @@ static volatile uint16_t numSamplesRequested;
 static uint8_t resolution = DefaultResolution;
 static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
 static volatile uint8_t axesRequested;
-static volatile bool running = false;
+static FileStore* volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
 static uint8_t axisLookup[3];
 static bool axisInverted[3];
 
@@ -218,126 +80,120 @@ static IoPort irqPort;
 	for (;;)
 	{
 		TaskBase::Take();
-		if (running)
+		FileStore * const f = accelerometerFile;			// capture volatile variable
+		if (f != nullptr)
 		{
-			// Calculate the approximate file size so that we can preallocate storage to reduce the risk of overflow
-			const unsigned int numAxes = (axesRequested & 1u) + ((axesRequested >> 1) & 1u) + ((axesRequested >> 2) & 1u);
-			const uint32_t preallocSize = numSamplesRequested * ((numAxes * (3 + GetDecimalPlaces(resolution))) + 4);
-			FileStore *f = CreateFile(CanInterface::GetCanAddress(), axesRequested, preallocSize);
-			if (f != nullptr)
+			// Collect and write the samples
+			unsigned int samplesWritten = 0;
+			unsigned int samplesWanted = numSamplesRequested;
+			unsigned int numOverflows = 0;
+			const uint16_t mask = (1u << resolution) - 1;
+			const int decimalPlaces = GetDecimalPlaces(resolution);
+
+			if (accelerometer->StartCollecting(axesRequested))
 			{
-				// Collect and write the samples
-				unsigned int samplesWritten = 0;
-				unsigned int samplesWanted = numSamplesRequested;
-				unsigned int numOverflows = 0;
-				const uint16_t mask = (1u << resolution) - 1;
-				const int decimalPlaces = GetDecimalPlaces(resolution);
-
-				if (accelerometer->StartCollecting(axesRequested))
+				uint16_t dataRate = 0;
+				do
 				{
-					uint16_t dataRate = 0;
-					do
+					const uint16_t *data;
+					bool overflowed;
+					unsigned int samplesRead = accelerometer->CollectData(&data, dataRate, overflowed);
+					if (samplesRead == 0)
 					{
-						const uint16_t *data;
-						bool overflowed;
-						unsigned int samplesRead = accelerometer->CollectData(&data, dataRate, overflowed);
-						if (samplesRead == 0)
+						// samplesRead == 0 indicates an error, e.g. no interrupt
+						samplesWanted = 0;
+						if (f != nullptr)
 						{
-							// samplesRead == 0 indicates an error, e.g. no interrupt
-							samplesWanted = 0;
-							if (f != nullptr)
-							{
-								f->Write("Failed to collect data from accelerometer\n");
-								f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-								f->Close();
-								f = nullptr;
-							}
-							break;
+							f->Write("Failed to collect data from accelerometer\n");
+							f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+							f->Close();
+							accelerometerFile = nullptr;
 						}
-						else
-						{
-							if (overflowed)
-							{
-								++numOverflows;
-							}
-							if (samplesWritten == 0)
-							{
-								// The first sample taken after waking up is inaccurate, so discard it
-								--samplesRead;
-								data += 3;
-							}
-							if (samplesRead >= samplesWanted)
-							{
-								samplesRead = samplesWanted;
-							}
-
-							while (samplesRead != 0)
-							{
-								// Write a row of data
-								String<StringLength50> temp;
-								temp.printf("%u", samplesWritten);
-
-								for (unsigned int axis = 0; axis < 3; ++axis)
-								{
-									if (axesRequested & (1u << axis))
-									{
-										uint16_t dataVal = data[axisLookup[axis]];
-										if (axisInverted[axis])
-										{
-											dataVal = (dataVal == 0x8000) ? ~dataVal : ~dataVal + 1;
-										}
-										dataVal >>= (16u - resolution);					// data from LIS3DH is left justified
-
-										// Sign-extend it
-										if (dataVal & (1u << (resolution - 1)))
-										{
-											dataVal |= ~mask;
-										}
-
-										// Convert it to a float number of g
-										const float fVal = (float)(int16_t)dataVal/(float)(1u << GetBitsAfterPoint(resolution));
-
-										// Append it to the buffer
-										temp.catf(",%.*f", decimalPlaces, (double)fVal);
-									}
-								}
-
-								data += 3;
-
-								temp.cat('\n');
-								f->Write(temp.c_str());
-
-								--samplesRead;
-								--samplesWanted;
-								++samplesWritten;
-							}
-						}
-					} while (samplesWanted != 0);
-
-					if (f != nullptr)
-					{
-						String<StringLength50> temp;
-						temp.printf("Rate %u, overflows %u\n", dataRate, numOverflows);
-						f->Write(temp.c_str());
+						break;
 					}
-				}
-				else if (f != nullptr)
-				{
-					f->Write("Failed to start accelerometer\n");
-				}
+					else
+					{
+						if (overflowed)
+						{
+							++numOverflows;
+						}
+						if (samplesWritten == 0)
+						{
+							// The first sample taken after waking up is inaccurate, so discard it
+							--samplesRead;
+							data += 3;
+						}
+						if (samplesRead >= samplesWanted)
+						{
+							samplesRead = samplesWanted;
+						}
+
+						while (samplesRead != 0)
+						{
+							// Write a row of data
+							String<StringLength50> temp;
+							temp.printf("%u", samplesWritten);
+
+							for (unsigned int axis = 0; axis < 3; ++axis)
+							{
+								if (axesRequested & (1u << axis))
+								{
+									uint16_t dataVal = data[axisLookup[axis]];
+									if (axisInverted[axis])
+									{
+										dataVal = (dataVal == 0x8000) ? ~dataVal : ~dataVal + 1;
+									}
+									dataVal >>= (16u - resolution);					// data from LIS3DH is left justified
+
+									// Sign-extend it
+									if (dataVal & (1u << (resolution - 1)))
+									{
+										dataVal |= ~mask;
+									}
+
+									// Convert it to a float number of g
+									const float fVal = (float)(int16_t)dataVal/(float)(1u << GetBitsAfterPoint(resolution));
+
+									// Append it to the buffer
+									temp.catf(",%.*f", decimalPlaces, (double)fVal);
+								}
+							}
+
+							data += 3;
+
+							temp.cat('\n');
+							f->Write(temp.c_str());
+
+							--samplesRead;
+							--samplesWanted;
+							++samplesWritten;
+						}
+					}
+				} while (samplesWanted != 0);
 
 				if (f != nullptr)
 				{
-					f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-					f->Close();
-					f = nullptr;
+					String<StringLength50> temp;
+					temp.printf("Rate %u, overflows %u\n", dataRate, numOverflows);
+					f->Write(temp.c_str());
 				}
+			}
+			else if (f != nullptr)
+			{
+				f->Write("Failed to start accelerometer\n");
+			}
+
+			if (f != nullptr)
+			{
+				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+				f->Close();
+				accelerometerFile = nullptr;
 			}
 
 			accelerometer->StopCollecting();
 
 			// Wait for another command
-			running = false;
+			accelerometerFile = nullptr;
 		}
 	}
 }
@@ -397,7 +253,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	}
 
 	// No need for task lock here because this function and the M956 function are called only by the MAIN task
-	if (running)
+	if (accelerometerFile != nullptr)
 	{
 		reply.copy("Cannot reconfigure accelerometer while it is collecting data");
 		return GCodeResult::error;
@@ -476,11 +332,11 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		}
 	}
 
-#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_CAN_EXPANSION
 	reply.printf("Accelerometer %u:%u with orientation %u samples at %uHz with %u-bit resolution", CanInterface::GetCanAddress(), 0, orientation, samplingRate, resolution);
-#else
+# else
 	reply.printf("Accelerometer %u with orientation %u samples at %uHz with %u-bit resolution", 0, orientation, samplingRate, resolution);
-#endif
+# endif
 	return GCodeResult::ok;
 }
 
@@ -504,33 +360,195 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		axes = 0x07;						// default to all three axes
 	}
 
+	// Check that we have an accelerometer
+	if (
 # if SUPPORT_CAN_EXPANSION
-	if (device.IsRemote())
-	{
-		return CanInterface::StartAccelerometer(device, axes, numSamples, mode, gb, reply);
-	}
+		!device.IsRemote() &&
 # endif
-
-	// No need for task lock here because this function and the M955 function are called only by the MAIN task
-	if (device.localDriver != 0 || accelerometer == nullptr)
+		(device.localDriver != 0 || accelerometer == nullptr)
+	   )
 	{
 		reply.copy("Accelerometer not found");
 		return GCodeResult::error;
 	}
 
-	if (running)
+	// No need for task lock here because this function and the M955 function are called only by the MAIN task
+	if (accelerometerFile != nullptr)
 	{
 		reply.copy("Accelerometer is already collecting data");
 		return GCodeResult::error;
 	}
 
+	// Set up the collection parameters in case the accelerometer task wakes up early
 	axesRequested = axes;
 	numSamplesRequested = numSamples;
-	running = true;
 	(void)mode;									// TODO implement mode
+
+	// Create the file for saving the data. First calculate the approximate file size so that we can preallocate storage to reduce the risk of overflow.
+	const unsigned int numAxes = (axesRequested & 1u) + ((axesRequested >> 1) & 1u) + ((axesRequested >> 2) & 1u);
+	const uint32_t preallocSize = numSamplesRequested * ((numAxes * (3 + GetDecimalPlaces(resolution))) + 4);
+
+	String<MaxFilenameLength> accelerometerFileName;
+	if (gb.Seen('F'))
+	{
+		String<StringLength50> temp;
+		gb.GetQuotedString(temp.GetRef(), false);
+		MassStorage::CombineName(accelerometerFileName.GetRef(), "0:/sys/accelerometer/", temp.c_str());
+	}
+	else
+	{
+		const time_t time = reprap.GetPlatform().GetDateTime();
+		tm timeInfo;
+		gmtime_r(&time, &timeInfo);
+		accelerometerFileName.printf("0:/sys/accelerometer/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
+# if SUPPORT_CAN_EXPANSION
+										(unsigned int)device.boardAddress,
+# else
+										0,
+#endif
+										timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+	}
+	FileStore * const f = MassStorage::OpenFile(accelerometerFileName.c_str(), OpenMode::write, preallocSize);
+	if (f == nullptr)
+	{
+		reply.copy("Failed to create accelerometer data file");
+		return GCodeResult::error;
+	}
+
+	// Write the header line ti the file
+	{
+		String<StringLength50> temp;
+		temp.printf("Sample");
+		if (axes & 1u) { temp.cat(",X"); }
+		if (axes & 2u) { temp.cat(",Y"); }
+		if (axes & 4u) { temp.cat(",Z"); }
+		temp.cat('\n');
+		f->Write(temp.c_str());
+	}
+	accelerometerFile = f;
+
+# if SUPPORT_CAN_EXPANSION
+	if (device.IsRemote())
+	{
+		expectedRemoteSampleNumber = 0;
+		expectedRemoteBoardAddress = device.boardAddress;
+		expectedRemoteAxes = axes;
+		numRemoteOverflows = 0;
+
+		const GCodeResult rslt = CanInterface::StartAccelerometer(device, axes, numSamples, mode, gb, reply);
+		if (rslt > GCodeResult::warning)
+		{
+			accelerometerFile->Close();
+			MassStorage::Delete(accelerometerFileName.c_str(), false);
+		}
+		return rslt;
+	}
+# endif
+
 	accelerometerTask->Give();
 	return GCodeResult::ok;
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Process accelerometer data received over CAN
+void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept
+{
+# ifdef DUET3_ATE
+	if (Duet3Ate::ProcessAccelerometerData(src, msg, msgLen))
+	{
+		return;								// ATE has processed the data
+	}
+# endif
+
+	FileStore * const f = accelerometerFile;
+	if (f != nullptr)
+	{
+		if (msgLen < msg.GetActualDataLength())
+		{
+			f->Write("Received bad data\n");
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+			f->Close();
+			accelerometerFile = nullptr;
+		}
+		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
+		{
+			f->Write("Received mismatched data\n");
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+			f->Close();
+			accelerometerFile = nullptr;
+		}
+		else
+		{
+			unsigned int numSamples = msg.numSamples;
+			const unsigned int numAxes = (expectedRemoteAxes & 1u) + ((expectedRemoteAxes >> 1) & 1u) + ((expectedRemoteAxes >> 2) & 1u);
+			size_t dataIndex = 0;
+			uint16_t currentBits = 0;
+			unsigned int bitsLeft = 0;
+			const unsigned int receivedResolution = msg.bitsPerSampleMinusOne + 1;
+			const uint16_t mask = (1u << receivedResolution) - 1;
+			const int decimalPlaces = GetDecimalPlaces(receivedResolution);
+			if (msg.overflowed)
+			{
+				++numRemoteOverflows;
+			}
+
+			while (numSamples != 0)
+			{
+				String<StringLength50> temp;
+				temp.printf("%u", expectedRemoteSampleNumber);
+				++expectedRemoteSampleNumber;
+
+				for (unsigned int axis = 0; axis < numAxes; ++axis)
+				{
+					// Extract one value from the message. A value spans at most two words in the buffer.
+					uint16_t val = currentBits;
+					if (bitsLeft >= receivedResolution)
+					{
+						bitsLeft -= receivedResolution;
+						currentBits >>= receivedResolution;
+					}
+					else
+					{
+						currentBits = msg.data[dataIndex++];
+						val |= currentBits << bitsLeft;
+						currentBits >>= receivedResolution - bitsLeft;
+						bitsLeft += 16 - receivedResolution;
+					}
+					val &= mask;
+
+					// Sign-extend it
+					if (val & (1u << (receivedResolution - 1)))
+					{
+						val |= ~mask;
+					}
+
+					// Convert it to a float number of g
+					const float fVal = (float)(int16_t)val/(float)(1u << GetBitsAfterPoint(receivedResolution));
+
+					// Append it to the buffer
+					temp.catf(",%.*f", decimalPlaces, (double)fVal);
+				}
+
+				temp.cat('\n');
+				f->Write(temp.c_str());
+				--numSamples;
+			}
+
+			if (msg.lastPacket)
+			{
+				String<StringLength50> temp;
+				temp.printf("Rate %u, overflows %u\n", msg.actualSampleRate, numRemoteOverflows);
+				f->Write(temp.c_str());
+				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+				f->Close();
+				accelerometerFile = nullptr;
+			}
+		}
+	}
+}
+
+#endif
 
 #endif
 
