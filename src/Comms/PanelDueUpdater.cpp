@@ -35,6 +35,7 @@ public:
 	void flush() noexcept override { this->uart.flush(); }
 	void setDTR(bool dtr) noexcept override {}
 	void setRTS(bool rts) noexcept override {}
+
 private:
 	UARTClass& uart;
 	int _timeout;
@@ -114,11 +115,11 @@ PanelDueUpdater::PanelDueUpdater() noexcept
 
 PanelDueUpdater::~PanelDueUpdater() noexcept
 {
-	delete samba;
-	delete serialPort;
-	delete device;
-	delete flasherObserver;
-	delete flasher;
+	DeleteObject(samba);
+	DeleteObject(serialPort);
+	DeleteObject(device);
+	DeleteObject(flasherObserver);
+	DeleteObject(flasher);
 }
 
 void PanelDueUpdater::Start(const StringRef& filenameRef, const uint32_t serialChan) noexcept
@@ -269,20 +270,11 @@ void PanelDueUpdater::Spin() noexcept
 				currentBaudRate = 0;
 
 				// Delete all objects we new'd
-				delete samba;
-				samba = nullptr;
-
-				delete serialPort;
-				serialPort = nullptr;
-
-				delete device;
-				device = nullptr;
-
-				delete flasherObserver;
-				flasherObserver = nullptr;
-
-				delete flasher;
-				flasher = nullptr;
+				DeleteObject(samba);
+				DeleteObject(serialPort);
+				DeleteObject(device);
+				DeleteObject(flasherObserver);
+				DeleteObject(flasher);
 
 				offset = 0;
 				erasedAndResetAt = 0;
@@ -316,6 +308,14 @@ void PanelDueUpdater::Spin() noexcept
 		{
 			reprap.GetPlatform().MessageF(ErrorMessage, "Flashing PanelDue failed in step %s. Please try again.", state.ToString());
 		}
+
+		// Delete all objects we new'd
+		DeleteObject(samba);
+		DeleteObject(serialPort);
+		DeleteObject(device);
+		DeleteObject(flasherObserver);
+		DeleteObject(flasher);
+
 		state = FlashState::done;
 	}
 }

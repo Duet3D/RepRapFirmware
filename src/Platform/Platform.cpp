@@ -110,7 +110,6 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 #endif
 
 #include <climits>
-#include <utility>					// for std::swap
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_12V_MONITOR) || !defined(HAS_VREF_MONITOR) \
@@ -4066,9 +4065,7 @@ GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcep
 	const size_t len = newSysDir.strlen() + 1;
 	char* const nsd = new char[len];
 	memcpy(nsd, newSysDir.c_str(), len);
-	const char *nsd2 = nsd;
-	std::swap(sysDir, nsd2);
-	delete nsd2;
+	ReplaceObject(sysDir, nsd);
 	reprap.DirectoriesUpdated();
 	return GCodeResult::ok;
 }

@@ -101,10 +101,7 @@ GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& repl
 		gb.GetReducedString(pinName.GetRef());
 
 		WriteLocker lock(fansLock);
-
-		Fan *oldFan = nullptr;
-		std::swap(oldFan, fans[fanNum]);
-		delete oldFan;
+		DeleteObject(fans[fanNum]);
 
 		const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
 
@@ -262,9 +259,7 @@ void FansManager::Exit() noexcept
 	WriteLocker lock(fansLock);
 	for (Fan*& fan : fans)
 	{
-		Fan *f;
-		std::swap(f, fan);
-		delete f;
+		DeleteObject(fan);
 	}
 }
 

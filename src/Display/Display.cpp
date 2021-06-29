@@ -195,17 +195,9 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	if (gb.Seen('P'))
 	{
 		// Delete any existing LCD, menu and encoder
-		Lcd *tempLcd = nullptr;
-		std::swap(lcd, tempLcd);
-		delete tempLcd;
-
-		Menu *tempMenu = nullptr;
-		std::swap(menu, tempMenu);
-		delete tempMenu;
-
-		RotaryEncoder *tempEncoder = nullptr;
-		std::swap(encoder, tempEncoder);
-		delete tempEncoder;
+		DeleteObject(lcd);
+		DeleteObject(menu);
+		DeleteObject(encoder);
 
 		seen = true;
 		switch (gb.GetUIValue())

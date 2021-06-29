@@ -139,9 +139,7 @@ bool FilamentMonitor::IsValid() const noexcept
 		if (sensor != nullptr)
 		{
 			sensor->Disable();
-			sensor = nullptr;
-			std::swap(sensor, filamentSensors[extruder]);
-			delete sensor;
+			DeleteObject(filamentSensors[extruder]);
 			reprap.SensorsUpdated();
 		}
 
@@ -350,9 +348,7 @@ bool FilamentMonitor::IsValid() const noexcept
 
 	for (FilamentMonitor *&f : filamentSensors)
 	{
-		FilamentMonitor *temp;
-		std::swap(temp, f);
-		delete temp;
+		DeleteObject(f);
 	}
 }
 
@@ -387,9 +383,7 @@ bool FilamentMonitor::IsValid() const noexcept
 		{
 			reply.lcatf("Filament monitor for extruder %u has been deleted due to configuration change", extruder);
 			warn = true;
-			FilamentMonitor *f = nullptr;
-			std::swap(f, filamentSensors[extruder]);
-			delete f;
+			DeleteObject(filamentSensors[extruder]);
 		}
 	}
 	return warn;
