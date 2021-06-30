@@ -151,7 +151,7 @@ public:
 	float CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept;
 	float CalcLinearB(float startDistance, float startTime) const noexcept;
 	float CalcC(float mmPerStep) const noexcept;
-	float CalcCDelta() const noexcept;
+	float GetC() const noexcept { return c; }
 
 	MoveSegment *GetNext() const noexcept;
 	bool IsLinear() const noexcept;
@@ -164,6 +164,8 @@ public:
 	void SetReverse() noexcept;
 
 	void AddToTail(MoveSegment *tail) noexcept;
+
+	const MoveSegment *GetFirstDecelSegment() const noexcept;
 
 	void DebugPrint(char ch) const noexcept;
 
@@ -261,11 +263,6 @@ inline float MoveSegment::CalcLinearB(float startDistance, float startTime) cons
 inline float MoveSegment::CalcC(float mmPerStep) const noexcept
 {
 	return c * mmPerStep;
-}
-
-inline float MoveSegment::CalcCDelta() const noexcept
-{
-	return c;
 }
 
 // Given that this is an accelerating or decelerating move, return true if it is accelerating

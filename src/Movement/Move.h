@@ -107,7 +107,7 @@ public:
 	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
 	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
-	const ExtruderShaper& GetExtruderShaper(size_t extruder) const noexcept { return extruderShapers[extruder]; }
+	ExtruderShaper& GetExtruderShaper(size_t extruder) noexcept { return extruderShapers[extruder]; }
 
 	void Diagnostics(MessageType mtype) noexcept;							// Report useful stuff
 

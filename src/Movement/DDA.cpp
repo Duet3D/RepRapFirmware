@@ -778,7 +778,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				if (extruderSegments != nullptr)
 				{
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-					pdm->PrepareExtruder(*this);
+					pdm->PrepareExtruder(*this, params);
 					InsertDM(pdm);
 				}
 			}
@@ -1470,7 +1470,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						if (extruderSegments != nullptr)
 						{
 							DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-							pdm->PrepareExtruder(*this);
+							pdm->PrepareExtruder(*this, params);
 							pdm->directionChanged = false;
 							InsertDM(pdm);
 						}
