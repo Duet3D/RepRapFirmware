@@ -1,0 +1,152 @@
+name: Bug Report
+description: File a bug report
+title: "[Bug]: "
+labels: [bug]
+assignees:
+- x0rtrunks
+body:
+- type: markdown
+  attributes:
+    value: |
+      # STOP!
+      ### Before posting a bug report here, you must start a discussion on Duet3D forums. This is to help reduce duplicates and solve configuration issues.
+      https://forum.duet3d.com/categories
+
+      ### Before posting your issue, please review the following sources to check if your question has already been reported and answered.
+
+      #### Have you checked the documentation?
+      https://duet3d.dozuki.com/
+
+      #### Have you checked the GCODE Wiki?
+      https://duet3d.dozuki.com/Wiki/Gcode
+
+      #### Have you checked the firmware release notes?
+      RRF2: https://github.com/Duet3D/RepRapFirmware/wiki/Changelog-RRF-1.x-&-2.x
+      RRF3: https://github.com/Duet3D/RepRapFirmware/wiki/Changelog-RRF-3.x
+
+      #### Have you searched the forums?
+      https://forum.duet3d.com/search
+
+      #### If this is a Beta firmware release, have you checked the Beta Firmware Forum?
+      https://forum.duet3d.com/category/30/beta-firmware
+
+      #### Have you searched the existing issues on GitHub?
+      
+      ### Please complete the following form to the best of your ability. Provide as much detail as possible. 
+      
+      ## Thank you for taking the time to file a bug report.
+- type: checkboxes
+  id: Hardware
+  attributes:
+    label: Which Duet products are you using?
+    description: Please list all Duet electronics boards you are using when experiencing your issue.
+    options:
+      - label: Duet2-Wifi
+      - label: Duet2-Ethernet
+      - label: Duet Expansion Breakout Board
+      - label: Duex2
+      - label: Duex5
+      - label: Duet2-Maestro
+      - label: Maestro Dual Driver Expansion
+      - label: Duet3-6HC
+      - label: Duet3-3HC
+      - label: Duet3-1XD
+      - label: Duet3-1LC
+      - label: Duet3-Tool Distribution Board
+      - label: Duet3-Mini5+
+      - label: Duet3-Mini2+
+      - label: Raspberry Pi or other SBC
+      - label: SmartEffector
+      - label: Magnetic Filament Sensor
+      - label: Laser Filament Sensor
+      - label: PT100 Daughterboard
+      - label: Thermocouple Daughterboard
+      - label: PanelDue
+      - label: Other
+      - label: None
+  validations:
+    required: true
+- type: input
+  id: FirmwareVersion
+  attributes:
+    label: Firmware Version
+    description: What version of our software are you running? Identify by sending M115
+    placeholder: ex. RepRapFirmware 3.2.2, PanelDueFirmware 3.3
+  validations:
+    required: true
+- type: input
+  id: DWCVersion
+  attributes:
+    label: Duet Web Control Version
+    description: What version of our software are you running? Identify in DWC by going to the Settings, General page
+    placeholder: ex. DWC 3.2.2, DWC 2.0
+  validations:
+    required: true
+- type: checkboxes
+  id: SBCMode
+  attributes:
+    label: Are you using a Single Board Computer (RaspberryPi) with your Duet?
+    description: SBC - Yes or No.
+    options:
+      - label: Yes I use a SBC.
+      - label: No I do not use a SBC.
+  validations:
+    required: true
+- type: textarea
+  id: M122
+  attributes:
+    label: Please upload the results of sending M122 in the gcode console.
+    description: This diagnostic report will provide a lot of useful information for us.
+    placeholder: Results of M122 copy and paste here.
+    value: "M122 Report"
+    render: shell
+  validations:
+    required: false
+- type: textarea
+  id: config
+  attributes:
+    label: Please upload the content of your config.g file.
+    description: This will show us how your printer is configured at startup.
+    placeholder: Copy and paste your config.g here.
+    value: "Config.g"
+    render: gcode
+  validations:
+    required: false
+- type: textarea
+  id: OtherMacros
+  attributes:
+    label: Please upload the content of any other releveant macro files.
+    description: Homeall.g, bed.g, or a custom macro needed to reproduce the problem.
+    placeholder: Copy and paste your macro file here.
+    render: gcode
+  validations:
+    required: false
+- type: textarea
+  id: PrinterDetails
+  attributes:
+    label: Details specific to your printer.
+    description: Please tell us about your printer.
+    placeholder: Make, model, DIY, kinematics, motors, power supply voltage, heaters, fans, etc.
+  validations:
+    required: false
+- type: textarea
+  id: Links
+  attributes:
+    label: Links to additional info.
+    description: Please share any links to forum threads or photos and videos of the problem.
+  validations:
+    required: false
+- type: textarea
+  id: ProblemDescription
+  attributes:
+    label: What happened?
+    description: Describe the problem in as much detail as possible.
+    value: |
+      Expected result
+      
+      Observed result
+      
+      Steps to reproduce
+      
+  validations:
+    required: true

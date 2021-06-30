@@ -1,0 +1,52 @@
+name: Feature Request
+description: Suggest an idea for this project
+title: "[FeatureRequest]: "
+labels: [FeatureRequest]
+assignees:
+- x0rtrunks
+body:
+- type: markdown
+  attributes:
+    value: |
+      ### The Duet forums have wishlist sections for feature requests if you'd like to discuss your feature request there first.
+      https://forum.duet3d.com/category/9/hardware-wishlist
+      https://forum.duet3d.com/category/8/firmware-wishlist
+      https://forum.duet3d.com/category/11/duet-web-control-wishlist
+     
+      ## Thank you for taking the time to submit a feature request.
+- type: textarea
+  id: ProblemDescription
+  attributes:
+    label: Is your feature request related to a problem? Please describe.
+    description: A clear and concise description of what the problem is.
+    value: |
+      Ex. I'm always frustrated when...
+  validations:
+    required: true
+- type: textarea
+  id: SolutionDescription
+  attributes:
+    label: Describe the solution you propose.
+    description: A clear and concise description of your prefered solution.
+    value: |
+      Ex. It would be great if...
+  validations:
+    required: true    
+- type: textarea
+  id: AlternativesDescription
+  attributes:
+    label: Describe alternatives you've considered
+    description: A clear and concise description of any alternative solutions or features you've considered.
+    value: |
+      Ex. A workaround exists but it is tedius, for example...
+  validations:
+    required: false  
+- type: textarea
+  id: AdditionalDetails
+  attributes:
+    label: Provide any additional context or information.
+    description: Add any other context or screenshots about the feature request here.
+    value: |
+      Ex. Photos, mockups, etc.
+  validations:
+    required: false
