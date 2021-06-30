@@ -390,21 +390,32 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	}
 
 	// Check whether there are any steps at all
+	const float forwardSteps = forwardDistance * mp.cart.effectiveStepsPerMm;
 	if (reverseDistance > 0.0)
 	{
-		qq;
+		const float netDistance = forwardDistance - reverseDistance;
+		const int32_t netSteps = netDistance * mp.cart.effectiveStepsPerMm;
+		if (netSteps == 0 && forwardSteps <= 1)
+		{
+			// No movement at all, or one step forward and one step back which we will ignore
+			shaper.SetExtrusionPending(netDistance * dda.directionVector[drive]);
+			return false;
+		}
+
+		reverseStartStep = forwardSteps + 1;
+		totalSteps = 2 * reverseStartStep - forwardSteps;
+		shaper.SetExtrusionPending((netDistance - (float)netSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 	}
 	else
 	{
-		const float steps = forwardDistance * stepsPerMm;
-		if (steps >= 1.0)
+		if (forwardSteps >= 1.0)
 		{
-			totalSteps = (uint32_t)steps;
+			totalSteps = (uint32_t)forwardSteps;
 			shaper.SetExtrusionPending((forwardDistance - (float)totalSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 		}
-		else if (steps <= -1.0)
+		else if (forwardSteps <= -1.0)
 		{
-			totalSteps = (uint32_t)(-steps);
+			totalSteps = (uint32_t)(-forwardSteps);
 			shaper.SetExtrusionPending((forwardDistance + (float)totalSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 		}
 		else
