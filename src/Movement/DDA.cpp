@@ -2073,7 +2073,7 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 		// We need to make sure it has really started, or we can get arithmetic wrap round in the case that there are no local drivers stepping.
 		const uint32_t timeRunning = StepTimer::GetTimerTicks() - afterPrepare.moveStartTime;
 		if (   timeRunning + WakeupTime >= clocksNeeded				// if it looks like the move has almost finished
-			&& timeRunning < 0 - MovementStartDelayClocks			// and it really has started
+			&& timeRunning < 0 - AbsoluteMinimumPreparedTime		// and it really has started
 			)
 		{
 			state = completed;
