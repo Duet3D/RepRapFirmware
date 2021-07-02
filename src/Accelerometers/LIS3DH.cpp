@@ -182,6 +182,7 @@ bool LIS3DH::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 	{
 		return false;
 	}
+	delayMicroseconds(1);
 	transferBuffer[1] = (uint8_t)reg | 0xC0;		// set auto increment and read bits
 	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToRead);
 	Deselect();
