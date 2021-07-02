@@ -58,25 +58,25 @@ private:
 	float GetExtraDecelStartDistance(const DDA& dda) const noexcept;
 	float GetExtraDecelEndDistance(const DDA& dda) const noexcept;
 
-	static constexpr unsigned int MaxImpulses = 5;
+	static constexpr unsigned int MaxExtraImpulses = 4;
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.1;
 	static constexpr float DefaultMinimumAcceleration = 10.0;
 
-	float frequency;								// the undamped frequency
-	float zeta;										// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
-	float minimumAcceleration;						// the minimum value that we reduce acceleration to (DAA only)
-	float coefficients[MaxImpulses - 1];			// the coefficients of all the impulses, except the last which is 1
-	float durations[MaxImpulses - 1];				// the duration in seconds of each impulse except the last
-	float totalDuration;							// the total input shaping time in seconds
-	float totalShapingClocks;						// the total input shaping time in step clocks
-	float clocksLostAtStart, clocksLostAtEnd;		// the acceleration time lost due to input shaping. Multiply by 2 if shaping is used at both the start and end of acceleration.
-	float overlappedCoefficients[MaxImpulses - 1][2 * MaxImpulses - 1];
-	float overlappedShapingClocks[MaxImpulses - 1];
-	float overlappedClocksLost[MaxImpulses - 1];
-	float averageAcceleration[MaxImpulses - 1];
-	unsigned int numImpulses;						// the total number of impulses
-	unsigned int maxOverlap;						// the maximum number of acceleration and deceleration segments that can be overlapped
+	unsigned int numExtraImpulses;						// the number of extra impulses
+	float frequency;									// the undamped frequency
+	float zeta;											// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
+	float minimumAcceleration;							// the minimum value that we reduce average acceleration to
+	float coefficients[MaxExtraImpulses];				// the coefficients of all the impulses
+	float durations[MaxExtraImpulses];					// the duration in seconds of each impulse
+	float totalDuration;								// the total input shaping time in seconds, which is the sum of the durations
+	float totalShapingClocks;							// the total input shaping time in step clocks
+	float clocksLostAtStart, clocksLostAtEnd;			// the acceleration time lost due to input shaping
+	float overlappedCoefficients[2 * MaxExtraImpulses];	// the coefficients if we use a shaped start immediately followed by a shaped end
+	float overlappedDuration;
+	float overlappedShapingClocks;
+	float overlappedClocksLost;
+	float overlappedAverageAcceleration;
 	InputShaperType type;
 };
 

@@ -27,7 +27,7 @@ constexpr ObjectModelTableEntry AxisShaper::objectModelTable[] =
 	// 0. InputShaper members
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
-	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
+	{ "minAcceleration",		OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
@@ -36,10 +36,10 @@ constexpr uint8_t AxisShaper::objectModelTableDescriptor[] = { 1, 4 };
 DEFINE_GET_OBJECT_MODEL_TABLE(AxisShaper)
 
 AxisShaper::AxisShaper() noexcept
-	: frequency(DefaultFrequency),
+	: numExtraImpulses(0),
+	  frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
 	  minimumAcceleration(DefaultMinimumAcceleration),
-	  numImpulses(1),
 	  type(InputShaperType::none)
 {
 }
@@ -47,8 +47,8 @@ AxisShaper::AxisShaper() noexcept
 // Process M593
 GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const float MinimumInputShapingFrequency = (float)StepTimer::StepClockRate/(2 * 65535);			// we use a 16-bit number of step clocks to represent half the input shaping period
-	const float MaximumInputShapingFrequency = 1000.0;
+	constexpr float MinimumInputShapingFrequency = (float)StepTimer::StepClockRate/(2 * 65535);			// we use a 16-bit number of step clocks to represent half the input shaping period
+	constexpr float MaximumInputShapingFrequency = 1000.0;
 	bool seen = false;
 	if (gb.Seen('F'))
 	{
@@ -97,18 +97,17 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		switch (type.RawValue())
 		{
 		case InputShaperType::none:
-			numImpulses = 1;
+			numExtraImpulses = 0;
 			break;
 
 		case InputShaperType::custom:
 			{
 				// Get the coefficients
-				size_t numAmplitudes = MaxImpulses - 1;
+				size_t numAmplitudes = MaxExtraImpulses;
 				gb.MustSee('H');
 				gb.GetFloatArray(coefficients, numAmplitudes, false);
 
 				// Get the impulse durations, if provided
-				maxOverlap = numAmplitudes;							// assume we can overlap, until we find otherwise
 				if (gb.Seen('T'))
 				{
 					size_t numDurations = numAmplitudes;
@@ -121,16 +120,6 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 						type = InputShaperType::none;
 						return GCodeResult::error;
 					}
-
-					// Test whether the durations are equal
-					for (unsigned int i = 1; i < numAmplitudes; ++i)
-					{
-						if (durations[i] != durations[0])
-						{
-							maxOverlap = 0;
-							break;
-						}
-					}
 				}
 				else
 				{
@@ -139,14 +128,14 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 						durations[i] = 0.5/frequency;
 					}
 				}
-				numImpulses = numAmplitudes + 1;
+				numExtraImpulses = numAmplitudes;
 			}
 			break;
 
 #if SUPPORT_DAA
 		case InputShaperType::daa:
 			durations[0] = 1.0/dampedFrequency;
-			numImpulses	= 1;
+			numExtraImpulses = 0;
 			break;
 #endif
 
@@ -157,8 +146,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[1] = coefficients[0] + 2.0 * k/j;
 			}
 			durations[0] = durations[1] = 0.5/dampedFrequency;
-			numImpulses = 3;
-			maxOverlap = 2;
+			numExtraImpulses = 2;
 			break;
 
 		case InputShaperType::zvdd:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
@@ -169,8 +157,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[2] = coefficients[1] + 3.0 * fsquare(k)/j;
 			}
 			durations[0] = durations[1] = durations[2] = 0.5/dampedFrequency;
-			numImpulses = 4;
-			maxOverlap = 3;
+			numExtraImpulses = 3;
 			break;
 
 		case InputShaperType::ei2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
@@ -181,13 +168,11 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[1] = (0.16054 + 0.33911)           + (0.76699 + 0.45081)           * zeta + (2.26560 - 2.58080)           * zetaSquared + (-1.22750 + 1.73650)           * zetaCubed;
 				coefficients[2] = (0.16054 + 0.33911 + 0.34089) + (0.76699 + 0.45081 - 0.61533) * zeta + (2.26560 - 2.58080 - 0.68765) * zetaSquared + (-1.22750 + 1.73650 + 0.42261) * zetaCubed;
 
-				// TODO is it really worth using precise durations instead of setting them all to 0.5/frequency? If we don't, then we can condense the shaping when the acceleration time is short.
 				durations[0] = ((0.49890)           + ( 0.16270          ) * zeta + (          -0.54262) * zetaSquared + (          6.16180) * zetaCubed)/dampedFrequency;
 				durations[1] = ((0.99748 - 0.49890) + ( 0.18382 - 0.16270) * zeta + (-1.58270 + 0.54262) * zetaSquared + (8.17120 - 6.16180) * zetaCubed)/dampedFrequency;
 				durations[2] = ((1.49920 - 0.99748) + (-0.09297 - 0.18382) * zeta + (-0.28338 + 1.58270) * zetaSquared + (1.85710 - 8.17120) * zetaCubed)/dampedFrequency;
 			}
-			numImpulses = 4;
-			maxOverlap = 0;
+			numExtraImpulses = 3;
 			break;
 
 		case InputShaperType::ei3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
@@ -199,21 +184,20 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[2] = (0.11275 + 0.23698 + 0.30008)           + (0.76632 + 0.61164 - 0.19062)           * zeta + (3.29160 - 2.57850 - 2.14560)           * zetaSquared + (-1.44380 + 4.85220 + 0.13744)           * zetaCubed;
 				coefficients[3] = (0.11275 + 0.23698 + 0.30008 + 0.23775) + (0.76632 + 0.61164 - 0.19062 - 0.73297) * zeta + (3.29160 - 2.57850 - 2.14560 + 0.46885) * zetaSquared + (-1.44380 + 4.85220 + 0.13744 - 2.08650) * zetaCubed;
 
-				// TODO is it really worth using precise durations instead of setting them all to 0.5/frequency? If we don't, then we can condense the shaping when the acceleration time is short.
 				durations[0] = ((0.49974)           + (0.23834)            * zeta + (0.44559)            * zetaSquared + (12.4720)           * zetaCubed)/dampedFrequency;
 				durations[1] = ((0.99849 - 0.49974) + (0.29808 - 0.23834)  * zeta + (-2.36460 - 0.44559) * zetaSquared + (23.3990 - 12.4720) * zetaCubed)/dampedFrequency;
 				durations[2] = ((1.49870 - 0.99849) + (0.10306 - 0.29808)  * zeta + (-2.01390 + 2.36460) * zetaSquared + (17.0320 - 23.3990) * zetaCubed)/dampedFrequency;
 				durations[3] = ((1.99960 - 1.49870) + (-0.28231 - 0.10306) * zeta + (0.61536 + 2.01390)  * zetaSquared + (5.40450 - 17.0320) * zetaCubed)/dampedFrequency;
 			}
-			numImpulses = 5;
-			maxOverlap = 0;
+			numExtraImpulses = 4;
 			break;
 		}
 
+		// Calculate the total extra duration of input shaping
 		totalDuration = 0.0;
 		float tLostAtStart = 0.0;
 		float tLostAtEnd = 0.0;
-		for (uint8_t i = 0; i < numImpulses - 1; ++i)
+		for (uint8_t i = 0; i < numExtraImpulses - 1; ++i)
 		{
 			totalDuration += durations[i];
 			tLostAtStart += (1.0 - coefficients[i]) * durations[i];
@@ -223,39 +207,33 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		clocksLostAtEnd = tLostAtEnd * StepTimer::StepClockRate;
 		totalShapingClocks = totalDuration * StepTimer::StepClockRate;
 
-		// Calculate the clocks and coefficients needed for various degrees of overlapping
-		for (unsigned int overlap = 0; overlap < maxOverlap; ++overlap)
+		// Calculate the clocks and coefficients needed when we shape the start of acceleration/deceleration and then immediately shape the end
+		float maxVal = 0.0;
+		float totalAcceleration = 0.0;
+		for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
 		{
-			const unsigned int overlapStart = numImpulses - overlap;
-			float maxVal = 0.0;
-			float totalAcceleration = 0.0;
-			for (unsigned int i = 0; i < numImpulses + overlapStart; ++i)
+			float val = (i < numExtraImpulses) ? coefficients[i] : 1.0;
+			if (i >= numExtraImpulses)
 			{
-				float val = (i < numImpulses) ? coefficients[i] : 1.0;
-				if (i >= overlapStart)
-				{
-					val -= coefficients[i - overlapStart];
-				}
-				if (maxVal > val)
-				{
-					maxVal = val;
-				}
-				overlappedCoefficients[overlap][i] = val;
-				totalAcceleration += val;
+				val -= coefficients[i - numExtraImpulses];
 			}
-
-			// Now scale the values by maxVal
-			if (maxVal < 1.0)
+			if (maxVal > val)
 			{
-				const float scaling = 1.0/maxVal;
-				for (unsigned int i = 0; i < numImpulses + overlapStart; ++i)
-				{
-					overlappedCoefficients[overlap][i] *= scaling;
-				}
-				totalAcceleration *= scaling;
+				maxVal = val;
 			}
-			averageAcceleration[overlap] = totalAcceleration/numImpulses + overlapStart;
+			overlappedCoefficients[i] = val;
+			totalAcceleration += val;
 		}
+
+		// Now scale the values by maxVal
+		const float scaling = 1.0/maxVal;
+		for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
+		{
+			overlappedCoefficients[i] *= scaling;
+		}
+		totalAcceleration *= scaling;
+
+		overlappedAverageAcceleration = totalAcceleration/numExtraImpulses + numExtraImpulses;
 
 		reprap.MoveUpdated();
 	}
@@ -266,15 +244,15 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	else
 	{
 		reply.printf("Input shaping '%s' at %.1fHz damping factor %.2f, min. acceleration %.1f", type.ToString(), (double)frequency, (double)zeta, (double)minimumAcceleration);
-		if (numImpulses > 1)
+		if (numExtraImpulses != 0)
 		{
 			reply.cat(", impulses");
-			for (unsigned int i = 0; i < numImpulses - 1; ++i)
+			for (unsigned int i = 0; i < numExtraImpulses; ++i)
 			{
 				reply.catf(" %.3f", (double)coefficients[i]);
 			}
 			reply.cat(" with durations (ms)");
-			for (unsigned int i = 0; i < numImpulses - 1; ++i)
+			for (unsigned int i = 0; i < numExtraImpulses; ++i)
 			{
 				reply.catf(" %.2f", (double)(durations[i] * 1000.0));
 			}
@@ -436,7 +414,7 @@ InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool 
 		plan.shapeDecelStart = params.decelClocks + clocksLostAtStart >= totalShapingClocks
 									&& params.decelStartDistance > params.accelDistance;
 		plan.shapeDecelEnd =   params.decelClocks + clocksLostAtEnd >= totalShapingClocks
-									&& (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove());
+								&& (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove());
 
 //		debugPrintf("Original plan %03x ", (unsigned int)plan.all);
 		{
@@ -546,7 +524,7 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrep
 		{
 			// Shape the end of the acceleration
 			float segStartSpeed = dda.topSpeed;
-			for (int i = numImpulses - 2; i >= 0; --i)
+			for (int i = numExtraImpulses - 1; i >= 0; --i)
 			{
 				++numAccelSegs;
 				endAccelSegs = MoveSegment::Allocate(endAccelSegs);
@@ -567,7 +545,7 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrep
 		if (plan.shapeAccelStart)
 		{
 			// Shape the start of the acceleration
-			for (unsigned int i = 0; i < numImpulses - 1; ++i)
+			for (unsigned int i = 0; i < numExtraImpulses; ++i)
 			{
 				++numAccelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
@@ -630,7 +608,7 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const BasicPrep
 		{
 			// Shape the end of the deceleration
 			float segStartSpeed = dda.endSpeed;
-			for (int i = numImpulses - 2; i >= 0; --i)
+			for (int i = numExtraImpulses - 1; i >= 0; --i)
 			{
 				++numDecelSegs;
 				endDecelSegs = MoveSegment::Allocate(endDecelSegs);
@@ -651,7 +629,7 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const BasicPrep
 		if (plan.shapeDecelStart)
 		{
 			// Shape the start of the deceleration
-			for (unsigned int i = 0; i < numImpulses - 1; ++i)
+			for (unsigned int i = 0; i < numExtraImpulses; ++i)
 			{
 				++numDecelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
@@ -729,7 +707,7 @@ float AxisShaper::GetExtraAccelStartDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float u = dda.startSpeed;
-	for (unsigned int seg = 0; seg < numImpulses - 1; ++seg)
+	for (unsigned int seg = 0; seg < numExtraImpulses; ++seg)
 	{
 		const float segTime = durations[seg];
 		const float speedChange = coefficients[seg] * dda.acceleration * segTime;
@@ -744,7 +722,7 @@ float AxisShaper::GetExtraAccelEndDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float v = dda.topSpeed;
-	for (int seg = numImpulses - 2; seg >= 0; --seg)
+	for (int seg = numExtraImpulses - 1; seg >= 0; --seg)
 	{
 		const float segTime = durations[seg];
 		const float speedChange = (1.0 - coefficients[seg]) * dda.acceleration * segTime;
@@ -759,7 +737,7 @@ float AxisShaper::GetExtraDecelStartDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float u = dda.topSpeed;
-	for (unsigned int seg = 0; seg < numImpulses - 1; ++seg)
+	for (unsigned int seg = 0; seg < numExtraImpulses; ++seg)
 	{
 		const float segTime = durations[seg];
 		const float speedChange = coefficients[seg] * dda.deceleration * segTime;
@@ -774,7 +752,7 @@ float AxisShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 {
 	float extraDistance = 0.0;
 	float v = dda.endSpeed;
-	for (int seg = numImpulses - 2; seg >= 0; --seg)
+	for (int seg = numExtraImpulses - 1; seg >= 0; --seg)
 	{
 		const float segTime = durations[seg];
 		const float speedChange = (1.0 - coefficients[seg]) * dda.deceleration * segTime;
