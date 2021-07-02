@@ -635,6 +635,9 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 void CanInterface::SendMotion(CanMessageBuffer *buf) noexcept
 {
 	buf->next = nullptr;
+#if 0
+	buf->msg.moveLinear.DebugPrint();
+#endif
 	{
 		TaskCriticalSectionLocker lock;
 
