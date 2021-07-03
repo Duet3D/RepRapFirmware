@@ -1220,12 +1220,14 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	if (flags.isLeadscrewAdjustmentMove)
 	{
 		params.SetFromDDA(*this);
+		params.Finalise(*this);
 		axisSegments = AxisShaper::GetUnshapedSegments(*this, params);
 	}
 	else if (flags.isNonPrintingExtruderMove)
 	{
 		axisSegments = nullptr;
 		params.SetFromDDA(*this);
+		params.Finalise(*this);
 #if SUPPORT_CAN_EXPANSION
 		params.shapingPlan.SetNoShaping();
 #endif

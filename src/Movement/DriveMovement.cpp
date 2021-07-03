@@ -85,7 +85,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 			state = DMState::cartAccelOrDecelNoReverse;
 		}
 
-		phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm);
+		phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 		if (nextStep < phaseStepLimit)
 		{
 			return true;
@@ -117,7 +117,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
 			pB = currentSegment->CalcLinearB(startDistance, startTime);
-			phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm);
+			phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 			state = DMState::cartLinear;
 		}
 		else
@@ -129,7 +129,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			{
 				// Extruders have a single acceleration segment. We need to add the extra extrusion distance due to pressure advance to the extrusion distance.
 				distanceSoFar += mp.cart.extraExtrusionDistance;
-				phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm);
+				phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 				state = DMState::cartAccelOrDecelNoReverse;
 			}
 			else
@@ -186,12 +186,12 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 		{
 			// This segment is purely upwards motion of the tower
 			state = DMState::deltaForwardsNoReverse;
-			phaseStepLimit = (uint32_t)netStepsAtEnd;
+			phaseStepLimit = (uint32_t)netStepsAtEnd + 1;
 		}
 		else
 		{
 			// This segment ends with reverse motion
-			phaseStepLimit = 2 * reverseStartStep - (uint32_t)netStepsAtEnd;
+			phaseStepLimit = 2 * reverseStartStep - (uint32_t)netStepsAtEnd + 1;
 			state = DMState::deltaForwardsReversing;
 		}
 

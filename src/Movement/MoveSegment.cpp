@@ -70,11 +70,11 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 	debugPrintf("%c d=%7.3f t=%7" PRIu32 " ", ch, (double)segmentLength, (uint32_t)segTime);
 	if (IsLinear())
 	{
-		debugPrintf("c=%.1f\n", (double)c);
+		debugPrintf("c=%.3e\n", (double)c);
 	}
 	else
 	{
-		debugPrintf("b=%.1f c=%12g\n", (double)b, (double)c);
+		debugPrintf("b=%.3e c=%.3e\n", (double)b, (double)c);
 	}
 }
 

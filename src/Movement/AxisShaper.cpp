@@ -769,8 +769,8 @@ float AxisShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 	if (params.decelClocks > 0.0)
 	{
 		tempSegments = MoveSegment::Allocate(nullptr);
-		const float b = -dda.topSpeed/dda.deceleration;
-		const float c = -2.0/dda.deceleration;
+		const float b = (-dda.topSpeed * StepTimer::StepClockRate)/dda.deceleration;
+		const float c = (-2.0 * StepTimer::StepClockRateSquared)/dda.deceleration;
 		tempSegments->SetNonLinear(params.decelDistance, params.decelClocks, b, c);
 	}
 	else
@@ -782,16 +782,16 @@ float AxisShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 	if (params.steadyClocks > 0.0)
 	{
 		tempSegments = MoveSegment::Allocate(tempSegments);
-		const float c = 1.0/dda.topSpeed;
-		tempSegments->SetLinear(params.decelStartDistance, params.accelClocks + dda.beforePrepare.accelDistance/dda.topSpeed, c);
+		const float c = StepTimer::StepClockRate/dda.topSpeed;
+		tempSegments->SetLinear(params.decelStartDistance, params.accelClocks + (dda.beforePrepare.accelDistance * c), c);
 	}
 
 	// Acceleration phase
 	if (params.accelClocks > 0.0)
 	{
 		tempSegments = MoveSegment::Allocate(tempSegments);
-		const float b = dda.startSpeed/dda.acceleration;
-		const float c = 2.0/dda.acceleration;
+		const float b = (dda.startSpeed * StepTimer::StepClockRate)/dda.acceleration;
+		const float c = (2.0 * StepTimer::StepClockRateSquared)/dda.acceleration;
 		tempSegments->SetNonLinear(params.accelDistance, params.accelClocks, b, c);
 	}
 
