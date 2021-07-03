@@ -135,7 +135,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			else
 			{
 				// This is a decelerating segment. If it includes pressure advance then it may include reversal.
-				phaseStepLimit = totalSteps;					// there is only one decelerating segment for extruders and it is at the end
+				phaseStepLimit = totalSteps + 1;				// there is only one decelerating segment for extruders and it is at the end
 				state = DMState::cartDecelForwardsReversing;	// assume tnat it may reverse
 			}
 		}
@@ -449,8 +449,8 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " A=%g B=%g C=%" PRIu32 "\n",
-						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, (double)pA, (double)pB, (uint32_t)pC);
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " A=%g B=%g C=%g ",
+						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, (double)pA, (double)pB, (double)pC);
 		if (isDelta)
 		{
 			debugPrintf("hmz0s=%.2f minusAaPlusBbTimesS=%.2f dSquaredMinusAsquaredMinusBsquared=%.2f\n",
