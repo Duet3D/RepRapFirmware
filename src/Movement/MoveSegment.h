@@ -69,16 +69,16 @@
  *   t = ts + B + sqrt(A + C*n/(f*m))
  * where for an acceleration segment:
  *   B = -u/a + k
- *   A = B^2 - 2*(S0 + p/f)/a
+ *   A = B^2 - 2*(S0 + p/f)/a = B^2 - C * (S0 + p/f)
  *   C = 2/a
  * and for a deceleration segment:
  *   B = u/d - k
- *   A = B^2 + 2*(S0 + EAD + p/f)/d
+ *   A = B^2 + 2*(S0 + EAD + p/f)/d = B^2 - C * (S0 + p/f)
  *   C = -2/d
  * For a linear segment:
  *   t = ts + B + C*n/(f*m)
  * where:
- *   B = (S0 + EAD + p/f)/u
+ *   B = -(S0 + EAD + p/f)/u
  *   C = 1/u
  *
  * For accelerating moves we can interpret (-A/C) as the (negative) distance at which the move reversed, and B is the time at which it reversed (negative so in the past)
@@ -105,7 +105,7 @@
  *   B' = (B - k) + ts
  *   C' = C * 1/(f*m)
  * For linear segments:
- *   B' = (Dprev + p/f)*C + ts
+ *   B' = -(Dprev + p/f)*C + ts
  *   C' = C * 1/(f*m)
  *
  * When preparing a move we need to:
@@ -242,7 +242,7 @@ inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, flo
 
 inline float MoveSegment::CalcNonlinearA(float startDistance) const noexcept
 {
-	return fsquare(b) + startDistance * c;
+	return fsquare(b) - startDistance * c;
 }
 
 inline float MoveSegment::CalcNonlinearB(float startTime) const noexcept
@@ -257,7 +257,7 @@ inline float MoveSegment::CalcNonlinearB(float startTime, float pressureAdvanceK
 
 inline float MoveSegment::CalcLinearB(float startDistance, float startTime) const noexcept
 {
-	return startDistance * c + startTime;
+	return startTime - (startDistance * c);
 }
 
 inline float MoveSegment::CalcC(float mmPerStep) const noexcept

@@ -82,7 +82,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
 			pA = currentSegment->CalcNonlinearA(startDistance);
 			pB = currentSegment->CalcNonlinearB(startTime);
-			state = DMState::cartAccelOrDecelNoReverse;
+			state = (currentSegment->IsAccelerating()) ? DMState::cartAccel : DMState::cartDecelNoReverse;
 		}
 
 		phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
@@ -130,13 +130,13 @@ bool DriveMovement::NewExtruderSegment() noexcept
 				// Extruders have a single acceleration segment. We need to add the extra extrusion distance due to pressure advance to the extrusion distance.
 				distanceSoFar += mp.cart.extraExtrusionDistance;
 				phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
-				state = DMState::cartAccelOrDecelNoReverse;
+				state = DMState::cartAccel;
 			}
 			else
 			{
 				// This is a decelerating segment. If it includes pressure advance then it may include reversal.
-				phaseStepLimit = totalSteps + 1;				// there is only one decelerating segment for extruders and it is at the end
-				state = DMState::cartDecelForwardsReversing;	// assume tnat it may reverse
+				phaseStepLimit = totalSteps + 1;						// there is only one decelerating segment for extruders and it is at the end
+				state = DMState::cartDecelForwardsReversing;			// assume that it may reverse
 			}
 		}
 
@@ -473,10 +473,10 @@ void DriveMovement::DebugPrint() const noexcept
 bool DriveMovement::CalcNextStepTimeFull(const DDA &dda) noexcept
 pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 {
-	uint32_t stepsToLimit;
+	uint32_t stepsToLimit = phaseStepLimit - nextStep;
 
 	// If there are no more steps left in this segment, skip to the next segment
-	if ((stepsToLimit = phaseStepLimit - nextStep) == 0)
+	if (stepsToLimit == 0)
 	{
 		currentSegment = currentSegment->GetNext();
 		const bool more = (isDelta) ? NewDeltaSegment(dda)
@@ -490,73 +490,62 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		}
 	}
 
+	if (phaseStepLimit > reverseStartStep)
+	{
+		stepsToLimit = reverseStartStep - nextStep;
+	}
+
 	uint32_t shiftFactor = 0;					// assume single stepping
+	if (stepsToLimit > 1 && stepInterval < DDA::MinCalcInterval)
+	{
+		if (stepInterval < DDA::MinCalcInterval/4 && stepsToLimit > 8)
+		{
+			shiftFactor = 3;				// octal stepping
+		}
+		else if (stepInterval < DDA::MinCalcInterval/2 && stepsToLimit > 4)
+		{
+			shiftFactor = 2;				// quad stepping
+		}
+		else if (stepsToLimit > 2)
+		{
+			shiftFactor = 1;				// double stepping
+		}
+	}
+	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
+
 	uint32_t nextCalcStepTime;
 
 	// Work out the time of the step
 	switch (state)
 	{
 	case DMState::cartLinear:					// linear steady speed
-		// Work out how many steps to calculate at a time.
-		if (stepsToLimit > 1 && stepInterval < DDA::MinCalcIntervalCartesian)
-		{
-			if (stepInterval < DDA::MinCalcIntervalCartesian/4 && stepsToLimit > 8)
-			{
-				shiftFactor = 3;				// octal stepping
-			}
-			else if (stepInterval < DDA::MinCalcIntervalCartesian/2 && stepsToLimit > 4)
-			{
-				shiftFactor = 2;				// quad stepping
-			}
-			else if (stepsToLimit > 2)
-			{
-				shiftFactor = 1;				// double stepping
-			}
-		}
-
-		stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 		nextCalcStepTime = pB + (float)(nextStep + stepsTillRecalc) * pC;
 		break;
 
+	case DMState::cartAccel:					// Cartesian accelerating
+		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+		break;
+
 	case DMState::cartDecelForwardsReversing:
-		if (reverseStartStep <= totalSteps)
+		if (nextStep <= reverseStartStep)
 		{
-			if (nextStep == reverseStartStep)
-			{
-				direction = false;
-				directionChanged = true;
-				state = DMState::deltaReverse;
-			}
-			else
-			{
-				stepsToLimit = reverseStartStep - nextStep;
-			}
-		}
-		// no break
-	case DMState::cartAccelOrDecelNoReverse:	// Cartesian accelerating, or decelerating with no reversal
-	case DMState::cartDecelReverse:				// Cartesian decelerating, reverse motion
-		// Work out how many steps to calculate at a time.
-		if (stepsToLimit > 1 && stepInterval < DDA::MinCalcIntervalCartesian)
-		{
-			if (stepInterval < DDA::MinCalcIntervalCartesian/4 && stepsToLimit > 8)
-			{
-				shiftFactor = 3;				// octal stepping
-			}
-			else if (stepInterval < DDA::MinCalcIntervalCartesian/2 && stepsToLimit > 4)
-			{
-				shiftFactor = 2;				// quad stepping
-			}
-			else if (stepsToLimit > 2)
-			{
-				shiftFactor = 1;				// double stepping
-			}
+			nextCalcStepTime = pB - fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+			break;
 		}
 
-		stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
+		direction = false;
+		directionChanged = true;
+		state = DMState::deltaReverse;
+		// no break
+	case DMState::cartDecelReverse:				// Cartesian decelerating, reverse motion
+		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)((2 * reverseStartStep - nextStep) + stepsTillRecalc));
+		break;
+
+	case DMState::cartDecelNoReverse:			// Cartesian accelerating with no reversal
 		nextCalcStepTime = pB - fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 		break;
 
-	case DMState::deltaForwardsReversing:			// moving forwards
+	case DMState::deltaForwardsReversing:		// moving forwards
 		if (reverseStartStep <= totalSteps)
 		{
 			if (nextStep == reverseStartStep)
@@ -573,29 +562,6 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// no break
 	case DMState::deltaForwardsNoReverse:
 	case DMState::deltaReverse:			// reversing on this and subsequent steps
-		// Work out how many steps to calculate at a time.
-		if (stepInterval < DDA::MinCalcIntervalDelta)
-		{
-			if (stepInterval < DDA::MinCalcIntervalDelta/8 && stepsToLimit > 16)
-			{
-				shiftFactor = 4;		// hexadecimal stepping
-			}
-			else if (stepInterval < DDA::MinCalcIntervalDelta/4 && stepsToLimit > 8)
-			{
-				shiftFactor = 3;		// octal stepping
-			}
-			else if (stepInterval < DDA::MinCalcIntervalDelta/2 && stepsToLimit > 4)
-			{
-				shiftFactor = 2;		// quad stepping
-			}
-			else if (stepsToLimit > 2)
-			{
-				shiftFactor = 1;		// double stepping
-			}
-		}
-
-		stepsTillRecalc = (1u << shiftFactor) - 1;						// store number of additional steps to generate
-
 		// Calculate d*s where d = distance the head has travelled, s = steps/mm for this drive
 		{
 			float steps = float(1u << shiftFactor);

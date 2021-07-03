@@ -26,8 +26,9 @@ enum class DMState : uint8_t
 
 	// All higher values are various states of motion
 	firstMotionState,
-	cartAccelOrDecelNoReverse = firstMotionState,	// linear accelerating motion
+	cartAccel = firstMotionState,					// linear accelerating motion
 	cartLinear,										// linear steady speed
+	cartDecelNoReverse,
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
 
