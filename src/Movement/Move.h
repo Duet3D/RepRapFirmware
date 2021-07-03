@@ -47,8 +47,6 @@ const unsigned int NumDms = 20 * 5;												// suitable for e.g. a delta + 2-
 
 #endif
 
-constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
-
 // This is the master movement class.  It controls all movement in the machine.
 class Move INHERIT_OBJECT_MODEL
 {
