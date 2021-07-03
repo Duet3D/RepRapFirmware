@@ -1219,11 +1219,13 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	PrepParams params;
 	if (flags.isLeadscrewAdjustmentMove)
 	{
+		params.SetFromDDA(*this);
 		axisSegments = AxisShaper::GetUnshapedSegments(*this, params);
 	}
 	else if (flags.isNonPrintingExtruderMove)
 	{
 		axisSegments = nullptr;
+		params.SetFromDDA(*this);
 #if SUPPORT_CAN_EXPANSION
 		params.shapingPlan.SetNoShaping();
 #endif
@@ -1236,6 +1238,8 @@ void DDA::Prepare(uint8_t simMode) noexcept
 		(void)reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
 #endif
 	}
+
+	extruderSegments = nullptr;
 
 	if (simMode == 0)
 	{
@@ -1261,7 +1265,6 @@ void DDA::Prepare(uint8_t simMode) noexcept
 		}
 
 		activeDMs = completedDMs = nullptr;
-		axisSegments = extruderSegments = nullptr;
 
 #if SUPPORT_CAN_EXPANSION
 		CanMotion::StartMovement();
@@ -1310,7 +1313,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 								// Check for sensible values, print them if they look dubious
 								if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 								{
-									DebugPrintAll("pr");
+									DebugPrintAll("pr_err1");
 								}
 								InsertDM(pdm);
 							}
@@ -1340,7 +1343,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						// Check for sensible values, print them if they look dubious
 						if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 						{
-							DebugPrintAll("pt");
+							DebugPrintAll("pr_err2");
 						}
 						InsertDM(pdm);
 					}
@@ -1402,7 +1405,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 							// Check for sensible values, print them if they look dubious
 							if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 							{
-								DebugPrintAll("pr");
+								DebugPrintAll("pr_err3");
 							}
 							InsertDM(pdm);
 						}

@@ -67,14 +67,14 @@ const MoveSegment *MoveSegment::GetFirstDecelSegment() const noexcept
 
 void MoveSegment::DebugPrint(char ch) const noexcept
 {
-	debugPrintf("%c d=%12g t=%6" PRIu32 " ", ch, (double)segmentLength, (uint32_t)segTime);
+	debugPrintf("%c d=%7.3f t=%7" PRIu32 " ", ch, (double)segmentLength, (uint32_t)segTime);
 	if (IsLinear())
 	{
-		debugPrintf("c=%14g\n", (double)c);
+		debugPrintf("c=%.1f\n", (double)c);
 	}
 	else
 	{
-		debugPrintf("b=%14g c=%14g\n", (double)b, (double)c);
+		debugPrintf("b=%.1f c=%12g\n", (double)b, (double)c);
 	}
 }
 

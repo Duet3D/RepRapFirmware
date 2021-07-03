@@ -215,6 +215,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	isDelta = false;
 	isExtruder = false;
 	currentSegment = dda.axisSegments;
+	nextStep = 0;									// must do this before calling NewCartesianSegment
 
 	if (!NewCartesianSegment())
 	{
@@ -222,7 +223,6 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	}
 
 	// Prepare for the first step
-	nextStep = 0;
 	nextStepTime = 0;
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
@@ -311,13 +311,13 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	currentSegment = dda.axisSegments;
 	mp.cart.extraExtrusionDistance = 0.0;
 
+	nextStep = 0;									// must do this before calling NewDeltaSegment
 	if (!NewDeltaSegment(dda))
 	{
 		return false;
 	}
 
 	// Prepare for the first step
-	nextStep = 0;
 	nextStepTime = 0;
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
@@ -431,13 +431,13 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	isDelta = false;
 	isExtruder = true;
 
+	nextStep = 0;									// must do this before calling NewExtruderSegment
 	if (!NewExtruderSegment())
 	{
 		return false;								// this should not happen because we have already determined that there are steps to do
 	}
 
 	// Prepare for the first step
-	nextStep = 0;
 	nextStepTime = 0;
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
