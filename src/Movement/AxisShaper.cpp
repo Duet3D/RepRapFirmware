@@ -197,7 +197,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		totalDuration = 0.0;
 		float tLostAtStart = 0.0;
 		float tLostAtEnd = 0.0;
-		for (uint8_t i = 0; i < numExtraImpulses - 1; ++i)
+		for (unsigned int i = 0; i < numExtraImpulses; ++i)
 		{
 			totalDuration += durations[i];
 			tLostAtStart += (1.0 - coefficients[i]) * durations[i];
@@ -207,33 +207,36 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		clocksLostAtEnd = tLostAtEnd * StepTimer::StepClockRate;
 		totalShapingClocks = totalDuration * StepTimer::StepClockRate;
 
-		// Calculate the clocks and coefficients needed when we shape the start of acceleration/deceleration and then immediately shape the end
-		float maxVal = 0.0;
-		float totalAcceleration = 0.0;
-		for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
+		if (numExtraImpulses != 0)
 		{
-			float val = (i < numExtraImpulses) ? coefficients[i] : 1.0;
-			if (i >= numExtraImpulses)
+			// Calculate the clocks and coefficients needed when we shape the start of acceleration/deceleration and then immediately shape the end
+			float maxVal = 0.0;
+			float totalAcceleration = 0.0;
+			for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
 			{
-				val -= coefficients[i - numExtraImpulses];
+				float val = (i < numExtraImpulses) ? coefficients[i] : 1.0;
+				if (i >= numExtraImpulses)
+				{
+					val -= coefficients[i - numExtraImpulses];
+				}
+				if (maxVal > val)
+				{
+					maxVal = val;
+				}
+				overlappedCoefficients[i] = val;
+				totalAcceleration += val;
 			}
-			if (maxVal > val)
+
+			// Now scale the values by maxVal
+			const float scaling = 1.0/maxVal;
+			for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
 			{
-				maxVal = val;
+				overlappedCoefficients[i] *= scaling;
 			}
-			overlappedCoefficients[i] = val;
-			totalAcceleration += val;
-		}
+			totalAcceleration *= scaling;
 
-		// Now scale the values by maxVal
-		const float scaling = 1.0/maxVal;
-		for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
-		{
-			overlappedCoefficients[i] *= scaling;
+			overlappedAverageAcceleration = totalAcceleration/(numExtraImpulses + 1);
 		}
-		totalAcceleration *= scaling;
-
-		overlappedAverageAcceleration = totalAcceleration/numExtraImpulses + numExtraImpulses;
 
 		reprap.MoveUpdated();
 	}
