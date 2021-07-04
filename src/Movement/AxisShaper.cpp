@@ -506,7 +506,7 @@ InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool 
 	MoveSegment * const decelSegs = GetDecelerationSegments(dda, params, plan);
 
 	params.Finalise(dda);									// this sets up params.steadyClocks, which is needed by FinishSegments
-	dda.axisSegments = FinishSegments(dda, params, accelSegs, decelSegs);
+	dda.shapedSegments = FinishSegments(dda, params, accelSegs, decelSegs);
 //	debugPrintf(" final plan %03x\n", (unsigned int)plan.all);
 	return plan;
 }

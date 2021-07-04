@@ -136,7 +136,7 @@ void BasicPrepParams::Finalise(DDA& dda) noexcept
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 {
 	activeDMs = completedDMs = nullptr;
-	axisSegments = extruderSegments = nullptr;
+	shapedSegments = unshapedSegments = nullptr;
 	tool = nullptr;						// needed in case we pause before any moves have been done
 
 	// Set the endpoints to zero, because Move will ask for them.
@@ -172,19 +172,19 @@ void DDA::ReleaseDMs() noexcept
 	}
 	activeDMs = completedDMs = nullptr;
 
-	for (MoveSegment* seg = axisSegments; seg != nullptr; )
+	for (MoveSegment* seg = shapedSegments; seg != nullptr; )
 	{
 		MoveSegment* const nextSeg = seg->GetNext();
 		MoveSegment::Release(seg);
 		seg = nextSeg;
 	}
-	for (MoveSegment* seg = extruderSegments; seg != nullptr; )
+	for (MoveSegment* seg = unshapedSegments; seg != nullptr; )
 	{
 		MoveSegment* const nextSeg = seg->GetNext();
 		MoveSegment::Release(seg);
 		seg = nextSeg;
 	}
-	axisSegments = extruderSegments = nullptr;
+	shapedSegments = unshapedSegments = nullptr;
 }
 
 // Return the number of clocks this DDA still needs to execute.
@@ -262,11 +262,11 @@ void DDA::DebugPrint(const char *tag) const noexcept
 	debugPrintf("\n"
 				"a=%f d=%f reqv=%f startv=%f topv=%f endv=%f cks=%" PRIu32 "\n",
 				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded);
-	for (const MoveSegment *segs = axisSegments; segs != nullptr; segs = segs->GetNext())
+	for (const MoveSegment *segs = shapedSegments; segs != nullptr; segs = segs->GetNext())
 	{
 		segs->DebugPrint('A');
 	}
-	for (const MoveSegment *segs = extruderSegments; segs != nullptr; segs = segs->GetNext())
+	for (const MoveSegment *segs = unshapedSegments; segs != nullptr; segs = segs->GetNext())
 	{
 		segs->DebugPrint('E');
 	}
@@ -697,7 +697,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	params.steadyClocks = msg.steadyClocks;
 	params.decelClocks = msg.decelClocks;
 
-	axisSegments = extruderSegments = nullptr;
+	shapedSegments = unshapedSegments = nullptr;
 	activeDMs = completedDMs = nullptr;
 
 	const size_t numDrivers = min<size_t>(msg.numDriversMinusOne + 1, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
@@ -712,11 +712,11 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				const int32_t delta = msg.perDrive[drive].iSteps;
 				if (delta != 0)
 				{
-					if (axisSegments ==nullptr)
+					if (shapedSegments == nullptr)
 					{
 						// Calculate the segments needed for axis movement
 						//TODO the message will include input shaping info
-						axisSegments = AxisShaper::GetUnshapedSegments(*this, params);
+						shapedSegments = AxisShaper::GetUnshapedSegments(*this, params);
 					}
 
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
@@ -755,11 +755,11 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 		case CanMessageMovementLinearShaped::shapedDelta:
 			{
-				if (axisSegments ==nullptr)
+				if (shapedSegments == nullptr)
 				{
 					// Calculate the segments needed for axis movement
 					//TODO the message will include input shaping info
-					axisSegments = AxisShaper::GetUnshapedSegments(*this, params);
+					shapedSegments = AxisShaper::GetUnshapedSegments(*this, params);
 				}
 
 				//TODO
@@ -771,11 +771,11 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			// no break
 		case CanMessageMovementLinearShaped::MoveType::extruderNoPa:
 			{
-				if (extruderSegments != nullptr)
+				if (unshapedSegments != nullptr)
 				{
-					extruderSegments = AxisShaper::GetUnshapedSegments(*this, params);
+					unshapedSegments = AxisShaper::GetUnshapedSegments(*this, params);
 				}
-				if (extruderSegments != nullptr)
+				if (unshapedSegments != nullptr)
 				{
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 					pdm->PrepareExtruder(*this, params);
@@ -1201,6 +1201,15 @@ pre(disableDeltaMapping || drive < MaxAxes)
 	}
 }
 
+// Set up unshapedSegments if we haven't done so already
+void DDA::EnsureUnshapedSegments(const BasicPrepParams& params) noexcept
+{
+	if (unshapedSegments == nullptr)
+	{
+		unshapedSegments = AxisShaper::GetUnshapedSegments(*this, params);
+	}
+}
+
 // Prepare this DDA for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare(uint8_t simMode) noexcept
@@ -1217,31 +1226,25 @@ void DDA::Prepare(uint8_t simMode) noexcept
 
 	// Prepare for axis movement if there is any
 	PrepParams params;
-	if (flags.isLeadscrewAdjustmentMove)
+	if (flags.xyMoving)
 	{
-		params.SetFromDDA(*this);
-		params.Finalise(*this);
-		axisSegments = AxisShaper::GetUnshapedSegments(*this, params);
+#if SUPPORT_CAN_EXPANSION
+		params.shapingPlan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
+#else
+		(void)reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);		// this sets up params and shapedSegments
+#endif
 	}
-	else if (flags.isNonPrintingExtruderMove)
+	else
 	{
-		axisSegments = nullptr;
+		shapedSegments = nullptr;
 		params.SetFromDDA(*this);
 		params.Finalise(*this);
 #if SUPPORT_CAN_EXPANSION
 		params.shapingPlan.SetNoShaping();
 #endif
 	}
-	else
-	{
-#if SUPPORT_CAN_EXPANSION
-		params.shapingPlan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
-#else
-		(void)reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
-#endif
-	}
 
-	extruderSegments = nullptr;
+	unshapedSegments = nullptr;
 
 	if (simMode == 0)
 	{
@@ -1296,16 +1299,17 @@ void DDA::Prepare(uint8_t simMode) noexcept
 				{
 					const int32_t delta = lrintf(directionVector[drive] * totalDistance * platform.DriveStepsPerUnit(Z_AXIS));
 					const DriverId driver = config.driverNumbers[drive];
+					if (delta != 0)
+					{
 #if SUPPORT_CAN_EXPANSION
-					if (driver.IsRemote())
-					{
-						CanMotion::AddMovement(params, driver, delta);
-					}
-					else
-#endif
-					{
-						if (delta != 0)
+						if (driver.IsRemote())
 						{
+							CanMotion::AddMovement(params, driver, delta);
+						}
+						else
+#endif
+						{
+							EnsureUnshapedSegments(params);
 							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::idle);
 							pdm->totalSteps = labs(delta);
 							pdm->direction = (delta >= 0);
@@ -1331,8 +1335,13 @@ void DDA::Prepare(uint8_t simMode) noexcept
 			}
 			else if (flags.isDeltaMovement && reprap.GetMove().GetKinematics().GetMotionType(drive) == MotionType::segmentFreeDelta)
 			{
-				platform.EnableDrivers(drive);
 				// On a delta we need to move all towers even if some of them have no net movement
+				platform.EnableDrivers(drive);
+				if (shapedSegments == nullptr)
+				{
+					EnsureUnshapedSegments(params);
+				}
+
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
@@ -1378,6 +1387,10 @@ void DDA::Prepare(uint8_t simMode) noexcept
 				if (delta != 0)
 				{
 					platform.EnableDrivers(drive);
+					if (shapedSegments == nullptr)
+					{
+						EnsureUnshapedSegments(params);
+					}
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{
 						// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
@@ -1468,16 +1481,23 @@ void DDA::Prepare(uint8_t simMode) noexcept
 					else
 #endif
 					{
-						if (extruderSegments == nullptr)
+						EnsureUnshapedSegments(params);
+						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+						pdm->direction = (directionVector[drive] >= 0);
+						if (pdm->PrepareExtruder(*this, params))
 						{
-							extruderSegments = AxisShaper::GetUnshapedSegments(*this, params);
-						}
-						if (extruderSegments != nullptr)
-						{
-							DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-							pdm->PrepareExtruder(*this, params);
 							pdm->directionChanged = false;
+							if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+							{
+								DebugPrintAll("pr_err4");
+							}
 							InsertDM(pdm);
+						}
+						else
+						{
+							pdm->state = DMState::idle;
+							pdm->nextDM = completedDMs;
+							completedDMs = pdm;
 						}
 					}
 				}

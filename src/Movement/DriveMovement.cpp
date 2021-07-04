@@ -210,11 +210,11 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	distanceSoFar = 0.0;
 	timeSoFar = 0.0;
 	mp.cart.pressureAdvanceK = 0.0;
-	mp.cart.effectiveStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * dda.directionVector[drive];
+	mp.cart.effectiveStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dda.directionVector[drive]);
 	mp.cart.effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
 	isDelta = false;
 	isExtruder = false;
-	currentSegment = dda.axisSegments;
+	currentSegment = (dda.shapedSegments != nullptr) ? dda.shapedSegments : dda.unshapedSegments;
 	nextStep = 0;									// must do this before calling NewCartesianSegment
 
 	if (!NewCartesianSegment())
@@ -308,7 +308,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	distanceSoFar = 0.0;
 	timeSoFar = 0.0;
 	isDelta = true;
-	currentSegment = dda.axisSegments;
+	currentSegment = (dda.shapedSegments != nullptr) ? dda.shapedSegments : dda.unshapedSegments;
 	mp.cart.extraExtrusionDistance = 0.0;
 
 	nextStep = 0;									// must do this before calling NewDeltaSegment
@@ -332,7 +332,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	distanceSoFar = shaper.GetExtrusionPending()/dda.directionVector[drive];
 
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-	mp.cart.effectiveStepsPerMm = stepsPerMm * dda.directionVector[drive];
+	mp.cart.effectiveStepsPerMm = stepsPerMm * fabsf(dda.directionVector[drive]);
 	mp.cart.effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
 
 	// Calculate the total forward and reverse movement distances
@@ -347,7 +347,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		forwardDistance += mp.cart.extraExtrusionDistance;
 
 		// Check if there is a reversal in the deceleration segment
-		const MoveSegment * const decelSeg = dda.extruderSegments->GetFirstDecelSegment();
+		const MoveSegment * const decelSeg = dda.unshapedSegments->GetFirstDecelSegment();
 		if (decelSeg == nullptr)
 		{
 			forwardDistance += dda.totalDistance;
@@ -426,7 +426,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		reverseStartStep = totalSteps + 1;			// no reverse phase
 	}
 
-	currentSegment = dda.extruderSegments;
+	currentSegment = dda.unshapedSegments;
 	timeSoFar = 0.0;
 	isDelta = false;
 	isExtruder = true;
