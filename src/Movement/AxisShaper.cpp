@@ -534,7 +534,7 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrep
 				const float acceleration = dda.acceleration * (1.0 - coefficients[i]);
 				const float segTime = durations[i];
 				segStartSpeed -= acceleration * segTime;
-				const float b = (segStartSpeed * StepTimer::StepClockRate)/acceleration;
+				const float b = (segStartSpeed * StepTimer::StepClockRate)/(-acceleration);
 				const float c = (2 * StepTimer::StepClockRateSquared)/acceleration;
 				const float segLen = (segStartSpeed + (0.5 * acceleration * segTime)) * segTime;
 				endDistance -= segLen;
@@ -555,7 +555,7 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrep
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float acceleration = dda.acceleration * coefficients[i];
 				const float segTime = durations[i];
-				const float b = (startSpeed * StepTimer::StepClockRate)/acceleration;
+				const float b = (startSpeed * StepTimer::StepClockRate)/(-acceleration);
 				const float c = (2 * StepTimer::StepClockRateSquared)/acceleration;
 				const float segLen = (startSpeed + (0.5 * acceleration * segTime)) * segTime;
 				startDistance += segLen;
@@ -578,7 +578,7 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrep
 		{
 			++numAccelSegs;
 			endAccelSegs = MoveSegment::Allocate(endAccelSegs);
-			const float b = (startSpeed * StepTimer::StepClockRate)/dda.acceleration;
+			const float b = (startSpeed * StepTimer::StepClockRate)/(-dda.acceleration);
 			const float c = (2 * StepTimer::StepClockRateSquared)/dda.acceleration;
 			endAccelSegs->SetNonLinear(endDistance - startDistance, params.accelClocks - (accumulatedSegTime * StepTimer::StepClockRate), b, c);
 		}
@@ -619,7 +619,7 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const BasicPrep
 				endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 				const float deceleration = dda.deceleration * (1.0 - coefficients[i]);
 				const float segTime = durations[i];
-				segStartSpeed -= deceleration * segTime;
+				segStartSpeed += deceleration * segTime;
 				const float b = (segStartSpeed * StepTimer::StepClockRate)/deceleration;
 				const float c = (2 * StepTimer::StepClockRateSquared)/(-deceleration);
 				const float segLen = (segStartSpeed + (0.5 * (-deceleration) * segTime)) * segTime;
