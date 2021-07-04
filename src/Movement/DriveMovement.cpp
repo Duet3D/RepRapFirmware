@@ -53,37 +53,57 @@ DriveMovement::DriveMovement(DriveMovement *next) noexcept : nextDM(next)
 
 // Non static members
 
+void DriveMovement::DebugPrint() const noexcept
+{
+	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
+	if (state != DMState::idle)
+	{
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%g B=%g C=%g ",
+						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, phaseStepLimit, (double)pA, (double)pB, (double)pC);
+		if (isDelta)
+		{
+			debugPrintf("hmz0s=%.2f minusAaPlusBbTimesS=%.2f dSquaredMinusAsquaredMinusBsquared=%.2f drev=%.3f\n",
+							(double)mp.delta.fHmz0s, (double)mp.delta.fMinusAaPlusBbTimesS, (double)mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared, (double)mp.delta.reverseStartDistance);
+		}
+		else
+		{
+			debugPrintf("pa=%.2f\n", (double)mp.cart.pressureAdvanceK);
+		}
+	}
+	else
+	{
+		debugPrintf("DM%c: not moving\n", c);
+	}
+}
+
 // This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
 bool DriveMovement::NewCartesianSegment() noexcept
 {
-	while(true)
+	while (true)
 	{
 		if (currentSegment == nullptr)
 		{
 			return false;
 		}
 
-		const float startDistance = distanceSoFar;
-		const float startTime = timeSoFar;
-
 		// Work out the movement limit in steps
-		distanceSoFar += currentSegment->GetSegmentLength();
-		timeSoFar += currentSegment->GetSegmentTime();
-
 		pC = currentSegment->CalcC(mp.cart.effectiveMmPerStep);
 		if (currentSegment->IsLinear())
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
-			pB = currentSegment->CalcLinearB(startDistance, startTime);
+			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
 			state = DMState::cartLinear;
 		}
 		else
 		{
 			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
-			pA = currentSegment->CalcNonlinearA(startDistance);
-			pB = currentSegment->CalcNonlinearB(startTime);
+			pA = currentSegment->CalcNonlinearA(distanceSoFar);
+			pB = currentSegment->CalcNonlinearB(timeSoFar);
 			state = (currentSegment->IsAccelerating()) ? DMState::cartAccel : DMState::cartDecelNoReverse;
 		}
+
+		distanceSoFar += currentSegment->GetSegmentLength();
+		timeSoFar += currentSegment->GetSegmentTime();
 
 		phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 		if (nextStep < phaseStepLimit)
@@ -96,9 +116,78 @@ bool DriveMovement::NewCartesianSegment() noexcept
 }
 
 // This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
+bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
+{
+	while (true)
+	{
+		if (currentSegment == nullptr)
+		{
+			return false;
+		}
+
+		const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
+		pC = currentSegment->GetC()/stepsPerMm;		//TODO store the reciprocal to avoid the division
+		if (currentSegment->IsLinear())
+		{
+			// Set up pB, pC such that for forward motion, time = pB + pC * (distanceMoved * steps/mm)
+			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
+		}
+		else
+		{
+			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * (distanceMoved * steps/mm))
+			pA = currentSegment->CalcNonlinearA(distanceSoFar);
+			pB = currentSegment->CalcNonlinearB(timeSoFar);
+		}
+
+		const float startDistance = distanceSoFar;
+		distanceSoFar += currentSegment->GetSegmentLength();
+		timeSoFar += currentSegment->GetSegmentTime();
+
+		// Work out whether we reverse in this segment and the movement limit in steps
+		const float sDx = distanceSoFar * dda.directionVector[0];
+		const float sDy = distanceSoFar * dda.directionVector[1];
+		const int32_t netStepsAtEnd = (int32_t)(fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
+								 	 	 	 	 + (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm);
+
+		if (mp.delta.reverseStartDistance <= startDistance)
+		{
+			// This segment is purely downwards motion and we want the greater of the two quadratic solutions. There may have been upwards motion earlier in the move.
+			if (direction)
+			{
+				direction = false;
+				directionChanged = true;
+			}
+			state = DMState::deltaReverse;
+			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1
+								: (reverseStartStep <= totalSteps) ? (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd)
+									: 1 - netStepsAtEnd;
+		}
+		else if (distanceSoFar <= mp.delta.reverseStartDistance)
+		{
+			// This segment is purely upwards motion of the tower and we want the lower quadratic solution
+			state = DMState::deltaForwardsNoReverse;
+			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(netStepsAtEnd + 1);
+		}
+		else
+		{
+			// This segment ends with reverse motion. We want the lower quadratic solution initially.
+			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+			state = DMState::deltaForwardsReversing;
+		}
+
+		if (phaseStepLimit > nextStep)
+		{
+			return true;
+		}
+
+		currentSegment = currentSegment->GetNext();
+	}
+}
+
+// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
 bool DriveMovement::NewExtruderSegment() noexcept
 {
-	while(true)
+	while (true)
 	{
 		if (currentSegment == nullptr)
 		{
@@ -146,61 +235,6 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		}
 
 		currentSegment = currentSegment->GetNext();						// skip this segment
-	}
-}
-
-// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
-{
-	while(true)
-	{
-		if (currentSegment == nullptr)
-		{
-			return false;
-		}
-
-		pC = currentSegment->GetC();
-		if (currentSegment->IsLinear())
-		{
-			// Set up pB, pC such that for forward motion, time = pB + pC * distanceMoved
-			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
-		}
-		else
-		{
-			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * distanceMoved)
-			pA = currentSegment->CalcNonlinearA(distanceSoFar);
-			pB = currentSegment->CalcNonlinearB(timeSoFar, 0.0);
-		}
-
-		distanceSoFar += currentSegment->GetSegmentLength();
-		timeSoFar += currentSegment->GetSegmentTime();
-
-		// Work out whether we reverse in this segment and the movement limit in steps
-		const float sDx = distanceSoFar * dda.directionVector[0];
-		const float sDy = distanceSoFar * dda.directionVector[1];
-		const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-		const float netStepsAtEnd = fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
-								 + (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm;
-
-		if (distanceSoFar <= mp.delta.reverseStartDistance)
-		{
-			// This segment is purely upwards motion of the tower
-			state = DMState::deltaForwardsNoReverse;
-			phaseStepLimit = (uint32_t)netStepsAtEnd + 1;
-		}
-		else
-		{
-			// This segment ends with reverse motion
-			phaseStepLimit = 2 * reverseStartStep - (uint32_t)netStepsAtEnd + 1;
-			state = DMState::deltaForwardsReversing;
-		}
-
-		if (phaseStepLimit > nextStep)
-		{
-			return true;
-		}
-
-		currentSegment = currentSegment->GetNext();
 	}
 }
 
@@ -257,7 +291,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	{
 		// Pure Z movement. We can't use the main calculation because it divides by a2plusb2.
 		direction = (dda.directionVector[Z_AXIS] >= 0.0);
-		mp.delta.reverseStartDistance = dda.totalDistance + 1.0;	// so that we never reverse
+		mp.delta.reverseStartDistance = (direction) ? dda.totalDistance + 1.0 : -1.0;	// so that we never reverse and NewDeltaSegment knows which way we are going
 		reverseStartStep = totalSteps + 1;
 	}
 	else
@@ -274,8 +308,9 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 			const int32_t numStepsUp = (int32_t)((hrev - mp.delta.h0MinusZ0) * stepsPerMm);
 
 			// We may be almost at the peak height already, in which case we don't really have a reversal.
-			if (numStepsUp < 1 || (direction && (uint32_t)numStepsUp <= totalSteps))
+			if (numStepsUp < 1)
 			{
+				mp.delta.reverseStartDistance = -1.0;				// so that we know we have reversed already
 				reverseStartStep = totalSteps + 1;
 				direction = false;
 			}
@@ -286,7 +321,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 				// Correct the initial direction and the total number of steps
 				if (direction)
 				{
-					// Net movement is up, so we will go up a bit and then down by a lesser amount
+					// Net movement is up, so we will go up first and then down by a lesser amount
 					totalSteps = (2 * numStepsUp) - totalSteps;
 				}
 				else
@@ -301,7 +336,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 		{
 			// No reversal
 			reverseStartStep = totalSteps + 1;
-			direction = (drev <= 0.0);
+			direction = (drev >= 0.0);
 		}
 	}
 
@@ -309,7 +344,6 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	timeSoFar = 0.0;
 	isDelta = true;
 	currentSegment = (dda.shapedSegments != nullptr) ? dda.shapedSegments : dda.unshapedSegments;
-	mp.cart.extraExtrusionDistance = 0.0;
 
 	nextStep = 0;									// must do this before calling NewDeltaSegment
 	if (!NewDeltaSegment(dda))
@@ -444,29 +478,6 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	return CalcNextStepTime(dda);
 }
 
-void DriveMovement::DebugPrint() const noexcept
-{
-	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
-	if (state != DMState::idle)
-	{
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " A=%g B=%g C=%g ",
-						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, (double)pA, (double)pB, (double)pC);
-		if (isDelta)
-		{
-			debugPrintf("hmz0s=%.2f minusAaPlusBbTimesS=%.2f dSquaredMinusAsquaredMinusBsquared=%.2f\n",
-							(double)mp.delta.fHmz0s, (double)mp.delta.fMinusAaPlusBbTimesS, (double)mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
-		}
-		else
-		{
-			debugPrintf("pa=%.2f\n", (double)mp.cart.pressureAdvanceK);
-		}
-	}
-	else
-	{
-		debugPrintf("DM%c: not moving\n", c);
-	}
-}
-
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // We have already incremented nextStep and checked that it does not exceed totalSteps, so at least one more step is due
 // Return true if all OK, false to abort this move because the calculation has gone wrong
@@ -485,7 +496,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		if (!more)
 		{
 			state = DMState::stepError;
-			stepInterval = 20000000 + nextStepTime;		// so we can tell what happened in the debug print
+			nextStep += 100000000;								// so we can tell what happened in the debug print
 			return false;
 		}
 	}
@@ -495,20 +506,20 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		stepsToLimit = reverseStartStep - nextStep;
 	}
 
-	uint32_t shiftFactor = 0;					// assume single stepping
+	uint32_t shiftFactor = 0;									// assume single stepping
 	if (stepsToLimit > 1 && stepInterval < DDA::MinCalcInterval)
 	{
 		if (stepInterval < DDA::MinCalcInterval/4 && stepsToLimit > 8)
 		{
-			shiftFactor = 3;				// octal stepping
+			shiftFactor = 3;									// octal stepping
 		}
 		else if (stepInterval < DDA::MinCalcInterval/2 && stepsToLimit > 4)
 		{
-			shiftFactor = 2;				// quad stepping
+			shiftFactor = 2;									// quad stepping
 		}
 		else if (stepsToLimit > 2)
 		{
-			shiftFactor = 1;				// double stepping
+			shiftFactor = 1;									// double stepping
 		}
 	}
 	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
@@ -518,11 +529,11 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	// Work out the time of the step
 	switch (state)
 	{
-	case DMState::cartLinear:					// linear steady speed
+	case DMState::cartLinear:									// linear steady speed
 		nextCalcStepTime = pB + (float)(nextStep + stepsTillRecalc) * pC;
 		break;
 
-	case DMState::cartAccel:					// Cartesian accelerating
+	case DMState::cartAccel:									// Cartesian accelerating
 		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 		break;
 
@@ -535,41 +546,37 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 
 		direction = false;
 		directionChanged = true;
-		state = DMState::deltaReverse;
+		state = DMState::cartDecelReverse;
 		// no break
-	case DMState::cartDecelReverse:				// Cartesian decelerating, reverse motion
+	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion
 		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)((2 * reverseStartStep - nextStep) + stepsTillRecalc));
 		break;
 
-	case DMState::cartDecelNoReverse:			// Cartesian accelerating with no reversal
+	case DMState::cartDecelNoReverse:							// Cartesian accelerating with no reversal
 		nextCalcStepTime = pB - fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 		break;
 
-	case DMState::deltaForwardsReversing:		// moving forwards
-		if (reverseStartStep <= totalSteps)
+	case DMState::deltaForwardsReversing:						// moving forwards
+		if (nextStep == reverseStartStep)
 		{
-			if (nextStep == reverseStartStep)
-			{
-				direction = false;
-				directionChanged = true;
-				state = DMState::deltaReverse;
-			}
-			else
-			{
-				stepsToLimit = reverseStartStep - nextStep;
-			}
+			direction = false;
+			directionChanged = true;
+			state = DMState::deltaReverse;
 		}
 		// no break
 	case DMState::deltaForwardsNoReverse:
-	case DMState::deltaReverse:			// reversing on this and subsequent steps
+	case DMState::deltaReverse:									// reversing on this and subsequent steps
 		// Calculate d*s where d = distance the head has travelled, s = steps/mm for this drive
 		{
-			float steps = float(1u << shiftFactor);
-			if (!direction)
+			const float steps = (float)(1u << shiftFactor);
+			if (direction)
 			{
-				steps = -steps;
+				mp.delta.fHmz0s += steps;						// get new carriage height above Z in steps
 			}
-			mp.delta.fHmz0s += steps;									// get new carriage height above Z in steps
+			else
+			{
+				mp.delta.fHmz0s -= steps;						// get new carriage height above Z in steps
+			}
 
 			const float hmz0sc = mp.delta.fHmz0s * dda.directionVector[Z_AXIS];
 			const float t1 = mp.delta.fMinusAaPlusBbTimesS + hmz0sc;
@@ -578,16 +585,19 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			const float t2 = (t2a > 0.0) ? fastSqrtf(t2a) : 0.0;
 			const float ds = (direction) ? t1 - t2 : t1 + t2;
 
-			// Now feed ds into the step algorithm for Cartesian motion without elasticity compensation
+			// Now feed ds into the step algorithm for Cartesian motion
 			if (ds < 0.0)
 			{
 				state = DMState::stepError;
-				nextStep += 1000000;									// so that we can tell what happened in the debug print
+				nextStep += 110000000;							// so that we can tell what happened in the debug print
 				return false;
 			}
 
 			const float pCds = pC * ds;
-			nextCalcStepTime = pB + ((currentSegment->IsLinear()) ? pCds : fastSqrtf(pA + pCds));
+			nextCalcStepTime = (currentSegment->IsLinear()) ? pB + pCds
+								: (currentSegment->IsAccelerating()) ? pB + fastSqrtf(pA + pCds)
+									 : pB - fastSqrtf(pA + pCds);
+			if (currentSegment->IsLinear()) { pA = ds; }	//DEBUG
 		}
 		break;
 
@@ -619,7 +629,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		{
 			// We don't expect any step except the last to be late
 			state = DMState::stepError;
-			stepInterval = 10000000 + nextStepTime;				// so we can tell what happened in the debug print
+			nextStep += 120000000;							// so we can tell what happened in the debug print
+			stepInterval = nextCalcStepTime;	//DEBUG
 			return false;
 		}
 	}

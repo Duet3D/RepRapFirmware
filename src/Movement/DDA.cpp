@@ -264,11 +264,11 @@ void DDA::DebugPrint(const char *tag) const noexcept
 				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded);
 	for (const MoveSegment *segs = shapedSegments; segs != nullptr; segs = segs->GetNext())
 	{
-		segs->DebugPrint('A');
+		segs->DebugPrint('S');
 	}
 	for (const MoveSegment *segs = unshapedSegments; segs != nullptr; segs = segs->GetNext())
 	{
-		segs->DebugPrint('E');
+		segs->DebugPrint('U');
 	}
 }
 
@@ -1346,8 +1346,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-					pdm->totalSteps = labs(delta);
-					pdm->direction = (delta >= 0);
+					pdm->totalSteps = labs(delta);							// this is net steps for now
 					if (pdm->PrepareDeltaAxis(*this, params))
 					{
 						pdm->directionChanged = false;
