@@ -1224,11 +1224,13 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	}
 #endif
 
-	// Prepare for axis movement if there is any
+	// Prepare for movement
+	shapedSegments = unshapedSegments = nullptr;
+
 	PrepParams params;
 	if (flags.xyMoving)
 	{
-		params.shapingPlan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
+		params.shapingPlan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);		// this will set up shapedSegments if we are doing any shaping
 
 		// Update the acceleration and deceleration in the DDA so that if we generate unshaped segments or CAN motion too, they will be in sync
 		if (params.shapingPlan.accelSegments > 1)
@@ -1242,15 +1244,12 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	}
 	else
 	{
-		shapedSegments = nullptr;
 		params.SetFromDDA(*this);
 		params.Finalise(*this);
 #if SUPPORT_CAN_EXPANSION
 		params.shapingPlan.SetNoShaping();
 #endif
 	}
-
-	unshapedSegments = nullptr;
 
 	if (simMode == 0)
 	{
