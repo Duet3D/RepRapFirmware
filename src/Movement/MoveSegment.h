@@ -165,8 +165,6 @@ public:
 
 	void AddToTail(MoveSegment *tail) noexcept;
 
-	const MoveSegment *GetFirstDecelSegment() const noexcept;
-
 	void DebugPrint(char ch) const noexcept;
 
 	// Allocate a MoveSegment, clearing the Linear and Last flags

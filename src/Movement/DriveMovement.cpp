@@ -58,16 +58,21 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%g B=%g C=%g ",
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%g B=%g C=%g",
 						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, phaseStepLimit, (double)pA, (double)pB, (double)pC);
 		if (isDelta)
 		{
-			debugPrintf("hmz0s=%.2f minusAaPlusBbTimesS=%.2f dSquaredMinusAsquaredMinusBsquared=%.2f drev=%.3f\n",
+			debugPrintf(" hmz0s=%.2f minusAaPlusBbTimesS=%.2f dSquaredMinusAsquaredMinusBsquared=%.2f drev=%.3f\n",
 							(double)mp.delta.fHmz0s, (double)mp.delta.fMinusAaPlusBbTimesS, (double)mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared, (double)mp.delta.reverseStartDistance);
+		}
+		else if (isExtruder)
+		{
+			debugPrintf(" pa=%.1f eed=%.3f ep=%.3f\n",
+							(double)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance, (double)reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive)).GetK());
 		}
 		else
 		{
-			debugPrintf("pa=%.2f\n", (double)mp.cart.pressureAdvanceK);
+			debugPrintf("\n");
 		}
 	}
 	else
@@ -376,12 +381,20 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	if (dda.flags.usePressureAdvance && shaper.GetK() > 0.0)
 	{
 		// We are using nonzero pressure advance. Movement must be forwards.
-		mp.cart.pressureAdvanceK = shaper.GetK();
-		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * dda.acceleration * params.accelClocks;	//TODO use the last speed at which we did any real extrusion instead
+		const float acceleration = dda.acceleration * (1.0/StepTimer::StepClockRateSquared);
+		const float deceleration = dda.deceleration * (1.0/StepTimer::StepClockRateSquared);
+		mp.cart.pressureAdvanceK = shaper.GetK() * StepTimer::StepClockRate;
+		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * acceleration * params.accelClocks;
 		forwardDistance += mp.cart.extraExtrusionDistance;
 
 		// Check if there is a reversal in the deceleration segment
-		const MoveSegment * const decelSeg = dda.unshapedSegments->GetFirstDecelSegment();
+		// There is at most one deceleration segment in the unshaped segments
+		const MoveSegment *decelSeg = dda.unshapedSegments;
+		while (decelSeg != nullptr && (decelSeg->IsLinear() || decelSeg->IsAccelerating()))
+		{
+			decelSeg = decelSeg->GetNext();
+		}
+
 		if (decelSeg == nullptr)
 		{
 			forwardDistance += dda.totalDistance;
@@ -389,12 +402,12 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		}
 		else
 		{
-			const float initialDecelSpeed = dda.topSpeed - mp.cart.pressureAdvanceK * dda.deceleration;
+			const float initialDecelSpeed = (dda.topSpeed * (1.0/StepTimer::StepClockRate)) - mp.cart.pressureAdvanceK * deceleration;
 			if (initialDecelSpeed <= 0.0)
 			{
 				// The entire deceleration segment is in reverse
 				forwardDistance += params.decelStartDistance;
-				reverseDistance = ((0.5 * dda.deceleration * params.decelClocks) - initialDecelSpeed) * params.decelClocks;
+				reverseDistance = ((0.5 * deceleration * params.decelClocks) - initialDecelSpeed) * params.decelClocks;
 			}
 			else
 			{
@@ -402,14 +415,14 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 				if (timeToReverse < params.decelClocks)
 				{
 					// There is a reversal
-					const float distanceToReverse = 0.5 * dda.deceleration * fsquare(timeToReverse);
+					const float distanceToReverse = 0.5 * deceleration * fsquare(timeToReverse);
 					forwardDistance += params.decelStartDistance + distanceToReverse;
-					reverseDistance = 0.5 * dda.deceleration * fsquare(params.decelClocks - timeToReverse);
+					reverseDistance = 0.5 * deceleration * fsquare(params.decelClocks - timeToReverse);
 				}
 				else
 				{
 					// No reversal
-					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * dda.deceleration * params.decelClocks);
+					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * deceleration * params.decelClocks);
 					reverseDistance = 0.0;
 				}
 			}
@@ -428,16 +441,32 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	if (reverseDistance > 0.0)
 	{
 		const float netDistance = forwardDistance - reverseDistance;
-		const int32_t netSteps = netDistance * mp.cart.effectiveStepsPerMm;
-		if (netSteps == 0 && forwardSteps <= 1)
+		const int32_t netSteps = (int32_t)(netDistance * mp.cart.effectiveStepsPerMm);
+		if (netSteps == 0 && forwardSteps <= 1.0)
 		{
 			// No movement at all, or one step forward and one step back which we will ignore
 			shaper.SetExtrusionPending(netDistance * dda.directionVector[drive]);
 			return false;
 		}
 
-		reverseStartStep = forwardSteps + 1;
-		totalSteps = 2 * reverseStartStep - forwardSteps;
+		// Note, netSteps may be negative for e.g. a deceleration-only move
+		const int32_t iFwdSteps = (int32_t)forwardSteps;
+		if (netSteps > 0 && netSteps + 1 >= iFwdSteps)
+		{
+			// There are zero or one reverse steps. We ignore a single reverse step.
+			totalSteps = netSteps;
+			reverseStartStep = totalSteps + 1;			// no reverse phase
+		}
+		else if (netSteps >= 0)
+		{
+			reverseStartStep = forwardSteps + 1;
+			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) - netSteps);
+		}
+		else
+		{
+			reverseStartStep = forwardSteps + 1;
+			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) + netSteps);
+		}
 		shaper.SetExtrusionPending((netDistance - (float)netSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 	}
 	else

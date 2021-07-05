@@ -48,23 +48,6 @@ void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 	seg->SetNext(tail);
 }
 
-// Return the first deceleration segment in the move segment chain, or nullptr if there isn't one
-// Called when preparing extruders, which have at most one deceleration segment,
-const MoveSegment *MoveSegment::GetFirstDecelSegment() const noexcept
-{
-	const MoveSegment *seg = this;
-	do
-	{
-		if (!seg->IsLinear() && !seg->IsAccelerating())
-		{
-			break;
-		}
-		seg = seg->GetNext();
-	} while (seg != nullptr);
-	return seg;
-
-}
-
 void MoveSegment::DebugPrint(char ch) const noexcept
 {
 	debugPrintf("%c d=%7.3f t=%7" PRIu32 " ", ch, (double)segmentLength, (uint32_t)segTime);
