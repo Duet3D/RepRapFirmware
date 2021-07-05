@@ -217,7 +217,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		else
 		{
 			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
-			pA = currentSegment->CalcNonlinearA(startDistance);
+			pA = currentSegment->CalcNonlinearA(startDistance, mp.cart.pressureAdvanceK);
 			pB = currentSegment->CalcNonlinearB(startTime, mp.cart.pressureAdvanceK);
 			if (currentSegment->IsAccelerating())
 			{
@@ -567,7 +567,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		break;
 
 	case DMState::cartDecelForwardsReversing:
-		if (nextStep <= reverseStartStep)
+		if (nextStep + stepsTillRecalc < reverseStartStep)
 		{
 			nextCalcStepTime = pB - fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 			break;
@@ -578,7 +578,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion
-		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)((2 * reverseStartStep - nextStep) + stepsTillRecalc));
+		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)((2 * reverseStartStep) - (nextStep + stepsTillRecalc)));
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian accelerating with no reversal

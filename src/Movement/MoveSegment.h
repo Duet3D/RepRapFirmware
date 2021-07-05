@@ -34,11 +34,11 @@
  * The basic motion equation for an acceleration segment is:
  *   s = s0 + u*f*(t - ts) + 0.5*a*f*(t - ts)t^2
  * Solving for t:
- *   t = ts - u/a + sqrt((u/a)^2 + 2*(s-s0)/(a*f))
+ *   t = ts - u/a + sqrt((-u/a)^2 + 2*(s-s0)/(a*f))
  * If we take s0 = S0 * f:
- *   t = ts - u/a + sqrt((u/a)^2 + 2*s/(a*f) - 2*S0/a)
+ *   t = ts - u/a + sqrt((-u/a)^2 + 2*s/(a*f) - 2*S0/a)
  * Substituting s = n/m:
- *   t = ts - u/a + sqrt((u/a)^2 + 2*n/(f*m*a) - 2*S0/a)
+ *   t = ts - u/a + sqrt((-u/a)^2 + 2*n/(f*m*a) - 2*S0/a)
  * For a deceleration segment, just set a = -d:
  *   t = ts + u/d + sqrt((u/d)^2 - 2*n/(f*m*d) + 2*S0/d)
  * For a linear segment:
@@ -52,14 +52,14 @@
  *
  * Now add pressure advance with constant k seconds.
  * For the acceleration segment, u is replaced by u+(k*a):
- *   t = ts - u/a - k + sqrt((u/a + k)^2 + 2*n/(f*m*a) - 2*S0/a)
+ *   t = ts - u/a - k + sqrt((-u/a - k)^2 + 2*n/(f*m*a) - 2*S0/a)
  * For the deceleration segment, u is replaced by u-(k*d). Additionally, S0 is replaced by S0 + EAD where EAD stands for extra acceleration distance, EAD = (vaccel-uaccel)*k = a*T*k where T was the acceleration time:
  *   t = ts + u/d - k + sqrt((u/d - k)^2 - 2*n/(f*m*d) + 2*(S0 + EAD)/d)
  * For the linear segment, S0 must include EAD again:
  *   t = ts - (S0 + EAD)/u + n/(u*f*m)
  * Now assume that there is also a fractional step p brought forward, where 0 <= p < 1.0. This must be subtracted from s0. Equivalently, add p/f to S0.
  * Acceleration segment:
- *   t = ts - u/a - k + sqrt((u/a + k)^2 + 2*n/(f*m*a) - 2*(S0 + p/f)/a)
+ *   t = ts - u/a - k + sqrt((-u/a - k)^2 + 2*n/(f*m*a) - 2*(S0 + p/f)/a)
  * Deceleration segment:
  *   t = ts + u/d - k + sqrt((u/d - k)^2 - 2*n/(f*m*d) + 2*(S0 + p/f + EAD)/d)
  * Linear segment:
@@ -147,6 +147,7 @@ public:
 	float GetSegmentLength() const noexcept { return segmentLength; }
 	float GetSegmentTime() const noexcept { return segTime; }
 	float CalcNonlinearA(float startDistance) const noexcept;
+	float CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept;
 	float CalcNonlinearB(float startTime) const noexcept;
 	float CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept;
 	float CalcLinearB(float startDistance, float startTime) const noexcept;
@@ -243,6 +244,11 @@ inline float MoveSegment::CalcNonlinearA(float startDistance) const noexcept
 	return fsquare(b) - startDistance * c;
 }
 
+inline float MoveSegment::CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept
+{
+	return fsquare(b - pressureAdvanceK) - startDistance * c;
+}
+
 inline float MoveSegment::CalcNonlinearB(float startTime) const noexcept
 {
 	return b + startTime;
@@ -250,7 +256,7 @@ inline float MoveSegment::CalcNonlinearB(float startTime) const noexcept
 
 inline float MoveSegment::CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept
 {
-	return b - pressureAdvanceK + startTime;
+	return (b - pressureAdvanceK) + startTime;
 }
 
 inline float MoveSegment::CalcLinearB(float startDistance, float startTime) const noexcept
