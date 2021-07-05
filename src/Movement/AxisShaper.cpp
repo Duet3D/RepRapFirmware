@@ -480,6 +480,7 @@ InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool 
 					if (params.accelDistance + extraDecelDistance <= params.decelStartDistance)
 					{
 						params.decelStartDistance -= extraDecelDistance;
+						params.decelDistance += extraDecelDistance;
 						if (plan.shapeDecelStart)
 						{
 							params.decelClocks += clocksLostAtStart;

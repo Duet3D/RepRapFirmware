@@ -1228,11 +1228,17 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	PrepParams params;
 	if (flags.xyMoving)
 	{
-#if SUPPORT_CAN_EXPANSION
 		params.shapingPlan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);
-#else
-		(void)reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);		// this sets up params and shapedSegments
-#endif
+
+		// Update the acceleration and deceleration in the DDA so that if we generate unshaped segments or CAN motion too, they will be in sync
+		if (params.shapingPlan.accelSegments > 1)
+		{
+			acceleration = ((topSpeed - startSpeed) * StepTimer::StepClockRate)/params.accelClocks;
+		}
+		if (params.shapingPlan.decelSegments > 1)
+		{
+			deceleration = ((topSpeed - endSpeed) * StepTimer::StepClockRate)/params.decelClocks;
+		}
 	}
 	else
 	{
@@ -1311,8 +1317,8 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						{
 							EnsureUnshapedSegments(params);
 							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::idle);
-							pdm->totalSteps = labs(delta);
 							pdm->direction = (delta >= 0);
+							pdm->totalSteps = labs(delta);
 							if (pdm->PrepareCartesianAxis(*this, params))
 							{
 								pdm->directionChanged = false;
@@ -1346,6 +1352,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+					pdm->direction = (delta >= 0);
 					pdm->totalSteps = labs(delta);							// this is net steps for now
 					if (pdm->PrepareDeltaAxis(*this, params))
 					{
@@ -1411,8 +1418,8 @@ void DDA::Prepare(uint8_t simMode) noexcept
 					   )
 					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-						pdm->totalSteps = labs(delta);
 						pdm->direction = (delta >= 0);
+						pdm->totalSteps = labs(delta);
 						if (pdm->PrepareCartesianAxis(*this, params))
 						{
 							pdm->directionChanged = false;
