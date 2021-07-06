@@ -40,6 +40,7 @@ body:
   attributes:
     label: Duet Forum Discussion Thread
     description: Before posting a bug report here, you must start a discussion on Duet3D forums. This is to help reduce duplicates and solve configuration issues. https://forum.duet3d.com/categories
+    placeholder: Copy and paste a link to your forum thread here.
   validations:
     required: true
 - type: checkboxes
