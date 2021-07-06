@@ -35,6 +35,13 @@ body:
       ### Please complete the following form to the best of your ability. Provide as much detail as possible. 
       
       ## Thank you for taking the time to file a bug report.
+- type: input
+  id: ForumLink
+  attributes:
+    label: Duet Forum Discussion Thread
+    description: Before posting a bug report here, you must start a discussion on Duet3D forums. This is to help reduce duplicates and solve configuration issues. https://forum.duet3d.com/categories
+  validations:
+    required: true
 - type: checkboxes
   id: Hardware
   attributes:
