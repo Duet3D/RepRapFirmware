@@ -1739,7 +1739,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 117:	// Display message
 				{
-					String<MediumStringLength> msg;
+					String<M117StringLength> msg;
 					gb.GetUnprecedentedString(msg.GetRef(), true);
 					reprap.SetMessage(msg.c_str());
 				}

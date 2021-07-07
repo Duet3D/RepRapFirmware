@@ -71,7 +71,8 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 				case 117:	// display message
 					{
 						// We need to call GetUnprecedentedString to ensure that if the string argument is not quoted, gb.DataLength() will return the correct value.
-						String<1> dummy;
+						// We need to pass the correct length string buffer here because GetUnprecedentedString will throw if the string is too long for the buffer.
+						String<M117StringLength> dummy;
 						gb.GetUnprecedentedString(dummy.GetRef());
 					}
 					return true;
