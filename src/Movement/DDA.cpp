@@ -118,9 +118,11 @@ void DDA::LogProbePosition() noexcept
 // Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 void BasicPrepParams::SetFromDDA(const DDA& dda) noexcept
 {
-	accelDistance = dda.beforePrepare.accelDistance;
 	decelDistance = dda.beforePrepare.decelDistance;
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
+	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
+	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 	accelClocks = ((dda.topSpeed - dda.startSpeed) * StepTimer::StepClockRate)/dda.acceleration;
 	decelClocks = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/dda.deceleration;
 }
@@ -1541,27 +1543,10 @@ void DDA::Prepare(uint8_t simMode) noexcept
 			clocksNeeded = canClocksNeeded;
 		}
 #endif
-		if (params.decelStartDistance < params.accelDistance || (reprap.Debug(moduleDda) && reprap.Debug(moduleMove)))		// show the prepared DDA if debug enabled for both modules
+
+		if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))		// show the prepared DDA if debug enabled for both modules
 		{
 			DebugPrintAll("pr");
-#if 0
-			// Check that the segments are valid
-			float speed = startSpeed/StepTimer::StepClockRate;
-			float highestSpeed = speed;
-			float distance = 0.0;
-			for (const MoveSegment *seg = segments; seg != nullptr; seg = seg->GetNext())
-			{
-				if (seg->IsLinear())
-				{
-					qq;
-				}
-				else
-				{
-					qq;
-				}
-			}
-			debugPrintf("Computed top speed %f, end speed %f, distance %f\n", speed, highestSpeed, distance);
-#endif
 		}
 
 #if DDA_MOVE_DEBUG
