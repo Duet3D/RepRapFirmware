@@ -72,11 +72,13 @@ private:
 	float totalShapingClocks;							// the total input shaping time in step clocks
 	float extraClocksAtStart;							// the extra time needed to shape the start of acceleration or deceleration
 	float extraClocksAtEnd;								// the extra time needed to shape the end of acceleration or deceleration
-	float extraDistanceAtStart;							// the extra distance per unit acceleration to shape the start of acceleration or deceleration
-	float extraDistanceAtEnd;							// the extra distance per unit acceleration to shape the end of acceleration or deceleration
+	float extraDistanceAtStart;							// the extra distance per unit acceleration to shape the start of acceleration or deceleration, less the initial velocity contribution
+	float extraDistanceAtEnd;							// the extra distance per unit acceleration to shape the end of acceleration or deceleration, less the final velocity contribution
+	float overlappedDurations[2 * MaxExtraImpulses];	// the duration in step clocks of each impulse of an overlapped acceleration or deceleration
 	float overlappedCoefficients[2 * MaxExtraImpulses];	// the coefficients if we use a shaped start immediately followed by a shaped end
 	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
 	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
+	float overlappedDistancePerA;						// the distance needed by an overlapped acceleration or deceleration, less the initial velocity contribution
 	InputShaperType type;
 };
 

@@ -236,6 +236,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			overlappedDeltaVPerA = 0.0;
 			for (unsigned int i = 0; i < numExtraImpulses; ++i)
 			{
+				overlappedDurations[i] = overlappedDurations[i + numExtraImpulses] = durations[i];
 				float val = coefficients[i];
 				overlappedCoefficients[i] = val;
 				overlappedDeltaVPerA += val;
@@ -252,15 +253,17 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				}
 			}
 
-			// Now scale the values by maxVal so that the highest coefficient is 1.0
-			if (maxVal < 1.0)
+			// Now scale the values by maxVal so that the highest coefficient is 1.0, and calculate the total distance per unit acceleration
+			overlappedDistancePerA = 0.0;
+			float u = 0.0;
+			for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
 			{
-				for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
-				{
-					overlappedCoefficients[i] /= maxVal;
-				}
-				overlappedDeltaVPerA /= maxVal;
+				overlappedCoefficients[i] /= maxVal;
+				const float speedChange = overlappedCoefficients[i] * overlappedDurations[i];
+				overlappedDistancePerA += (u + 0.5 * speedChange) * overlappedDurations[i];
+				u += speedChange;
 			}
+			overlappedDeltaVPerA /= maxVal;
 		}
 
 		reprap.MoveUpdated();
