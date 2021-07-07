@@ -457,15 +457,11 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 			totalSteps = netSteps;
 			reverseStartStep = totalSteps + 1;			// no reverse phase
 		}
-		else if (netSteps >= 0)
-		{
-			reverseStartStep = forwardSteps + 1;
-			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) - netSteps);
-		}
 		else
 		{
-			reverseStartStep = forwardSteps + 1;
-			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) + netSteps);
+			// We know that netSteps <= iFwdSteps
+			reverseStartStep = iFwdSteps + 1;
+			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) - netSteps);
 		}
 		shaper.SetExtrusionPending((netDistance - (float)netSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 	}
@@ -483,6 +479,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		}
 		else
 		{
+			// No steps at all
 			shaper.SetExtrusionPending(forwardDistance * dda.directionVector[drive]);
 			return false;
 		}
