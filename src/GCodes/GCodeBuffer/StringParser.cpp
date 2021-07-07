@@ -1278,7 +1278,7 @@ void StringParser::InternalGetQuotedString(const StringRef& str) THROWS(GCodeExc
 			}
 			else if (gb.buffer[readPointer] == c)
 			{
-				// Two backslashes are used to represent one
+				// Two single quote characters are used to represent one
 				++readPointer;
 			}
 		}
