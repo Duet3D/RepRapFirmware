@@ -62,6 +62,7 @@ private:
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.1;
 	static constexpr float DefaultMinimumAcceleration = 10.0;
+	static constexpr float MinimumMiddleSegmentTime = 8.0/1000.0;	// minimum length of the segment between shaped start and shaped end of an acceleration or deceleration
 
 	unsigned int numExtraImpulses;						// the number of extra impulses
 	float frequency;									// the undamped frequency in Hz
@@ -70,6 +71,7 @@ private:
 	float coefficients[MaxExtraImpulses];				// the coefficients of all the impulses
 	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
 	float totalShapingClocks;							// the total input shaping time in step clocks
+	float minimumNonOverlappedOriginalClocks;			// the minimum original acceleration or deceleration time using non-overlapped start and end shaping
 	float extraClocksAtStart;							// the extra time needed to shape the start of acceleration or deceleration
 	float extraClocksAtEnd;								// the extra time needed to shape the end of acceleration or deceleration
 	float extraDistanceAtStart;							// the extra distance per unit acceleration to shape the start of acceleration or deceleration, less the initial velocity contribution

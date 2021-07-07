@@ -203,6 +203,8 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		extraClocksAtStart = 0.0;
 		extraClocksAtEnd = 0.0;
 		extraDistanceAtStart = 0.0;
+		extraDistanceAtEnd = 0.0;
+
 		{
 			float u = 0.0;
 			for (unsigned int i = 0; i < numExtraImpulses; ++i)
@@ -217,7 +219,8 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			}
 		}
 
-		extraDistanceAtEnd = 0.0;
+		minimumNonOverlappedOriginalClocks = (totalShapingClocks * 2) - extraClocksAtStart - extraClocksAtEnd + (MinimumMiddleSegmentTime * StepTimer::StepClockRate);
+
 		{
 			float v = 0.0;
 			for (int i = numExtraImpulses - 1; i >= 0; --i)
@@ -452,7 +455,7 @@ InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool 
 			// See if we can shape the acceleration
 			if (plan.shapeAccelStart || plan.shapeAccelEnd)
 			{
-				if (plan.shapeAccelStart && plan.shapeAccelEnd && params.accelClocks < 2 * totalShapingClocks)
+				if (plan.shapeAccelStart && plan.shapeAccelEnd && params.accelClocks < minimumNonOverlappedOriginalClocks)
 				{
 					// Acceleration segment is too short to shape both the start and the end
 					plan.shapeAccelStart = plan.shapeAccelEnd = false;
@@ -493,7 +496,7 @@ InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool 
 			// See if we can shape the deceleration
 			if (plan.shapeDecelStart || plan.shapeDecelEnd)
 			{
-				if (plan.shapeDecelStart && plan.shapeDecelEnd && params.decelClocks < 2 * totalShapingClocks)
+				if (plan.shapeDecelStart && plan.shapeDecelEnd && params.decelClocks < minimumNonOverlappedOriginalClocks)
 				{
 					// Deceleration segment is too short to shape both the start and the end
 					plan.shapeDecelStart = plan.shapeDecelEnd = false;
