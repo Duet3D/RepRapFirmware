@@ -70,7 +70,10 @@ private:
 	float coefficients[MaxExtraImpulses];				// the coefficients of all the impulses
 	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
 	float totalShapingClocks;							// the total input shaping time in step clocks
-	float clocksLostAtStart, clocksLostAtEnd;			// the acceleration time lost due to input shaping
+	float extraClocksAtStart;							// the extra time needed to shape the start of acceleration or deceleration
+	float extraClocksAtEnd;								// the extra time needed to shape the end of acceleration or deceleration
+	float extraDistanceAtStart;							// the extra distance per unit acceleration to shape the start of acceleration or deceleration
+	float extraDistanceAtEnd;							// the extra distance per unit acceleration to shape the end of acceleration or deceleration
 	float overlappedCoefficients[2 * MaxExtraImpulses];	// the coefficients if we use a shaped start immediately followed by a shaped end
 	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
 	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
