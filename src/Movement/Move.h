@@ -204,10 +204,17 @@ public:
 	static const TaskBase *GetMoveTaskHandle() noexcept { return &moveTask; }
 
 #if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept					// add a move from the ATE to the movement queue
+# if USE_REMOTE_INPUT_SHAPING
+	void AddShapeddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept		// add a move from the ATE to the movement queue
 	{
 		mainDDARing.AddMoveFromRemote(msg);
 	}
+# else
+	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
+	{
+		mainDDARing.AddMoveFromRemote(msg);
+	}
+# endif
 #endif
 
 protected:

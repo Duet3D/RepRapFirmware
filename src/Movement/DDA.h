@@ -122,7 +122,11 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
+# if USE_REMOTE_INPUT_SHAPING
+	bool InitShapedFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
+# else
+	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
+# endif
 #endif
 
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates

@@ -403,9 +403,15 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
 				return;							// no reply needed
 
-			case CanMessageType::movementLinearShaped:
-				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
+			case CanMessageType::movementLinear:
+				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
 				return;							// no reply needed
+
+#if USE_REMOTE_INPUT_SHAPING
+			case CanMessageType::movementLinearShaped:
+				reprap.GetMove().AddShapedMoveFromRemote(buf->msg.moveLinearShaped);
+				return;							// no reply needed
+#endif
 
 			case CanMessageType::returnInfo:
 				requestId = buf->msg.getInfo.requestId;

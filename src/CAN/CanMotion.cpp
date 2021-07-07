@@ -73,7 +73,7 @@ CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexce
 		if (buf == nullptr)
 		{
 			reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
-			return  nullptr;		//TODO error handling
+			return nullptr;		//TODO error handling
 		}
 
 		buf->next = movementBufferList;
@@ -115,7 +115,9 @@ CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexce
 		move->shaperAccelPhasesMinusOne = params.shapingPlan.accelSegments - 1;
 		move->shaperDecelPhasesMinusOne = params.shapingPlan.decelSegments - 1;
 #else
+		move->pressureAdvanceDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
+		move->zero = 0;
 #endif
 
 		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
@@ -139,7 +141,11 @@ CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexce
 }
 
 // This is called by DDA::Prepare for each active CAN DM in the move
+#if USE_REMOTE_INPUT_SHAPING
 void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
+#else
+void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
+#endif
 {
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
@@ -148,6 +154,10 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].iSteps = steps;
 #else
 		buf->msg.moveLinear.perDrive[canDriver.localDriver].steps = steps;
+		if (usePressureAdvance)
+		{
+			buf->msg.moveLinear.pressureAdvanceDrives |= 1u << canDriver.localDriver;
+		}
 #endif
 	}
 }

@@ -905,8 +905,25 @@ uint32_t DDARing::ManageLaserPower() const noexcept
 
 #if SUPPORT_REMOTE_COMMANDS
 
+# if USE_REMOTE_INPUT_SHAPING
+
 // Add a move from the ATE to the movement queue
-void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
+void DDARing::AddShapedMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
+{
+	if (addPointer->GetState() == DDA::empty)
+	{
+		if (addPointer->InitShapedFromRemote(msg))
+		{
+			addPointer = addPointer->GetNext();
+			scheduledMoves++;
+		}
+	}
+}
+
+# else
+
+// Add a move from the ATE to the movement queue
+void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
 	if (addPointer->GetState() == DDA::empty)
 	{
@@ -918,6 +935,7 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexc
 	}
 }
 
+# endif
 #endif
 
 // End
