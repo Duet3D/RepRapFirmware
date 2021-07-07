@@ -1468,7 +1468,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 					if (flags.isPrintingMove)
 					{
 						float a, b, limit;
-						if (reprap.GetPlatform().GetExtrusionCoefficients(extruder, a, b, limit))
+						if (platform.GetExtrusionCoefficients(extruder, a, b, limit))
 						{
 							float& dv = directionVector[drive];
 							const float averageExtrusionSpeed = (totalDistance * dv * StepTimer::StepClockRate)/clocksNeeded;
@@ -1483,7 +1483,22 @@ void DDA::Prepare(uint8_t simMode) noexcept
 					const DriverId driver = platform.GetExtruderDriver(extruder);
 					if (driver.IsRemote())
 					{
-						CanMotion::AddExtruderMovement(params, driver, directionVector[drive], flags.usePressureAdvance);
+						// This calculation isn't quite right when we use PA and fractional steps accumulate. I will fix it when I change the CAN protocol.
+						ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
+						float netMovement = totalDistance;
+						if (flags.usePressureAdvance)
+						{
+							netMovement += (endSpeed - startSpeed) * shaper.GetK();
+						}
+						netMovement = (netMovement * directionVector[drive]) + shaper.GetExtrusionPending();
+						const float stepsPerMm = platform.DriveStepsPerUnit(drive);
+						const int32_t steps = (int32_t)(netMovement * stepsPerMm);
+						if (steps != 0)
+						{
+							CanMotion::AddMovement(params, driver, steps);
+							netMovement -= (float)steps/stepsPerMm;
+						}
+						shaper.SetExtrusionPending(netMovement);
 					}
 					else
 #endif
@@ -2164,9 +2179,10 @@ void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexc
 // Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.
 uint32_t DDA::ManageLaserPower() const noexcept
 {
+	Platform& platform = reprap.GetPlatform();
 	if (!flags.controlLaser || laserPwmOrIoBits.laserPwm == 0)
 	{
-		reprap.GetPlatform().SetLaserPwm(0);
+		platform.SetLaserPwm(0);
 		return 0;
 	}
 
@@ -2174,7 +2190,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 	if (clocksMoving >= clocksNeeded)			// this also covers the case of now < startTime
 	{
 		// Something has gone wrong with the timing. Set zero laser power, but try again soon.
-		reprap.GetPlatform().SetLaserPwm(0);
+		platform.SetLaserPwm(0);
 		return LaserPwmIntervalMillis;
 	}
 
@@ -2184,7 +2200,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 	{
 		// Acceleration phase
 		const Pwm_t pwm = (Pwm_t)((accelSpeed/topSpeed) * laserPwmOrIoBits.laserPwm);
-		reprap.GetPlatform().SetLaserPwm(pwm);
+		platform.SetLaserPwm(pwm);
 		return LaserPwmIntervalMillis;
 	}
 
@@ -2194,12 +2210,12 @@ uint32_t DDA::ManageLaserPower() const noexcept
 	{
 		// Deceleration phase
 		const Pwm_t pwm = (Pwm_t)((decelSpeed/topSpeed) * laserPwmOrIoBits.laserPwm);
-		reprap.GetPlatform().SetLaserPwm(pwm);
+		platform.SetLaserPwm(pwm);
 		return LaserPwmIntervalMillis;
 	}
 
 	// We must be in the constant speed phase
-	reprap.GetPlatform().SetLaserPwm(laserPwmOrIoBits.laserPwm);
+	platform.SetLaserPwm(laserPwmOrIoBits.laserPwm);
 	const uint32_t decelClocks = ((topSpeed - endSpeed)/deceleration) * StepTimer::StepClockRate;
 	if (clocksLeft <= decelClocks)
 	{
