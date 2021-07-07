@@ -64,19 +64,16 @@ private:
 	static constexpr float DefaultMinimumAcceleration = 10.0;
 
 	unsigned int numExtraImpulses;						// the number of extra impulses
-	float frequency;									// the undamped frequency
+	float frequency;									// the undamped frequency in Hz
 	float zeta;											// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
-	float minimumAcceleration;							// the minimum value that we reduce average acceleration to
+	float minimumAcceleration;							// the minimum value that we reduce average acceleration to in mm/sec^2
 	float coefficients[MaxExtraImpulses];				// the coefficients of all the impulses
-	float durations[MaxExtraImpulses];					// the duration in seconds of each impulse
-	float totalDuration;								// the total input shaping time in seconds, which is the sum of the durations
+	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
 	float totalShapingClocks;							// the total input shaping time in step clocks
 	float clocksLostAtStart, clocksLostAtEnd;			// the acceleration time lost due to input shaping
 	float overlappedCoefficients[2 * MaxExtraImpulses];	// the coefficients if we use a shaped start immediately followed by a shaped end
-	float overlappedDuration;
-	float overlappedShapingClocks;
-	float overlappedClocksLost;
-	float overlappedAverageAcceleration;
+	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
+	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
 	InputShaperType type;
 };
 
