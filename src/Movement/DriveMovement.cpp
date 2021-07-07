@@ -249,7 +249,8 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	distanceSoFar = 0.0;
 	timeSoFar = 0.0;
 	mp.cart.pressureAdvanceK = 0.0;
-	mp.cart.effectiveStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dda.directionVector[drive]);
+	// We can't use directionVector here because those values relate to Cartesian space, whereas we may be CoreXY etc.
+	mp.cart.effectiveStepsPerMm = (float)totalSteps/dda.totalDistance;
 	mp.cart.effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
 	isDelta = false;
 	isExtruder = false;
