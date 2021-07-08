@@ -289,11 +289,23 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 		if (drive < numVisibleAxes)
 		{
+			const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
+			if (positionDelta != 0.0)
+			{
+				if (reprap.GetPlatform().IsAxisRotational(drive))
+				{
+					rotationalAxesMoving = true;
+				}
+				else
+				{
+					linearAxesMoving = true;
+				}
+			}
+
 			int32_t delta;
 			if (doMotorMapping)
 			{
 				delta = endPoint[drive] - positionNow[drive];
-				const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
 				directionVector[drive] = positionDelta;
 				if (positionDelta != 0.0 && (Tool::GetXAxes(nextMove.tool).IsBitSet(drive) || Tool::GetYAxes(nextMove.tool).IsBitSet(drive)))
 				{
@@ -308,20 +320,12 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
 			}
 
+#if 0	// debug only
 			if (delta != 0)
 			{
-#if 0	// debug only
 				stepsRequested[drive] += labs(delta);
-#endif
-				if (reprap.GetPlatform().IsAxisRotational(drive))
-				{
-					rotationalAxesMoving = true;
-				}
-				else
-				{
-					linearAxesMoving = true;
-				}
 			}
+#endif
 		}
 		else if (LogicalDriveToExtruder(drive) < reprap.GetGCodes().GetNumExtruders())
 		{
