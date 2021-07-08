@@ -24,8 +24,8 @@
 
 class DDARing;
 
-// Movement parameters calculated by the input shaper
-struct BasicPrepParams
+// Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
+struct PrepParams
 {
 	// Parameters used for all types of motion
 	float accelDistance;
@@ -33,25 +33,12 @@ struct BasicPrepParams
 	float decelStartDistance;
 	float accelClocks, steadyClocks, decelClocks;
 
-	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
-	void SetFromDDA(const DDA& dda) noexcept;
-
-	// Calculate the steady clocks and set the total clocks in the DDA
-	void Finalise(DDA& dda) noexcept;
-};
-
-// Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
-struct PrepParams : public BasicPrepParams
-{
-	// Parameters used only for extruders
-//	float accelCompFactor;
+	InputShaperPlan shapingPlan;
 
 #if SUPPORT_CAN_EXPANSION
 	// Parameters used by CAN expansion
 	float initialSpeedFraction, finalSpeedFraction;
 #endif
-
-	InputShaperPlan shapingPlan;
 
 	// Parameters used only for delta moves
 	float initialX, initialY;
@@ -61,6 +48,12 @@ struct PrepParams : public BasicPrepParams
 #endif
 	const LinearDeltaKinematics *dparams;
 	float a2plusb2;								// sum of the squares of the X and Y movement fractions
+
+	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
+	void SetFromDDA(const DDA& dda) noexcept;
+
+	// Calculate the steady clocks and set the total clocks in the DDA
+	void Finalise(DDA& dda) noexcept;
 };
 
 // This defines a single coordinated movement of one or several motors
@@ -69,7 +62,7 @@ class DDA
 	friend class DriveMovement;
 	friend class AxisShaper;
 	friend class ExtruderShaper;
-	friend class BasicPrepParams;
+	friend class PrepParams;
 
 public:
 
@@ -238,7 +231,7 @@ private:
 	void ReleaseDMs() noexcept;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
-	void EnsureUnshapedSegments(const BasicPrepParams& params) noexcept;
+	void EnsureUnshapedSegments(const PrepParams& params) noexcept;
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION

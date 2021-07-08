@@ -116,7 +116,7 @@ void DDA::LogProbePosition() noexcept
 #endif
 
 // Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
-void BasicPrepParams::SetFromDDA(const DDA& dda) noexcept
+void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
 	decelDistance = dda.beforePrepare.decelDistance;
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
@@ -128,7 +128,7 @@ void BasicPrepParams::SetFromDDA(const DDA& dda) noexcept
 }
 
 // Calculate the steady clocks and set the total clocks in the DDA
-void BasicPrepParams::Finalise(DDA& dda) noexcept
+void PrepParams::Finalise(DDA& dda) noexcept
 {
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (max<float>(0.0, steadyDistance) * StepTimer::StepClockRate)/dda.topSpeed;
@@ -1264,7 +1264,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 }
 
 // Set up unshapedSegments if we haven't done so already
-void DDA::EnsureUnshapedSegments(const BasicPrepParams& params) noexcept
+void DDA::EnsureUnshapedSegments(const PrepParams& params) noexcept
 {
 	if (unshapedSegments == nullptr)
 	{
@@ -1292,17 +1292,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	PrepParams params;
 	if (flags.xyMoving)
 	{
-		params.shapingPlan = reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);		// this will set up shapedSegments if we are doing any shaping
-
-		// Update the acceleration and deceleration in the DDA so that if we generate unshaped segments or CAN motion too, they will be in sync
-		if (params.shapingPlan.accelSegments > 1)
-		{
-			acceleration = ((topSpeed - startSpeed) * StepTimer::StepClockRate)/params.accelClocks;
-		}
-		if (params.shapingPlan.decelSegments > 1)
-		{
-			deceleration = ((topSpeed - endSpeed) * StepTimer::StepClockRate)/params.decelClocks;
-		}
+		reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);		// this will set up shapedSegments if we are doing any shaping
 	}
 	else
 	{

@@ -39,7 +39,7 @@ AxisShaper::AxisShaper() noexcept
 	: numExtraImpulses(0),
 	  frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-	  minimumAcceleration(DefaultMinimumAcceleration),
+	  minimumAcceleration(DefaultMinimumAcceleration/StepTimer::StepClockRateSquared),
 	  type(InputShaperType::none)
 {
 }
@@ -58,7 +58,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	if (gb.Seen('L'))
 	{
 		seen = true;
-		minimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
+		minimumAcceleration = max<float>(gb.GetFValue(), 1.0)/StepTimer::StepClockRateSquared;			// very low accelerations cause problems with the maths
 	}
 	if (gb.Seen('S'))
 	{
@@ -234,22 +234,20 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 
 		if (numExtraImpulses != 0)
 		{
+			overlappedShapingClocks = 2 * totalShapingClocks;
 			// Calculate the clocks and coefficients needed when we shape the start of acceleration/deceleration and then immediately shape the end
 			float maxVal = 0.0;
-			overlappedDeltaVPerA = 0.0;
 			for (unsigned int i = 0; i < numExtraImpulses; ++i)
 			{
 				overlappedDurations[i] = overlappedDurations[i + numExtraImpulses] = durations[i];
 				float val = coefficients[i];
 				overlappedCoefficients[i] = val;
-				overlappedDeltaVPerA += val;
 				if (val > maxVal)
 				{
 					maxVal = val;
 				}
 				val = 1.0 - val;
 				overlappedCoefficients[i + numExtraImpulses] = val;
-				overlappedDeltaVPerA += val;
 				if (val > maxVal)
 				{
 					maxVal = val;
@@ -257,6 +255,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			}
 
 			// Now scale the values by maxVal so that the highest coefficient is 1.0, and calculate the total distance per unit acceleration
+			overlappedDeltaVPerA = totalShapingClocks/maxVal;
 			overlappedDistancePerA = 0.0;
 			float u = 0.0;
 			for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
@@ -266,7 +265,6 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				overlappedDistancePerA += (u + 0.5 * speedChange) * overlappedDurations[i];
 				u += speedChange;
 			}
-			overlappedDeltaVPerA /= maxVal;
 		}
 
 		reprap.MoveUpdated();
@@ -277,7 +275,8 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	}
 	else
 	{
-		reply.printf("Input shaping '%s' at %.1fHz damping factor %.2f, min. acceleration %.1f", type.ToString(), (double)frequency, (double)zeta, (double)minimumAcceleration);
+		reply.printf("Input shaping '%s' at %.1fHz damping factor %.2f, min. acceleration %.1f",
+						type.ToString(), (double)frequency, (double)zeta, (double)(minimumAcceleration * StepTimer::StepClockRateSquared));
 		if (numExtraImpulses != 0)
 		{
 			reply.cat(", impulses");
@@ -297,9 +296,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 
 // Plan input shaping, generate the MoveSegment, and set up the basic move parameters.
 // Currently we use a single input shaper for all axes, so the move segments are attached to the DDA not the DM
-InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept
+void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept
 {
-	InputShaperPlan plan;			// this clears out all the fields
+	params.shapingPlan.Clear();			// this clears out all the fields
 
 	switch ((shapingEnabled) ? type.RawValue() : InputShaperType::none)
 	{
@@ -440,97 +439,29 @@ InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool 
 		// Set up the provisional parameters
 		params.SetFromDDA(dda);
 
-		// Set the plan to what we would like to do, if possible
-		plan.shapeAccelStart = params.accelClocks + extraClocksAtStart >= totalShapingClocks
-									&& ((dda.GetPrevious()->state != DDA::DDAState::frozen && dda.GetPrevious()->state != DDA::DDAState::executing) || !dda.GetPrevious()->flags.wasAccelOnlyMove);
-		plan.shapeAccelEnd =   params.accelClocks + extraClocksAtEnd >= totalShapingClocks
-									&& params.decelStartDistance > params.accelDistance;
-		plan.shapeDecelStart = params.decelClocks + extraClocksAtStart >= totalShapingClocks
-									&& params.decelStartDistance > params.accelDistance;
-		plan.shapeDecelEnd =   params.decelClocks + extraClocksAtEnd >= totalShapingClocks
-								&& (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove());
-
-//		debugPrintf("Original plan %03x ", (unsigned int)plan.all);
+		if (params.accelDistance < params.decelStartDistance)			// we can't do any shaping unless there is a steady speed segment that can be shortened
 		{
-			// See if we can shape the acceleration
-			if (plan.shapeAccelStart || plan.shapeAccelEnd)
+			//TODO if we want to shape both acceleration and deceleration by the steady distance is zero or too short, we could reduce the top speed
+			if (params.accelDistance > 0.0)
 			{
-				if (plan.shapeAccelStart && plan.shapeAccelEnd && params.accelClocks < minimumNonOverlappedOriginalClocks)
+				if ((dda.GetPrevious()->state != DDA::DDAState::frozen && dda.GetPrevious()->state != DDA::DDAState::executing) || !dda.GetPrevious()->flags.wasAccelOnlyMove)
 				{
-					// Acceleration segment is too short to shape both the start and the end
-					plan.shapeAccelStart = plan.shapeAccelEnd = false;
+					TryShapeAccelBoth(dda, params);
 				}
 				else
 				{
-					float extraAccelDistance = (plan.shapeAccelStart) ? GetExtraAccelStartDistance(dda) : 0.0;
-					if (plan.shapeAccelEnd)
-					{
-						extraAccelDistance += GetExtraAccelEndDistance(dda);
-					}
-//					debugPrintf("Extra accel dist: %g, %g\n", (double)GetExtraAccelStartDistance(dda), (double)GetExtraAccelEndDistance(dda));
-					if (params.accelDistance + extraAccelDistance <= params.decelStartDistance)
-					{
-						params.accelDistance += extraAccelDistance;
-						if (plan.shapeAccelStart)
-						{
-							params.accelClocks += extraClocksAtStart;
-						}
-						if (plan.shapeAccelEnd)
-						{
-							params.accelClocks += extraClocksAtEnd;
-						}
-					}
-					else
-					{
-						// Not enough constant speed time to the acceleration shaping
-						// TODO look at overlapping accel start/accel end
-						plan.shapeAccelStart = plan.shapeAccelEnd = false;
-						if (reprap.Debug(Module::moduleDda))
-						{
-							debugPrintf("Can't shape acceleration\n");
-						}
-					}
+					TryShapeAccelEnd(dda, params);
 				}
 			}
-
-			// See if we can shape the deceleration
-			if (plan.shapeDecelStart || plan.shapeDecelEnd)
+			if (params.decelDistance > 0.0)
 			{
-				if (plan.shapeDecelStart && plan.shapeDecelEnd && params.decelClocks < minimumNonOverlappedOriginalClocks)
+				if (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove())
 				{
-					// Deceleration segment is too short to shape both the start and the end
-					plan.shapeDecelStart = plan.shapeDecelEnd = false;
+					TryShapeDecelBoth(dda, params);
 				}
 				else
 				{
-					float extraDecelDistance = (plan.shapeDecelStart) ? GetExtraDecelStartDistance(dda) : 0.0;
-					if (plan.shapeDecelEnd)
-					{
-						extraDecelDistance += GetExtraDecelEndDistance(dda);
-					}
-					if (params.accelDistance + extraDecelDistance <= params.decelStartDistance)
-					{
-						params.decelStartDistance -= extraDecelDistance;
-						params.decelDistance += extraDecelDistance;
-						if (plan.shapeDecelStart)
-						{
-							params.decelClocks += extraClocksAtStart;
-						}
-						if (plan.shapeDecelEnd)
-						{
-							params.decelClocks += extraClocksAtEnd;
-						}
-					}
-					else
-					{
-						// Not enough constant speed time to the acceleration shaping
-						// TODO look at overlapping decel start/decel end
-						plan.shapeDecelStart = plan.shapeDecelEnd = false;
-						if (reprap.Debug(Module::moduleDda))
-						{
-							debugPrintf("Can't shape deceleration\n");
-						}
-					}
+					TryShapeDecelStart(dda, params);
 				}
 			}
 		}
@@ -538,39 +469,227 @@ InputShaperPlan AxisShaper::PlanShaping(DDA& dda, BasicPrepParams& params, bool 
 	}
 
 	// If we are doing any input shaping then set up dda.shapedSegments, else leave it as null
-	if (plan.shapeAccelStart || plan.shapeAccelEnd || plan.shapeDecelStart || plan.shapeDecelEnd)
+	if (params.shapingPlan.IsShaped())
 	{
-		MoveSegment * const accelSegs = GetAccelerationSegments(dda, params, plan);
-		MoveSegment * const decelSegs = GetDecelerationSegments(dda, params, plan);
+		MoveSegment * const accelSegs = GetAccelerationSegments(dda, params);
+		MoveSegment * const decelSegs = GetDecelerationSegments(dda, params);
 		params.Finalise(dda);									// this sets up params.steadyClocks, which is needed by FinishSegments
 		dda.shapedSegments = FinishSegments(dda, params, accelSegs, decelSegs);
+
+		// Update the acceleration and deceleration in the DDA to be the average instead of peak values, so that if we generate unshaped segments or CAN motion too, they will be in sync
+		if (params.shapingPlan.shapeAccelStart || params.shapingPlan.shapeAccelEnd || params.shapingPlan.shapeAccelOverlapped)
+		{
+			dda.acceleration = ((dda.topSpeed - dda.startSpeed) * StepTimer::StepClockRate)/params.accelClocks;
+		}
+		if (params.shapingPlan.shapeDecelStart || params.shapingPlan.shapeDecelEnd || params.shapingPlan.shapeDecelOverlapped)
+		{
+			dda.deceleration = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/params.decelClocks;
+		}
 	}
 	else
 	{
 		params.Finalise(dda);									// this sets up params.steadyClocks
 	}
 
-//	debugPrintf(" final plan %03x\n", (unsigned int)plan.all);
-	return plan;
+//	debugPrintf(" final plan %03x\n", (unsigned int)params.shapingPlan.all);
+}
+
+void AxisShaper::TryShapeAccelStart(const DDA& dda, PrepParams& params) const noexcept
+{
+	const float extraAccelDistance = GetExtraAccelStartDistance(dda);
+	if (params.accelDistance + extraAccelDistance <= params.decelStartDistance)
+	{
+		params.shapingPlan.shapeAccelStart = true;
+		params.accelDistance += extraAccelDistance;
+		params.accelClocks += extraClocksAtStart;
+	}
+	else
+	{
+		// Not enough constant speed time to the acceleration shaping
+		if (reprap.Debug(Module::moduleDda))
+		{
+			debugPrintf("Can't shape accel start\n");
+		}
+	}
+}
+
+void AxisShaper::TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noexcept
+{
+	const float extraAccelDistance = GetExtraAccelEndDistance(dda);
+	if (params.accelDistance + extraAccelDistance <= params.decelStartDistance)
+	{
+		params.shapingPlan.shapeAccelEnd = true;
+		params.accelDistance += extraAccelDistance;
+		params.accelClocks += extraClocksAtEnd;
+	}
+	else
+	{
+		// Not enough constant speed time to the acceleration shaping
+		if (reprap.Debug(Module::moduleDda))
+		{
+			debugPrintf("Can't shape accel end\n");
+		}
+	}
+}
+
+void AxisShaper::TryShapeAccelBoth(DDA& dda, PrepParams& params) const noexcept
+{
+	if ((dda.topSpeed - dda.startSpeed)/StepTimer::StepClockRate <= overlappedDeltaVPerA * (dda.acceleration/StepTimer::StepClockRateSquared))
+	{
+		// We can use overlapped shaping
+		const float newAcceleration = ((dda.topSpeed - dda.startSpeed)/StepTimer::StepClockRate)/overlappedDeltaVPerA;
+		if (newAcceleration < minimumAcceleration)
+		{
+			return;
+		}
+		const float newAccelDistance = ((dda.startSpeed/StepTimer::StepClockRate) * overlappedShapingClocks) + (newAcceleration * overlappedDistancePerA);
+		if (newAccelDistance >= params.decelStartDistance)
+		{
+			return;
+		}
+		dda.acceleration = newAcceleration * StepTimer::StepClockRateSquared;
+		params.accelDistance = newAccelDistance;
+		params.accelClocks = overlappedShapingClocks;
+		params.shapingPlan.shapeAccelOverlapped = true;
+	}
+	else
+	{
+		if (params.accelClocks < minimumNonOverlappedOriginalClocks)
+		{
+			// The speed change is too high to allow overlapping, but non-overlapped shaping will give a very short steady acceleration segment.
+			// If we have enough spare distance, reduce the acceleration slightly to lengthen that segment.
+			const float newAcceleration = (dda.acceleration/StepTimer::StepClockRateSquared) * params.accelClocks/minimumNonOverlappedOriginalClocks;
+			const float newAccelDistance = ((dda.startSpeed/StepTimer::StepClockRate) + (0.5 * newAcceleration * minimumNonOverlappedOriginalClocks)) * minimumNonOverlappedOriginalClocks;
+			if (newAccelDistance >= params.decelStartDistance)
+			{
+				return;
+			}
+			dda.acceleration = newAcceleration * StepTimer::StepClockRateSquared;
+			params.accelDistance = newAccelDistance;
+			params.accelClocks = minimumNonOverlappedOriginalClocks;
+		}
+		TryShapeAccelStart(dda, params);
+		TryShapeAccelEnd(dda, params);
+	}
+}
+
+void AxisShaper::TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept
+{
+	float extraDecelDistance = GetExtraDecelStartDistance(dda);
+	if (params.accelDistance + extraDecelDistance <= params.decelStartDistance)
+	{
+		params.shapingPlan.shapeDecelStart = true;
+		params.decelStartDistance -= extraDecelDistance;
+		params.decelDistance += extraDecelDistance;
+		params.decelClocks += extraClocksAtStart;
+	}
+	else
+	{
+		// Not enough constant speed time to do deceleration shaping
+		if (reprap.Debug(Module::moduleDda))
+		{
+			debugPrintf("Can't shape decel start\n");
+		}
+	}
+}
+
+void AxisShaper::TryShapeDecelEnd(const DDA& dda, PrepParams& params) const noexcept
+{
+	float extraDecelDistance = GetExtraDecelEndDistance(dda);
+	if (params.accelDistance + extraDecelDistance <= params.decelStartDistance)
+	{
+		params.shapingPlan.shapeDecelEnd = true;
+		params.decelStartDistance -= extraDecelDistance;
+		params.decelDistance += extraDecelDistance;
+		params.decelClocks += extraClocksAtEnd;
+	}
+	else
+	{
+		// Not enough constant speed time to do deceleration shaping
+		if (reprap.Debug(Module::moduleDda))
+		{
+			debugPrintf("Can't shape decel and\n");
+		}
+	}
+}
+
+void AxisShaper::TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept
+{
+	if ((dda.topSpeed - dda.endSpeed)/StepTimer::StepClockRate <= overlappedDeltaVPerA * (dda.deceleration/StepTimer::StepClockRateSquared))
+	{
+		// We can use overlapped shaping
+		const float newDeceleration = ((dda.topSpeed - dda.endSpeed)/StepTimer::StepClockRate)/overlappedDeltaVPerA;
+		if (newDeceleration < minimumAcceleration)
+		{
+			return;
+		}
+		const float newDecelDistance = ((dda.topSpeed/StepTimer::StepClockRate) * overlappedShapingClocks) - (newDeceleration * overlappedDistancePerA);
+		const float newDecelStartDistance = dda.totalDistance - newDecelDistance;
+		if (newDecelStartDistance < params.accelDistance)
+		{
+			return;
+		}
+		dda.deceleration = newDeceleration * StepTimer::StepClockRateSquared;
+		params.decelDistance = newDecelDistance;
+		params.decelStartDistance = newDecelStartDistance;
+		params.decelClocks = overlappedShapingClocks;
+		params.shapingPlan.shapeDecelOverlapped = true;
+	}
+	else
+	{
+		if (params.decelClocks < minimumNonOverlappedOriginalClocks)
+		{
+			// The speed change is too high to allow overlapping, but non-overlapped shaping will give a very short steady acceleration segment.
+			// If we have enough spare distance, reduce the acceleration slightly to lengthen that segment.
+			const float newDeceleration = (dda.deceleration/StepTimer::StepClockRateSquared) * params.decelClocks/minimumNonOverlappedOriginalClocks;
+			const float newDecelDistance = ((dda.endSpeed/StepTimer::StepClockRate) + (0.5 * newDeceleration * minimumNonOverlappedOriginalClocks)) * minimumNonOverlappedOriginalClocks;
+			const float newDecelStartDistance = dda.totalDistance - newDecelDistance;
+			if (newDecelStartDistance <= params.accelDistance)
+			{
+				return;
+			}
+			dda.deceleration = newDeceleration * StepTimer::StepClockRateSquared;
+			params.decelStartDistance = newDecelStartDistance;
+			params.decelClocks = overlappedShapingClocks;
+		}
+		TryShapeDecelStart(dda, params);
+		TryShapeDecelEnd(dda, params);
+	}
 }
 
 // If there is an acceleration phase, generate the acceleration segments according to the plan, and set the number of acceleration segments in the plan
-MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrepParams& params, InputShaperPlan& plan) const noexcept
+MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const PrepParams& params) const noexcept
 {
 	if (dda.beforePrepare.accelDistance > 0.0)
 	{
-		unsigned int numAccelSegs = 0;
+		const float peakAcceleration = dda.acceleration/StepTimer::StepClockRateSquared;
+		if (params.shapingPlan.shapeAccelOverlapped)
+		{
+			MoveSegment *accelSegs = nullptr;
+			float segStartSpeed = dda.topSpeed/StepTimer::StepClockRate;
+			for (int i = (2 * numExtraImpulses) - 1; i >= 0; --i)
+			{
+				accelSegs = MoveSegment::Allocate(accelSegs);
+				const float acceleration = peakAcceleration * overlappedCoefficients[i];
+				const float segTime = overlappedDurations[i];
+				segStartSpeed -= acceleration * segTime;
+				const float b = segStartSpeed/(-acceleration);
+				const float c = 2.0/acceleration;
+				const float segLen = (segStartSpeed + (0.5 * acceleration * segTime)) * segTime;
+				accelSegs->SetNonLinear(segLen, segTime, b, c);
+			}
+			return accelSegs;
+		}
+
 		float accumulatedSegTime = 0.0;
 		float endDistance = params.accelDistance;
-		const float peakAcceleration = dda.acceleration/StepTimer::StepClockRateSquared;
 		MoveSegment *endAccelSegs = nullptr;
-		if (plan.shapeAccelEnd)
+		if (params.shapingPlan.shapeAccelEnd)
 		{
 			// Shape the end of the acceleration
 			float segStartSpeed = dda.topSpeed/StepTimer::StepClockRate;
 			for (int i = numExtraImpulses - 1; i >= 0; --i)
 			{
-				++numAccelSegs;
 				endAccelSegs = MoveSegment::Allocate(endAccelSegs);
 				const float acceleration = peakAcceleration * (1.0 - coefficients[i]);
 				const float segTime = durations[i];
@@ -587,12 +706,11 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrep
 		float startDistance = 0.0;
 		float startSpeed = dda.startSpeed/StepTimer::StepClockRate;
 		MoveSegment *startAccelSegs = nullptr;
-		if (plan.shapeAccelStart)
+		if (params.shapingPlan.shapeAccelStart)
 		{
 			// Shape the start of the acceleration
 			for (unsigned int i = 0; i < numExtraImpulses; ++i)
 			{
-				++numAccelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float acceleration = peakAcceleration * coefficients[i];
 				const float segTime = durations[i];
@@ -617,14 +735,12 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrep
 		// Do the constant acceleration part
 		if (endDistance > startDistance)
 		{
-			++numAccelSegs;
 			endAccelSegs = MoveSegment::Allocate(endAccelSegs);
 			const float b = startSpeed/(-peakAcceleration);
 			const float c = 2.0/peakAcceleration;
 			endAccelSegs->SetNonLinear(endDistance - startDistance, params.accelClocks - accumulatedSegTime, b, c);
 		}
 
-		plan.accelSegments = numAccelSegs;
 		if (startAccelSegs == nullptr)
 		{
 			return endAccelSegs;
@@ -637,27 +753,42 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, const BasicPrep
 		return startAccelSegs;
 	}
 
-	plan.accelSegments = 0;
 	return nullptr;
 }
 
 // If there is a deceleration phase, generate the deceleration segments according to the plan, and set the number of deceleration segments in the plan
-MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const BasicPrepParams& params, InputShaperPlan& plan) const noexcept
+MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const PrepParams& params) const noexcept
 {
 	if (dda.beforePrepare.decelDistance > 0.0)
 	{
-		unsigned int numDecelSegs = 0;
+		const float peakDeceleration = dda.deceleration/StepTimer::StepClockRateSquared;
+		if (params.shapingPlan.shapeDecelOverlapped)
+		{
+			MoveSegment *decelSegs = nullptr;
+			float segStartSpeed = dda.endSpeed/StepTimer::StepClockRate;
+			for (int i = (2 * numExtraImpulses) - 1; i >= 0; --i)
+			{
+				decelSegs = MoveSegment::Allocate(decelSegs);
+				const float deceleration = peakDeceleration * overlappedCoefficients[i];
+				const float segTime = overlappedDurations[i];
+				segStartSpeed += deceleration * segTime;
+				const float b = segStartSpeed/deceleration;
+				const float c = -2.0/deceleration;
+				const float segLen = (segStartSpeed + (-0.5 * deceleration * segTime)) * segTime;
+				decelSegs->SetNonLinear(segLen, segTime, b, c);
+			}
+			return decelSegs;
+		}
+
 		float accumulatedSegTime = 0.0;
 		float endDistance = dda.totalDistance;
-		const float peakDeceleration = dda.deceleration/StepTimer::StepClockRateSquared;
 		MoveSegment *endDecelSegs = nullptr;
-		if (plan.shapeDecelEnd)
+		if (params.shapingPlan.shapeDecelEnd)
 		{
 			// Shape the end of the deceleration
 			float segStartSpeed = dda.endSpeed/StepTimer::StepClockRate;
 			for (int i = numExtraImpulses - 1; i >= 0; --i)
 			{
-				++numDecelSegs;
 				endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 				const float deceleration = peakDeceleration * (1.0 - coefficients[i]);
 				const float segTime = durations[i];
@@ -674,12 +805,11 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const BasicPrep
 		float startDistance = params.decelStartDistance;
 		float startSpeed = dda.topSpeed/StepTimer::StepClockRate;
 		MoveSegment *startDecelSegs = nullptr;
-		if (plan.shapeDecelStart)
+		if (params.shapingPlan.shapeDecelStart)
 		{
 			// Shape the start of the deceleration
 			for (unsigned int i = 0; i < numExtraImpulses; ++i)
 			{
-				++numDecelSegs;
 				MoveSegment *seg = MoveSegment::Allocate(nullptr);
 				const float deceleration = peakDeceleration * coefficients[i];
 				const float segTime = durations[i];
@@ -704,14 +834,12 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const BasicPrep
 		// Do the constant deceleration part
 		if (endDistance > startDistance)
 		{
-			++numDecelSegs;
 			endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 			const float b = startSpeed/peakDeceleration;
 			const float c = -2.0/peakDeceleration;
 			endDecelSegs->SetNonLinear(endDistance - startDistance, params.decelClocks - accumulatedSegTime, b, c);
 		}
 
-		plan.decelSegments = numDecelSegs;
 		if (startDecelSegs == nullptr)
 		{
 			return endDecelSegs;
@@ -724,13 +852,12 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, const BasicPrep
 		return startDecelSegs;
 	}
 
-	plan.decelSegments = 0;
 	return nullptr;
 }
 
 // Generate the steady speed segment (if any), tack the segments together, and attach them to the DDA
 // Must set up params.steadyClocks before calling this
-MoveSegment *AxisShaper::FinishSegments(const DDA& dda, const BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept
+MoveSegment *AxisShaper::FinishSegments(const DDA& dda, const PrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept
 {
 	if (params.steadyClocks > 0.0)
 	{
@@ -775,7 +902,7 @@ inline float AxisShaper::GetExtraDecelEndDistance(const DDA& dda) const noexcept
 	return ((extraClocksAtEnd * dda.endSpeed)/StepTimer::StepClockRate) - ((extraDistanceAtEnd * dda.deceleration)/StepTimer::StepClockRateSquared);
 }
 
-/*static*/ MoveSegment *AxisShaper::GetUnshapedSegments(DDA& dda, const BasicPrepParams& params) noexcept
+/*static*/ MoveSegment *AxisShaper::GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept
 {
 	// Deceleration phase
 	MoveSegment * tempSegments;

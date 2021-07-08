@@ -29,7 +29,7 @@ NamedEnum(InputShaperType, uint8_t,
 );
 
 class DDA;
-class BasicPrepParams;
+class PrepParams;
 class MoveSegment;
 
 class AxisShaper INHERIT_OBJECT_MODEL
@@ -40,23 +40,29 @@ public:
 	float GetFrequency() const noexcept { return frequency; }
 	float GetDamping() const noexcept { return zeta; }
 	InputShaperType GetType() const noexcept { return type; }
-	InputShaperPlan PlanShaping(DDA& dda, BasicPrepParams& params, bool shapingEnabled) const noexcept;
+	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 
-	static MoveSegment *GetUnshapedSegments(DDA& dda, const BasicPrepParams& params) noexcept;
+	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	MoveSegment *GetAccelerationSegments(const DDA& dda, const BasicPrepParams& params, InputShaperPlan& plan) const noexcept;
-	MoveSegment *GetDecelerationSegments(const DDA& dda, const BasicPrepParams& params, InputShaperPlan& plan) const noexcept;
-	MoveSegment *FinishSegments(const DDA& dda, const BasicPrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
+	MoveSegment *GetAccelerationSegments(const DDA& dda, const PrepParams& params) const noexcept;
+	MoveSegment *GetDecelerationSegments(const DDA& dda, const PrepParams& params) const noexcept;
+	MoveSegment *FinishSegments(const DDA& dda, const PrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
 	float GetExtraAccelStartDistance(const DDA& dda) const noexcept;
 	float GetExtraAccelEndDistance(const DDA& dda) const noexcept;
 	float GetExtraDecelStartDistance(const DDA& dda) const noexcept;
 	float GetExtraDecelEndDistance(const DDA& dda) const noexcept;
+	void TryShapeAccelStart(const DDA& dda, PrepParams& params) const noexcept;
+	void TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noexcept;
+	void TryShapeAccelBoth(DDA& dda, PrepParams& params) const noexcept;
+	void TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept;
+	void TryShapeDecelEnd(const DDA& dda, PrepParams& params) const noexcept;
+	void TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept;
 
 	static constexpr unsigned int MaxExtraImpulses = 4;
 	static constexpr float DefaultFrequency = 40.0;

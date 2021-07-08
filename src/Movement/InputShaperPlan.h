@@ -16,16 +16,18 @@ union InputShaperPlan
 	{
 		uint32_t shapeAccelStart : 1,
 				 shapeAccelEnd : 1,
+				 shapeAccelOverlapped : 1,
 				 shapeDecelStart : 1,
 				 shapeDecelEnd : 1,
-				 accelSegments : 4,
-				 decelSegments : 4;
+				 shapeDecelOverlapped : 1;
 	};
 	uint32_t all;
 
 	InputShaperPlan() noexcept : all(0) { }
 
-	void SetNoShaping() noexcept { all = 0; }
+	void Clear() noexcept { all = 0; }
+
+	bool IsShaped() const noexcept { return shapeAccelStart || shapeAccelEnd || shapeAccelOverlapped || shapeDecelStart || shapeDecelEnd || shapeDecelOverlapped; }
 };
 
 
