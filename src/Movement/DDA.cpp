@@ -1555,7 +1555,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						const int32_t steps = (int32_t)(netMovement * stepsPerMm);
 						if (steps != 0)
 						{
-							CanMotion::AddMovement(params, driver, steps);
+							CanMotion::AddMovement(params, driver, steps, flags.usePressureAdvance);
 							netMovement -= (float)steps/stepsPerMm;
 						}
 						shaper.SetExtrusionPending(netMovement);
