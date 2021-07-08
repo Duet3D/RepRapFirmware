@@ -1297,10 +1297,8 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	else
 	{
 		params.SetFromDDA(*this);
+		params.shapingPlan.Clear();
 		params.Finalise(*this);
-#if SUPPORT_CAN_EXPANSION
-		params.shapingPlan.SetNoShaping();
-#endif
 	}
 
 	if (simMode == 0)
