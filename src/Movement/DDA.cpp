@@ -1532,19 +1532,19 @@ void DDA::Prepare(uint8_t simMode) noexcept
 					if (driver.IsRemote())
 					{
 						// This calculation isn't quite right when we use PA and fractional steps accumulate. I will fix it when I change the CAN protocol.
+						// The MovementLinear message requires the raw step count not adjusted for PA to be passed. The remote board adds the PA.
 						ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
-						float netMovement = totalDistance;
+						float netMovement = (totalDistance * directionVector[drive]) + shaper.GetExtrusionPending();
+						const float stepsPerMm = platform.DriveStepsPerUnit(drive);
+						const int32_t rawSteps = (int32_t)(netMovement * stepsPerMm);
+						if (rawSteps != 0)
+						{
+							CanMotion::AddMovement(params, driver, rawSteps, flags.usePressureAdvance);
+							netMovement -= (float)rawSteps/stepsPerMm;
+						}
 						if (flags.usePressureAdvance)
 						{
-							netMovement += (endSpeed - startSpeed) * shaper.GetK();
-						}
-						netMovement = (netMovement * directionVector[drive]) + shaper.GetExtrusionPending();
-						const float stepsPerMm = platform.DriveStepsPerUnit(drive);
-						const int32_t steps = (int32_t)(netMovement * stepsPerMm);
-						if (steps != 0)
-						{
-							CanMotion::AddMovement(params, driver, steps, flags.usePressureAdvance);
-							netMovement -= (float)steps/stepsPerMm;
+							netMovement += (endSpeed - startSpeed) * directionVector[drive] * shaper.GetK();
 						}
 						shaper.SetExtrusionPending(netMovement);
 					}

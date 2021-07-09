@@ -110,7 +110,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 		distanceSoFar += currentSegment->GetSegmentLength();
 		timeSoFar += currentSegment->GetSegmentTime();
 
-		phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
+		phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 		if (nextStep < phaseStepLimit)
 		{
 			return true;
@@ -211,7 +211,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
 			pB = currentSegment->CalcLinearB(startDistance, startTime);
-			phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
+			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 			state = DMState::cartLinear;
 		}
 		else
@@ -223,7 +223,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			{
 				// Extruders have a single acceleration segment. We need to add the extra extrusion distance due to pressure advance to the extrusion distance.
 				distanceSoFar += mp.cart.extraExtrusionDistance;
-				phaseStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
+				phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 				state = DMState::cartAccel;
 			}
 			else
