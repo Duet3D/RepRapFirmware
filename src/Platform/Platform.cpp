@@ -1091,7 +1091,7 @@ void Platform::Spin() noexcept
 	}
 #endif
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	MassStorage::Spin();
 #endif
 

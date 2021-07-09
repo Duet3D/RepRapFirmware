@@ -418,9 +418,17 @@ void DataTransfer::Init() noexcept
 	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
 #if !SAME70
-	// Allocate buffers
-	rxBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
-	txBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
+	if (reprap.UsingLinuxInterface())
+	{
+		// Allocate buffers in SBC mode
+		rxBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
+		txBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
+	}
+	else
+	{
+		// Only send back the TX header + response code in standalone mode indicating we're running in standalone mode
+		txHeader.formatCode = LinuxFormatCodeStandalone;
+	}
 #endif
 
 #if SAME5x
@@ -478,6 +486,12 @@ void DataTransfer::Init() noexcept
 	// A value of 8 seems to work. I haven't tried other values yet.
 	matrix_set_slave_slot_cycle(0, 8);
 #endif
+
+	if (!reprap.UsingLinuxInterface())
+	{
+		// Start off the first transfer in standalone mode
+		StartNextTransfer();
+	}
 }
 
 void DataTransfer::SetSBCTask(TaskHandle handle) noexcept
@@ -517,6 +531,12 @@ template<typename T> const T *DataTransfer::ReadDataHeader() noexcept
 	const T *header = reinterpret_cast<const T*>(rxBuffer + rxPointer);
 	rxPointer += sizeof(T);
 	return header;
+}
+
+bool DataTransfer::ReadBoolean() noexcept
+{
+	const BooleanHeader *header = ReadDataHeader<BooleanHeader>();
+	return header->value;
 }
 
 void DataTransfer::ReadGetObjectModel(size_t packetLength, const StringRef &key, const StringRef &flags) noexcept
@@ -697,6 +717,31 @@ GCodeChannel DataTransfer::ReadDeleteLocalVariable(const StringRef& varName) noe
 	return GCodeChannel(header->channel);
 }
 
+FileHandle DataTransfer::ReadOpenFileResult(FilePosition& fileLength) noexcept
+{
+	// Read header
+	const OpenFileResult *header = ReadDataHeader<OpenFileResult>();
+
+	// Read values
+	fileLength = header->fileSize;
+	return header->handle;
+}
+
+int DataTransfer::ReadFileData(char *buffer, size_t length) noexcept
+{
+	// Read header
+	const FileDataHeader *header = ReadDataHeader<FileDataHeader>();
+	int bytesToRead = min<int>(header->bytesRead, length);
+
+	// Read data content if applicable
+	if (bytesToRead > 0)
+	{
+		const char *fileData = ReadData(header->bytesRead);
+		memcpy(buffer, fileData, bytesToRead);
+	}
+	return bytesToRead;
+}
+
 void DataTransfer::ExchangeHeader() noexcept
 {
 	Cache::FlushBeforeDMASend(&txHeader, sizeof(txHeader));
@@ -820,7 +865,7 @@ bool DataTransfer::IsReady() noexcept
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
 			{
-				if (rxHeader.dataLength != 0 || txHeader.dataLength != 0)
+				if (reprap.UsingLinuxInterface() && (rxHeader.dataLength != 0 || txHeader.dataLength != 0))
 				{
 					// Perform the actual data transfer
 					ExchangeData();
@@ -1524,6 +1569,159 @@ bool DataTransfer::WriteSetVariableError(const char *varName, const char *errorM
 	// Write expression and error message
 	WriteData(varName, varNameLength);
 	WriteData(errorMessage, errorLength);
+	return true;
+}
+
+bool DataTransfer::WriteCheckFileExists(const char *filename) noexcept
+{
+	// Check if it fits
+	size_t filenameLength = strlen(filename);
+	if (!CanWritePacket(filenameLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::CheckFileExists, filenameLength);
+
+	// Write filename
+	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename) noexcept
+{
+	// Check if it fits
+	size_t filenameLength = strlen(filename);
+	if (!CanWritePacket(filenameLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::DeleteFileOrDirectory, filenameLength);
+
+	// Write filename
+	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteOpenFile(const char *filename, bool forWriting, bool append, uint32_t preAllocSize) noexcept
+{
+	// Check if it fits
+	size_t filenameLength = strlen(filename);
+	if (!CanWritePacket(sizeof(OpenFileHeader) + filenameLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::OpenFile, sizeof(OpenFileHeader) + filenameLength);
+
+	// Write partial header
+	OpenFileHeader *header = WriteDataHeader<OpenFileHeader>();
+	header->forWriting = forWriting;
+	header->append = append;
+	header->filenameLength = filenameLength;
+	header->padding = 0;
+	header->preAllocSize = preAllocSize;
+
+	// Write expression and error message
+	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteReadFile(FileHandle handle, size_t bufferSize) noexcept
+{
+	// Check if it fits
+	if (!CanWritePacket(sizeof(ReadFileHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::ReadFile, sizeof(ReadFileHeader));
+
+	// Write data header
+	ReadFileHeader *header = WriteDataHeader<ReadFileHeader>();
+	header->handle = handle;
+	header->maxLength = min<uint32_t>(bufferSize, LinuxTransferBufferSize - sizeof(FileDataHeader));
+	return true;
+}
+
+bool DataTransfer::WriteFileData(FileHandle handle, const char *data, size_t& length) noexcept
+{
+	// Check if anything can be written
+	size_t freeSpace = FreeTxSpace();
+	if (freeSpace <= sizeof(FileHandleHeader))
+	{
+		return false;
+	}
+	size_t bytesToWrite = min<size_t>(length, freeSpace - sizeof(PacketHeader) - sizeof(FileHandleHeader));
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::WriteFile, bytesToWrite + sizeof(FileHandleHeader));
+
+	// Write data header
+	FileHandleHeader *header = WriteDataHeader<FileHandleHeader>();
+	header->handle = handle;
+
+	// Check how much can be written this time and write it
+	WriteData(data, bytesToWrite);
+	length -= bytesToWrite;
+	txPointer = AddPadding(txPointer);
+	return true;
+}
+
+bool DataTransfer::WriteSeekFile(FileHandle handle, FilePosition offset) noexcept
+{
+	// Check if it fits
+	if (!CanWritePacket(sizeof(SeekFileHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::SeekFile, sizeof(SeekFileHeader));
+
+	// Write data header
+	SeekFileHeader *header = WriteDataHeader<SeekFileHeader>();
+	header->handle = handle;
+	header->offset = offset;
+	return true;
+}
+
+bool DataTransfer::WriteTruncateFile(FileHandle handle) noexcept
+{
+	// Check if it fits
+	if (!CanWritePacket(sizeof(FileHandleHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::TruncateFile, sizeof(FileHandleHeader));
+
+	// Write data header
+	FileHandleHeader *header = WriteDataHeader<FileHandleHeader>();
+	header->handle = handle;
+	return true;
+}
+
+bool DataTransfer::WriteCloseFile(FileHandle handle) noexcept
+{
+	// Check if it fits
+	if (!CanWritePacket(sizeof(FileHandleHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::CloseFile, sizeof(FileHandleHeader));
+
+	// Write data header
+	FileHandleHeader *header = WriteDataHeader<FileHandleHeader>();
+	header->handle = handle;
 	return true;
 }
 

@@ -41,6 +41,7 @@ public:
 	size_t PacketsToRead() const noexcept;
 	const PacketHeader *ReadPacket() noexcept;												// Attempt to read the next packet header or return null. Advances the read pointer to the next packet or the packet's data
 	const char *ReadData(size_t packetLength) noexcept;										// Read the packet data and advance to the next packet (if any)
+	bool ReadBoolean() noexcept;															// Read a boolean value
 	void ReadGetObjectModel(size_t packetLength, const StringRef &key, const StringRef &flags) noexcept;		// Read an object model request
 	void ReadPrintStartedInfo(size_t packetLength, const StringRef& filename, GCodeFileInfo &info) noexcept;	// Read info about the started file print
 	PrintStoppedReason ReadPrintStoppedInfo() noexcept;										// Read info about why the print has been stopped
@@ -53,6 +54,8 @@ public:
 	bool ReadMessage(MessageType& type, OutputBuffer *buf) noexcept;						// Read a request to output a message
 	GCodeChannel ReadSetVariable(bool& createVariable, const StringRef& varName, const StringRef& expression) noexcept;	// Read a variable set request
 	GCodeChannel ReadDeleteLocalVariable(const StringRef& varName) noexcept;				// Read a variable deletion request
+	FileHandle ReadOpenFileResult(FilePosition& fileLength) noexcept;						// Read the result of a file open request
+	int ReadFileData(char *buffer, size_t length) noexcept;									// Read file data from the SBC
 
 	void ResendPacket(const PacketHeader *packet) noexcept;
 	bool WriteObjectModel(OutputBuffer *data) noexcept;
@@ -72,6 +75,14 @@ public:
 	bool WriteMessageAcknowledged(GCodeChannel channel) noexcept;
 	bool WriteSetVariableResult(const char *varName, const ExpressionValue& value) noexcept;
 	bool WriteSetVariableError(const char *varName, const char *errorMessage) noexcept;
+	bool WriteCheckFileExists(const char *filename) noexcept;
+	bool WriteDeleteFileOrDirectory(const char *filename) noexcept;
+	bool WriteOpenFile(const char *filename, bool forWriting, bool append, uint32_t preAllocSize) noexcept;
+	bool WriteReadFile(FileHandle handle, size_t bufferSize) noexcept;
+	bool WriteFileData(FileHandle handle, const char *data, size_t& length) noexcept;
+	bool WriteSeekFile(FileHandle handle, FilePosition offset) noexcept;
+	bool WriteTruncateFile(FileHandle handle) noexcept;
+	bool WriteCloseFile(FileHandle handle) noexcept;
 
 private:
 	enum class SpiState
@@ -128,7 +139,7 @@ private:
 
 	// Always keep enough tx space to allow resend requests in case RRF runs out of
 	// resources and cannot process an incoming request right away
-	size_t FreeTxSpace() const noexcept { return LinuxTransferBufferSize - txPointer - rxHeader.numPackets * sizeof(PacketHeader); }
+	size_t FreeTxSpace() const noexcept { return LinuxTransferBufferSize - AddPadding(txPointer) - rxHeader.numPackets * sizeof(PacketHeader); }
 
 	bool CanWritePacket(size_t dataLength = 0) const noexcept;
 	PacketHeader *WritePacketHeader(FirmwareRequest request, size_t dataLength = 0, uint16_t resendPacktId = 0) noexcept;

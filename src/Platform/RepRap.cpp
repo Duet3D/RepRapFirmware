@@ -582,8 +582,9 @@ void RepRap::Init() noexcept
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
 #if HAS_LINUX_INTERFACE && !HAS_MASS_STORAGE
-	linuxInterface->Init();
 	usingLinuxInterface = true;
+	linuxInterface->Init();
+	FileWriteBuffer::UsingSbcMode();
 #endif
 
 #if HAS_MASS_STORAGE
@@ -600,10 +601,6 @@ void RepRap::Init() noexcept
 
 		if (rslt == GCodeResult::ok)
 		{
-# if HAS_LINUX_INTERFACE
-			delete linuxInterface;						// free up the RAM for more tools etc.
-			linuxInterface = nullptr;
-# endif
 			// Run the configuration file
 			if (!RunStartupFile(GCodes::CONFIG_FILE) && !RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
 			{
@@ -613,19 +610,18 @@ void RepRap::Init() noexcept
 # if HAS_LINUX_INTERFACE
 		else if (!MassStorage::IsCardDetected(0))		// if we failed to mount the SD card because there was no card in the slot
 		{
-			linuxInterface->Init();
 			usingLinuxInterface = true;
+			FileWriteBuffer::UsingSbcMode();
 		}
 # endif
 		else
 		{
-# if HAS_LINUX_INTERFACE
-			delete linuxInterface;						// free up the RAM for more tools etc.
-			linuxInterface = nullptr;
-# endif
 			delay(3000);								// Wait a few seconds so users have a chance to see this
 			platform->MessageF(AddWarning(UsbMessage), "%s\n", reply.c_str());
 		}
+# if HAS_LINUX_INTERFACE
+		linuxInterface->Init();
+# endif
 	}
 #endif
 
@@ -758,6 +754,16 @@ void RepRap::Spin() noexcept
 	ticksInSpinState = 0;
 	spinningModule = moduleDisplay;
 	display->Spin();
+#endif
+
+#if HAS_LINUX_INTERFACE
+	// Keep the Linux task spinning from the main task in standalone mode to respond to a SBC if necessary
+	if (!UsingLinuxInterface())
+	{
+		ticksInSpinState = 0;
+		spinningModule = moduleLinuxInterface;
+		linuxInterface->Spin();
+	}
 #endif
 
 	ticksInSpinState = 0;

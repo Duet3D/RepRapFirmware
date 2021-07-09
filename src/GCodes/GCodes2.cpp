@@ -3537,6 +3537,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
+#if HAS_LINUX_INTERFACE
+			case 576: // Set SPI communication parameters
+				if (reprap.UsingLinuxInterface())
+				{
+					result = reprap.GetLinuxInterface().HandleM576(gb, reply);
+				}
+				else
+				{
+					reply.copy("Board is running in standalone mode");
+					result = GCodeResult::error;
+				}
+				break;
+#endif
+
 			case 577: // Wait until endstop input is triggered
 				result = WaitForPin(gb, reply);
 				break;
