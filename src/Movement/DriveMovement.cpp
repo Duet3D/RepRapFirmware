@@ -462,7 +462,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		{
 			// We know that netSteps <= iFwdSteps
 			reverseStartStep = iFwdSteps + 1;
-			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) - netSteps);
+			totalSteps = (uint32_t)((int32_t)(2 * iFwdSteps) - netSteps);
 		}
 		shaper.SetExtrusionPending((netDistance - (float)netSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 	}
@@ -576,7 +576,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion
-		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)((2 * reverseStartStep) - (nextStep + stepsTillRecalc)));
+		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)((2 * (reverseStartStep - 1)) - (nextStep + stepsTillRecalc)));
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian accelerating with no reversal
