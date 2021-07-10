@@ -219,6 +219,8 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			}
 		}
 
+		minimumShapingStartOriginalClocks = totalShapingClocks - extraClocksAtStart + (MinimumMiddleSegmentTime * StepTimer::StepClockRate);
+		minimumShapingEndOriginalClocks = totalShapingClocks - extraClocksAtEnd + (MinimumMiddleSegmentTime * StepTimer::StepClockRate);
 		minimumNonOverlappedOriginalClocks = (totalShapingClocks * 2) - extraClocksAtStart - extraClocksAtEnd + (MinimumMiddleSegmentTime * StepTimer::StepClockRate);
 
 		{
@@ -448,7 +450,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 				{
 					TryShapeAccelBoth(dda, params);
 				}
-				else
+				else if (params.accelClocks >= minimumShapingEndOriginalClocks)
 				{
 					TryShapeAccelEnd(dda, params);
 				}
@@ -459,7 +461,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 				{
 					TryShapeDecelBoth(dda, params);
 				}
-				else
+				else if (params.decelClocks >= minimumShapingStartOriginalClocks)
 				{
 					TryShapeDecelStart(dda, params);
 				}
@@ -494,6 +496,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 //	debugPrintf(" final plan %03x\n", (unsigned int)params.shapingPlan.all);
 }
 
+// Try to shape the start of the acceleration. We already know that there is sufficient acceleration time to do this, but we still need to check that there is enough distance.
 void AxisShaper::TryShapeAccelStart(const DDA& dda, PrepParams& params) const noexcept
 {
 	const float extraAccelDistance = GetExtraAccelStartDistance(dda);
@@ -513,6 +516,7 @@ void AxisShaper::TryShapeAccelStart(const DDA& dda, PrepParams& params) const no
 	}
 }
 
+// Try to shape the end of the acceleration. We already know that there is sufficient acceleration time to do this, but we still need to check that there is enough distance.
 void AxisShaper::TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noexcept
 {
 	const float extraAccelDistance = GetExtraAccelEndDistance(dda);
@@ -573,6 +577,7 @@ void AxisShaper::TryShapeAccelBoth(DDA& dda, PrepParams& params) const noexcept
 	}
 }
 
+// Try to shape the start of the deceleration. We already know that there is sufficient deceleration time to do this, but we still need to check that there is enough distance.
 void AxisShaper::TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept
 {
 	float extraDecelDistance = GetExtraDecelStartDistance(dda);
@@ -593,6 +598,7 @@ void AxisShaper::TryShapeDecelStart(const DDA& dda, PrepParams& params) const no
 	}
 }
 
+// Try to shape the end of the deceleration. We already know that there is sufficient deceleration time to do this, but we still need to check that there is enough distance.
 void AxisShaper::TryShapeDecelEnd(const DDA& dda, PrepParams& params) const noexcept
 {
 	float extraDecelDistance = GetExtraDecelEndDistance(dda);

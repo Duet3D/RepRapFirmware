@@ -77,6 +77,8 @@ private:
 	float coefficients[MaxExtraImpulses];				// the coefficients of all the impulses
 	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
 	float totalShapingClocks;							// the total input shaping time in step clocks
+	float minimumShapingStartOriginalClocks;			// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
+	float minimumShapingEndOriginalClocks;				// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
 	float minimumNonOverlappedOriginalClocks;			// the minimum original acceleration or deceleration time using non-overlapped start and end shaping
 	float extraClocksAtStart;							// the extra time needed to shape the start of acceleration or deceleration
 	float extraClocksAtEnd;								// the extra time needed to shape the end of acceleration or deceleration
