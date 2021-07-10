@@ -11,20 +11,25 @@
 #include "RepRapFirmware.h"
 
 #if SAM4E || SAM4S || SAME70 || SAME5x
-const size_t NumFileWriteBuffers = 2;					// Number of write buffers
-const size_t FileWriteBufLen = 8192;					// Size of each write buffer
+constexpr size_t NumFileWriteBuffers = 2;					// Number of write buffers
+constexpr size_t FileWriteBufLen = 8192;					// Size of each write buffer
+constexpr size_t LinuxFileWriteBufLen = 4192;				// Available size of each write buffer in SBC mode
 #elif defined(__LPC17xx__)
 # if HAS_WIFI_NETWORKING
-const size_t NumFileWriteBuffers = 1;
-const size_t FileWriteBufLen = 1024;
+constexpr size_t NumFileWriteBuffers = 1;
+constexpr size_t FileWriteBufLen = 1024;
+constexpr size_t LinuxFileWriteBufLen = 768;
 # else
-const size_t NumFileWriteBuffers = 1;
-const size_t FileWriteBufLen = 512;
+constexpr size_t NumFileWriteBuffers = 1;
+constexpr size_t FileWriteBufLen = 512;
+constexpr size_t LinuxFileWriteBufLen = 468;
 # endif
 #else
-const size_t NumFileWriteBuffers = 1;
-const size_t FileWriteBufLen = 4096;
+constexpr size_t NumFileWriteBuffers = 1;
+constexpr size_t FileWriteBufLen = 4096;
+constexpr size_t LinuxFileWriteBufLen = 3072;
 #endif
+static_assert(FileWriteBufLen >= LinuxFileWriteBufLen, "File write buffer must be at least as big as the configured Linux threshold");
 
 // Class to cache data that is about to be written to the SD card. This is NOT a ring buffer,
 // instead it just provides simple interfaces to cache a certain amount of data so that fewer
@@ -37,6 +42,7 @@ public:
 #else
 	FileWriteBuffer(FileWriteBuffer *n) noexcept : next(n), index(0) { }
 #endif
+	static void UsingSbcMode() { fileWriteBufLen = LinuxFileWriteBufLen; }	// only called by RepRap on startup
 
 	FileWriteBuffer *Next() const noexcept { return next; }
 	void SetNext(FileWriteBuffer *n) noexcept { next = n; }
@@ -44,13 +50,14 @@ public:
 	char *Data() noexcept { return buf; }
 	const char *Data() const noexcept { return buf; }
 	const size_t BytesStored() const noexcept { return index; }
-	const size_t BytesLeft() const noexcept { return FileWriteBufLen - index; }
+	const size_t BytesLeft() const noexcept { return fileWriteBufLen - index; }
 
 	size_t Store(const char *data, size_t length) noexcept;				// Stores some data and returns how much could be stored
 	void DataTaken() noexcept { index = 0; }							// Called to indicate that the buffer has been written to the SD card
 	void DataStored(size_t numBytes) noexcept { index += numBytes; }	// Called when more data has been stored directly in the buffer
 
 private:
+	static size_t fileWriteBufLen;
 	FileWriteBuffer *next;
 
 	size_t index;

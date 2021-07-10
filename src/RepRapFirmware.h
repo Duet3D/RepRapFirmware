@@ -514,6 +514,11 @@ constexpr size_t NumCoordinateSystems = 1;
 
 #define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 
+#if HAS_LINUX_INTERFACE
+typedef uint32_t FileHandle;
+const FileHandle noFileHandle = 0;
+#endif
+
 // Type of an offset in a file
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;

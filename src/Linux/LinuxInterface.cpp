@@ -48,9 +48,10 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 }
 
 LinuxInterface::LinuxInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0),
+	maxDelayBetweenTransfers(SpiTransferDelay), numMaxEvents(SpiEventsRequired), delaying(false), numEvents(0),
 	reportPause(false), reportPauseWritten(false), printStarted(false), printStopped(false),
-	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true),
-	iapWritePointer(IAP_IMAGE_START), waitingForFileChunk(false)
+	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), iapWritePointer(IAP_IMAGE_START),
+	waitingForFileChunk(false), fileMutex(), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false)
 #ifdef TRACK_FILE_CODES
 	, fileCodesRead(0), fileCodesHandled(0), fileMacrosRunning(0), fileMacrosClosing(0)
 #endif
@@ -59,25 +60,43 @@ LinuxInterface::LinuxInterface() noexcept : isConnected(false), numDisconnects(0
 
 void LinuxInterface::Init() noexcept
 {
-	gcodeReplyMutex.Create("SBCReply");
-	codeBuffer = (char *)new uint32_t[(SpiCodeBufferSize + 3)/4];
+	if (reprap.UsingLinuxInterface())
+	{
+		fileMutex.Create("SBCFile");
+		gcodeReplyMutex.Create("SBCReply");
+		codeBuffer = (char *)new uint32_t[(SpiCodeBufferSize + 3)/4];
 
 #if defined(DUET_NG)
-	// Make sure that the Wifi module if present is disabled. The ESP Reset pin is already forced low in Platform::Init();
-	pinMode(EspEnablePin, OUTPUT_LOW);
+		// Make sure that the Wifi module if present is disabled. The ESP Reset pin is already forced low in Platform::Init();
+		pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
 
-	transfer.Init();
-	sbcTask = new Task<SBCTaskStackWords>;
-	sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
-	iapRamAvailable = &_estack - Tasks::GetHeapTop();
+		transfer.Init();
+		sbcTask = new Task<SBCTaskStackWords>;
+		sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
+		iapRamAvailable = &_estack - Tasks::GetHeapTop();
+	}
+	else
+	{
+		// Set up the data transfer to exchange the header + response code. No task is started to save memory
+		transfer.Init();
+	}
+}
+
+void LinuxInterface::Spin() noexcept
+{
+	if (transfer.IsReady())
+	{
+		// Don't process anything, just kick off the next transfer to report we're operating in standalone mode
+		transfer.StartNextTransfer();
+	}
 }
 
 [[noreturn]] void LinuxInterface::TaskLoop() noexcept
 {
 	transfer.SetSBCTask(sbcTask);
 	transfer.StartNextTransfer();
-	bool writingIap = false, hadReset = false;
+	bool writingIap = false, hadReset = false, skipNextDelay = false;
 	for (;;)
 	{
 		bool isReady = false;
@@ -492,13 +511,13 @@ void LinuxInterface::Init() noexcept
 						// If there is a macro file waiting, the first instruction must be conditional. Don't block any longer...
 						if (gb->IsWaitingForMacro())
 						{
+							gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
 							if (channel == GCodeChannel::File)
 							{
 								fileMacrosRunning++;
 							}
 #endif
-							gb->ResolveMacroRequest(false, false);
 						}
 
 						try
@@ -563,13 +582,14 @@ void LinuxInterface::Init() noexcept
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 						if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
 						{
+							// File exists and is open, but no code has arrived yet
+							gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
 							if (channel == GCodeChannel::File)
 							{
 								fileMacrosRunning++;
 							}
 #endif
-							gb->ResolveMacroRequest(false, false);
 						}
 						else if (channel != GCodeChannel::Daemon)
 						{
@@ -727,6 +747,107 @@ void LinuxInterface::Init() noexcept
 					break;
 				}
 
+				// Result of a file exists check
+				case LinuxRequest::CheckFileExistsResult:
+					if (fileOperation == FileOperation::checkFileExists)
+					{
+						fileSuccess = transfer.ReadBoolean();
+						fileSemaphore.Give();
+					}
+					else
+					{
+						REPORT_INTERNAL_ERROR;
+					}
+					break;
+
+
+				// Result of a deletion request
+				case LinuxRequest::FileDeleteResult:
+					if (fileOperation == FileOperation::deleteFileOrDirectory)
+					{
+						fileSuccess = transfer.ReadBoolean();
+						fileSemaphore.Give();
+					}
+					else
+					{
+						REPORT_INTERNAL_ERROR;
+					}
+					break;
+
+				// Result of a file open request
+				case LinuxRequest::OpenFileResult:
+					if (fileOperation == FileOperation::openRead ||
+						fileOperation == FileOperation::openWrite ||
+						fileOperation == FileOperation::openAppend)
+					{
+						fileHandle = transfer.ReadOpenFileResult(fileOffset);
+						fileSuccess = (fileHandle != noFileHandle);
+						fileSemaphore.Give();
+					}
+					else
+					{
+						REPORT_INTERNAL_ERROR;
+					}
+					break;
+
+				// Result of a file read request
+				case LinuxRequest::FileReadResult:
+					if (fileOperation == FileOperation::read)
+					{
+						int bytesRead = transfer.ReadFileData(fileReadBuffer, fileBufferLength);
+						fileSuccess = bytesRead >= 0;
+						fileOffset = fileSuccess ? bytesRead : 0;
+						fileSemaphore.Give();
+					}
+					else
+					{
+						REPORT_INTERNAL_ERROR;
+					}
+					break;
+
+				// Result of a file write request
+				case LinuxRequest::FileWriteResult:
+					if (fileOperation == FileOperation::write)
+					{
+						fileSuccess = transfer.ReadBoolean();
+						if (!fileSuccess || --numFileWriteRequests == 0)
+						{
+							fileOperationPending = false;
+							fileSemaphore.Give();
+						}
+					}
+					else
+					{
+						REPORT_INTERNAL_ERROR;
+					}
+					break;
+
+				// Result of a file seek request
+				case LinuxRequest::FileSeekResult:
+					if (fileOperation == FileOperation::seek)
+					{
+						fileSuccess = transfer.ReadBoolean();
+						fileSemaphore.Give();
+					}
+					else
+					{
+						REPORT_INTERNAL_ERROR;
+					}
+					break;
+
+				// Result of a file seek request
+				case LinuxRequest::FileTruncateResult:
+					if (fileOperation == FileOperation::truncate)
+					{
+						fileSuccess = transfer.ReadBoolean();
+						fileSemaphore.Give();
+					}
+					else
+					{
+						REPORT_INTERNAL_ERROR;
+					}
+					break;
+
 				// Invalid request
 				default:
 					REPORT_INTERNAL_ERROR;
@@ -739,6 +860,21 @@ void LinuxInterface::Init() noexcept
 					transfer.ResendPacket(packet);
 				}
 			}
+
+			// Check if we can wait a short moment to reduce CPU load on the SBC
+			if (!writingIap && !skipNextDelay && numEvents < numMaxEvents && !waitingForFileChunk &&
+				!fileOperationPending && (fileOperation != FileOperation::write || numFileWriteRequests == 0))
+			{
+				TaskBase::ClearNotifyCount();
+
+				delaying = true;
+				if (!TaskBase::Take(maxDelayBetweenTransfers))
+				{
+					delaying = false;
+				}
+			}
+			numEvents = 0;
+			skipNextDelay = false;
 
 			// Send code replies and generic messages
 			if (!gcodeReply.IsEmpty())
@@ -772,6 +908,67 @@ void LinuxInterface::Init() noexcept
 					!fileChunkRequestSent && transfer.WriteFileChunkRequest(requestedFileName.c_str(), requestedFileOffset, requestedFileLength))
 				{
 					fileChunkRequestSent = true;
+				}
+
+				// Perform the next file operation if requested
+				if (fileOperationPending)
+				{
+					switch (fileOperation)
+					{
+					case FileOperation::checkFileExists:
+						fileOperationPending = !transfer.WriteCheckFileExists(filePath);
+						break;
+
+					case FileOperation::deleteFileOrDirectory:
+						fileOperationPending = !transfer.WriteDeleteFileOrDirectory(filePath);
+						break;
+
+					case FileOperation::openRead:
+					case FileOperation::openWrite:
+					case FileOperation::openAppend:
+						fileOperationPending = !transfer.WriteOpenFile(filePath, fileOperation == FileOperation::openWrite || fileOperation == FileOperation::openAppend, fileOperation == FileOperation::openAppend, filePreAllocSize);
+						break;
+
+					case FileOperation::read:
+						fileOperationPending = !transfer.WriteReadFile(fileHandle, fileBufferLength);
+						break;
+
+					case FileOperation::write:
+					{
+						size_t bytesNotWritten = fileBufferLength;
+						if (transfer.WriteFileData(fileHandle, fileWriteBuffer, fileBufferLength))
+						{
+							++numFileWriteRequests;
+							fileWriteBuffer += bytesNotWritten - fileBufferLength;
+							if (fileBufferLength == 0)
+							{
+								fileOperationPending = false;
+							}
+						}
+						break;
+					}
+
+					case FileOperation::seek:
+						fileOperationPending = !transfer.WriteSeekFile(fileHandle, fileOffset);
+						break;
+
+					case FileOperation::truncate:
+						fileOperationPending = !transfer.WriteTruncateFile(fileHandle);
+						break;
+
+					case FileOperation::close:
+						fileOperationPending = !transfer.WriteCloseFile(fileHandle);
+						if (!fileOperationPending)
+						{
+							// Close requests don't get a result back, so they can be resolved as soon as they are sent to the SBC
+							(void)fileSemaphore.Give();
+						}
+						break;
+
+					default:
+						REPORT_INTERNAL_ERROR;
+						break;
+					}
 				}
 
 				// Deal with code channel requests
@@ -816,6 +1013,11 @@ void LinuxInterface::Init() noexcept
 						MutexLocker gbLock(gb->mutex, 10);
 						if (gbLock)
 						{
+							if (gb->GetChannel() != GCodeChannel::Daemon)
+							{
+								skipNextDelay |= gb->IsMacroRequestPending() || gb->HasJustStartedMacro();
+							}
+
 							// Handle file abort requests
 							if (gb->IsAbortRequested() && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
 							{
@@ -913,6 +1115,14 @@ void LinuxInterface::Init() noexcept
 				requestedFileSemaphore.Give();
 			}
 
+			if ((!fileOperationPending && fileOperation != FileOperation::none) ||
+				(fileOperation == FileOperation::write && numFileWriteRequests != 0))
+			{
+				fileOperation = FileOperation::none;
+				(void)fileSemaphore.Give();
+			}
+			MassStorage::InvalidateAllFiles();
+
 			// Don't cache any messages if they cannot be sent
 			{
 				MutexLocker lock(gcodeReplyMutex);
@@ -972,6 +1182,35 @@ void LinuxInterface::Diagnostics(MessageType mtype) noexcept
 #ifdef TRACK_FILE_CODES
 	reprap.GetPlatform().MessageF(mtype, "File codes read/handled: %d/%d, file macros open/closing: %d %d\n", (int)fileCodesRead, (int)fileCodesHandled, (int)fileMacrosRunning, (int)fileMacrosClosing);
 #endif
+}
+
+GCodeResult LinuxInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) noexcept
+{
+	bool seen = false;
+
+	if (gb.Seen('S'))
+	{
+		uint32_t sParam = gb.GetUIValue();
+		if (sParam > SpiConnectionTimeout)
+		{
+			reply.printf("SPI transfer delay must not exceed %" PRIu32 "ms", SpiConnectionTimeout);
+			return GCodeResult::error;
+		}
+		maxDelayBetweenTransfers = sParam;
+		seen = true;
+	}
+
+	if (gb.Seen('P'))
+	{
+		numMaxEvents = gb.GetUIValue();
+		seen = true;
+	}
+
+	if (!seen)
+	{
+		reply.printf("Max transfer delay %" PRIu32 "ms, max number of events during delays: %" PRIu32, maxDelayBetweenTransfers, numMaxEvents);
+	}
+	return GCodeResult::ok;
 }
 
 bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
@@ -1082,36 +1321,238 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb) noexcept
 	return false;
 }
 
-// Read a file chunk from the SBC. When a response has been received, the current task is woken up again.
-// It changes bufferLength to the number of received bytes
-// This method returns true on success and false if an error occurred (e.g. file not found)
-bool LinuxInterface::GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept
+bool LinuxInterface::FileExists(const char *filename) noexcept
 {
-	if (waitingForFileChunk)
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Trying to request a file chunk from two independent tasks\n");
-		bufferLength = fileLength = 0;
 		return false;
 	}
 
-	fileChunkRequestSent = false;
-	requestedFileName.copy(filename);
-	requestedFileLength = bufferLength;
-	requestedFileOffset = offset;
-	requestedFileBuffer = buffer;
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+	filePath = filename;
+	fileOperation = FileOperation::checkFileExists;
+	fileOperationPending = true;
 
-	waitingForFileChunk = true;
-	requestedFileSemaphore.Take();
-
-	waitingForFileChunk = false;
-	if (requestedFileDataLength < 0)
+	// Let the SBC task process this request as quickly as possible
+	if (delaying)
 	{
-		bufferLength = fileLength = 0;
+		delaying = false;
+		sbcTask->Give();
+	}
+	fileSemaphore.Take();
+
+	// Return the result
+	return fileSuccess;
+}
+
+bool LinuxInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
 		return false;
 	}
-	bufferLength = requestedFileDataLength;
-	fileLength = requestedFileLength;
-	return true;
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+	filePath = fileOrDirectory;
+	fileOperation = FileOperation::close;
+	fileOperationPending = true;
+
+	// Let the SBC task process this request as quickly as possible
+	if (delaying)
+	{
+		delaying = false;
+		sbcTask->Give();
+	}
+	fileSemaphore.Take();
+
+	// Return the result
+	return fileSuccess;
+}
+
+FileHandle LinuxInterface::OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+	filePath = filename;
+	filePreAllocSize = preAllocSize;
+	switch (mode)
+	{
+	case OpenMode::read:
+		fileOperation = FileOperation::openRead;
+		break;
+
+	case OpenMode::write:
+	case OpenMode::writeWithCrc:
+		fileOperation = FileOperation::openWrite;
+		break;
+
+	case OpenMode::append:
+		fileOperation = FileOperation::openAppend;
+		break;
+
+	default:
+		filePath = nullptr;
+		REPORT_INTERNAL_ERROR;
+		break;
+	}
+	fileOperationPending = true;
+
+	// Let the SBC task process this request as quickly as possible
+	if (delaying)
+	{
+		delaying = false;
+		sbcTask->Give();
+	}
+	fileSemaphore.Take();
+
+	// Update the file length and return the handle
+	fileLength = fileOffset;
+	return fileHandle;
+}
+
+int LinuxInterface::ReadFile(FileHandle handle, char *buffer, size_t bufferLength) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+	fileHandle = handle;
+	fileReadBuffer = buffer;
+	fileBufferLength = bufferLength;
+	fileOperation = FileOperation::read;
+	fileOperationPending = true;
+
+	// Let the SBC task process this request as quickly as possible
+	if (delaying)
+	{
+		delaying = false;
+		sbcTask->Give();
+	}
+	fileSemaphore.Take();
+;
+
+	// Return the number of bytes read
+	return fileSuccess ? (int)fileOffset : -1;
+}
+
+bool LinuxInterface::WriteFile(FileHandle handle, const char *buffer, size_t bufferLength) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+	fileHandle = handle;
+	fileWriteBuffer = buffer;
+	fileBufferLength = bufferLength;
+	numFileWriteRequests = 0;
+	fileOperation = FileOperation::write;
+	fileOperationPending = true;
+
+	// Let the SBC task process this request as quickly as possible
+	if (delaying)
+	{
+		delaying = false;
+		sbcTask->Give();
+	}
+	fileSemaphore.Take();
+
+	// Return the result
+	return fileSuccess;
+}
+
+bool LinuxInterface::SeekFile(FileHandle handle, FilePosition offset) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+	fileHandle = handle;
+	fileOffset = offset;
+	fileOperation = FileOperation::seek;
+	fileOperationPending = true;
+
+	// Let the SBC task process this request as quickly as possible
+	if (delaying)
+	{
+		delaying = false;
+		sbcTask->Give();
+	}
+	fileSemaphore.Take();
+
+	// Return the result
+	return fileSuccess;
+}
+
+bool LinuxInterface::TruncateFile(FileHandle handle) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+	fileHandle = handle;
+	fileOperation = FileOperation::truncate;
+	fileOperationPending = true;
+
+	// Let the SBC task process this request as quickly as possible
+	if (delaying)
+	{
+		delaying = false;
+		sbcTask->Give();
+	}
+	fileSemaphore.Take();
+
+	// Return the result
+	return fileSuccess;
+}
+
+void LinuxInterface::CloseFile(FileHandle handle) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+	fileHandle = handle;
+	fileOperation = FileOperation::close;
+	fileOperationPending = true;
+
+	// Let the SBC task process this request as quickly as possible
+	if (delaying)
+	{
+		delaying = false;
+		sbcTask->Give();
+	}
+	fileSemaphore.Take();
+;
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept
@@ -1146,6 +1587,7 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcep
 		// Store nullptr to indicate an empty response. This way many OutputBuffer references can be saved
 		gcodeReply.Push(nullptr, mt);
 	}
+	EventOccurred();
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noexcept
@@ -1165,6 +1607,64 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noex
 
 	MutexLocker lock(gcodeReplyMutex);
 	gcodeReply.Push(buffer, mt);
+	EventOccurred();
+}
+
+// Read a file chunk from the SBC. When a response has been received, the current task is woken up again.
+// It changes bufferLength to the number of received bytes
+// This method returns true on success and false if an error occurred (e.g. file not found)
+bool LinuxInterface::GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept
+{
+	if (waitingForFileChunk)
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Trying to request a file chunk from two independent tasks\n");
+		bufferLength = fileLength = 0;
+		return false;
+	}
+
+	fileChunkRequestSent = false;
+	requestedFileName.copy(filename);
+	requestedFileLength = bufferLength;
+	requestedFileOffset = offset;
+	requestedFileBuffer = buffer;
+
+	waitingForFileChunk = true;
+	requestedFileSemaphore.Take();
+
+	waitingForFileChunk = false;
+	if (requestedFileDataLength < 0)
+	{
+		bufferLength = fileLength = 0;
+		return false;
+	}
+	bufferLength = requestedFileDataLength;
+	fileLength = requestedFileLength;
+	return true;
+}
+
+void LinuxInterface::EventOccurred(bool timeCritical) noexcept
+{
+	if (!IsConnected())
+	{
+		return;
+	}
+
+	// Increment the number of events
+	if (timeCritical)
+	{
+		numEvents = numMaxEvents;
+	}
+	else
+	{
+		numEvents++;
+	}
+
+	// Stop delaying if the next transfer is time-critical
+	if (delaying && numEvents >= numMaxEvents)
+	{
+		delaying = false;
+		sbcTask->Give();
+	}
 }
 
 void LinuxInterface::InvalidateBufferChannel(GCodeChannel channel) noexcept

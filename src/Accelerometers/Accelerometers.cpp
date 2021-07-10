@@ -417,7 +417,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		return GCodeResult::error;
 	}
 
-	// Write the header line ti the file
+	// Write the header line to the file
 	{
 		String<StringLength50> temp;
 		temp.printf("Sample");

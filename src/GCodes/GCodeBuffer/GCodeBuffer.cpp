@@ -829,6 +829,7 @@ void GCodeBuffer::SetFileFinished() noexcept
 			{
 				// Flag it (and following machine states) as finished
 				ms->fileFinished = true;
+				reprap.GetLinuxInterface().EventOccurred();
 			}
 			else
 			{
@@ -854,6 +855,7 @@ void GCodeBuffer::SetPrintFinished() noexcept
 			{
 				// Mark machine states executing the print file as finished
 				ms->fileFinished = true;
+				reprap.GetLinuxInterface().EventOccurred();
 			}
 		}
 	}
@@ -883,6 +885,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	{
 		// Wait for a response (but not forever)
 		isWaitingForMacro = true;
+		reprap.GetLinuxInterface().EventOccurred(true);
 		if (!macroSemaphore.Take(SpiMacroRequestTimeout))
 		{
 			isWaitingForMacro = false;
@@ -913,6 +916,7 @@ void GCodeBuffer::MacroFileClosed() noexcept
 	machineState->CloseFile();
 	macroJustStarted = false;
 	macroFileClosed = true;
+	reprap.GetLinuxInterface().EventOccurred();
 }
 
 #endif
@@ -930,6 +934,7 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 			ms->messageCancelled = cancelled;
 #if HAS_LINUX_INTERFACE
 			messageAcknowledged = !cancelled;
+			reprap.GetLinuxInterface().EventOccurred();
 #endif
 		}
 	}

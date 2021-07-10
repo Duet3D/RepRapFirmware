@@ -19,26 +19,9 @@
 # include <Linux/LinuxInterface.h>
 #endif
 
-FileStore::FileStore() noexcept
-	:
-#if HAS_MASS_STORAGE
-	writeBuffer(nullptr)
-#endif
-#if HAS_LINUX_INTERFACE
-# if HAS_MASS_STORAGE
-	,
-# endif
-	absoluteFilename(nullptr), length(0), offset(0)
-#endif
+FileStore::FileStore() noexcept : writeBuffer(nullptr)
 {
 	Init();
-}
-
-FileStore::~FileStore()
-{
-#if HAS_LINUX_INTERFACE
-	delete absoluteFilename;
-#endif
 }
 
 void FileStore::Init() noexcept
@@ -48,116 +31,121 @@ void FileStore::Init() noexcept
 	openCount = 0;
 	closeRequested = false;
 #endif
+#if HAS_LINUX_INTERFACE
+	handle = noFileHandle;
+	length = offset = 0;
+#endif
 }
 
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
+#if !HAS_MASS_STORAGE && !HAS_LINUX_INTERFACE
+	return false;
+#endif
+
+	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
+	writeBuffer = nullptr;
+
+	// Try to allocate a write buffer
+	if (writing)
+	{
+#if HAS_MASS_STORAGE
+		if (!MassStorage::EnsurePath(filePath, true))
+		{
+			return false;
+		}
+#endif
+
+		// Also try to allocate a write buffer so we can perform faster writes
+		// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
+		// especially as we need to flush messages to SD card regularly.
+		// Currently, append mode is used for the log file and for appending simulated print times to GCodes files (which require read access too).
+		if (mode == OpenMode::write || mode == OpenMode::writeWithCrc)
+		{
+			writeBuffer = MassStorage::AllocateWriteBuffer();
+		}
+	}
+
+	// Attempt to open the file
+	bool fileOpened = false;
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{
-		if (mode != OpenMode::read)
+		handle = reprap.GetLinuxInterface().OpenFile(filePath, mode, length, preAllocSize);
+		if (handle != noFileHandle)
 		{
-			REPORT_INTERNAL_ERROR;
-			return false;
+			offset = (mode == OpenMode::append) ? length : 0;
+			fileOpened = true;
 		}
-		//TODO allocating dynamic memory here isn't nice because of possible memory fragmentation. Try to avoid it in future.
-		absoluteFilename = new char[strlen(filePath)+1];
-		strcpy(absoluteFilename, filePath);
-		char dummyBuf[1];
-		uint32_t dummyLen = 0;
-		if (!reprap.GetLinuxInterface().GetFileChunk(absoluteFilename, 0, dummyBuf, dummyLen, length))
+		else
 		{
-			delete absoluteFilename;
-			absoluteFilename = nullptr;
-			return false;
+			length = offset = 0;
 		}
-		usageMode = FileUseMode::readOnly;
-		offset = 0;
-		return true;
 	}
+# if HAS_MASS_STORAGE
+	else
+# endif
 #endif
 #if HAS_MASS_STORAGE
 	{
-		const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
-		writeBuffer = nullptr;
-
-		if (writing)
-		{
-			if (!MassStorage::EnsurePath(filePath, true))
-			{
-				return false;
-			}
-
-			// Also try to allocate a write buffer so we can perform faster writes
-			// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
-			// especially as we need to flush messages to SD card regularly.
-			// Currently, append mode is used for the log file and for appending simulated print times to GCodes files (which require read access too).
-			if (mode == OpenMode::write || mode == OpenMode::writeWithCrc)
-			{
-				writeBuffer = MassStorage::AllocateWriteBuffer();
-			}
-		}
-
 		const FRESULT openReturn = f_open(&file, filePath,
-											(mode == OpenMode::write || mode == OpenMode::writeWithCrc) ?  FA_CREATE_ALWAYS | FA_WRITE
+											(mode == OpenMode::write || mode == OpenMode::writeWithCrc) ? FA_CREATE_ALWAYS | FA_WRITE
 												: (mode == OpenMode::append) ? FA_READ | FA_WRITE | FA_OPEN_ALWAYS
 													: FA_OPEN_EXISTING | FA_READ);
-		if (openReturn != FR_OK)
+		if (openReturn == FR_OK)
 		{
-			if (writeBuffer != nullptr)
-			{
-				MassStorage::ReleaseWriteBuffer(writeBuffer);
-				writeBuffer = nullptr;
-			}
-
+			fileOpened = true;
+		}
+		else
+		{
 			// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 			// It is up to the caller to report an error if necessary.
 			if (reprap.Debug(modulePlatform))
 			{
 				reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %s, error code %d\n", filePath, (writing) ? "write" : "read", (int)openReturn);
 			}
-			return false;
+		}
+	}
+#endif
+
+	// Discard the write buffer if that failed
+	if (!fileOpened)
+	{
+		if (writeBuffer != nullptr)
+		{
+			MassStorage::ReleaseWriteBuffer(writeBuffer);
+			writeBuffer = nullptr;
 		}
 
-		crc.Reset();
-		calcCrc = (mode == OpenMode::writeWithCrc);
-		usageMode = (writing) ? FileUseMode::readWrite : FileUseMode::readOnly;
-		openCount = 1;
-# ifndef __LPC17xx__
-		if (preAllocSize != 0 && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
-		{
-			const FRESULT expandReturn = f_expand(&file, preAllocSize, 1);		// try to pre-allocate contiguous space - it doesn't matter if it fails
-			if (reprap.Debug(moduleStorage))
-			{
-				debugPrintf("Preallocating %" PRIu32 " bytes returned %d\n", preAllocSize, (int)expandReturn);
-			}
-		}
-# endif
-		reprap.VolumesUpdated();
-		return true;
+		return false;
 	}
-# else
-	return false;
+
+	// File open, carry on
+	crc.Reset();
+	calcCrc = (mode == OpenMode::writeWithCrc);
+	usageMode = (writing) ? FileUseMode::readWrite : FileUseMode::readOnly;
+	openCount = 1;
+# if HAS_MASS_STORAGE
+#  ifndef __LPC17xx__
+	if (preAllocSize != 0 && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
+	{
+		const FRESULT expandReturn = f_expand(&file, preAllocSize, 1);		// try to pre-allocate contiguous space - it doesn't matter if it fails
+		if (reprap.Debug(moduleStorage))
+		{
+			debugPrintf("Preallocating %" PRIu32 " bytes returned %d\n", preAllocSize, (int)expandReturn);
+		}
+	}
+#  endif
 # endif
+	reprap.VolumesUpdated();
+	return true;
 }
 
 // This may be called from an ISR, in which case we need to defer the close
 bool FileStore::Close() noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		offset = 0;
-		length = 0;
-		delete absoluteFilename;
-		absoluteFilename = nullptr;
-		usageMode = FileUseMode::free;
-		return true;
-	}
-#endif
-#if HAS_MASS_STORAGE
 	switch (usageMode)
 	{
 	case FileUseMode::free:
@@ -206,9 +194,6 @@ bool FileStore::Close() noexcept
 			return true;
 		}
 	}
-#else
-	return true;
-#endif
 }
 
 bool FileStore::Seek(FilePosition pos) noexcept
@@ -224,12 +209,12 @@ bool FileStore::Seek(FilePosition pos) noexcept
 #if HAS_LINUX_INTERFACE
 		if (reprap.UsingLinuxInterface())
 		{
-			const bool validTarget = offset < length;
-			if (validTarget)
+			if (reprap.GetLinuxInterface().SeekFile(handle, pos))
 			{
 				offset = pos;
+				return true;
 			}
-			return validTarget;
+			return false;
 		}
 #endif
 #if HAS_MASS_STORAGE
@@ -243,6 +228,41 @@ bool FileStore::Seek(FilePosition pos) noexcept
 		return false;
 	}
 }
+
+// Truncate file at current file pointer
+bool FileStore::Truncate() noexcept
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+	case FileUseMode::readOnly:
+		REPORT_INTERNAL_ERROR;
+		return false;
+
+	case FileUseMode::readWrite:
+		if (!Flush())
+		{
+			return false;
+		}
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
+		{
+			length = offset;
+			return reprap.GetLinuxInterface().TruncateFile(handle);
+		}
+#endif
+#if HAS_MASS_STORAGE
+		return f_truncate(&file) == FR_OK;
+#else
+		return false;
+#endif
+
+	case FileUseMode::invalidated:
+	default:
+		return false;
+	}
+}
+
 
 FilePosition FileStore::Position() const noexcept
 {
@@ -281,6 +301,12 @@ FilePosition FileStore::Length() const noexcept
 #endif
 
 	case FileUseMode::readWrite:
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
+		{
+			return (writeBuffer != nullptr) ? length + writeBuffer->BytesStored() : length;
+		}
+#endif
 #if HAS_MASS_STORAGE
 		return (writeBuffer != nullptr) ? f_size(&file) + writeBuffer->BytesStored() : f_size(&file);
 #else
@@ -313,14 +339,12 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 #if HAS_LINUX_INTERFACE
 		if (reprap.UsingLinuxInterface())
 		{
-			uint32_t read = nBytes;
-			const bool success = reprap.GetLinuxInterface().GetFileChunk(absoluteFilename, offset, extBuf, read, length);
-			if (!success)
+			int bytesRead = reprap.GetLinuxInterface().ReadFile(handle, extBuf, nBytes);
+			if (bytesRead > 0)
 			{
-				return -1;
+				offset += bytesRead;
 			}
-			offset += read;
-			return (int)read;
+			return bytesRead;
 		}
 #endif
 #if HAS_MASS_STORAGE
@@ -379,6 +403,203 @@ int FileStore::ReadLine(char* buf, size_t nBytes) noexcept
 	return i;
 }
 
+bool FileStore::ForceClose() noexcept
+{
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	bool ok = true;
+	if (usageMode == FileUseMode::readWrite)
+	{
+		ok = Flush();
+	}
+
+	if (writeBuffer != nullptr)
+	{
+		MassStorage::ReleaseWriteBuffer(writeBuffer);
+		writeBuffer = nullptr;
+	}
+#endif
+
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		reprap.GetLinuxInterface().CloseFile(handle);
+		handle = noFileHandle;
+		offset = length = 0;
+		usageMode = FileUseMode::free;
+		return ok;
+	}
+#endif
+
+#if HAS_MASS_STORAGE
+	const FRESULT fr = f_close(&file);
+	usageMode = FileUseMode::free;
+	closeRequested = false;
+	openCount = 0;
+	reprap.VolumesUpdated();
+	return ok && fr == FR_OK;
+#endif
+	return false;
+}
+
+bool FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
+{
+	if (calcCrc)
+	{
+		crc.Update(s, len);
+	}
+
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		bool ok = (len > 0) ? reprap.GetLinuxInterface().WriteFile(handle, s, len) : true;
+		*bytesWritten = ok ? len : 0;
+		offset += len;
+		if (offset > length)
+		{
+			length = offset;
+		}
+		return ok;
+	}
+#endif
+
+#if HAS_MASS_STORAGE
+	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
+	if (writeStatus != FR_OK)
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to write to file, error code %d. Card may be full.\n", (int)writeStatus);
+		return false;
+	}
+	return true;
+#else
+	*bytesWritten = 0;
+	return false;
+#endif
+}
+
+bool FileStore::Write(char b) noexcept
+{
+	return Write(&b, sizeof(char));
+}
+
+bool FileStore::Write(const char* b) noexcept
+{
+	return Write(b, strlen(b));
+}
+
+bool FileStore::Write(const char *s, size_t len) noexcept
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+		REPORT_INTERNAL_ERROR;
+		return false;
+
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			size_t totalBytesWritten = 0;
+			bool writeOk = true;
+			if (writeBuffer == nullptr)
+			{
+				writeOk = Store(s, len, &totalBytesWritten);
+			}
+			else
+			{
+				do
+				{
+					const size_t bytesStored = writeBuffer->Store(s + totalBytesWritten, len - totalBytesWritten);
+					if (writeBuffer->BytesLeft() == 0)
+					{
+						const size_t bytesToWrite = writeBuffer->BytesStored();
+						size_t bytesWritten;
+						writeOk = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
+						writeBuffer->DataTaken();
+
+						if (bytesToWrite != bytesWritten)
+						{
+							// Something went wrong
+							break;
+						}
+					}
+					totalBytesWritten += bytesStored;
+				}
+				while (writeOk && totalBytesWritten != len);
+			}
+
+			if (totalBytesWritten != len)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to write to file. Card may be full.\n");
+			}
+			return writeOk && (totalBytesWritten == len);
+		}
+
+	case FileUseMode::invalidated:
+	default:
+		return false;
+	}
+}
+
+bool FileStore::Flush() noexcept
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+		REPORT_INTERNAL_ERROR;
+		return false;
+
+	case FileUseMode::readOnly:
+		return true;
+
+	case FileUseMode::readWrite:
+		if (writeBuffer != nullptr)
+		{
+			const size_t bytesToWrite = writeBuffer->BytesStored();
+			if (bytesToWrite != 0)
+			{
+				size_t bytesWritten;
+				bool writeOk = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
+				writeBuffer->DataTaken();
+
+				if (writeOk && (bytesToWrite != bytesWritten))
+				{
+					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to flush data to file. Card may be full.\n");
+				}
+				return writeOk && (bytesToWrite == bytesWritten);
+			}
+		}
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
+		{
+			return true;
+		}
+#endif
+#if HAS_MASS_STORAGE
+		return f_sync(&file) == FR_OK;
+#endif
+
+	case FileUseMode::invalidated:
+	default:
+		return false;
+	}
+}
+
+#if HAS_LINUX_INTERFACE			// these functions are only supported in SBC mode
+
+// Invalidate the file
+void FileStore::Invalidate() noexcept
+{
+	if (writeBuffer != nullptr)
+	{
+		MassStorage::ReleaseWriteBuffer(writeBuffer);
+		writeBuffer = nullptr;
+	}
+	closeRequested = false;
+	openCount = 0;
+	usageMode = FileUseMode::invalidated;
+}
+
+#endif
+
 #if HAS_MASS_STORAGE			// the remaining functions are only supported on local storage
 
 // Invalidate the file if it uses the specified FATFS object
@@ -431,161 +652,6 @@ void FileStore::Duplicate() noexcept
 	case FileUseMode::invalidated:
 	default:
 		break;
-	}
-}
-
-bool FileStore::ForceClose() noexcept
-{
-	bool ok = true;
-	if (usageMode == FileUseMode::readWrite)
-	{
-		ok = Flush();
-	}
-
-	if (writeBuffer != nullptr)
-	{
-		MassStorage::ReleaseWriteBuffer(writeBuffer);
-		writeBuffer = nullptr;
-	}
-
-	const FRESULT fr = f_close(&file);
-	usageMode = FileUseMode::free;
-	closeRequested = false;
-	openCount = 0;
-	reprap.VolumesUpdated();
-	return ok && fr == FR_OK;
-}
-
-FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
-{
-	if (calcCrc)
-	{
-		crc.Update(s, len);
-	}
-	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
-	return writeStatus;
-}
-
-bool FileStore::Write(char b) noexcept
-{
-	return Write(&b, sizeof(char));
-}
-
-bool FileStore::Write(const char* b) noexcept
-{
-	return Write(b, strlen(b));
-}
-
-bool FileStore::Write(const char *s, size_t len) noexcept
-{
-	switch (usageMode)
-	{
-	case FileUseMode::free:
-		REPORT_INTERNAL_ERROR;
-		return false;
-
-	case FileUseMode::readOnly:
-	case FileUseMode::readWrite:
-		{
-			size_t totalBytesWritten = 0;
-			FRESULT writeStatus = FR_OK;
-			if (writeBuffer == nullptr)
-			{
-				writeStatus = Store(s, len, &totalBytesWritten);
-			}
-			else
-			{
-				do
-				{
-					const size_t bytesStored = writeBuffer->Store(s + totalBytesWritten, len - totalBytesWritten);
-					if (writeBuffer->BytesLeft() == 0)
-					{
-						const size_t bytesToWrite = writeBuffer->BytesStored();
-						size_t bytesWritten;
-						writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
-						writeBuffer->DataTaken();
-
-						if (bytesToWrite != bytesWritten)
-						{
-							// Something went wrong
-							break;
-						}
-					}
-					totalBytesWritten += bytesStored;
-				}
-				while (writeStatus == FR_OK && totalBytesWritten != len);
-			}
-
-			if ((writeStatus != FR_OK) || (totalBytesWritten != len))
-			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to write to file, error code %d. Card may be full.\n", (int)writeStatus);
-				return false;
-			}
-			return true;
-		}
-
-	case FileUseMode::invalidated:
-	default:
-		return false;
-	}
-}
-
-bool FileStore::Flush() noexcept
-{
-	switch (usageMode)
-	{
-	case FileUseMode::free:
-		REPORT_INTERNAL_ERROR;
-		return false;
-
-	case FileUseMode::readOnly:
-		return true;
-
-	case FileUseMode::readWrite:
-		if (writeBuffer != nullptr)
-		{
-			const size_t bytesToWrite = writeBuffer->BytesStored();
-			if (bytesToWrite != 0)
-			{
-				size_t bytesWritten;
-				const FRESULT writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
-				writeBuffer->DataTaken();
-
-				if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
-				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to flush data to file, error code %d. Card may be full.\n", (int)writeStatus);
-					return false;
-				}
-			}
-		}
-		return f_sync(&file) == FR_OK;
-
-	case FileUseMode::invalidated:
-	default:
-		return false;
-	}
-}
-
-// Truncate file at current file pointer
-bool FileStore::Truncate() noexcept
-{
-	switch (usageMode)
-	{
-	case FileUseMode::free:
-	case FileUseMode::readOnly:
-		REPORT_INTERNAL_ERROR;
-		return false;
-
-	case FileUseMode::readWrite:
-		if (!Flush())
-		{
-			return false;
-		}
-		return f_truncate(&file) == FR_OK;
-
-	case FileUseMode::invalidated:
-	default:
-		return false;
 	}
 }
 
