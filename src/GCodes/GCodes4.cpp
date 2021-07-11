@@ -278,7 +278,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			else
 			{
 				gb.SetState(GCodeState::homing2);
-				if (!DoFileMacro(gb, nextHomingFileName.c_str(), false, 28))
+				if (!DoFileMacro(gb, nextHomingFileName.c_str(), false, SystemHelperMacroCode))
 				{
 					reply.printf("Homing file %s not found", nextHomingFileName.c_str());
 					stateMachineResult = GCodeResult::error;
