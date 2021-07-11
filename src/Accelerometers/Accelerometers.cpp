@@ -325,7 +325,12 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	if (gb.Seen('I'))
 	{
 		seen = true;
-		if (!TranslateOrientation(gb.GetUIValue()))
+		const uint32_t localOrientation = gb.GetUIValue();
+		if (TranslateOrientation(localOrientation))
+		{
+			orientation = localOrientation;
+		}
+		else
 		{
 			reply.copy("Bad orientation parameter");
 			return GCodeResult::error;
