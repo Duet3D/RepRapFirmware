@@ -57,7 +57,7 @@ extern "C" {
 
 extern Mutex lwipMutex;
 
-constexpr size_t EthernetTaskStackWords = 250;
+constexpr size_t EthernetTaskStackWords = 300;
 static Task<EthernetTaskStackWords> ethernetTask;
 
 // Error counters
