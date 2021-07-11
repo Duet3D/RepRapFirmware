@@ -220,14 +220,15 @@ void GCodeQueue::Clear() noexcept
 
 void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "Code queue is %s\n", (queuedItems == nullptr) ? "empty." : "not empty:");
-	if (queuedItems != nullptr)
+	if (queuedItems == nullptr)
+	{
+		reprap.GetPlatform().Message(mtype, "Code queue is empty\n");
+	}
+	else
 	{
 		const QueuedCode *item = queuedItems;
-		size_t queueLength = 0;
 		do
 		{
-			queueLength++;
 #if HAS_LINUX_INTERFACE
 			// The following may output binary gibberish if this code is stored in binary.
 			// We could restore this message by using GCodeBuffer::AppendFullCommand but there is probably no need to
@@ -237,7 +238,6 @@ void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 				reprap.GetPlatform().MessageF(mtype, "Queued '%.*s' for move %" PRIu32 "\n", item->dataLength, item->data, item->executeAtMove);
 			}
 		} while ((item = item->Next()) != nullptr);
-		reprap.GetPlatform().MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
 	}
 }
 

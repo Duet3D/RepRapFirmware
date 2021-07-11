@@ -4625,7 +4625,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 
 	if (seen)
 	{
-		if (!LockMovementAndWaitForStandstill(gb) || !IsCodeQueueIdle())
+		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return false;
 		}

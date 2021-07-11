@@ -27,8 +27,8 @@ public:
 	void SetExtrusionPending(float ep) noexcept { extrusionPending = ep; }
 
 private:
-	float k;								// the pressure advance constant
-	float extrusionPending;					// extrusion we have been asked to do but haven't because it is less than one microstep
+	float k;								// the pressure advance constant in seconds
+	float extrusionPending;					// extrusion we have been asked to do but haven't because it is less than one microstep, in mm
 //	float lastSpeed;						// the speed we were moving at at the end of the last extrusion, needed to implement pressure advance
 };
 

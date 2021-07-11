@@ -447,6 +447,7 @@ void GCodes::Spin() noexcept
 	   )	// if autoPause is active
 	{
 		(void)SpinGCodeBuffer(*autoPauseGCode);
+		(void)SpinGCodeBuffer(*queuedGCode);						// autopause sometimes to wait for queued GCodes to complete, so spin queuedGCodes too to avoid lockup
 	}
 	else
 	{
