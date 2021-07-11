@@ -1512,7 +1512,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 				// It's an extruder drive
 				if (directionVector[drive] != 0.0)
 				{
-					// We don't apply input shaping to extruders. We generate separate MoveSegment objects for each extruder in case they have different pressure advance.
+					// Currently, we don't apply input shaping to extruders
 					platform.EnableDrivers(drive);
 					const size_t extruder = LogicalDriveToExtruder(drive);
 #if SUPPORT_NONLINEAR_EXTRUSION
@@ -1540,15 +1540,18 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
 						float netMovement = (totalDistance * directionVector[drive]) + shaper.GetExtrusionPending();
 						const float stepsPerMm = platform.DriveStepsPerUnit(drive);
-						const int32_t rawSteps = (int32_t)(netMovement * stepsPerMm);
-						if (rawSteps != 0)
-						{
-							CanMotion::AddMovement(params, driver, rawSteps, flags.usePressureAdvance);
-							netMovement -= (float)rawSteps/stepsPerMm;
-						}
+						const int32_t rawSteps = lrintf(netMovement * stepsPerMm);					// we round here instead of truncating to match the old code
 						if (flags.usePressureAdvance)
 						{
 							netMovement += (endSpeed - startSpeed) * directionVector[drive] * shaper.GetK();
+						}
+						if (rawSteps != 0)
+						{
+							CanMotion::AddMovement(params, driver, rawSteps, flags.usePressureAdvance);
+							const int32_t netSteps = (flags.usePressureAdvance)
+														? lrintf(netMovement * stepsPerMm)			// work out how many steps the remote extruder will take
+															: rawSteps;
+							netMovement -= (float)netSteps/stepsPerMm;
 						}
 						shaper.SetExtrusionPending(netMovement);
 					}
