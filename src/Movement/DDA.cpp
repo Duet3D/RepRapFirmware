@@ -1294,7 +1294,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	// Prepare for movement
 	shapedSegments = unshapedSegments = nullptr;
 
-	PrepParams params;
+	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
 	if (flags.xyMoving)
 	{
 		reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);		// this will set up shapedSegments if we are doing any shaping
@@ -1302,7 +1302,6 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	else
 	{
 		params.SetFromDDA(*this);
-		params.shapingPlan.Clear();
 		params.Finalise(*this);
 	}
 

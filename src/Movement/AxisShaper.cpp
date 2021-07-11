@@ -297,15 +297,15 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 }
 
 // Plan input shaping, generate the MoveSegment, and set up the basic move parameters.
+// On entry, params.shapingPlan is set to 'no shaping'.
 // Currently we use a single input shaper for all axes, so the move segments are attached to the DDA not the DM
 void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept
 {
-	params.shapingPlan.Clear();			// this clears out all the fields
-
 	switch ((shapingEnabled) ? type.RawValue() : InputShaperType::none)
 	{
 #if SUPPORT_DAA
 	case InputShaperType::daa:
+		do
 		{
 			// Try to reduce the acceleration/deceleration of the move to cancel ringing
 			const float idealPeriod = 1.0/frequency;					// for DAA this the full period, 1.0
@@ -425,9 +425,11 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					debugPrintf("DAA: new a=%.1f d=%.1f\n", (double)dda.acceleration, (double)dda.deceleration);
 				}
 			}
-		}
+		} while (false);			// this loop is solely for the purpose of catching 'break' statements
+		params.SetFromDDA(dda);
+		break;
 #endif
-		// no break
+
 	case InputShaperType::none:
 	default:
 		params.SetFromDDA(dda);
