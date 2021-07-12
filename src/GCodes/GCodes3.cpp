@@ -35,6 +35,7 @@
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>
 # include <CAN/ExpansionManager.h>
+# include <ClosedLoop/ClosedLoop.h>
 #endif
 
 #ifdef I2C_IFACE
@@ -1373,6 +1374,11 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 			}
 			return SmartDrivers::GetAnyRegister(drive, reply, regNum);
 		}
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+	case 5:
+		return ClosedLoop::StartDataCollection(id, gb, reply);
 #endif
 
 	default:

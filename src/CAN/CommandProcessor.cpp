@@ -15,6 +15,7 @@
 #include <Platform/Platform.h>
 #include <Heating/Heat.h>
 #include "ExpansionManager.h"
+# include <ClosedLoop/ClosedLoop.h>
 
 #ifndef DUET3_ATE
 # include <Movement/Move.h>
@@ -537,6 +538,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			case CanMessageType::filamentMonitorsStatusReport:
 				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
+				break;
+
+			case CanMessageType::closedLoopData:
+				ClosedLoop::ProcessReceivedData(buf->id.Src(), buf->msg.closedLoopData, buf->dataLength);
 				break;
 
 #if SUPPORT_ACCELEROMETERS
