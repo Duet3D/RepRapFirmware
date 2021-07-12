@@ -242,6 +242,28 @@ void BinaryParser::SetDriverIdFromBinary(DriverId& did, uint32_t val) THROWS(GCo
 #endif
 }
 
+void BinaryParser::SetDriverIdFromFloat(DriverId& did, float fval) THROWS(GCodeException)
+{
+	fval *= 10.0;
+	const int32_t ival = lrintf(fval);
+#if SUPPORT_CAN_EXPANSION
+	if (ival >= 0 && fabsf(fval - (float)ival) <= 0.002)
+	{
+		did.boardAddress = ival/10;
+		did.localDriver = ival % 10;
+	}
+#else
+	if (ival >= 0 && ival < 10 && fabsf(fval - (float)ival) <= 0.002)
+	{
+		did.localDriver = ival % 10;
+	}
+#endif
+	else
+	{
+		throw ConstructParseException("Invalid driver ID expression");
+	}
+}
+
 // Get a driver ID
 DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 {
@@ -257,6 +279,19 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 	case DataType::UInt:
 	case DataType::DriverId:
 		SetDriverIdFromBinary(value, seenParameter->uintValue);
+		break;
+
+	case DataType::Float:
+		SetDriverIdFromFloat(value, seenParameter->floatValue);
+		break;
+
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			const float fval = parser.ParseFloat();
+			parser.CheckForExtraCharacters();
+			SetDriverIdFromFloat(value, fval);
+		}
 		break;
 
 	default:
