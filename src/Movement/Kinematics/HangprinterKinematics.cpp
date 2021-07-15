@@ -10,7 +10,9 @@
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
-//#include "Movement/BedProbing/RandomProbePointSet.h"
+#include <CAN/CanInterface.h>
+
+#include <General/Portability.h>
 
 // Default anchor coordinates
 // These are only placeholders. Each machine must have these values calibrated in order to work correctly.
@@ -76,13 +78,13 @@ void HangprinterKinematics::Init() noexcept
 	 * In practice you might want to compensate a bit more or a bit less */
 	constexpr float DefaultSpoolBuildupFactor = 0.007;
 	/* Measure and set spool radii with M669 to achieve better accuracy */
-	constexpr float DefaultSpoolRadii[4] = { 65.0, 65.0, 65.0, 65.0}; // HP4 default
+	constexpr float DefaultSpoolRadii[4] = { 75.0, 75.0, 75.0, 75.0}; // HP4 default
 	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
-	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 2, 2, 2, 2}; // HP4 default
+	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 2, 2, 2, 4}; // HP4 default
 	constexpr uint32_t DefaultLinesPerSpool[4] = { 1, 1, 1, 1}; // HP4 default
 	constexpr uint32_t DefaultMotorGearTeeth[4] = {  20,  20,  20,  20}; // HP4 default
 	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 255, 255, 255, 255}; // HP4 default
-	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 200, 200, 200, 200};
+	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 25, 25, 25, 25};
 	ARRAY_INIT(anchors, DefaultAnchors);
 	printRadius = DefaultPrintRadius;
 	spoolBuildupFactor = DefaultSpoolBuildupFactor;
@@ -499,6 +501,7 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 	// Calculate quadratic equation coefficients
 	const float halfB = (S * Q) - (R * T) - U;
 	const float C = fsquare(S) + fsquare(T) + (anchors[A_AXIS][Y_AXIS] * T - anchors[A_AXIS][X_AXIS] * S) * P * 2 + (Da2 - fsquare(La)) * P2;
+	debugPrintf("S: %.2f, T: %.2f, halfB: %.2f, C: %.2f, P: %.2f, A: %.2f\n", (double)S, (double)T, (double)halfB, (double)C, (double)P, (double) A);
 
 	// Solve the quadratic equation for z
 	machinePos[2] = (- halfB - fastSqrtf(fabsf(fsquare(halfB) - A * C)))/A;
@@ -825,6 +828,182 @@ void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexce
 					(double)anchors[A_AXIS][X_AXIS], (double)anchors[A_AXIS][Y_AXIS], (double)anchors[A_AXIS][Z_AXIS],
 					(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
 					(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS]);
+}
+
+std::optional<float> HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference)
+{
+	const uint8_t cmd = CANSimple::MSG_GET_ENCODER_ESTIMATES;
+	static CanAddress seenDrives[HANGPRINTER_AXES] = { 0, 0, 0, 0 };
+	static float referencePositions[HANGPRINTER_AXES] = { 0.0, 0.0, 0.0, 0.0 };
+	static size_t numSeenDrives = 0;
+	size_t thisDriveIdx = 0;
+
+	while (thisDriveIdx < numSeenDrives and seenDrives[thisDriveIdx] != driver.boardAddress)
+	{
+		thisDriveIdx++;
+	}
+	bool const newOne = (thisDriveIdx == numSeenDrives);
+	if (newOne)
+	{
+		if (numSeenDrives < HANGPRINTER_AXES)
+		{
+			seenDrives[thisDriveIdx] = driver.boardAddress;
+			numSeenDrives++;
+		}
+		else // we don't have space for a new one
+		{
+			reply.printf("Max CAN addresses we can reference is %d. Can't reference board %d.", HANGPRINTER_AXES, driver.boardAddress);
+			numSeenDrives = HANGPRINTER_AXES;
+			return {};
+		}
+	}
+
+	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, cmd, reply);
+	if (buf == nullptr)
+	{
+		return {};
+	}
+
+	CanInterface::SendPlainMessageNoFree(buf);
+
+	bool ok = CanInterface::ODrive::GetExpectedSimpleMessage(buf, driver, cmd, reply);
+	float encoderEstimate = 0.0;
+	if (ok)
+	{
+		size_t const expectedResponseLength = 8;
+		ok = (buf->dataLength == expectedResponseLength);
+		if (ok)
+		{
+			encoderEstimate = LoadLEFloat(buf->msg.raw);
+			if (makeReference)
+			{
+				referencePositions[thisDriveIdx] = encoderEstimate;
+			}
+			// Subtract reference value
+			if (subtractReference)
+			{
+				encoderEstimate = encoderEstimate - referencePositions[thisDriveIdx];
+			}
+		}
+		else
+		{
+			reply.printf("Unexpected response length: %d", buf->dataLength);
+		}
+	}
+
+	if (newOne and not ok)
+	{
+		seenDrives[thisDriveIdx] = 0;
+		numSeenDrives--;
+	}
+
+	CanMessageBuffer::Free(buf);
+	if (ok)
+	{
+		return encoderEstimate;
+	}
+	return {};
+}
+
+GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	std::optional<float> const estimate = GetODrive3EncoderEstimate(driver, gb.Seen('S'), reply, true);
+	if (estimate.has_value())
+	{
+		float directionCorrectedEncoderValue = estimate.value();
+		if (driver.boardAddress == 40 or driver.boardAddress == 41) // Driver direction is not stored on main board!! (will be in the future)
+		{
+			directionCorrectedEncoderValue *= -1.0;
+		}
+		reply.catf("%.2f, ", (double)(directionCorrectedEncoderValue * 360.0));
+		return GCodeResult::ok;
+	}
+	return GCodeResult::error;
+}
+
+GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque, const StringRef& reply)
+{
+	// Set the right target torque
+	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, CANSimple::MSG_SET_INPUT_TORQUE, reply);
+	if (buf == nullptr)
+	{
+		return GCodeResult::error;
+	}
+	buf->dataLength = 4;
+	buf->remote = false;
+	memcpy(buf->msg.raw, &torque, sizeof(torque));
+	CanInterface::SendPlainMessageNoFree(buf);
+
+	// Enable Torque Control Mode
+	buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_CONTROLLER_MODES);
+	buf->dataLength = 8;
+	buf->remote = false;
+	buf->msg.raw32[0] = CANSimple::CONTROL_MODE_TORQUE_CONTROL;
+	buf->msg.raw32[1] = CANSimple::INPUT_MODE_PASSTHROUGH;
+	CanInterface::SendPlainMessageNoFree(buf);
+
+	CanMessageBuffer::Free(buf);
+	return GCodeResult::ok;
+}
+
+GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, const StringRef& reply)
+{
+	std::optional<float> const estimate = GetODrive3EncoderEstimate(driver, false, reply, false);
+	if (estimate.has_value())
+	{
+		float const desiredPos = estimate.value();
+		CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, CANSimple::MSG_SET_INPUT_POS, reply);
+		if (buf == nullptr)
+		{
+			return GCodeResult::error;
+		}
+		buf->dataLength = 8;
+		buf->remote = false;
+		memset(buf->msg.raw32, 0, buf->dataLength); // four last bytes are velocity and torque setpoints. Zero them.
+		memcpy(buf->msg.raw32, &desiredPos, sizeof(desiredPos));
+		CanInterface::SendPlainMessageNoFree(buf);
+
+		// Enable Position Control Mode
+		buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_CONTROLLER_MODES);
+		buf->dataLength = 8;
+		buf->remote = false;
+		buf->msg.raw32[0] = CANSimple::CONTROL_MODE_POSITION_CONTROL;
+		buf->msg.raw32[1] = CANSimple::INPUT_MODE_PASSTHROUGH;
+		CanInterface::SendPlainMessageNoFree(buf);
+
+		CanMessageBuffer::Free(buf);
+		return GCodeResult::ok;
+	}
+	return GCodeResult::error;
+}
+
+GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, float torque, const StringRef& reply)
+{
+	GCodeResult res = GCodeResult::ok;
+	constexpr double MIN_TORQUE_NM = 0.0001;
+	if (fabs(torque) < MIN_TORQUE_NM)
+	{
+		res = SetODrive3PosMode(driver, reply);
+		if (res == GCodeResult::ok)
+		{
+			reply.cat("pos_mode, ");
+		}
+	}
+	else
+	{
+		// Set the right sign
+		torque = std::abs(torque);
+		if (driver.boardAddress == 42 or driver.boardAddress == 43) // Driver direction is not stored on main board!! (will be in the future)
+		{
+			torque = -torque;
+		}
+		res = SetODrive3TorqueModeInner(driver, torque, reply);
+		if (res == GCodeResult::ok)
+		{
+			reply.catf("%.6f Nm, ", (double)torque);
+		}
+	}
+	return res;
 }
 
 // End

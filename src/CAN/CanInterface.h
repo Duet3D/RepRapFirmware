@@ -85,7 +85,7 @@ namespace CanInterface
 	uint16_t GetTimeStampCounter() noexcept;
 
 #if DUAL_CAN
-	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept;
+	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf) noexcept;
 	bool ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout) noexcept;
 #endif
 
@@ -137,6 +137,12 @@ namespace CanInterface
 #if SUPPORT_ACCELEROMETERS
 	GCodeResult StartAccelerometer(DriverId device, uint8_t axes, uint16_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 #endif
+
+namespace ODrive {
+	CanId ArbitrationId(DriverId driver, uint8_t cmd);
+	CanMessageBuffer * PrepareSimpleMessage(DriverId const driver, uint8_t const cmd, const StringRef& reply);
+	bool GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply);
+}
 }
 
 // Members of template class CanDriversData
