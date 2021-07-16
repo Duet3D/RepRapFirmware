@@ -26,8 +26,9 @@
 constexpr uint16_t DefaultSamplingRate = 1000;
 
 static uint8_t modeRequested;							// The sampling mode
+static uint32_t filterRequested;						// A filter for what data is collected
 static DriverId deviceRequested;						// The driver being sampled
-static volatile uint16_t numSamplesRequested;			// The number of samples to collect
+static volatile uint32_t numSamplesRequested;			// The number of samples to collect
 //static uint8_t resolution = DefaultResolution;		// The resolution at which to collect the samples
 static FileStore* volatile closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
 
@@ -35,31 +36,75 @@ static unsigned int numRemoteOverflows;
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
 
+// DEBUG - Remove
+static bool received;
+static uint8_t rawMsg[64];
+
 // Handle M569.5 - Collect closed loop data
 GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	deviceRequested = driverId;
+	// Check what the user wants - record or report
+	// Record - A number of samples (Snn) is given to record
+	// Report - Samples (Snn) is not given, and we are already recording
+	bool recording = false;
+	uint32_t parsedS;
+	gb.TryGetUIValue('S', parsedS, recording);
 
-	// Parse the GCODE params
-	gb.MustSee('S');
-	numSamplesRequested = min<uint32_t>(gb.GetUIValue(), 65535);
-	gb.MustSee('A');
-	modeRequested = gb.GetUIValue();
-
-	// Check the chosen drive is a closed loop drive
-	// TODO: Think of how we can do this. For now, just check it is remote
-	if (!deviceRequested.IsRemote())
-	{
-		reply.copy("Drive is not in closed loop mode");
-		return GCodeResult::error;
-	}
-
-	// Check if we are already collecting data
-	if (closedLoopFile != nullptr)
+	// If the user is requesting a recording, check if one is already happening
+	if (recording && closedLoopFile != nullptr)
 	{
 		reply.copy("Closed loop data is already being collected");
 		return GCodeResult::error;
 	}
+
+	// If the user is requesting a report, check if a recording is happening
+	if (!recording && closedLoopFile == nullptr)
+	{
+		reply.copy("Closed loop data is not being collected");
+		return GCodeResult::warning;
+	}
+
+	// If we are reporting, deal with that
+	if (!recording)
+	{
+		reply.printf("Collecting sample: %d/%d", (int) expectedRemoteSampleNumber, (int) numSamplesRequested);
+		return GCodeResult::ok;
+		// TODO: Check if the user supplied additional params & send them back a warning if so?
+	}
+
+	// We are recording, parse the additional parameters
+	bool seen = false;
+	uint32_t parsedA, parsedD;
+
+	gb.TryGetUIValue('A', parsedA, seen);
+	if (!seen) {parsedA = 0;}
+
+	seen = false;
+	gb.TryGetUIValue('D', parsedD, seen);
+	if (!seen) {parsedD = 0;}
+
+	// Validate the parameters
+	if (!driverId.IsRemote())// Check the chosen drive is a closed loop drive - TODO: Think of how we can do this. For now, just check it is remote
+	{
+		reply.printf("Drive is not in closed loop mode (driverId.IsRemote() = %d)", driverId.IsRemote());
+		return GCodeResult::error;
+	}
+	if (parsedS > 65535) 	// TODO: What is a good maximum value here?
+	{
+		reply.copy("Maximum number of samples that can be collected is 65535");
+		return GCodeResult::error;
+	}
+	if (parsedA > 1)
+	{
+		reply.printf("Mode (A) can be either 0 or 1 - A%d is invalid", parsedA);
+		return GCodeResult::error;
+	}
+
+	// Validation passed - store the values
+	modeRequested = parsedA;
+	filterRequested = parsedD;
+	deviceRequested = driverId;
+	numSamplesRequested = parsedS;
 
 	// Estimate how large the file will be
 	const uint32_t preallocSize = 1000;	//TODO! numSamplesRequested * ((numAxes * (3 + GetDecimalPlaces(resolution))) + 4);
@@ -92,13 +137,22 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 
 	// Write the header line
 	{
-		// TODO!
-		String<StringLength50> temp;
-		temp.printf("Sample,Encoder,Target,Control\n");
-//		if (axes & 1u) { temp.cat(",X"); }
-//		if (axes & 2u) { temp.cat(",Y"); }
-//		if (axes & 4u) { temp.cat(",Z"); }
-//		temp.cat('\n');
+		String<StringLength500> temp;
+		temp.printf("Sample");
+		if (filterRequested & 1)  		{temp.cat(",Raw Encoder Reading");}
+		if (filterRequested & 2)  		{temp.cat(",Current Motor Steps");}
+		if (filterRequested & 4)  		{temp.cat(",TargetMotorSteps");}
+		if (filterRequested & 8)  		{temp.cat(",Step Phase");}
+		if (filterRequested & 16)  		{temp.cat(",PID Control Signal");}
+		if (filterRequested & 32)  		{temp.cat(",PID P Term");}
+		if (filterRequested & 64)  		{temp.cat(",PID I Term");}
+		if (filterRequested & 128)  	{temp.cat(",PID D Term");}
+		if (filterRequested & 256)  	{temp.cat(",Phase Shift");}
+		if (filterRequested & 512)  	{temp.cat(",Desired Step Phase");}
+		if (filterRequested & 1024) 	{temp.cat(",Coil A Current");}
+		if (filterRequested & 2048) 	{temp.cat(",Coil B Current");}
+		temp.Erase(temp.strlen(), 1);
+		temp.cat("\n");
 		f->Write(temp.c_str());
 	}
 	closedLoopFile = f;
@@ -117,18 +171,22 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	expectedRemoteSampleNumber = 0;
 	expectedRemoteBoardAddress = deviceRequested.boardAddress;
 	numRemoteOverflows = 0;
-	const GCodeResult rslt = CanInterface::StartClosedLoopDataCollection(deviceRequested, numSamplesRequested, modeRequested, gb, reply);
+	const GCodeResult rslt = CanInterface::StartClosedLoopDataCollection(deviceRequested, filterRequested, numSamplesRequested, modeRequested, gb, reply);
 	if (rslt > GCodeResult::warning)
 	{
 		closedLoopFile->Close();
+		closedLoopFile = nullptr;
 		MassStorage::Delete(closedLoopFileName.c_str(), false);
 	}
 	return rslt;
 }
 
 // Process closed loop data received over CAN
-void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopData& msg, size_t msgLen) noexcept
+void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopData& msg, size_t msgLen, uint8_t raw[]) noexcept
 {
+
+//	memcpy(rawMsg, &raw, 64);
+//	received = true;
 
 	FileStore * const f = closedLoopFile;
 	if (f != nullptr)
@@ -167,7 +225,7 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 
 			while (numSamples != 0)
 			{
-				String<StringLength50> temp;
+				String<StringLength500> temp;
 				temp.printf("%u", expectedRemoteSampleNumber);
 				++expectedRemoteSampleNumber;
 
@@ -203,9 +261,22 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 //					temp.catf(",%.*f", decimalPlaces, (double)fVal);
 //				}
 
-				temp.catf(",%d", msg.encoderData[0]);
-				temp.catf(",%d", msg.targetData[0]);
-				temp.catf(",%d\n", msg.controlData[0]);
+				// Count how many bits are set in 'filter'
+				// TODO: Look into a more efficient way of doing this
+				int variableCount = 0;
+				int tmpFilter = filterRequested;
+				while (tmpFilter != 0) {
+					variableCount += tmpFilter & 0x1;
+					tmpFilter >>= 1;
+				}
+
+				// Pull all the variables from the data packet
+				for (int i=0;i < variableCount; i++)
+				{
+					int16_t val = msg.data[i];
+					temp.catf(",%d", val);
+				}
+				temp.cat("\n");
 
 				f->Write(temp.c_str());
 				--numSamples;

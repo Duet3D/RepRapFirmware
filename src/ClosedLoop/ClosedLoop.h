@@ -20,6 +20,6 @@ namespace ClosedLoop
 //	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 # if SUPPORT_CAN_EXPANSION
 	GCodeResult StartDataCollection(DriverId, GCodeBuffer&, const StringRef&) THROWS(GCodeException);
-	void ProcessReceivedData(CanAddress, const CanMessageClosedLoopData&, size_t) noexcept;
+	void ProcessReceivedData(CanAddress, const CanMessageClosedLoopData&, size_t, uint8_t[64]) noexcept;
 # endif
 }
