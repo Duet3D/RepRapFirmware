@@ -80,7 +80,7 @@ static IoPort irqPort;
 	for (;;)
 	{
 		TaskBase::Take();
-		FileStore * const f = accelerometerFile;			// capture volatile variable
+		FileStore * f = accelerometerFile;			// capture volatile variable
 		if (f != nullptr)
 		{
 			// Collect and write the samples
@@ -102,14 +102,10 @@ static IoPort irqPort;
 					{
 						// samplesRead == 0 indicates an error, e.g. no interrupt
 						samplesWanted = 0;
-						if (f != nullptr)
-						{
-							f->Write("Failed to collect data from accelerometer\n");
-							f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-							f->Close();
-							accelerometerFile = nullptr;
-						}
-						break;
+						f->Write("Failed to collect data from accelerometer\n");
+						f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+						f->Close();
+						f = nullptr;
 					}
 					else
 					{
@@ -187,7 +183,6 @@ static IoPort irqPort;
 			{
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
-				accelerometerFile = nullptr;
 			}
 
 			accelerometer->StopCollecting();
@@ -338,11 +333,11 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	}
 
 # if SUPPORT_CAN_EXPANSION
-	reply.printf("Accelerometer %u:%u with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-					CanInterface::GetCanAddress(), 0, orientation, samplingRate, resolution, accelerometer->GetFrequency());
+	reply.printf("Accelerometer %u:%u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
+					CanInterface::GetCanAddress(), 0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
 # else
-	reply.printf("Accelerometer %u with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-					0, orientation, samplingRate, resolution, accelerometer->GetFrequency());
+	reply.printf("Accelerometer %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
+					0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
 # endif
 	return GCodeResult::ok;
 }
