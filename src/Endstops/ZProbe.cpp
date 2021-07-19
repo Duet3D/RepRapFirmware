@@ -78,7 +78,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->adcValue), 						ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 								ObjectModelEntryFlags::none },
 	{ "travelSpeed",				OBJECT_MODEL_FUNC(self->travelSpeed, 1), 							ObjectModelEntryFlags::none },
-	{ "triggerHeight",				OBJECT_MODEL_FUNC(self->triggerHeight, 3), 							ObjectModelEntryFlags::none },
+	{ "triggerHeight",				OBJECT_MODEL_FUNC(-self->offsets[Z_AXIS], 3), 						ObjectModelEntryFlags::none },
 	{ "type",						OBJECT_MODEL_FUNC((int32_t)self->type), 							ObjectModelEntryFlags::none },
 	{ "value",						OBJECT_MODEL_FUNC_NOSELF(&valueArrayDescriptor), 					ObjectModelEntryFlags::live },
 };
@@ -102,7 +102,7 @@ void ZProbe::SetDefaults() noexcept
 	{
 		offset = 0.0;
 	}
-	triggerHeight = DefaultZProbeTriggerHeight;
+	offsets[Z_AXIS] = -DefaultZProbeTriggerHeight;
 	calibTemperature = DefaultZProbeTemperature;
 	for (float& tc : temperatureCoefficients)
 	{
@@ -128,10 +128,10 @@ float ZProbe::GetActualTriggerHeight() const noexcept
 		if (err == TemperatureError::success)
 		{
 			const float dt = temperature - calibTemperature;
-			return (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]) + triggerHeight;
+			return (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]) - offsets[Z_AXIS];
 		}
 	}
-	return triggerHeight;
+	return -offsets[Z_AXIS];
 }
 
 #if HAS_MASS_STORAGE
@@ -149,7 +149,7 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexc
 			scratchString.catf(" %c%.1f", axisLetters[i], (double)offsets[i]);
 		}
 	}
-	scratchString.catf(" Z%.2f\n", (double)triggerHeight);
+	scratchString.catf(" Z%.2f\n", (double)-offsets[Z_AXIS]);
 	return f->Write(scratchString.c_str());
 }
 
@@ -327,7 +327,14 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			gb.TryGetFValue(axisLetters[i], offsets[i], seen);
 		}
 	}
-	gb.TryGetFValue(axisLetters[Z_AXIS], triggerHeight, seen);
+
+	{
+		float triggerHeight;
+		if (gb.TryGetFValue(axisLetters[Z_AXIS], triggerHeight, seen))
+		{
+			offsets[Z_AXIS] = -triggerHeight;				// logically, the Z offset of the Z probe is the negative of the trigger height
+		}
+	}
 
 	if (gb.Seen('P'))
 	{
@@ -353,7 +360,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		{
 			reply.catf(" (%d)", v1);
 		}
-		reply.catf(", threshold %d, trigger height %.3f", adcValue, (double)triggerHeight);
+		reply.catf(", threshold %d, trigger height %.3f", adcValue, (double)-offsets[Z_AXIS]);
 		if (temperatureCoefficients[0] != 0.0)
 		{
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficients [%.1f/" DEGREE_SYMBOL "C, %.1f/" DEGREE_SYMBOL "C^2]",
