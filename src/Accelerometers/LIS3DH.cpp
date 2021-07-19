@@ -58,21 +58,33 @@ uint8_t LIS3DH::ReadStatus() noexcept
 }
 
 // Configure the accelerometer to collect for the requested axis at or near the requested sampling rate and the requested resolution in bits.
-// Actual collection does not start until the first call to Collect8bitData or Collect16bitData.
+// Update the sampling rate and resolution to the actual values used.
 bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 {
 	bool ok;
 	if (is3DSH)
 	{
 		resolution = 16;
-		// We first need to set the address increment bit in control register 6
+		// We first need to make sure that the address increment bit in control register 6 is set
 		ok = WriteRegister(LisRegister::CtrlReg6, 1u << 4);
 		if (ok)
 		{
 			// Set up control registers 1 and 4 according to the selected sampling rate and resolution. The BDA but must be zero when using the FIFO, see app note AN3393.
-			ctrlReg_0x20 = (samplingRate >= 1200) ? 0x90					// select 1600Hz if we asked fore 1200 or higher
-							: (samplingRate >= 600) ? 0x80					// select 800Hz if we asked for 600 or higher
-								: 0x70;										// set 400Hz, lower isn't useful
+			if (samplingRate == 0 || samplingRate >= 1200)
+			{
+				samplingRate = 1600;										// select 1600Hz if we asked for the default, or for 1200 or higher
+				ctrlReg_0x20 = 0x90;
+			}
+			else if (samplingRate >= 600)
+			{
+				samplingRate = 800;											// select 800Hz if we asked for 600 or higher
+				ctrlReg_0x20 = 0x80;
+			}
+			else
+			{
+				samplingRate = 400;											// set 400Hz, lower isn't useful
+				ctrlReg_0x20 = 0x70;
+			}
 
 			// Set up the control registers, except set ctrlReg1 to 0 to select power down mode
 			dataBuffer[0] = 0;												// ctrlReg4: for now select power down mode
@@ -110,7 +122,7 @@ bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 		}
 
 		uint8_t odr;
-		if (samplingRate >= 1000)
+		if (samplingRate == 0 || samplingRate >= 1000)
 		{
 			if (resolution >= 10)
 			{

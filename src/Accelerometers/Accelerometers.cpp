@@ -55,7 +55,6 @@ static unsigned int GetDecimalPlaces(uint8_t dataResolution) noexcept
 
 #include "LIS3DH.h"
 
-constexpr uint16_t DefaultSamplingRate = 1000;
 constexpr uint8_t DefaultResolution = 10;
 
 constexpr size_t AccelerometerTaskStackWords = 400;			// big enough to handle printf and file writes
@@ -63,7 +62,7 @@ static Task<AccelerometerTaskStackWords> *accelerometerTask;
 
 static LIS3DH *accelerometer = nullptr;
 
-static uint16_t samplingRate = DefaultSamplingRate;
+static uint16_t samplingRate = 0;							// 0 means use the default
 static volatile uint16_t numSamplesRequested;
 static uint8_t resolution = DefaultResolution;
 static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
