@@ -9,7 +9,7 @@
 
 #if SUPPORT_12864_LCD
 
-constexpr unsigned int TILE_WIDTH = 1;
+constexpr unsigned int TILE_WIDTH = 8;
 constexpr unsigned int TILE_HEIGHT = 8;
 
 Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
@@ -74,24 +74,30 @@ bool Lcd7567::FlushSome() noexcept
 
 		// Flush that row (which is 8 pixels high)
 		SelectDevice();
-		SetGraphicsAddress(nextFlushRow, startCol);
+		SetGraphicsAddress(nextFlushRow, startCol & (~7));
 		StartDataTransaction();
 
 		// Send tiles of 1x8 for the desired (quantized) width of the dirty rectangle
-		for (int x = startCol; x < endCol; x += TILE_WIDTH)
+		//TODO should we limit how many tiles we send on each call?
+		for (PixelNumber x = startCol & (~7); x < endCol; x += TILE_WIDTH)
 		{
-			uint8_t data = 0;
+			// Gather the bits for 8 vertical lines of 8 pixels (LSB is the top pixel)
+			// Use two 32-bit accumulators instead of eight 8-bit accumulators so that all the work can be done in registers
+			uint32_t data0 = 0, data1 = 0;
+			const uint8_t * p = image + (x/8u) + (nextFlushRow * (numCols/8u));
 
-			// Gather the bits for a vertical line of 8 pixels (LSB is the top pixel)
-			for (uint8_t i = 0; i < 8; i++)
+			for (unsigned int i = 0; i < 8; i++)
 			{
-				if (ReadPixel(x, nextFlushRow + i))
-				{
-					data |= (1u << i);
-				}
+				const uint32_t val = (uint32_t)*p;
+				data0 >>= 1;
+				data1 >>= 1;
+				data0 |= ((val & 0x80) << 0) | ((val & 0x40) << 9)  | ((val & 0x20) << 18) | ((val & 0x10) << 27);
+				data1 |= ((val & 0x08) << 4) | ((val & 0x04) << 13) | ((val & 0x02) << 22) | ((val & 0x01) << 31);
+				p += numCols/8;
 			}
 
-			SendByte(data);
+			const uint32_t buffer[2] = { data0, data1 };
+			device.TransceivePacket((const uint8_t*)buffer, nullptr, 8);
 		}
 
 		EndDataTransaction();
