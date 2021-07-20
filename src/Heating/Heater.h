@@ -50,6 +50,7 @@ public:
 	virtual void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept = 0;
 
 #if SUPPORT_CAN_EXPANSION
+	virtual bool IsLocal() const noexcept = 0;
 	virtual void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept = 0;
 	virtual void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept = 0;
 #endif

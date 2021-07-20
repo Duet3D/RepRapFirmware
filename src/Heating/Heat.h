@@ -73,7 +73,8 @@ public:
 
 	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept;	// Is everything at temperature within tolerance?
 
-	void SwitchOffAll(bool includingChamberAndBed) noexcept;			// Turn all heaters off
+	void SwitchOffAll(bool includingChamberAndBed) noexcept;			// Turn all heaters off. Not safe to call from an ISR.
+	void SwitchOffAllLocalFromISR() noexcept;							// Turn off all local heaters. Safe to call from an ISR.
 	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power or while probing
 	GCodeResult ResetFault(int heater, const StringRef& reply) noexcept;	// Reset a heater fault for a specific heater or all heaters
 
