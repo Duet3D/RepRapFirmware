@@ -115,6 +115,7 @@ private:
 	static uint32_t prevMasterTime;												// the previous master time received
 	static uint32_t prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
 	static int32_t peakPosJitter, peakNegJitter;								// the max and min corrections we made to local time offset while synced
+	static bool gotJitter;														// true if we have recorded the jitter
 	static uint32_t peakReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
 	static volatile unsigned int syncCount;										// the number of messages we have received since starting sync
 	static unsigned int numJitterResyncs, numTimeoutResyncs;
