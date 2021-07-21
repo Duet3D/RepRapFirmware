@@ -30,6 +30,7 @@ public:
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
 	void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept override;
+	bool IsLocal() const noexcept override { return false; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override;
 	void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept override;
 

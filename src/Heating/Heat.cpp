@@ -658,6 +658,22 @@ void Heat::SwitchOffAll(bool includingChamberAndBed) noexcept
 	}
 }
 
+// Turn off all local heaters. Safe to call from an ISR. Called only from the tick ISR.
+void Heat::SwitchOffAllLocalFromISR() noexcept
+{
+	for (Heater* h : heaters)
+	{
+		if (h != nullptr
+#if SUPPORT_CAN_EXPANSION
+			&& h->IsLocal()
+#endif
+		   )
+		{
+			h->SwitchOff();
+		}
+	}
+}
+
 void Heat::Standby(int heater, const Tool *tool) noexcept
 {
 	const auto h = FindHeater(heater);

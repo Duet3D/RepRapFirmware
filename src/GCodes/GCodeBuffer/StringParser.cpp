@@ -1728,36 +1728,64 @@ int32_t StringParser::ReadIValue() THROWS(GCodeException)
 DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 {
 	DriverId result;
-	const uint32_t v1 = ReadUIValue();
+	if (gb.buffer[readPointer] == '{')
+	{
+		// Allow a floating point expression to be converted to a driver ID
+		// We assume that a driver ID only ever has a single fractional digit. This means that e.g. 3.10 will be treated the same as 3.1.
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		const float val = 10.0 * parser.ParseFloat();
+		readPointer = parser.GetEndptr() - gb.buffer;
+		const int32_t ival = lrintf(val);
 #if SUPPORT_CAN_EXPANSION
-	if (gb.buffer[readPointer] == '.')
-	{
-		++readPointer;
-		const uint32_t v2 = ReadUIValue();
-		result.localDriver = v2;
-		result.boardAddress = v1;
-	}
-	else
-	{
-		result.localDriver = v1;
-		result.boardAddress = CanInterface::GetCanAddress();
-	}
-#else
-	// We now allow driver names of the form "0.x" on boards without CAN expansion
-	if (gb.buffer[readPointer] == '.')
-	{
-		if (v1 != 0)
+		if (ival >= 0 && fabsf(val - (float)ival) <= 0.002)
 		{
-			throw ConstructParseException("Board address of driver must be 0");
+			result.boardAddress = ival/10;
+			result.localDriver = ival % 10;
 		}
-		++readPointer;
-		result.localDriver = ReadUIValue();
+#else
+		if (ival >= 0 && ival < 10 && fabsf(val - (float)ival) <= 0.002)
+		{
+			result.localDriver = ival % 10;
+		}
+#endif
+		else
+		{
+			throw ConstructParseException("Invalid driver ID expression");
+		}
 	}
 	else
 	{
-		result.localDriver = v1;
-	}
+		const uint32_t v1 = ReadUIValue();
+#if SUPPORT_CAN_EXPANSION
+		if (gb.buffer[readPointer] == '.')
+		{
+			++readPointer;
+			const uint32_t v2 = ReadUIValue();
+			result.localDriver = v2;
+			result.boardAddress = v1;
+		}
+		else
+		{
+			result.localDriver = v1;
+			result.boardAddress = CanInterface::GetCanAddress();
+		}
+#else
+		// We now allow driver names of the form "0.x" on boards without CAN expansion
+		if (gb.buffer[readPointer] == '.')
+		{
+			if (v1 != 0)
+			{
+				throw ConstructParseException("Board address of driver must be 0");
+			}
+			++readPointer;
+			result.localDriver = ReadUIValue();
+		}
+		else
+		{
+			result.localDriver = v1;
+		}
 #endif
+	}
 	return result;
 }
 
