@@ -4100,10 +4100,6 @@ bool Platform::FileExists(const char* folder, const char *filename) const noexce
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
 
-#endif
-
-#if HAS_MASS_STORAGE
-
 // Return a pointer to a string holding the directory where the system files are. Lock the sysdir lock before calling this.
 const char* Platform::InternalGetSysDir() const noexcept
 {
@@ -4114,12 +4110,6 @@ bool Platform::Delete(const char* folder, const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
-}
-
-bool Platform::DirectoryExists(const char *folder, const char *dir) const noexcept
-{
-	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, dir) && MassStorage::DirectoryExists(location.c_str());
 }
 
 // Set the system files path

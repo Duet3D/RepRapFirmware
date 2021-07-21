@@ -1004,7 +1004,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	if (simulationMode == 0)
 	{
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
@@ -1325,16 +1325,10 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		return;			// we can't yet save to the Pi
-	}
-#endif
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
 	if (printingFilename != nullptr)
 	{
@@ -4174,13 +4168,8 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
-#if HAS_MASS_STORAGE
-		if (   reason == StopPrintReason::normalCompletion
-			&& simulationMode == 0
-# if HAS_LINUX_INTERFACE
-			&& !reprap.UsingLinuxInterface()
-# endif
-		   )
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 		}

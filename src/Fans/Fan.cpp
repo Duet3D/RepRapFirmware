@@ -194,7 +194,7 @@ GCodeResult Fan::SetPwm(float speed, const StringRef& reply) noexcept
 	return Refresh(reply);
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Save the settings of this fan if it isn't thermostatic
 bool Fan::WriteSettings(FileStore *f, size_t fanNum) const noexcept

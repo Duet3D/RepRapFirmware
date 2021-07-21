@@ -395,10 +395,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool FileExists(const char* folder, const char *filename) const noexcept;
-#endif
-#if HAS_MASS_STORAGE
 	bool Delete(const char* folder, const char *filename) const noexcept;
-	bool DirectoryExists(const char *folder, const char *dir) const noexcept;
 
 	const char* GetWebDir() const noexcept; 					// Where the html etc files are
 	const char* GetGCodeDir() const noexcept; 					// Where the gcodes are
@@ -820,7 +817,7 @@ private:
 #endif
 
 	// Files
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	const char *sysDir;
 	mutable ReadWriteLock sysDirLock;
 #endif
