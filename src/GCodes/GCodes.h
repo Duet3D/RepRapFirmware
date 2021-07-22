@@ -598,6 +598,8 @@ private:
 
 #if HAS_MASS_STORAGE
 	FileData fileToPrint;						// The next file to print
+#endif
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FilePosition fileOffsetToPrint;				// The offset to print from
 #endif
 

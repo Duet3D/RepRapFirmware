@@ -2439,6 +2439,12 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #endif
 		break;
 
+#if HAS_VOLTAGE_MONITOR
+	case (unsigned int)DiagnosticTestType::UndervoltageEvent:
+		reprap.GetGCodes().LowVoltagePause();
+		break;
+#endif
+
 #ifdef DUET_NG
 	case (unsigned int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());

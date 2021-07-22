@@ -287,6 +287,10 @@ void GCodes::Reset() noexcept
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	fileOffsetToPrint = 0;
+	restartMoveFractionDone = 0.0;
+#endif
 #if HAS_LINUX_INTERFACE
 	lastFilePosition = noFilePosition;
 #endif
@@ -1174,6 +1178,14 @@ bool GCodes::DoEmergencyPause() noexcept
 		pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 	}
+
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface() && pauseRestorePoint.filePos == noFilePosition)
+	{
+		// Use the last known print file position if the current one is unknown (e.g. because a macro file is being executed)
+		pauseRestorePoint.filePos = lastFilePosition;
+	}
+#endif
 
 	codeQueue->PurgeEntries();
 
@@ -3217,8 +3229,6 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 	if (f != nullptr)
 	{
 		fileToPrint.Set(f);
-		fileOffsetToPrint = 0;
-		restartMoveFractionDone = 0.0;
 		return true;
 	}
 
@@ -3230,6 +3240,9 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 // Start printing the file already selected. We must hold the movement lock and wait for all moves to finish before calling this, because of the call to ResetMoveCounters.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
+	fileOffsetToPrint = 0;
+	restartMoveFractionDone = 0.0;
+
 	buildObjects.Init();
 	reprap.GetMove().ResetMoveCounters();
 
