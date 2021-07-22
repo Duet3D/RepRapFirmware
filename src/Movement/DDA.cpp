@@ -136,7 +136,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 void PrepParams::Finalise(DDA& dda) noexcept
 {
 	const float steadyDistance = decelStartDistance - accelDistance;
-	steadyClocks = (max<float>(0.0, steadyDistance) * StepTimer::StepClockRate)/dda.topSpeed;
+	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : (steadyDistance * StepTimer::StepClockRate)/dda.topSpeed;
 	dda.clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
 }
 

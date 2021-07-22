@@ -445,7 +445,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 
 		if (params.accelDistance < params.decelStartDistance)			// we can't do any shaping unless there is a steady speed segment that can be shortened
 		{
-			//TODO if we want to shape both acceleration and deceleration by the steady distance is zero or too short, we could reduce the top speed
+			//TODO if we want to shape both acceleration and deceleration but the steady distance is zero or too short, we could reduce the top speed
 			if (params.accelDistance > 0.0)
 			{
 				if ((dda.GetPrevious()->state != DDA::DDAState::frozen && dda.GetPrevious()->state != DDA::DDAState::executing) || !dda.GetPrevious()->flags.wasAccelOnlyMove)
@@ -480,14 +480,22 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 		params.Finalise(dda);									// this sets up params.steadyClocks, which is needed by FinishSegments
 		dda.shapedSegments = FinishSegments(dda, params, accelSegs, decelSegs);
 
-		// Update the acceleration and deceleration in the DDA to be the average instead of peak values, so that if we generate unshaped segments or CAN motion too, they will be in sync
+		// Update the acceleration and deceleration in the DDA and the acceleration/deceleration distances and times in the PrepParams, so that if we generate unshaped segments or CAN motion too, they will be in sync
+		// Replace the shaped acceleration by a linear acceleration followed by constant speed time
 		if (params.shapingPlan.shapeAccelStart || params.shapingPlan.shapeAccelEnd || params.shapingPlan.shapeAccelOverlapped)
 		{
-			dda.acceleration = ((dda.topSpeed - dda.startSpeed) * StepTimer::StepClockRate)/params.accelClocks;
+			const float speedIncrease = dda.topSpeed - dda.startSpeed;
+			params.accelClocks = 2 * (dda.topSpeed * params.accelClocks - params.accelDistance * StepTimer::StepClockRate)/speedIncrease;
+			params.accelDistance = (dda.startSpeed + dda.topSpeed) * params.accelClocks/(2 * StepTimer::StepClockRate);
+			dda.acceleration = (speedIncrease * StepTimer::StepClockRate)/params.accelClocks;
 		}
 		if (params.shapingPlan.shapeDecelStart || params.shapingPlan.shapeDecelEnd || params.shapingPlan.shapeDecelOverlapped)
 		{
-			dda.deceleration = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/params.decelClocks;
+			const float speedDecrease = dda.endSpeed - dda.startSpeed;
+			params.decelClocks = 2 * (params.decelDistance * StepTimer::StepClockRate - dda.topSpeed * params.decelClocks)/speedDecrease;
+			params.decelDistance = (dda.topSpeed + dda.endSpeed) * params.decelClocks/(2 * StepTimer::StepClockRate);
+			params.decelStartDistance = dda.totalDistance - params.decelDistance;
+			dda.deceleration = (speedDecrease * StepTimer::StepClockRate)/params.decelClocks;
 		}
 	}
 	else
