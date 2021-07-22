@@ -1293,7 +1293,7 @@ void RepRap::Tick() noexcept
 			if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
 			{
 				stopped = true;
-				heat->SwitchOffAll(true);
+				heat->SwitchOffAllLocalFromISR();								// can't call SwitchOffAll because remote heaters can't be turned off from inside a ISR
 				platform->EmergencyDisableDrivers();
 
 				// We now save the stack when we get stuck in a spin loop

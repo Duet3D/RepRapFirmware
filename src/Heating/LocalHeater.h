@@ -41,6 +41,7 @@ public:
 	void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept override;
 
 #if SUPPORT_CAN_EXPANSION
+	bool IsLocal() const noexcept override { return true; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override { }
 	void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept override { }
 #endif
