@@ -48,7 +48,9 @@ constexpr float DefaultXYInstantDv = 15.0;				// mm/sec
 constexpr float DefaultZInstantDv = 0.2;
 constexpr float DefaultEInstantDv = 2.0;
 
-constexpr float DefaultMinFeedrate = 0.5;				// The minimum movement speed (extruding moves will go slower than this if the extrusion rate demands it)
+constexpr float DefaultMinFeedrate = 0.5;				// the default minimum movement speed in mm/sec (extruding moves will go slower than this if the extrusion rate demands it)
+constexpr float AbsoluteMinFeedrate = 0.01;				// the absolute minimum movement speed in mm/sec
+constexpr float MinimumJerk = 0.1;						// the minimum jerk in mm/sec
 
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;

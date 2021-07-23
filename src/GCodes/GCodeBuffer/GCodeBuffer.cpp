@@ -19,6 +19,7 @@
 #include <GCodes/GCodeException.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Movement/StepTimer.h>
 
 // Macros to reduce the amount of explicit conditional compilation in this file
 #if HAS_LINUX_INTERFACE
@@ -51,7 +52,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	// 0. inputs[] root
 	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),					ObjectModelEntryFlags::none },
 	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),			ObjectModelEntryFlags::none },
-	{ "distanceUnit",		OBJECT_MODEL_FUNC((self->machineState->usingInches) ? "inch" : "mm"),		ObjectModelEntryFlags::none },
+	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),								ObjectModelEntryFlags::none },
 	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),				ObjectModelEntryFlags::none },
 	{ "feedRate",			OBJECT_MODEL_FUNC(self->machineState->feedRate, 1),							ObjectModelEntryFlags::live },
 	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),				ObjectModelEntryFlags::none },
@@ -386,6 +387,24 @@ float GCodeBuffer::GetLimitedFValue(char c, float minValue, float maxValue) THRO
 float GCodeBuffer::GetDistance() THROWS(GCodeException)
 {
 	return ConvertDistance(GetFValue());
+}
+
+// Get a speed in mm/min or inches/min or optionally /sec and convert it to mm/step_clock
+float GCodeBuffer::GetSpeed() THROWS(GCodeException)
+{
+	return ConvertSpeed(GetFValue());
+}
+
+// Get a speed in mm/min or inches/min or optionally /sec and convert it to mm/step_clock
+float GCodeBuffer::GetSpeedFromMm(bool useSeconds) THROWS(GCodeException)
+{
+	return ConvertSpeedFromMm(GetFValue(), useSeconds);
+}
+
+// Get an acceleration in mm/sec^2 or inches/sec^2 and convert it to mm/step_clock^2
+float GCodeBuffer::GetAcceleration() THROWS(GCodeException)
+{
+	return ConvertAcceleration(GetFValue());
 }
 
 // Get an integer after a key letter
@@ -727,13 +746,48 @@ GCodeMachineState& GCodeBuffer::CurrentFileMachineState() const noexcept
 // Convert from inches to mm if necessary
 float GCodeBuffer::ConvertDistance(float distance) const noexcept
 {
-	return (machineState->usingInches) ? distance * InchToMm : distance;
+	return (UsingInches()) ? distance * InchToMm : distance;
 }
 
 // Convert from mm to inches if necessary
 float GCodeBuffer::InverseConvertDistance(float distance) const noexcept
 {
-	return (machineState->usingInches) ? distance/InchToMm : distance;
+	return (UsingInches()) ? distance/InchToMm : distance;
+}
+
+/*static*/ float GCodeBuffer::ConvertAcceleration(float accel) noexcept
+{
+	return accel * (1.0/StepTimer::StepClockRateSquared);
+}
+
+/*static */float GCodeBuffer::InverseConvertAcceleration(float accel) noexcept
+{
+	return accel * StepTimer::StepClockRateSquared;
+}
+
+float GCodeBuffer::ConvertSpeed(float speed) const noexcept
+{
+	return speed * ((UsingInches()) ? InchToMm/StepTimer::StepClockRate : 1.0/StepTimer::StepClockRate);
+}
+
+/*static*/ float GCodeBuffer::ConvertSpeedFromMm(float speed, bool useSeconds) noexcept
+{
+	return speed * ((useSeconds) ? 1.0/StepTimer::StepClockRate : MinutesToSeconds/StepTimer::StepClockRate);
+}
+
+float GCodeBuffer::InverseConvertSpeed(float speed) const noexcept
+{
+	return speed * ((UsingInches()) ? StepTimer::StepClockRate/InchToMm : (float)StepTimer::StepClockRate);
+}
+
+/*static*/ float GCodeBuffer::InverseConvertSpeedToMm(float speed, bool useSeconds) noexcept
+{
+	return speed * ((useSeconds) ? StepTimer::StepClockRate : StepTimer::StepClockRate * SecondsToMinutes);
+}
+
+const char *GCodeBuffer::GetDistanceUnits() const noexcept
+{
+	return (UsingInches()) ? "in" : "mm";
 }
 
 // Return the  current stack depth
