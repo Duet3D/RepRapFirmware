@@ -79,8 +79,18 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 		}
 
 		// If the file is empty or not a G-Code file, we don't need to parse anything
-		if (fileBeingParsed->Length() == 0 || (!StringEndsWithIgnoreCase(filePath, ".gcode") && !StringEndsWithIgnoreCase(filePath, ".g")
-					&& !StringEndsWithIgnoreCase(filePath, ".gco") && !StringEndsWithIgnoreCase(filePath, ".gc")))
+		constexpr const char *GcodeFileExtensions[] = { ".gcode", ".g", ".gco", ".gc", ".nc" };
+		bool isGcodeFile = false;
+		for (const char *ext : GcodeFileExtensions)
+		{
+			if (StringEndsWithIgnoreCase(filePath, ext))
+			{
+				isGcodeFile = true;
+				break;
+			}
+		}
+
+		if (fileBeingParsed->Length() == 0 || !isGcodeFile)
 		{
 			fileBeingParsed->Close();
 			parsedFileInfo.incomplete = false;
