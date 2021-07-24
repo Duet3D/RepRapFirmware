@@ -1492,7 +1492,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				buf.catf("\nG0 F6000 Z%.3f\n", (double)pauseRestorePoint.moveCoords[Z_AXIS]);
 
 				// Set the feed rate
-				buf.catf("G1 F%.1f", (double)(pauseRestorePoint.feedRate * MinutesToSeconds));
+				buf.catf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
 #if SUPPORT_LASER
 				if (machineType == MachineType::laser)
 				{
@@ -1630,7 +1630,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 		moveBuffer.applyM220M221 = (moveBuffer.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro());
 		if (gb.Seen(feedrateLetter))
 		{
-			gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;	// update requested speed, not allowing for speed factor
+			gb.LatestMachineState().feedRate = gb.GetSpeed();				// update requested speed, not allowing for speed factor
 		}
 		moveBuffer.feedRate = (moveBuffer.applyM220M221)
 								? speedFactor * gb.LatestMachineState().feedRate
@@ -1640,7 +1640,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 	else
 	{
 		moveBuffer.applyM220M221 = false;
-		moveBuffer.feedRate = DefaultG0FeedRate;					// use maximum feed rate, the M203 parameters will limit it
+		moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultG0FeedRate);	// use maximum feed rate, the M203 parameters will limit it
 		moveBuffer.usingStandardFeedrate = false;
 	}
 
@@ -1650,11 +1650,11 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 		moveBuffer.coords[drive] = 0.0;
 	}
 	moveBuffer.hasPositiveExtrusion = false;
-	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
+	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;			// save this before we update it
 	ExtrudersBitmap extrudersMoving;
 
 	// Check if we are extruding
-	if (gb.Seen(extrudeLetter))							// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
+	if (gb.Seen(extrudeLetter))												// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
 	{
 		// Check that we have a tool to extrude with
 		Tool* const tool = reprap.GetCurrentTool();

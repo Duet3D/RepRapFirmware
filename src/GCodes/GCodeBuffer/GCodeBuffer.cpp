@@ -50,17 +50,17 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. inputs[] root
-	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),					ObjectModelEntryFlags::none },
-	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),			ObjectModelEntryFlags::none },
-	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),								ObjectModelEntryFlags::none },
-	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),				ObjectModelEntryFlags::none },
-	{ "feedRate",			OBJECT_MODEL_FUNC(self->machineState->feedRate, 1),							ObjectModelEntryFlags::live },
-	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),				ObjectModelEntryFlags::none },
-	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),							ObjectModelEntryFlags::live },
-	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),							ObjectModelEntryFlags::none },
-	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),							ObjectModelEntryFlags::none },
-	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),									ObjectModelEntryFlags::live },
-	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),			ObjectModelEntryFlags::none },
+	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),							ObjectModelEntryFlags::none },
+	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),					ObjectModelEntryFlags::none },
+	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),										ObjectModelEntryFlags::none },
+	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),						ObjectModelEntryFlags::none },
+	{ "feedRate",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->machineState->feedRate), 1),	ObjectModelEntryFlags::live },
+	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::none },
+	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
+	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
+	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),									ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),											ObjectModelEntryFlags::live },
+	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 11 };
@@ -389,19 +389,19 @@ float GCodeBuffer::GetDistance() THROWS(GCodeException)
 	return ConvertDistance(GetFValue());
 }
 
-// Get a speed in mm/min or inches/min or optionally /sec and convert it to mm/step_clock
+// Get a speed in mm/min or inches/min and convert it to mm/step_clock
 float GCodeBuffer::GetSpeed() THROWS(GCodeException)
 {
 	return ConvertSpeed(GetFValue());
 }
 
-// Get a speed in mm/min or inches/min or optionally /sec and convert it to mm/step_clock
+// Get a speed in mm/min mm/sec and convert it to mm/step_clock
 float GCodeBuffer::GetSpeedFromMm(bool useSeconds) THROWS(GCodeException)
 {
 	return ConvertSpeedFromMm(GetFValue(), useSeconds);
 }
 
-// Get an acceleration in mm/sec^2 or inches/sec^2 and convert it to mm/step_clock^2
+// Get an acceleration in mm/sec^2 and convert it to mm/step_clock^2
 float GCodeBuffer::GetAcceleration() THROWS(GCodeException)
 {
 	return ConvertAcceleration(GetFValue());
@@ -755,34 +755,14 @@ float GCodeBuffer::InverseConvertDistance(float distance) const noexcept
 	return (UsingInches()) ? distance/InchToMm : distance;
 }
 
-/*static*/ float GCodeBuffer::ConvertAcceleration(float accel) noexcept
-{
-	return accel * (1.0/StepTimer::StepClockRateSquared);
-}
-
-/*static */float GCodeBuffer::InverseConvertAcceleration(float accel) noexcept
-{
-	return accel * StepTimer::StepClockRateSquared;
-}
-
 float GCodeBuffer::ConvertSpeed(float speed) const noexcept
 {
-	return speed * ((UsingInches()) ? InchToMm/StepTimer::StepClockRate : 1.0/StepTimer::StepClockRate);
-}
-
-/*static*/ float GCodeBuffer::ConvertSpeedFromMm(float speed, bool useSeconds) noexcept
-{
-	return speed * ((useSeconds) ? 1.0/StepTimer::StepClockRate : MinutesToSeconds/StepTimer::StepClockRate);
+	return speed * ((UsingInches()) ? InchToMm/StepClockRate : 1.0/StepClockRate);
 }
 
 float GCodeBuffer::InverseConvertSpeed(float speed) const noexcept
 {
-	return speed * ((UsingInches()) ? StepTimer::StepClockRate/InchToMm : (float)StepTimer::StepClockRate);
-}
-
-/*static*/ float GCodeBuffer::InverseConvertSpeedToMm(float speed, bool useSeconds) noexcept
-{
-	return speed * ((useSeconds) ? StepTimer::StepClockRate : StepTimer::StepClockRate * SecondsToMinutes);
+	return speed * ((UsingInches()) ? StepClockRate/InchToMm : (float)StepClockRate);
 }
 
 const char *GCodeBuffer::GetDistanceUnits() const noexcept

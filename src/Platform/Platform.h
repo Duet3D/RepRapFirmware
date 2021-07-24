@@ -917,7 +917,7 @@ inline const float* Platform::Accelerations() const noexcept
 
 inline void Platform::SetAcceleration(size_t drive, float value) noexcept
 {
-	accelerations[drive] = max<float>(value, 1.0);		// don't allow zero or negative
+	accelerations[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
 }
 
 inline float Platform::MaxFeedrate(size_t drive) const noexcept
@@ -927,7 +927,17 @@ inline float Platform::MaxFeedrate(size_t drive) const noexcept
 
 inline void Platform::SetMaxFeedrate(size_t drive, float value) noexcept
 {
-	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);	// don't allow zero or negative, but do allow small values
+	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);						// don't allow zero or negative, but do allow small values
+}
+
+inline void Platform::SetInstantDv(size_t drive, float value) noexcept
+{
+	instantDvs[drive] = max<float>(value, ConvertSpeedFromMmPerSec(MinimumJerk));		// don't allow zero or negative values, they causes Move to loop indefinitely
+}
+
+inline void Platform::SetMinMovementSpeed(float value) noexcept
+{
+	minimumMovementSpeed = max<float>(value, ConvertSpeedFromMmPerSec(AbsoluteMinFeedrate));
 }
 
 inline float Platform::GetInstantDv(size_t drive) const noexcept

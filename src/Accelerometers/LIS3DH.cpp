@@ -224,7 +224,7 @@ unsigned int LIS3DH::CollectData(const uint16_t **collectedData, uint16_t &dataR
 		const uint32_t interval = lastInterruptTime - firstInterruptTime;
 		dataRate = (totalNumRead == 0 || interval == 0)
 					? 0
-					: (totalNumRead * StepTimer::StepClockRate)/interval;
+					: (totalNumRead * StepClockRate)/interval;
 		totalNumRead += numToRead;
 	}
 	return numToRead;

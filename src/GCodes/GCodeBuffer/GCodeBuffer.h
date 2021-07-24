@@ -134,12 +134,8 @@ public:
 	bool UsingInches() const noexcept { return machineState->usingInches; }
 	float ConvertDistance(float distance) const noexcept;
 	float InverseConvertDistance(float distance) const noexcept;
-	static float ConvertAcceleration(float accel) noexcept;
-	static float InverseConvertAcceleration(float accel) noexcept;
 	float ConvertSpeed(float speed) const noexcept;
-	static float ConvertSpeedFromMm(float speed, bool useSeconds) noexcept;
 	float InverseConvertSpeed(float speed) const noexcept;
-	static float InverseConvertSpeedToMm(float speed, bool useSeconds) noexcept;
 	const char *GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
 	bool PushState(bool withinSameFile) noexcept;				// Push state returning true if successful (i.e. stack not overflowed)

@@ -67,14 +67,14 @@ unsigned int DiskioGetAndClearMaxRetryCount() noexcept
 
 float DiskioGetAndClearLongestReadTime() noexcept
 {
-	const float ret = (float)longestReadTime * StepTimer::StepClocksToMillis;
+	const float ret = (float)longestReadTime * StepClocksToMillis;
 	longestReadTime = 0;
 	return ret;
 }
 
 float DiskioGetAndClearLongestWriteTime() noexcept
 {
-	const float ret = (float)longestWriteTime * StepTimer::StepClocksToMillis;
+	const float ret = (float)longestWriteTime * StepClocksToMillis;
 	longestWriteTime = 0;
 	return ret;
 }

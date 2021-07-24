@@ -94,11 +94,11 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),											ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC(GCodeBuffer::InverseConvertAcceleration(self->maxPrintingAcceleration), 1),	ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxPrintingAcceleration), 1),				ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),												ObjectModelEntryFlags::none },
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),								ObjectModelEntryFlags::none },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC(GCodeBuffer::InverseConvertAcceleration(self->maxTravelAcceleration), 1),		ObjectModelEntryFlags::none },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxTravelAcceleration), 1),					ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),					ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
 	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),		ObjectModelEntryFlags::obsolete },
@@ -108,14 +108,14 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),										ObjectModelEntryFlags::none },
 
 	// 2. move.currentMove members
-	{ "acceleration",			OBJECT_MODEL_FUNC(GCodeBuffer::InverseConvertAcceleration(self->GetAcceleration()), 1),			ObjectModelEntryFlags::live },
-	{ "deceleration",			OBJECT_MODEL_FUNC(GCodeBuffer::InverseConvertAcceleration(self->GetDeceleration()), 1),			ObjectModelEntryFlags::live },
+	{ "acceleration",			OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->GetAcceleration()), 1),						ObjectModelEntryFlags::live },
+	{ "deceleration",			OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->GetDeceleration()), 1),						ObjectModelEntryFlags::live },
 # if SUPPORT_LASER
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
 															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::live },
 # endif
-	{ "requestedSpeed",			OBJECT_MODEL_FUNC(GCodeBuffer::InverseConvertSpeedToMm(self->GetRequestedSpeed(), true), 1),	ObjectModelEntryFlags::live },
-	{ "topSpeed",				OBJECT_MODEL_FUNC(GCodeBuffer::InverseConvertSpeedToMm(self->GetTopSpeed(), true), 1),			ObjectModelEntryFlags::live },
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMm(self->GetRequestedSpeed(), true), 1),					ObjectModelEntryFlags::live },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMm(self->GetTopSpeed(), true), 1),						ObjectModelEntryFlags::live },
 
 	// 3. move.calibration members
 	{ "final",					OBJECT_MODEL_FUNC(self, 5),																		ObjectModelEntryFlags::none },
@@ -993,7 +993,7 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 	else
 	{
 		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f mm/sec^2",
-						(double)gb.InverseConvertAcceleration(maxPrintingAcceleration), (double)gb.InverseConvertAcceleration(maxTravelAcceleration));
+						(double)InverseConvertAcceleration(maxPrintingAcceleration), (double)InverseConvertAcceleration(maxTravelAcceleration));
 	}
 	return GCodeResult::ok;
 }

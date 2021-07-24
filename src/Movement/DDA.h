@@ -187,25 +187,25 @@ public:
 	// Note: the above measurements were taken some time ago, before some firmware optimisations.
 #if SAME70
 	// Use the same defaults as for the SAM4E for now.
-	static constexpr uint32_t MinCalcInterval = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = (30 * StepTimer::StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
+	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// same as delta for now, but could be lower
+	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #elif SAM4E || SAM4S || SAME5x
-	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t MinCalcInterval = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = (30 * StepTimer::StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
+	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepClockRate)/1000000; 			// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// same as delta for now, but could be lower
+	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #elif defined(__LPC17xx__)
-     static constexpr uint32_t MinCalcInterval = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = (30 * StepTimer::StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
+     static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// same as delta for now, but could be lower
+	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #else	// SAM3X
-	static constexpr uint32_t MinCalcInterval = (60 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = (40 * StepTimer::StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
+	static constexpr uint32_t MinCalcInterval = (60 * StepClockRate)/1000000;				// same as delta for now, but could be lower
+	static constexpr uint32_t HiccupTime = (40 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #endif
-	static constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;			// the maximum time we spend looping in the ISR , in step clocks
-	static constexpr uint32_t WakeupTime = (100 * StepTimer::StepClockRate)/1000000;				// stop resting 100us before the move is due to end
-	static constexpr uint32_t HiccupIncrement = HiccupTime/2;										// how much we increase the hiccup time by on each attempt
+	static constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;	// the maximum time we spend looping in the ISR , in step clocks
+	static constexpr uint32_t WakeupTime = (100 * StepClockRate)/1000000;					// stop resting 100us before the move is due to end
+	static constexpr uint32_t HiccupIncrement = HiccupTime/2;								// how much we increase the hiccup time by on each attempt
 
-	static constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;				// 100ms
-	static constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;			// 50ms
+	static constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;					// 100ms
+	static constexpr uint32_t AbsoluteMinimumPreparedTime = StepClockRate/20;				// 50ms
 
 #if DDA_LOG_PROBE_CHANGES
 	static const size_t MaxLoggedProbePositions = 40;

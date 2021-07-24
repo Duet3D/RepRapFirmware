@@ -382,10 +382,8 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	if (dda.flags.usePressureAdvance && shaper.GetK() > 0.0)
 	{
 		// We are using nonzero pressure advance. Movement must be forwards.
-		const float acceleration = dda.acceleration * (1.0/StepTimer::StepClockRateSquared);
-		const float deceleration = dda.deceleration * (1.0/StepTimer::StepClockRateSquared);
-		mp.cart.pressureAdvanceK = shaper.GetK() * StepTimer::StepClockRate;
-		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * acceleration * params.accelClocks;
+		mp.cart.pressureAdvanceK = shaper.GetK() * StepClockRate;
+		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * dda.acceleration * params.accelClocks;
 		forwardDistance += mp.cart.extraExtrusionDistance;
 
 		// Check if there is a reversal in the deceleration segment
@@ -403,12 +401,12 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		}
 		else
 		{
-			const float initialDecelSpeed = (dda.topSpeed * (1.0/StepTimer::StepClockRate)) - mp.cart.pressureAdvanceK * deceleration;
+			const float initialDecelSpeed = dda.topSpeed - mp.cart.pressureAdvanceK * dda.deceleration;
 			if (initialDecelSpeed <= 0.0)
 			{
 				// The entire deceleration segment is in reverse
 				forwardDistance += params.decelStartDistance;
-				reverseDistance = ((0.5 * deceleration * params.decelClocks) - initialDecelSpeed) * params.decelClocks;
+				reverseDistance = ((0.5 * dda.deceleration * params.decelClocks) - initialDecelSpeed) * params.decelClocks;
 			}
 			else
 			{
@@ -416,14 +414,14 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 				if (timeToReverse < params.decelClocks)
 				{
 					// There is a reversal
-					const float distanceToReverse = 0.5 * deceleration * fsquare(timeToReverse);
+					const float distanceToReverse = 0.5 * dda.deceleration * fsquare(timeToReverse);
 					forwardDistance += params.decelStartDistance + distanceToReverse;
-					reverseDistance = 0.5 * deceleration * fsquare(params.decelClocks - timeToReverse);
+					reverseDistance = 0.5 * dda.deceleration * fsquare(params.decelClocks - timeToReverse);
 				}
 				else
 				{
 					// No reversal
-					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * deceleration * params.decelClocks);
+					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * dda.deceleration * params.decelClocks);
 					reverseDistance = 0.0;
 				}
 			}

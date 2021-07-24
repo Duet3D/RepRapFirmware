@@ -839,7 +839,7 @@ void RepRap::Spin() noexcept
 
 void RepRap::Timing(MessageType mtype) noexcept
 {
-	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepTimer::StepClocksToMillis), (double)(fastLoop * StepTimer::StepClocksToMillis));
+	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
@@ -1356,7 +1356,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	AppendFloatArray(response, "extr", GetExtrudersInUse(), [this](size_t extruder) noexcept { return move->LiveCoordinate(ExtruderToLogicalDrive(extruder), currentTool); }, 1);
 
 	// Current speeds
-	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)GCodeBuffer::InverseConvertSpeedToMm(move->GetRequestedSpeed(), true), (double)GCodeBuffer::InverseConvertSpeedToMm(move->GetTopSpeed(), true));
+	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)InverseConvertSpeedToMmPerSec(move->GetRequestedSpeed()), (double)InverseConvertSpeedToMmPerSec(move->GetTopSpeed()));
 
 	// Current tool number
 	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());
@@ -1839,7 +1839,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	// Accelerations
 	response->cat(',');
-	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return GCodeBuffer::InverseConvertAcceleration(platform->Acceleration(drive)); }, 2);
+	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->Acceleration(drive)); }, 2);
 
 	// Motor currents
 	response->cat(',');
@@ -1886,11 +1886,11 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 	response->catf(",\"idleTimeout\":%.1f,", (double)(move->IdleTimeout()));
 
 	// Minimum feedrates
-	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return GCodeBuffer::InverseConvertSpeedToMm(platform->GetInstantDv(drive), true); }, 2);
+	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(platform->GetInstantDv(drive)); }, 2);
 
 	// Maximum feedrates
 	response->cat(',');
-	AppendFloatArray(response, "maxFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return GCodeBuffer::InverseConvertSpeedToMm(platform->MaxFeedrate(drive), true); }, 2);
+	AppendFloatArray(response, "maxFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(platform->MaxFeedrate(drive)); }, 2);
 
 	// Config file is no longer included, because we can use rr_configfile or M503 instead
 	response->cat('}');
