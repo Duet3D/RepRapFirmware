@@ -114,8 +114,8 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
 															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::live },
 # endif
-	{ "requestedSpeed",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMm(self->GetRequestedSpeed(), true), 1),					ObjectModelEntryFlags::live },
-	{ "topSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMm(self->GetTopSpeed(), true), 1),						ObjectModelEntryFlags::live },
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->GetRequestedSpeed()), 1),					ObjectModelEntryFlags::live },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->GetTopSpeed()), 1),						ObjectModelEntryFlags::live },
 
 	// 3. move.calibration members
 	{ "final",					OBJECT_MODEL_FUNC(self, 5),																		ObjectModelEntryFlags::none },
