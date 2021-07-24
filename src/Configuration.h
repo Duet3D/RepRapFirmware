@@ -293,7 +293,8 @@ constexpr size_t ObjectNamesStringSpace = 500;			// How much space we reserve fo
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
 constexpr float DefaultG0FeedRate = 18000;				// The initial feed rate for G0 commands after resetting the printer, in mm/min
-constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm
+constexpr float MinRetractSpeed = 60.0;					// The minimum firmware retraction/un-retraction speed in mm/min
+constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm/min
 constexpr float DefaultRetractLength = 2.0;
 
 constexpr float MaxArcDeviation = 0.005;				// maximum deviation from ideal arc due to segmentation

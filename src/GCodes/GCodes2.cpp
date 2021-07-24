@@ -2415,7 +2415,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							// The pipeline is empty, so execute the babystepping move immediately
 							SetMoveBufferDefaults();
-							moveBuffer.feedRate = DefaultFeedRate;
+							moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
 							moveBuffer.tool = reprap.GetCurrentTool();
 							NewMoveAvailable(1);
 						}

@@ -755,14 +755,16 @@ float GCodeBuffer::InverseConvertDistance(float distance) const noexcept
 	return (UsingInches()) ? distance/InchToMm : distance;
 }
 
+// Convert speed from mm/min or inches/min to mm per step clock
 float GCodeBuffer::ConvertSpeed(float speed) const noexcept
 {
-	return speed * ((UsingInches()) ? InchToMm/StepClockRate : 1.0/StepClockRate);
+	return speed * ((UsingInches()) ? InchToMm/(StepClockRate * iMinutesToSeconds) : 1.0/(StepClockRate * iMinutesToSeconds));
 }
 
+// Convert speed to mm/min or inches/min
 float GCodeBuffer::InverseConvertSpeed(float speed) const noexcept
 {
-	return speed * ((UsingInches()) ? StepClockRate/InchToMm : (float)StepClockRate);
+	return speed * ((UsingInches()) ? (StepClockRate * iMinutesToSeconds)/InchToMm : (float)(StepClockRate * iMinutesToSeconds));
 }
 
 const char *GCodeBuffer::GetDistanceUnits() const noexcept
