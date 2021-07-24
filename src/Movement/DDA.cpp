@@ -267,7 +267,7 @@ void DDA::DebugPrint(const char *tag) const noexcept
 	debugPrintf(" s=%f", (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
 	debugPrintf("\n"
-				"a=%f d=%f reqv=%f startv=%f topv=%f endv=%f cks=%" PRIu32 "\n",
+				"a=%.3e d=%.3e reqv=%.3e startv=%.3e topv=%.3e endv=%.3e cks=%" PRIu32 "\n",
 				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded);
 	for (const MoveSegment *segs = shapedSegments; segs != nullptr; segs = segs->GetNext())
 	{
