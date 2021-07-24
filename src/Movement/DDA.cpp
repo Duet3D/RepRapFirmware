@@ -1543,7 +1543,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						const int32_t rawSteps = lrintf(netMovement * stepsPerMm);					// we round here instead of truncating to match the old code
 						if (flags.usePressureAdvance)
 						{
-							netMovement += (endSpeed - startSpeed) * directionVector[drive] * shaper.GetK();
+							netMovement += (endSpeed - startSpeed) * directionVector[drive] * shaper.GetKclocks();
 						}
 						if (rawSteps != 0)
 						{

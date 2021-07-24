@@ -1061,7 +1061,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 #if SUPPORT_CAN_EXPANSION
 				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
 										{
-											extruderShapers[extruder].SetK(advance);
+											extruderShapers[extruder].SetKseconds(advance);
 											const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
 											if (did.IsRemote())
 											{
@@ -1117,7 +1117,7 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 							}
 							else
 							{
-								extruderShapers[driver].SetK(msg.values[count]);
+								extruderShapers[driver].SetKseconds(msg.values[count]);
 							}
 						}
 				   );
