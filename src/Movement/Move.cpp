@@ -167,7 +167,7 @@ Move::Move() noexcept
 #if SUPPORT_ASYNC_MOVES
 	  heightController(nullptr),
 #endif
-	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
+	  maxPrintingAcceleration(ConvertAcceleration(DefaultPrintingAcceleration)), maxTravelAcceleration(ConvertAcceleration(DefaultTravelAcceleration)),
 	  jerkPolicy(0),
 	  numCalibratedFactors(0)
 {

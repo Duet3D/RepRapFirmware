@@ -494,6 +494,7 @@ const AxesBitmap XyAxes = AxesBitmap::MakeLowestNBits(XY_AXES);
 
 // Common conversion factors
 constexpr float MinutesToSeconds = 60.0;
+constexpr uint32_t iMinutesToSeconds = 60;
 constexpr float SecondsToMinutes = 1.0/MinutesToSeconds;
 constexpr float SecondsToMillis = 1000.0;
 constexpr float MillisToSeconds = 0.001;
@@ -525,12 +526,12 @@ static inline constexpr float ConvertSpeedFromMmPerSec(float speed) noexcept
 
 static inline constexpr float ConvertSpeedFromMmPerMin(float speed) noexcept
 {
-	return speed * (MinutesToSeconds/StepClockRate);
+	return speed * (1.0/(StepClockRate * iMinutesToSeconds));
 }
 
 static inline constexpr float ConvertSpeedFromMm(float speed, bool useSeconds) noexcept
 {
-	return speed * ((useSeconds) ? 1.0/StepClockRate : MinutesToSeconds/StepClockRate);
+	return speed * ((useSeconds) ? 1.0/StepClockRate : 1.0/(StepClockRate * iMinutesToSeconds));
 }
 
 static inline constexpr float InverseConvertSpeedToMmPerSec(float speed) noexcept
@@ -540,12 +541,12 @@ static inline constexpr float InverseConvertSpeedToMmPerSec(float speed) noexcep
 
 static inline constexpr float InverseConvertSpeedToMmPerMin(float speed) noexcept
 {
-	return speed * (StepClockRate * SecondsToMinutes);
+	return speed * (StepClockRate * iMinutesToSeconds);
 }
 
 static inline constexpr float InverseConvertSpeedToMm(float speed, bool useSeconds) noexcept
 {
-	return speed * ((useSeconds) ? StepClockRate : StepClockRate * SecondsToMinutes);
+	return speed * ((useSeconds) ? StepClockRate : StepClockRate * iMinutesToSeconds);
 }
 
 static inline constexpr float ConvertAcceleration(float accel) noexcept
