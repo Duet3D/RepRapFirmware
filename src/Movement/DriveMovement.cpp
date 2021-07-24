@@ -67,8 +67,8 @@ void DriveMovement::DebugPrint() const noexcept
 		}
 		else if (isExtruder)
 		{
-			debugPrintf(" pa=%.1f eed=%.3f ep=%.3f\n",
-							(double)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance, (double)reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive)).GetK());
+			debugPrintf(" pa=%.1f eed=%.3f ep=%" PRIu32 "\n",
+							(double)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance, (uint32_t)reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive)).GetKclocks());
 		}
 		else
 		{
@@ -379,10 +379,10 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	float forwardDistance = distanceSoFar;
 	float reverseDistance;
 
-	if (dda.flags.usePressureAdvance && shaper.GetK() > 0.0)
+	if (dda.flags.usePressureAdvance && shaper.GetKclocks() > 0.0)
 	{
 		// We are using nonzero pressure advance. Movement must be forwards.
-		mp.cart.pressureAdvanceK = shaper.GetK() * StepClockRate;
+		mp.cart.pressureAdvanceK = shaper.GetKclocks();
 		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * dda.acceleration * params.accelClocks;
 		forwardDistance += mp.cart.extraExtrusionDistance;
 

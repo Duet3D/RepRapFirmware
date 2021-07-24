@@ -96,7 +96,7 @@ public:
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
 
-	float GetPressureAdvance(size_t extruder) const noexcept;
+	float GetPressureAdvanceClocks(size_t extruder) const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
@@ -337,9 +337,9 @@ inline void Move::ResetExtruderPositions() noexcept
 	mainDDARing.ResetExtruderPositions();
 }
 
-inline float Move::GetPressureAdvance(size_t extruder) const noexcept
+inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
 {
-	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetK() : 0.0;
+	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetKclocks() : 0.0;
 }
 
 #if HAS_SMART_DRIVERS

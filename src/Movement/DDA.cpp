@@ -388,11 +388,11 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationTime = reprap.GetMove().GetPressureAdvance(LogicalDriveToExtruder(drive));
-					if (compensationTime > 0.0)
+					const float compensationClocks = reprap.GetMove().GetPressureAdvanceClocks(LogicalDriveToExtruder(drive));
+					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().GetInstantDv(drive)/compensationTime);
+						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().GetInstantDv(drive)/compensationClocks);
 					}
 				}
 			}
