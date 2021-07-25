@@ -492,7 +492,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 		if (params.shapingPlan.shapeDecelStart || params.shapingPlan.shapeDecelEnd || params.shapingPlan.shapeDecelOverlapped)
 		{
 			const float speedDecrease = dda.topSpeed - dda.endSpeed;
-			params.decelClocks = 2 * (params.decelDistance - dda.topSpeed * params.decelClocks)/speedDecrease;
+			params.decelClocks = 2 * (dda.topSpeed * params.decelClocks - params.decelDistance)/speedDecrease;
 			params.decelDistance = (dda.topSpeed + dda.endSpeed) * params.decelClocks * 0.5;
 			params.decelStartDistance = dda.totalDistance - params.decelDistance;
 			dda.deceleration = speedDecrease/params.decelClocks;
