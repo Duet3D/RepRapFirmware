@@ -123,8 +123,8 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
-	accelClocks = ((dda.topSpeed - dda.startSpeed) * StepTimer::StepClockRate)/dda.acceleration;
-	decelClocks = ((dda.topSpeed - dda.endSpeed) * StepTimer::StepClockRate)/dda.deceleration;
+	accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
+	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
 
 #if SUPPORT_CAN_EXPANSION
 	initialSpeedFraction = dda.startSpeed/dda.topSpeed;
@@ -136,7 +136,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 void PrepParams::Finalise(DDA& dda) noexcept
 {
 	const float steadyDistance = decelStartDistance - accelDistance;
-	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : (steadyDistance * StepTimer::StepClockRate)/dda.topSpeed;
+	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : steadyDistance/dda.topSpeed;
 	dda.clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
 }
 
@@ -267,7 +267,7 @@ void DDA::DebugPrint(const char *tag) const noexcept
 	debugPrintf(" s=%f", (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
 	debugPrintf("\n"
-				"a=%f d=%f reqv=%f startv=%f topv=%f endv=%f cks=%" PRIu32 "\n",
+				"a=%.3e d=%.3e reqv=%.3e startv=%.3e topv=%.3e endv=%.3e cks=%" PRIu32 "\n",
 				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded);
 	for (const MoveSegment *segs = shapedSegments; segs != nullptr; segs = segs->GetNext())
 	{
@@ -388,11 +388,11 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationTime = reprap.GetMove().GetPressureAdvance(LogicalDriveToExtruder(drive));
-					if (compensationTime > 0.0)
+					const float compensationClocks = reprap.GetMove().GetPressureAdvanceClocks(LogicalDriveToExtruder(drive));
+					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().GetInstantDv(drive)/compensationTime);
+						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().GetInstantDv(drive)/compensationClocks);
 					}
 				}
 			}
@@ -700,16 +700,16 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	// Normalise the move to unit distance and convert time units from step clocks to seconds
 	totalDistance = 1.0;
 
-	topSpeed = (2.0 * StepTimer::StepClockRate)/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
+	topSpeed = 2.0/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
 	startSpeed = topSpeed * msg.initialSpeedFraction;
 	endSpeed = topSpeed * msg.finalSpeedFraction;
 
-	acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction) * StepTimer::StepClockRate)/msg.accelerationClocks;
-	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction) * StepTimer::StepClockRate)/msg.decelClocks;
+	acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction))/msg.accelerationClocks;
+	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction))/msg.decelClocks;
 
 	PrepParams params;
-	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks/(2 * StepTimer::StepClockRate);
-	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks/(2 * StepTimer::StepClockRate);
+	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
+	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
 	params.decelStartDistance = 1.0 - params.decelDistance;
 	params.accelClocks = msg.accelerationClocks;
 	params.steadyClocks = msg.steadyClocks;
@@ -1187,7 +1187,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 	const float totalTime = (topSpeed - startSpeed)/acceleration
 							+ (topSpeed - endSpeed)/deceleration
 							+ (totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance)/topSpeed;
-	clocksNeeded = (uint32_t)(totalTime * StepTimer::StepClockRate);
+	clocksNeeded = (uint32_t)totalTime;
 }
 
 // Decide what speed we would really like this move to end at.
@@ -1523,7 +1523,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						if (platform.GetExtrusionCoefficients(extruder, a, b, limit))
 						{
 							float& dv = directionVector[drive];
-							const float averageExtrusionSpeed = (totalDistance * dv * StepTimer::StepClockRate)/clocksNeeded;
+							const float averageExtrusionSpeed = (totalDistance * dv)/clocksNeeded;
 							const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
 							dv *= factor;
 						}
@@ -1543,7 +1543,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 						const int32_t rawSteps = lrintf(netMovement * stepsPerMm);					// we round here instead of truncating to match the old code
 						if (flags.usePressureAdvance)
 						{
-							netMovement += (endSpeed - startSpeed) * directionVector[drive] * shaper.GetK();
+							netMovement += (endSpeed - startSpeed) * directionVector[drive] * shaper.GetKclocks();
 						}
 						if (rawSteps != 0)
 						{
@@ -2249,8 +2249,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 		return LaserPwmIntervalMillis;
 	}
 
-	const float timeMoving = (float)clocksMoving * (1.0/(float)StepTimer::StepClockRate);
-	const float accelSpeed = startSpeed + acceleration * timeMoving;
+	const float accelSpeed = startSpeed + acceleration * clocksMoving;
 	if (accelSpeed < topSpeed)
 	{
 		// Acceleration phase
@@ -2260,7 +2259,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 	}
 
 	const uint32_t clocksLeft = clocksNeeded - clocksMoving;
-	const float decelSpeed = endSpeed + deceleration * (float)clocksLeft * (1.0/(float)StepTimer::StepClockRate);
+	const float decelSpeed = endSpeed + deceleration * clocksLeft;
 	if (decelSpeed < topSpeed)
 	{
 		// Deceleration phase
@@ -2271,13 +2270,13 @@ uint32_t DDA::ManageLaserPower() const noexcept
 
 	// We must be in the constant speed phase
 	platform.SetLaserPwm(laserPwmOrIoBits.laserPwm);
-	const uint32_t decelClocks = ((topSpeed - endSpeed)/deceleration) * StepTimer::StepClockRate;
+	const uint32_t decelClocks = (topSpeed - endSpeed)/deceleration;
 	if (clocksLeft <= decelClocks)
 	{
 		return LaserPwmIntervalMillis;
 	}
 	const uint32_t clocksToDecel = clocksLeft - decelClocks;
-	return lrintf((float)clocksToDecel * StepTimer::StepClocksToMillis) + LaserPwmIntervalMillis;
+	return lrintf((float)clocksToDecel * StepClocksToMillis) + LaserPwmIntervalMillis;
 }
 
 #endif

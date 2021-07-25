@@ -267,12 +267,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 20: // Inches (which century are we living in, here?)
-			gb.LatestMachineState().usingInches = true;
+			gb.UseInches(true);
 			reprap.InputsUpdated();
 			break;
 
 		case 21: // mm
-			gb.LatestMachineState().usingInches = false;
+			gb.UseInches(false);
 			reprap.InputsUpdated();
 			break;
 
@@ -2070,7 +2070,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							platform.SetAcceleration(axis, gb.GetDistance());
+							platform.SetAcceleration(axis, gb.GetAcceleration());
 							seen = true;
 						}
 					}
@@ -2083,7 +2083,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetAcceleration(ExtruderToLogicalDrive(e), gb.ConvertDistance(eVals[e]));
+							platform.SetAcceleration(ExtruderToLogicalDrive(e), ConvertAcceleration(eVals[e]));
 						}
 					}
 
@@ -2093,16 +2093,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-						reply.printf("Accelerations (mm/sec^2): ");
+						reply.copy("Accelerations (mm/sec^2): ");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)platform.Acceleration(axis));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Acceleration(axis)));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)platform.Acceleration(ExtruderToLogicalDrive(extruder)));
+							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Acceleration(ExtruderToLogicalDrive(extruder))));
 							sep = ':';
 						}
 					}
@@ -2113,14 +2113,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					// Units are mm/sec if S1 is given, else mm/min
 					const bool usingMmPerSec = (gb.Seen('S') && gb.GetIValue() == 1);
-					const float settingMultiplier = (usingMmPerSec) ? 1.0 : SecondsToMinutes;
 					bool seen = false;
 
 					// Do the minimum first, because we constrain the maximum rates to be no lower than it
 					if (gb.Seen('I'))
 					{
 						seen = true;
-						platform.SetMinMovementSpeed(gb.GetDistance() * settingMultiplier);
+						platform.SetMinMovementSpeed(gb.GetSpeedFromMm(usingMmPerSec));
 					}
 
 					for (size_t axis = 0; axis < numTotalAxes; ++axis)
@@ -2128,7 +2127,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (gb.Seen(axisLetters[axis]))
 						{
 							seen = true;
-							platform.SetMaxFeedrate(axis, gb.GetDistance() * settingMultiplier);
+							platform.SetMaxFeedrate(axis, gb.GetSpeedFromMm(usingMmPerSec));
 						}
 					}
 
@@ -2140,7 +2139,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetMaxFeedrate(ExtruderToLogicalDrive(e), gb.ConvertDistance(eVals[e]) * settingMultiplier);
+							platform.SetMaxFeedrate(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], usingMmPerSec));
 						}
 					}
 
@@ -2150,20 +2149,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-						const float reportingMultiplier = (usingMmPerSec) ? 1.0 : MinutesToSeconds;
-						reply.printf("Max speeds (mm/%s): ", (usingMmPerSec) ? "sec" : "min");
+						reply.printf("Max speeds (%s)): ", (usingMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) * reportingMultiplier));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(platform.MaxFeedrate(axis), usingMmPerSec));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)(platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)) * reportingMultiplier));
+							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)), usingMmPerSec));
 							sep = ':';
 						}
-						reply.catf(", min. speed %.2f", (double)(platform.MinMovementSpeed() * reportingMultiplier));
+						reply.catf(", min. speed %.2f", (double)InverseConvertSpeedToMm(platform.MinMovementSpeed(), usingMmPerSec));
 					}
 				}
 				break;
@@ -2248,7 +2246,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (!seen)
 					{
-						reply.copy("Axis limit");
+						reply.copy("Axis limits (mm)");
 						char sep = 's';
 						for (size_t axis = 0; axis < numTotalAxes; axis++)
 						{
@@ -2417,7 +2415,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							// The pipeline is empty, so execute the babystepping move immediately
 							SetMoveBufferDefaults();
-							moveBuffer.feedRate = DefaultFeedRate;
+							moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
 							moveBuffer.tool = reprap.GetCurrentTool();
 							NewMoveAvailable(1);
 						}
@@ -3281,13 +3279,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 205: // Set/print maximum jerk speeds in mm/sec
 			case 566: // Set/print maximum jerk speeds in mm/min
 				{
-					const float multiplier1 = (code == 566) ? SecondsToMinutes : 1.0;
+					const bool useMmPerSec = (code == 205);
 					bool seenAxis = false, seenExtruder = false;
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							platform.SetInstantDv(axis, gb.GetDistance() * multiplier1);
+							platform.SetInstantDv(axis, gb.GetSpeedFromMm(useMmPerSec));
 							seenAxis = true;
 						}
 					}
@@ -3300,7 +3298,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetInstantDv(ExtruderToLogicalDrive(e), eVals[e] * multiplier1);
+							platform.SetInstantDv(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], useMmPerSec));
 						}
 					}
 
@@ -3316,17 +3314,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else if (!seenExtruder)
 					{
-						const float multiplier2 = (code == 566) ? MinutesToSeconds : 1.0;
-						reply.printf("Maximum jerk rates (mm/%s): ", (code == 566) ? "min" : "sec");
+						reply.printf("Maximum jerk rates (%s): ", (useMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.GetInstantDv(axis) * multiplier2));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(platform.GetInstantDv(axis), useMmPerSec));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)(platform.GetInstantDv(ExtruderToLogicalDrive(extruder)) * multiplier2));
+							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(platform.GetInstantDv(ExtruderToLogicalDrive(extruder)), useMmPerSec));
 							sep = ':';
 						}
 						if (code == 566)
@@ -3965,8 +3962,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// Get the feedrate (if any) and kick off a new move
 						if (gb.Seen(feedrateLetter))
 						{
-							const float rate = gb.ConvertDistance(gb.GetFValue());
-							gb.LatestMachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor
+							gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor
 						}
 						moveBuffer.feedRate = gb.LatestMachineState().feedRate;
 						moveBuffer.usingStandardFeedrate = true;

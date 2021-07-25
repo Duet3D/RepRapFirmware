@@ -100,8 +100,14 @@ private:
 	uint32_t stepInterval;								// how many clocks between steps
 
 	float distanceSoFar;
+#if DM_USE_FPU
 	float timeSoFar;
 	float pA, pB, pC;
+#else
+	uint32_t iTimeSoFar;
+	int64_t ipA;
+	int32_t ipB, ipC;
+#endif
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union
@@ -109,11 +115,11 @@ private:
 		struct DeltaParameters							// Parameters for delta movement
 		{
 			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
-#if DM_USE_FPU
 			float fTwoA;
 			float fTwoB;
-			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
 			float h0MinusZ0;							// the height subtended by the rod at the start of the move
+#if DM_USE_FPU
+			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
 			float fHmz0s;								// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
 			float fMinusAaPlusBbTimesS;
 			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
@@ -132,8 +138,6 @@ private:
 			float extraExtrusionDistance;				// the extra extrusion distance in the acceleration phase
 		} cart;
 	} mp;
-
-	static constexpr uint32_t NoStepTime = 0xFFFFFFFF;	// value to indicate that no further steps are needed when calculating the next step time
 
 #if !DM_USE_FPU
 	static constexpr uint32_t K1 = 1024;				// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors

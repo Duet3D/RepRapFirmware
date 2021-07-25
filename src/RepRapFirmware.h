@@ -494,6 +494,7 @@ const AxesBitmap XyAxes = AxesBitmap::MakeLowestNBits(XY_AXES);
 
 // Common conversion factors
 constexpr float MinutesToSeconds = 60.0;
+constexpr uint32_t iMinutesToSeconds = 60;
 constexpr float SecondsToMinutes = 1.0/MinutesToSeconds;
 constexpr float SecondsToMillis = 1000.0;
 constexpr float MillisToSeconds = 0.001;
@@ -502,6 +503,61 @@ constexpr float Pi = 3.141592653589793;
 constexpr float TwoPi = 3.141592653589793 * 2;
 constexpr float DegreesToRadians = 3.141592653589793/180.0;
 constexpr float RadiansToDegrees = 180.0/3.141592653589793;
+
+// The step clock is used for timing step pulses and oyther fine-resolution timer purposes
+
+#if SAME70 || SAME5x
+// All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
+constexpr uint32_t StepClockRate = 48000000/64;								// 750kHz
+#elif defined(__LPC17xx__)
+constexpr uint32_t StepClockRate = 1000000;									// 1MHz
+#else
+constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
+#endif
+
+constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
+constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
+
+// Functions to convert speeds and accelerations between seconds and step clocks
+static inline constexpr float ConvertSpeedFromMmPerSec(float speed) noexcept
+{
+	return speed * 1.0/StepClockRate;
+}
+
+static inline constexpr float ConvertSpeedFromMmPerMin(float speed) noexcept
+{
+	return speed * (1.0/(StepClockRate * iMinutesToSeconds));
+}
+
+static inline constexpr float ConvertSpeedFromMm(float speed, bool useSeconds) noexcept
+{
+	return speed * ((useSeconds) ? 1.0/StepClockRate : 1.0/(StepClockRate * iMinutesToSeconds));
+}
+
+static inline constexpr float InverseConvertSpeedToMmPerSec(float speed) noexcept
+{
+	return speed * StepClockRate;
+}
+
+static inline constexpr float InverseConvertSpeedToMmPerMin(float speed) noexcept
+{
+	return speed * (StepClockRate * iMinutesToSeconds);
+}
+
+static inline constexpr float InverseConvertSpeedToMm(float speed, bool useSeconds) noexcept
+{
+	return speed * ((useSeconds) ? StepClockRate : StepClockRate * iMinutesToSeconds);
+}
+
+static inline constexpr float ConvertAcceleration(float accel) noexcept
+{
+	return accel * (1.0/StepClockRateSquared);
+}
+
+static inline constexpr float InverseConvertAcceleration(float accel) noexcept
+{
+	return accel * StepClockRateSquared;
+}
 
 constexpr unsigned int MaxFloatDigitsDisplayedAfterPoint = 7;
 const char *GetFloatFormatString(unsigned int numDigitsAfterPoint) noexcept;

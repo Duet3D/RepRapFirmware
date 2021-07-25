@@ -212,7 +212,7 @@ bool DDARing::CanAddMove() const noexcept
 				prevMoveTime = dda->GetClocksNeeded();
 			}
 
-			return (unPreparedTime < StepTimer::StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepTimer::StepClockRate);
+			return (unPreparedTime < StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepClockRate);
 	 }
 	 return false;
 }
@@ -266,7 +266,7 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
 	if (simulationMode != 0 && cdda != nullptr)
 	{
-		simulationTime += (float)cdda->GetClocksNeeded()/StepTimer::StepClockRate;
+		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
 		cdda->Complete();
 		CurrentMoveCompleted();
 		cdda = currentDda;

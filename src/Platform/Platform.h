@@ -460,7 +460,7 @@ public:
 	const float* MaxFeedrates() const noexcept { return maxFeedrates; }
 	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
 	float MinMovementSpeed() const noexcept { return minimumMovementSpeed; }
-	void SetMinMovementSpeed(float value) noexcept { minimumMovementSpeed = max<float>(value, 0.01); }
+	void SetMinMovementSpeed(float value) noexcept;
 	float GetInstantDv(size_t axis) const noexcept;
 	void SetInstantDv(size_t axis, float value) noexcept;
 	float AxisMaximum(size_t axis) const noexcept;
@@ -709,10 +709,10 @@ private:
 	uint16_t microstepping[MaxAxesPlusExtruders];			// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
 	volatile DriverStatus driverState[MaxAxesPlusExtruders];
-	float maxFeedrates[MaxAxesPlusExtruders];
-	float accelerations[MaxAxesPlusExtruders];
+	float maxFeedrates[MaxAxesPlusExtruders];				// max feed rates in mm per step clock
+	float accelerations[MaxAxesPlusExtruders];				// max accelerations in mm per step clock squared
 	float driveStepsPerUnit[MaxAxesPlusExtruders];
-	float instantDvs[MaxAxesPlusExtruders];
+	float instantDvs[MaxAxesPlusExtruders];					// max jerk in mm per step clock
 	uint32_t driveDriverBits[MaxAxesPlusExtruders + NumDirectDrivers];
 															// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
@@ -732,7 +732,7 @@ private:
 	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
 	uint32_t steppingEnabledDriversBitmap;					// mask of driver bits that we haven't disabled temporarily
 	float idleCurrentFactor;
-	float minimumMovementSpeed;
+	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock
 
 #if HAS_SMART_DRIVERS
 	size_t numSmartDrivers;									// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
@@ -917,7 +917,7 @@ inline const float* Platform::Accelerations() const noexcept
 
 inline void Platform::SetAcceleration(size_t drive, float value) noexcept
 {
-	accelerations[drive] = max<float>(value, 1.0);		// don't allow zero or negative
+	accelerations[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
 }
 
 inline float Platform::MaxFeedrate(size_t drive) const noexcept
@@ -927,17 +927,22 @@ inline float Platform::MaxFeedrate(size_t drive) const noexcept
 
 inline void Platform::SetMaxFeedrate(size_t drive, float value) noexcept
 {
-	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);	// don't allow zero or negative, but do allow small values
+	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);						// don't allow zero or negative, but do allow small values
+}
+
+inline void Platform::SetInstantDv(size_t drive, float value) noexcept
+{
+	instantDvs[drive] = max<float>(value, ConvertSpeedFromMmPerSec(MinimumJerk));		// don't allow zero or negative values, they causes Move to loop indefinitely
+}
+
+inline void Platform::SetMinMovementSpeed(float value) noexcept
+{
+	minimumMovementSpeed = max<float>(value, ConvertSpeedFromMmPerSec(AbsoluteMinFeedrate));
 }
 
 inline float Platform::GetInstantDv(size_t drive) const noexcept
 {
 	return instantDvs[drive];
-}
-
-inline void Platform::SetInstantDv(size_t drive, float value) noexcept
-{
-	instantDvs[drive] = max<float>(value, 0.1);			// don't allow zero or negative values, they causes Move to loop indefinitely
 }
 
 inline size_t Platform::GetNumActualDirectDrivers() const noexcept

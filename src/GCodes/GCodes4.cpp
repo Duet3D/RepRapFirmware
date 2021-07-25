@@ -399,8 +399,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			SetMoveBufferDefaults();
 			currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-			moveBuffer.feedRate = DefaultFeedRate * SecondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
-			moveBuffer.tool = reprap.GetCurrentTool();					// needed so that bed compensation is applied correctly
+			moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
+			moveBuffer.tool = reprap.GetCurrentTool();							// needed so that bed compensation is applied correctly
 			NewMoveAvailable(1);
 			gb.AdvanceState();
 		}
@@ -511,8 +511,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			SetMoveBufferDefaults();
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-			moveBuffer.feedRate = DefaultFeedRate * SecondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
-			moveBuffer.tool = reprap.GetCurrentTool();					// needed so that bed compensation is applied correctly
+			moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
+			moveBuffer.tool = reprap.GetCurrentTool();							// needed so that bed compensation is applied correctly
 			if (gb.GetState() == GCodeState::resuming1 && currentZ > pauseRestorePoint.moveCoords[Z_AXIS])
 			{
 				// First move the head to the correct XY point, then move it down in a separate move
