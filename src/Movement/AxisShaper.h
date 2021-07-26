@@ -52,17 +52,17 @@ protected:
 private:
 	MoveSegment *GetAccelerationSegments(const DDA& dda, const PrepParams& params) const noexcept;
 	MoveSegment *GetDecelerationSegments(const DDA& dda, const PrepParams& params) const noexcept;
-	MoveSegment *FinishSegments(const DDA& dda, const PrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
-	float GetExtraAccelStartDistance(const DDA& dda) const noexcept;
-	float GetExtraAccelEndDistance(const DDA& dda) const noexcept;
-	float GetExtraDecelStartDistance(const DDA& dda) const noexcept;
-	float GetExtraDecelEndDistance(const DDA& dda) const noexcept;
-	void TryShapeAccelStart(const DDA& dda, PrepParams& params) const noexcept;
+	MoveSegment *FinishShapedSegments(const DDA& dda, const PrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
+	float GetExtraAccelStartDistance(float startSpeed, float acceleration) const noexcept;
+	float GetExtraAccelEndDistance(float topSpeed, float acceleration) const noexcept;
+	float GetExtraDecelStartDistance(float topSpeed, float deceleration) const noexcept;
+	float GetExtraDecelEndDistance(float endSpeed, float deceleration) const noexcept;
 	void TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noexcept;
 	void TryShapeAccelBoth(DDA& dda, PrepParams& params) const noexcept;
 	void TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeDecelEnd(const DDA& dda, PrepParams& params) const noexcept;
 	void TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept;
+	bool ImplementAccelShaping(const DDA& dda, PrepParams& params, float newAccelDistance, float newAccelClocks) const noexcept;
+	bool ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelDistance, float newDecelClocks) const noexcept;
 
 	static constexpr unsigned int MaxExtraImpulses = 4;
 	static constexpr float DefaultFrequency = 40.0;

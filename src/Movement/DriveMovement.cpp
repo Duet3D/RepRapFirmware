@@ -58,16 +58,16 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%.3e B=%.3e C=%.3e",
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%.4e B=%.4e C=%.4e",
 						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, phaseStepLimit, (double)pA, (double)pB, (double)pC);
 		if (isDelta)
 		{
-			debugPrintf(" hmz0s=%.2f minusAaPlusBbTimesS=%.2f dSquaredMinusAsquaredMinusBsquared=%.2f drev=%.3f\n",
+			debugPrintf(" hmz0s=%.4e minusAaPlusBbTimesS=%.4e dSquaredMinusAsquaredMinusBsquared=%.4e drev=%.4e\n",
 							(double)mp.delta.fHmz0s, (double)mp.delta.fMinusAaPlusBbTimesS, (double)mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared, (double)mp.delta.reverseStartDistance);
 		}
 		else if (isExtruder)
 		{
-			debugPrintf(" pa=%" PRIu32 " eed=%.3f\n", (uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance);
+			debugPrintf(" pa=%" PRIu32 " eed=%.4e ebf=%.4e\n", (uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance, (double)mp.cart.extrusionBroughtForwards);
 		}
 		else
 		{
@@ -367,12 +367,12 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 // We have already generated the extruder segments and we know that there are some
 bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) noexcept
 {
-	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
-	distanceSoFar = shaper.GetExtrusionPending()/dda.directionVector[drive];
-
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
 	mp.cart.effectiveStepsPerMm = stepsPerMm * fabsf(dda.directionVector[drive]);
 	mp.cart.effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
+
+	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
+	mp.cart.extrusionBroughtForwards = distanceSoFar = shaper.GetExtrusionPending()/dda.directionVector[drive];
 
 	// Calculate the total forward and reverse movement distances
 	float forwardDistance = distanceSoFar;
@@ -382,7 +382,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	{
 		// We are using nonzero pressure advance. Movement must be forwards.
 		mp.cart.pressureAdvanceK = shaper.GetKclocks();
-		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * dda.acceleration * params.accelClocks;
+		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * params.unshaped.acceleration * params.unshaped.accelClocks;
 		forwardDistance += mp.cart.extraExtrusionDistance;
 
 		// Check if there is a reversal in the deceleration segment
@@ -400,27 +400,27 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		}
 		else
 		{
-			const float initialDecelSpeed = dda.topSpeed - mp.cart.pressureAdvanceK * dda.deceleration;
+			const float initialDecelSpeed = dda.topSpeed - mp.cart.pressureAdvanceK * params.unshaped.deceleration;
 			if (initialDecelSpeed <= 0.0)
 			{
 				// The entire deceleration segment is in reverse
-				forwardDistance += params.decelStartDistance;
-				reverseDistance = ((0.5 * dda.deceleration * params.decelClocks) - initialDecelSpeed) * params.decelClocks;
+				forwardDistance += params.unshaped.decelStartDistance;
+				reverseDistance = ((0.5 * params.unshaped.deceleration * params.unshaped.decelClocks) - initialDecelSpeed) * params.unshaped.decelClocks;
 			}
 			else
 			{
 				const float timeToReverse = initialDecelSpeed * ((-0.5) * decelSeg->GetC());	// 'c' is -2/deceleration, so -0.5*c is 1/deceleration
-				if (timeToReverse < params.decelClocks)
+				if (timeToReverse < params.unshaped.decelClocks)
 				{
 					// There is a reversal
-					const float distanceToReverse = 0.5 * dda.deceleration * fsquare(timeToReverse);
-					forwardDistance += params.decelStartDistance + distanceToReverse;
-					reverseDistance = 0.5 * dda.deceleration * fsquare(params.decelClocks - timeToReverse);
+					const float distanceToReverse = 0.5 * params.unshaped.deceleration * fsquare(timeToReverse);
+					forwardDistance += params.unshaped.decelStartDistance + distanceToReverse;
+					reverseDistance = 0.5 * params.unshaped.deceleration * fsquare(params.unshaped.decelClocks - timeToReverse);
 				}
 				else
 				{
 					// No reversal
-					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * dda.deceleration * params.decelClocks);
+					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * params.unshaped.deceleration * params.unshaped.decelClocks);
 					reverseDistance = 0.0;
 				}
 			}
@@ -629,6 +629,26 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		return false;
 	}
 
+	if (nextCalcStepTime > dda.clocksNeeded)
+	{
+		// The calculation makes this step late.
+		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
+		// So if this is the last step and it is late, bring it forward to the expected finish time.
+		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
+		if (nextStep + stepsTillRecalc + 1 >= totalSteps)
+		{
+			nextCalcStepTime = dda.clocksNeeded;
+		}
+		else
+		{
+			// We don't expect any step except the last to be late
+			state = DMState::stepError;
+			nextStep += 120000000 + stepsTillRecalc;		// so we can tell what happened in the debug print
+			stepInterval = nextCalcStepTime;				//DEBUG
+			return false;
+		}
+	}
+
 	// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
 	stepInterval = (nextCalcStepTime > nextStepTime)
 					? (nextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
@@ -638,26 +658,6 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 #else
 	nextStepTime = nextCalcStepTime;
 #endif
-
-	if (nextCalcStepTime > dda.clocksNeeded)
-	{
-		// The calculation makes this step late.
-		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
-		// So if this is the last step and it is late, bring it forward to the expected finish time.
-		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
-		if (nextStep + 1 >= totalSteps)
-		{
-			nextStepTime = dda.clocksNeeded;
-		}
-		else
-		{
-			// We don't expect any step except the last to be late
-			state = DMState::stepError;
-			nextStep += 120000000;							// so we can tell what happened in the debug print
-			stepInterval = nextCalcStepTime;	//DEBUG
-			return false;
-		}
-	}
 
 	return true;
 }

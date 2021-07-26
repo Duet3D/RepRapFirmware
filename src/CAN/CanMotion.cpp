@@ -89,9 +89,9 @@ CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexce
 		if (buf->next == nullptr)
 		{
 			// This is the first CAN-connected board for this movement
-			move->accelerationClocks = (uint32_t)params.accelClocks;
-			move->steadyClocks = (uint32_t)params.steadyClocks;
-			move->decelClocks = (uint32_t)params.decelClocks;
+			move->accelerationClocks = (uint32_t)params.unshaped.accelClocks;
+			move->steadyClocks = (uint32_t)params.unshaped.steadyClocks;
+			move->decelClocks = (uint32_t)params.unshaped.decelClocks;
 			currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
 		}
 		else

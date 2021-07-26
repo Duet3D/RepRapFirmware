@@ -118,13 +118,15 @@ void DDA::LogProbePosition() noexcept
 // Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
-	decelDistance = dda.beforePrepare.decelDistance;
-	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+	unshaped.decelDistance = dda.beforePrepare.decelDistance;
+	unshaped.decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
-	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
-	accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
-	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
+	unshaped.accelDistance = min<float>(dda.beforePrepare.accelDistance, unshaped.decelStartDistance);
+	unshaped.acceleration = dda.acceleration;
+	unshaped.deceleration = dda.deceleration;
+	unshaped.accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
+	unshaped.decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
 
 #if SUPPORT_CAN_EXPANSION
 	initialSpeedFraction = dda.startSpeed/dda.topSpeed;
@@ -133,11 +135,10 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 }
 
 // Calculate the steady clocks and set the total clocks in the DDA
-void PrepParams::Finalise(DDA& dda) noexcept
+void PrepParams::PrepParamSet::Finalise(float topSpeed) noexcept
 {
 	const float steadyDistance = decelStartDistance - accelDistance;
-	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : steadyDistance/dda.topSpeed;
-	dda.clocksNeeded = (uint32_t)(accelClocks + decelClocks + steadyClocks);
+	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : steadyDistance/topSpeed;
 }
 
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
@@ -264,11 +265,10 @@ void DDA::DebugPrint(const char *tag) const noexcept
 		DebugPrintVector(" end", endCoordinates, numAxes);
 	}
 
-	debugPrintf(" s=%f", (double)totalDistance);
+	debugPrintf(" s=%.4e", (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
-	debugPrintf("\n"
-				"a=%.3e d=%.3e reqv=%.3e startv=%.3e topv=%.3e endv=%.3e cks=%" PRIu32 "\n",
-				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded);
+	debugPrintf("\n" "a=%.4e d=%.4e reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
+				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
 	for (const MoveSegment *segs = shapedSegments; segs != nullptr; segs = segs->GetNext())
 	{
 		segs->DebugPrint('S');
@@ -708,12 +708,12 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction))/msg.decelClocks;
 
 	PrepParams params;
-	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
-	params.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
-	params.decelStartDistance = 1.0 - params.decelDistance;
-	params.accelClocks = msg.accelerationClocks;
-	params.steadyClocks = msg.steadyClocks;
-	params.decelClocks = msg.decelClocks;
+	params.unshaped.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
+	params.unshaped.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
+	params.unshaped.decelStartDistance = 1.0 - params.unshaped.decelDistance;
+	params.unshaped.accelClocks = msg.accelerationClocks;
+	params.unshaped.steadyClocks = msg.steadyClocks;
+	params.unshaped.decelClocks = msg.decelClocks;
 
 	shapedSegments = unshapedSegments = nullptr;
 	activeDMs = completedDMs = nullptr;
@@ -1297,13 +1297,19 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
 	if (flags.xyMoving)
 	{
-		reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);		// this will set up shapedSegments if we are doing any shaping
+		reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);	// this will set up shapedSegments if we are doing any shaping
 	}
 	else
 	{
 		params.SetFromDDA(*this);
-		params.Finalise(*this);
+		params.unshaped.Finalise(topSpeed);
+		clocksNeeded = params.unshaped.TotalClocks();
 	}
+
+	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
+	//TODO change ManageLaserPower to work on the shaped segments instead
+	acceleration = params.unshaped.acceleration;
+	deceleration = params.unshaped.deceleration;
 
 	if (simMode == 0)
 	{

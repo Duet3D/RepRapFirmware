@@ -27,12 +27,24 @@ class DDARing;
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
-	// Parameters used for all types of motion
-	float accelDistance;
-	float decelDistance;
-	float decelStartDistance;
-	float accelClocks, steadyClocks, decelClocks;
+	struct PrepParamSet
+	{
+		float accelDistance;
+		float decelDistance;
+		float decelStartDistance;
+		float accelClocks, steadyClocks, decelClocks;
+		float acceleration, deceleration;
 
+		// Calculate the steady clocks and set the total clocks in the DDA
+		void Finalise(float topSpeed) noexcept;
+
+		// Get the total clocks needed
+		float TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
+	};
+
+	// Parameters used for all types of motion
+	PrepParamSet unshaped;
+	PrepParamSet shaped;								// only valid if the shaping plan is not empty
 	InputShaperPlan shapingPlan;
 
 #if SUPPORT_CAN_EXPANSION
@@ -51,9 +63,6 @@ struct PrepParams
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 	void SetFromDDA(const DDA& dda) noexcept;
-
-	// Calculate the steady clocks and set the total clocks in the DDA
-	void Finalise(DDA& dda) noexcept;
 };
 
 // This defines a single coordinated movement of one or several motors
