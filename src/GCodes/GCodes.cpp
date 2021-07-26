@@ -2816,10 +2816,32 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 
 #if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE
 	gb.LatestMachineState().doingFileMacro = true;
-	gb.LatestMachineState().runningM501 = (codeRunning == 501);
-	gb.LatestMachineState().runningM502 = (codeRunning == 502);
-	gb.LatestMachineState().runningSystemMacro = (codeRunning == SystemHelperMacroCode || codeRunning == AsyncSystemMacroCode || codeRunning == 29 || codeRunning == 32);
-																		// running a system macro e.g. homing, so don't use workplace coordinates
+
+	// The following three flags need to be inherited in the case that a system macro calls another macro, e.g.homeall.g calls homez.g. The Push call copied them over already.
+	switch (codeRunning)
+	{
+	case 501:
+		gb.LatestMachineState().runningM501 = true;
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	case 502:
+		gb.LatestMachineState().runningM502 = true;
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	case SystemHelperMacroCode:
+	case AsyncSystemMacroCode:
+	case ToolChangeMacroCode:
+	case 29:
+	case 32:
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	default:
+		break;
+	}
+
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 
