@@ -497,6 +497,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 			params.decelStartDistance = dda.totalDistance - params.decelDistance;
 			dda.deceleration = speedDecrease/params.decelClocks;
 		}
+		params.steadyClocks = max<float>(dda.clocksNeeded - params.accelClocks - params.decelClocks, 0.0);
 	}
 	else
 	{
@@ -504,26 +505,6 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 	}
 
 //	debugPrintf(" final plan %03x\n", (unsigned int)params.shapingPlan.all);
-}
-
-// Try to shape the start of the acceleration. We already know that there is sufficient acceleration time to do this, but we still need to check that there is enough distance.
-void AxisShaper::TryShapeAccelStart(const DDA& dda, PrepParams& params) const noexcept
-{
-	const float extraAccelDistance = GetExtraAccelStartDistance(dda);
-	if (params.accelDistance + extraAccelDistance <= params.decelStartDistance)
-	{
-		params.shapingPlan.shapeAccelStart = true;
-		params.accelDistance += extraAccelDistance;
-		params.accelClocks += extraClocksAtStart;
-	}
-	else
-	{
-		// Not enough constant speed time to the acceleration shaping
-		if (reprap.Debug(Module::moduleDda))
-		{
-			debugPrintf("Can't shape accel start\n");
-		}
-	}
 }
 
 // Try to shape the end of the acceleration. We already know that there is sufficient acceleration time to do this, but we still need to check that there is enough distance.
@@ -582,8 +563,15 @@ void AxisShaper::TryShapeAccelBoth(DDA& dda, PrepParams& params) const noexcept
 			params.accelDistance = newAccelDistance;
 			params.accelClocks = minimumNonOverlappedOriginalClocks;
 		}
-		TryShapeAccelStart(dda, params);
-		TryShapeAccelEnd(dda, params);
+
+		// Only perform shaping if we can shape both the start and end of acceleration, otherwise we may not be able to generate a corresponding unshaped move because it might require negative steady distance
+		const float extraAccelDistance = GetExtraAccelStartDistance(dda) + GetExtraAccelEndDistance(dda);
+		if (params.accelDistance + extraAccelDistance <= params.decelStartDistance)
+		{
+			params.shapingPlan.shapeAccelStart = params.shapingPlan.shapeAccelEnd = true;
+			params.accelDistance += extraAccelDistance;
+			params.accelClocks += extraClocksAtStart + extraClocksAtEnd;
+		}
 	}
 }
 
@@ -604,27 +592,6 @@ void AxisShaper::TryShapeDecelStart(const DDA& dda, PrepParams& params) const no
 		if (reprap.Debug(Module::moduleDda))
 		{
 			debugPrintf("Can't shape decel start\n");
-		}
-	}
-}
-
-// Try to shape the end of the deceleration. We already know that there is sufficient deceleration time to do this, but we still need to check that there is enough distance.
-void AxisShaper::TryShapeDecelEnd(const DDA& dda, PrepParams& params) const noexcept
-{
-	float extraDecelDistance = GetExtraDecelEndDistance(dda);
-	if (params.accelDistance + extraDecelDistance <= params.decelStartDistance)
-	{
-		params.shapingPlan.shapeDecelEnd = true;
-		params.decelStartDistance -= extraDecelDistance;
-		params.decelDistance += extraDecelDistance;
-		params.decelClocks += extraClocksAtEnd;
-	}
-	else
-	{
-		// Not enough constant speed time to do deceleration shaping
-		if (reprap.Debug(Module::moduleDda))
-		{
-			debugPrintf("Can't shape decel and\n");
 		}
 	}
 }
@@ -668,8 +635,16 @@ void AxisShaper::TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept
 			params.decelStartDistance = newDecelStartDistance;
 			params.decelClocks = overlappedShapingClocks;
 		}
-		TryShapeDecelStart(dda, params);
-		TryShapeDecelEnd(dda, params);
+
+		// Only perform shaping if we can shape both the start and end of deceleration, otherwise we may not be able to generate a corresponding unshaped move because it might require negative steady distance
+		const float extraDecelDistance = GetExtraDecelStartDistance(dda) + GetExtraDecelEndDistance(dda);
+		if (params.accelDistance + extraDecelDistance <= params.decelStartDistance)
+		{
+			params.shapingPlan.shapeDecelStart = params.shapingPlan.shapeDecelEnd = true;
+			params.decelStartDistance -= extraDecelDistance;
+			params.decelDistance += extraDecelDistance;
+			params.decelClocks += extraClocksAtStart + extraClocksAtEnd;
+		}
 	}
 }
 
