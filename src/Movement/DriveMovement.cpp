@@ -67,8 +67,8 @@ void DriveMovement::DebugPrint() const noexcept
 		}
 		else if (isExtruder)
 		{
-			debugPrintf(" pa=%.1f eed=%.3f ep=%" PRIu32 "\n",
-							(double)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance, (uint32_t)reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive)).GetKclocks());
+			debugPrintf(" pa=%" PRIu32 " eed=%.3f\n",
+							(uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance);
 		}
 		else
 		{

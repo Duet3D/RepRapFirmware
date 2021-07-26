@@ -24,8 +24,8 @@ public:
 
 	// Temporary functions until we support more sophisticated pressure advance
 	float GetKclocks() const noexcept { return k; }								// get pressure advance in step clocks
-	float GetKseconds() const noexcept { return k * StepClockRate; }
-	void SetKseconds(float val) noexcept { k = val * (1.0/StepClockRate); }		// set pressure advance in seconds
+	float GetKseconds() const noexcept { return k * (1.0/StepClockRate); }
+	void SetKseconds(float val) noexcept { k = val * StepClockRate; }			// set pressure advance in seconds
 	float GetExtrusionPending() const noexcept { return extrusionPending; }
 	void SetExtrusionPending(float ep) noexcept { extrusionPending = ep; }
 
