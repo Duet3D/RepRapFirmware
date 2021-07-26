@@ -67,8 +67,7 @@ void DriveMovement::DebugPrint() const noexcept
 		}
 		else if (isExtruder)
 		{
-			debugPrintf(" pa=%" PRIu32 " eed=%.3f\n",
-							(uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance);
+			debugPrintf(" pa=%" PRIu32 " eed=%.3f\n", (uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance);
 		}
 		else
 		{
