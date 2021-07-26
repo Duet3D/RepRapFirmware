@@ -52,8 +52,6 @@
 
 Task<Move::MoveTaskStackWords> Move::moveTask;
 
-constexpr uint32_t MoveTimeout = 20;					// normal timeout in milliseconds when the Move process is waiting for a new move
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -303,7 +301,7 @@ void Move::Exit() noexcept
 		}
 
 		// Let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		mainDDARing.Spin(simulationMode, !canAddMove || millis() - idleStartTime >= mainDDARing.GetGracePeriod());
+		uint32_t nextPrepareDelay = mainDDARing.Spin(simulationMode, !canAddMove || millis() - idleStartTime >= mainDDARing.GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 		if (auxMoveAvailable && auxDDARing.CanAddMove())
@@ -314,7 +312,11 @@ void Move::Exit() noexcept
 			}
 			auxMoveAvailable = false;
 		}
-		auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
+		const uint32_t auxPrepareDelay = auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
+		if (auxPrepareDelay < nextPrepareDelay)
+		{
+			nextPrepareDelay = auxPrepareDelay;
+		}
 #endif
 
 		// Reduce motor current to standby if the rings have been idle for long enough
@@ -344,7 +346,7 @@ void Move::Exit() noexcept
 
 		if (!moveRead)
 		{
-			TaskBase::Take(MoveTimeout);
+			TaskBase::Take(nextPrepareDelay);
 		}
 	}
 }
