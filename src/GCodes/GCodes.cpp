@@ -287,6 +287,10 @@ void GCodes::Reset() noexcept
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	fileOffsetToPrint = 0;
+	restartMoveFractionDone = 0.0;
+#endif
 #if HAS_LINUX_INTERFACE
 	lastFilePosition = noFilePosition;
 #endif
@@ -1001,7 +1005,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	if (simulationMode == 0)
 	{
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
@@ -1172,6 +1176,14 @@ bool GCodes::DoEmergencyPause() noexcept
 #endif
 	}
 
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface() && pauseRestorePoint.filePos == noFilePosition)
+	{
+		// Use the last known print file position if the current one is unknown (e.g. because a macro file is being executed)
+		pauseRestorePoint.filePos = lastFilePosition;
+	}
+#endif
+
 	codeQueue->PurgeEntries();
 
 	// Replace the paused machine coordinates by user coordinates, which we updated earlier
@@ -1322,16 +1334,10 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		return;			// we can't yet save to the Pi
-	}
-#endif
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
 	if (printingFilename != nullptr)
 	{
@@ -3247,8 +3253,6 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 	if (f != nullptr)
 	{
 		fileToPrint.Set(f);
-		fileOffsetToPrint = 0;
-		restartMoveFractionDone = 0.0;
 		return true;
 	}
 
@@ -3260,6 +3264,9 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 // Start printing the file already selected. We must hold the movement lock and wait for all moves to finish before calling this, because of the call to ResetMoveCounters.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
+	fileOffsetToPrint = 0;
+	restartMoveFractionDone = 0.0;
+
 	buildObjects.Init();
 	reprap.GetMove().ResetMoveCounters();
 
@@ -4198,13 +4205,8 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
-#if HAS_MASS_STORAGE
-		if (   reason == StopPrintReason::normalCompletion
-			&& simulationMode == 0
-# if HAS_LINUX_INTERFACE
-			&& !reprap.UsingLinuxInterface()
-# endif
-		   )
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 		}

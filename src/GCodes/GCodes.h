@@ -77,11 +77,12 @@ enum class StopPrintReason
 
 enum class PauseState : uint8_t
 {
-	// Do not change the order of these! We rely on notPaused < pausing < { paused, resuming}
+	// Do not change the order of these! We rely on notPaused < pausing < { paused, resuming, cancelling }
 	notPaused = 0,
 	pausing,
 	paused,
-	resuming
+	resuming,
+	cancelling
 };
 
 struct M585Settings
@@ -400,7 +401,7 @@ private:
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute) THROWS(GCodeException);	// Set workspace coordinates
-# if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteWorkplaceCoordinates(FileStore *f) const noexcept;
 # endif
 #endif
@@ -482,7 +483,7 @@ private:
 	void EndSimulation(GCodeBuffer *gb) noexcept;								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const noexcept;										// Return true if the code queue is idle
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
 #endif
 
@@ -597,6 +598,8 @@ private:
 
 #if HAS_MASS_STORAGE
 	FileData fileToPrint;						// The next file to print
+#endif
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FilePosition fileOffsetToPrint;				// The offset to print from
 #endif
 

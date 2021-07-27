@@ -1576,13 +1576,18 @@ bool DataTransfer::WriteCheckFileExists(const char *filename) noexcept
 {
 	// Check if it fits
 	size_t filenameLength = strlen(filename);
-	if (!CanWritePacket(filenameLength))
+	if (!CanWritePacket(sizeof(StringHeader) + filenameLength))
 	{
 		return false;
 	}
 
 	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::CheckFileExists, filenameLength);
+	(void)WritePacketHeader(FirmwareRequest::CheckFileExists, sizeof(StringHeader) + filenameLength);
+
+	// Write header
+	StringHeader *header = WriteDataHeader<StringHeader>();
+	header->length = filenameLength;
+	header->padding = 0;
 
 	// Write filename
 	WriteData(filename, filenameLength);

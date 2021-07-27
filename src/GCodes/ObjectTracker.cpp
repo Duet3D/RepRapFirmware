@@ -265,7 +265,7 @@ void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
 	}
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Write the object details to file, returning true if successful
 bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
@@ -303,7 +303,7 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 	if (ok)
 	{
 		String<StringLength20> buf;
-		buf.printf("M486 S%d", currentObjectNumber);
+		buf.printf("M486 S%d\n", currentObjectNumber);
 		ok = f->Write(buf.c_str());
 	}
 

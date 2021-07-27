@@ -2502,21 +2502,22 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (gCodes->GetPauseState() == PauseState::pausing)			? 4		// Pausing
 			: (gCodes->GetPauseState() == PauseState::resuming)			? 5		// Resuming
 			: (gCodes->GetPauseState() == PauseState::paused)			? 6		// Paused
+			: (gCodes->GetPauseState() == PauseState::cancelling)		? 7		// Paused
 			: (printMonitor->IsPrinting())
-			  	  ? ((gCodes->IsSimulating())							? 7		// Simulating
-			: 														  	  8		// Printing
+			  	  ? ((gCodes->IsSimulating())							? 8		// Simulating
+			: 														  	  9		// Printing
 			  	  	)
-			: (gCodes->IsDoingToolChange())								? 9		// Changing tool
+			: (gCodes->IsDoingToolChange())								? 10		// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
-			   gCodes->WaitingForAcknowledgement()) 					? 10	// Busy
-			:															  11;	// Idle
+			   gCodes->WaitingForAcknowledgement()) 					? 11	// Busy
+			:															  12;	// Idle
 
 }
 
 // Get the status character for the new-style status response
 char RepRap::GetStatusCharacter() const noexcept
 {
-	return "CFHODRSMPTBI"[GetStatusIndex()];
+	return "CFHODRSAMPTBI"[GetStatusIndex()];
 }
 
 const char* RepRap::GetStatusString() const noexcept
@@ -2530,6 +2531,7 @@ const char* RepRap::GetStatusString() const noexcept
 		"pausing",
 		"resuming",
 		"paused",
+		"cancelling",
 		"simulating",
 		"processing",
 		"changingTool",
@@ -2631,7 +2633,7 @@ GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& 
 	return rslt;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix

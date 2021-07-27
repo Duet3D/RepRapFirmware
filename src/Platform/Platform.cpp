@@ -2435,6 +2435,12 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #endif
 		break;
 
+#if HAS_VOLTAGE_MONITOR
+	case (unsigned int)DiagnosticTestType::UndervoltageEvent:
+		reprap.GetGCodes().LowVoltagePause();
+		break;
+#endif
+
 #ifdef DUET_NG
 	case (unsigned int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());
@@ -4028,10 +4034,6 @@ bool Platform::FileExists(const char* folder, const char *filename) const noexce
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
 
-#endif
-
-#if HAS_MASS_STORAGE
-
 // Return a pointer to a string holding the directory where the system files are. Lock the sysdir lock before calling this.
 const char* Platform::InternalGetSysDir() const noexcept
 {
@@ -4042,12 +4044,6 @@ bool Platform::Delete(const char* folder, const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
-}
-
-bool Platform::DirectoryExists(const char *folder, const char *dir) const noexcept
-{
-	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, dir) && MassStorage::DirectoryExists(location.c_str());
 }
 
 // Set the system files path

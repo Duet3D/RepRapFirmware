@@ -274,8 +274,8 @@ void LinuxInterface::Spin() noexcept
 					break;
 				}
 
-				// Print has been started, set file print info
-				case LinuxRequest::PrintStarted:
+				// Print is about to be started, set file print info
+				case LinuxRequest::SetPrintFileInfo:
 				{
 					String<MaxFilenameLength> filename;
 					transfer.ReadPrintStartedInfo(packet->length, filename.GetRef(), fileInfo);

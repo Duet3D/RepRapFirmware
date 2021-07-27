@@ -184,6 +184,7 @@ enum class DiagnosticTestType : unsigned int
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
+	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
 
 #ifdef __LPC17xx__
 	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
@@ -395,10 +396,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool FileExists(const char* folder, const char *filename) const noexcept;
-#endif
-#if HAS_MASS_STORAGE
 	bool Delete(const char* folder, const char *filename) const noexcept;
-	bool DirectoryExists(const char *folder, const char *dir) const noexcept;
 
 	const char* GetWebDir() const noexcept; 					// Where the html etc files are
 	const char* GetGCodeDir() const noexcept; 					// Where the gcodes are
@@ -810,7 +808,7 @@ private:
 #endif
 
 	// Files
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	const char *sysDir;
 	mutable ReadWriteLock sysDirLock;
 #endif

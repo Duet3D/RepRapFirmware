@@ -534,6 +534,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 						}
 
+						pauseState = PauseState::cancelling;
 						const bool leaveHeatersOn = (gb.Seen('H') && gb.GetIValue() > 0);
 						gb.SetState((leaveHeatersOn) ? GCodeState::stoppingWithHeatersOn : GCodeState::stoppingWithHeatersOff);
 						(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemHelperMacroCode);
@@ -903,8 +904,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 						}
 					}
-#if HAS_MASS_STORAGE
-					else if (!fileToPrint.IsLive())
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+					else if (
+# if HAS_MASS_STORAGE
+								!fileToPrint.IsLive()
+# else
+								true
+# endif
+# if HAS_LINUX_INTERFACE
+								&& !reprap.UsingLinuxInterface()
+# endif
+							)
 					{
 						reply.copy("Cannot print, because no file is selected!");
 						result = GCodeResult::error;
@@ -926,7 +936,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								// We executed M26 to set the file offset, which normally means that we are executing resurrect.g.
 								// We need to copy the absolute/relative and volumetric extrusion flags over
 								fileGCode->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
-								fileToPrint.Seek(fileOffsetToPrint);
+# if HAS_LINUX_INTERFACE
+								if (!reprap.UsingLinuxInterface())
+# endif
+# if HAS_MASS_STORAGE
+								{
+									fileToPrint.Seek(fileOffsetToPrint);
+								}
+# endif
 								moveFractionToSkip = restartMoveFractionDone;
 							}
 							StartPrinting(fromStart);
@@ -1012,7 +1029,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 26: // Set SD position
 				// This is used between executing M23 to set up the file to print, and M25 to print it
 				gb.MustSee('S');
@@ -1026,7 +1043,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					restartInitialUserC1 = (gb.Seen(c1)) ? gb.GetFValue() : 0.0;
 				}
 				break;
+#endif
 
+#if HAS_MASS_STORAGE
 			case 27: // Report print status - Deprecated
 				if (reprap.GetPrintMonitor().IsPrinting())
 				{
@@ -4379,7 +4398,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 916:
 				if (!platform.SysFileExists(RESUME_AFTER_POWER_FAIL_G))
 				{
