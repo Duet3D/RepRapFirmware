@@ -618,6 +618,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::stoppingWithHeatersOn:		// M0 H1 or M1 H1 after executing stop.g/sleep.g if present
 		if (LockMovementAndWaitForStandstill(gb))
 		{
+			pauseState = PauseState::notPaused;
 			platform.SetDriversIdle();
 			gb.SetState(GCodeState::normal);
 		}
@@ -1421,7 +1422,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		else
 		{
-# if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			SaveResumeInfo(true);											// create the resume file so that we can resume after power down
 # endif
 			platform.Message(LoggedGenericMessage, "Print auto-paused due to low voltage\n");

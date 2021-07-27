@@ -161,7 +161,7 @@ public:
 	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept;
 	void ClearAlert() noexcept;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteToolSettings(FileStore *f) noexcept;						// save some information for the resume file
 	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noexcept;	// save some information in config-override.g
 #endif

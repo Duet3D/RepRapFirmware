@@ -785,7 +785,7 @@ void LinearDeltaKinematics::PrintParameters(const StringRef& reply) const noexce
 		(double)(xTilt * 100.0), (double)(yTilt * 100.0));
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Write the parameters that are set by auto calibration to a file, returning true if success
 bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const noexcept
@@ -813,6 +813,7 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 	}
 	return ok;
 }
+
 
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
 bool LinearDeltaKinematics::WriteResumeSettings(FileStore *f) const noexcept

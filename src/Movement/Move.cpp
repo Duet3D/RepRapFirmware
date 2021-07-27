@@ -953,7 +953,7 @@ void Move::SetIdleTimeout(float timeout) noexcept
 	reprap.MoveUpdated();
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Write settings for resuming the print
 // The GCodes module deals with the head position so all we need worry about is the bed compensation
