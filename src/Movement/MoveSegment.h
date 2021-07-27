@@ -91,7 +91,7 @@
  *
  * When starting a new axis segment we calculate actual coefficients A' B' C' as follows (Dprev is the distance limit of the previous segment, i.e. total length of previous moves):
  * For accel/decel segments:
- *   A' = B^2 + C*Dprev
+ *   A' = B^2 - C*Dprev
  *   B' = B + ts
  *   C' = C * 1/(f*m)
  * (for axis segments we could instead include ts in B, but we can't do that for common extruder segments, see later)

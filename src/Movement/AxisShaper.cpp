@@ -576,35 +576,11 @@ bool AxisShaper::ImplementAccelShaping(const DDA& dda, PrepParams& params, float
 	return false;
 }
 
-// Check whether we can implement acceleration shaping using the proposed parameters; if so then implement it and return true; else return false with nothing changed
-bool AxisShaper::ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelDistance, float newDecelClocks) const noexcept
-{
-	if (params.shaped.accelDistance + newDecelDistance <= dda.totalDistance)
-	{
-		const float speedDecrease = dda.topSpeed - dda.endSpeed;
-		const float unshapedDecelClocks = 2 * (dda.topSpeed * newDecelClocks - newDecelDistance)/speedDecrease;
-		const float unshapedDecelDistance = (dda.topSpeed + dda.endSpeed) * unshapedDecelClocks * 0.5;
-		if (params.unshaped.accelDistance + unshapedDecelDistance <= dda.totalDistance)
-		{
-			params.shaped.decelDistance = newDecelDistance;
-			params.shaped.decelStartDistance = dda.totalDistance - newDecelDistance;
-			params.shaped.decelClocks = newDecelClocks;
-			params.unshaped.decelClocks = unshapedDecelClocks;
-			params.unshaped.decelDistance = unshapedDecelDistance;
-			params.unshaped.decelStartDistance = dda.totalDistance - unshapedDecelDistance;
-			params.unshaped.deceleration = speedDecrease/unshapedDecelClocks;
-			return true;
-		}
-	}
-
-	return false;
-}
-
 // Try to shape the start of the deceleration. We already know that there is sufficient deceleration time to do this, but we still need to check that there is enough distance.
 void AxisShaper::TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept
 {
 	const float extraDecelDistance = GetExtraDecelStartDistance(dda.topSpeed, params.unshaped.deceleration);
-	if (ImplementDecelShaping(dda, params, params.unshaped.accelDistance + extraDecelDistance, params.unshaped.decelClocks + extraClocksAtStart))
+	if (ImplementDecelShaping(dda, params, params.unshaped.decelDistance + extraDecelDistance, params.unshaped.decelClocks + extraClocksAtStart))
 	{
 		params.shapingPlan.shapeDecelStart = true;
 	}
@@ -660,6 +636,30 @@ void AxisShaper::TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept
 			}
 		}
 	}
+}
+
+// Check whether we can implement acceleration shaping using the proposed parameters; if so then implement it and return true; else return false with nothing changed
+bool AxisShaper::ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelDistance, float newDecelClocks) const noexcept
+{
+	if (params.shaped.accelDistance + newDecelDistance <= dda.totalDistance)
+	{
+		const float speedDecrease = dda.topSpeed - dda.endSpeed;
+		const float unshapedDecelClocks = 2 * (dda.topSpeed * newDecelClocks - newDecelDistance)/speedDecrease;
+		const float unshapedDecelDistance = (dda.topSpeed + dda.endSpeed) * unshapedDecelClocks * 0.5;
+		if (params.unshaped.accelDistance + unshapedDecelDistance <= dda.totalDistance)
+		{
+			params.shaped.decelDistance = newDecelDistance;
+			params.shaped.decelStartDistance = dda.totalDistance - newDecelDistance;
+			params.shaped.decelClocks = newDecelClocks;
+			params.unshaped.decelClocks = unshapedDecelClocks;
+			params.unshaped.decelDistance = unshapedDecelDistance;
+			params.unshaped.decelStartDistance = dda.totalDistance - unshapedDecelDistance;
+			params.unshaped.deceleration = speedDecrease/unshapedDecelClocks;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // If there is an acceleration phase, generate the acceleration segments according to the plan, and set the number of acceleration segments in the plan
