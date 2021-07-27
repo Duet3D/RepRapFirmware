@@ -520,8 +520,8 @@ void AxisShaper::TryShapeAccelBoth(DDA& dda, PrepParams& params) const noexcept
 			return;
 		}
 
-		const float newAccelDistnce = (dda.startSpeed * overlappedShapingClocks) + (newAcceleration * overlappedDistancePerA);
-		if (ImplementAccelShaping(dda, params, newAccelDistnce, overlappedShapingClocks))
+		const float newAccelDistance = (dda.startSpeed * overlappedShapingClocks) + (newAcceleration * overlappedDistancePerA);
+		if (ImplementAccelShaping(dda, params, newAccelDistance, overlappedShapingClocks))
 		{
 			params.shapingPlan.shapeAccelOverlapped = true;
 			params.shaped.acceleration = newAcceleration;
@@ -562,7 +562,7 @@ bool AxisShaper::ImplementAccelShaping(const DDA& dda, PrepParams& params, float
 		const float speedIncrease = dda.topSpeed - dda.startSpeed;
 		const float unshapedAccelClocks = 2 * (dda.topSpeed * newAccelClocks - newAccelDistance)/speedIncrease;
 		const float unshapedAccelDistance = (dda.startSpeed + dda.topSpeed) * unshapedAccelClocks * 0.5;
-		if (unshapedAccelDistance <= params.shaped.decelStartDistance)
+		if (unshapedAccelDistance <= params.unshaped.decelStartDistance)
 		{
 			params.shaped.accelDistance = newAccelDistance;
 			params.shaped.accelClocks = newAccelClocks;
