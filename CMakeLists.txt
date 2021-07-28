@@ -41,9 +41,10 @@ set ( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static --specs=nosys.sp
 message( "LD_FLAGS:" ${CMAKE_EXE_LINKER_FLAGS} )
 
 
-project( reprap VERSION 3.4 )
-set( CMAKE_PROJECT_DESCRIPTION "This is RepRap Firmware" )
-set( CMAKE_PROJECT_HOMEPAGE_URL "https://github.com/Duet3D/RepRapFirmware" )
+project( reprap
+	DESCRIPTION "This is RepRap Firmware"
+	HOMEPAGE_URL "https://github.com/Duet3D/RepRapFirmware"
+)
 
 add_subdirectory( lib/FreeRTOS )
 add_subdirectory( lib/libCAN )
