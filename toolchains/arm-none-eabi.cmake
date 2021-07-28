@@ -67,18 +67,19 @@ set( CMAKE_OBJCOPY      ${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/${CROSS_COMPILE}objc
 set( CMAKE_OBJDUMP      ${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/${CROSS_COMPILE}objdump
      CACHE FILEPATH "The toolchain objdump command " FORCE )
 
-# Set the common build flags
+# -Wextra -Wundef -Wdouble-promotion -fexceptions -nostdlib
+set ( COMMON_FLAGS "-O2 -g -DNDEBUG -ffunction-sections -fdata-sections -fsingle-precision-constant -Wall" )
 
-# Set the CMAKE C flags ( which should also be used by the assembler!
-set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --param max-inline-insns-single=500 -mlong-calls -ffunction-sections -fdata-sections -fno-exceptions -fsingle-precision-constant -Wall -Wextra -Wundef -Wdouble-promotion -Wno-expansion-to-defined")
+# -Wno-expansion-to-defined -Werror=return-type -Wsuggest-override
+set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=gnu++17 -fno-threadsafe-statics -fno-rtti" )
+set( CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS}" )
+#set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -std=gnu99 --param max-inline-insns-single=500 -mlong-calls -ffunction-sections -fdata-sections -fno-exceptions -fsingle-precision-constant -Wall -Wextra -Wundef -Wdouble-promotion")
+#set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -std=gnu99 -Dnoexcept=")
+set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -std=gnu99 -Dnoexcept=")
 
-set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" CACHE STRING "" )
-set( CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fno-threadsafe-statics -fno-rtti" CACHE STRING "" )
-set( CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS}" CACHE STRING "" )
-
+message( "ASM_FLAGS: " ${CMAKE_ASM_FLAGS} )
 message( "C_FLAGS: " ${CMAKE_C_FLAGS} )
 message( "CXX_FLAGS: " ${CMAKE_CXX_FLAGS} )
-message( "ASM_FLAGS: " ${CMAKE_ASM_FLAGS} )
 
 set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}" )
 message( "LD_FLAGS: " ${CMAKE_EXE_LINKER_FLAGS} )
