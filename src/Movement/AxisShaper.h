@@ -50,8 +50,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	MoveSegment *GetAccelerationSegments(const DDA& dda, const PrepParams& params) const noexcept;
-	MoveSegment *GetDecelerationSegments(const DDA& dda, const PrepParams& params) const noexcept;
+	MoveSegment *GetAccelerationSegments(const DDA& dda, PrepParams& params) const noexcept;
+	MoveSegment *GetDecelerationSegments(const DDA& dda, PrepParams& params) const noexcept;
 	MoveSegment *FinishShapedSegments(const DDA& dda, const PrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
 	float GetExtraAccelStartDistance(float startSpeed, float acceleration) const noexcept;
 	float GetExtraAccelEndDistance(float topSpeed, float acceleration) const noexcept;
@@ -62,7 +62,7 @@ private:
 	void TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept;
 	void TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept;
 	bool ImplementAccelShaping(const DDA& dda, PrepParams& params, float newAccelDistance, float newAccelClocks) const noexcept;
-	bool ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelDistance, float newDecelClocks) const noexcept;
+	bool ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelStartDistance, float newDecelClocks) const noexcept;
 
 	static constexpr unsigned int MaxExtraImpulses = 4;
 	static constexpr float DefaultFrequency = 40.0;

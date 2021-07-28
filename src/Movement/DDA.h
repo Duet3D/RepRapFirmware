@@ -30,7 +30,6 @@ struct PrepParams
 	struct PrepParamSet
 	{
 		float accelDistance;
-		float decelDistance;
 		float decelStartDistance;
 		float accelClocks, steadyClocks, decelClocks;
 		float acceleration, deceleration;

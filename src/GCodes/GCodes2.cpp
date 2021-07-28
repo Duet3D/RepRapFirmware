@@ -3694,10 +3694,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 593: // Configure dynamic ringing cancellation
-				if (!LockMovementAndWaitForStandstill(gb))
-				{
-					return false;
-				}
 				result = reprap.GetMove().GetAxisShaper().Configure(gb, reply);
 				break;
 

@@ -118,7 +118,6 @@ void DDA::LogProbePosition() noexcept
 // Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
-	unshaped.decelDistance = dda.beforePrepare.decelDistance;
 	unshaped.decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
@@ -709,8 +708,8 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 	PrepParams params;
 	params.unshaped.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
-	params.unshaped.decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
-	params.unshaped.decelStartDistance = 1.0 - params.unshaped.decelDistance;
+	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
+	params.unshaped.decelStartDistance = 1.0 - decelDistance;
 	params.unshaped.accelClocks = msg.accelerationClocks;
 	params.unshaped.steadyClocks = msg.steadyClocks;
 	params.unshaped.decelClocks = msg.decelClocks;
@@ -1620,7 +1619,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 		}
 #endif
 
-		if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))		// show the prepared DDA if debug enabled for both modules
+		if (reprap.Debug(moduleMove) && (reprap.Debug(moduleDda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
 		{
 			DebugPrintAll("pr");
 		}

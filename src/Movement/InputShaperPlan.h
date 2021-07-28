@@ -19,7 +19,8 @@ union InputShaperPlan
 				 shapeAccelOverlapped : 1,
 				 shapeDecelStart : 1,
 				 shapeDecelEnd : 1,
-				 shapeDecelOverlapped : 1;
+				 shapeDecelOverlapped : 1,
+				 debugPrint : 1;
 	};
 	uint32_t all;
 
