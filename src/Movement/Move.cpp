@@ -407,14 +407,7 @@ bool Move::IsRawMotorMove(uint8_t moveType) const noexcept
 // Return true if the specified point is accessible to the Z probe
 bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
-	const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(reprap.GetGCodes().GetCurrentZProbeNumber());
-	if (zp.IsNotNull())
-	{
-		axes.Iterate([axesCoords, &zp](unsigned int axis, unsigned int) {
-			axesCoords[axis] -= zp->GetOffset(axis);
-		});
-	}
-	return kinematics->IsReachable(axesCoords, axes, false);
+	return kinematics->IsReachable(axesCoords, axes);
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.

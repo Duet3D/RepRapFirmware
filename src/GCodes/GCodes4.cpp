@@ -640,14 +640,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				axes.SetBit(axis0Num);
 				axes.SetBit(axis1Num);
 				float axesCoords[MaxAxes];
-				axesCoords[axis0Num] = axis0Coord;
-				axesCoords[axis1Num] = axis1Coord;
+				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				axesCoords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
+				axesCoords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
 				if (move.IsAccessibleProbePoint(axesCoords, axes))
 				{
 					SetMoveBufferDefaults();
-					const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-					moveBuffer.coords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
-					moveBuffer.coords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
+					moveBuffer.coords[axis0Num] = axesCoords[axis0Num];
+					moveBuffer.coords[axis1Num] = axesCoords[axis1Num];
 					moveBuffer.coords[Z_AXIS] = zp->GetStartingHeight();
 					moveBuffer.feedRate = zp->GetTravelSpeed();
 					NewMoveAvailable(1);

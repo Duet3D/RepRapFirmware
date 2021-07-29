@@ -15,7 +15,7 @@
 class RoundBedKinematics : public Kinematics
 {
 public:
-	bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept override;
+	bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
 	AxesBitmap GetLinearAxes() const noexcept override;
 protected:
