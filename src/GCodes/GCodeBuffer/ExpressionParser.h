@@ -26,7 +26,7 @@ public:
 	uint32_t ParseUnsigned() THROWS(GCodeException);
 
 	void SkipWhiteSpace() noexcept;
-	void CheckForExtraCharacters() THROWS(GCodeException);
+	void CheckForExtraCharacters(bool isArrayExpression = false) THROWS(GCodeException);
 	const char *GetEndptr() const noexcept { return currentp; }
 
 private:

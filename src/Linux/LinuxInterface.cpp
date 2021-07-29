@@ -39,6 +39,7 @@ constexpr size_t SBCTaskStackWords = 1000;			// debug builds use more stack
 #else
 constexpr size_t SBCTaskStackWords = 820;
 #endif
+constexpr uint32_t LinuxYieldTimeout = 10;
 
 static Task<SBCTaskStackWords> *sbcTask;
 
@@ -49,7 +50,7 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 
 LinuxInterface::LinuxInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0),
 	maxDelayBetweenTransfers(SpiTransferDelay), numMaxEvents(SpiEventsRequired), delaying(false), numEvents(0),
-	reportPause(false), reportPauseWritten(false), printStarted(false), printStopped(false),
+	reportPause(false), reportPauseWritten(false), printStopped(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), iapWritePointer(IAP_IMAGE_START),
 	waitingForFileChunk(false), fileMutex(), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false)
 #ifdef TRACK_FILE_CODES
@@ -94,12 +95,12 @@ void LinuxInterface::Spin() noexcept
 
 [[noreturn]] void LinuxInterface::TaskLoop() noexcept
 {
-	transfer.SetSBCTask(sbcTask);
+	transfer.InitFromTask();
 	transfer.StartNextTransfer();
-	bool writingIap = false, hadReset = false, skipNextDelay = false;
+
+	bool writingIap = false, isReady = false, hadReset = false, skipNextDelay = false;
 	for (;;)
 	{
-		bool isReady = false;
 		if (hadReset)
 		{
 			isReady = true;
@@ -109,6 +110,10 @@ void LinuxInterface::Spin() noexcept
 		{
 			isReady = true;
 			hadReset = isConnected && transfer.LinuxHadReset();
+		}
+		else
+		{
+			isReady = false;
 		}
 
 		if (isReady && !hadReset)
@@ -280,7 +285,6 @@ void LinuxInterface::Spin() noexcept
 					String<MaxFilenameLength> filename;
 					transfer.ReadPrintStartedInfo(packet->length, filename.GetRef(), fileInfo);
 					reprap.GetPrintMonitor().SetPrintingFileInfo(filename.c_str(), fileInfo);
-					printStarted = true;
 					break;
 				}
 
@@ -292,7 +296,7 @@ void LinuxInterface::Spin() noexcept
 					{
 						// Just mark the print file as finished
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
-						MutexLocker locker(gb->mutex, 10);
+						MutexLocker locker(gb->mutex, LinuxYieldTimeout);
 						if (locker)
 						{
 							gb->SetPrintFinished();
@@ -330,7 +334,7 @@ void LinuxInterface::Spin() noexcept
 						}
 						else
 						{
-							MutexLocker locker(gb->mutex, 10);
+							MutexLocker locker(gb->mutex, LinuxYieldTimeout);
 							if (locker)
 							{
 								if (error)
@@ -408,7 +412,7 @@ void LinuxInterface::Spin() noexcept
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-						MutexLocker locker(gb->mutex, 10);
+						MutexLocker locker(gb->mutex, LinuxYieldTimeout);
 						if (locker && reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
 						{
 							transfer.WriteLocked(channel);
@@ -432,7 +436,7 @@ void LinuxInterface::Spin() noexcept
 					if (channel.IsValid())
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-						MutexLocker locker(gb->mutex, 10);
+						MutexLocker locker(gb->mutex, LinuxYieldTimeout);
 						if (locker)
 						{
 							reprap.GetGCodes().UnlockAll(*gb);
@@ -523,7 +527,7 @@ void LinuxInterface::Spin() noexcept
 						try
 						{
 							// Evaluate the expression and send the result to DSF
-							MutexLocker lock(gb->mutex, 10);
+							MutexLocker lock(gb->mutex, LinuxYieldTimeout);
 							if (lock)
 							{
 								ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
@@ -620,7 +624,7 @@ void LinuxInterface::Spin() noexcept
 							gb->ResolveMacroRequest(true, false);
 						}
 
-						MutexLocker locker(gb->mutex, 10);
+						MutexLocker locker(gb->mutex, LinuxYieldTimeout);
 						if (locker)
 						{
 							// Note that we do not call StopPrint here or set any other variables; DSF already does that
@@ -654,7 +658,7 @@ void LinuxInterface::Spin() noexcept
 					}
 
 					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-					MutexLocker lock(gb->mutex, 10);
+					MutexLocker lock(gb->mutex, LinuxYieldTimeout);
 					if (!lock)
 					{
 						packetAcknowledged = false;
@@ -734,7 +738,7 @@ void LinuxInterface::Spin() noexcept
 					}
 
 					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-					MutexLocker lock(gb->mutex, 10);
+					MutexLocker lock(gb->mutex, LinuxYieldTimeout);
 					if (!lock)
 					{
 						packetAcknowledged = false;
@@ -865,8 +869,6 @@ void LinuxInterface::Spin() noexcept
 			if (!writingIap && !skipNextDelay && numEvents < numMaxEvents && !waitingForFileChunk &&
 				!fileOperationPending && (fileOperation != FileOperation::write || numFileWriteRequests == 0))
 			{
-				TaskBase::ClearNotifyCount();
-
 				delaying = true;
 				if (!TaskBase::Take(maxDelayBetweenTransfers))
 				{
@@ -901,7 +903,7 @@ void LinuxInterface::Spin() noexcept
 				sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
 			}
 
-			if (!writingIap)					// it's not safe to access GCodes once we have started writing the IAP
+			if (!writingIap)					// it's not safe to access other resources once we have started writing the IAP
 			{
 				// Get another chunk of the file being requested
 				if (waitingForFileChunk &&
@@ -1010,7 +1012,7 @@ void LinuxInterface::Spin() noexcept
 					// Deal with other requests unless we are still waiting in a semaphore
 					if (!gb->IsWaitingForMacro())
 					{
-						MutexLocker gbLock(gb->mutex, 10);
+						MutexLocker gbLock(gb->mutex, LinuxYieldTimeout);
 						if (gbLock)
 						{
 							if (gb->GetChannel() != GCodeChannel::Daemon)
@@ -1080,7 +1082,7 @@ void LinuxInterface::Spin() noexcept
 				if (reportPause)
 				{
 					GCodeBuffer * const fileGCode = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
-					MutexLocker locker(fileGCode->mutex, 10);
+					MutexLocker locker(fileGCode->mutex, LinuxYieldTimeout);
 					if (locker && transfer.WritePrintPaused(pauseFilePosition, pauseReason))
 					{
 						fileGCode->Invalidate();
@@ -1157,7 +1159,7 @@ void LinuxInterface::Spin() noexcept
 			if (hadReset)
 			{
 				// Let the main task invalidate resources
-				RTOSIface::Yield();
+				TaskBase::Take(LinuxYieldTimeout);
 			}
 			else
 			{
@@ -1168,6 +1170,11 @@ void LinuxInterface::Spin() noexcept
 		else if (!writingIap)
 		{
 			// A transfer is being performed but it has not finished yet
+			TaskBase::Take(LinuxYieldTimeout);
+		}
+		else
+		{
+			// IAP binary is being written, only keep equal or higher priority tasks running
 			RTOSIface::Yield();
 		}
 	}

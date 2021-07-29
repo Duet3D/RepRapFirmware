@@ -1170,7 +1170,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 		CanId id;
 		id.SetReceivedId(lastCancelledId);
 		lastCancelledId = 0;
-		str.catf(" last cancelled message type %u dest %u\n", (unsigned int)id.MsgType(), id.Dst());
+		str.catf(" last cancelled message type %u dest %u", (unsigned int)id.MsgType(), id.Dst());
 	}
 
 	reprap.GetPlatform().MessageF(mtype, "Tx timeouts%s\n", str.c_str());

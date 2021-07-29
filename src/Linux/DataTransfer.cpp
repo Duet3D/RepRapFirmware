@@ -304,7 +304,7 @@ pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 
 	// Enable SPI and notify the SBC we are ready
 #if SAME5x
-	SbcSpiSercom->SPI.INTFLAG.reg = 0xFF;			// clear any pending interrupts
+	SbcSpiSercom->SPI.INTFLAG.reg = 0xFF;						// clear any pending interrupts
 	SbcSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_SSL;	// enable the start of transfer (SS low) interrupt
 	SbcSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_ENABLE;
 	while (SbcSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
@@ -494,9 +494,9 @@ void DataTransfer::Init() noexcept
 	}
 }
 
-void DataTransfer::SetSBCTask(TaskHandle handle) noexcept
+void DataTransfer::InitFromTask() noexcept
 {
-	linuxTaskHandle = handle;
+	linuxTaskHandle = TaskBase::GetCallerTaskHandle();
 }
 
 void DataTransfer::Diagnostics(MessageType mtype) noexcept

@@ -15,6 +15,12 @@
 # include <Reset.h>
 #endif
 
+#if SAME5x
+// Magic address and value to launch the uf2 bootloader on failure, see inc/uf2.h in uf2-samdx1 repository
+# define DBL_TAP_PTR ((volatile uint32_t *)(HSRAM_ADDR + HSRAM_SIZE - 4))
+# define DBL_TAP_MAGIC 0xf01669ef // Randomly selected, adjusted to have first and last bit set
+#endif
+
 // Perform a software reset. 'stk' points to the exception stack (r0 r1 r2 r3 r12 lr pc xPSR) if the cause is an exception, otherwise it is nullptr.
 [[noreturn]] void SoftwareReset(SoftwareResetReason initialReason, const uint32_t *stk) noexcept
 {
@@ -31,7 +37,8 @@
 	if (initialReason == SoftwareResetReason::erase)
 	{
 #if SAME5x
-		//TODO invalidate flash so the USB bootloader runs
+		// Start from uf2 bootloader next time. This pretends the reset button has been pressed twice in short succession
+		*DBL_TAP_PTR = DBL_TAP_MAGIC;
 #else
 		EraseAndReset();
 #endif
