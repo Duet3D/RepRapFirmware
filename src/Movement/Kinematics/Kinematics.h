@@ -136,7 +136,7 @@ public:
 
 	// Return true if the positions specified for the axes in the AxesBitmap are reachable by the print head reference point.
 	// The default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 commands.
-	virtual bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept;
+	virtual bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
