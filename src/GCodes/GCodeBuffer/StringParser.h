@@ -43,10 +43,11 @@ public:
 	bool IsLastCommand() const noexcept;
 	bool ContainsExpression() const noexcept { return seenExpression; }
 
-	bool Seen(char c) noexcept SPEED_CRITICAL;					// Is a character present?
-	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;	// Get a float after a key letter
-	float GetDistance() THROWS(GCodeException) SPEED_CRITICAL;	// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;	// Get an integer after a key letter
+	bool Seen(char c) noexcept SPEED_CRITICAL;									// Is a character present?
+	bool SeenAny(Bitmap<uint32_t> bm) const noexcept;							// Return true if any of the parameter letters in the bitmap were seen
+	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get a float after a key letter
+	float GetDistance() THROWS(GCodeException) SPEED_CRITICAL;					// Get a distance or coordinate and convert it from inches to mm if necessary
+	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);								// Get an unsigned integer value
 	DriverId GetDriverId() THROWS(GCodeException);								// Get a driver ID
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);			// Get an IP address quad after a key letter

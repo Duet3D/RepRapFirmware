@@ -345,6 +345,12 @@ bool GCodeBuffer::Seen(char c) noexcept
 	return PARSER_OPERATION(Seen(c));
 }
 
+// Return true if any of the parameter letters in the bitmap were seen
+bool GCodeBuffer::SeenAny(Bitmap<uint32_t> bm) const noexcept
+{
+	return PARSER_OPERATION(SeenAny(bm));
+}
+
 // Test for character present, throw error if not
 void GCodeBuffer::MustSee(char c) THROWS(GCodeException)
 {

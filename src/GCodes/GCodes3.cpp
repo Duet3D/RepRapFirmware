@@ -1384,22 +1384,22 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 {
 	if (drive < platform.GetNumActualDirectDrivers())
 	{
-		bool seen = false;
-		if (gb.Seen('S'))
+		if (gb.SeenAny("RS"))
 		{
 			if (!LockMovementAndWaitForStandstill(gb))
 			{
 				return GCodeResult::notFinished;
 			}
+		}
+
+		bool seen = false;
+		if (gb.Seen('S'))
+		{
 			seen = true;
 			platform.SetDirectionValue(drive, gb.GetIValue() != 0);
 		}
 		if (gb.Seen('R'))
 		{
-			if (!LockMovementAndWaitForStandstill(gb))
-			{
-				return GCodeResult::notFinished;
-			}
 			seen = true;
 			platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
 		}
