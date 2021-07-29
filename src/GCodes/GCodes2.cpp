@@ -831,7 +831,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = MassStorage::Unmount(card, reply);
 				}
 				break;
+#endif
 
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 23: // Set file to print
 			case 32: // Select file and start SD print
 				// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functionality.
@@ -849,7 +851,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
-					if (QueueFileToPrint(filename.c_str(), reply))
+					if (
+#if HAS_LINUX_INTERFACE
+						reprap.UsingLinuxInterface()
+# if HAS_MASS_STORAGE
+						||
+# endif
+#endif
+#if HAS_MASS_STORAGE
+						QueueFileToPrint(filename.c_str(), reply)
+#endif
+					   )
 					{
 						reprap.GetPrintMonitor().StartingPrint(filename.c_str());
 						if (gb.LatestMachineState().compatibility == Compatibility::Marlin)

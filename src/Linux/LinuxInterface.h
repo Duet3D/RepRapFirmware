@@ -46,7 +46,6 @@ public:
 	void EventOccurred(bool timeCritical = false) noexcept;						// Called when a new event has happened. It can optionally start off a new transfer immediately
 	GCodeResult HandleM576(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Set the SPI communication parameters
 
-	bool HasPrintStarted();
 	bool HasPrintStopped();
 	StopPrintReason GetPrintStopReason() const { return printStopReason; }
 	bool FillBuffer(GCodeBuffer &gb) noexcept;									// Try to fill up the G-code buffer with the next available G-code
@@ -80,7 +79,7 @@ private:
 	GCodeFileInfo fileInfo;
 	FilePosition pauseFilePosition;
 	PrintPausedReason pauseReason;
-	bool reportPause, reportPauseWritten, printStarted, printStopped;
+	bool reportPause, reportPauseWritten, printStopped;
 	StopPrintReason printStopReason;
 
 	char *codeBuffer;
@@ -145,17 +144,6 @@ inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedRea
 	pauseReason = reason;
 	reportPauseWritten = false;
 	reportPause = true;
-}
-
-inline bool LinuxInterface::HasPrintStarted()
-{
-	TaskCriticalSectionLocker locker;
-	if (printStarted)
-	{
-		printStarted = false;
-		return true;
-	}
-	return false;
 }
 
 inline bool LinuxInterface::HasPrintStopped()

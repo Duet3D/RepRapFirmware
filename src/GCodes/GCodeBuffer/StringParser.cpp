@@ -1092,7 +1092,7 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad
 	{
 		CheckArrayLength(length, returnedLength);
 		arr[length++] = ReadFloatValue();
-		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		if (gb.buffer[readPointer] != EXPRESSION_LIST_SEPARATOR && gb.buffer[readPointer] != LIST_SEPARATOR)
 		{
 			break;
 		}
@@ -1129,7 +1129,7 @@ void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad
 		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadIValue();
 		length++;
-		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		if (gb.buffer[readPointer] != EXPRESSION_LIST_SEPARATOR && gb.buffer[readPointer] != LIST_SEPARATOR)
 		{
 			break;
 		}
@@ -1165,7 +1165,7 @@ void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool
 		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadUIValue();
 		length++;
-		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		if (gb.buffer[readPointer] != EXPRESSION_LIST_SEPARATOR && gb.buffer[readPointer] != LIST_SEPARATOR)
 		{
 			break;
 		}
@@ -1202,7 +1202,7 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 		CheckArrayLength(length, returnedLength);
 		arr[length] = ReadDriverIdValue();
 		length++;
-		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		if (gb.buffer[readPointer] != EXPRESSION_LIST_SEPARATOR && gb.buffer[readPointer] != LIST_SEPARATOR)
 		{
 			break;
 		}

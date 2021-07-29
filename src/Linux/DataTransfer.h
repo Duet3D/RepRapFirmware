@@ -30,7 +30,7 @@ class DataTransfer
 public:
 	DataTransfer() noexcept;
 	void Init() noexcept;
-	void SetSBCTask(TaskHandle handle) noexcept;
+	void InitFromTask() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 
 	bool IsConnected() const noexcept;														// Check if the connection to DCS is live

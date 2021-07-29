@@ -476,17 +476,17 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 
 void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad);
+	GetArray(arr, length, doPad, DataType::Float);
 }
 
 void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad);
+	GetArray(arr, length, doPad, DataType::Int);
 }
 
 void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad);
+	GetArray(arr, length, doPad, DataType::UInt);
 }
 
 // Get a :-separated list of drivers after a key letter
@@ -516,6 +516,17 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 		}
 		length = seenParameter->intValue;
 		break;
+
+	case DataType::Expression:
+	{
+		float temp[seenParameter->intValue];
+		GetArray(temp, length, false, DataType::Float);
+		for (int i = 0; i < seenParameter->intValue; i++)
+		{
+			SetDriverIdFromBinary(arr[i], temp[i]);
+		}
+		break;
+	}
 
 	default:
 		length = 0;
@@ -581,7 +592,7 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 	}
 }
 
-template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad) THROWS(GCodeException)
+template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad, DataType type) THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)
 	{
@@ -636,34 +647,104 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		break;
 
 	case DataType::Expression:
-		//TODO need a way to pass multi-element array-valued expressions. For now we support only single-element expressions.
+	{
+		const char *pos = seenParameterValue, *endPos = seenParameterValue + seenParameter->intValue;
+
+		// Check if the whole expression is encapsulated in curly braces and remove them if necessary
+		if (*pos == '{' && pos != endPos)
 		{
-			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
-			const ExpressionValue val = parser.Parse();
-			switch ((TypeCode)val.type)
+			bool isEncapsulated = true, inQuotes = false;
+			size_t numBraces = 1;
+			for (const char *str = pos + 1; str < endPos; str++)
 			{
-			case TypeCode::Int32:
-				arr[0] = (T)val.iVal;
-				lastIndex = 0;
+				if (inQuotes)
+				{
+					inQuotes = (*str != '"');
+				}
+				else if (*str == '"')
+				{
+					inQuotes = true;
+				}
+				else if (*str == '{')
+				{
+					numBraces++;
+				}
+				else if (*str == '}')
+				{
+					numBraces--;
+					if (numBraces == 0)
+					{
+						const char *curPos = str;
+						while (str != endPos && strchr("\t ", *++str) != nullptr) { }
+						if (str == endPos)
+						{
+							endPos = curPos + 1;
+						}
+						else
+						{
+							isEncapsulated = false;
+						}
+						break;
+					}
+				}
+			}
+
+			if (isEncapsulated)
+			{
+				pos++;
+				endPos--;
+			}
+		}
+
+		// Read array expression
+		for (;;)
+		{
+			if (lastIndex >= (int)length)
+			{
+				throw ConstructParseException("array too long, max length = %u", (uint32_t)length);
+			}
+
+			// Read the next expression value
+			ExpressionParser parser(gb, pos, endPos, -1);
+			switch (type)
+			{
+			case DataType::Int:
+				arr[++lastIndex] = (T)parser.ParseInteger();
 				break;
 
-			case TypeCode::Float:
-				arr[0] = (T)val.fVal;
-				lastIndex = 0;
+			case DataType::UInt:
+				arr[++lastIndex] = (T)parser.ParseUnsigned();
 				break;
 
-			case TypeCode::Uint32:
-			case TypeCode::DriverId:
-				arr[0] = (T)val.uVal;
-				lastIndex = 0;
+			case DataType::Float:
+				arr[++lastIndex] = (T)parser.ParseFloat();
 				break;
 
 			default:
-				throw ConstructParseException("invalid expression type");
+				throw ConstructParseException("Unsupported array data type");
 			}
-			parser.CheckForExtraCharacters();
+			parser.CheckForExtraCharacters(true);
+			pos = parser.GetEndptr();
+
+			if (pos++ >= endPos)
+			{
+				break;
+			}
+		}
+
+		if (doPad && lastIndex == 0)
+		{
+			for (size_t i = 1; i < length; i++)
+			{
+				arr[i] = arr[0];
+			}
+		}
+		else
+		{
+			length = lastIndex + 1;
 		}
 		break;
+	}
 
 	default:
 		length = 0;

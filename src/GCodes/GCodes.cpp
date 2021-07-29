@@ -478,16 +478,10 @@ void GCodes::Spin() noexcept
 
 
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+	// Need to check if the print has been stopped by the SBC
+	if (reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().HasPrintStopped())
 	{
-		if (reprap.GetLinuxInterface().HasPrintStarted())
-		{
-			StartPrinting(true);
-		}
-		else if (reprap.GetLinuxInterface().HasPrintStopped())
-		{
-			StopPrint(reprap.GetLinuxInterface().GetPrintStopReason());
-		}
+		StopPrint(reprap.GetLinuxInterface().GetPrintStopReason());
 	}
 #endif
 
