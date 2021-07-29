@@ -24,10 +24,11 @@ class BinaryParser
 {
 public:
 	BinaryParser(GCodeBuffer& gcodeBuffer) noexcept;
-	void Init() noexcept; 											// Set it up to parse another G-code
-	void Put(const uint32_t *data, size_t len) noexcept;			// Add an entire binary code, overwriting any existing content
-	void DecodeCommand() noexcept;									// Print the buffer content in debug mode and prepare for execution
-	bool Seen(char c) noexcept SPEED_CRITICAL;						// Is a character present?
+	void Init() noexcept; 														// Set it up to parse another G-code
+	void Put(const uint32_t *data, size_t len) noexcept;						// Add an entire binary code, overwriting any existing content
+	void DecodeCommand() noexcept;												// Print the buffer content in debug mode and prepare for execution
+	bool Seen(char c) noexcept SPEED_CRITICAL;									// Is a character present?
+	bool SeenAny(Bitmap<uint32_t> bm) const noexcept;							// Return true if any of the parameter letters in the bitmap were seen
 
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;

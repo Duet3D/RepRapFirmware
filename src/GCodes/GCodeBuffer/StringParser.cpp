@@ -1059,6 +1059,12 @@ bool StringParser::Seen(char c) noexcept
 	return false;
 }
 
+// Return true if any of the parameter letters in the bitmap were seen
+bool StringParser::SeenAny(Bitmap<uint32_t> bm) const noexcept
+{
+	return parametersPresent.Intersects(bm);
+}
+
 // Get a float after a G Code letter found by a call to Seen()
 float StringParser::GetFValue() THROWS(GCodeException)
 {

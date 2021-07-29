@@ -88,6 +88,25 @@ bool BinaryParser::Seen(char c) noexcept
 	return false;
 }
 
+// Return true if any of the parameter letters in the bitmap were seen
+bool BinaryParser::SeenAny(Bitmap<uint32_t> bm) const noexcept
+{
+	if (bufferLength != 0 && header->numParameters != 0)
+	{
+		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
+		for (size_t i = 0; i < header->numParameters; i++)
+		{
+			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
+			const char paramLetter = param->letter;
+			if (paramLetter >= 'A' && paramLetter <= 'Z' && bm.IsBitSet(paramLetter - 'A'))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 char BinaryParser::GetCommandLetter() const noexcept
 {
 	return (bufferLength != 0) ? header->letter : 'Q';
