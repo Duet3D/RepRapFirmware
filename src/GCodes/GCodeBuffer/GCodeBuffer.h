@@ -72,9 +72,13 @@ public:
 	bool Seen(char c) noexcept SPEED_CRITICAL;										// Is a character present?
 	void MustSee(char c) THROWS(GCodeException);									// Test for character present, throw error if not
 	char MustSee(char c1, char c2) THROWS(GCodeException);							// Test for one of two characters present, throw error if not
+	inline bool SeenAny(const char *s) const noexcept { return SeenAny(Bitmap<uint32_t>(ParametersToBitmap(s))); }
 
 	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter
 	float GetDistance() THROWS(GCodeException);										// Get a distance or coordinate and convert it from inches to mm if necessary
+	float GetSpeed() THROWS(GCodeException);										// Get a speed in mm/min or inches/min and convert it to mm/step_clock
+	float GetSpeedFromMm(bool useSeconds) THROWS(GCodeException);					// Get a speed in mm/min or optionally /sec and convert it to mm/step_clock
+	float GetAcceleration() THROWS(GCodeException);									// Get an acceleration in mm/sec^2 or inches/sec^2 and convert it to mm/step_clock^2
 	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter
 	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
 		pre(minvalue <= maxValue)
@@ -127,8 +131,13 @@ public:
 	GCodeMachineState::BlockState& GetBlockState() const noexcept { return CurrentFileMachineState().CurrentBlockState(); }
 	uint16_t GetBlockIndent() const noexcept { return GetBlockState().GetIndent(); }
 
+	void UseInches(bool inchesNotMm) noexcept { machineState->usingInches = inchesNotMm; }
+	bool UsingInches() const noexcept { return machineState->usingInches; }
 	float ConvertDistance(float distance) const noexcept;
 	float InverseConvertDistance(float distance) const noexcept;
+	float ConvertSpeed(float speed) const noexcept;
+	float InverseConvertSpeed(float speed) const noexcept;
+	const char *GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
 	bool PushState(bool withinSameFile) noexcept;				// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool withinSameFile) noexcept;				// Pop state returning true if successful (i.e. no stack underrun)
@@ -235,6 +244,15 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	bool SeenAny(Bitmap<uint32_t> bm) const noexcept;								// Return true if any of the parameter letters in the bitmap were seen
+
+	// Convert a string of uppercase parameter letters to a bit map
+	static inline constexpr uint32_t ParametersToBitmap(const char *s) noexcept
+	{
+		return (*s == 0) ? 0
+			: (*s >= 'A' && *s <= 'Z') ? ((uint32_t)1 << (*s - 'A')) | ParametersToBitmap(s + 1)
+				: ParametersToBitmap(s + 1);
+	}
 
 #if SUPPORT_OBJECT_MODEL
 	const char *GetStateText() const noexcept;

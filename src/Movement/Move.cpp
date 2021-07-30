@@ -47,11 +47,10 @@
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanMotion.h>
+# include <CAN/CanInterface.h>
 #endif
 
 Task<Move::MoveTaskStackWords> Move::moveTask;
-
-constexpr uint32_t MoveTimeout = 20;					// normal timeout when the Move process is waiting for a new move
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -86,69 +85,69 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
-	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::live },
-	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																ObjectModelEntryFlags::none },
-	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
-	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::live },
-	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),									ObjectModelEntryFlags::live },
-	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
-	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),													ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration, 1),									ObjectModelEntryFlags::none },
-	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),										ObjectModelEntryFlags::none },
-	{ "shaping",				OBJECT_MODEL_FUNC(&self->shaper, 0),													ObjectModelEntryFlags::none },
-	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),						ObjectModelEntryFlags::none },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration, 1),										ObjectModelEntryFlags::none },
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),			ObjectModelEntryFlags::live },
+	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 												ObjectModelEntryFlags::live },
+	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																		ObjectModelEntryFlags::none },
+	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																		ObjectModelEntryFlags::none },
+	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																		ObjectModelEntryFlags::live },
+	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),											ObjectModelEntryFlags::live },
+	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
+	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxPrintingAcceleration), 1),				ObjectModelEntryFlags::none },
+	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),												ObjectModelEntryFlags::none },
+	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
+	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),								ObjectModelEntryFlags::none },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxTravelAcceleration), 1),					ObjectModelEntryFlags::none },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),					ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
-	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),	ObjectModelEntryFlags::obsolete },
+	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),		ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
-	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),				ObjectModelEntryFlags::none },
-	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),								ObjectModelEntryFlags::none },
+	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),						ObjectModelEntryFlags::none },
+	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),										ObjectModelEntryFlags::none },
 
 	// 2. move.currentMove members
-	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAcceleration(), 1),											ObjectModelEntryFlags::live },
-	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDeceleration(), 1),											ObjectModelEntryFlags::live },
+	{ "acceleration",			OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->GetAcceleration()), 1),						ObjectModelEntryFlags::live },
+	{ "deceleration",			OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->GetDeceleration()), 1),						ObjectModelEntryFlags::live },
 # if SUPPORT_LASER
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
-															reprap.GetPlatform().GetLaserPwm(), 2),						ObjectModelEntryFlags::live },
+															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::live },
 # endif
-	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed(), 1),										ObjectModelEntryFlags::live },
-	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed(), 1),												ObjectModelEntryFlags::live },
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->GetRequestedSpeed()), 1),					ObjectModelEntryFlags::live },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->GetTopSpeed()), 1),						ObjectModelEntryFlags::live },
 
 	// 3. move.calibration members
-	{ "final",					OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
-	{ "initial",				OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::none },
-	{ "numFactors",				OBJECT_MODEL_FUNC((int32_t)self->numCalibratedFactors),									ObjectModelEntryFlags::none },
+	{ "final",					OBJECT_MODEL_FUNC(self, 5),																		ObjectModelEntryFlags::none },
+	{ "initial",				OBJECT_MODEL_FUNC(self, 4),																		ObjectModelEntryFlags::none },
+	{ "numFactors",				OBJECT_MODEL_FUNC((int32_t)self->numCalibratedFactors),											ObjectModelEntryFlags::none },
 
 	// 4. move.calibration.initialDeviation members
-	{ "deviation",				OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
-	{ "mean",					OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
+	{ "deviation",				OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetDeviationFromMean(), 3),					ObjectModelEntryFlags::none },
+	{ "mean",					OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 
 	// 5. move.calibration.finalDeviation members
-	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
-	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
+	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),					ObjectModelEntryFlags::none },
+	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
 
 	// 6. move.compensation members
 	{ "fadeHeight",				OBJECT_MODEL_FUNC((self->useTaper) ? self->taperHeight : std::numeric_limits<float>::quiet_NaN(), 1),	ObjectModelEntryFlags::none },
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-	{ "file",					OBJECT_MODEL_FUNC_IF(self->usingMesh, self->heightMap.GetFileName()),					ObjectModelEntryFlags::none },
+	{ "file",					OBJECT_MODEL_FUNC_IF(self->usingMesh, self->heightMap.GetFileName()),							ObjectModelEntryFlags::none },
 #endif
-	{ "liveGrid",				OBJECT_MODEL_FUNC_IF(self->usingMesh, (const GridDefinition *)&self->GetGrid()),		ObjectModelEntryFlags::none },
-	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 7),											ObjectModelEntryFlags::none },
-	{ "probeGrid",				OBJECT_MODEL_FUNC_NOSELF((const GridDefinition *)&reprap.GetGCodes().GetDefaultGrid()),	ObjectModelEntryFlags::none },
-	{ "skew",					OBJECT_MODEL_FUNC(self, 8),																ObjectModelEntryFlags::none },
-	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),									ObjectModelEntryFlags::none },
+	{ "liveGrid",				OBJECT_MODEL_FUNC_IF(self->usingMesh, (const GridDefinition *)&self->GetGrid()),				ObjectModelEntryFlags::none },
+	{ "meshDeviation",			OBJECT_MODEL_FUNC_IF(self->usingMesh, self, 7),													ObjectModelEntryFlags::none },
+	{ "probeGrid",				OBJECT_MODEL_FUNC_NOSELF((const GridDefinition *)&reprap.GetGCodes().GetDefaultGrid()),			ObjectModelEntryFlags::none },
+	{ "skew",					OBJECT_MODEL_FUNC(self, 8),																		ObjectModelEntryFlags::none },
+	{ "type",					OBJECT_MODEL_FUNC(self->GetCompensationTypeString()),											ObjectModelEntryFlags::none },
 
 	// 7. move.compensation.meshDeviation members
-	{ "deviation",				OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetDeviationFromMean(), 3),					ObjectModelEntryFlags::none },
-	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
+	{ "deviation",				OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetDeviationFromMean(), 3),							ObjectModelEntryFlags::none },
+	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),										ObjectModelEntryFlags::none },
 
 	// 8. move.compensation.skew members
-	{ "compensateXY",			OBJECT_MODEL_FUNC(self->compensateXY),													ObjectModelEntryFlags::none },
-	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY, 4),														ObjectModelEntryFlags::none },
-	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ, 4),														ObjectModelEntryFlags::none },
-	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),														ObjectModelEntryFlags::none },
+	{ "compensateXY",			OBJECT_MODEL_FUNC(self->compensateXY),															ObjectModelEntryFlags::none },
+	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY, 4),																ObjectModelEntryFlags::none },
+	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ, 4),																ObjectModelEntryFlags::none },
+	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),																ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 15, 2, 4 + SUPPORT_LASER, 3, 2, 2, 6 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
@@ -166,7 +165,7 @@ Move::Move() noexcept
 #if SUPPORT_ASYNC_MOVES
 	  heightController(nullptr),
 #endif
-	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
+	  maxPrintingAcceleration(ConvertAcceleration(DefaultPrintingAcceleration)), maxTravelAcceleration(ConvertAcceleration(DefaultTravelAcceleration)),
 	  jerkPolicy(0),
 	  numCalibratedFactors(0)
 {
@@ -302,7 +301,7 @@ void Move::Exit() noexcept
 		}
 
 		// Let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		mainDDARing.Spin(simulationMode, !canAddMove || millis() - idleStartTime >= mainDDARing.GetGracePeriod());
+		uint32_t nextPrepareDelay = mainDDARing.Spin(simulationMode, !canAddMove || millis() - idleStartTime >= mainDDARing.GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 		if (auxMoveAvailable && auxDDARing.CanAddMove())
@@ -313,7 +312,11 @@ void Move::Exit() noexcept
 			}
 			auxMoveAvailable = false;
 		}
-		auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
+		const uint32_t auxPrepareDelay = auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
+		if (auxPrepareDelay < nextPrepareDelay)
+		{
+			nextPrepareDelay = auxPrepareDelay;
+		}
 #endif
 
 		// Reduce motor current to standby if the rings have been idle for long enough
@@ -343,7 +346,7 @@ void Move::Exit() noexcept
 
 		if (!moveRead)
 		{
-			TaskBase::Take(MoveTimeout);
+			TaskBase::Take(nextPrepareDelay);
 		}
 	}
 }
@@ -407,14 +410,7 @@ bool Move::IsRawMotorMove(uint8_t moveType) const noexcept
 // Return true if the specified point is accessible to the Z probe
 bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
-	const auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(reprap.GetGCodes().GetCurrentZProbeNumber());
-	if (zp.IsNotNull())
-	{
-		axes.Iterate([axesCoords, &zp](unsigned int axis, unsigned int) {
-			axesCoords[axis] -= zp->GetOffset(axis);
-		});
-	}
-	return kinematics->IsReachable(axesCoords, axes, false);
+	return kinematics->IsReachable(axesCoords, axes);
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
@@ -444,8 +440,8 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	scratchString.copy(GetCompensationTypeString());
 
 	Platform& p = reprap.GetPlatform();
-	p.MessageF(mtype, "=== Move ===\nDMs created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
-						DriveMovement::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift);
+	p.MessageF(mtype, "=== Move ===\nDMs created %u, segments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
+						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift);
 	longestGcodeWaitInterval = 0;
 
 #if 0	// debug only
@@ -973,17 +969,17 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 	{
 		// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
 		seen = true;
-		maxTravelAcceleration = maxPrintingAcceleration = gb.GetFValue();
+		maxTravelAcceleration = maxPrintingAcceleration = gb.GetAcceleration();
 	}
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		maxPrintingAcceleration = gb.GetFValue();
+		maxPrintingAcceleration = gb.GetAcceleration();
 	}
 	if (gb.Seen('T'))
 	{
 		seen = true;
-		maxTravelAcceleration = gb.GetFValue();
+		maxTravelAcceleration = gb.GetAcceleration();
 	}
 	if (seen)
 	{
@@ -991,7 +987,8 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 	}
 	else
 	{
-		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", (double)maxPrintingAcceleration, (double)maxTravelAcceleration);
+		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f mm/sec^2",
+						(double)InverseConvertAcceleration(maxPrintingAcceleration), (double)InverseConvertAcceleration(maxTravelAcceleration));
 	}
 	return GCodeResult::ok;
 }
@@ -1002,6 +999,127 @@ GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply
 	const size_t ringNumber = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', ARRAY_SIZE(rings)) : 0;
 	return rings[ringNumber].ConfigureMovementQueue(gb, reply);
 }
+
+// Process M572
+GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (gb.Seen('S'))
+	{
+		const float advance = gb.GetFValue();
+		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+
+		GCodeResult rslt = GCodeResult::ok;
+
+#if SUPPORT_CAN_EXPANSION
+		CanDriversData<float> canDriversToUpdate;
+#endif
+		if (gb.Seen('D'))
+		{
+			uint32_t eDrive[MaxExtruders];
+			size_t eCount = MaxExtruders;
+			gb.GetUnsignedArray(eDrive, eCount, false);
+#if SUPPORT_CAN_EXPANSION
+			Platform& platform = reprap.GetPlatform();
+#endif
+			for (size_t i = 0; i < eCount; i++)
+			{
+				const uint32_t extruder = eDrive[i];
+				if (extruder >= reprap.GetGCodes().GetNumExtruders())
+				{
+					reply.printf("Invalid extruder number '%" PRIu32 "'", extruder);
+					rslt = GCodeResult::error;
+					break;
+				}
+				extruderShapers[extruder].SetKseconds(advance);
+#if SUPPORT_CAN_EXPANSION
+				const DriverId did = platform.GetExtruderDriver(extruder);
+				if (did.IsRemote())
+				{
+					canDriversToUpdate.AddEntry(did, advance);
+				}
+#endif
+			}
+		}
+		else
+		{
+			const Tool * const ct = reprap.GetCurrentTool();
+			if (ct == nullptr)
+			{
+				reply.copy("No tool selected");
+				rslt = GCodeResult::error;
+			}
+			else
+			{
+#if SUPPORT_CAN_EXPANSION
+				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
+										{
+											extruderShapers[extruder].SetKseconds(advance);
+											const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
+											if (did.IsRemote())
+											{
+												canDriversToUpdate.AddEntry(did, advance);
+											}
+										}
+									);
+#else
+				ct->IterateExtruders([this, advance](unsigned int extruder)
+										{
+											extruderShapers[extruder].SetKseconds(advance);
+										}
+									);
+#endif
+			}
+		}
+
+#if SUPPORT_CAN_EXPANSION
+		return max(rslt, CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply));
+#else
+		return rslt;
+#endif
+	}
+
+	reply.copy("Extruder pressure advance");
+	char c = ':';
+	for (size_t i = 0; i < reprap.GetGCodes().GetNumExtruders(); ++i)
+	{
+		reply.catf("%c %.3f", c, (double)extruderShapers[i].GetKseconds());
+		c = ',';
+	}
+	return GCodeResult::ok;
+}
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								extruderShapers[driver].SetKseconds(msg.values[count]);
+							}
+						}
+				   );
+	return rslt;
+}
+
+#endif
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry

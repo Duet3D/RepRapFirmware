@@ -88,6 +88,25 @@ bool BinaryParser::Seen(char c) noexcept
 	return false;
 }
 
+// Return true if any of the parameter letters in the bitmap were seen
+bool BinaryParser::SeenAny(Bitmap<uint32_t> bm) const noexcept
+{
+	if (bufferLength != 0 && header->numParameters != 0)
+	{
+		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
+		for (size_t i = 0; i < header->numParameters; i++)
+		{
+			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
+			const char paramLetter = param->letter;
+			if (paramLetter >= 'A' && paramLetter <= 'Z' && bm.IsBitSet(paramLetter - 'A'))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 char BinaryParser::GetCommandLetter() const noexcept
 {
 	return (bufferLength != 0) ? header->letter : 'Q';
@@ -455,19 +474,58 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 	}
 }
 
-void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException)
+void BinaryParser::GetFloatArray(float arr[], size_t& length) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad, DataType::Float);
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	if (seenParameter->type == DataType::Expression)
+	{
+		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		parser.ParseFloatArray(arr, length);
+	}
+	else
+	{
+		GetArray(arr, length);
+	}
 }
 
-void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
+void BinaryParser::GetIntArray(int32_t arr[], size_t& length) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad, DataType::Int);
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	if (seenParameter->type == DataType::Expression)
+	{
+		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		parser.ParseIntArray(arr, length);
+	}
+	else
+	{
+		GetArray(arr, length);
+	}
 }
 
-void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
+void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad, DataType::UInt);
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	if (seenParameter->type == DataType::Expression)
+	{
+		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		parser.ParseUnsignedArray(arr, length);
+	}
+	else
+	{
+		GetArray(arr, length);
+	}
 }
 
 // Get a :-separated list of drivers after a key letter
@@ -499,15 +557,12 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 		break;
 
 	case DataType::Expression:
-	{
-		float temp[seenParameter->intValue];
-		GetArray(temp, length, false, DataType::Float);
-		for (int i = 0; i < seenParameter->intValue; i++)
 		{
-			SetDriverIdFromBinary(arr[i], temp[i]);
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			parser.ParseDriverIdArray(arr, length);
+			parser.CheckForExtraCharacters();
 		}
 		break;
-	}
 
 	default:
 		length = 0;
@@ -573,13 +628,8 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 	}
 }
 
-template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad, DataType type) THROWS(GCodeException)
+template<typename T> void BinaryParser::GetArray(T arr[], size_t& length) THROWS(GCodeException)
 {
-	if (seenParameter == nullptr)
-	{
-		THROW_INTERNAL_ERROR;
-	}
-
 	int lastIndex = -1;
 	switch (seenParameter->type)
 	{
@@ -627,122 +677,12 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		lastIndex = seenParameter->intValue - 1;
 		break;
 
-	case DataType::Expression:
-	{
-		const char *pos = seenParameterValue, *endPos = seenParameterValue + seenParameter->intValue;
-
-		// Check if the whole expression is encapsulated in curly braces and remove them if necessary
-		if (*pos == '{' && pos != endPos)
-		{
-			bool isEncapsulated = true, inQuotes = false;
-			size_t numBraces = 1;
-			for (const char *str = pos + 1; str < endPos; str++)
-			{
-				if (inQuotes)
-				{
-					inQuotes = (*str != '"');
-				}
-				else if (*str == '"')
-				{
-					inQuotes = true;
-				}
-				else if (*str == '{')
-				{
-					numBraces++;
-				}
-				else if (*str == '}')
-				{
-					numBraces--;
-					if (numBraces == 0)
-					{
-						const char *curPos = str;
-						while (str != endPos && strchr("\t ", *++str) != nullptr) { }
-						if (str == endPos)
-						{
-							endPos = curPos + 1;
-						}
-						else
-						{
-							isEncapsulated = false;
-						}
-						break;
-					}
-				}
-			}
-
-			if (isEncapsulated)
-			{
-				pos++;
-				endPos--;
-			}
-		}
-
-		// Read array expression
-		for (;;)
-		{
-			if (lastIndex >= (int)length)
-			{
-				throw ConstructParseException("array too long, max length = %u", (uint32_t)length);
-			}
-
-			// Read the next expression value
-			ExpressionParser parser(gb, pos, endPos, -1);
-			switch (type)
-			{
-			case DataType::Int:
-				arr[++lastIndex] = (T)parser.ParseInteger();
-				break;
-
-			case DataType::UInt:
-				arr[++lastIndex] = (T)parser.ParseUnsigned();
-				break;
-
-			case DataType::Float:
-				arr[++lastIndex] = (T)parser.ParseFloat();
-				break;
-
-			default:
-				throw ConstructParseException("Unsupported array data type");
-			}
-			parser.CheckForExtraCharacters(true);
-			pos = parser.GetEndptr();
-
-			if (pos++ >= endPos)
-			{
-				break;
-			}
-		}
-
-		if (doPad && lastIndex == 0)
-		{
-			for (size_t i = 1; i < length; i++)
-			{
-				arr[i] = arr[0];
-			}
-		}
-		else
-		{
-			length = lastIndex + 1;
-		}
-		break;
-	}
-
 	default:
 		length = 0;
 		return;
 	}
 
-	if (doPad && lastIndex == 0)
-	{
-		for (size_t i = 1; i < length; i++)
-		{
-			arr[i] = arr[0];
-		}
-	}
-	else
-	{
-		length = lastIndex + 1;
-	}
+	length = lastIndex + 1;
 }
 
 void BinaryParser::CheckArrayLength(size_t maxLength) THROWS(GCodeException)

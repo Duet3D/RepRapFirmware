@@ -560,6 +560,60 @@ uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 	}
 }
 
+DriverId ExpressionParser::ParseDriverId() THROWS(GCodeException)
+{
+	ExpressionValue val = Parse();
+	ConvertToDriverId(val, true);
+	return val.GetDriverIdValue();
+}
+
+void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index)> THROWS(GCodeException) processElement) THROWS(GCodeException)
+{
+	size_t numElements = 0;
+	AdvancePointer();					// skip the '{'
+	while (numElements < length)
+	{
+		processElement(numElements);
+		++numElements;
+		if (CurrentCharacter() != EXPRESSION_LIST_SEPARATOR)
+		{
+			break;
+		}
+		if (numElements == length)
+		{
+			ThrowParseException("Array too long");
+		}
+		AdvancePointer();				// skip the '{'
+	}
+	if (CurrentCharacter() != '}')
+	{
+		ThrowParseException("Expected '}'");
+	}
+	AdvancePointer();					// skip the '{'
+	length = numElements;
+}
+
+// This is called when we expect a non-empty float array parameter and we have encountered (but not skipped) '{'
+void ExpressionParser::ParseFloatArray(float arr[], size_t& length) THROWS(GCodeException)
+{
+	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseFloat(); });
+}
+
+void ExpressionParser::ParseIntArray(int32_t arr[], size_t& length) THROWS(GCodeException)
+{
+	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseInteger(); });
+}
+
+void ExpressionParser::ParseUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException)
+{
+	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseUnsigned(); });
+}
+
+void ExpressionParser::ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
+{
+	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseDriverId(); });
+}
+
 void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
 {
 	// First convert any Uint64 or Uint32 operands to float
@@ -704,6 +758,51 @@ void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) noex
 	}
 }
 
+void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
+{
+	switch (val.GetType())
+	{
+	case TypeCode::DriverId:
+		break;
+
+	case TypeCode::Int32:
+#if SUPPORT_CAN_EXPANSION
+		val.Set(DriverId(0, val.uVal));
+#else
+		val.Set(DriverId(val.uVal));
+#endif
+		break;
+
+	case TypeCode::Float:
+		{
+			const float f10val = 10.0 * val.fVal;
+			const int32_t ival = lrintf(f10val);
+#if SUPPORT_CAN_EXPANSION
+			if (ival >= 0 && fabsf(f10val - (float)ival) <= 0.002)
+			{
+				val.Set(ival/10, ival % 10);
+			}
+#else
+			if (ival >= 0 && ival < 10 && fabsf(f10val - (float)ival) <= 0.002)
+			{
+				val.Set(0, ival % 10);
+			}
+#endif
+			else
+			{
+				ThrowParseException("invalid driver ID");
+			}
+		}
+		break;
+
+	default:
+		if (evaluate)
+		{
+			ThrowParseException("expected driver ID");
+		}
+	}
+}
+
 void ExpressionParser::SkipWhiteSpace() noexcept
 {
 	char c;
@@ -713,12 +812,10 @@ void ExpressionParser::SkipWhiteSpace() noexcept
 	}
 }
 
-void ExpressionParser::CheckForExtraCharacters(bool isArrayExpression) THROWS(GCodeException)
+void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 {
 	SkipWhiteSpace();
-
-	char c = CurrentCharacter();
-	if (c != 0 && (!isArrayExpression || (c != EXPRESSION_LIST_SEPARATOR && c != LIST_SEPARATOR)))
+	if (CurrentCharacter() != 0)
 	{
 		ThrowParseException("Unexpected characters after expression");
 	}

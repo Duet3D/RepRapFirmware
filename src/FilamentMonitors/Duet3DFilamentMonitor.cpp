@@ -85,7 +85,7 @@ Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint1
 {
 	// For the Duet3D sensors we need to decode the received data from the transition times recorded in the edgeCaptures array
 	static constexpr uint32_t BitsPerSecond = 1000;							// the nominal bit rate that the data is transmitted at
-	static constexpr uint32_t NominalBitLength = StepTimer::StepClockRate/BitsPerSecond;	// the nominal bit length in step clocks
+	static constexpr uint32_t NominalBitLength = StepClockRate/BitsPerSecond;	// the nominal bit length in step clocks
 	static constexpr uint32_t MinBitLength = (NominalBitLength * 10)/13;	// allow 30% clock speed tolerance
 	static constexpr uint32_t MaxBitLength = (NominalBitLength * 13)/10;	// allow 30% clock speed tolerance
 	static constexpr uint32_t ErrorRecoveryDelayBits = 8;					// before a start bit we want the line to be low for this long

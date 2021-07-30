@@ -84,7 +84,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 
 	case TypeCode::DriverId:
 #if SUPPORT_CAN_EXPANSION
-		str.catf("%u.%u", (unsigned int)(uVal >> 8), (unsigned int)(uVal & 0xFF));
+		str.catf("%u.%u", (unsigned int)param, (unsigned int)uVal);
 #else
 		str.catf("%u", (unsigned int)uVal);
 #endif
@@ -709,7 +709,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 
 	case TypeCode::DriverId:
 #if SUPPORT_CAN_EXPANSION
-		buf->catf("\"%u.%u\"", (unsigned int)(val.uVal >> 8), (unsigned int)(val.uVal & 0xFF));
+		buf->catf("\"%u.%u\"", (unsigned int)val.param, (unsigned int)val.uVal);
 #else
 		buf->catf("\"%u\"", (unsigned int)val.uVal);
 #endif

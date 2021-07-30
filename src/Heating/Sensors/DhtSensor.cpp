@@ -17,7 +17,7 @@
 constexpr uint16_t MinimumReadInterval = 2000;		// ms
 constexpr uint8_t  MaximumReadTime = 20;			// ms
 constexpr uint8_t  MinimumOneBitLength = 50;		// microseconds
-constexpr uint32_t MinimumOneBitStepClocks = (StepTimer::StepClockRate * MinimumOneBitLength)/1000000;
+constexpr uint32_t MinimumOneBitStepClocks = (StepClockRate * MinimumOneBitLength)/1000000;
 
 // Pulse ISR
 void DhtDataTransition(CallbackParameter cp) noexcept

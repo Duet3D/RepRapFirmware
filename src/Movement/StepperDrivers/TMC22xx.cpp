@@ -884,7 +884,7 @@ inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 // Update the maximum step pulse interval at which we consider open load detection to be reliable
 void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 {
-	const uint32_t defaultMaxInterval = StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec;
+	const uint32_t defaultMaxInterval = StepClockRate/MinimumOpenLoadFullStepsPerSec;
 	if ((writeRegisters[WriteGConf] & GCONF_SPREAD_CYCLE) != 0)
 	{
 		maxOpenLoadStepInterval = defaultMaxInterval;
@@ -896,7 +896,7 @@ void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 		// tpwmthrs is the 20-bit interval between 1/256 microsteps threshold, in clock cycles @ 12MHz.
 		// We need to convert it to the interval between full steps, measured in our step clocks, less about 20% to allow some margin.
 		// So multiply by the step clock rate divided by 12MHz, also multiply by 256 less 20%.
-		constexpr uint32_t conversionFactor = ((256 - 51) * (StepTimer::StepClockRate/1000000))/12;
+		constexpr uint32_t conversionFactor = ((256 - 51) * (StepClockRate/1000000))/12;
 		const uint32_t fullStepClocks = tpwmthrs * conversionFactor;
 		maxOpenLoadStepInterval = min<uint32_t>(fullStepClocks, defaultMaxInterval);
 	}

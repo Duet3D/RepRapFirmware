@@ -67,7 +67,7 @@ bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) noexcept
 
 // Return true if the specified XY position is reachable by the print head reference point.
 // This default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 command.
-bool Kinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept
+bool Kinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
 	const Platform& platform = reprap.GetPlatform();
 	return axes.IterateWhile([&platform, axesCoords](unsigned int axis, unsigned int count) -> bool {

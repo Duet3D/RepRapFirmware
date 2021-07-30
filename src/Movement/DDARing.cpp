@@ -15,6 +15,8 @@
 # include "CAN/CanMotion.h"
 #endif
 
+constexpr uint32_t MoveStartPollInterval = 10;					// delay in milliseconds between checking whether we should start moves
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -85,7 +87,6 @@ void DDARing::Init2() noexcept
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
 		extrusionAccumulators[i] = 0;
-		extrusionPending[i] = 0.0;
 	}
 	extrudersPrinting = false;
 	simulationTime = 0.0;
@@ -213,7 +214,7 @@ bool DDARing::CanAddMove() const noexcept
 				prevMoveTime = dda->GetClocksNeeded();
 			}
 
-			return (unPreparedTime < StepTimer::StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepTimer::StepClockRate);
+			return (unPreparedTime < StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepClockRate);
 	 }
 	 return false;
 }
@@ -258,8 +259,9 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 
 #endif
 
-// Try to process moves in the ring
-void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
+// Try to process moves in the ring. Called by the Move task.
+// Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
+uint32_t DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 {
 	DDA *cdda = currentDda;											// capture volatile variable
 
@@ -267,7 +269,7 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
 	if (simulationMode != 0 && cdda != nullptr)
 	{
-		simulationTime += (float)cdda->GetClocksNeeded()/StepTimer::StepClockRate;
+		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
 		cdda->Complete();
 		CurrentMoveCompleted();
 		cdda = currentDda;
@@ -287,86 +289,100 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 			cdda = cdda->GetNext();
 			if (cdda == addPointer)
 			{
-				return;												// all moves are already prepared
+				return TaskBase::TimeoutUnlimited;				// all the moves we have are already prepared, so nothing to do until new moves arrive
 			}
 		}
 
-		PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
+		return PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
 	}
-	else
-	{
-		// No DDA is executing, so start executing a new one if possible
-		DDA * dda = getPointer;										// capture volatile variable
-		if (   shouldStartMove										// if the Move code told us that we should start a move...
-			|| waitingForRingToEmpty								// ...or GCodes is waiting for all moves to finish...
-			|| !CanAddMove()										// ...or the ring is full...
-#if SUPPORT_REMOTE_COMMANDS
-			|| dda->GetState() == DDA::frozen						// ...or the move has already been frozen (it's probably a remote move)
-#endif
-		   )
-		{
-			PrepareMoves(dda, 0, 0, simulationMode);
 
-			if (dda->GetState() == DDA::completed)
+	// No DDA is executing, so start executing a new one if possible
+	DDA * dda = getPointer;										// capture volatile variable
+	if (   shouldStartMove										// if the Move code told us that we should start a move...
+		|| waitingForRingToEmpty								// ...or GCodes is waiting for all moves to finish...
+		|| !CanAddMove()										// ...or the ring is full...
+#if SUPPORT_REMOTE_COMMANDS
+		|| dda->GetState() == DDA::frozen						// ...or the move has already been frozen (it's probably a remote move)
+#endif
+	   )
+	{
+		const uint32_t ret = PrepareMoves(dda, 0, 0, simulationMode);
+
+		if (dda->GetState() == DDA::completed)
+		{
+			// We prepared the move but found there was nothing to do because endstops are already triggered
+			getPointer = dda = dda->GetNext();
+			completedMoves++;
+		}
+		else if (dda->GetState() == DDA::frozen)
+		{
+			if (simulationMode != 0)
 			{
-				// We prepared the move but found there was nothing to do because endstops are already triggered
-				getPointer = dda = dda->GetNext();
-				completedMoves++;
+				currentDda = dda;									// pretend we are executing this move
 			}
-			else if (dda->GetState() == DDA::frozen)
+			else
 			{
-				if (simulationMode != 0)
+				Platform& p = reprap.GetPlatform();
+				SetBasePriority(NvicPriorityStep);					// shut out step interrupt
+				const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
+				if (ScheduleNextStepInterrupt())
 				{
-					currentDda = dda;									// pretend we are executing this move
+					Interrupt(p);
+				}
+				SetBasePriority(0);
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+				if (wakeLaser)
+				{
+					Move::WakeLaserTask();
 				}
 				else
 				{
-					Platform& p = reprap.GetPlatform();
-					SetBasePriority(NvicPriorityStep);					// shut out step interrupt
-					const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
-					if (ScheduleNextStepInterrupt())
-					{
-						Interrupt(p);
-					}
-					SetBasePriority(0);
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-					if (wakeLaser)
-					{
-						Move::WakeLaserTask();
-					}
-					else
-					{
-						p.SetLaserPwm(0);
-					}
-#else
-					(void)wakeLaser;
-#endif
+					p.SetLaserPwm(0);
 				}
+#else
+				(void)wakeLaser;
+#endif
 			}
 		}
+		return ret;
 	}
+
+	return (dda->GetState() == DDA::provisional)
+			? MoveStartPollInterval									// there are moves in the queue but it is not time to prepare them yet
+				: TaskBase::TimeoutUnlimited;						// the queue is empty, nothing to do until new moves arrive
 }
 
 // Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
-void DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept
+// Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
+uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept
 {
 	// If the number of prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
 		   && moveTimeLeft < (int32_t)DDA::UsualMinimumPreparedTime		// prepare moves one tenth of a second ahead of when they will be needed
-		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring
+		   && alreadyPrepared * 2 < numDdasInRing						// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
 		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < (int32_t)DDA::AbsoluteMinimumPreparedTime)
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
 #endif
 		  )
 	{
-		firstUnpreparedMove->Prepare(simulationMode, extrusionPending);
+		firstUnpreparedMove->Prepare(simulationMode);
 		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
 		++alreadyPrepared;
 		firstUnpreparedMove = firstUnpreparedMove->GetNext();
 	}
+
+	// Decide how soon we want to be called again to prepare further moves
+	if (firstUnpreparedMove->GetState() == DDA::provisional)
+	{
+		// There are more moves waiting to be prepared, so ask to be woken up early
+		const int32_t clocksTillWakeup = moveTimeLeft - (int32_t)DDA::UsualMinimumPreparedTime;						// calculate how long before we run out of prepared moves, less the usual advance prepare time
+		return (clocksTillWakeup <= 0) ? 2 : min<uint32_t>((uint32_t)clocksTillWakeup/(StepClockRate/1000), 2);		// wake up at that time, but delay for at least 2 ticks
+	}
+
+	return TaskBase::TimeoutUnlimited;
 }
 
 // Return true if this DDA ring is idle
@@ -906,6 +922,23 @@ uint32_t DDARing::ManageLaserPower() const noexcept
 
 #if SUPPORT_REMOTE_COMMANDS
 
+# if USE_REMOTE_INPUT_SHAPING
+
+// Add a move from the ATE to the movement queue
+void DDARing::AddShapedMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
+{
+	if (addPointer->GetState() == DDA::empty)
+	{
+		if (addPointer->InitShapedFromRemote(msg))
+		{
+			addPointer = addPointer->GetNext();
+			scheduledMoves++;
+		}
+	}
+}
+
+# else
+
 // Add a move from the ATE to the movement queue
 void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
@@ -919,6 +952,7 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 	}
 }
 
+# endif
 #endif
 
 // End

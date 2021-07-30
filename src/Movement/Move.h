@@ -9,7 +9,8 @@
 #define MOVE_H_
 
 #include <RepRapFirmware.h>
-#include "InputShaper.h"
+#include "AxisShaper.h"
+#include "ExtruderShaper.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
@@ -93,10 +94,18 @@ public:
 
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);		// process M204
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
+	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
+
+	float GetPressureAdvanceClocks(size_t extruder) const noexcept;
+
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+#endif
 
 	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
 	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
-	InputShaper& GetShaper() noexcept { return shaper; }
+	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
+	ExtruderShaper& GetExtruderShaper(size_t extruder) noexcept { return extruderShapers[extruder]; }
 
 	void Diagnostics(MessageType mtype) noexcept;							// Report useful stuff
 
@@ -195,10 +204,17 @@ public:
 	static const TaskBase *GetMoveTaskHandle() noexcept { return &moveTask; }
 
 #if SUPPORT_REMOTE_COMMANDS
+# if USE_REMOTE_INPUT_SHAPING
+	void AddShapeddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept		// add a move from the ATE to the movement queue
+	{
+		mainDDARing.AddMoveFromRemote(msg);
+	}
+# else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
 	{
 		mainDDARing.AddMoveFromRemote(msg);
 	}
+# endif
 #endif
 
 protected:
@@ -273,7 +289,13 @@ private:
 
 	Kinematics *kinematics;								// What kinematics we are using
 
-	InputShaper shaper;
+	AxisShaper axisShaper;
+
+#if SUPPORT_REMOTE_COMMANDS
+	ExtruderShaper extruderShapers[max<size_t>(MaxExtruders, NumDirectDrivers)];
+#else
+	ExtruderShaper extruderShapers[MaxExtruders];
+#endif
 
 	float latestLiveCoordinates[MaxAxesPlusExtruders];
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
@@ -313,6 +335,11 @@ inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotor
 inline void Move::ResetExtruderPositions() noexcept
 {
 	mainDDARing.ResetExtruderPositions();
+}
+
+inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
+{
+	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetKclocks() : 0.0;
 }
 
 #if HAS_SMART_DRIVERS

@@ -53,7 +53,7 @@ namespace LedStripDriver
 {
 	constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default
 	constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2500000;		// must be between about 2MHz and about 4MHz
-	constexpr uint32_t MinNeoPixelResetTicks = (250 * StepTimer::StepClockRate)/1000000;		// 250us minimum Neopixel reset time on later chips
+	constexpr uint32_t MinNeoPixelResetTicks = (250 * StepClockRate)/1000000;	// 250us minimum Neopixel reset time on later chips
 
 	// Define the size of the buffer used to accumulate a sequence of colours to send to the string
 #if defined(DUET3_V06)

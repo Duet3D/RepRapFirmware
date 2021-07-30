@@ -94,30 +94,30 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Tool members
-	{ "active",				OBJECT_MODEL_FUNC_NOSELF(&activeTempsArrayDescriptor), 			ObjectModelEntryFlags::live },
-	{ "axes",				OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 				ObjectModelEntryFlags::none },
-	{ "extruders",			OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 			ObjectModelEntryFlags::none },
-	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 							ObjectModelEntryFlags::none },
-	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),				ObjectModelEntryFlags::none },
-	{ "heaters",			OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 				ObjectModelEntryFlags::none },
-	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 						ObjectModelEntryFlags::live },
-	{ "mix",				OBJECT_MODEL_FUNC_NOSELF(&mixArrayDescriptor), 					ObjectModelEntryFlags::none },
-	{ "name",				OBJECT_MODEL_FUNC(self->name),						 			ObjectModelEntryFlags::none },
-	{ "number",				OBJECT_MODEL_FUNC((int32_t)self->myNumber),						ObjectModelEntryFlags::none },
-	{ "offsets",			OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 				ObjectModelEntryFlags::none },
-	{ "offsetsProbed",		OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),	ObjectModelEntryFlags::none },
-	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),										ObjectModelEntryFlags::none },
-	{ "spindle",			OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),				ObjectModelEntryFlags::none },
-	{ "spindleRpm",			OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),					ObjectModelEntryFlags::none },
-	{ "standby",			OBJECT_MODEL_FUNC_NOSELF(&standbyTempsArrayDescriptor), 		ObjectModelEntryFlags::live },
-	{ "state",				OBJECT_MODEL_FUNC(self->state.ToString()), 						ObjectModelEntryFlags::live },
+	{ "active",				OBJECT_MODEL_FUNC_NOSELF(&activeTempsArrayDescriptor), 						ObjectModelEntryFlags::live },
+	{ "axes",				OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 							ObjectModelEntryFlags::none },
+	{ "extruders",			OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 						ObjectModelEntryFlags::none },
+	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 										ObjectModelEntryFlags::none },
+	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),							ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 							ObjectModelEntryFlags::none },
+	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 									ObjectModelEntryFlags::live },
+	{ "mix",				OBJECT_MODEL_FUNC_NOSELF(&mixArrayDescriptor), 								ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->name),						 						ObjectModelEntryFlags::none },
+	{ "number",				OBJECT_MODEL_FUNC((int32_t)self->myNumber),									ObjectModelEntryFlags::none },
+	{ "offsets",			OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 							ObjectModelEntryFlags::none },
+	{ "offsetsProbed",		OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),				ObjectModelEntryFlags::none },
+	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),													ObjectModelEntryFlags::none },
+	{ "spindle",			OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),							ObjectModelEntryFlags::none },
+	{ "spindleRpm",			OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),								ObjectModelEntryFlags::none },
+	{ "standby",			OBJECT_MODEL_FUNC_NOSELF(&standbyTempsArrayDescriptor), 					ObjectModelEntryFlags::live },
+	{ "state",				OBJECT_MODEL_FUNC(self->state.ToString()), 									ObjectModelEntryFlags::live },
 
 	// 1. Tool.retraction members
-	{ "extraRestart",		OBJECT_MODEL_FUNC(self->retractExtra, 1),						ObjectModelEntryFlags::none },
-	{ "length",				OBJECT_MODEL_FUNC(self->retractLength, 1),						ObjectModelEntryFlags::none },
-	{ "speed" ,				OBJECT_MODEL_FUNC(self->retractSpeed, 1),						ObjectModelEntryFlags::none },
-	{ "unretractSpeed",		OBJECT_MODEL_FUNC(self->unRetractSpeed, 1),						ObjectModelEntryFlags::none },
-	{ "zHop",				OBJECT_MODEL_FUNC(self->retractHop, 2),							ObjectModelEntryFlags::none },
+	{ "extraRestart",		OBJECT_MODEL_FUNC(self->retractExtra, 1),									ObjectModelEntryFlags::none },
+	{ "length",				OBJECT_MODEL_FUNC(self->retractLength, 1),									ObjectModelEntryFlags::none },
+	{ "speed" ,				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->retractSpeed), 1),	ObjectModelEntryFlags::none },
+	{ "unretractSpeed",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->unRetractSpeed), 1),	ObjectModelEntryFlags::none },
+	{ "zHop",				OBJECT_MODEL_FUNC(self->retractHop, 2),										ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 17, 5 };
@@ -217,7 +217,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	t->retractLength = DefaultRetractLength;
 	t->retractExtra = 0.0;
 	t->retractHop = 0.0;
-	t->retractSpeed = t->unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
+	t->retractSpeed = t->unRetractSpeed = ConvertSpeedFromMmPerMin(DefaultRetractSpeed);
 	t->isRetracted = false;
 	t->spindleNumber = spindleNo;
 	t->spindleRpm = 0;
@@ -777,12 +777,12 @@ GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply,
 	}
 	if (gb.Seen('F'))
 	{
-		unRetractSpeed = retractSpeed = max<float>(gb.GetFValue(), 60.0) * SecondsToMinutes;
+		unRetractSpeed = retractSpeed = max<float>(gb.GetSpeedFromMm(false), ConvertSpeedFromMmPerMin(MinRetractSpeed));
 		seen = true;
 	}
 	if (gb.Seen('T'))	// must do this one after 'F'
 	{
-		unRetractSpeed = max<float>(gb.GetFValue(), 60.0) * SecondsToMinutes;
+		unRetractSpeed = max<float>(gb.GetSpeedFromMm(false), ConvertSpeedFromMmPerMin(MinRetractSpeed));
 		seen = true;
 	}
 	if (gb.Seen('Z'))
@@ -803,7 +803,7 @@ GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply,
 			return GCodeResult::notFinished;
 		}
 		outBuf->lcatf("Tool %u retract/reprime: length %.2f/%.2fmm, speed %.1f/%.1fmm/sec, Z hop %.2fmm",
-			myNumber, (double)retractLength, (double)(retractLength + retractExtra), (double)retractSpeed, (double)unRetractSpeed, (double)retractHop);
+			myNumber, (double)retractLength, (double)(retractLength + retractExtra), (double)InverseConvertSpeedToMmPerSec(retractSpeed), (double)InverseConvertSpeedToMmPerSec(unRetractSpeed), (double)retractHop);
 	}
 	return GCodeResult::ok;
 }

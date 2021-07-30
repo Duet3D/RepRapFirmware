@@ -92,8 +92,8 @@ protected:
 	float calibTemperature;				// the temperature at which we did the calibration
 	float temperatureCoefficients[2];	// the variation of height with bed temperature and with the square of temperature
 	float diveHeight;					// the dive height we use when probing
-	float probeSpeeds[2];				// the initial speed of probing
-	float travelSpeed;					// the speed at which we travel to the probe point
+	float probeSpeeds[2];				// the initial speed of probing in mm per step clock
+	float travelSpeed;					// the speed at which we travel to the probe point ni mm per step clock
 	float recoveryTime;					// Z probe recovery time
 	float tolerance;					// maximum difference between probe heights when doing >1 taps
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
