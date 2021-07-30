@@ -210,7 +210,6 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
 			pB = currentSegment->CalcLinearB(startDistance, startTime);
-			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 			state = DMState::cartLinear;
 		}
 		else
@@ -222,17 +221,16 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			{
 				// Extruders have a single acceleration segment. We need to add the extra extrusion distance due to pressure advance to the extrusion distance.
 				distanceSoFar += mp.cart.extraExtrusionDistance;
-				phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 				state = DMState::cartAccel;
 			}
 			else
 			{
-				// This is a decelerating segment. If it includes pressure advance then it may include reversal.
-				phaseStepLimit = totalSteps + 1;						// there is only one decelerating segment for extruders and it is at the end
+				// This is the single decelerating segment. If it includes pressure advance then it may include reversal.
 				state = DMState::cartDecelForwardsReversing;			// assume that it may reverse
 			}
 		}
 
+		phaseStepLimit = ((currentSegment->GetNext() == nullptr) ? totalSteps : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm)) + 1;
 		if (nextStep < phaseStepLimit)
 		{
 			return true;
@@ -395,7 +393,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 
 		if (decelSeg == nullptr)
 		{
-			forwardDistance += dda.totalDistance;
+			forwardDistance += dda.totalDistance;			// no deceleration segment
 			reverseDistance = 0.0;
 		}
 		else
@@ -439,8 +437,9 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	if (reverseDistance > 0.0)
 	{
 		const float netDistance = forwardDistance - reverseDistance;
+		const int32_t iFwdSteps = (int32_t)forwardSteps;
 		const int32_t netSteps = (int32_t)(netDistance * mp.cart.effectiveStepsPerMm);
-		if (netSteps == 0 && forwardSteps <= 1.0)
+		if (netSteps == 0 && iFwdSteps <= 1)
 		{
 			// No movement at all, or one step forward and one step back which we will ignore
 			shaper.SetExtrusionPending(netDistance * dda.directionVector[drive]);
@@ -448,10 +447,9 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		}
 
 		// Note, netSteps may be negative for e.g. a deceleration-only move
-		const int32_t iFwdSteps = (int32_t)forwardSteps;
 		if (netSteps > 0 && netSteps + 1 >= iFwdSteps)
 		{
-			// There are zero or one reverse steps. We ignore a single reverse step.
+			// There is at least one forward step are zero or one reverse steps. We ignore a single reverse step.
 			totalSteps = netSteps;
 			reverseStartStep = totalSteps + 1;			// no reverse phase
 		}
@@ -470,14 +468,10 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 			totalSteps = (uint32_t)forwardSteps;
 			shaper.SetExtrusionPending((forwardDistance - (float)totalSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 		}
-		else if (forwardSteps <= -1.0)
-		{
-			totalSteps = (uint32_t)(-forwardSteps);
-			shaper.SetExtrusionPending((forwardDistance + (float)totalSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
-		}
 		else
 		{
-			// No steps at all
+			// No steps at all, or negative forward steps which I think should be impossible unless the steps/mm is changed
+			totalSteps = 0;
 			shaper.SetExtrusionPending(forwardDistance * dda.directionVector[drive]);
 			return false;
 		}
@@ -523,9 +517,10 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			nextStep += 100000000;								// so we can tell what happened in the debug print
 			return false;
 		}
+		stepsToLimit = phaseStepLimit - nextStep;
 	}
 
-	if (phaseStepLimit > reverseStartStep)
+	if (reverseStartStep < phaseStepLimit && nextStep < reverseStartStep)
 	{
 		stepsToLimit = reverseStartStep - nextStep;
 	}

@@ -51,9 +51,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	constexpr float MaximumInputShapingFrequency = 1000.0;
 	bool seen = false;
 
-	// If we are changing the type, frequency, damping or custom parameters, we will change multiple stored values used by the motoin planner, so wait until movement has stopped.
+	// If we are changing the type, frequency, damping or custom parameters, we will change multiple stored values used by the motion planner, so wait until movement has stopped.
 	// Changing just the minimum acceleration is OK because no other variables depend on it.
-	if (gb.Seen('F') || gb.Seen('S') || gb.Seen('P') || gb.Seen('H') || gb.Seen('T'))
+	if (gb.SeenAny("FSPHT"))
 	{
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
 		{

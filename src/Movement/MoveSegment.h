@@ -68,7 +68,7 @@
  * We can summarise like this. For an acceleration or deceleration segment:
  *   t = ts + B + sqrt(A + C*n/(f*m))
  * where for an acceleration segment:
- *   B = -u/a + k
+ *   B = -u/a - k
  *   A = B^2 - 2*(S0 + p/f)/a = B^2 - C * (S0 + p/f)
  *   C = 2/a
  * and for a deceleration segment:
