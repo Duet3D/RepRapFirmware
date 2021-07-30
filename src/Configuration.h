@@ -383,6 +383,7 @@ static_assert(MaxExpectedWebDirFilenameLength + strlen(WEB_DIR) + strlen(".gz") 
 #define EOF_STRING "<!-- **EoF** -->"
 
 // List defaults
+constexpr char EXPRESSION_LIST_SEPARATOR = ',';
 constexpr char LIST_SEPARATOR = ':';
 
 #endif

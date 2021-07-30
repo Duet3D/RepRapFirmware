@@ -33,7 +33,7 @@ public:
 	void ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);
 
 	void SkipWhiteSpace() noexcept;
-	void CheckForExtraCharacters() THROWS(GCodeException);
+	void CheckForExtraCharacters(bool isArrayExpression = false) THROWS(GCodeException);
 	const char *GetEndptr() const noexcept { return currentp; }
 
 private:

@@ -292,11 +292,11 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 #if HAS_MASS_STORAGE
 	WriteLocker locker(printMonitorLock);
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
-	printingFileParsed = false;
 # if HAS_LINUX_INTERFACE
 	if (!reprap.UsingLinuxInterface())
 # endif
 	{
+		printingFileParsed = false;
 		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished)
 		{
 			UpdatePrintingFileInfo();

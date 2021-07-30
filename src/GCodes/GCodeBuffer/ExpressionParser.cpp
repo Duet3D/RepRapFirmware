@@ -812,10 +812,12 @@ void ExpressionParser::SkipWhiteSpace() noexcept
 	}
 }
 
-void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
+void ExpressionParser::CheckForExtraCharacters(bool isArrayExpression) THROWS(GCodeException)
 {
 	SkipWhiteSpace();
-	if (CurrentCharacter() != 0)
+
+	char c = CurrentCharacter();
+	if (c != 0 && (!isArrayExpression || (c != EXPRESSION_LIST_SEPARATOR && c != LIST_SEPARATOR)))
 	{
 		ThrowParseException("Unexpected characters after expression");
 	}
