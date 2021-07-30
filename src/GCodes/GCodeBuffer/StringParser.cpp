@@ -1080,35 +1080,32 @@ float StringParser::GetFValue() THROWS(GCodeException)
 
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
-void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad) THROWS(GCodeException)
+void StringParser::GetFloatArray(float arr[], size_t& returnedLength) THROWS(GCodeException)
 {
 	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
 
-	size_t length = 0;
-	for (;;)
+	if (gb.buffer[readPointer] == '{')
 	{
-		CheckArrayLength(length, returnedLength);
-		arr[length++] = ReadFloatValue();
-		if (gb.buffer[readPointer] != EXPRESSION_LIST_SEPARATOR && gb.buffer[readPointer] != LIST_SEPARATOR)
-		{
-			break;
-		}
-		++readPointer;
-	}
-
-	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-	if (doPad && length == 1 && returnedLength > 1)
-	{
-		for (size_t i = 1; i < returnedLength; i++)
-		{
-			arr[i] = arr[0];
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		parser.ParseFloatArray(arr, returnedLength);
 	}
 	else
 	{
+		size_t length = 0;
+		for (;;)
+		{
+			CheckArrayLength(length, returnedLength);
+			arr[length++] = ReadFloatValue();
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
+			{
+				break;
+			}
+			++readPointer;
+		}
+
 		returnedLength = length;
 	}
 
@@ -1116,72 +1113,67 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad
 }
 
 // Get a :-separated list of ints after a key letter
-void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad) THROWS(GCodeException)
+void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength) THROWS(GCodeException)
 {
 	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
 
-	size_t length = 0;
-	for (;;)
+	if (gb.buffer[readPointer] == '{')
 	{
-		CheckArrayLength(length, returnedLength);
-		arr[length] = ReadIValue();
-		length++;
-		if (gb.buffer[readPointer] != EXPRESSION_LIST_SEPARATOR && gb.buffer[readPointer] != LIST_SEPARATOR)
-		{
-			break;
-		}
-		++readPointer;
-	}
-
-	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-	if (doPad && length == 1 && returnedLength > 1)
-	{
-		for (size_t i = 1; i < returnedLength; i++)
-		{
-			arr[i] = arr[0];
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		parser.ParseIntArray(arr, returnedLength);
 	}
 	else
 	{
+		size_t length = 0;
+		for (;;)
+		{
+			CheckArrayLength(length, returnedLength);
+			arr[length] = ReadIValue();
+			length++;
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
+			{
+				break;
+			}
+			++readPointer;
+		}
+
 		returnedLength = length;
 	}
+
 	readPointer = -1;
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad) THROWS(GCodeException)
+void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength) THROWS(GCodeException)
 {
 	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
 
-	size_t length = 0;
-	for (;;)
+	if (gb.buffer[readPointer] == '{')
 	{
-		CheckArrayLength(length, returnedLength);
-		arr[length] = ReadUIValue();
-		length++;
-		if (gb.buffer[readPointer] != EXPRESSION_LIST_SEPARATOR && gb.buffer[readPointer] != LIST_SEPARATOR)
-		{
-			break;
-		}
-		++readPointer;
-	}
-
-	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-	if (doPad && length == 1 && returnedLength > 1)
-	{
-		for (size_t i = 1; i < returnedLength; i++)
-		{
-			arr[i] = arr[0];
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		parser.ParseUnsignedArray(arr, returnedLength);
 	}
 	else
 	{
+		size_t length = 0;
+		for (;;)
+		{
+			CheckArrayLength(length, returnedLength);
+			arr[length] = ReadUIValue();
+			length++;
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
+			{
+				break;
+			}
+			++readPointer;
+		}
+
 		returnedLength = length;
 	}
 
@@ -1196,20 +1188,29 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 		THROW_INTERNAL_ERROR;
 	}
 
-	size_t length = 0;
-	for (;;)
+	if (gb.buffer[readPointer] == '{')
 	{
-		CheckArrayLength(length, returnedLength);
-		arr[length] = ReadDriverIdValue();
-		length++;
-		if (gb.buffer[readPointer] != EXPRESSION_LIST_SEPARATOR && gb.buffer[readPointer] != LIST_SEPARATOR)
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		parser.ParseDriverIdArray(arr, returnedLength);
+	}
+	else
+	{
+		size_t length = 0;
+		for (;;)
 		{
-			break;
+			CheckArrayLength(length, returnedLength);
+			arr[length] = ReadDriverIdValue();
+			length++;
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
+			{
+				break;
+			}
+			++readPointer;
 		}
-		++readPointer;
+
+		returnedLength = length;
 	}
 
-	returnedLength = length;
 	readPointer = -1;
 }
 

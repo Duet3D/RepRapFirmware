@@ -488,19 +488,46 @@ void GCodeBuffer::GetReducedString(const StringRef& str) THROWS(GCodeException)
 // Get a colon-separated list of floats after a key letter
 void GCodeBuffer::GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
-	PARSER_OPERATION(GetFloatArray(arr, length, doPad));
+	const size_t maxLength = length;
+	PARSER_OPERATION(GetFloatArray(arr, length));
+	// If there is one entry and doPad is true, fill the rest of the array with the first entry.
+	if (doPad && length == 1)
+	{
+		while (length < maxLength)
+		{
+			arr[length++] = arr[0];
+		}
+	}
 }
 
 // Get a :-separated list of ints after a key letter
 void GCodeBuffer::GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
-	PARSER_OPERATION(GetIntArray(arr, length, doPad));
+	const size_t maxLength = length;
+	PARSER_OPERATION(GetIntArray(arr, length));
+	// If there is one entry and doPad is true, fill the rest of the array with the first entry.
+	if (doPad && length == 1)
+	{
+		while (length < maxLength)
+		{
+			arr[length++] = arr[0];
+		}
+	}
 }
 
 // Get a :-separated list of unsigned ints after a key letter
 void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
 {
-	PARSER_OPERATION(GetUnsignedArray(arr, length, doPad));
+	const size_t maxLength = length;
+	PARSER_OPERATION(GetUnsignedArray(arr, length));
+	// If there is one entry and doPad is true, fill the rest of the array with the first entry.
+	if (doPad && length == 1)
+	{
+		while (length < maxLength)
+		{
+			arr[length++] = arr[0];
+		}
+	}
 }
 
 // Get a :-separated list of drivers after a key letter

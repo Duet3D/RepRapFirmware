@@ -46,9 +46,9 @@ public:
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);					// Get the complete parameter string
 	void GetQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);			// Get and copy a quoted string
 	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);	// Get and copy a string which may or may not be quoted
-	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException) SPEED_CRITICAL; // Get a colon-separated list of floats after a key letter
-	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);			// Get a :-separated list of ints after a key letter
-	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
+	void GetFloatArray(float arr[], size_t& length) THROWS(GCodeException) SPEED_CRITICAL;		// Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length) THROWS(GCodeException);						// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of drivers after a key letter
 
 	void SetFinished() noexcept;									// Set the G Code finished
@@ -73,7 +73,7 @@ private:
 	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;
 
 	size_t AddPadding(size_t bytesRead) const noexcept { return (bytesRead + 3u) & (~3u); }
-	template<typename T> void GetArray(T arr[], size_t& length, bool doPad, DataType type) THROWS(GCodeException) SPEED_CRITICAL;
+	template<typename T> void GetArray(T arr[], size_t& length) THROWS(GCodeException) SPEED_CRITICAL;
 	void WriteParameters(const StringRef& s, bool quoteStrings) const noexcept;
 
 	size_t bufferLength;
