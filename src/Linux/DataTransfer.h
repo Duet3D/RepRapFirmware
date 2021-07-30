@@ -36,6 +36,7 @@ public:
 	bool IsConnected() const noexcept;														// Check if the connection to DCS is live
 	bool IsReady() noexcept;																// Returns true when data can be read
 	void StartNextTransfer() noexcept;														// Kick off the next transfer
+	void ResetConnection() noexcept;														// Reset the connection after a longer timeout
 	bool LinuxHadReset() const noexcept;													// Check if the remote end reset
 
 	size_t PacketsToRead() const noexcept;
@@ -132,7 +133,8 @@ private:
 	void ExchangeHeader() noexcept;
 	void ExchangeResponse(uint32_t response) noexcept;
 	void ExchangeData() noexcept;
-	void ResetTransfer(bool ownRequest) noexcept;
+	void ResetTransfer() noexcept;
+	void StatefulTransferReset(bool ownRequest) noexcept;
 	uint32_t CalcCRC32(const char *buffer, size_t length) const noexcept;
 
 	template<typename T> const T *ReadDataHeader() noexcept;
