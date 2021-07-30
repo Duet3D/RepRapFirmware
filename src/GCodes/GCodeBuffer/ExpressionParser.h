@@ -49,7 +49,7 @@ private:
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 	void __attribute__((noinline)) ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeException);
 
-	void ParseArray(size_t& length, function_ref<void(size_t index)> processElement) THROWS(GCodeException);
+	void ParseArray(size_t& length, function_ref<void(size_t index)> THROWS(GCodeException) processElement) THROWS(GCodeException);
 
 	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException);
 

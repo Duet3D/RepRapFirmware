@@ -567,7 +567,7 @@ DriverId ExpressionParser::ParseDriverId() THROWS(GCodeException)
 	return val.GetDriverIdValue();
 }
 
-void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index)> processElement) THROWS(GCodeException)
+void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index)> THROWS(GCodeException) processElement) THROWS(GCodeException)
 {
 	size_t numElements = 0;
 	AdvancePointer();					// skip the '{'
@@ -575,7 +575,7 @@ void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index
 	{
 		processElement(numElements);
 		++numElements;
-		if (CurrentCharacter() != ',')
+		if (CurrentCharacter() != EXPRESSION_LIST_SEPARATOR)
 		{
 			break;
 		}
