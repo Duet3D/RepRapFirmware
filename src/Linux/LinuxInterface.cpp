@@ -1091,11 +1091,8 @@ void LinuxInterface::Spin() noexcept
 				}
 			}
 
-			// Start the next transfer
+			// Start the next transfer and wait for it to complete
 			transfer.StartNextTransfer();
-
-			// Wait for the next SPI transaction to complete or for a timeout to occur
-			TaskBase::Take(SpiConnectionTimeout);
 		}
 		else if (isConnected && !writingIap && (!transfer.IsConnected() || hadReset))
 		{
@@ -1156,10 +1153,21 @@ void LinuxInterface::Spin() noexcept
 			// Turn off all the heaters
 			reprap.GetHeat().SwitchOffAll(true);
 
+			// Reset the SPI connection
+			transfer.ResetConnection();
+
 			if (hadReset)
 			{
 				// Let the main task invalidate resources
 				TaskBase::Take(LinuxYieldTimeout);
+			}
+		}
+		else if (!writingIap)
+		{
+			if (isConnected || transfer.IsConnected())
+			{
+				// Wait for the next SPI transaction to complete or for a timeout to occur
+				TaskBase::Take(SpiConnectionTimeout);
 			}
 			else
 			{
@@ -1167,14 +1175,9 @@ void LinuxInterface::Spin() noexcept
 				TaskBase::Take();
 			}
 		}
-		else if (!writingIap)
-		{
-			// A transfer is being performed but it has not finished yet
-			TaskBase::Take(LinuxYieldTimeout);
-		}
 		else
 		{
-			// IAP binary is being written, only keep equal or higher priority tasks running
+			// A transfer is being performed but it has not finished yet
 			RTOSIface::Yield();
 		}
 	}
@@ -1365,7 +1368,7 @@ bool LinuxInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
 	// Set up the request content
 	MutexLocker locker(fileMutex);
 	filePath = fileOrDirectory;
-	fileOperation = FileOperation::close;
+	fileOperation = FileOperation::deleteFileOrDirectory;
 	fileOperationPending = true;
 
 	// Let the SBC task process this request as quickly as possible
@@ -1559,7 +1562,6 @@ void LinuxInterface::CloseFile(FileHandle handle) noexcept
 		sbcTask->Give();
 	}
 	fileSemaphore.Take();
-;
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept

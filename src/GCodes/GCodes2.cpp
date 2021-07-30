@@ -533,10 +533,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
 						if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))
 						{
+							pauseState = PauseState::cancelling;
 							break;
 						}
 
-						pauseState = PauseState::cancelling;
 						const bool leaveHeatersOn = (gb.Seen('H') && gb.GetIValue() > 0);
 						gb.SetState((leaveHeatersOn) ? GCodeState::stoppingWithHeatersOn : GCodeState::stoppingWithHeatersOff);
 						(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemHelperMacroCode);

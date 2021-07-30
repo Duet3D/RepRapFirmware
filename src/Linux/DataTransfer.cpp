@@ -765,7 +765,7 @@ void DataTransfer::ExchangeData() noexcept
 	setup_spi(rxBuffer, txBuffer, bytesToExchange);
 }
 
-void DataTransfer::ResetTransfer(bool ownRequest) noexcept
+void DataTransfer::StatefulTransferReset(bool ownRequest) noexcept
 {
 	if (reprap.Debug(moduleLinuxInterface))
 	{
@@ -792,9 +792,16 @@ bool DataTransfer::IsReady() noexcept
 	if (dataReceived)
 	{
 #if SAME5x
-		if (!digitalRead(SbcSSPin))			// transfer is complete if SS is high
+		// Unfortunately the SAME5x doesn't have an end-of-transfer interrupt, but SPI transfers typically don't take long
+		uint32_t startTime = millis();
+		while (!digitalRead(SbcSSPin))			// transfer is complete if SS is high
 		{
-			return false;
+			RTOSIface::Yield();
+			if (millis() - startTime > SpiTransferTimeout)
+			{
+				ResetTransfer();
+				return false;
+			}
 		}
 
 		if (SbcSpiSercom->SPI.STATUS.bit.BUFOVF)
@@ -825,7 +832,7 @@ bool DataTransfer::IsReady() noexcept
 			if (headerResponse == TransferResponse::BadResponse)
 			{
 				// Linux wants to restart the transfer
-				ResetTransfer(false);
+				StatefulTransferReset(false);
 				break;
 			}
 
@@ -882,7 +889,7 @@ bool DataTransfer::IsReady() noexcept
 			else if (rxResponse == TransferResponse::BadResponse)
 			{
 				// Linux wants to restart the transfer
-				ResetTransfer(false);
+				StatefulTransferReset(false);
 			}
 			else if (rxResponse == TransferResponse::BadHeaderChecksum || txResponse == TransferResponse::BadHeaderChecksum)
 			{
@@ -893,7 +900,7 @@ bool DataTransfer::IsReady() noexcept
 			else
 			{
 				// Received invalid response code
-				ResetTransfer(true);
+				StatefulTransferReset(true);
 			}
 			break;
 
@@ -942,7 +949,7 @@ bool DataTransfer::IsReady() noexcept
 			if (rxResponse == TransferResponse::BadResponse)
 			{
 				// Linux wants to restart the transfer
-				ResetTransfer(false);
+				StatefulTransferReset(false);
 			}
 			else if (rxResponse == TransferResponse::BadDataChecksum || txResponse == TransferResponse::BadDataChecksum)
 			{
@@ -953,7 +960,7 @@ bool DataTransfer::IsReady() noexcept
 			else
 			{
 				// Received invalid response, reset the SPI transfer
-				ResetTransfer(true);
+				StatefulTransferReset(true);
 			}
 			break;
 
@@ -969,32 +976,10 @@ bool DataTransfer::IsReady() noexcept
 			break;
 		}
 	}
-	else if (state != SpiState::ExchangingHeader && millis() - lastTransferTime > SpiTransferTimeout)
+	else if (millis() - lastTransferTime > SpiTransferTimeout)
 	{
 		// Reset failed transfers automatically after a certain period of time
-		transferReadyHigh = false;
-		disable_spi();
-		failedTransfers++;
-		ExchangeHeader();
-	}
-	else if (!IsConnected() && lastTransferNumber != 0)
-	{
-		// The Linux interface is no longer connected...
-		disable_spi();
-
-		// Reset the sequence numbers and clear the data to send
-		lastTransferNumber = 0;
-		rxHeader.sequenceNumber = 0;
-		txHeader.sequenceNumber = 0;
-		rxPointer = txPointer = 0;
-		packetId = 0;
-
-		// Kick off a new transfer
-		if (transferReadyHigh)
-		{
-			transferReadyHigh = false;
-		}
-		StartNextTransfer();
+		ResetTransfer();
 	}
 	return false;
 }
@@ -1020,6 +1005,39 @@ void DataTransfer::StartNextTransfer() noexcept
 
 	// Begin SPI transfer
 	ExchangeHeader();
+}
+
+void DataTransfer::ResetTransfer() noexcept
+{
+	dataReceived = false;
+	if (state != SpiState::ExchangingHeader)
+	{
+		disable_spi();
+		failedTransfers++;
+		transferReadyHigh = false;
+		ExchangeHeader();
+	}
+}
+
+void DataTransfer::ResetConnection() noexcept
+{
+	if (lastTransferNumber != 0)
+	{
+		// The Linux interface is no longer connected...
+		disable_spi();
+		dataReceived = false;
+
+		// Reset the sequence numbers and clear the data to send
+		lastTransferNumber = 0;
+		rxHeader.sequenceNumber = 0;
+		txHeader.sequenceNumber = 0;
+		rxPointer = txPointer = 0;
+		packetId = 0;
+
+		// Kick off a new transfer
+		transferReadyHigh = false;
+		StartNextTransfer();
+	}
 }
 
 bool DataTransfer::WriteObjectModel(OutputBuffer *data) noexcept
@@ -1598,13 +1616,18 @@ bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename) noexcept
 {
 	// Check if it fits
 	size_t filenameLength = strlen(filename);
-	if (!CanWritePacket(filenameLength))
+	if (!CanWritePacket(sizeof(StringHeader) + filenameLength))
 	{
 		return false;
 	}
 
 	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::DeleteFileOrDirectory, filenameLength);
+	(void)WritePacketHeader(FirmwareRequest::DeleteFileOrDirectory, sizeof(StringHeader) + filenameLength);
+
+	// Write header
+	StringHeader *header = WriteDataHeader<StringHeader>();
+	header->length = filenameLength;
+	header->padding = 0;
 
 	// Write filename
 	WriteData(filename, filenameLength);

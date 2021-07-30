@@ -114,15 +114,18 @@ bool GCodeMachineState::DoingFile() const noexcept
 void GCodeMachineState::CloseFile() noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface() && fileId != NoFileId)
+	if (reprap.UsingLinuxInterface())
 	{
-		const FileId lastFileId = fileId;
-		for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->GetPrevious())
+		if (fileId != NoFileId)
 		{
-			if (ms->fileId == lastFileId)
+			const FileId lastFileId = fileId;
+			for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->GetPrevious())
 			{
-				ms->fileId = NoFileId;
-				ms->fileFinished = false;
+				if (ms->fileId == lastFileId)
+				{
+					ms->fileId = NoFileId;
+					ms->fileFinished = false;
+				}
 			}
 		}
 	}

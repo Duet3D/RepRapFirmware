@@ -862,7 +862,6 @@ void GCodeBuffer::SetFileFinished() noexcept
 			{
 				// Flag it (and following machine states) as finished
 				ms->fileFinished = true;
-				reprap.GetLinuxInterface().EventOccurred();
 			}
 			else
 			{
@@ -873,7 +872,11 @@ void GCodeBuffer::SetFileFinished() noexcept
 
 	if (macroFileId == NoFileId)
 	{
-		reprap.GetPlatform().Message(WarningMessage, "Cannot set macro file finished because there is no file ID\n");
+		reprap.GetPlatform().MessageF(WarningMessage, "Cannot set macro file finished because there is no file ID (channel %s)\n", GetChannel().ToString());
+	}
+	else
+	{
+		reprap.GetLinuxInterface().EventOccurred();
 	}
 }
 
@@ -888,13 +891,13 @@ void GCodeBuffer::SetPrintFinished() noexcept
 			{
 				// Mark machine states executing the print file as finished
 				ms->fileFinished = true;
-				reprap.GetLinuxInterface().EventOccurred();
 			}
 		}
+		reprap.GetLinuxInterface().EventOccurred();
 	}
 	else
 	{
-		reprap.GetPlatform().Message(WarningMessage, "Cannot set print file finished because there is no file ID\n");
+		reprap.GetPlatform().MessageF(WarningMessage, "Cannot set print file finished because there is no file ID (channel %s)\n", GetChannel().ToString());
 	}
 }
 
