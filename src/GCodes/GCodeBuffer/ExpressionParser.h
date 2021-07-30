@@ -24,6 +24,13 @@ public:
 	float ParseFloat() THROWS(GCodeException);
 	int32_t ParseInteger() THROWS(GCodeException);
 	uint32_t ParseUnsigned() THROWS(GCodeException);
+	DriverId ParseDriverId() THROWS(GCodeException);
+
+	// These 4 functions may be removed when we support array-valued expressions more generally
+	void ParseFloatArray(float arr[], size_t& length) THROWS(GCodeException);
+	void ParseIntArray(int32_t arr[], size_t& length) THROWS(GCodeException);
+	void ParseUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);
+	void ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);
 
 	void SkipWhiteSpace() noexcept;
 	void CheckForExtraCharacters() THROWS(GCodeException);
@@ -41,11 +48,15 @@ private:
 	void __attribute__((noinline)) ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 	void __attribute__((noinline)) ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeException);
+
+	void ParseArray(size_t& length, function_ref<void(size_t index)> processElement) THROWS(GCodeException);
+
 	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToString(ExpressionValue& val, bool evaluate) noexcept;
+	void ConvertToDriverId(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 
 	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
