@@ -632,7 +632,7 @@ void AxisShaper::TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept
 		// If we have enough spare distance, reduce the acceleration slightly to lengthen that segment.
 		const float newDeceleration = speedDecrease/minimumNonOverlappedOriginalClocks;
 		const float newUnshapedDecelDistance = (dda.endSpeed + (0.5 * newDeceleration * minimumNonOverlappedOriginalClocks)) * minimumNonOverlappedOriginalClocks;
-		const float extraDecelDistance = GetExtraDecelStartDistance(dda.startSpeed, newDeceleration) + GetExtraDecelEndDistance(dda.topSpeed, newDeceleration);
+		const float extraDecelDistance = GetExtraDecelStartDistance(dda.topSpeed, newDeceleration) + GetExtraDecelEndDistance(dda.endSpeed, newDeceleration);
 		if (ImplementDecelShaping(dda, params, dda.totalDistance - (newUnshapedDecelDistance + extraDecelDistance), minimumNonOverlappedOriginalClocks + extraClocksAtStart + extraClocksAtEnd))
 		{
 			params.shapingPlan.shapeDecelStart = params.shapingPlan.shapeDecelEnd = true;
