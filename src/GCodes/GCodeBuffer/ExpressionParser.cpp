@@ -333,7 +333,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 							val.SetType(TypeCode::Int32);
 							val.iVal = (int32_t)(val.Get56BitValue() - val2.Get56BitValue());
 						}
-						if (val2.GetType() == TypeCode::Uint32)
+						else if (val2.GetType() == TypeCode::Uint32)
 						{
 							val.Set56BitValue(val.Get56BitValue() - val2.uVal);
 						}
@@ -393,6 +393,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						val.bVal = (val.fVal > val2.fVal);
 						break;
 
+					case TypeCode::DateTime:
+						val.bVal = val.Get56BitValue() > val2.Get56BitValue();
+						break;
+
 					case TypeCode::Bool:
 						val.bVal = (val.bVal && !val2.bVal);
 						break;
@@ -417,6 +421,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 					case TypeCode::Float:
 						val.bVal = (val.fVal < val2.fVal);
+						break;
+
+					case TypeCode::DateTime:
+						val.bVal = val.Get56BitValue() < val2.Get56BitValue();
 						break;
 
 					case TypeCode::Bool:
@@ -461,6 +469,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 						case TypeCode::Float:
 							val.bVal = (val.fVal == val2.fVal);
+							break;
+
+						case TypeCode::DateTime:
+							val.bVal = val.Get56BitValue() == val2.Get56BitValue();
 							break;
 
 						case TypeCode::Bool:
@@ -567,7 +579,7 @@ DriverId ExpressionParser::ParseDriverId() THROWS(GCodeException)
 	return val.GetDriverIdValue();
 }
 
-void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index)> THROWS(GCodeException) processElement) THROWS(GCodeException)
+void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException)
 {
 	size_t numElements = 0;
 	AdvancePointer();					// skip the '{'
