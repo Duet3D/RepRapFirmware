@@ -344,7 +344,7 @@ void Move::Exit() noexcept
 			moveState = MoveState::executing;
 		}
 
-		if (!moveRead)
+		if (!moveRead && nextPrepareDelay != 0)
 		{
 			TaskBase::Take(nextPrepareDelay);
 		}

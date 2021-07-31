@@ -271,8 +271,16 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 	{
 		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
 		cdda->Complete();
-		CurrentMoveCompleted();
-		cdda = currentDda;
+		CurrentMoveCompleted();										// this sets currentDda to nullptr and advances getPointer
+		DDA * const gp  = getPointer;								// capture volatile variable
+		if (gp->GetState() == DDA::frozen)
+		{
+			cdda = currentDda = gp;									// set up the next move to be simulated
+		}
+		else
+		{
+			cdda = nullptr;
+		}
 	}
 
 	// If we are already moving, see whether we need to prepare any more moves
@@ -289,20 +297,23 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 			cdda = cdda->GetNext();
 			if (cdda == addPointer)
 			{
-				return TaskBase::TimeoutUnlimited;				// all the moves we have are already prepared, so nothing to do until new moves arrive
+				return (simulationMode == 0)
+						? TaskBase::TimeoutUnlimited				// all the moves we have are already prepared, so nothing to do until new moves arrive
+							: 0;
 			}
 		}
 
-		return PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
+		const uint32_t ret = PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
+		return (simulationMode == 0) ? ret : 0;
 	}
 
 	// No DDA is executing, so start executing a new one if possible
-	DDA * dda = getPointer;										// capture volatile variable
-	if (   shouldStartMove										// if the Move code told us that we should start a move...
-		|| waitingForRingToEmpty								// ...or GCodes is waiting for all moves to finish...
-		|| !CanAddMove()										// ...or the ring is full...
+	DDA * dda = getPointer;											// capture volatile variable
+	if (   shouldStartMove											// if the Move code told us that we should start a move...
+		|| waitingForRingToEmpty									// ...or GCodes is waiting for all moves to finish...
+		|| !CanAddMove()											// ...or the ring is full...
 #if SUPPORT_REMOTE_COMMANDS
-		|| dda->GetState() == DDA::frozen						// ...or the move has already been frozen (it's probably a remote move)
+		|| dda->GetState() == DDA::frozen							// ...or the move has already been frozen (it's probably a remote move)
 #endif
 	   )
 	{
@@ -319,31 +330,30 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 			if (simulationMode != 0)
 			{
 				currentDda = dda;									// pretend we are executing this move
+				return 0;											// we don't want any delay because we want Spin() to be called again soon to complete this move
+			}
+
+			Platform& p = reprap.GetPlatform();
+			SetBasePriority(NvicPriorityStep);						// shut out step interrupt
+			const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
+			if (ScheduleNextStepInterrupt())
+			{
+				Interrupt(p);
+			}
+			SetBasePriority(0);
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+			if (wakeLaser)
+			{
+				Move::WakeLaserTask();
 			}
 			else
 			{
-				Platform& p = reprap.GetPlatform();
-				SetBasePriority(NvicPriorityStep);					// shut out step interrupt
-				const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
-				if (ScheduleNextStepInterrupt())
-				{
-					Interrupt(p);
-				}
-				SetBasePriority(0);
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-				if (wakeLaser)
-				{
-					Move::WakeLaserTask();
-				}
-				else
-				{
-					p.SetLaserPwm(0);
-				}
-#else
-				(void)wakeLaser;
-#endif
+				p.SetLaserPwm(0);
 			}
+#else
+			(void)wakeLaser;
+#endif
 		}
 		return ret;
 	}
@@ -378,10 +388,16 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, u
 	if (firstUnpreparedMove->GetState() == DDA::provisional)
 	{
 		// There are more moves waiting to be prepared, so ask to be woken up early
+		if (simulationMode != 0)
+		{
+			return 1;
+		}
+
 		const int32_t clocksTillWakeup = moveTimeLeft - (int32_t)DDA::UsualMinimumPreparedTime;						// calculate how long before we run out of prepared moves, less the usual advance prepare time
 		return (clocksTillWakeup <= 0) ? 2 : min<uint32_t>((uint32_t)clocksTillWakeup/(StepClockRate/1000), 2);		// wake up at that time, but delay for at least 2 ticks
 	}
 
+	// There are no moves waiting to be prepared
 	return TaskBase::TimeoutUnlimited;
 }
 
