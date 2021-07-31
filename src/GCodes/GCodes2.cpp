@@ -732,7 +732,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			case 20:		// List files on SD card
 				if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
 				{
@@ -809,6 +809,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
+#endif
+
+#if HAS_MASS_STORAGE
 
 			case 21: // Initialise SD card
 				if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
@@ -2979,7 +2982,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			case 503: // List variable settings
 				{
 					if (!LockFileSystem(gb))

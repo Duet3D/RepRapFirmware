@@ -2063,7 +2063,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 	return response;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // Get the list of files in the specified directory in JSON format. PanelDue uses this one, so include a newline at the end.
 // If flagDirs is true then we prefix each directory with a * character.
@@ -2080,11 +2080,14 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 	unsigned int err;
 	unsigned int nextFile = 0;
 
+#if HAS_MASS_STORAGE
 	if (!MassStorage::CheckDriveMounted(dir))
 	{
 		err = 1;
 	}
-	else if (!MassStorage::DirectoryExists(dir))
+	else
+#endif
+	if (!MassStorage::DirectoryExists(dir))
 	{
 		err = 2;
 	}
@@ -2156,11 +2159,14 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 	unsigned int err;
 	unsigned int nextFile = 0;
 
+#if HAS_MASS_STORAGE
 	if (!MassStorage::CheckDriveMounted(dir))
 	{
 		err = 1;
 	}
-	else if (!MassStorage::DirectoryExists(dir))
+	else
+#endif
+	if (!MassStorage::DirectoryExists(dir))
 	{
 		err = 2;
 	}
@@ -2242,7 +2248,6 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 	GCodeFileInfo info;
 	if (specificFile)
 	{
-#if HAS_MASS_STORAGE
 		// Poll file info for a specific file
 		String<MaxFilenameLength> filePath;
 		if (!MassStorage::CombineName(filePath.GetRef(), platform->GetGCodeDir(), filename))
@@ -2254,9 +2259,6 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 			// This may take a few runs...
 			return GCodeResult::notFinished;
 		}
-#else
-		return GCodeResult::notFinished;
-#endif
 	}
 	else if (!printMonitor->GetPrintingFileInfo(info))
 	{

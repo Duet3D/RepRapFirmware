@@ -46,22 +46,18 @@ void FileStore::Init() noexcept
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
-#if !HAS_MASS_STORAGE && !HAS_LINUX_INTERFACE
-	return false;
-#endif
-
 	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
 	writeBuffer = nullptr;
 
 	// Try to allocate a write buffer
 	if (writing)
 	{
-#if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE
 		if (!MassStorage::EnsurePath(filePath, true))
 		{
 			return false;
 		}
-#endif
+# endif
 
 		// Also try to allocate a write buffer so we can perform faster writes
 		// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
@@ -75,7 +71,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 
 	// Attempt to open the file
 	bool fileOpened = false;
-#if HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{
 		handle = reprap.GetLinuxInterface().OpenFile(filePath, mode, length, preAllocSize);
@@ -89,11 +85,11 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 			length = offset = 0;
 		}
 	}
-# if HAS_MASS_STORAGE
+#  if HAS_MASS_STORAGE
 	else
+#  endif
 # endif
-#endif
-#if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE
 	{
 		const FRESULT openReturn = f_open(&file, filePath,
 											(mode == OpenMode::write || mode == OpenMode::writeWithCrc) ? FA_CREATE_ALWAYS | FA_WRITE
@@ -113,7 +109,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 			}
 		}
 	}
-#endif
+# endif
 
 	// Discard the write buffer if that failed
 	if (!fileOpened)
@@ -147,6 +143,10 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 	reprap.VolumesUpdated();
 	return true;
 }
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // This may be called from an ISR, in which case we need to defer the close
 bool FileStore::Close() noexcept
@@ -224,6 +224,10 @@ bool FileStore::Seek(FilePosition pos) noexcept
 #endif
 #if HAS_MASS_STORAGE
 		return f_lseek(&file, pos) == FR_OK;
+#elif HAS_EMBEDDED_FILES
+		//TODO limit checking
+		offset = pos;
+		return true;
 #else
 		return false;
 #endif
@@ -233,6 +237,10 @@ bool FileStore::Seek(FilePosition pos) noexcept
 		return false;
 	}
 }
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Truncate file at current file pointer
 bool FileStore::Truncate() noexcept
@@ -267,7 +275,6 @@ bool FileStore::Truncate() noexcept
 		return false;
 	}
 }
-
 
 FilePosition FileStore::Position() const noexcept
 {
@@ -324,6 +331,10 @@ FilePosition FileStore::Length() const noexcept
 	}
 }
 
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+
 // Single character read
 bool FileStore::Read(char& b) noexcept
 {
@@ -363,6 +374,9 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 			}
 			return (int)bytes_read;
 		}
+#elif HAS_EMBEDDED_FILES
+		//TODO
+		return -1;
 #else
 		return -1;
 #endif
@@ -443,8 +457,20 @@ bool FileStore::ForceClose() noexcept
 	reprap.VolumesUpdated();
 	return ok && fr == FR_OK;
 #endif
+
+#if HAS_EMBEDDED_FILES
+	usageMode = FileUseMode::free;
+	closeRequested = false;
+	openCount = 0;
+	return true;
+#endif
+
 	return false;
 }
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 bool FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
 {

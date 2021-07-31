@@ -2782,7 +2782,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
 		if (f == nullptr)
 		{
@@ -2812,7 +2812,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 #endif
 	}
 
-#if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE
+#if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	gb.LatestMachineState().doingFileMacro = true;
 	gb.LatestMachineState().runningM501 = (codeRunning == 501);
 	gb.LatestMachineState().runningM502 = (codeRunning == 502);
@@ -2844,7 +2844,7 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 		else
 #endif
 		{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			FileData &file = gb.LatestMachineState().fileState;
 			gb.GetFileInput()->Reset(file);
 			file.Close();

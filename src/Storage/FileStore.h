@@ -51,6 +51,11 @@ public:
 	FilePosition Length() const noexcept;						// File size in bytes
 	bool IsCloseRequested() const noexcept { return closeRequested; }
 	bool IsFree() const noexcept { return usageMode == FileUseMode::free; }
+	FilePosition Position() const noexcept;						// Return the current position in the file, assuming we are reading the file
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	void Duplicate() noexcept;									// Create a second reference to this file
+#endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileWriteBuffer *GetWriteBuffer() const noexcept;			// Return a pointer to the remaining space for writing
@@ -60,29 +65,25 @@ public:
 	bool Write(const char* s) noexcept;							// Write a string
 	bool Flush() noexcept;										// Write remaining buffer data
 	bool Truncate() noexcept;									// Truncate file at current file pointer
-	FilePosition Position() const noexcept;						// Return the current position in the file, assuming we are reading the file
-# if HAS_MASS_STORAGE
-	uint32_t ClusterSize() const noexcept;						// Cluster size in bytes
-# endif
-# if 0	// not currently used
-	bool GoToEnd() noexcept;									// Position the file at the end (so you can write on the end).
-# endif
+	uint32_t GetCRC32() const noexcept;
+#endif
 
-# if HAS_LINUX_INTERFACE
+#if HAS_LINUX_INTERFACE
 	void Invalidate() noexcept;									// Invalidate the file
-# endif
-# if HAS_MASS_STORAGE
-	void Duplicate() noexcept;									// Create a second reference to this file
+#endif
+
+#if HAS_MASS_STORAGE
+	uint32_t ClusterSize() const noexcept;						// Cluster size in bytes
 	bool Invalidate(const FATFS *fs, bool doClose) noexcept;	// Invalidate the file if it uses the specified FATFS object
 	bool IsOpenOn(const FATFS *fs) const noexcept;				// Return true if the file is open on the specified file system
 	bool IsSameFile(const FIL& otherFile) const noexcept;		// Return true if the passed file is the same as ours
-# endif
-	uint32_t GetCRC32() const noexcept;
-
 # if 0	// not currently used
 	bool SetClusterMap(uint32_t[]) noexcept;					// Provide a cluster map for fast seeking
 # endif
+#endif
 
+#if 0	// not currently used
+	bool GoToEnd() noexcept;									// Position the file at the end (so you can write on the end).
 #endif
 
 private:
@@ -104,6 +105,10 @@ private:
 #if HAS_LINUX_INTERFACE
 	FileHandle handle;
 	FilePosition length;
+	FilePosition offset;
+#endif
+
+#if HAS_EMBEDDED_FILES
 	FilePosition offset;
 #endif
 

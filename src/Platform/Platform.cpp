@@ -4089,7 +4089,7 @@ bool Platform::IsDuetWiFi() const noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // Open a file
 FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
@@ -4112,11 +4112,13 @@ const char* Platform::InternalGetSysDir() const noexcept
 	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
 }
 
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 bool Platform::Delete(const char* folder, const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
 }
+# endif
 
 // Set the system files path
 GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcept
@@ -4152,11 +4154,13 @@ FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const noex
 				: nullptr;
 }
 
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 bool Platform::DeleteSysFile(const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
 }
+#endif
 
 bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const noexcept
 {

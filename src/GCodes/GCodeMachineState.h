@@ -196,7 +196,7 @@ public:
 
 	VariableSet variables;											// local variables and parameters
 	float feedRate;
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileState;
 #endif
 #if HAS_LINUX_INTERFACE

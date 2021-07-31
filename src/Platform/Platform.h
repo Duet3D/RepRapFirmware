@@ -393,10 +393,12 @@ public:
 #endif
 
 	// File functions
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool FileExists(const char* folder, const char *filename) const noexcept;
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool Delete(const char* folder, const char *filename) const noexcept;
+#endif
 
 	const char* GetWebDir() const noexcept; 					// Where the html etc files are
 	const char* GetGCodeDir() const noexcept; 					// Where the gcodes are
@@ -406,7 +408,9 @@ public:
 	GCodeResult SetSysDir(const char* dir, const StringRef& reply) noexcept;				// Set the system files path
 	bool SysFileExists(const char *filename) const noexcept;
 	FileStore* OpenSysFile(const char *filename, OpenMode mode) const noexcept;
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool DeleteSysFile(const char *filename) const noexcept;
+# endif
 	bool MakeSysFileName(const StringRef& result, const char *filename) const noexcept;
 	void AppendSysDir(const StringRef & path) const noexcept;
 	ReadLockedPointer<const char> GetSysDir() const noexcept;	// where the system files are
@@ -818,7 +822,7 @@ private:
 #endif
 
 	// Files
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	const char *sysDir;
 	mutable ReadWriteLock sysDirLock;
 #endif
@@ -883,7 +887,7 @@ private:
 	static bool deliberateError;						// true if we deliberately caused an exception for testing purposes. Must be static in case of exception during startup.
 };
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // Where the htm etc files are
 inline const char* Platform::GetWebDir() const noexcept

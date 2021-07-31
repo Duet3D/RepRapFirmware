@@ -10,7 +10,7 @@
 
 #include "FileStore.h"
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 class FileGCodeInput;
 
@@ -62,6 +62,7 @@ public:
 		return f->Read(buf, nBytes);
 	}
 
+# if HAS_MASS_STORAGE
 	bool Write(char b) noexcept
 	{
 		return f->Write(b);
@@ -92,6 +93,7 @@ public:
 	{
 		return f->Flush();
 	}
+# endif
 
 	FilePosition GetPosition() const noexcept
 	{

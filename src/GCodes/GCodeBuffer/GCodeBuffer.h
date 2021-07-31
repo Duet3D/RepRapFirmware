@@ -218,7 +218,7 @@ public:
 
 	void RestartFrom(FilePosition pos) noexcept;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCodeInput *GetFileInput() const noexcept { return fileInput; }
 #endif
 	GCodeInput *GetNormalInput() const noexcept { return normalInput; }
@@ -253,7 +253,7 @@ private:
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCodeInput *fileInput;							// Our file input stream for when we are reading from a print file or a macro file, may be shared with other GCodeBuffers
 #endif
 
