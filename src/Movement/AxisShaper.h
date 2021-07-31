@@ -8,7 +8,7 @@
 #ifndef SRC_MOVEMENT_AXISSHAPER_H_
 #define SRC_MOVEMENT_AXISSHAPER_H_
 
-#define SUPPORT_DAA		(1)
+#define SUPPORT_DAA		(0)
 
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
