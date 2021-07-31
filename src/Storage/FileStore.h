@@ -14,7 +14,7 @@
 class Platform;
 class FileWriteBuffer;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 enum class OpenMode : uint8_t
 {
@@ -45,53 +45,56 @@ public:
 	int Read(uint8_t* buf, size_t nBytes) noexcept
 		{ return Read((char*)buf, nBytes); }					// Read a block of nBytes length
 	int ReadLine(char* buf, size_t nBytes) noexcept;			// As Read but stop after '\n' or '\r\n' and null-terminate
+	bool Close() noexcept;										// Shut the file and tidy up
+	bool ForceClose() noexcept;
+	bool Seek(FilePosition pos) noexcept;						// Jump to pos in the file
+	FilePosition Length() const noexcept;						// File size in bytes
+	bool IsCloseRequested() const noexcept { return closeRequested; }
+	bool IsFree() const noexcept { return usageMode == FileUseMode::free; }
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileWriteBuffer *GetWriteBuffer() const noexcept;			// Return a pointer to the remaining space for writing
 	bool Write(char b) noexcept;								// Write 1 byte
 	bool Write(const char *s, size_t len) noexcept;				// Write a block of len bytes
 	bool Write(const uint8_t *s, size_t len) noexcept;			// Write a block of len bytes
 	bool Write(const char* s) noexcept;							// Write a string
 	bool Flush() noexcept;										// Write remaining buffer data
-	bool Close() noexcept;										// Shut the file and tidy up
-	bool ForceClose() noexcept;
-	bool Seek(FilePosition pos) noexcept;						// Jump to pos in the file
 	bool Truncate() noexcept;									// Truncate file at current file pointer
 	FilePosition Position() const noexcept;						// Return the current position in the file, assuming we are reading the file
-#if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE
 	uint32_t ClusterSize() const noexcept;						// Cluster size in bytes
-#endif
-	FilePosition Length() const noexcept;						// File size in bytes
-#if 0	// not currently used
+# endif
+# if 0	// not currently used
 	bool GoToEnd() noexcept;									// Position the file at the end (so you can write on the end).
-#endif
+# endif
 
-#if HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
 	void Invalidate() noexcept;									// Invalidate the file
-#endif
-#if HAS_MASS_STORAGE
+# endif
+# if HAS_MASS_STORAGE
 	void Duplicate() noexcept;									// Create a second reference to this file
 	bool Invalidate(const FATFS *fs, bool doClose) noexcept;	// Invalidate the file if it uses the specified FATFS object
 	bool IsOpenOn(const FATFS *fs) const noexcept;				// Return true if the file is open on the specified file system
 	bool IsSameFile(const FIL& otherFile) const noexcept;		// Return true if the passed file is the same as ours
-#endif
+# endif
 	uint32_t GetCRC32() const noexcept;
-	bool IsCloseRequested() const noexcept { return closeRequested; }
-	bool IsFree() const noexcept { return usageMode == FileUseMode::free; }
 
-#if 0	// not currently used
+# if 0	// not currently used
 	bool SetClusterMap(uint32_t[]) noexcept;					// Provide a cluster map for fast seeking
-#endif
+# endif
 
 #endif
+
 private:
 	void Init() noexcept;
 	bool Store(const char *s, size_t len, size_t *bytesWritten) noexcept;	// Write data to the non-volatile storage
 
-	volatile bool closeRequested;
-	bool calcCrc;
-	FileUseMode usageMode;
+	volatile unsigned int openCount;
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileWriteBuffer *writeBuffer;
 	CRC32 crc;
-	volatile unsigned int openCount;
+#endif
 
 #if HAS_MASS_STORAGE
     FIL file;
@@ -103,7 +106,16 @@ private:
 	FilePosition length;
 	FilePosition offset;
 #endif
+
+	volatile bool closeRequested;
+	FileUseMode usageMode;
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	bool calcCrc;
+#endif
 };
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 inline FileWriteBuffer *FileStore::GetWriteBuffer() const noexcept { return writeBuffer; }
 
@@ -115,3 +127,7 @@ inline uint32_t FileStore::GetCRC32() const noexcept
 }
 
 #endif
+
+#endif	// HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+
+#endif	// #ifndef FILESTORE_H

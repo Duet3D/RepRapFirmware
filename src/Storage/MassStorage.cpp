@@ -125,7 +125,9 @@ static DIR findDir;
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 static FileWriteBuffer *freeWriteBuffers;
+#endif
 
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 static Mutex fsMutex;
 static FileStore files[MAX_FILES];
 #endif
@@ -281,9 +283,9 @@ void MassStorage::Init() noexcept
 	{
 # if SAME70
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers, writeBufferStorage[i]);
-#else
+# else
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
-#endif
+# endif
 	}
 
 # if HAS_MASS_STORAGE
@@ -313,7 +315,7 @@ void MassStorage::Init() noexcept
 
 void MassStorage::Spin() noexcept
 {
-#if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE
 	for (size_t card = 0; card < NumSdCards; ++card)
 	{
 		SdCardInfo& inf = info[card];
@@ -370,7 +372,7 @@ void MassStorage::Spin() noexcept
 			}
 		}
 	}
-#endif
+# endif
 
 	// Check if any files are supposed to be closed
 	{
@@ -395,12 +397,12 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 			if (files[i].IsFree())
 			{
 				FileStore * const ret = (files[i].Open(filePath, mode, preAllocSize)) ? &files[i]: nullptr;
-#if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE
 				if (ret != nullptr && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 				{
 					(void)VolumeUpdated(filePath);
 				}
-#endif
+# endif
 				return ret;
 			}
 		}
@@ -408,6 +410,10 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 	reprap.GetPlatform().Message(ErrorMessage, "Max open file count exceeded.\n");
 	return nullptr;
 }
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // Close all files
 void MassStorage::CloseAllFiles() noexcept
@@ -421,6 +427,10 @@ void MassStorage::CloseAllFiles() noexcept
 		}
 	}
 }
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Static helper functions
 size_t FileWriteBuffer::fileWriteBufLen = FileWriteBufLen;
@@ -991,6 +1001,10 @@ bool MassStorage::IsCardDetected(size_t card) noexcept
 	return info[card].cardState == CardDetectState::present;
 }
 
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
 unsigned int MassStorage::GetNumFreeFiles() noexcept
 {
 	unsigned int numFreeFiles = 0;
@@ -1004,6 +1018,10 @@ unsigned int MassStorage::GetNumFreeFiles() noexcept
 	}
 	return numFreeFiles;
 }
+
+#endif
+
+#if HAS_MASS_STORAGE
 
 // Append the simulated printing time to the end of the file
 void MassStorage::RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept

@@ -36,7 +36,11 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 #define HAS_W5500_NETWORKING	0
 
 #define HAS_CPU_TEMP_SENSOR		1
-#define HAS_HIGH_SPEED_SD		1					// SD card socket is optional
+
+// File system options
+#define HAS_MASS_STORAGE		0					// SD card socket is optional
+#define HAS_HIGH_SPEED_SD		0
+#define HAS_EMBEDDED_FILES		1					// A read only file system is appended to the binary
 
 #if defined(PCCB_10) || defined(PCCB_08_X5)
 # define SUPPORT_TMC2660		1

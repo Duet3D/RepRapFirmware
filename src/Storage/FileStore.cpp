@@ -2,7 +2,7 @@
 
 #include "RepRapFirmware.h"
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
@@ -19,7 +19,10 @@
 # include <Linux/LinuxInterface.h>
 #endif
 
-FileStore::FileStore() noexcept : writeBuffer(nullptr)
+FileStore::FileStore() noexcept
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	: writeBuffer(nullptr)
+#endif
 {
 	Init();
 }
@@ -27,7 +30,7 @@ FileStore::FileStore() noexcept : writeBuffer(nullptr)
 void FileStore::Init() noexcept
 {
 	usageMode = FileUseMode::free;
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	openCount = 0;
 	closeRequested = false;
 #endif
@@ -36,6 +39,8 @@ void FileStore::Init() noexcept
 	length = offset = 0;
 #endif
 }
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
@@ -701,6 +706,8 @@ bool FileStore::SetClusterMap(uint32_t tbl[]) noexcept
 }
 
 #endif
+
+#endif	// HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 #endif
 

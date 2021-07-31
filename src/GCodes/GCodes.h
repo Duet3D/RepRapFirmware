@@ -599,7 +599,7 @@ private:
 #if HAS_MASS_STORAGE
 	FileData fileToPrint;						// The next file to print
 #endif
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	FilePosition fileOffsetToPrint;				// The offset to print from
 #endif
 
