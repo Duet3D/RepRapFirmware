@@ -154,46 +154,49 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 // Set workspace coordinates
 GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute)
 {
-	const uint32_t cs = (gb.Seen('P')) ? gb.GetIValue() : currentCoordinateSystem + 1;
-	if (cs > 0 && cs <= NumCoordinateSystems)
+	// No P parameter or P0 (LinuxCNC extension) means use current coordinate system
+	uint32_t cs = 0;
+	bool dummySeen;
+	gb.TryGetLimitedUIValue('P', cs, dummySeen, NumCoordinateSystems + 1);		// allow 0..NumCoordinateSystems inclusive
+	if (cs == 0)
 	{
-		bool seen = false;
-		for (size_t axis = 0; axis < numVisibleAxes; axis++)
-		{
-			if (gb.Seen(axisLetters[axis]))
-			{
-				const float coord = gb.GetDistance();
-				if (!seen)
-				{
-					if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
-					{
-						return GCodeResult::notFinished;
-					}
-					seen = true;
-				}
-				workplaceCoordinates[cs - 1][axis] = (compute) ? currentUserPosition[axis] - coord : coord;
-			}
-		}
-
-		if (seen)
-		{
-			reprap.MoveUpdated();
-			String<StringLengthLoggedCommand> scratch;
-			gb.AppendFullCommand(scratch.GetRef());
-			platform.Message(MessageType::LogInfo, scratch.c_str());
-		}
-		else
-		{
-			reply.printf("Origin of workplace %" PRIu32 ":", cs);
-			for (size_t axis = 0; axis < numVisibleAxes; axis++)
-			{
-				reply.catf(" %c%.2f", axisLetters[axis], (double)gb.InverseConvertDistance(workplaceCoordinates[cs - 1][axis]));
-			}
-		}
-		return GCodeResult::ok;
+		cs = currentCoordinateSystem + 1;
 	}
 
-	return GCodeResult::badOrMissingParameter;
+	bool seen = false;
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			const float coord = gb.GetDistance();
+			if (!seen)
+			{
+				if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
+				{
+					return GCodeResult::notFinished;
+				}
+				seen = true;
+			}
+			workplaceCoordinates[cs - 1][axis] = (compute) ? currentUserPosition[axis] - coord : coord;
+		}
+	}
+
+	if (seen)
+	{
+		reprap.MoveUpdated();
+		String<StringLengthLoggedCommand> scratch;
+		gb.AppendFullCommand(scratch.GetRef());
+		platform.Message(MessageType::LogInfo, scratch.c_str());
+	}
+	else
+	{
+		reply.printf("Origin of workplace %" PRIu32 ":", cs);
+		for (size_t axis = 0; axis < numVisibleAxes; axis++)
+		{
+			reply.catf(" %c%.2f", axisLetters[axis], (double)gb.InverseConvertDistance(workplaceCoordinates[cs - 1][axis]));
+		}
+	}
+	return GCodeResult::ok;
 }
 
 # if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
