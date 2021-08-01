@@ -58,8 +58,9 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%.4e B=%.4e C=%.4e",
-						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, phaseStepLimit, (double)pA, (double)pB, (double)pC);
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.4e",
+						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, phaseStepLimit,
+							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);
 		if (isDelta)
 		{
 			debugPrintf(" hmz0s=%.4e minusAaPlusBbTimesS=%.4e dSquaredMinusAsquaredMinusBsquared=%.4e drev=%.4e\n",
@@ -380,7 +381,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	{
 		// We are using nonzero pressure advance. Movement must be forwards.
 		mp.cart.pressureAdvanceK = shaper.GetKclocks();
-		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * params.unshaped.acceleration * params.unshaped.accelClocks;
+		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * (dda.topSpeed - dda.startSpeed);
 		forwardDistance += mp.cart.extraExtrusionDistance;
 
 		// Check if there is a reversal in the deceleration segment
@@ -410,10 +411,10 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 				const float timeToReverse = initialDecelSpeed * ((-0.5) * decelSeg->GetC());	// 'c' is -2/deceleration, so -0.5*c is 1/deceleration
 				if (timeToReverse < params.unshaped.decelClocks)
 				{
-					// There is a reversal
-					const float distanceToReverse = 0.5 * params.unshaped.deceleration * fsquare(timeToReverse);
+					// There is a reversal, although it could be tiny
+					const float distanceToReverse = fsquare(initialDecelSpeed) * decelSeg->GetC() * 0.25;	// because (v^2-u^2) = 2as, so if v=0 then s=-u^2/2a = u^2/2d = 0.25*u^2*c
 					forwardDistance += params.unshaped.decelStartDistance + distanceToReverse;
-					reverseDistance = 0.5 * params.unshaped.deceleration * fsquare(params.unshaped.decelClocks - timeToReverse);
+					reverseDistance = 0.5 * params.unshaped.deceleration * fsquare(params.unshaped.decelClocks - timeToReverse);	// because s = 0.5*a*t^2
 				}
 				else
 				{
@@ -438,26 +439,32 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	{
 		const float netDistance = forwardDistance - reverseDistance;
 		const int32_t iFwdSteps = (int32_t)forwardSteps;
-		const int32_t netSteps = (int32_t)(netDistance * mp.cart.effectiveStepsPerMm);
-		if (netSteps == 0 && iFwdSteps <= 1)
+		int32_t netSteps = (int32_t)(netDistance * mp.cart.effectiveStepsPerMm);
+		if (netSteps == 0 && iFwdSteps == 0)
 		{
-			// No movement at all, or one step forward and one step back which we will ignore
+			// No movement at all
 			shaper.SetExtrusionPending(netDistance * dda.directionVector[drive]);
 			return false;
 		}
 
 		// Note, netSteps may be negative for e.g. a deceleration-only move
-		if (netSteps > 0 && netSteps + 1 >= iFwdSteps)
+		if (netSteps == iFwdSteps)
 		{
-			// There is at least one forward step are zero or one reverse steps. We ignore a single reverse step.
-			totalSteps = netSteps;
-			reverseStartStep = totalSteps + 1;			// no reverse phase
+			// The reverse segment is very small, so ignore it
+			totalSteps = (uint32_t)iFwdSteps;
+			reverseStartStep = totalSteps + 1;
 		}
 		else
 		{
 			// We know that netSteps <= iFwdSteps
 			reverseStartStep = iFwdSteps + 1;
-			totalSteps = (uint32_t)((int32_t)(2 * iFwdSteps) - netSteps);
+			// Round up netSteps because we don't want to overshoot the reverse movement.
+			const float extrusionPending = netDistance - (float)netSteps * mp.cart.effectiveMmPerStep;
+			if (extrusionPending > 0.05 * mp.cart.effectiveMmPerStep)
+			{
+				++netSteps;
+			}
+			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) - netSteps - 1);
 		}
 		shaper.SetExtrusionPending((netDistance - (float)netSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 	}
@@ -494,6 +501,12 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	return CalcNextStepTime(dda);
+}
+
+// Version of fastSqrtf that allows for slightly negative operands cause dby rounding error
+static inline float fastLimSqrtf(float f) noexcept
+{
+	return (f > 0.0) ? fastSqrtf(f) : 0.0;
 }
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
@@ -543,7 +556,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	}
 	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 
-	uint32_t nextCalcStepTime;
+	float nextCalcStepTime;
 
 	// Work out the time of the step
 	switch (state)
@@ -553,13 +566,13 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		break;
 
 	case DMState::cartAccel:									// Cartesian accelerating
-		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 		break;
 
 	case DMState::cartDecelForwardsReversing:
 		if (nextStep + stepsTillRecalc < reverseStartStep)
 		{
-			nextCalcStepTime = pB - fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 			break;
 		}
 
@@ -568,11 +581,11 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion
-		nextCalcStepTime = pB + fastSqrtf(pA + pC * (float)((2 * (reverseStartStep - 1)) - (nextStep + stepsTillRecalc)));
+		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)((2 * (reverseStartStep - 1)) - (nextStep + stepsTillRecalc)));
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian accelerating with no reversal
-		nextCalcStepTime = pB - fastSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 		break;
 
 	case DMState::deltaForwardsReversing:						// moving forwards
@@ -601,7 +614,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			const float t1 = mp.delta.fMinusAaPlusBbTimesS + hmz0sc;
 			const float t2a = mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(mp.delta.fHmz0s) + fsquare(t1);
 			// Due to rounding error we can end up trying to take the square root of a negative number if we do not take precautions here
-			const float t2 = (t2a > 0.0) ? fastSqrtf(t2a) : 0.0;
+			const float t2 = fastLimSqrtf(t2a);
 			const float ds = (direction) ? t1 - t2 : t1 + t2;
 
 			// Now feed ds into the step algorithm for Cartesian motion
@@ -614,8 +627,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 
 			const float pCds = pC * ds;
 			nextCalcStepTime = (currentSegment->IsLinear()) ? pB + pCds
-								: (currentSegment->IsAccelerating()) ? pB + fastSqrtf(pA + pCds)
-									 : pB - fastSqrtf(pA + pCds);
+								: (currentSegment->IsAccelerating()) ? pB + fastLimSqrtf(pA + pCds)
+									 : pB - fastLimSqrtf(pA + pCds);
 			if (currentSegment->IsLinear()) { pA = ds; }	//DEBUG
 		}
 		break;
@@ -624,7 +637,18 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		return false;
 	}
 
-	if (nextCalcStepTime > dda.clocksNeeded)
+#if 0	//DEBUG
+	if (std::isnan(nextCalcStepTime) || nextCalcStepTime < 0.0)
+	{
+		state = DMState::stepError;
+		nextStep += 140000000 + stepsTillRecalc;			// so we can tell what happened in the debug print
+		distanceSoFar = nextCalcStepTime;					//DEBUG
+		return false;
+	}
+#endif
+
+	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
+	if (iNextCalcStepTime > dda.clocksNeeded)
 	{
 		// The calculation makes this step late.
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
@@ -632,26 +656,35 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
 		if (nextStep + stepsTillRecalc + 1 >= totalSteps)
 		{
-			nextCalcStepTime = dda.clocksNeeded;
+			iNextCalcStepTime = dda.clocksNeeded;
 		}
 		else
 		{
 			// We don't expect any step except the last to be late
 			state = DMState::stepError;
 			nextStep += 120000000 + stepsTillRecalc;		// so we can tell what happened in the debug print
-			stepInterval = nextCalcStepTime;				//DEBUG
+			stepInterval = iNextCalcStepTime;				//DEBUG
 			return false;
 		}
 	}
 
 	// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
-	stepInterval = (nextCalcStepTime > nextStepTime)
-					? (nextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
+	stepInterval = (iNextCalcStepTime > nextStepTime)
+					? (iNextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
 					: 0;
+#if 0	//DEBUG
+	if (isExtruder && stepInterval < 150 && nextStep + 1 < totalSteps)
+	{
+		state = DMState::stepError;
+		nextStep += 130000000 + stepsTillRecalc;			// so we can tell what happened in the debug print
+		return false;
+	}
+#endif
+
 #if EVEN_STEPS
-	nextStepTime = nextCalcStepTime - (stepsTillRecalc * stepInterval);
+	nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval);
 #else
-	nextStepTime = nextCalcStepTime;
+	nextStepTime = iNextCalcStepTime;
 #endif
 
 	return true;
