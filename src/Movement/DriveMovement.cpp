@@ -58,7 +58,7 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.4e",
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
 						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, phaseStepLimit,
 							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);
 		if (isDelta)
@@ -464,7 +464,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 			{
 				++netSteps;
 			}
-			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) - netSteps - 1);
+			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) - netSteps - 2);
 		}
 		shaper.SetExtrusionPending((netDistance - (float)netSteps * mp.cart.effectiveMmPerStep) * dda.directionVector[drive]);
 	}
@@ -515,45 +515,50 @@ static inline float fastLimSqrtf(float f) noexcept
 bool DriveMovement::CalcNextStepTimeFull(const DDA &dda) noexcept
 pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 {
-	uint32_t stepsToLimit = phaseStepLimit - nextStep;
-
-	// If there are no more steps left in this segment, skip to the next segment
-	if (stepsToLimit == 0)
-	{
-		currentSegment = currentSegment->GetNext();
-		const bool more = (isDelta) ? NewDeltaSegment(dda)
-							: (isExtruder) ? NewExtruderSegment()
-								: NewCartesianSegment();
-		if (!more)
-		{
-			state = DMState::stepError;
-			nextStep += 100000000;								// so we can tell what happened in the debug print
-			return false;
-		}
-		stepsToLimit = phaseStepLimit - nextStep;
-	}
-
-	if (reverseStartStep < phaseStepLimit && nextStep < reverseStartStep)
-	{
-		stepsToLimit = reverseStartStep - nextStep;
-	}
-
 	uint32_t shiftFactor = 0;									// assume single stepping
-	if (stepsToLimit > 1 && stepInterval < DDA::MinCalcInterval)
+
 	{
-		if (stepInterval < DDA::MinCalcInterval/4 && stepsToLimit > 8)
+		uint32_t stepsToLimit = phaseStepLimit - nextStep;
+		// If there are no more steps left in this segment, skip to the next segment
+		if (stepsToLimit == 0)
 		{
-			shiftFactor = 3;									// octal stepping
+			currentSegment = currentSegment->GetNext();
+			const bool more = (isDelta) ? NewDeltaSegment(dda)
+								: (isExtruder) ? NewExtruderSegment()
+									: NewCartesianSegment();
+			if (!more)
+			{
+				state = DMState::stepError;
+				nextStep += 100000000;							// so we can tell what happened in the debug print
+				return false;
+			}
+			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
 		}
-		else if (stepInterval < DDA::MinCalcInterval/2 && stepsToLimit > 4)
+		else
 		{
-			shiftFactor = 2;									// quad stepping
-		}
-		else if (stepsToLimit > 2)
-		{
-			shiftFactor = 1;									// double stepping
+			if (reverseStartStep < phaseStepLimit && nextStep < reverseStartStep)
+			{
+				stepsToLimit = reverseStartStep - nextStep;
+			}
+
+			if (stepsToLimit > 1 && stepInterval < DDA::MinCalcInterval)
+			{
+				if (stepInterval < DDA::MinCalcInterval/4 && stepsToLimit > 8)
+				{
+					shiftFactor = 3;							// octal stepping
+				}
+				else if (stepInterval < DDA::MinCalcInterval/2 && stepsToLimit > 4)
+				{
+					shiftFactor = 2;							// quad stepping
+				}
+				else if (stepsToLimit > 2)
+				{
+					shiftFactor = 1;							// double stepping
+				}
+			}
 		}
 	}
+
 	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 
 	float nextCalcStepTime;
@@ -580,8 +585,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		directionChanged = true;
 		state = DMState::cartDecelReverse;
 		// no break
-	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion
-		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)((2 * reverseStartStep) - (nextStep + stepsTillRecalc) - 1));
+	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
+		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)((2 * (int32_t)(reverseStartStep - 1)) - (int32_t)(nextStep + stepsTillRecalc)));
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian accelerating with no reversal
@@ -673,7 +678,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 					? (iNextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
 					: 0;
 #if 0	//DEBUG
-	if (isExtruder && stepInterval < 150 && nextStep + 1 < totalSteps)
+	if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
 	{
 		state = DMState::stepError;
 		nextStep += 130000000 + stepsTillRecalc;			// so we can tell what happened in the debug print
