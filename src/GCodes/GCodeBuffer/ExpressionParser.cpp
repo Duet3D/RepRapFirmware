@@ -304,7 +304,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						{
 							val.Set56BitValue((int64_t)val.Get56BitValue() + val2.iVal);
 						}
-						else
+						else if (evaluate)
 						{
 							ThrowParseException("invalid operand types");
 						}
@@ -341,7 +341,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						{
 							val.Set56BitValue((int64_t)val.Get56BitValue() - val2.iVal);
 						}
-						else
+						else if (evaluate)
 						{
 							ThrowParseException("invalid operand types");
 						}
@@ -402,7 +402,12 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						break;
 
 					default:
-						ThrowParseException("expected numeric or Boolean operands to comparison operator");
+						if (evaluate)
+						{
+							ThrowParseException("expected numeric or Boolean operands to comparison operator");
+						}
+						val.bVal = false;
+						break;
 					}
 					val.SetType(TypeCode::Bool);
 					if (invert)
@@ -432,7 +437,12 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						break;
 
 					default:
-						ThrowParseException("expected numeric or Boolean operands to comparison operator");
+						if (evaluate)
+						{
+							ThrowParseException("expected numeric or Boolean operands to comparison operator");
+						}
+						val.bVal = false;
+						break;
 					}
 					val.SetType(TypeCode::Bool);
 					if (invert)
@@ -488,7 +498,12 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 							break;
 
 						default:
-							ThrowParseException("unexpected operand type to equality operator");
+							if (evaluate)
+							{
+								ThrowParseException("unexpected operand type to equality operator");
+							}
+							val.bVal = false;
+							break;
 						}
 					}
 					val.SetType(TypeCode::Bool);
