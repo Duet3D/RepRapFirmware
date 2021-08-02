@@ -68,7 +68,7 @@ private:
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.1;
 	static constexpr float DefaultMinimumAcceleration = 10.0;
-	static constexpr float MinimumMiddleSegmentTime = 8.0/1000.0;	// minimum length of the segment between shaped start and shaped end of an acceleration or deceleration
+	static constexpr float MinimumMiddleSegmentTime = 5.0/1000.0;	// minimum length of the segment between shaped start and shaped end of an acceleration or deceleration
 
 	unsigned int numExtraImpulses;						// the number of extra impulses
 	float frequency;									// the undamped frequency in Hz
