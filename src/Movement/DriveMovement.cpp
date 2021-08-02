@@ -581,7 +581,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion
-		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)((2 * (reverseStartStep - 1)) - (nextStep + stepsTillRecalc)));
+		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)((2 * reverseStartStep) - (nextStep + stepsTillRecalc) - 1));
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian accelerating with no reversal
