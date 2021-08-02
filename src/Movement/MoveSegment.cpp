@@ -50,14 +50,14 @@ void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 
 void MoveSegment::DebugPrint(char ch) const noexcept
 {
-	debugPrintf("%c d=%.3e t=%" PRIu32 " ", ch, (double)segmentLength, (uint32_t)segTime);
+	debugPrintf("%c d=%.4e t=%.1f ", ch, (double)segmentLength, (double)segTime);
 	if (IsLinear())
 	{
-		debugPrintf("c=%.3e\n", (double)c);
+		debugPrintf("c=%.4e\n", (double)c);
 	}
 	else
 	{
-		debugPrintf("b=%.3e c=%.3e\n", (double)b, (double)c);
+		debugPrintf("b=%.4e c=%.4e\n", (double)b, (double)c);
 	}
 }
 

@@ -412,7 +412,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 				if (timeToReverse < params.unshaped.decelClocks)
 				{
 					// There is a reversal, although it could be tiny
-					const float distanceToReverse = fsquare(initialDecelSpeed) * decelSeg->GetC() * 0.25;	// because (v^2-u^2) = 2as, so if v=0 then s=-u^2/2a = u^2/2d = 0.25*u^2*c
+					const float distanceToReverse = fsquare(initialDecelSpeed) * decelSeg->GetC() * (-0.25);	// because (v^2-u^2) = 2as, so if v=0 then s=-u^2/2a = u^2/2d = -0.25*u^2*c
 					forwardDistance += params.unshaped.decelStartDistance + distanceToReverse;
 					reverseDistance = 0.5 * params.unshaped.deceleration * fsquare(params.unshaped.decelClocks - timeToReverse);	// because s = 0.5*a*t^2
 				}
