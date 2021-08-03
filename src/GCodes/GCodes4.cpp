@@ -546,6 +546,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
+	case GCodeState::cancelling:
+		if (LockMovementAndWaitForStandstill(gb))		// wait until cancel.g has completely finished
+		{
+			pauseState = PauseState::notPaused;
+			gb.SetState(GCodeState::normal);
+		}
+		break;
+
 	case GCodeState::flashing1:
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 
@@ -613,9 +621,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::stoppingWithHeatersOff:	// MO or M1 after executing stop.g/sleep.g if present
 		reprap.GetHeat().SwitchOffAll(true);
-		// no break
-
-	case GCodeState::stoppingWithHeatersOn:		// M0 H1 or M1 H1 after executing stop.g/sleep.g if present
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			pauseState = PauseState::notPaused;
