@@ -3583,9 +3583,9 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	FansBitmap fanMap;
 	if (gb.Seen('F'))
 	{
-		uint32_t fanMapping[MaxFans];
+		int32_t fanMapping[MaxFans];				// use a signed array so that F-1 will result in no fans at all
 		size_t fanCount = MaxFans;
-		gb.GetUnsignedArray(fanMapping, fanCount, false);
+		gb.GetIntArray(fanMapping, fanCount, false);
 		fanMap = FansBitmap::MakeFromArray(fanMapping, fanCount) & FansBitmap::MakeLowestNBits(MaxFans);
 		seen = true;
 	}
