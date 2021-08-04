@@ -582,8 +582,9 @@ void RepRap::Init() noexcept
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
 #if HAS_LINUX_INTERFACE && !HAS_MASS_STORAGE
-	linuxInterface->Init();
 	usingLinuxInterface = true;
+	linuxInterface->Init();
+	FileWriteBuffer::UsingSbcMode();
 #endif
 
 #if HAS_MASS_STORAGE
@@ -600,10 +601,6 @@ void RepRap::Init() noexcept
 
 		if (rslt == GCodeResult::ok)
 		{
-# if HAS_LINUX_INTERFACE
-			delete linuxInterface;						// free up the RAM for more tools etc.
-			linuxInterface = nullptr;
-# endif
 			// Run the configuration file
 			if (!RunStartupFile(GCodes::CONFIG_FILE) && !RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
 			{
@@ -613,19 +610,18 @@ void RepRap::Init() noexcept
 # if HAS_LINUX_INTERFACE
 		else if (!MassStorage::IsCardDetected(0))		// if we failed to mount the SD card because there was no card in the slot
 		{
-			linuxInterface->Init();
 			usingLinuxInterface = true;
+			FileWriteBuffer::UsingSbcMode();
 		}
 # endif
 		else
 		{
-# if HAS_LINUX_INTERFACE
-			delete linuxInterface;						// free up the RAM for more tools etc.
-			linuxInterface = nullptr;
-# endif
 			delay(3000);								// Wait a few seconds so users have a chance to see this
 			platform->MessageF(AddWarning(UsbMessage), "%s\n", reply.c_str());
 		}
+# if HAS_LINUX_INTERFACE
+		linuxInterface->Init();
+# endif
 	}
 #endif
 
@@ -760,6 +756,16 @@ void RepRap::Spin() noexcept
 	display->Spin();
 #endif
 
+#if HAS_LINUX_INTERFACE
+	// Keep the Linux task spinning from the main task in standalone mode to respond to a SBC if necessary
+	if (!UsingLinuxInterface())
+	{
+		ticksInSpinState = 0;
+		spinningModule = moduleLinuxInterface;
+		linuxInterface->Spin();
+	}
+#endif
+
 	ticksInSpinState = 0;
 	spinningModule = noModule;
 
@@ -833,7 +839,7 @@ void RepRap::Spin() noexcept
 
 void RepRap::Timing(MessageType mtype) noexcept
 {
-	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepTimer::StepClocksToMillis), (double)(fastLoop * StepTimer::StepClocksToMillis));
+	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
@@ -1287,7 +1293,7 @@ void RepRap::Tick() noexcept
 			if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
 			{
 				stopped = true;
-				heat->SwitchOffAll(true);
+				heat->SwitchOffAllLocalFromISR();								// can't call SwitchOffAll because remote heaters can't be turned off from inside a ISR
 				platform->EmergencyDisableDrivers();
 
 				// We now save the stack when we get stuck in a spin loop
@@ -1350,7 +1356,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	AppendFloatArray(response, "extr", GetExtrudersInUse(), [this](size_t extruder) noexcept { return move->LiveCoordinate(ExtruderToLogicalDrive(extruder), currentTool); }, 1);
 
 	// Current speeds
-	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeed(), (double)move->GetTopSpeed());
+	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)InverseConvertSpeedToMmPerSec(move->GetRequestedSpeed()), (double)InverseConvertSpeedToMmPerSec(move->GetTopSpeed()));
 
 	// Current tool number
 	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());
@@ -1833,7 +1839,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	// Accelerations
 	response->cat(',');
-	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return platform->Acceleration(drive); }, 2);
+	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->Acceleration(drive)); }, 2);
 
 	// Motor currents
 	response->cat(',');
@@ -1880,11 +1886,11 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 	response->catf(",\"idleTimeout\":%.1f,", (double)(move->IdleTimeout()));
 
 	// Minimum feedrates
-	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return platform->GetInstantDv(drive); }, 2);
+	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(platform->GetInstantDv(drive)); }, 2);
 
 	// Maximum feedrates
 	response->cat(',');
-	AppendFloatArray(response, "maxFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return platform->MaxFeedrate(drive); }, 2);
+	AppendFloatArray(response, "maxFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(platform->MaxFeedrate(drive)); }, 2);
 
 	// Config file is no longer included, because we can use rr_configfile or M503 instead
 	response->cat('}');
@@ -2496,21 +2502,22 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (gCodes->GetPauseState() == PauseState::pausing)			? 4		// Pausing
 			: (gCodes->GetPauseState() == PauseState::resuming)			? 5		// Resuming
 			: (gCodes->GetPauseState() == PauseState::paused)			? 6		// Paused
+			: (gCodes->GetPauseState() == PauseState::cancelling)		? 7		// Paused
 			: (printMonitor->IsPrinting())
-			  	  ? ((gCodes->IsSimulating())							? 7		// Simulating
-			: 														  	  8		// Printing
+			  	  ? ((gCodes->IsSimulating())							? 8		// Simulating
+			: 														  	  9		// Printing
 			  	  	)
-			: (gCodes->IsDoingToolChange())								? 9		// Changing tool
+			: (gCodes->IsDoingToolChange())								? 10		// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
-			   gCodes->WaitingForAcknowledgement()) 					? 10	// Busy
-			:															  11;	// Idle
+			   gCodes->WaitingForAcknowledgement()) 					? 11	// Busy
+			:															  12;	// Idle
 
 }
 
 // Get the status character for the new-style status response
 char RepRap::GetStatusCharacter() const noexcept
 {
-	return "CFHODRSMPTBI"[GetStatusIndex()];
+	return "CFHODRSAMPTBI"[GetStatusIndex()];
 }
 
 const char* RepRap::GetStatusString() const noexcept
@@ -2524,6 +2531,7 @@ const char* RepRap::GetStatusString() const noexcept
 		"pausing",
 		"resuming",
 		"paused",
+		"cancelling",
 		"simulating",
 		"processing",
 		"changingTool",
@@ -2625,7 +2633,7 @@ GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& 
 	return rslt;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix

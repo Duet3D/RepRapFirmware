@@ -16,7 +16,7 @@ RoundBedKinematics::RoundBedKinematics(KinematicsType t, SegmentationType segTyp
 
 
 // Return true if the specified XY position is reachable by the print head reference point.
-bool RoundBedKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept
+bool RoundBedKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
 	if (axes.IsBitSet(X_AXIS) && axes.IsBitSet(Y_AXIS) && (fsquare(axesCoords[X_AXIS]) + fsquare(axesCoords[Y_AXIS]) >= printRadiusSquared))
 	{
@@ -24,7 +24,7 @@ bool RoundBedKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes,
 	}
 	axes.ClearBit(X_AXIS);
 	axes.ClearBit(Y_AXIS);
-	return Kinematics::IsReachable(axesCoords, axes, isCoordinated);
+	return Kinematics::IsReachable(axesCoords, axes);
 }
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.

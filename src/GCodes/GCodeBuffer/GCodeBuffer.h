@@ -68,78 +68,56 @@ public:
 		return CurrentFileMachineState().lineNumber;
 	}
 	bool IsLastCommand() const noexcept;
-	GCodeResult GetLastResult() const noexcept {
-		return lastResult;
-	}
-	void SetLastResult(GCodeResult r) noexcept {
-		lastResult = r;
-	}
+	GCodeResult GetLastResult() const noexcept { return lastResult; }
+	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
 
-	bool Seen(char c) noexcept SPEED_CRITICAL;		// Is a character present?
-	void MustSee(char c) THROWS(GCodeException);// Test for character present, throw error if not
-	char MustSee(char c1, char c2) THROWS(GCodeException);// Test for one of two characters present, throw error if not
+	bool Seen(char c) noexcept SPEED_CRITICAL;										// Is a character present?
+	void MustSee(char c) THROWS(GCodeException);									// Test for character present, throw error if not
+	char MustSee(char c1, char c2) THROWS(GCodeException);							// Test for one of two characters present, throw error if not
+	inline bool SeenAny(const char *s) const noexcept { return SeenAny(Bitmap<uint32_t>(ParametersToBitmap(s))); }
 
-	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;// Get a float after a key letter
-	float GetDistance() THROWS(GCodeException);	// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;// Get an integer after a key letter
-	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue)
-			THROWS(GCodeException)
-			pre(minvalue <= maxValue)
-			post(minValue <= result; result <= maxValue);// Get an integer after a key letter
-	uint32_t GetUIValue() THROWS(GCodeException);// Get an unsigned integer value
-	uint32_t GetLimitedUIValue(char c, uint32_t minValue,
-			uint32_t maxValuePlusOne) THROWS(GCodeException)// Get an unsigned integer value, throw if outside limits
-					pre(maxValuePlusOne > minValue)// Get an unsigned integer value, throw if outside limits
-					post(result >= minValue; result < maxValuePlusOne);
-	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne)
-			THROWS(GCodeException)
-			post(result < maxValuePlusOne) {
-		return GetLimitedUIValue(c, 0, maxValuePlusOne);
-	}
-	float GetLimitedFValue(char c, float minValue, float maxValue)
-			THROWS(GCodeException)
-			pre(minvalue <= maxValue)
-			post(minValue <= result; result <= maxValue);// Get a float after a key letter
-	void GetIPAddress(IPAddress &returnedIp) THROWS(GCodeException);// Get an IP address quad after a key letter
-	void GetMacAddress(MacAddress &mac) THROWS(GCodeException);	// Get a MAC address sextet after a key letter
-	PwmFrequency GetPwmFrequency() THROWS(GCodeException);// Get a PWM frequency
-	float GetPwmValue() THROWS(GCodeException);				// Get a PWM value
-	DriverId GetDriverId() THROWS(GCodeException);			// Get a driver ID
-	void GetUnprecedentedString(const StringRef &str, bool allowEmpty = false)
-			THROWS(GCodeException);// Get a string with no preceding key letter
-	void GetQuotedString(const StringRef &str, bool allowEmpty = false)
-			THROWS(GCodeException);			// Get and copy a quoted string
-	void GetPossiblyQuotedString(const StringRef &str, bool allowEmpty = false)
-			THROWS(GCodeException);// Get and copy a string which may or may not be quoted
-	void GetReducedString(const StringRef &str) THROWS(GCodeException);	// Get and copy a quoted string, removing certain characters
-	void GetFloatArray(float arr[], size_t &length, bool doPad)
-			THROWS(GCodeException) SPEED_CRITICAL; // Get a colon-separated list of floats after a key letter
-	void GetIntArray(int32_t arr[], size_t &length, bool doPad)
-			THROWS(GCodeException);// Get a :-separated list of ints after a key letter
-	void GetUnsignedArray(uint32_t arr[], size_t &length, bool doPad)
-			THROWS(GCodeException);// Get a :-separated list of unsigned ints after a key letter
-	void GetDriverIdArray(DriverId arr[], size_t &length)
-			THROWS(GCodeException);// Get a :-separated list of drivers after a key letter
+	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter
+	float GetDistance() THROWS(GCodeException);										// Get a distance or coordinate and convert it from inches to mm if necessary
+	float GetSpeed() THROWS(GCodeException);										// Get a speed in mm/min or inches/min and convert it to mm/step_clock
+	float GetSpeedFromMm(bool useSeconds) THROWS(GCodeException);					// Get a speed in mm/min or optionally /sec and convert it to mm/step_clock
+	float GetAcceleration() THROWS(GCodeException);									// Get an acceleration in mm/sec^2 or inches/sec^2 and convert it to mm/step_clock^2
+	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter
+	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
+		pre(minvalue <= maxValue)
+		post(minValue <= result; result <= maxValue);								// Get an integer after a key letter
+	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
+	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)		// Get an unsigned integer value, throw if outside limits
+		pre(maxValuePlusOne > minValue)												// Get an unsigned integer value, throw if outside limits
+		post(result >= minValue; result < maxValuePlusOne);
+	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS(GCodeException)
+		post(result < maxValuePlusOne) { return GetLimitedUIValue(c, 0, maxValuePlusOne); }
+	float GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
+		pre(minvalue <= maxValue)
+		post(minValue <= result; result <= maxValue);								// Get a float after a key letter
+	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);				// Get an IP address quad after a key letter
+	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);						// Get a MAC address sextet after a key letter
+	PwmFrequency GetPwmFrequency() THROWS(GCodeException);							// Get a PWM frequency
+	float GetPwmValue() THROWS(GCodeException);										// Get a PWM value
+	DriverId GetDriverId() THROWS(GCodeException);									// Get a driver ID
+	void GetUnprecedentedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);	// Get a string with no preceding key letter
+	void GetQuotedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);			// Get and copy a quoted string
+	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty = false) THROWS(GCodeException);	// Get and copy a string which may or may not be quoted
+	void GetReducedString(const StringRef& str) THROWS(GCodeException);				// Get and copy a quoted string, removing certain characters
+	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException) SPEED_CRITICAL; // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
+	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
 
-	bool TryGetFValue(char c, float &val, bool &seen) THROWS(GCodeException);
-	bool TryGetIValue(char c, int32_t &val, bool &seen) THROWS(GCodeException);
-	bool TryGetLimitedIValue(char c, int32_t &val, bool &seen, int32_t minValue,
-			int32_t maxValue) THROWS(GCodeException);
-	bool TryGetUIValue(char c, uint32_t &val, bool &seen)
-			THROWS(GCodeException);
-	bool TryGetLimitedUIValue(char c, uint32_t &val, bool &seen,
-			uint32_t maxValuePlusOne) THROWS(GCodeException);
-	bool TryGetBValue(char c, bool &val, bool &seen) THROWS(GCodeException);
-	bool TryGetFloatArray(char c, size_t numVals, float vals[],
-			const StringRef &reply, bool &seen, bool doPad = false)
-					THROWS(GCodeException);
-	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[],
-			const StringRef &reply, bool &seen, bool doPad = false)
-					THROWS(GCodeException);
-	bool TryGetQuotedString(char c, const StringRef &str, bool &seen,
-			bool allowEmpty = false) THROWS(GCodeException);
-	bool TryGetPossiblyQuotedString(char c, const StringRef &str, bool &seen)
-			THROWS(GCodeException);
+	bool TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException);
+	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeException);
+	bool TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t minValue, int32_t maxValue) THROWS(GCodeException);
+	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException);
+	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException);
+	bool TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException);
+	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS(GCodeException);
+	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS(GCodeException);
+	bool TryGetQuotedString(char c, const StringRef& str, bool& seen, bool allowEmpty = false) THROWS(GCodeException);
+	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException);
 
 	bool IsIdle() const noexcept;
 	bool IsCompletelyIdle() const noexcept;
@@ -161,8 +139,13 @@ public:
 		return GetBlockState().GetIndent();
 	}
 
+	void UseInches(bool inchesNotMm) noexcept { machineState->usingInches = inchesNotMm; }
+	bool UsingInches() const noexcept { return machineState->usingInches; }
 	float ConvertDistance(float distance) const noexcept;
 	float InverseConvertDistance(float distance) const noexcept;
+	float ConvertSpeed(float speed) const noexcept;
+	float InverseConvertSpeed(float speed) const noexcept;
+	const char *GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
 	bool PushState(bool withinSameFile) noexcept;// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool withinSameFile) noexcept;// Pop state returning true if successful (i.e. no stack underrun)
@@ -333,6 +316,15 @@ public:
 protected:DECLARE_OBJECT_MODEL
 
 private:
+	bool SeenAny(Bitmap<uint32_t> bm) const noexcept;								// Return true if any of the parameter letters in the bitmap were seen
+
+	// Convert a string of uppercase parameter letters to a bit map
+	static inline constexpr uint32_t ParametersToBitmap(const char *s) noexcept
+	{
+		return (*s == 0) ? 0
+			: (*s >= 'A' && *s <= 'Z') ? ((uint32_t)1 << (*s - 'A')) | ParametersToBitmap(s + 1)
+				: ParametersToBitmap(s + 1);
+	}
 
 #if SUPPORT_OBJECT_MODEL
 	const char* GetStateText() const noexcept;

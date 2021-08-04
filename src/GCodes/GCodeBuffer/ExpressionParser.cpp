@@ -304,7 +304,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						{
 							val.Set56BitValue((int64_t)val.Get56BitValue() + val2.iVal);
 						}
-						else
+						else if (evaluate)
 						{
 							ThrowParseException("invalid operand types");
 						}
@@ -333,7 +333,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 							val.SetType(TypeCode::Int32);
 							val.iVal = (int32_t)(val.Get56BitValue() - val2.Get56BitValue());
 						}
-						if (val2.GetType() == TypeCode::Uint32)
+						else if (val2.GetType() == TypeCode::Uint32)
 						{
 							val.Set56BitValue(val.Get56BitValue() - val2.uVal);
 						}
@@ -341,7 +341,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						{
 							val.Set56BitValue((int64_t)val.Get56BitValue() - val2.iVal);
 						}
-						else
+						else if (evaluate)
 						{
 							ThrowParseException("invalid operand types");
 						}
@@ -393,12 +393,21 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						val.bVal = (val.fVal > val2.fVal);
 						break;
 
+					case TypeCode::DateTime:
+						val.bVal = val.Get56BitValue() > val2.Get56BitValue();
+						break;
+
 					case TypeCode::Bool:
 						val.bVal = (val.bVal && !val2.bVal);
 						break;
 
 					default:
-						ThrowParseException("expected numeric or Boolean operands to comparison operator");
+						if (evaluate)
+						{
+							ThrowParseException("expected numeric or Boolean operands to comparison operator");
+						}
+						val.bVal = false;
+						break;
 					}
 					val.SetType(TypeCode::Bool);
 					if (invert)
@@ -419,12 +428,21 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						val.bVal = (val.fVal < val2.fVal);
 						break;
 
+					case TypeCode::DateTime:
+						val.bVal = val.Get56BitValue() < val2.Get56BitValue();
+						break;
+
 					case TypeCode::Bool:
 						val.bVal = (!val.bVal && val2.bVal);
 						break;
 
 					default:
-						ThrowParseException("expected numeric or Boolean operands to comparison operator");
+						if (evaluate)
+						{
+							ThrowParseException("expected numeric or Boolean operands to comparison operator");
+						}
+						val.bVal = false;
+						break;
 					}
 					val.SetType(TypeCode::Bool);
 					if (invert)
@@ -463,6 +481,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 							val.bVal = (val.fVal == val2.fVal);
 							break;
 
+						case TypeCode::DateTime:
+							val.bVal = val.Get56BitValue() == val2.Get56BitValue();
+							break;
+
 						case TypeCode::Bool:
 							val.bVal = (val.bVal == val2.bVal);
 							break;
@@ -476,7 +498,12 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 							break;
 
 						default:
-							ThrowParseException("unexpected operand type to equality operator");
+							if (evaluate)
+							{
+								ThrowParseException("unexpected operand type to equality operator");
+							}
+							val.bVal = false;
+							break;
 						}
 					}
 					val.SetType(TypeCode::Bool);
@@ -558,6 +585,60 @@ uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 	default:
 		ThrowParseException("expected non-negative integer value");
 	}
+}
+
+DriverId ExpressionParser::ParseDriverId() THROWS(GCodeException)
+{
+	ExpressionValue val = Parse();
+	ConvertToDriverId(val, true);
+	return val.GetDriverIdValue();
+}
+
+void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException)
+{
+	size_t numElements = 0;
+	AdvancePointer();					// skip the '{'
+	while (numElements < length)
+	{
+		processElement(numElements);
+		++numElements;
+		if (CurrentCharacter() != EXPRESSION_LIST_SEPARATOR)
+		{
+			break;
+		}
+		if (numElements == length)
+		{
+			ThrowParseException("Array too long");
+		}
+		AdvancePointer();				// skip the '{'
+	}
+	if (CurrentCharacter() != '}')
+	{
+		ThrowParseException("Expected '}'");
+	}
+	AdvancePointer();					// skip the '{'
+	length = numElements;
+}
+
+// This is called when we expect a non-empty float array parameter and we have encountered (but not skipped) '{'
+void ExpressionParser::ParseFloatArray(float arr[], size_t& length) THROWS(GCodeException)
+{
+	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseFloat(); });
+}
+
+void ExpressionParser::ParseIntArray(int32_t arr[], size_t& length) THROWS(GCodeException)
+{
+	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseInteger(); });
+}
+
+void ExpressionParser::ParseUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException)
+{
+	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseUnsigned(); });
+}
+
+void ExpressionParser::ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
+{
+	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseDriverId(); });
 }
 
 void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
@@ -700,6 +781,51 @@ void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) noex
 		else
 		{
 			val.Set("");
+		}
+	}
+}
+
+void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
+{
+	switch (val.GetType())
+	{
+	case TypeCode::DriverId:
+		break;
+
+	case TypeCode::Int32:
+#if SUPPORT_CAN_EXPANSION
+		val.Set(DriverId(0, val.uVal));
+#else
+		val.Set(DriverId(val.uVal));
+#endif
+		break;
+
+	case TypeCode::Float:
+		{
+			const float f10val = 10.0 * val.fVal;
+			const int32_t ival = lrintf(f10val);
+#if SUPPORT_CAN_EXPANSION
+			if (ival >= 0 && fabsf(f10val - (float)ival) <= 0.002)
+			{
+				val.Set(ival/10, ival % 10);
+			}
+#else
+			if (ival >= 0 && ival < 10 && fabsf(f10val - (float)ival) <= 0.002)
+			{
+				val.Set(0, ival % 10);
+			}
+#endif
+			else
+			{
+				ThrowParseException("invalid driver ID");
+			}
+		}
+		break;
+
+	default:
+		if (evaluate)
+		{
+			ThrowParseException("expected driver ID");
 		}
 	}
 }

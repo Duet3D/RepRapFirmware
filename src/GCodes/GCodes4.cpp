@@ -278,7 +278,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			else
 			{
 				gb.SetState(GCodeState::homing2);
-				if (!DoFileMacro(gb, nextHomingFileName.c_str(), false, 28))
+				if (!DoFileMacro(gb, nextHomingFileName.c_str(), false, SystemHelperMacroCode))
 				{
 					reply.printf("Homing file %s not found", nextHomingFileName.c_str());
 					stateMachineResult = GCodeResult::error;
@@ -384,7 +384,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (currentTool != nullptr)
 			{
 				const float newZPos = (moveBuffer.coords[Z_AXIS] - currentTool->GetOffset(Z_AXIS));
-				if(newZPos > platform.AxisMaximum(Z_AXIS) || newZPos < platform.AxisMinimum(Z_AXIS))
+				if (newZPos > platform.AxisMaximum(Z_AXIS) || newZPos < platform.AxisMinimum(Z_AXIS))
 				{
 					gb.LatestMachineState().feedRate = toolChangeRestorePoint.feedRate;
 					doingToolChange = false;
@@ -394,13 +394,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					break;
 				}
 			}
+
 			// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
-			// Only do this if we are running as an FDM printer, because it's not appropriate for CNC machines.
 			SetMoveBufferDefaults();
 			currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-			moveBuffer.feedRate = DefaultFeedRate * SecondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
-			moveBuffer.tool = reprap.GetCurrentTool();					// needed so that bed compensation is applied correctly
+			moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
+			moveBuffer.tool = reprap.GetCurrentTool();							// needed so that bed compensation is applied correctly
 			NewMoveAvailable(1);
 			gb.AdvanceState();
 		}
@@ -408,7 +408,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChangeComplete:
 	case GCodeState::m109ToolChangeComplete:
-		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing or the move to height to finish
+		if (LockMovementAndWaitForStandstill(gb))		// wait for the move to height to finish
 		{
 			gb.LatestMachineState().feedRate = toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
@@ -511,8 +511,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			SetMoveBufferDefaults();
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-			moveBuffer.feedRate = DefaultFeedRate * SecondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
-			moveBuffer.tool = reprap.GetCurrentTool();					// needed so that bed compensation is applied correctly
+			moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
+			moveBuffer.tool = reprap.GetCurrentTool();							// needed so that bed compensation is applied correctly
 			if (gb.GetState() == GCodeState::resuming1 && currentZ > pauseRestorePoint.moveCoords[Z_AXIS])
 			{
 				// First move the head to the correct XY point, then move it down in a separate move
@@ -541,6 +541,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			restartInitialUserC1 = pauseRestorePoint.initialUserC1;
 			reply.copy("Printing resumed");
 			platform.Message(LogWarn, "Printing resumed\n");
+			pauseState = PauseState::notPaused;
+			gb.SetState(GCodeState::normal);
+		}
+		break;
+
+	case GCodeState::cancelling:
+		if (LockMovementAndWaitForStandstill(gb))		// wait until cancel.g has completely finished
+		{
 			pauseState = PauseState::notPaused;
 			gb.SetState(GCodeState::normal);
 		}
@@ -613,11 +621,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::stoppingWithHeatersOff:	// MO or M1 after executing stop.g/sleep.g if present
 		reprap.GetHeat().SwitchOffAll(true);
-		// no break
-
-	case GCodeState::stoppingWithHeatersOn:		// M0 H1 or M1 H1 after executing stop.g/sleep.g if present
 		if (LockMovementAndWaitForStandstill(gb))
 		{
+			pauseState = PauseState::notPaused;
 			platform.SetDriversIdle();
 			gb.SetState(GCodeState::normal);
 		}
@@ -639,14 +645,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				axes.SetBit(axis0Num);
 				axes.SetBit(axis1Num);
 				float axesCoords[MaxAxes];
-				axesCoords[axis0Num] = axis0Coord;
-				axesCoords[axis1Num] = axis1Coord;
+				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				axesCoords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
+				axesCoords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
 				if (move.IsAccessibleProbePoint(axesCoords, axes))
 				{
 					SetMoveBufferDefaults();
-					const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-					moveBuffer.coords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
-					moveBuffer.coords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
+					moveBuffer.coords[axis0Num] = axesCoords[axis0Num];
+					moveBuffer.coords[axis1Num] = axesCoords[axis1Num];
 					moveBuffer.coords[Z_AXIS] = zp->GetStartingHeight();
 					moveBuffer.feedRate = zp->GetTravelSpeed();
 					NewMoveAvailable(1);
@@ -1421,7 +1427,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		else
 		{
-# if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			SaveResumeInfo(true);											// create the resume file so that we can resume after power down
 # endif
 			platform.Message(LoggedGenericMessage, "Print auto-paused due to low voltage\n");

@@ -38,31 +38,48 @@ public:
 	// The Init method must be called prior to calling any of the other methods. Use reprap.UsingLinuxInterface() to guard calls to other members.
 	// OTOH, calling Init when we don't have a SBC connected may cause problems due to noise pickup on the SPI CS and clock inputs
 	void Init() noexcept;
+	void Spin() noexcept;														// Only called in standalone mode by the main loop
 	[[noreturn]] void TaskLoop() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 	bool IsConnected() const noexcept { return isConnected; }
 
-	bool HasPrintStarted();
+	void EventOccurred(bool timeCritical = false) noexcept;						// Called when a new event has happened. It can optionally start off a new transfer immediately
+	GCodeResult HandleM576(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Set the SPI communication parameters
+
 	bool HasPrintStopped();
 	StopPrintReason GetPrintStopReason() const { return printStopReason; }
-	bool FillBuffer(GCodeBuffer &gb) noexcept;		// Try to fill up the G-code buffer with the next available G-code
+	bool FillBuffer(GCodeBuffer &gb) noexcept;									// Try to fill up the G-code buffer with the next available G-code
 
 	void SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept;	// Notify Linux that the print has been paused
 
-	void HandleGCodeReply(MessageType type, const char *reply) noexcept;	// accessed by Platform
-	void HandleGCodeReply(MessageType type, OutputBuffer *buffer) noexcept;	// accessed by Platform
+	void HandleGCodeReply(MessageType type, const char *reply) noexcept;		// accessed by Platform
+	void HandleGCodeReply(MessageType type, OutputBuffer *buffer) noexcept;		// accessed by Platform
 
 	bool GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept;
+
+	bool FileExists(const char *filename) noexcept;
+	bool DeleteFileOrDirectory(const char *fileOrDirectory) noexcept;
+
+	FileHandle OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize = 0) noexcept;
+	int ReadFile(FileHandle handle, char *buffer, size_t bufferLength) noexcept;
+	bool WriteFile(FileHandle handle, const char *buffer, size_t bufferLength) noexcept;
+	bool SeekFile(FileHandle handle, FilePosition offset) noexcept;
+	bool TruncateFile(FileHandle handle) noexcept;
+	void CloseFile(FileHandle handle) noexcept;
 
 private:
 	DataTransfer transfer;
 	bool isConnected;
 	uint32_t numDisconnects, numTimeouts;
 
+	uint32_t maxDelayBetweenTransfers, numMaxEvents;
+	volatile bool delaying;
+	volatile uint32_t numEvents;
+
 	GCodeFileInfo fileInfo;
 	FilePosition pauseFilePosition;
 	PrintPausedReason pauseReason;
-	bool reportPause, reportPauseWritten, printStarted, printStopped;
+	bool reportPause, reportPauseWritten, printStopped;
 	StopPrintReason printStopReason;
 
 	char *codeBuffer;
@@ -81,6 +98,35 @@ private:
 	char *requestedFileBuffer;
 	int32_t requestedFileDataLength;
 
+	// File I/O
+	Mutex fileMutex;													// locked while a file operation is performed
+	BinarySemaphore fileSemaphore;										// resolved when the requested file operation has finished
+
+	enum class FileOperation {
+		none,
+		checkFileExists,
+		deleteFileOrDirectory,
+		openRead,
+		openWrite,
+		openAppend,
+		read,
+		write,
+		seek,
+		truncate,
+		close
+	} fileOperation;
+	bool fileOperationPending;
+
+	const char *filePath;
+	FileHandle fileHandle;
+	bool fileSuccess;
+
+	uint32_t filePreAllocSize;
+	char *fileReadBuffer;
+	const char *fileWriteBuffer;
+	size_t fileBufferLength, numFileWriteRequests;
+	FilePosition fileOffset;
+
 	static volatile OutputStack gcodeReply;
 	static Mutex gcodeReplyMutex;											// static so that the LinuxInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
 
@@ -98,17 +144,6 @@ inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedRea
 	pauseReason = reason;
 	reportPauseWritten = false;
 	reportPause = true;
-}
-
-inline bool LinuxInterface::HasPrintStarted()
-{
-	TaskCriticalSectionLocker locker;
-	if (printStarted)
-	{
-		printStarted = false;
-		return true;
-	}
-	return false;
 }
 
 inline bool LinuxInterface::HasPrintStopped()

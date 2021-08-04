@@ -34,7 +34,7 @@ constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 	{ "coords", 			OBJECT_MODEL_FUNC_NOSELF(&coordinatesArrayDescriptor), 								ObjectModelEntryFlags::none },
 	{ "extruderPos",		OBJECT_MODEL_FUNC(self->virtualExtruderPosition, 1),	 							ObjectModelEntryFlags::none },
 	{ "fanPwm", 			OBJECT_MODEL_FUNC(self->fanSpeed, 2), 												ObjectModelEntryFlags::none },
-	{ "feedRate", 			OBJECT_MODEL_FUNC(self->feedRate, 1), 												ObjectModelEntryFlags::none },
+	{ "feedRate", 			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->feedRate), 1), 				ObjectModelEntryFlags::none },
 #if SUPPORT_IOBITS
 	{ "ioBits",				OBJECT_MODEL_FUNC_IF(reprap.GetGCodes().GetMachineType() != MachineType::laser,
 													(int32_t)self->laserPwmOrIoBits.ioBits),					ObjectModelEntryFlags::none },
@@ -64,7 +64,7 @@ void RestorePoint::Init() noexcept
 		moveCoords[i] = 0.0;
 	}
 
-	feedRate = DefaultFeedRate * SecondsToMinutes;
+	feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 	proportionDone = 0.0;

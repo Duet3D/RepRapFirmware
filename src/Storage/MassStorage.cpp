@@ -121,10 +121,11 @@ static Mutex dirMutex;
 
 static FileInfoParser infoParser;
 static DIR findDir;
-static FileWriteBuffer *freeWriteBuffers;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+static FileWriteBuffer *freeWriteBuffers;
+
 static Mutex fsMutex;
 static FileStore files[MAX_FILES];
 #endif
@@ -177,7 +178,11 @@ uint16_t MassStorage::GetVolumeSeq(unsigned int volume) noexcept
 // Return true if we did update the sequence number
 static bool VolumeUpdated(const char *path) noexcept
 {
-	if (!StringEndsWithIgnoreCase(path, ".part"))
+	if (!StringEndsWithIgnoreCase(path, ".part")
+#if HAS_LINUX_INTERFACE
+		&& !reprap.UsingLinuxInterface()
+#endif
+	   )
 	{
 		const unsigned int volume = (isdigit(path[0]) && path[1] == ':') ? path[0] - '0' : 0;
 		if (volume < ARRAY_SIZE(info))
@@ -187,28 +192,6 @@ static bool VolumeUpdated(const char *path) noexcept
 		}
 	}
 	return false;
-}
-
-// Static helper functions
-FileWriteBuffer *MassStorage::AllocateWriteBuffer() noexcept
-{
-	MutexLocker lock(fsMutex);
-
-	FileWriteBuffer * const buffer = freeWriteBuffers;
-	if (buffer != nullptr)
-	{
-		freeWriteBuffers = buffer->Next();
-		buffer->SetNext(nullptr);
-		buffer->DataTaken();				// make sure that the write pointer is clear
-	}
-	return buffer;
-}
-
-void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept
-{
-	MutexLocker lock(fsMutex);
-	buffer->SetNext(freeWriteBuffers);
-	freeWriteBuffers = buffer;
 }
 
 // Unmount a file system returning the number of open files were invalidated
@@ -293,22 +276,22 @@ void MassStorage::Init() noexcept
 {
 	fsMutex.Create("FileSystem");
 
+	freeWriteBuffers = nullptr;
+	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
+	{
+# if SAME70
+		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers, writeBufferStorage[i]);
+#else
+		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
+#endif
+	}
+
 # if HAS_MASS_STORAGE
 	static const char * const VolMutexNames[] = { "SD0", "SD1" };
 	static_assert(ARRAY_SIZE(VolMutexNames) >= NumSdCards, "Incorrect VolMutexNames array");
 
 	// Create the mutexes
 	dirMutex.Create("DirSearch");
-
-	freeWriteBuffers = nullptr;
-	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
-	{
-#if SAME70
-		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers, writeBufferStorage[i]);
-#else
-		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
-#endif
-	}
 
 	for (size_t card = 0; card < NumSdCards; ++card)
 	{
@@ -325,6 +308,82 @@ void MassStorage::Init() noexcept
 
 	// We no longer mount the SD card here because it may take a long time if it fails
 # endif
+}
+
+
+void MassStorage::Spin() noexcept
+{
+#if HAS_MASS_STORAGE
+	for (size_t card = 0; card < NumSdCards; ++card)
+	{
+		SdCardInfo& inf = info[card];
+		if (inf.cdPin != NoPin)
+		{
+			if (IoPort::ReadPin(inf.cdPin))
+			{
+				// Pin state says no card present
+				switch (inf.cardState)
+				{
+				case CardDetectState::inserting:
+				case CardDetectState::present:
+					inf.cardState = CardDetectState::removing;
+					inf.cdChangedTime = millis();
+					break;
+
+				case CardDetectState::removing:
+					if (millis() - inf.cdChangedTime > SdCardDetectDebounceMillis)
+					{
+						inf.cardState = CardDetectState::notPresent;
+						if (inf.isMounted)
+						{
+							const unsigned int numFiles = InternalUnmount(card, false);
+							if (numFiles != 0)
+							{
+								reprap.GetPlatform().MessageF(ErrorMessage, "SD card %u removed with %u file(s) open on it\n", card, numFiles);
+							}
+						}
+					}
+					break;
+
+				default:
+					break;
+				}
+			}
+			else
+			{
+				// Pin state says card is present
+				switch (inf.cardState)
+				{
+				case CardDetectState::removing:
+				case CardDetectState::notPresent:
+					inf.cardState = CardDetectState::inserting;
+					inf.cdChangedTime = millis();
+					break;
+
+				case CardDetectState::inserting:
+					inf.cardState = CardDetectState::present;
+					break;
+
+				default:
+					break;
+				}
+			}
+		}
+	}
+#endif
+
+	// Check if any files are supposed to be closed
+	{
+		MutexLocker lock(fsMutex);
+		for (FileStore & fil : files)
+		{
+			if (fil.IsCloseRequested())
+			{
+				// We could not close this file in an ISR, so do it here
+				fil.Close();
+			}
+		}
+	}
 }
 
 FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
@@ -349,9 +408,7 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 	reprap.GetPlatform().Message(ErrorMessage, "Max open file count exceeded.\n");
 	return nullptr;
 }
-#endif
 
-#if HAS_MASS_STORAGE
 // Close all files
 void MassStorage::CloseAllFiles() noexcept
 {
@@ -364,6 +421,139 @@ void MassStorage::CloseAllFiles() noexcept
 		}
 	}
 }
+
+// Static helper functions
+size_t FileWriteBuffer::fileWriteBufLen = FileWriteBufLen;
+
+FileWriteBuffer *MassStorage::AllocateWriteBuffer() noexcept
+{
+	MutexLocker lock(fsMutex);
+
+	FileWriteBuffer * const buffer = freeWriteBuffers;
+	if (buffer != nullptr)
+	{
+		freeWriteBuffers = buffer->Next();
+		buffer->SetNext(nullptr);
+		buffer->DataTaken();				// make sure that the write pointer is clear
+	}
+	return buffer;
+}
+
+void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept
+{
+	MutexLocker lock(fsMutex);
+	buffer->SetNext(freeWriteBuffers);
+	freeWriteBuffers = buffer;
+}
+
+# if HAS_LINUX_INTERFACE
+
+// Invalidate all files
+void MassStorage::InvalidateAllFiles() noexcept
+{
+	MutexLocker lock(fsMutex);
+	for (FileStore& f : files)
+	{
+		while (!f.IsFree())
+		{
+			f.Invalidate();
+		}
+	}
+}
+
+# endif
+
+# if HAS_MASS_STORAGE
+
+// Delete a file or directory
+static bool InternalDelete(const char* filePath, bool messageIfFailed) noexcept
+{
+	FRESULT unlinkReturn;
+	bool isOpen = false;
+
+	// Start new scope to lock the filesystem for the minimum time
+	{
+		MutexLocker lock(fsMutex);
+
+		// First check whether the file is open - don't allow it to be deleted if it is, because that may corrupt the file system
+		FIL file;
+		const FRESULT openReturn = f_open(&file, filePath, FA_OPEN_EXISTING | FA_READ);
+		if (openReturn == FR_OK)
+		{
+			for (const FileStore& fil : files)
+			{
+				if (fil.IsSameFile(file))
+				{
+					isOpen = true;
+					break;
+				}
+			}
+			f_close(&file);
+		}
+
+		if (!isOpen)
+		{
+			unlinkReturn = f_unlink(filePath);
+		}
+	}
+
+	if (isOpen)
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Cannot delete file %s because it is open\n", filePath);
+		return false;
+	}
+
+	if (unlinkReturn != FR_OK)
+	{
+		// If the error was that the file or path doesn't exist, don't generate a global error message, but still return false
+		if (unlinkReturn != FR_NO_FILE && unlinkReturn != FR_NO_PATH)
+		{
+			if (messageIfFailed)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", filePath);
+			}
+		}
+		return false;
+	}
+	return true;
+}
+
+# endif
+
+// Delete a file or directory and update the volume sequence number returning true if successful
+bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
+{
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		if (reprap.GetLinuxInterface().DeleteFileOrDirectory(filePath))
+		{
+			return true;
+		}
+
+		if (messageIfFailed)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", filePath);
+		}
+		return false;
+	}
+#endif
+
+#if HAS_MASS_STORAGE
+	const bool ok = InternalDelete(filePath, messageIfFailed);
+	if (ok)
+	{
+		(void)VolumeUpdated(filePath);
+	}
+	return ok;
+#else
+	return false;
+#endif
+}
+
+#endif
+
+#if HAS_MASS_STORAGE
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 // If this returns true then the file system mutex is owned. The caller must subsequently release the mutex either
@@ -452,73 +642,17 @@ const char* MassStorage::GetMonthName(const uint8_t month) noexcept
 	return (month <= 12) ? monthNames[month] : monthNames[0];
 }
 
-// Delete a file or directory
-static bool InternalDelete(const char* filePath, bool messageIfFailed) noexcept
-{
-	FRESULT unlinkReturn;
-	bool isOpen = false;
-
-	// Start new scope to lock the filesystem for the minimum time
-	{
-		MutexLocker lock(fsMutex);
-
-		// First check whether the file is open - don't allow it to be deleted if it is, because that may corrupt the file system
-		FIL file;
-		const FRESULT openReturn = f_open(&file, filePath, FA_OPEN_EXISTING | FA_READ);
-		if (openReturn == FR_OK)
-		{
-			for (const FileStore& fil : files)
-			{
-				if (fil.IsSameFile(file))
-				{
-					isOpen = true;
-					break;
-				}
-			}
-			f_close(&file);
-		}
-
-		if (!isOpen)
-		{
-			unlinkReturn = f_unlink(filePath);
-		}
-	}
-
-	if (isOpen)
-	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Cannot delete file %s because it is open\n", filePath);
-		return false;
-	}
-
-	if (unlinkReturn != FR_OK)
-	{
-		// If the error was that the file or path doesn't exist, don't generate a global error message, but still return false
-		if (unlinkReturn != FR_NO_FILE && unlinkReturn != FR_NO_PATH)
-		{
-			if (messageIfFailed)
-			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", filePath);
-			}
-		}
-		return false;
-	}
-	return true;
-}
-
-// Delete a file or directory and update the volume sequence number returning true if successful
-bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
-{
-	const bool ok = InternalDelete(filePath, messageIfFailed);
-	if (ok)
-	{
-		(void)VolumeUpdated(filePath);
-	}
-	return ok;
-}
-
 // Ensure that the path up to the last '/' (excluding trailing '/' characters) in filePath exists, returning true if successful
 bool MassStorage::EnsurePath(const char* filePath, bool messageIfFailed) noexcept
 {
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		// This isn't needed in SBC mode because DSF does it automatically
+		return true;
+	}
+#endif
+
 	// Try to create the path of this file if we want to write to it
 	String<MaxFilenameLength> filePathCopy;
 	filePathCopy.copy(filePath);
@@ -621,30 +755,25 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool 
 #endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+
 // Check if the specified file exists
 bool MassStorage::FileExists(const char *filePath) noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
-#endif
+	if (reprap.UsingLinuxInterface())
 	{
+		return reprap.GetLinuxInterface().FileExists(filePath);
+	}
+#endif
+
 #if HAS_MASS_STORAGE
-		FILINFO fil;
-		return (f_stat(filePath, &fil) == FR_OK);
+	FILINFO fil;
+	return (f_stat(filePath, &fil) == FR_OK);
 #else
-		return false;
-#endif
-	}
-#if HAS_LINUX_INTERFACE
-	else
-	{
-		char dummyBuf[1];
-		uint32_t dummyLen = 0;
-		uint32_t dummyFileSize = 0;
-		return reprap.GetLinuxInterface().GetFileChunk(filePath, 0, dummyBuf, dummyLen, dummyFileSize);
-	}
+	return false;
 #endif
 }
+
 #endif
 
 #if HAS_MASS_STORAGE
@@ -874,79 +1003,6 @@ unsigned int MassStorage::GetNumFreeFiles() noexcept
 		}
 	}
 	return numFreeFiles;
-}
-
-void MassStorage::Spin() noexcept
-{
-	for (size_t card = 0; card < NumSdCards; ++card)
-	{
-		SdCardInfo& inf = info[card];
-		if (inf.cdPin != NoPin)
-		{
-			if (IoPort::ReadPin(inf.cdPin))
-			{
-				// Pin state says no card present
-				switch (inf.cardState)
-				{
-				case CardDetectState::inserting:
-				case CardDetectState::present:
-					inf.cardState = CardDetectState::removing;
-					inf.cdChangedTime = millis();
-					break;
-
-				case CardDetectState::removing:
-					if (millis() - inf.cdChangedTime > SdCardDetectDebounceMillis)
-					{
-						inf.cardState = CardDetectState::notPresent;
-						if (inf.isMounted)
-						{
-							const unsigned int numFiles = InternalUnmount(card, false);
-							if (numFiles != 0)
-							{
-								reprap.GetPlatform().MessageF(ErrorMessage, "SD card %u removed with %u file(s) open on it\n", card, numFiles);
-							}
-						}
-					}
-					break;
-
-				default:
-					break;
-				}
-			}
-			else
-			{
-				// Pin state says card is present
-				switch (inf.cardState)
-				{
-				case CardDetectState::removing:
-				case CardDetectState::notPresent:
-					inf.cardState = CardDetectState::inserting;
-					inf.cdChangedTime = millis();
-					break;
-
-				case CardDetectState::inserting:
-					inf.cardState = CardDetectState::present;
-					break;
-
-				default:
-					break;
-				}
-			}
-		}
-	}
-
-	// Check if any files are supposed to be closed
-	{
-		MutexLocker lock(fsMutex);
-		for (FileStore & fil : files)
-		{
-			if (fil.IsCloseRequested())
-			{
-				// We could not close this file in an ISR, so do it here
-				fil.Close();
-			}
-		}
-	}
 }
 
 // Append the simulated printing time to the end of the file

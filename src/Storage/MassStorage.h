@@ -29,14 +29,22 @@ namespace MassStorage
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	void Init() noexcept;
+	void Spin() noexcept;
 	FileStore* OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
 	bool FileExists(const char *filePath) noexcept;
+	FileWriteBuffer *AllocateWriteBuffer() noexcept;
+	size_t GetFileWriteBufferLength() noexcept;
+	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
+	void CloseAllFiles() noexcept;
+	bool Delete(const char* filePath, bool messageIfFailed) noexcept;
+#endif
+#if HAS_LINUX_INTERFACE
+	void InvalidateAllFiles() noexcept;
 #endif
 #if HAS_MASS_STORAGE
 	bool FindFirst(const char *directory, FileInfo &file_info) noexcept;
 	bool FindNext(FileInfo &file_info) noexcept;
 	void AbandonFindNext() noexcept;
-	bool Delete(const char* filePath, bool messageIfFailed) noexcept;
 	bool EnsurePath(const char* filePath, bool messageIfFailed) noexcept;
 	bool MakeDirectory(const char *directory, bool messageIfFailed) noexcept;
 	bool Rename(const char *oldFilePath, const char *newFilePath, bool deleteExisting, bool messageIfFailed) noexcept;
@@ -51,14 +59,10 @@ namespace MassStorage
 	bool IsCardDetected(size_t card) noexcept;
 	unsigned int InvalidateFiles(const FATFS *fs, bool doClose) noexcept;					// Invalidate all open files on the specified file system, returning the number of files invalidated
 	bool AnyFileOpen(const FATFS *fs) noexcept;												// Return true if any files are open on the file system
-	void CloseAllFiles() noexcept;
 	unsigned int GetNumFreeFiles() noexcept;
-	void Spin() noexcept;
 	Mutex& GetVolumeMutex(size_t vol) noexcept;
 	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
 	void RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
-	FileWriteBuffer *AllocateWriteBuffer() noexcept;
-	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
 	uint16_t GetVolumeSeq(unsigned int volume) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 

@@ -63,18 +63,7 @@ public:
 	// ISR called from StepTimer
 	static void Interrupt() noexcept;
 
-#if SAME70 || SAME5x
-	// All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
-	static constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
-#elif defined(__LPC17xx__)
-	static constexpr uint32_t StepClockRate = 1000000;                          // 1MHz
-#else
-	static constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
-#endif
-
-	static constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
-	static constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
-	static constexpr uint32_t MinInterruptInterval = 6;							// about 6us
+	static constexpr uint32_t MinInterruptInterval = 6;							// Minimum interval between step timer interrupts, in step clocks; about 6us
 
 #if SUPPORT_REMOTE_COMMANDS
 	static uint32_t GetLocalTimeOffset() noexcept { return localTimeOffset; }
@@ -115,6 +104,7 @@ private:
 	static uint32_t prevMasterTime;												// the previous master time received
 	static uint32_t prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
 	static int32_t peakPosJitter, peakNegJitter;								// the max and min corrections we made to local time offset while synced
+	static bool gotJitter;														// true if we have recorded the jitter
 	static uint32_t peakReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
 	static volatile unsigned int syncCount;										// the number of messages we have received since starting sync
 	static unsigned int numJitterResyncs, numTimeoutResyncs;

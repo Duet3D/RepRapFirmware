@@ -75,7 +75,7 @@ size_t FansManager::GetNumFansToReport() const noexcept
 	return numFans;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 bool FansManager::WriteFanSettings(FileStore *f) const noexcept
 {

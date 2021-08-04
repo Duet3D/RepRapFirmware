@@ -267,12 +267,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 20: // Inches (which century are we living in, here?)
-			gb.LatestMachineState().usingInches = true;
+			gb.UseInches(true);
 			reprap.InputsUpdated();
 			break;
 
 		case 21: // mm
-			gb.LatestMachineState().usingInches = false;
+			gb.UseInches(false);
 			reprap.InputsUpdated();
 			break;
 
@@ -515,9 +515,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.copy("Pause the print before attempting to cancel it");
 					result = GCodeResult::error;
 				}
-				else if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
-						 || !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
-						)
+				else if (!LockMovementAndWaitForStandstill(gb))	// wait until everything has stopped and deferred command queue has caught up
 				{
 					return false;
 				}
@@ -531,13 +529,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 					{
 						// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-						if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))
+						if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed())
 						{
-							break;
+							gb.SetState(GCodeState::cancelling);
+							if (DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))
+							{
+								pauseState = PauseState::cancelling;
+								break;
+							}
+							// The state will be changed a few lines down, so no need to reset it to normal here
 						}
 
-						const bool leaveHeatersOn = (gb.Seen('H') && gb.GetIValue() > 0);
-						gb.SetState((leaveHeatersOn) ? GCodeState::stoppingWithHeatersOn : GCodeState::stoppingWithHeatersOff);
+						gb.SetState(GCodeState::stoppingWithHeatersOff);
 						(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemHelperMacroCode);
 					}
 				}
@@ -830,7 +833,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = MassStorage::Unmount(card, reply);
 				}
 				break;
+#endif
 
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 23: // Set file to print
 			case 32: // Select file and start SD print
 				// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functionality.
@@ -848,7 +853,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
-					if (QueueFileToPrint(filename.c_str(), reply))
+					if (
+#if HAS_LINUX_INTERFACE
+						reprap.UsingLinuxInterface()
+# if HAS_MASS_STORAGE
+						||
+# endif
+#endif
+#if HAS_MASS_STORAGE
+						QueueFileToPrint(filename.c_str(), reply)
+#endif
+					   )
 					{
 						reprap.GetPrintMonitor().StartingPrint(filename.c_str());
 						if (gb.LatestMachineState().compatibility == Compatibility::Marlin)
@@ -905,8 +920,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 						}
 					}
-#if HAS_MASS_STORAGE
-					else if (!fileToPrint.IsLive())
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+					else if (
+# if HAS_MASS_STORAGE
+								!fileToPrint.IsLive()
+# else
+								true
+# endif
+# if HAS_LINUX_INTERFACE
+								&& !reprap.UsingLinuxInterface()
+# endif
+							)
 					{
 						reply.copy("Cannot print, because no file is selected!");
 						result = GCodeResult::error;
@@ -928,7 +952,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								// We executed M26 to set the file offset, which normally means that we are executing resurrect.g.
 								// We need to copy the absolute/relative and volumetric extrusion flags over
 								fileGCode->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
-								fileToPrint.Seek(fileOffsetToPrint);
+# if HAS_LINUX_INTERFACE
+								if (!reprap.UsingLinuxInterface())
+# endif
+# if HAS_MASS_STORAGE
+								{
+									fileToPrint.Seek(fileOffsetToPrint);
+								}
+# endif
 								moveFractionToSkip = restartMoveFractionDone;
 							}
 							StartPrinting(fromStart);
@@ -1014,7 +1045,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 26: // Set SD position
 				// This is used between executing M23 to set up the file to print, and M25 to print it
 				gb.MustSee('S');
@@ -1028,7 +1059,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					restartInitialUserC1 = (gb.Seen(c1)) ? gb.GetFValue() : 0.0;
 				}
 				break;
+#endif
 
+#if HAS_MASS_STORAGE
 			case 27: // Report print status - Deprecated
 				if (reprap.GetPrintMonitor().IsPrinting())
 				{
@@ -1433,9 +1466,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 109: // Deprecated in RRF, but widely generated by slicers
 				{
 					const bool movementWasLocked = gb.LatestMachineState().lockedResources.IsBitSet(MoveResource);
-					if (   !LockMovementAndWaitForStandstill(gb)		// wait until movement has finished
-						|| !IsCodeQueueIdle()							// also wait until deferred command queue has caught up to avoid out-of-order execution
-					   )
+					if (!LockMovementAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
 					{
 						return false;
 					}
@@ -1646,9 +1677,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 116: // Wait for set temperatures
-				if (   !LockMovementAndWaitForStandstill(gb)		// wait until movement has finished
-					|| !IsCodeQueueIdle()							// also wait until deferred command queue has caught up to avoid out-of-order execution
-				   )
+				if (!LockMovementAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
 				{
 					return false;
 				}
@@ -1739,7 +1768,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 117:	// Display message
 				{
-					String<MediumStringLength> msg;
+					String<M117StringLength> msg;
 					gb.GetUnprecedentedString(msg.GetRef(), true);
 					reprap.SetMessage(msg.c_str());
 				}
@@ -1990,9 +2019,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 190: // Set bed temperature and wait
 			case 191: // Set chamber temperature and wait
-				if (   !LockMovementAndWaitForStandstill(gb)		// wait until movement has finished
-					|| !IsCodeQueueIdle()							// also wait until deferred command queue has caught up to avoid out-of-order execution
-				   )
+				if (!LockMovementAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
 				{
 					return false;
 				}
@@ -2078,7 +2105,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							platform.SetAcceleration(axis, gb.GetDistance());
+							platform.SetAcceleration(axis, gb.GetAcceleration());
 							seen = true;
 						}
 					}
@@ -2091,7 +2118,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetAcceleration(ExtruderToLogicalDrive(e), gb.ConvertDistance(eVals[e]));
+							platform.SetAcceleration(ExtruderToLogicalDrive(e), ConvertAcceleration(eVals[e]));
 						}
 					}
 
@@ -2101,16 +2128,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-						reply.printf("Accelerations (mm/sec^2): ");
+						reply.copy("Accelerations (mm/sec^2): ");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)platform.Acceleration(axis));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Acceleration(axis)));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)platform.Acceleration(ExtruderToLogicalDrive(extruder)));
+							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Acceleration(ExtruderToLogicalDrive(extruder))));
 							sep = ':';
 						}
 					}
@@ -2121,14 +2148,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					// Units are mm/sec if S1 is given, else mm/min
 					const bool usingMmPerSec = (gb.Seen('S') && gb.GetIValue() == 1);
-					const float settingMultiplier = (usingMmPerSec) ? 1.0 : SecondsToMinutes;
 					bool seen = false;
 
 					// Do the minimum first, because we constrain the maximum rates to be no lower than it
 					if (gb.Seen('I'))
 					{
 						seen = true;
-						platform.SetMinMovementSpeed(gb.GetDistance() * settingMultiplier);
+						platform.SetMinMovementSpeed(gb.GetSpeedFromMm(usingMmPerSec));
 					}
 
 					for (size_t axis = 0; axis < numTotalAxes; ++axis)
@@ -2136,7 +2162,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (gb.Seen(axisLetters[axis]))
 						{
 							seen = true;
-							platform.SetMaxFeedrate(axis, gb.GetDistance() * settingMultiplier);
+							platform.SetMaxFeedrate(axis, gb.GetSpeedFromMm(usingMmPerSec));
 						}
 					}
 
@@ -2148,7 +2174,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetMaxFeedrate(ExtruderToLogicalDrive(e), gb.ConvertDistance(eVals[e]) * settingMultiplier);
+							platform.SetMaxFeedrate(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], usingMmPerSec));
 						}
 					}
 
@@ -2158,20 +2184,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-						const float reportingMultiplier = (usingMmPerSec) ? 1.0 : MinutesToSeconds;
-						reply.printf("Max speeds (mm/%s): ", (usingMmPerSec) ? "sec" : "min");
+						reply.printf("Max speeds (%s)): ", (usingMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) * reportingMultiplier));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(platform.MaxFeedrate(axis), usingMmPerSec));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)(platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)) * reportingMultiplier));
+							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)), usingMmPerSec));
 							sep = ':';
 						}
-						reply.catf(", min. speed %.2f", (double)(platform.MinMovementSpeed() * reportingMultiplier));
+						reply.catf(", min. speed %.2f", (double)InverseConvertSpeedToMm(platform.MinMovementSpeed(), usingMmPerSec));
 					}
 				}
 				break;
@@ -2256,7 +2281,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (!seen)
 					{
-						reply.copy("Axis limit");
+						reply.copy("Axis limits (mm)");
 						char sep = 's';
 						for (size_t axis = 0; axis < numTotalAxes; axis++)
 						{
@@ -2425,7 +2450,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							// The pipeline is empty, so execute the babystepping move immediately
 							SetMoveBufferDefaults();
-							moveBuffer.feedRate = DefaultFeedRate;
+							moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
 							moveBuffer.tool = reprap.GetCurrentTool();
 							NewMoveAvailable(1);
 						}
@@ -3289,13 +3314,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 205: // Set/print maximum jerk speeds in mm/sec
 			case 566: // Set/print maximum jerk speeds in mm/min
 				{
-					const float multiplier1 = (code == 566) ? SecondsToMinutes : 1.0;
+					const bool useMmPerSec = (code == 205);
 					bool seenAxis = false, seenExtruder = false;
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							platform.SetInstantDv(axis, gb.GetDistance() * multiplier1);
+							platform.SetInstantDv(axis, gb.GetSpeedFromMm(useMmPerSec));
 							seenAxis = true;
 						}
 					}
@@ -3308,7 +3333,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetInstantDv(ExtruderToLogicalDrive(e), eVals[e] * multiplier1);
+							platform.SetInstantDv(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], useMmPerSec));
 						}
 					}
 
@@ -3324,17 +3349,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else if (!seenExtruder)
 					{
-						const float multiplier2 = (code == 566) ? MinutesToSeconds : 1.0;
-						reply.printf("Maximum jerk rates (mm/%s): ", (code == 566) ? "min" : "sec");
+						reply.printf("Maximum jerk rates (%s): ", (useMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.GetInstantDv(axis) * multiplier2));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(platform.GetInstantDv(axis), useMmPerSec));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)(platform.GetInstantDv(ExtruderToLogicalDrive(extruder)) * multiplier2));
+							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(platform.GetInstantDv(ExtruderToLogicalDrive(extruder)), useMmPerSec));
 							sep = ':';
 						}
 						if (code == 566)
@@ -3428,25 +3452,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 572: // Set/report pressure advance
-				if (gb.Seen('S'))
-				{
-					const float advance = gb.GetFValue();
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-					result = platform.SetPressureAdvance(advance, gb, reply);
-				}
-				else
-				{
-					reply.copy("Extruder pressure advance");
-					char c = ':';
-					for (size_t i = 0; i < numExtruders; ++i)
-					{
-						reply.catf("%c %.3f", c, (double)platform.GetPressureAdvance(i));
-						c = ',';
-					}
-				}
+				result = reprap.GetMove().ConfigurePressureAdvance(gb, reply);
 				break;
 
 			case 573: // Report heater average PWM
@@ -3536,6 +3542,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
+
+#if HAS_LINUX_INTERFACE
+			case 576: // Set SPI communication parameters
+				if (reprap.UsingLinuxInterface())
+				{
+					result = reprap.GetLinuxInterface().HandleM576(gb, reply);
+				}
+				else
+				{
+					reply.copy("Board is running in standalone mode");
+					result = GCodeResult::error;
+				}
+				break;
+#endif
 
 			case 577: // Wait until endstop input is triggered
 				result = WaitForPin(gb, reply);
@@ -3690,11 +3710,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 593: // Configure dynamic ringing cancellation
-				if (!LockMovementAndWaitForStandstill(gb))
-				{
-					return false;
-				}
-				result = reprap.GetMove().GetShaper().Configure(gb, reply);
+				result = reprap.GetMove().GetAxisShaper().Configure(gb, reply);
 				break;
 
 #if SUPPORT_ASYNC_MOVES
@@ -3977,8 +3993,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// Get the feedrate (if any) and kick off a new move
 						if (gb.Seen(feedrateLetter))
 						{
-							const float rate = gb.ConvertDistance(gb.GetFValue());
-							gb.LatestMachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor
+							gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor
 						}
 						moveBuffer.feedRate = gb.LatestMachineState().feedRate;
 						moveBuffer.usingStandardFeedrate = true;
@@ -4395,7 +4410,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 916:
 				if (!platform.SysFileExists(RESUME_AFTER_POWER_FAIL_G))
 				{
@@ -4615,7 +4630,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 	}
 	else if (gb.Seen('T'))
 	{
-		// We handle "T{expression}" as if it's "T "{expression}, also DSF may pass a T{expression} command in this way
+		// We handle "T T{expression}" as if it's "T "{expression}, also DSF may pass a T{expression} command in this way
 		seen = true;
 		toolNum = gb.GetIValue();
 	}
@@ -4637,7 +4652,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 
 	if (seen)
 	{
-		if (!LockMovementAndWaitForStandstill(gb) || !IsCodeQueueIdle())
+		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return false;
 		}

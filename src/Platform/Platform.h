@@ -184,6 +184,7 @@ enum class DiagnosticTestType : unsigned int
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
+	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
 
 #ifdef __LPC17xx__
 	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
@@ -395,10 +396,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool FileExists(const char* folder, const char *filename) const noexcept;
-#endif
-#if HAS_MASS_STORAGE
 	bool Delete(const char* folder, const char *filename) const noexcept;
-	bool DirectoryExists(const char *folder, const char *dir) const noexcept;
 
 	const char* GetWebDir() const noexcept; 					// Where the html etc files are
 	const char* GetGCodeDir() const noexcept; 					// Where the gcodes are
@@ -460,7 +458,7 @@ public:
 	const float* MaxFeedrates() const noexcept { return maxFeedrates; }
 	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
 	float MinMovementSpeed() const noexcept { return minimumMovementSpeed; }
-	void SetMinMovementSpeed(float value) noexcept { minimumMovementSpeed = max<float>(value, 0.01); }
+	void SetMinMovementSpeed(float value) noexcept;
 	float GetInstantDv(size_t axis) const noexcept;
 	void SetInstantDv(size_t axis, float value) noexcept;
 	float AxisMaximum(size_t axis) const noexcept;
@@ -468,9 +466,6 @@ public:
 	float AxisMinimum(size_t axis) const noexcept;
 	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisTotalLength(size_t axis) const noexcept;
-
-	float GetPressureAdvance(size_t extruder) const noexcept;
-	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
@@ -634,8 +629,6 @@ public:
 	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
-	float EutGetRemotePressureAdvance(size_t driver) const noexcept;
-	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 #endif
 
@@ -662,10 +655,6 @@ private:
 #else
 	void IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
-#endif
-
-#if SUPPORT_REMOTE_COMMANDS
-	float remotePressureAdvance[NumDirectDrivers];
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -719,10 +708,10 @@ private:
 	uint16_t microstepping[MaxAxesPlusExtruders];			// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
 	volatile DriverStatus driverState[MaxAxesPlusExtruders];
-	float maxFeedrates[MaxAxesPlusExtruders];
-	float accelerations[MaxAxesPlusExtruders];
+	float maxFeedrates[MaxAxesPlusExtruders];				// max feed rates in mm per step clock
+	float accelerations[MaxAxesPlusExtruders];				// max accelerations in mm per step clock squared
 	float driveStepsPerUnit[MaxAxesPlusExtruders];
-	float instantDvs[MaxAxesPlusExtruders];
+	float instantDvs[MaxAxesPlusExtruders];					// max jerk in mm per step clock
 	uint32_t driveDriverBits[MaxAxesPlusExtruders + NumDirectDrivers];
 															// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
@@ -733,7 +722,6 @@ private:
 	AxesBitmap shortcutAxes;								// axes that wrap modulo 360 and for which G0 may choose the shortest direction
 #endif
 
-	float pressureAdvance[MaxExtruders];
 #if SUPPORT_NONLINEAR_EXTRUSION
 	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
 #endif
@@ -743,7 +731,7 @@ private:
 	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
 	uint32_t steppingEnabledDriversBitmap;					// mask of driver bits that we haven't disabled temporarily
 	float idleCurrentFactor;
-	float minimumMovementSpeed;
+	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock
 
 #if HAS_SMART_DRIVERS
 	size_t numSmartDrivers;									// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
@@ -821,7 +809,7 @@ private:
 #endif
 
 	// Files
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	const char *sysDir;
 	mutable ReadWriteLock sysDirLock;
 #endif
@@ -928,7 +916,7 @@ inline const float* Platform::Accelerations() const noexcept
 
 inline void Platform::SetAcceleration(size_t drive, float value) noexcept
 {
-	accelerations[drive] = max<float>(value, 1.0);		// don't allow zero or negative
+	accelerations[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
 }
 
 inline float Platform::MaxFeedrate(size_t drive) const noexcept
@@ -938,17 +926,22 @@ inline float Platform::MaxFeedrate(size_t drive) const noexcept
 
 inline void Platform::SetMaxFeedrate(size_t drive, float value) noexcept
 {
-	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);	// don't allow zero or negative, but do allow small values
+	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);						// don't allow zero or negative, but do allow small values
+}
+
+inline void Platform::SetInstantDv(size_t drive, float value) noexcept
+{
+	instantDvs[drive] = max<float>(value, ConvertSpeedFromMmPerSec(MinimumJerk));		// don't allow zero or negative values, they causes Move to loop indefinitely
+}
+
+inline void Platform::SetMinMovementSpeed(float value) noexcept
+{
+	minimumMovementSpeed = max<float>(value, ConvertSpeedFromMmPerSec(AbsoluteMinFeedrate));
 }
 
 inline float Platform::GetInstantDv(size_t drive) const noexcept
 {
 	return instantDvs[drive];
-}
-
-inline void Platform::SetInstantDv(size_t drive, float value) noexcept
-{
-	instantDvs[drive] = max<float>(value, 0.1);			// don't allow zero or negative values, they causes Move to loop indefinitely
 }
 
 inline size_t Platform::GetNumActualDirectDrivers() const noexcept
@@ -1064,11 +1057,6 @@ inline IPAddress Platform::NetMask() const noexcept
 inline IPAddress Platform::GateWay() const noexcept
 {
 	return gateWay;
-}
-
-inline float Platform::GetPressureAdvance(size_t extruder) const noexcept
-{
-	return (extruder < MaxExtruders) ? pressureAdvance[extruder] : 0.0;
 }
 
 inline float Platform::GetFilamentWidth() const noexcept

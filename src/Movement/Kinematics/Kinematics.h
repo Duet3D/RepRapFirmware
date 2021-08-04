@@ -124,7 +124,7 @@ public:
 	// Do nothing if auto calibration is not supported.
 	virtual void SetCalibrationDefaults() noexcept { }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	// Write the parameters that are set by auto calibration to the config-override.g file, returning true if success
 	// Just return true if auto calibration is not supported.
 	virtual bool WriteCalibrationParameters(FileStore *f) const noexcept { return true; }
@@ -136,7 +136,7 @@ public:
 
 	// Return true if the positions specified for the axes in the AxesBitmap are reachable by the print head reference point.
 	// The default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 commands.
-	virtual bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes, bool isCoordinated) const noexcept;
+	virtual bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
@@ -186,7 +186,7 @@ public:
 	// This default is good for Cartesian and Core printers, but not deltas or SCARA
 	virtual AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept { return (disallowMovesBeforeHoming) ? axesMoving : AxesBitmap(); }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	// Write any calibration data that we need to resume a print after power fail, returning true if successful. Override where necessary.
 	virtual bool WriteResumeSettings(FileStore *f) const noexcept { return true; }
 #endif

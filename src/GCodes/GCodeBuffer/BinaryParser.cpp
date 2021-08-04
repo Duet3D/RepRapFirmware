@@ -88,6 +88,25 @@ bool BinaryParser::Seen(char c) noexcept
 	return false;
 }
 
+// Return true if any of the parameter letters in the bitmap were seen
+bool BinaryParser::SeenAny(Bitmap<uint32_t> bm) const noexcept
+{
+	if (bufferLength != 0 && header->numParameters != 0)
+	{
+		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
+		for (size_t i = 0; i < header->numParameters; i++)
+		{
+			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
+			const char paramLetter = param->letter;
+			if (paramLetter >= 'A' && paramLetter <= 'Z' && bm.IsBitSet(paramLetter - 'A'))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 char BinaryParser::GetCommandLetter() const noexcept
 {
 	return (bufferLength != 0) ? header->letter : 'Q';
@@ -242,6 +261,28 @@ void BinaryParser::SetDriverIdFromBinary(DriverId& did, uint32_t val) THROWS(GCo
 #endif
 }
 
+void BinaryParser::SetDriverIdFromFloat(DriverId& did, float fval) THROWS(GCodeException)
+{
+	fval *= 10.0;
+	const int32_t ival = lrintf(fval);
+#if SUPPORT_CAN_EXPANSION
+	if (ival >= 0 && fabsf(fval - (float)ival) <= 0.002)
+	{
+		did.boardAddress = ival/10;
+		did.localDriver = ival % 10;
+	}
+#else
+	if (ival >= 0 && ival < 10 && fabsf(fval - (float)ival) <= 0.002)
+	{
+		did.localDriver = ival % 10;
+	}
+#endif
+	else
+	{
+		throw ConstructParseException("Invalid driver ID expression");
+	}
+}
+
 // Get a driver ID
 DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 {
@@ -257,6 +298,19 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 	case DataType::UInt:
 	case DataType::DriverId:
 		SetDriverIdFromBinary(value, seenParameter->uintValue);
+		break;
+
+	case DataType::Float:
+		SetDriverIdFromFloat(value, seenParameter->floatValue);
+		break;
+
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			const float fval = parser.ParseFloat();
+			parser.CheckForExtraCharacters();
+			SetDriverIdFromFloat(value, fval);
+		}
 		break;
 
 	default:
@@ -420,19 +474,58 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 	}
 }
 
-void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad) THROWS(GCodeException)
+void BinaryParser::GetFloatArray(float arr[], size_t& length) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad);
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	if (seenParameter->type == DataType::Expression)
+	{
+		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		parser.ParseFloatArray(arr, length);
+	}
+	else
+	{
+		GetArray(arr, length);
+	}
 }
 
-void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
+void BinaryParser::GetIntArray(int32_t arr[], size_t& length) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad);
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	if (seenParameter->type == DataType::Expression)
+	{
+		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		parser.ParseIntArray(arr, length);
+	}
+	else
+	{
+		GetArray(arr, length);
+	}
 }
 
-void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException)
+void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException)
 {
-	GetArray(arr, length, doPad);
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	if (seenParameter->type == DataType::Expression)
+	{
+		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		parser.ParseUnsignedArray(arr, length);
+	}
+	else
+	{
+		GetArray(arr, length);
+	}
 }
 
 // Get a :-separated list of drivers after a key letter
@@ -461,6 +554,14 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 			SetDriverIdFromBinary(arr[i], reinterpret_cast<const uint32_t*>(seenParameterValue)[i]);
 		}
 		length = seenParameter->intValue;
+		break;
+
+	case DataType::Expression:
+		{
+			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			parser.ParseDriverIdArray(arr, length);
+			parser.CheckForExtraCharacters();
+		}
 		break;
 
 	default:
@@ -527,13 +628,8 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 	}
 }
 
-template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad) THROWS(GCodeException)
+template<typename T> void BinaryParser::GetArray(T arr[], size_t& length) THROWS(GCodeException)
 {
-	if (seenParameter == nullptr)
-	{
-		THROW_INTERNAL_ERROR;
-	}
-
 	int lastIndex = -1;
 	switch (seenParameter->type)
 	{
@@ -581,52 +677,12 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		lastIndex = seenParameter->intValue - 1;
 		break;
 
-	case DataType::Expression:
-		//TODO need a way to pass multi-element array-valued expressions. For now we support only single-element expressions.
-		{
-			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
-			const ExpressionValue val = parser.Parse();
-			switch ((TypeCode)val.type)
-			{
-			case TypeCode::Int32:
-				arr[0] = (T)val.iVal;
-				lastIndex = 0;
-				break;
-
-			case TypeCode::Float:
-				arr[0] = (T)val.fVal;
-				lastIndex = 0;
-				break;
-
-			case TypeCode::Uint32:
-			case TypeCode::DriverId:
-				arr[0] = (T)val.uVal;
-				lastIndex = 0;
-				break;
-
-			default:
-				throw ConstructParseException("invalid expression type");
-			}
-			parser.CheckForExtraCharacters();
-		}
-		break;
-
 	default:
 		length = 0;
 		return;
 	}
 
-	if (doPad && lastIndex == 0)
-	{
-		for (size_t i = 1; i < length; i++)
-		{
-			arr[i] = arr[0];
-		}
-	}
-	else
-	{
-		length = lastIndex + 1;
-	}
+	length = lastIndex + 1;
 }
 
 void BinaryParser::CheckArrayLength(size_t maxLength) THROWS(GCodeException)

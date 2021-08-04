@@ -1059,6 +1059,12 @@ bool StringParser::Seen(char c) noexcept
 	return false;
 }
 
+// Return true if any of the parameter letters in the bitmap were seen
+bool StringParser::SeenAny(Bitmap<uint32_t> bm) const noexcept
+{
+	return parametersPresent.Intersects(bm);
+}
+
 // Get a float after a G Code letter found by a call to Seen()
 float StringParser::GetFValue() THROWS(GCodeException)
 {
@@ -1074,35 +1080,32 @@ float StringParser::GetFValue() THROWS(GCodeException)
 
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
-void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad) THROWS(GCodeException)
+void StringParser::GetFloatArray(float arr[], size_t& returnedLength) THROWS(GCodeException)
 {
 	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
 
-	size_t length = 0;
-	for (;;)
+	if (gb.buffer[readPointer] == '{')
 	{
-		CheckArrayLength(length, returnedLength);
-		arr[length++] = ReadFloatValue();
-		if (gb.buffer[readPointer] != LIST_SEPARATOR)
-		{
-			break;
-		}
-		++readPointer;
-	}
-
-	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-	if (doPad && length == 1 && returnedLength > 1)
-	{
-		for (size_t i = 1; i < returnedLength; i++)
-		{
-			arr[i] = arr[0];
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		parser.ParseFloatArray(arr, returnedLength);
 	}
 	else
 	{
+		size_t length = 0;
+		for (;;)
+		{
+			CheckArrayLength(length, returnedLength);
+			arr[length++] = ReadFloatValue();
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
+			{
+				break;
+			}
+			++readPointer;
+		}
+
 		returnedLength = length;
 	}
 
@@ -1110,72 +1113,67 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad
 }
 
 // Get a :-separated list of ints after a key letter
-void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad) THROWS(GCodeException)
+void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength) THROWS(GCodeException)
 {
 	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
 
-	size_t length = 0;
-	for (;;)
+	if (gb.buffer[readPointer] == '{')
 	{
-		CheckArrayLength(length, returnedLength);
-		arr[length] = ReadIValue();
-		length++;
-		if (gb.buffer[readPointer] != LIST_SEPARATOR)
-		{
-			break;
-		}
-		++readPointer;
-	}
-
-	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-	if (doPad && length == 1 && returnedLength > 1)
-	{
-		for (size_t i = 1; i < returnedLength; i++)
-		{
-			arr[i] = arr[0];
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		parser.ParseIntArray(arr, returnedLength);
 	}
 	else
 	{
+		size_t length = 0;
+		for (;;)
+		{
+			CheckArrayLength(length, returnedLength);
+			arr[length] = ReadIValue();
+			length++;
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
+			{
+				break;
+			}
+			++readPointer;
+		}
+
 		returnedLength = length;
 	}
+
 	readPointer = -1;
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad) THROWS(GCodeException)
+void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength) THROWS(GCodeException)
 {
 	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
 
-	size_t length = 0;
-	for (;;)
+	if (gb.buffer[readPointer] == '{')
 	{
-		CheckArrayLength(length, returnedLength);
-		arr[length] = ReadUIValue();
-		length++;
-		if (gb.buffer[readPointer] != LIST_SEPARATOR)
-		{
-			break;
-		}
-		++readPointer;
-	}
-
-	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-	if (doPad && length == 1 && returnedLength > 1)
-	{
-		for (size_t i = 1; i < returnedLength; i++)
-		{
-			arr[i] = arr[0];
-		}
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		parser.ParseUnsignedArray(arr, returnedLength);
 	}
 	else
 	{
+		size_t length = 0;
+		for (;;)
+		{
+			CheckArrayLength(length, returnedLength);
+			arr[length] = ReadUIValue();
+			length++;
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
+			{
+				break;
+			}
+			++readPointer;
+		}
+
 		returnedLength = length;
 	}
 
@@ -1190,20 +1188,29 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 		THROW_INTERNAL_ERROR;
 	}
 
-	size_t length = 0;
-	for (;;)
+	if (gb.buffer[readPointer] == '{')
 	{
-		CheckArrayLength(length, returnedLength);
-		arr[length] = ReadDriverIdValue();
-		length++;
-		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		parser.ParseDriverIdArray(arr, returnedLength);
+	}
+	else
+	{
+		size_t length = 0;
+		for (;;)
 		{
-			break;
+			CheckArrayLength(length, returnedLength);
+			arr[length] = ReadDriverIdValue();
+			length++;
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
+			{
+				break;
+			}
+			++readPointer;
 		}
-		++readPointer;
+
+		returnedLength = length;
 	}
 
-	returnedLength = length;
 	readPointer = -1;
 }
 
@@ -1278,7 +1285,7 @@ void StringParser::InternalGetQuotedString(const StringRef& str) THROWS(GCodeExc
 			}
 			else if (gb.buffer[readPointer] == c)
 			{
-				// Two backslashes are used to represent one
+				// Two single quote characters are used to represent one
 				++readPointer;
 			}
 		}
@@ -1728,36 +1735,64 @@ int32_t StringParser::ReadIValue() THROWS(GCodeException)
 DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 {
 	DriverId result;
-	const uint32_t v1 = ReadUIValue();
+	if (gb.buffer[readPointer] == '{')
+	{
+		// Allow a floating point expression to be converted to a driver ID
+		// We assume that a driver ID only ever has a single fractional digit. This means that e.g. 3.10 will be treated the same as 3.1.
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		const float val = 10.0 * parser.ParseFloat();
+		readPointer = parser.GetEndptr() - gb.buffer;
+		const int32_t ival = lrintf(val);
 #if SUPPORT_CAN_EXPANSION
-	if (gb.buffer[readPointer] == '.')
-	{
-		++readPointer;
-		const uint32_t v2 = ReadUIValue();
-		result.localDriver = v2;
-		result.boardAddress = v1;
-	}
-	else
-	{
-		result.localDriver = v1;
-		result.boardAddress = CanInterface::GetCanAddress();
-	}
-#else
-	// We now allow driver names of the form "0.x" on boards without CAN expansion
-	if (gb.buffer[readPointer] == '.')
-	{
-		if (v1 != 0)
+		if (ival >= 0 && fabsf(val - (float)ival) <= 0.002)
 		{
-			throw ConstructParseException("Board address of driver must be 0");
+			result.boardAddress = ival/10;
+			result.localDriver = ival % 10;
 		}
-		++readPointer;
-		result.localDriver = ReadUIValue();
+#else
+		if (ival >= 0 && ival < 10 && fabsf(val - (float)ival) <= 0.002)
+		{
+			result.localDriver = ival % 10;
+		}
+#endif
+		else
+		{
+			throw ConstructParseException("Invalid driver ID expression");
+		}
 	}
 	else
 	{
-		result.localDriver = v1;
-	}
+		const uint32_t v1 = ReadUIValue();
+#if SUPPORT_CAN_EXPANSION
+		if (gb.buffer[readPointer] == '.')
+		{
+			++readPointer;
+			const uint32_t v2 = ReadUIValue();
+			result.localDriver = v2;
+			result.boardAddress = v1;
+		}
+		else
+		{
+			result.localDriver = v1;
+			result.boardAddress = CanInterface::GetCanAddress();
+		}
+#else
+		// We now allow driver names of the form "0.x" on boards without CAN expansion
+		if (gb.buffer[readPointer] == '.')
+		{
+			if (v1 != 0)
+			{
+				throw ConstructParseException("Board address of driver must be 0");
+			}
+			++readPointer;
+			result.localDriver = ReadUIValue();
+		}
+		else
+		{
+			result.localDriver = v1;
+		}
 #endif
+	}
 	return result;
 }
 

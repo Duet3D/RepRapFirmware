@@ -35,7 +35,7 @@ public:
 
 	ZProbeType GetProbeType() const noexcept { return type; }
 	float GetOffset(size_t axisNumber) const noexcept { return offsets[axisNumber]; }
-	float GetConfiguredTriggerHeight() const noexcept { return triggerHeight; }
+	float GetConfiguredTriggerHeight() const noexcept { return -offsets[Z_AXIS]; }
 	float GetActualTriggerHeight() const noexcept;
 	float GetDiveHeight() const noexcept { return diveHeight; }
 	float GetStartingHeight() const noexcept { return diveHeight + GetActualTriggerHeight(); }
@@ -55,7 +55,7 @@ public:
 
 	void SetProbingAway(const bool probingAway) noexcept { misc.parts.probingAway = probingAway; }
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	void SetTriggerHeight(float height) noexcept { triggerHeight = height; }
+	void SetTriggerHeight(float height) noexcept { offsets[Z_AXIS] = -height; }
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
 	void SetLastStoppedHeight(float h) noexcept;
@@ -88,13 +88,12 @@ protected:
 		} parts;
 		uint16_t all;
 	} misc;
-	float offsets[MaxAxes];				// the offset of the probe relative to the print head
-	float triggerHeight;				// the nozzle height at which the target ADC value is returned
+	float offsets[MaxAxes];				// the offset of the probe relative to the print head. The Z offset is the negation of the trigger height.
 	float calibTemperature;				// the temperature at which we did the calibration
 	float temperatureCoefficients[2];	// the variation of height with bed temperature and with the square of temperature
 	float diveHeight;					// the dive height we use when probing
-	float probeSpeeds[2];				// the initial speed of probing
-	float travelSpeed;					// the speed at which we travel to the probe point
+	float probeSpeeds[2];				// the initial speed of probing in mm per step clock
+	float travelSpeed;					// the speed at which we travel to the probe point ni mm per step clock
 	float recoveryTime;					// Z probe recovery time
 	float tolerance;					// maximum difference between probe heights when doing >1 taps
 	float lastStopHeight;				// the height at which the last G30 probe move stopped

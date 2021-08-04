@@ -21,7 +21,7 @@
 constexpr ObjectModelArrayDescriptor ObjectTracker::objectsArrayDescriptor =
 {
 	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ObjectTracker*)self)->numObjects; },
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return min<size_t>(((const ObjectTracker*)self)->numObjects, MaxTrackedObjects); },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
 };
 
@@ -78,9 +78,9 @@ void ObjectTracker::Init() noexcept
 	currentObjectCancelled = printingJustResumed = usingM486Labelling = false;
 #if TRACK_OBJECT_NAMES
 	// Clear out all object names in case of late object model requests
-	for (size_t i = 0; i < MaxTrackedObjects; ++i)
+	for (ObjectDirectoryEntry& ode : objectDirectory)
 	{
-		objectDirectory[i].Init("");
+		ode.Init("");
 	}
 	usingM486Naming = false;
 #endif
@@ -137,7 +137,7 @@ GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, O
 			{
 				CreateObject(num, objectName.c_str());
 			}
-			else if (strcmp(objectName.c_str(), objectDirectory[num].name.Get().Ptr()) != 0)
+			else if (num < (int)MaxTrackedObjects && strcmp(objectName.c_str(), objectDirectory[num].name.Get().Ptr()) != 0)
 			{
 				objectDirectory[num].SetName(objectName.c_str());
 				reprap.JobUpdated();
@@ -265,7 +265,7 @@ void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
 	}
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Write the object details to file, returning true if successful
 bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
@@ -303,7 +303,7 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 	if (ok)
 	{
 		String<StringLength20> buf;
-		buf.printf("M486 S%d", currentObjectNumber);
+		buf.printf("M486 S%d\n", currentObjectNumber);
 		ok = f->Write(buf.c_str());
 	}
 
@@ -378,7 +378,7 @@ void ObjectDirectoryEntry::SetName(const char *label) noexcept
 // This is OK because it is very unlikely that there won't be a subsequent extruding move that ends close to the original one.
 void ObjectTracker::UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept
 {
-	if (currentObjectNumber >= 0 && currentObjectNumber < (int)numObjects)
+	if (currentObjectNumber >= 0 && currentObjectNumber < (int)MaxTrackedObjects)
 	{
 		if (objectDirectory[currentObjectNumber].UpdateObjectCoordinates(coords, axes))
 		{
@@ -407,7 +407,7 @@ void ObjectTracker::StartObject(GCodeBuffer& gb, const char *label) noexcept
 {
 	if (!usingM486Naming)
 	{
-		for (size_t i = 0; i < numObjects; ++i)
+		for (size_t i = 0; i < min<size_t>(numObjects, MaxTrackedObjects); ++i)
 		{
 			if (strcmp(objectDirectory[i].name.Get().Ptr(), label) == 0)
 			{
@@ -426,7 +426,7 @@ void ObjectTracker::StartObject(GCodeBuffer& gb, const char *label) noexcept
 		else
 		{
 			// Here if the new object won't fit in the directory
-			ChangeToObject(gb, -1);
+			ChangeToObject(gb, MaxTrackedObjects);
 		}
 	}
 }

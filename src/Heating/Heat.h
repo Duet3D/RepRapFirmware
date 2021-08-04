@@ -73,7 +73,8 @@ public:
 
 	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept;	// Is everything at temperature within tolerance?
 
-	void SwitchOffAll(bool includingChamberAndBed) noexcept;			// Turn all heaters off
+	void SwitchOffAll(bool includingChamberAndBed) noexcept;			// Turn all heaters off. Not safe to call from an ISR.
+	void SwitchOffAllLocalFromISR() noexcept;							// Turn off all local heaters. Safe to call from an ISR.
 	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power or while probing
 	GCodeResult ResetFault(int heater, const StringRef& reply) noexcept;	// Reset a heater fault for a specific heater or all heaters
 
@@ -127,7 +128,7 @@ public:
 	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
 	void FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteModelParameters(FileStore *f) const noexcept;				// Write heater model parameters to file returning true if no error
 	bool WriteBedAndChamberTempSettings(FileStore *f) const noexcept;	// Save some resume information
 #endif

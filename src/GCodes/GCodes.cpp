@@ -287,6 +287,10 @@ void GCodes::Reset() noexcept
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	fileOffsetToPrint = 0;
+	restartMoveFractionDone = 0.0;
+#endif
 #if HAS_LINUX_INTERFACE
 	lastFilePosition = noFilePosition;
 #endif
@@ -447,6 +451,7 @@ void GCodes::Spin() noexcept
 	   )	// if autoPause is active
 	{
 		(void)SpinGCodeBuffer(*autoPauseGCode);
+		(void)SpinGCodeBuffer(*queuedGCode);						// autopause sometimes to wait for queued GCodes to complete, so spin queuedGCodes too to avoid lockup
 	}
 	else
 	{
@@ -474,16 +479,10 @@ void GCodes::Spin() noexcept
 
 
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+	// Need to check if the print has been stopped by the SBC
+	if (reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().HasPrintStopped())
 	{
-		if (reprap.GetLinuxInterface().HasPrintStarted())
-		{
-			StartPrinting(true);
-		}
-		else if (reprap.GetLinuxInterface().HasPrintStopped())
-		{
-			StopPrint(reprap.GetLinuxInterface().GetPrintStopReason());
-		}
+		StopPrint(reprap.GetLinuxInterface().GetPrintStopReason());
 	}
 #endif
 
@@ -648,9 +647,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
-					&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
-				   )
+				if (LockMovementAndWaitForStandstill(gb))				// wait until movement has finished and deferred command queue has caught up
 				{
 					StopPrint(StopPrintReason::normalCompletion);
 				}
@@ -786,9 +783,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
-					&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
-				   )
+				if (LockMovementAndWaitForStandstill(gb))					// wait until movement has finished and deferred command queue has caught up
 				{
 					StopPrint(StopPrintReason::normalCompletion);
 				}
@@ -1004,7 +999,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	if (simulationMode == 0)
 	{
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
@@ -1175,6 +1170,14 @@ bool GCodes::DoEmergencyPause() noexcept
 #endif
 	}
 
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface() && pauseRestorePoint.filePos == noFilePosition)
+	{
+		// Use the last known print file position if the current one is unknown (e.g. because a macro file is being executed)
+		pauseRestorePoint.filePos = lastFilePosition;
+	}
+#endif
+
 	codeQueue->PurgeEntries();
 
 	// Replace the paused machine coordinates by user coordinates, which we updated earlier
@@ -1325,16 +1328,10 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		return;			// we can't yet save to the Pi
-	}
-#endif
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
 	if (printingFilename != nullptr)
 	{
@@ -1495,7 +1492,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				buf.catf("\nG0 F6000 Z%.3f\n", (double)pauseRestorePoint.moveCoords[Z_AXIS]);
 
 				// Set the feed rate
-				buf.catf("G1 F%.1f", (double)(pauseRestorePoint.feedRate * MinutesToSeconds));
+				buf.catf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
 #if SUPPORT_LASER
 				if (machineType == MachineType::laser)
 				{
@@ -1577,7 +1574,12 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 		return false;
 	}
 
-	gb.MotionStopped();								// must do this after we have finished waiting, so that we don't stop waiting when executing G4
+	if (&gb != queuedGCode && !IsCodeQueueIdle())		// wait for deferred command queue to catch up
+	{
+		return false;
+	}
+
+	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
 	if (RTOSIface::GetCurrentTask() == Tasks::GetMainTask())
 	{
@@ -1628,7 +1630,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 		moveBuffer.applyM220M221 = (moveBuffer.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro());
 		if (gb.Seen(feedrateLetter))
 		{
-			gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;	// update requested speed, not allowing for speed factor
+			gb.LatestMachineState().feedRate = gb.GetSpeed();				// update requested speed, not allowing for speed factor
 		}
 		moveBuffer.feedRate = (moveBuffer.applyM220M221)
 								? speedFactor * gb.LatestMachineState().feedRate
@@ -1638,7 +1640,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 	else
 	{
 		moveBuffer.applyM220M221 = false;
-		moveBuffer.feedRate = DefaultG0FeedRate;					// use maximum feed rate, the M203 parameters will limit it
+		moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultG0FeedRate);	// use maximum feed rate, the M203 parameters will limit it
 		moveBuffer.usingStandardFeedrate = false;
 	}
 
@@ -1648,11 +1650,11 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 		moveBuffer.coords[drive] = 0.0;
 	}
 	moveBuffer.hasPositiveExtrusion = false;
-	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
+	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;			// save this before we update it
 	ExtrudersBitmap extrudersMoving;
 
 	// Check if we are extruding
-	if (gb.Seen(extrudeLetter))							// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
+	if (gb.Seen(extrudeLetter))												// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
 	{
 		// Check that we have a tool to extrude with
 		Tool* const tool = reprap.GetCurrentTool();
@@ -2116,7 +2118,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 				moveLengthSquared += fsquare(currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
 			}
 			const float moveLength = fastSqrtf(moveLengthSquared);
-			const float moveTime = moveLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
+			const float moveTime = moveLength/(moveBuffer.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
 			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else
@@ -2466,7 +2468,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	// We leave out the square term because it is very small
 	// In CNC applications even very small deviations can be visible, so we use a smaller segment length at low speeds
 	const float arcSegmentLength = constrain<float>
-									(	min<float>(fastSqrtf(8 * moveBuffer.arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
+									(	min<float>(fastSqrtf(8 * moveBuffer.arcRadius * MaxArcDeviation), moveBuffer.feedRate * StepClockRate * (1.0/MinArcSegmentsPerSec)),
 										MinArcSegmentLength,
 										MaxArcSegmentLength
 									);
@@ -2814,10 +2816,32 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 
 #if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE
 	gb.LatestMachineState().doingFileMacro = true;
-	gb.LatestMachineState().runningM501 = (codeRunning == 501);
-	gb.LatestMachineState().runningM502 = (codeRunning == 502);
-	gb.LatestMachineState().runningSystemMacro = (codeRunning == SystemHelperMacroCode || codeRunning == AsyncSystemMacroCode || codeRunning == 29 || codeRunning == 32);
-																		// running a system macro e.g. homing, so don't use workplace coordinates
+
+	// The following three flags need to be inherited in the case that a system macro calls another macro, e.g.homeall.g calls homez.g. The Push call copied them over already.
+	switch (codeRunning)
+	{
+	case 501:
+		gb.LatestMachineState().runningM501 = true;
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	case 502:
+		gb.LatestMachineState().runningM502 = true;
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	case SystemHelperMacroCode:
+	case AsyncSystemMacroCode:
+	case ToolChangeMacroCode:
+	case 29:
+	case 32:
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	default:
+		break;
+	}
+
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 
@@ -3223,8 +3247,6 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 	if (f != nullptr)
 	{
 		fileToPrint.Set(f);
-		fileOffsetToPrint = 0;
-		restartMoveFractionDone = 0.0;
 		return true;
 	}
 
@@ -3236,6 +3258,9 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 // Start printing the file already selected. We must hold the movement lock and wait for all moves to finish before calling this, because of the call to ResetMoveCounters.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
+	fileOffsetToPrint = 0;
+	restartMoveFractionDone = 0.0;
+
 	buildObjects.Init();
 	reprap.GetMove().ResetMoveCounters();
 
@@ -3558,9 +3583,9 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	FansBitmap fanMap;
 	if (gb.Seen('F'))
 	{
-		uint32_t fanMapping[MaxFans];
+		int32_t fanMapping[MaxFans];				// use a signed array so that F-1 will result in no fans at all
 		size_t fanCount = MaxFans;
-		gb.GetUnsignedArray(fanMapping, fanCount, false);
+		gb.GetIntArray(fanMapping, fanCount, false);
 		fanMap = FansBitmap::MakeFromArray(fanMapping, fanCount) & FansBitmap::MakeLowestNBits(MaxFans);
 		seen = true;
 	}
@@ -4174,13 +4199,8 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
-#if HAS_MASS_STORAGE
-		if (   reason == StopPrintReason::normalCompletion
-			&& simulationMode == 0
-# if HAS_LINUX_INTERFACE
-			&& !reprap.UsingLinuxInterface()
-# endif
-		   )
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 		}

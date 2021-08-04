@@ -893,6 +893,13 @@ pre(driver.IsRemote())
 	{
 	case -1:
 	case 0:
+		if (gb.SeenAny("RS"))
+		{
+			if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+			{
+				return GCodeResult::notFinished;
+			}
+		}
 		{
 			CanMessageGenericConstructor cons(M569Params);
 			cons.PopulateFromCommand(gb);
@@ -900,10 +907,24 @@ pre(driver.IsRemote())
 		}
 
 	case 1:
+		if (gb.SeenAny("STERID"))
+		{
+			if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+			{
+				return GCodeResult::notFinished;
+			}
+		}
 		{
 			CanMessageGenericConstructor cons(M569Point1Params);
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p1, driver.boardAddress, reply);
+		}
+
+	case 2:
+		{
+			CanMessageGenericConstructor cons(M569Point2Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m569p2, driver.boardAddress, reply);
 		}
 
 	case 5:
@@ -1181,7 +1202,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 		CanId id;
 		id.SetReceivedId(lastCancelledId);
 		lastCancelledId = 0;
-		str.catf(" last cancelled message type %u dest %u\n", (unsigned int)id.MsgType(), id.Dst());
+		str.catf(" last cancelled message type %u dest %u", (unsigned int)id.MsgType(), id.Dst());
 	}
 
 	reprap.GetPlatform().MessageF(mtype, "Tx timeouts%s\n", str.c_str());

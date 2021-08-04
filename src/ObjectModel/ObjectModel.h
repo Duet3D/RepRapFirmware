@@ -123,7 +123,18 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress), param(0), uVal(ip.GetV4LittleEndian()) { }
 	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
 	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::DateTime) { Set56BitValue(t.tim); }
-	explicit ExpressionValue(DriverId id) noexcept : type((uint32_t)TypeCode::DriverId), param(0), uVal(id.AsU32()) { }
+
+	explicit ExpressionValue(DriverId id) noexcept
+		: type((uint32_t)TypeCode::DriverId),
+#if SUPPORT_CAN_EXPANSION
+		  param(id.boardAddress),
+#else
+		  param(0),
+#endif
+		  uVal(id.localDriver)
+	{
+	}
+
 	explicit ExpressionValue(Bitmap<uint16_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap16), param(0), uVal(bm.GetRaw()) { }
 	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap32), param(0), uVal(bm.GetRaw()) { }
 	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap64) { Set56BitValue(bm.GetRaw()); }
@@ -150,6 +161,18 @@ struct ExpressionValue
 	void Set(float f) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = MaxFloatDigitsDisplayedAfterPoint; }
 	void Set(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
 	void Set(const char *s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
+	void Set(DriverId did) noexcept
+	{
+		Release();
+		type = (uint32_t)TypeCode::DriverId;
+#if SUPPORT_CAN_EXPANSION
+		param = did.boardAddress;
+#else
+		param = 0;
+#endif
+		uVal = did.localDriver;
+	}
+
 	void Set(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
 	void Set(nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
 
@@ -158,6 +181,14 @@ struct ExpressionValue
 
 	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.
 	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
+
+	// Extract a driver ID value
+	DriverId GetDriverIdValue() const noexcept
+#if SUPPORT_CAN_EXPANSION
+	{ return DriverId(param, uVal); }
+#else
+	{ return DriverId(uVal); }
+#endif
 
 	// Get the format string to use assuming this is a floating point number
 	const char *GetFloatFormatString() const noexcept { return ::GetFloatFormatString(param); }

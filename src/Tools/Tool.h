@@ -98,7 +98,7 @@ public:
 	uint32_t GetSpindleRpm() const noexcept { return spindleRpm; }
 	void SetSpindleRpm(uint32_t rpm) THROWS(GCodeException);
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteSettings(FileStore *f) const noexcept;							// write the tool's settings to file
 #endif
 
@@ -157,8 +157,8 @@ private:
 
 	// Firmware retraction settings
 	float retractLength, retractExtra;			// retraction length and extra length to un-retract
-	float retractSpeed;							// retract speed in mm/min
-	float unRetractSpeed;						// un=retract speed in mm/min
+	float retractSpeed;							// retract speed in mm per step clock
+	float unRetractSpeed;						// un-retract speed in mm per step clock
 	float retractHop;							// Z hop when retracting
 
 	FansBitmap fanMapping;
