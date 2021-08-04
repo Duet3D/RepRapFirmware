@@ -25,9 +25,11 @@
 //constexpr uint8_t DefaultResolution = 10;
 constexpr uint16_t DefaultSamplingRate = 1000;
 
+static uint8_t rateRequested;							// The sampling rate
 static uint8_t modeRequested;							// The sampling mode
 static uint32_t filterRequested;						// A filter for what data is collected
 static DriverId deviceRequested;						// The driver being sampled
+static uint8_t movementRequested;						// The movement to be made whilst recording
 static volatile uint32_t numSamplesRequested;			// The number of samples to collect
 //static uint8_t resolution = DefaultResolution;		// The resolution at which to collect the samples
 static FileStore* volatile closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
@@ -35,6 +37,8 @@ static FileStore* volatile closedLoopFile = nullptr;	// This is non-null when th
 static unsigned int numRemoteOverflows;
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
+
+uint16_t typeFilter;
 
 // DEBUG - Remove
 static bool received;
@@ -53,6 +57,10 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	// If the user is requesting a recording, check if one is already happening
 	if (recording && closedLoopFile != nullptr)
 	{
+		closedLoopFile->Truncate();				// truncate the file in case we didn't write all the preallocated space
+		closedLoopFile->Close();
+		closedLoopFile = nullptr;
+
 		reply.copy("Closed loop data is already being collected");
 		return GCodeResult::error;
 	}
@@ -74,7 +82,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 
 	// We are recording, parse the additional parameters
 	bool seen = false;
-	uint32_t parsedA, parsedD;
+	uint32_t parsedA, parsedD, parsedR, parsedV;
 
 	gb.TryGetUIValue('A', parsedA, seen);
 	if (!seen) {parsedA = 0;}
@@ -83,7 +91,16 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	gb.TryGetUIValue('D', parsedD, seen);
 	if (!seen) {parsedD = 0;}
 
+	seen = false;
+	gb.TryGetUIValue('R', parsedR, seen);
+	if (!seen) {parsedR = 100;}
+
+	seen = false;
+	gb.TryGetUIValue('V', parsedV, seen);
+	if (!seen) {parsedV = 0;}
+
 	// Validate the parameters
+	// TODO: Move a lot of this to the expansion board!
 	if (!driverId.IsRemote())// Check the chosen drive is a closed loop drive - TODO: Think of how we can do this. For now, just check it is remote
 	{
 		reply.printf("Drive is not in closed loop mode (driverId.IsRemote() = %d)", driverId.IsRemote());
@@ -102,9 +119,29 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 
 	// Validation passed - store the values
 	modeRequested = parsedA;
+	rateRequested = parsedR;
 	filterRequested = parsedD;
 	deviceRequested = driverId;
+	movementRequested = parsedV;
 	numSamplesRequested = parsedS;
+
+	// Calculate the type filter (i.e. the types of the data in a given position in the packet)
+	// 0 indicates int16_t, 1 indicates float
+	typeFilter = 0;
+	for (int i = 15; i>=0; i--)
+	{
+		if ((filterRequested >> 1) & 0x1) {
+			typeFilter <<= 1;
+			switch(i) {
+			case 1:
+			case 2:
+			case 5:
+			case 6:
+			case 7:
+				typeFilter |= 0x1;
+			}
+		}
+	}
 
 	// Estimate how large the file will be
 	const uint32_t preallocSize = 1000;	//TODO! numSamplesRequested * ((numAxes * (3 + GetDecimalPlaces(resolution))) + 4);
@@ -171,7 +208,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	expectedRemoteSampleNumber = 0;
 	expectedRemoteBoardAddress = deviceRequested.boardAddress;
 	numRemoteOverflows = 0;
-	const GCodeResult rslt = CanInterface::StartClosedLoopDataCollection(deviceRequested, filterRequested, numSamplesRequested, modeRequested, gb, reply);
+	const GCodeResult rslt = CanInterface::StartClosedLoopDataCollection(deviceRequested, filterRequested, numSamplesRequested, rateRequested, movementRequested, modeRequested, gb, reply);
 	if (rslt > GCodeResult::warning)
 	{
 		closedLoopFile->Close();
@@ -182,6 +219,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 }
 
 // Process closed loop data received over CAN
+// TODO: Remove raw!
 void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopData& msg, size_t msgLen, uint8_t raw[]) noexcept
 {
 
@@ -198,23 +236,23 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 //			f->Close();
 //			closedLoopFile = nullptr;
 //		} else if
-		if (msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
-		{
-			f->Write("Received mismatched data\n");
-			String<StringLength50> temp;
-			temp.printf("%d instead of %d\n", msg.firstSampleNumber, expectedRemoteSampleNumber);
-			f->Write(temp.c_str());
-			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-			f->Close();
-			closedLoopFile = nullptr;
-		}
-		else
-		{
-			unsigned int numSamples = msg.numSamples;
+//		if (msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
+//		{
+//			f->Write("Received mismatched data\n");
+//			String<StringLength50> temp;
+//			temp.printf("%d instead of %d\n", msg.firstSampleNumber, expectedRemoteSampleNumber);
+//			f->Write(temp.c_str());
+//			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+//			f->Close();
+//			closedLoopFile = nullptr;
+//		}
+//		else
+//		{
+		unsigned int numSamples = msg.numSamples;
 //			const unsigned int numAxes = (expectedRemoteAxes & 1u) + ((expectedRemoteAxes >> 1) & 1u) + ((expectedRemoteAxes >> 2) & 1u);
-			size_t dataIndex = 0;
-			uint16_t currentBits = 0;
-			unsigned int bitsLeft = 0;
+		size_t dataIndex = 0;
+		uint16_t currentBits = 0;
+		unsigned int bitsLeft = 0;
 //			const unsigned int receivedResolution = msg.bitsPerSampleMinusOne + 1;
 //			const uint16_t mask = (1u << receivedResolution) - 1;
 //			const int decimalPlaces = GetDecimalPlaces(receivedResolution);
@@ -223,13 +261,14 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 //				++numRemoteOverflows;
 //			}
 
-			while (numSamples != 0)
-			{
-				String<StringLength500> temp;
-				temp.printf("%u", expectedRemoteSampleNumber);
-				++expectedRemoteSampleNumber;
+		int sampleNum = 0;
+		while (numSamples != 0)
+		{
+			String<StringLength500> temp;
+			temp.printf("%u", msg.firstSampleNumber + sampleNum);
+			++expectedRemoteSampleNumber;
 
-				// TODO: Parse data!
+			// TODO: Parse data!
 //				for (unsigned int axis = 0; axis < numAxes; ++axis)
 //				{
 //					// Extract one value from the message. A value spans at most two words in the buffer.
@@ -261,37 +300,44 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 //					temp.catf(",%.*f", decimalPlaces, (double)fVal);
 //				}
 
-				// Count how many bits are set in 'filter'
-				// TODO: Look into a more efficient way of doing this
-				int variableCount = 0;
-				int tmpFilter = filterRequested;
-				while (tmpFilter != 0) {
-					variableCount += tmpFilter & 0x1;
-					tmpFilter >>= 1;
-				}
-
-				// Pull all the variables from the data packet
-				for (int i=0;i < variableCount; i++)
-				{
-					int16_t val = msg.data[i];
-					temp.catf(",%d", val);
-				}
-				temp.cat("\n");
-
-				f->Write(temp.c_str());
-				--numSamples;
+			// Count how many bits are set in 'filter'
+			// TODO: Look into a more efficient way of doing this
+			int variableCount = 0;
+			int tmpFilter = filterRequested;
+			while (tmpFilter != 0) {
+				variableCount += tmpFilter & 0x1;
+				tmpFilter >>= 1;
 			}
 
-			if (msg.lastPacket)
+			// Pull all the variables from the data packet
+			for (int i=0;i < variableCount; i++)
 			{
+				float val = msg.data[sampleNum*variableCount + i];
+//				if ((typeFilter >> i) & 0x1)
+//				{
+//					temp.catf(",%f", (float) val);
+//				} else {
+				temp.catf(",%f", val);
+//				}
+
+			}
+			temp.cat("\n");
+
+			f->Write(temp.c_str());
+			--numSamples;
+			sampleNum++;
+		}
+
+		if (msg.lastPacket)
+		{
 //				String<StringLength50> temp;
 //				temp.printf("Rate %u, overflows %u\n", msg.actualSampleRate, numRemoteOverflows);
 //				f->Write(temp.c_str());
-				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-				f->Close();
-				closedLoopFile = nullptr;
-			}
+			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+			f->Close();
+			closedLoopFile = nullptr;
 		}
+//		}
 	}
 }
 

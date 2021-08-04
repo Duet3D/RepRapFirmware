@@ -1378,6 +1378,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 
 #if SUPPORT_CAN_EXPANSION
 	case 5:
+		// TODO: Move this into `if (id.boardAddress != CanInterface::GetCanAddress())` at the top?
 		return ClosedLoop::StartDataCollection(id, gb, reply);
 #endif
 

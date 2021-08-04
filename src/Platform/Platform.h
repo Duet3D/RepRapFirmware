@@ -592,6 +592,7 @@ public:
 #if HAS_MASS_STORAGE
 	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	const char *GetLogFileName() const noexcept;
+	void LogRemoteMessage(CanAddress src, const CanMessageLogMessage& msg, size_t msgLen) noexcept;
 #endif
 
 	// Ancillary PWM
