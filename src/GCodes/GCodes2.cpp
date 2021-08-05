@@ -3406,19 +3406,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 568: // Tool Settings
+				if (simulationMode == 0)
 				{
-					const unsigned int toolNumber = gb.GetLimitedUIValue('P', MaxTools);
-					if (reprap.GetTool(toolNumber).IsNull())
-					{
-						reply.cat("Tool settings can only be set for existing tools");
-						result = GCodeResult::error;
-						break;
-					}
-
-					if (simulationMode != 0)
-					{
-						break;
-					}
 					result = SetOrReportOffsets(gb, reply, 568);
 				}
 				break;
