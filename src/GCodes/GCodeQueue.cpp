@@ -77,8 +77,10 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 					}
 					return true;
 
+#if SUPPORT_LED_STRIPS
 				case 150:	// set LED colours
 					return !LedStripDriver::MustStopMovement(gb);		// if it is going to call LockMovementAndWaitForStandstill then we mustn't queue it
+#endif
 
 				case 291:
 					{
