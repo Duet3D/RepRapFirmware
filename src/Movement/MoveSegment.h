@@ -196,12 +196,14 @@ public:
 	static constexpr unsigned int SFdistance = 10;
 	static constexpr unsigned int SFstepsPerMm = 16;
 	static constexpr unsigned int SFmmPerStep = 31;
-	static constexpr unsigned int SFdirectionVector = 30;
+	static constexpr unsigned int SFdirectionVector = 20;
+	static constexpr unsigned int SFdelta = 9;
 
 	static constexpr uint32_t Kdistance = 1u << SFdistance;					// a power of 2 used to multiply distances by so we can store them as integers
 	static constexpr uint32_t KstepsPerMm = 1u << SFstepsPerMm;				// a power of 2 used to multiply steps/mm by so we can store them as integers
 	static constexpr uint32_t KmmPerStep = 1u << SFmmPerStep;				// a power of 2 for scaling the Z movement fraction
 	static constexpr uint32_t KdirectionVector = 1u << SFdirectionVector;	// a power of 2 for scaling the direction vector
+	static constexpr uint32_t Kdelta = 1u << SFdelta;						// a power of 2 for scaling delta motion calculations to reduce rounding error (but too high makes things worse)
 
 private:
 	static constexpr uint32_t LinearFlag = 0x01;

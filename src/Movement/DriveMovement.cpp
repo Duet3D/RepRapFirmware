@@ -96,7 +96,7 @@ void DriveMovement::DebugPrint() const noexcept
 		}
 		else if (isExtruder)
 		{
-			debugPrintf(" pa=%" PRIu32 " eed=%" PRIu32 " ebf=%.4e\n", mp.cart.iPressureAdvanceK, mp.cart.iExtraExtrusionDistance, mp.cart.extrusionBroughtForwards);
+			debugPrintf(" pa=%" PRIu32 " eed=%" PRIu32 " ebf=%.4e\n", mp.cart.iPressureAdvanceK, mp.cart.iExtraExtrusionDistance, (double)mp.cart.extrusionBroughtForwards);
 		}
 		else
 		{
@@ -183,6 +183,7 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 		}
 
 		const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
+#if MS_USE_FPU
 		pC = currentSegment->GetC()/stepsPerMm;		//TODO store the reciprocal to avoid the division
 		if (currentSegment->IsLinear())
 		{
@@ -231,6 +232,56 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
 			state = DMState::deltaForwardsReversing;
 		}
+#else
+		iC = currentSegment->GetC()/stepsPerMm;		//TODO store the reciprocal to avoid the division? Use a scaling factor for C
+		if (currentSegment->IsLinear())
+		{
+			// Set up pB, pC such that for forward motion, time = pB + pC * (distanceMoved * steps/mm)
+			iB = currentSegment->CalcLinearB(iDistanceSoFar, iTimeSoFar);
+		}
+		else
+		{
+			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * (distanceMoved * steps/mm))
+			iA = currentSegment->CalcNonlinearA(iDistanceSoFar);
+			iB = currentSegment->CalcNonlinearB(iTimeSoFar);
+		}
+
+		const uint32_t startDistance = iDistanceSoFar;
+		iDistanceSoFar += currentSegment->GetSegmentLength();
+		iTimeSoFar += currentSegment->GetSegmentTime();
+
+		// Work out whether we reverse in this segment and the movement limit in steps
+		const float sDx = iDistanceSoFar * dda.directionVector[0];	//TODO avoid float maths
+		const float sDy = iDistanceSoFar * dda.directionVector[1];	//TODO avoid float maths
+		const int32_t netStepsAtEnd = (int32_t)(isqrt64(mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
+								 	 	 	 	 + (iDistanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm);	//TODO avoid float maths
+
+		if (mp.delta.iReverseStartDistance <= (int32_t)startDistance)
+		{
+			// This segment is purely downwards motion and we want the greater of the two quadratic solutions. There may have been upwards motion earlier in the move.
+			if (direction)
+			{
+				direction = false;
+				directionChanged = true;
+			}
+			state = DMState::deltaReverse;
+			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1
+								: (reverseStartStep <= totalSteps) ? (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd)
+									: 1 - netStepsAtEnd;
+		}
+		else if ((int32_t)iDistanceSoFar <= mp.delta.iReverseStartDistance)
+		{
+			// This segment is purely upwards motion of the tower and we want the lower quadratic solution
+			state = DMState::deltaForwardsNoReverse;
+			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(netStepsAtEnd + 1);
+		}
+		else
+		{
+			// This segment ends with reverse motion. We want the lower quadratic solution initially.
+			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+			state = DMState::deltaForwardsReversing;
+		}
+#endif
 
 		if (phaseStepLimit > nextStep)
 		{
@@ -375,19 +426,15 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	const float B = params.initialY - params.dparams->GetTowerY(drive);
 	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
 	const float dSquaredMinusAsquaredMinusBsquared = params.dparams->GetDiagonalSquared(drive) - fsquare(A) - fsquare(B);
-	mp.delta.h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
+	const float h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
+
 #if MS_USE_FPU
+	mp.delta.h0MinusZ0 = h0MinusZ0;
 	mp.delta.fTwoA = 2.0 * A;
 	mp.delta.fTwoB = 2.0 * B;
-	mp.delta.fHmz0s = mp.delta.h0MinusZ0 * stepsPerMm;
+	mp.delta.fHmz0s = h0MinusZ0 * stepsPerMm;
 	mp.delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
 	mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
-#else
-	qq;	// incomplete!
-	mp.delta.hmz0sK = roundS32(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
-	mp.delta.minusAaPlusBbTimesKs = -roundS32(aAplusbB * stepsPerMm * DriveMovement::K2);
-	mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared = roundS64(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
-#endif
 
 	// Calculate the distance at which we need to reverse direction.
 	if (params.a2plusb2 <= 0.0)
@@ -445,6 +492,73 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 
 	distanceSoFar = 0.0;
 	timeSoFar = 0.0;
+#else
+	mp.delta.h0MinusZ0 = h0MinusZ0;		//TODO change to integer
+	mp.delta.fTwoA = 2.0 * A;			//TODO change to integer
+	mp.delta.fTwoB = 2.0 * B;			//TODO change to integer
+	mp.delta.hmz0sK = lrintf(h0MinusZ0 * stepsPerMm * MoveSegment::Kdelta);
+	mp.delta.minusAaPlusBbTimesKs = -lrintf(aAplusbB * stepsPerMm * MoveSegment::Kdelta);
+	mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared = llrintf(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * MoveSegment::Kdelta));
+
+	// Calculate the distance at which we need to reverse direction.
+	if (params.a2plusb2 <= 0.0)
+	{
+		// Pure Z movement. We can't use the main calculation because it divides by a2plusb2.
+		direction = (dda.directionVector[Z_AXIS] >= 0.0);
+		const float reverseStartDistance = (direction) ? dda.totalDistance + 1.0 : -1.0;	// so that we never reverse and NewDeltaSegment knows which way we are going
+		mp.delta.iReverseStartDistance = (int32_t)(reverseStartDistance * MoveSegment::Kdistance);
+		reverseStartStep = totalSteps + 1;
+	}
+	else
+	{
+		// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
+		// the other root corresponds to the carriages being above the bed.
+		const float drev = ((dda.directionVector[Z_AXIS] * fastSqrtf(params.a2plusb2 * params.dparams->GetDiagonalSquared(drive) - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
+							- aAplusbB)/params.a2plusb2;
+		mp.delta.iReverseStartDistance = (int32_t)(drev * MoveSegment::Kdistance);
+		if (drev > 0.0 && drev < dda.totalDistance)						// if the reversal point is within range
+		{
+			// Calculate how many steps we need to move up before reversing
+			const float hrev = dda.directionVector[Z_AXIS] * drev + fastSqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
+			const int32_t numStepsUp = (int32_t)((hrev - mp.delta.h0MinusZ0) * stepsPerMm);
+
+			// We may be almost at the peak height already, in which case we don't really have a reversal.
+			if (numStepsUp < 1)
+			{
+				mp.delta.iReverseStartDistance = -1;					// so that we know we have reversed already
+				reverseStartStep = totalSteps + 1;
+				direction = false;
+			}
+			else
+			{
+				reverseStartStep = (uint32_t)numStepsUp + 1;
+
+				// Correct the initial direction and the total number of steps
+				if (direction)
+				{
+					// Net movement is up, so we will go up first and then down by a lesser amount
+					totalSteps = (2 * numStepsUp) - totalSteps;
+				}
+				else
+				{
+					// Net movement is down, so we will go up first and then down by a greater amount
+					direction = true;
+					totalSteps = (2 * numStepsUp) + totalSteps;
+				}
+			}
+		}
+		else
+		{
+			// No reversal
+			reverseStartStep = totalSteps + 1;
+			direction = (drev >= 0.0);
+		}
+	}
+
+	iDistanceSoFar = 0;
+	iTimeSoFar = 0;
+#endif
+
 	isDelta = true;
 	currentSegment = (dda.shapedSegments != nullptr) ? dda.shapedSegments : dda.unshapedSegments;
 
@@ -678,6 +792,13 @@ static inline float fastLimSqrtf(float f) noexcept
 	return (f > 0.0) ? fastSqrtf(f) : 0.0;
 }
 
+#else
+
+static inline uint32_t LimISqrt64(int64_t num) noexcept
+{
+	return (num <= 0) ? 0 : isqrt64((uint64_t)num);
+}
+
 #endif
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
@@ -732,23 +853,39 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 
 	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 
+#if MS_USE_FPU
 	float nextCalcStepTime;
+#else
+	uint32_t iNextCalcStepTime;
+#endif
 
 	// Work out the time of the step
 	switch (state)
 	{
 	case DMState::cartLinear:									// linear steady speed
+#if MS_USE_FPU
 		nextCalcStepTime = pB + (float)(nextStep + stepsTillRecalc) * pC;
+#else
+		iNextCalcStepTime = iB + (nextStep + stepsTillRecalc) * iC;	//TODO ??scaling factor for iC ?
+#endif
 		break;
 
 	case DMState::cartAccel:									// Cartesian accelerating
+#if MS_USE_FPU
 		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+#else
+		iNextCalcStepTime = iB + LimISqrt64(iA + iC * (nextStep + stepsTillRecalc));	//TODO ??scaling factor for iC ?
+#endif
 		break;
 
 	case DMState::cartDecelForwardsReversing:
 		if (nextStep + stepsTillRecalc < reverseStartStep)
 		{
+#if MS_USE_FPU
 			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+#else
+			iNextCalcStepTime = iB - LimISqrt64(iA + iC * (nextStep + stepsTillRecalc));	//TODO ??scaling factor for iC ?
+#endif
 			break;
 		}
 
@@ -757,11 +894,19 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
+#if MS_USE_FPU
 		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)((2 * (int32_t)(reverseStartStep - 1)) - (int32_t)(nextStep + stepsTillRecalc)));
+#else
+		iNextCalcStepTime = iB + LimISqrt64(iA + iC * ((2 * (int32_t)(reverseStartStep - 1)) - (int32_t)(nextStep + stepsTillRecalc)));	//TODO ??scaling factor for iC ?
+#endif
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian accelerating with no reversal
+#if MS_USE_FPU
 		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+#else
+		iNextCalcStepTime = iB - LimISqrt64(iA + iC * (nextStep + stepsTillRecalc));	//TODO ??scaling factor for iC ?
+#endif
 		break;
 
 	case DMState::deltaForwardsReversing:						// moving forwards
@@ -776,6 +921,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	case DMState::deltaReverse:									// reversing on this and subsequent steps
 		// Calculate d*s where d = distance the head has travelled, s = steps/mm for this drive
 		{
+#if MS_USE_FPU
 			const float steps = (float)(1u << shiftFactor);
 			if (direction)
 			{
@@ -805,7 +951,36 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			nextCalcStepTime = (currentSegment->IsLinear()) ? pB + pCds
 								: (currentSegment->IsAccelerating()) ? pB + fastLimSqrtf(pA + pCds)
 									 : pB - fastLimSqrtf(pA + pCds);
-			if (currentSegment->IsLinear()) { pA = ds; }	//DEBUG
+			//if (currentSegment->IsLinear()) { pA = ds; }	//DEBUG
+#else
+			int32_t shiftedK2 = (int32_t)(MoveSegment::Kdelta << shiftFactor);
+			if (!direction)
+			{
+				shiftedK2 = -shiftedK2;
+			}
+			mp.delta.hmz0sK += shiftedK2;							// get K2 * (new carriage height above Z in steps)
+
+			const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.afterPrepare.cKc) >> MoveSegment::SFdelta);
+			const int32_t t1 = mp.delta.minusAaPlusBbTimesKs + hmz0scK;
+			const int32_t t2a = (int32_t)(mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - (int64_t)isquare64(mp.delta.hmz0sK) + (int64_t)isquare64(t1));
+			// Due to rounding error we can end up trying to take the square root of a negative number if we do not take precautions here
+			const uint32_t t2 = LimISqrt64(t2a);
+			const int32_t dsK = (direction) ? t1 - t2 : t1 + t2;
+
+			// Now feed dsK into the step algorithm for Cartesian motion
+			if (dsK < 0)
+			{
+				state = DMState::stepError;
+				nextStep += 110000000;							// so that we can tell what happened in the debug print
+				return false;
+			}
+
+			const int32_t iCds = ((int64_t)iC * dsK) >> (MoveSegment::SFdelta + MoveSegment::SFdistance);
+			iNextCalcStepTime = (currentSegment->IsLinear()) ? iB + iCds
+								: (currentSegment->IsAccelerating()) ? iB + LimISqrt64(iA + iCds)
+									 : iB - LimISqrt64(iA + iCds);
+			//if (currentSegment->IsLinear()) { iA = dsK; }	//DEBUG
+#endif
 		}
 		break;
 
@@ -823,7 +998,10 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	}
 #endif
 
+#if MS_USE_FPU
 	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
+#endif
+
 	if (iNextCalcStepTime > dda.clocksNeeded)
 	{
 		// The calculation makes this step late.
