@@ -99,11 +99,12 @@ private:
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
-	float distanceSoFar;
 #if DM_USE_FPU
+	float distanceSoFar;
 	float timeSoFar;
 	float pA, pB, pC;
 #else
+	uint32_t distanceSoFar;
 	uint32_t iTimeSoFar;
 	int64_t ipA;
 	int32_t ipB, ipC;
@@ -127,24 +128,27 @@ private:
 			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
 			int32_t minusAaPlusBbTimesKs;
+			int32_t reverseStartDistance;				// the overall move distance at which movement reversal occurs
 #endif
 		} delta;
 
 		struct CartesianParameters
 		{
+#if DM_USE_FPU
 			float pressureAdvanceK;						// how much pressure advance is applied to this move
 			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
 			float effectiveMmPerStep;					// reciprocal of [the steps/mm multiplied by the movement fraction]
 			float extraExtrusionDistance;				// the extra extrusion distance in the acceleration phase
 			float extrusionBroughtForwards;				// the amount of extrusion brought forwards from previous moves. Only needed for debug output.
+#else
+			uint32_t iPressureAdvanceK;					// how much pressure advance is applied to this move
+			uint32_t iEffectiveStepsPerMm;				// the steps/mm multiplied by the movement fraction
+			uint32_t iEffectiveMmPerStep;				// reciprocal of [the steps/mm multiplied by the movement fraction]
+			uint32_t iExtraExtrusionDistance;			// the extra extrusion distance in the acceleration phase
+			uint32_t iExtrusionBroughtForwards;			// the amount of extrusion brought forwards from previous moves. Only needed for debug output.
+#endif
 		} cart;
 	} mp;
-
-#if !DM_USE_FPU
-	static constexpr uint32_t K1 = 1024;				// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors
-	static constexpr uint32_t K2 = 512;					// a power of 2 used in delta calculations to reduce rounding errors (but too large makes things worse)
-	static constexpr int32_t Kc = 1024 * 1024;			// a power of 2 for scaling the Z movement fraction
-#endif
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.

@@ -134,6 +134,8 @@
 #include <RepRapFirmware.h>
 #include <Platform/Tasks.h>
 
+#define MS_USE_FPU			(__FPU_USED)
+
 class MoveSegment
 {
 public:
@@ -144,6 +146,7 @@ public:
 
 	MoveSegment(MoveSegment *p_next) noexcept;
 
+#if MS_USE_FPU
 	float GetSegmentLength() const noexcept { return segmentLength; }
 	float GetSegmentTime() const noexcept { return segTime; }
 	float CalcNonlinearA(float startDistance) const noexcept;
@@ -154,18 +157,31 @@ public:
 	float CalcC(float mmPerStep) const noexcept;
 	float GetC() const noexcept { return c; }
 
+	void SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept;
+	void SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c) noexcept;
+#else
+	uint32_t GetSegmentLength() const noexcept { return segmentLength; }
+	uint32_t GetSegmentTime() const noexcept { return segTime; }
+	int64_t CalcNonlinearA(uint32_t startDistance) const noexcept;
+	int64_t CalcNonlinearA(uint32_t startDistance, uint32_t pressureAdvanceK) const noexcept;
+	int32_t CalcNonlinearB(uint32_t startTime) const noexcept;
+	int32_t CalcNonlinearB(uint32_t startTime, uint32_t pressureAdvanceK) const noexcept;
+	int32_t CalcLinearB(uint32_t startDistance, uint32_t startTime) const noexcept;
+	int32_t CalcC(uint32_t mmPerStep) const noexcept;
+	int32_t GetC() const noexcept { return c; }
+
+	void SetLinear(uint32_t pSegmentLength, uint32_t p_segTime, int32_t p_c) noexcept;
+	void SetNonLinear(uint32_t pSegmentLength, uint32_t p_segTime, int32_t p_b, int32_t p_c) noexcept;
+#endif
+	void SetReverse() noexcept;
+
 	MoveSegment *GetNext() const noexcept;
 	bool IsLinear() const noexcept;
 	bool IsAccelerating() const noexcept pre(!IsLinear());
 	bool IsLast() const noexcept;
 
 	void SetNext(MoveSegment *p_next) noexcept;
-	void SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept;
-	void SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c) noexcept;
-	void SetReverse() noexcept;
-
 	void AddToTail(MoveSegment *tail) noexcept;
-
 	void DebugPrint(char ch) const noexcept;
 
 	// Allocate a MoveSegment, clearing the Linear and Last flags
@@ -187,10 +203,21 @@ private:
 	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
 
 	// The 'next' field is a MoveSegment pointer with two flag bits in the bottom two bits
-	uint32_t nextAndFlags;			// pointer to the next segment, plus flag bits
-	float segmentLength;			// the length of this segment before applying the movement fraction
-	float segTime;					// the time in step clocks at which this move ends
-	float b, c;						// the move parameters (b is not needed for linear moves)
+	uint32_t nextAndFlags;								// pointer to the next segment, plus flag bits
+#if MS_USE_FPU
+	float segmentLength;								// the length of this segment before applying the movement fraction
+	float segTime;										// the time in step clocks at which this move ends
+	float b, c;											// the move parameters (b is not needed for linear moves)
+#else
+	uint32_t segmentLength;								// the length of this segment before applying the movement fraction
+	uint32_t segTime;									// the time in step clocks at which this move ends
+	int32_t b, c;										// the move parameters (b is not needed for linear moves)
+
+	static constexpr uint32_t Kdistance = 1u << 10;		// a power of 2 used to multiply distances by so we can store them as integers
+	static constexpr uint32_t KstepsPerMm = 1u << 16;	// a power of 2 used to multiply steps/mm by so we can store them as integers
+	static constexpr uint32_t KmmPerStep = 1u << 31;	// a power of 2 for scaling the Z movement fraction
+#endif
+
 };
 
 // Create a new one, leaving the flags clear
@@ -221,23 +248,7 @@ inline bool MoveSegment::IsLast() const noexcept
 	return GetNext() == nullptr;
 }
 
-inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept
-{
-	segmentLength = pSegmentLength;
-	segTime = p_segTime;
-	b = 0.0;
-	c = p_c;
-	nextAndFlags |= LinearFlag;
-}
-
-// Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
-inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c) noexcept
-{
-	segmentLength = pSegmentLength;
-	segTime = p_segTime;
-	b = p_b;
-	c = p_c;
-}
+#if MS_USE_FPU
 
 inline float MoveSegment::CalcNonlinearA(float startDistance) const noexcept
 {
@@ -268,6 +279,76 @@ inline float MoveSegment::CalcC(float mmPerStep) const noexcept
 {
 	return c * mmPerStep;
 }
+
+inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept
+{
+	segmentLength = pSegmentLength;
+	segTime = p_segTime;
+	b = 0.0;
+	c = p_c;
+	nextAndFlags |= LinearFlag;
+}
+
+// Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
+inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c) noexcept
+{
+	segmentLength = pSegmentLength;
+	segTime = p_segTime;
+	b = p_b;
+	c = p_c;
+}
+
+#else
+
+inline int64_t MoveSegment::CalcNonlinearA(uint32_t startDistance) const noexcept
+{
+	return isquare64(b) - (int64_t)startDistance * c;
+}
+
+inline int64_t MoveSegment::CalcNonlinearA(uint32_t startDistance, uint32_t pressureAdvanceK) const noexcept
+{
+	return isquare64(b - pressureAdvanceK) - (int64_t)startDistance * c;
+}
+
+inline int32_t MoveSegment::CalcNonlinearB(uint32_t startTime) const noexcept
+{
+	return b + (int32_t)startTime;
+}
+
+inline int32_t MoveSegment::CalcNonlinearB(uint32_t startTime, uint32_t pressureAdvanceK) const noexcept
+{
+	return (b - (int32_t)pressureAdvanceK) + (int32_t)startTime;
+}
+
+inline int32_t MoveSegment::CalcLinearB(uint32_t startDistance, uint32_t startTime) const noexcept
+{
+	return (int32_t)startTime - ((int32_t)startDistance * c);
+}
+
+inline int32_t MoveSegment::CalcC(uint32_t mmPerStep) const noexcept
+{
+	return c * mmPerStep;
+}
+
+inline void MoveSegment::SetLinear(uint32_t pSegmentLength, uint32_t p_segTime, int32_t p_c) noexcept
+{
+	segmentLength = pSegmentLength;
+	segTime = p_segTime;
+	b = 0;
+	c = p_c;
+	nextAndFlags |= LinearFlag;
+}
+
+// Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
+inline void MoveSegment::SetNonLinear(uint32_t pSegmentLength, uint32_t p_segTime, int32_t p_b, int32_t p_c) noexcept
+{
+	segmentLength = pSegmentLength;
+	segTime = p_segTime;
+	b = p_b;
+	c = p_c;
+}
+
+#endif
 
 // Given that this is an accelerating or decelerating move, return true if it is accelerating
 inline bool MoveSegment::IsAccelerating() const noexcept
