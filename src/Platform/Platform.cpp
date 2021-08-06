@@ -384,7 +384,7 @@ Platform::Platform() noexcept :
 #if HAS_AUX_DEVICES
 	panelDueUpdater(nullptr),
 #endif
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	sysDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
