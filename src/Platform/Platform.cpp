@@ -384,7 +384,7 @@ Platform::Platform() noexcept :
 #if HAS_AUX_DEVICES
 	panelDueUpdater(nullptr),
 #endif
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	sysDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
@@ -4081,10 +4081,26 @@ const char *Platform::GetBoardShortName() const noexcept
 
 #ifdef DUET3MINI
 
-// Return true if this is a Duet WiFi, false if it is a Duet Ethernet
+// Return true if this is a WiFi board, false if it has Ethernet
 bool Platform::IsDuetWiFi() const noexcept
 {
 	return board == BoardType::Duet3Mini_WiFi || board == BoardType::Duet3Mini_Unknown;
+}
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+
+bool Platform::Delete(const char* folder, const char *filename) const noexcept
+{
+	String<MaxFilenameLength> location;
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
+}
+
+bool Platform::DeleteSysFile(const char *filename) const noexcept
+{
+	String<MaxFilenameLength> location;
+	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
 }
 
 #endif
@@ -4111,14 +4127,6 @@ const char* Platform::InternalGetSysDir() const noexcept
 {
 	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
 }
-
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-bool Platform::Delete(const char* folder, const char *filename) const noexcept
-{
-	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
-}
-# endif
 
 // Set the system files path
 GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcept
@@ -4153,14 +4161,6 @@ FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const noex
 			? MassStorage::OpenFile(location.c_str(), mode, 0)
 				: nullptr;
 }
-
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-bool Platform::DeleteSysFile(const char *filename) const noexcept
-{
-	String<MaxFilenameLength> location;
-	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
-}
-#endif
 
 bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const noexcept
 {
