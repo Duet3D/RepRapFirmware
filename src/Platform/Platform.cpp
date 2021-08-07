@@ -4506,7 +4506,7 @@ bool Platform::SetDateTime(time_t time) noexcept
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Exactly one of FHJPS is allowed
+	// Exactly one of FHJPSR is allowed
 	unsigned int charsPresent = 0;
 	for (char c : (const char[]){'R', 'J', 'F', 'H', 'P', 'S'})
 	{
@@ -4519,30 +4519,30 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 
 	switch (charsPresent)
 	{
-	case 1:
+	case 1:		// S
 		{
 			const uint32_t gpioNumber = gb.GetLimitedUIValue('S', MaxGpOutPorts);
 			return gpoutPorts[gpioNumber].Configure(gpioNumber, true, gb, reply);
 		}
 
-	case 2:
+	case 2:		// P
 		{
 			const uint32_t gpioNumber = gb.GetLimitedUIValue('P', MaxGpOutPorts);
 			return gpoutPorts[gpioNumber].Configure(gpioNumber, false, gb, reply);
 		}
 
-	case 4:
+	case 4:		// H
 		return reprap.GetHeat().ConfigureHeater(gb, reply);
 
-	case 8:
+	case 8:		// F
 		return reprap.GetFansManager().ConfigureFanPort(gb, reply);
 
-	case 16:
+	case 16:	// J
 		{
 			const uint32_t gpinNumber = gb.GetLimitedUIValue('J', MaxGpInPorts);
 			return gpinPorts[gpinNumber].Configure(gpinNumber, gb, reply);
 		}
-	case 32:
+	case 32:	// R
 		{
 			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
 			return spindles[slot].Configure(gb, reply);
