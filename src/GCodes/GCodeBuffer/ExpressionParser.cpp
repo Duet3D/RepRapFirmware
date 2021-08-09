@@ -610,7 +610,7 @@ void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index
 		{
 			ThrowParseException("Array too long");
 		}
-		AdvancePointer();				// skip the '{'
+		AdvancePointer();				// skip the ','
 	}
 	if (CurrentCharacter() != '}')
 	{
@@ -807,12 +807,12 @@ void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) co
 #if SUPPORT_CAN_EXPANSION
 			if (ival >= 0 && fabsf(f10val - (float)ival) <= 0.002)
 			{
-				val.Set(ival/10, ival % 10);
+				val.Set(DriverId(ival/10, ival % 10));
 			}
 #else
 			if (ival >= 0 && ival < 10 && fabsf(f10val - (float)ival) <= 0.002)
 			{
-				val.Set(0, ival % 10);
+				val.Set(DriverId(0, ival % 10));
 			}
 #endif
 			else
