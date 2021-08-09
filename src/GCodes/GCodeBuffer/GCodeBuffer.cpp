@@ -8,7 +8,7 @@
 //*************************************************************************************
 
 #include "GCodeBuffer.h"
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include <GCodes/GCodeInput.h>
 #endif
 #if HAS_LINUX_INTERFACE

@@ -116,7 +116,7 @@ public:
 	void Reset() noexcept;														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m) noexcept;											// Called by the Move class to get a movement set by the last G Code
 	void ClearMove() noexcept;
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
@@ -459,7 +459,7 @@ private:
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile) THROWS(GCodeException);	// Handle M37 to simulate a whole file
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode) THROWS(GCodeException);		// Handle M37 to change the simulation mode
 #endif
@@ -596,7 +596,7 @@ private:
 	unsigned int currentCoordinateSystem;		// This is zero-based, where as the P parameter in the G10 command is 1-based
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print
 #endif
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
@@ -658,7 +658,7 @@ private:
 	// Code queue
 	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	// SHA1 hashing
 	FileStore *fileBeingHashed;
 	SHA1Context hash;

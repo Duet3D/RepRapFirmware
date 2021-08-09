@@ -973,7 +973,7 @@ void StringParser::SetFinished() noexcept
 // Get the file position at the start of the current command
 FilePosition StringParser::GetFilePosition() const noexcept
 {
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (gb.LatestMachineState().DoingFile()
 # if HAS_LINUX_INTERFACE
 		&& !reprap.UsingLinuxInterface()

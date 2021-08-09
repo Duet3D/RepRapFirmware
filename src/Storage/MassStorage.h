@@ -32,10 +32,10 @@ namespace MassStorage
 	FileStore* OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
 	bool FileExists(const char *filePath) noexcept;
 	void CloseAllFiles() noexcept;
+	void Spin() noexcept;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-	void Spin() noexcept;
 	FileWriteBuffer *AllocateWriteBuffer() noexcept;
 	size_t GetFileWriteBufferLength() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
@@ -55,6 +55,8 @@ namespace MassStorage
 	bool FindNext(FileInfo &file_info) noexcept;
 	void AbandonFindNext() noexcept;
 	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
+	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
+	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
 #endif
 
 #if HAS_MASS_STORAGE
@@ -63,8 +65,6 @@ namespace MassStorage
 	bool Rename(const char *oldFilePath, const char *newFilePath, bool deleteExisting, bool messageIfFailed) noexcept;
 	time_t GetLastModifiedTime(const char *filePath) noexcept;
 	bool SetLastModifiedTime(const char *file, time_t time) noexcept;
-	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
-	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
 	bool CheckDriveMounted(const char* path) noexcept;
 	bool IsCardDetected(size_t card) noexcept;
 	unsigned int InvalidateFiles(const FATFS *fs, bool doClose) noexcept;					// Invalidate all open files on the specified file system, returning the number of files invalidated

@@ -113,7 +113,7 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_12V_MONITOR) || !defined(HAS_VREF_MONITOR) \
- || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES) || !defined(HAS_MASS_STORAGE)
+ || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES) || !defined(HAS_MASS_STORAGE) || !defined(HAS_EMBEDDED_FILES)
 # error Missing feature definition
 #endif
 
@@ -465,7 +465,7 @@ void Platform::Init() noexcept
 		pinMode(SdCardDetectPins[i], INPUT_PULLUP);
 	}
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Init();
 #endif
 
@@ -969,7 +969,7 @@ void Platform::SendPanelDueMessage(size_t auxNumber, const char* msg) noexcept
 void Platform::Exit() noexcept
 {
 	StopLogging();
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	MassStorage::CloseAllFiles();
 #endif
 #if HAS_SMART_DRIVERS
@@ -1091,7 +1091,7 @@ void Platform::Spin() noexcept
 	}
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Spin();
 #endif
 

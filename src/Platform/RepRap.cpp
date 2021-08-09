@@ -587,7 +587,7 @@ void RepRap::Init() noexcept
 	FileWriteBuffer::UsingSbcMode();
 #endif
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	{
 		// Try to mount the first SD card
 		GCodeResult rslt;
@@ -1876,7 +1876,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	response->catf(",\"firmwareDate\":\"%.s\"", DATE);
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	// System files folder
 	response->catf(", \"sysdir\":\"%.s\"", platform->GetSysDir().Ptr());
 #endif

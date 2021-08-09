@@ -272,21 +272,23 @@ static const char* TranslateCardError(sd_mmc_err_t err) noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 void MassStorage::Init() noexcept
 {
 	fsMutex.Create("FileSystem");
 
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	freeWriteBuffers = nullptr;
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
-# if SAME70
+#  if SAME70
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers, writeBufferStorage[i]);
-# else
+#  else
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
-# endif
+#  endif
 	}
+# endif
 
 # if HAS_MASS_STORAGE
 	static const char * const VolMutexNames[] = { "SD0", "SD1" };
@@ -410,10 +412,6 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 	reprap.GetPlatform().Message(ErrorMessage, "Max open file count exceeded.\n");
 	return nullptr;
 }
-
-#endif
-
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // Close all files
 void MassStorage::CloseAllFiles() noexcept

@@ -15,21 +15,6 @@
 #include <ObjectModel/ObjectModel.h>
 #include "FileStore.h"
 
-void MassStorage::Init() noexcept
-{
-	//TODO
-}
-
-FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
-{
-	if (mode == OpenMode::read)
-	{
-		// Try to open the embedded file
-		//TODO
-	}
-	return nullptr;
-}
-
 bool MassStorage::FileExists(const char *filePath) noexcept
 {
 	//TODO
