@@ -8,6 +8,10 @@
 #include <Heating/Heat.h>
 #include <Endstops/ZProbe.h>
 
+#if HAS_LINUX_INTERFACE
+# include <Linux/LinuxInterface.h>
+#endif
+
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
 # include <Comms/FirmwareUpdater.h>
 #endif
@@ -24,6 +28,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		return;
 	}
+	bool reportPause = false;
 #endif
 
 	// Perform the next operation of the state machine for this gcode source
@@ -455,9 +460,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, AsyncSystemMacroCode))
+				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, SystemHelperMacroCode))
 				{
-					DoFileMacro(gb, PAUSE_G, true, AsyncSystemMacroCode);
+					DoFileMacro(gb, PAUSE_G, true, SystemHelperMacroCode);
 				}
 			}
 		}
@@ -494,6 +499,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			platform.MessageF(LogWarn, "%s\n", reply.c_str());
 			pauseState = PauseState::paused;
+#if HAS_LINUX_INTERFACE
+			reportPause = reprap.UsingLinuxInterface();
+#endif
 			gb.SetState(GCodeState::normal);
 		}
 		break;
@@ -1528,7 +1536,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		UnlockAll(gb);
 		gb.LatestMachineState().RetrieveStateMachineResult(stateMachineResult, reply);
 		HandleReply(gb, stateMachineResult, reply.c_str());
+
 		CheckForDeferredPause(gb);
+#if HAS_LINUX_INTERFACE
+		if (reportPause)
+		{
+			fileGCode->Invalidate();
+			reprap.GetLinuxInterface().ReportPause();
+		}
+#endif
 	}
 }
 
