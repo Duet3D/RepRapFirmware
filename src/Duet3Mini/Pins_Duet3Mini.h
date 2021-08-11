@@ -267,7 +267,7 @@ constexpr Pin DiagPin = NoPin;												// Diag/status LED pin is shared with 
 constexpr Pin ActLedPin = NoPin;											// Activity LED pin is shared with SWCLK
 #else
 constexpr Pin DiagPin = PortAPin(31);										// Diag/status LED pin
-constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin (Etherne Yellow LED on v0.2 board)
+constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin (Ethernet Yellow LED on v0.2 board)
 #endif
 
 constexpr bool DiagOnPolarity = false;

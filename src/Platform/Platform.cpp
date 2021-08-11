@@ -156,7 +156,7 @@ constexpr uint16_t driverV12OffAdcReading = V12VoltageToAdcReading(9.5);				// v
 
 #endif
 
-const float MinStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
+constexpr float MinStepPulseTiming = 0.2;												// we assume that we always generate step high and low times at least this wide without special action
 
 // Global variable for debugging in tricky situations e.g. within ISRs
 int debugLine = 0;
@@ -389,6 +389,10 @@ Platform::Platform() noexcept :
 #endif
 	tickState(0), debugCode(0),
 	lastWarningMillis(0),
+#ifdef DUET3MINI
+	whenLastCanMessageProcessed(0),
+#endif
+
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
@@ -1085,6 +1089,15 @@ void Platform::Spin() noexcept
 		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
 		digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
 	}
+#endif
+
+#if defined(DUET3MINI)
+	// Turn off the ACT LED if it is time to do so
+	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
+	{
+		digitalWrite(ActLedPin, !ActOnPolarity);
+	}
+
 #endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
@@ -4579,6 +4592,14 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 								}
 							);
 	return CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(data, reply);
+}
+
+void Platform::OnProcessingCanMessage()
+{
+#ifdef DUET3MINI			// MB6HC doesn't yet have a ACT LED
+	whenLastCanMessageProcessed = millis();
+	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
+#endif
 }
 
 #endif

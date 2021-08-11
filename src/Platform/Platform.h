@@ -635,6 +635,10 @@ public:
 	void AdjustNumDrivers(size_t numDriversNotAvailable) noexcept;
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+	void OnProcessingCanMessage();										// called when we start processing any CAN message except for regular messages e.g. time sync
+#endif
+
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(axisDrivers)
@@ -851,6 +855,10 @@ private:
 #endif
 
 	uint32_t lastWarningMillis;							// When we last sent a warning message
+
+#ifdef DUET3MINI
+	uint32_t whenLastCanMessageProcessed;
+#endif
 
 	// RTC
 	time_t realTime;									// the current date/time, or zero if never set

@@ -391,6 +391,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
+			if (id != CanMessageType::timeSync)
+			{
+				reprap.GetPlatform().OnProcessingCanMessage();
+			}
+
 			String<StringLength500> reply;
 			const StringRef& replyRef = reply.GetRef();
 			GCodeResult rslt;
@@ -475,6 +480,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;
 
 			default:
+				// We received a message type that we don't recognise. If it's a broadcast, ignore it. If it's addressed to us, send a reply.
+				if (buf->id.Src() != CanInterface::GetCanAddress())
+				{
+					return;
+				}
 				requestId = CanRequestIdAcceptAlways;
 				reply.printf("Board %u received unknown msg type %u", CanInterface::GetCanAddress(), (unsigned int)buf->id.MsgType());
 				rslt = GCodeResult::error;
