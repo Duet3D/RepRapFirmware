@@ -1672,7 +1672,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.catf(" + %s", additionalExpansionName);
 					}
 #endif
+#ifdef DUET3_ATE
+					reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
+#else
 					reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
+#endif
 				}
 				break;
 

@@ -22,7 +22,7 @@
 # define BOARD_SHORT_NAME		"Mini5plus"
 # define BOARD_NAME				"Duet 3 Mini 5+"
 # ifdef DUET3_ATE
-#  define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+ ATE"
+#  define FIRMWARE_NAME			"RepRapFirmware for ATE based on Duet 3 Mini 5+"
 # else
 #  define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+"
 # endif
