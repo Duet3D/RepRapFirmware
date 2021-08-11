@@ -543,14 +543,14 @@ public:
 
 	// MCU temperature
 #if HAS_CPU_TEMP_SENSOR
-	MinMaxCurrent GetMcuTemperatures() const noexcept;
+	MinCurMax GetMcuTemperatures() const noexcept;
 	void SetMcuTemperatureAdjust(float v) noexcept { mcuTemperatureAdjust = v; }
 	float GetMcuTemperatureAdjust() const noexcept { return mcuTemperatureAdjust; }
 #endif
 
 #if HAS_VOLTAGE_MONITOR
 	// Power in voltage
-	MinMaxCurrent GetPowerVoltages() const noexcept;
+	MinCurMax GetPowerVoltages() const noexcept;
 	float GetCurrentPowerVoltage() const noexcept;
 	bool IsPowerOk() const noexcept;
 	void DisableAutoSave() noexcept;
@@ -560,7 +560,7 @@ public:
 
 #if HAS_12V_MONITOR
 	// 12V rail voltage
-	MinMaxCurrent GetV12Voltages() const noexcept;
+	MinCurMax GetV12Voltages() const noexcept;
 	float GetCurrentV12Voltage() const noexcept;
 #endif
 

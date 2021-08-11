@@ -24,7 +24,7 @@ struct ExpansionBoardData
 	ExpansionBoardData() noexcept;
 
 	const char *typeName;
-	MinMaxCurrent mcuTemp, vin, v12;
+	MinCurMax mcuTemp, vin, v12;
 	BoardState state;
 	uint8_t numDrivers;
 };

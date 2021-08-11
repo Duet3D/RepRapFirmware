@@ -309,16 +309,16 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		reply.printf("{\"firmwareElectronics\":\"Duet 3 %.0s\"", BOARD_NAME);
 #if HAS_VOLTAGE_MONITOR
 		{
-			const MinMaxCurrent voltages = reprap.GetPlatform().GetPowerVoltages();
+			const MinCurMax voltages = reprap.GetPlatform().GetPowerVoltages();
 			reply.catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-					(double)voltages.min, (double)voltages.current, (double)voltages.max);
+					(double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
 		}
 #endif
 #if HAS_12V_MONITOR
 		{
-			const MinMaxCurrent voltages = reprap.GetPlatform().GetV12Voltages();
+			const MinCurMax voltages = reprap.GetPlatform().GetV12Voltages();
 			reply.catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-					(double)voltages.min, (double)voltages.current, (double)voltages.max);
+					(double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
 		}
 #endif
 		reply.cat('}');
@@ -366,8 +366,8 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 			reply.catf("V12: %.1fn", (double)reprap.GetPlatform().GetCurrentV12Voltage());
 #endif
 #if HAS_CPU_TEMP_SENSOR
-			const MinMaxCurrent temps = reprap.GetPlatform().GetMcuTemperatures();
-			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.min, (double)temps.current, (double)temps.max);
+			const MinCurMax temps = reprap.GetPlatform().GetMcuTemperatures();
+			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
 #endif
 		}
 		break;

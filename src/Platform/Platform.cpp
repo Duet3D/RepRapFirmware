@@ -253,15 +253,15 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_CPU_TEMP_SENSOR
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().max, 1),												ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min, 1),												ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().maximum, 1),											ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().minimum, 1),											ObjectModelEntryFlags::none },
 #endif
 
 	// 2. vIn members
 #if HAS_VOLTAGE_MONITOR
 	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage(), 1),												ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().max, 1),													ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().min, 1),													ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().maximum, 1),												ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().minimum, 1),												ObjectModelEntryFlags::none },
 #endif
 
 	// 3. move.axes[] members
@@ -307,8 +307,8 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_12V_MONITOR
 	// 6. v12 members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),														ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max, 1),															ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min, 1),															ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().maximum, 1),														ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().minimum, 1),														ObjectModelEntryFlags::none },
 #endif
 
 	// 7. move.axes[].microstepping members
@@ -4236,12 +4236,12 @@ bool Platform::Inkjet(int bitPattern) noexcept
 #if HAS_CPU_TEMP_SENSOR
 
 // CPU temperature
-MinMaxCurrent Platform::GetMcuTemperatures() const noexcept
+MinCurMax Platform::GetMcuTemperatures() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = lowestMcuTemperature;
+	MinCurMax result;
+	result.minimum = lowestMcuTemperature;
 	result.current = GetCpuTemperature();
-	result.max = highestMcuTemperature;
+	result.maximum = highestMcuTemperature;
 	return result;
 }
 
@@ -4250,12 +4250,12 @@ MinMaxCurrent Platform::GetMcuTemperatures() const noexcept
 #if HAS_VOLTAGE_MONITOR
 
 // Power in voltage
-MinMaxCurrent Platform::GetPowerVoltages() const noexcept
+MinCurMax Platform::GetPowerVoltages() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = AdcReadingToPowerVoltage(lowestVin);
+	MinCurMax result;
+	result.minimum = AdcReadingToPowerVoltage(lowestVin);
 	result.current = AdcReadingToPowerVoltage(currentVin);
-	result.max = AdcReadingToPowerVoltage(highestVin);
+	result.maximum = AdcReadingToPowerVoltage(highestVin);
 	return result;
 }
 
@@ -4268,12 +4268,12 @@ float Platform::GetCurrentPowerVoltage() const noexcept
 
 #if HAS_12V_MONITOR
 
-MinMaxCurrent Platform::GetV12Voltages() const noexcept
+MinCurMax Platform::GetV12Voltages() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = AdcReadingToPowerVoltage(lowestV12);
+	MinCurMax result;
+	result.minimum = AdcReadingToPowerVoltage(lowestV12);
 	result.current = AdcReadingToPowerVoltage(currentV12);
-	result.max = AdcReadingToPowerVoltage(highestV12);
+	result.maximum = AdcReadingToPowerVoltage(highestV12);
 	return result;
 }
 

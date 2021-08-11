@@ -1762,24 +1762,24 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		// MCU temperatures
 #if HAS_CPU_TEMP_SENSOR
 		{
-			const MinMaxCurrent temps = platform->GetMcuTemperatures();
-			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)temps.min, (double)temps.current, (double)temps.max);
+			const MinCurMax temps = platform->GetMcuTemperatures();
+			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
 		}
 #endif
 
 #if HAS_VOLTAGE_MONITOR
 		// Power in voltages
 		{
-			const MinMaxCurrent voltages = platform->GetPowerVoltages();
-			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)voltages.min, (double)voltages.current, (double)voltages.max);
+			const MinCurMax voltages = platform->GetPowerVoltages();
+			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
 		}
 #endif
 
 #if HAS_12V_MONITOR
 		// Power in voltages
 		{
-			const MinMaxCurrent voltages = platform->GetV12Voltages();
-			response->catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)voltages.min, (double)voltages.current, (double)voltages.max);
+			const MinCurMax voltages = platform->GetV12Voltages();
+			response->catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
 		}
 #endif
 	}

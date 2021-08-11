@@ -812,7 +812,7 @@ void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) co
 #else
 			if (ival >= 0 && ival < 10 && fabsf(f10val - (float)ival) <= 0.002)
 			{
-				val.Set(DriverId(0, ival % 10));
+				val.Set(DriverId(ival % 10));
 			}
 #endif
 			else
