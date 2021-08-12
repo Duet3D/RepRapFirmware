@@ -2283,13 +2283,20 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				IrqDisable();
 				asm volatile("":::"memory");
 				uint32_t now1 = SysTick->VAL;
-				val = RepRap::FastSqrtf(val);
+				const float nval = RepRap::FastSqrtf(val);
 				uint32_t now2 = SysTick->VAL;
 				asm volatile("":::"memory");
 				IrqEnable();
 				now1 &= 0x00FFFFFF;
 				now2 &= 0x00FFFFFF;
 				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+#if 0	//debug
+				if (nval != sqrtf(val))
+				{
+					debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
+				}
+#endif
+				val = nval;
 			}
 
 			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
