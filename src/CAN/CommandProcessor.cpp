@@ -539,6 +539,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
 				break;
 
+			case CanMessageType::driversStatusReport:
+				//TODO
+				break;
+
+			case CanMessageType::boardStatusReport:
+				reprap.GetExpansion().ProcessBoardStatusReport(buf);
+				break;
+
 			case CanMessageType::heaterTuningReport:
 				reprap.GetHeat().ProcessRemoteHeaterTuningReport(buf->id.Src(), buf->msg.heaterTuningReport);
 				break;
@@ -585,7 +593,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				}
 				break;
 #endif
-			case CanMessageType::driversStatusReport:	// not handled yet
+
 			default:
 				if (reprap.Debug(moduleCan))
 				{

@@ -145,6 +145,34 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 	CanInterface::SendResponseNoFree(buf);
 }
 
+// Process a board status report
+void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept
+{
+	const CanAddress address = buf->id.Src();
+	ExpansionBoardData& board = boards[address];
+	if (board.state != BoardState::running)
+	{
+		UpdateBoardState(address, BoardState::running);
+	}
+
+	const CanMessageBoardStatus msg = buf->msg.boardStatus;
+
+	// We must process the data in the correct order, to ensure that we pick up the right values
+	size_t index = 0;
+	if (msg.hasVin)
+	{
+		board.vin = msg.values[index++];
+	}
+	if (msg.hasV12)
+	{
+		board.v12 = msg.values[index++];
+	}
+	if (msg.hasMcuTemp)
+	{
+		board.mcuTemp = msg.values[index++];
+	}
+}
+
 // Return a pointer to the expansion board, if it is present
 const ExpansionBoardData *ExpansionManager::GetBoardDetails(uint8_t address) const noexcept
 {
