@@ -82,7 +82,7 @@ CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexce
 #if USE_REMOTE_INPUT_SHAPING
 		auto move = buf->SetupRequestMessage<CanMessageMovementLinearShaped>(0, CanId::MasterAddress, canDriver.boardAddress);
 #else
-		auto move = buf->SetupRequestMessage<CanMessageMovementLinear>(0, CanId::MasterAddress, canDriver.boardAddress);
+		auto move = buf->SetupRequestMessage<CanMessageMovementLinear>(0, CanInterface::GetCurrentMasterAddress(), canDriver.boardAddress);
 #endif
 
 		// Common parameters

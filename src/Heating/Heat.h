@@ -157,6 +157,10 @@ private:
 	void InsertSensor(TemperatureSensor *newSensor) noexcept;
 	void SetTemperature(int heater, float t, bool activeNotStandby) THROWS(GCodeException);
 
+#if SUPPORT_REMOTE_COMMANDS
+	void SendHeatersStatus(CanMessageBuffer& buf) noexcept;
+#endif
+
 	static ReadWriteLock heatersLock;
 
 	uint8_t volatile sensorCount;
@@ -172,6 +176,11 @@ private:
 	int8_t chamberHeaters[MaxChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
 	int8_t heaterBeingTuned;									// which PID is currently being tuned
 	int8_t lastHeaterTuned;										// which PID we last finished tuning
+
+#if SUPPORT_REMOTE_COMMANDS
+	uint8_t newHeaterFaultState;								// 0 = normal, 1 = new heater fault, 2 = sent heater fault CAN message
+	uint8_t newDriverFaultState;								// 0 = normal, 1 = new driver fault, 2 = sent driver fault CAN message
+#endif
 };
 
 //***********************************************************************************************************

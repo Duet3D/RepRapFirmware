@@ -5041,7 +5041,27 @@ GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringR
 	return GCodeResult::ok;
 }
 
-#endif
+void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
+{
+	CanMessageDriversStatus * const msg = buf.SetupStatusMessage<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+# if HAS_SMART_DRIVERS
+	msg->SetStandardFields(MaxSmartDrivers);
+	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
+	{
+		msg->data[driver] = SmartDrivers::GetStandardDriverStatus(driver);
+	}
+# else
+	msg->SetStandardFields(NumDrivers);
+	for (size_t driver = 0; driver < NumDrivers; ++driver)
+	{
+		msg->data[driver] = Platform::GetStandardDriverStatus(driver);
+	}
+# endif
+	buf.dataLength = msg->GetActualDataLength();
+	CanInterface::SendMessageNoReplyNoFree(&buf);
+}
+
+#endif	// SUPPORT_REMOTE_COMMANDS
 
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.

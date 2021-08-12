@@ -284,4 +284,28 @@ void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFansRepor
 
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// Construct a fan RPM report message. Returns the number of fans reported in it.
+unsigned int FansManager::PopulateFansReport(CanMessageFansReport& msg) noexcept
+{
+	ReadLocker locker(fansLock);
+
+	msg.whichFans = 0;
+	unsigned int numReported = 0;
+	for (Fan* f : fans)
+	{
+		if (f != nullptr && f->IsLocal())
+		{
+			msg.fanReports[numReported].actualPwm = (uint16_t)(f->GetPwm() * 65535);
+			msg.fanReports[numReported].rpm = f->GetRPM();
+			msg.whichFans |= (uint64_t)1 << f->GetNumber();
+			++numReported;
+		}
+	}
+	return numReported;
+}
+
+#endif
+
 // End
