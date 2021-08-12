@@ -178,7 +178,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 		temp.printf("Sample");
 		if (filterRequested & 1)  		{temp.cat(",Raw Encoder Reading");}
 		if (filterRequested & 2)  		{temp.cat(",Current Motor Steps");}
-		if (filterRequested & 4)  		{temp.cat(",TargetMotorSteps");}
+		if (filterRequested & 4)  		{temp.cat(",Target Motor Steps");}
 		if (filterRequested & 8)  		{temp.cat(",Step Phase");}
 		if (filterRequested & 16)  		{temp.cat(",PID Control Signal");}
 		if (filterRequested & 32)  		{temp.cat(",PID P Term");}
@@ -188,6 +188,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 		if (filterRequested & 512)  	{temp.cat(",Desired Step Phase");}
 		if (filterRequested & 1024) 	{temp.cat(",Coil A Current");}
 		if (filterRequested & 2048) 	{temp.cat(",Coil B Current");}
+		if (filterRequested & 4096) 	{temp.cat(",Current Error");}
 		temp.Erase(temp.strlen(), 1);
 		temp.cat("\n");
 		f->Write(temp.c_str());
