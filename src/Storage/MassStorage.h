@@ -28,6 +28,8 @@ namespace EmbeddedFiles
 	bool DirectoryExists(const StringRef& path) noexcept;
 	bool FindFirst(const char *directory, FileInfo& info) noexcept;
 	bool FindNext(FileInfo& info) noexcept;
+	FilePosition Seek(int32_t fileIndex, FilePosition pos) noexcept;
+	FilePosition Length(int32_t fileIndex) noexcept;
 }
 
 #endif

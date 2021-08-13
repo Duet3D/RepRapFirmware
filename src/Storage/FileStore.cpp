@@ -9,8 +9,11 @@
 
 #include "FileStore.h"
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include "MassStorage.h"
+#endif
+
+#if HAS_MASS_STORAGE
 # include <Libraries/Fatfs/diskio.h>
 # include <Movement/StepTimer.h>
 #endif
@@ -34,9 +37,15 @@ void FileStore::Init() noexcept
 	openCount = 0;
 	closeRequested = false;
 #endif
+#if HAS_EMBEDDED_FILES
+	fileIndex = -1;
+#endif
 #if HAS_LINUX_INTERFACE
 	handle = noFileHandle;
-	length = offset = 0;
+	length = 0;
+#endif
+#if HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+	offset = 0;
 #endif
 }
 
@@ -225,8 +234,7 @@ bool FileStore::Seek(FilePosition pos) noexcept
 #if HAS_MASS_STORAGE
 		return f_lseek(&file, pos) == FR_OK;
 #elif HAS_EMBEDDED_FILES
-		//TODO limit checking
-		offset = pos;
+		offset = EmbeddedFiles::Seek(fileIndex, pos);
 		return true;
 #else
 		return false;
@@ -235,6 +243,65 @@ bool FileStore::Seek(FilePosition pos) noexcept
 	case FileUseMode::invalidated:
 	default:
 		return false;
+	}
+}
+
+FilePosition FileStore::Position() const noexcept
+{
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		return offset;
+	}
+#endif
+#if HAS_MASS_STORAGE
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fptr : 0;
+#elif HAS_EMBEDDED_FILES
+	return offset;
+#else
+	return 0;
+#endif
+}
+
+FilePosition FileStore::Length() const noexcept
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+		REPORT_INTERNAL_ERROR;
+		return 0;
+
+	case FileUseMode::readOnly:
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
+		{
+			return length;
+		}
+#endif
+#if HAS_MASS_STORAGE
+		return f_size(&file);
+#elif HAS_EMBEDDED_FILES
+		return EmbeddedFiles::Length(fileIndex);
+#else
+		return 0;
+#endif
+
+	case FileUseMode::readWrite:
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
+		{
+			return (writeBuffer != nullptr) ? length + writeBuffer->BytesStored() : length;
+		}
+#endif
+#if HAS_MASS_STORAGE
+		return (writeBuffer != nullptr) ? f_size(&file) + writeBuffer->BytesStored() : f_size(&file);
+#else
+		return 0;
+#endif
+
+	case FileUseMode::invalidated:
+	default:
+		return 0;
 	}
 }
 
@@ -273,61 +340,6 @@ bool FileStore::Truncate() noexcept
 	case FileUseMode::invalidated:
 	default:
 		return false;
-	}
-}
-
-FilePosition FileStore::Position() const noexcept
-{
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		return offset;
-	}
-#endif
-#if HAS_MASS_STORAGE
-	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fptr : 0;
-#else
-	return 0;
-#endif
-}
-
-FilePosition FileStore::Length() const noexcept
-{
-	switch (usageMode)
-	{
-	case FileUseMode::free:
-		REPORT_INTERNAL_ERROR;
-		return 0;
-
-	case FileUseMode::readOnly:
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
-		{
-			return length;
-		}
-#endif
-#if HAS_MASS_STORAGE
-		return f_size(&file);
-#else
-		return 0;
-#endif
-
-	case FileUseMode::readWrite:
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
-		{
-			return (writeBuffer != nullptr) ? length + writeBuffer->BytesStored() : length;
-		}
-#endif
-#if HAS_MASS_STORAGE
-		return (writeBuffer != nullptr) ? f_size(&file) + writeBuffer->BytesStored() : f_size(&file);
-#else
-		return 0;
-#endif
-
-	case FileUseMode::invalidated:
-	default:
-		return 0;
 	}
 }
 

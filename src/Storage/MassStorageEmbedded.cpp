@@ -166,21 +166,21 @@ bool EmbeddedFiles::FindNext(FileInfo &info) noexcept
 	return false;
 }
 
+// Seek to a position
+FilePosition EmbeddedFiles::Seek(int32_t fileIndex, FilePosition pos) noexcept
+{
+	return min<FilePosition>(pos, Length(fileIndex));
+}
+
+// Return the file size in bytes, or 0 if the file index is invalid
+FilePosition EmbeddedFiles::Length(int32_t fileIndex) noexcept
+{
+	return (_firmware_end.magic == EmbeddedFilesHeader::MagicValue && fileIndex >= 0 && fileIndex < (int32_t)_firmware_end.numFiles)
+			? _firmware_end.files[fileIndex].contentLength
+				: 0;
+}
+
 // Members of FileStore that are replaced (probably to be moved back into FileStore)
-
-// Return the file size in bytes
-FilePosition FileStore::Length() const noexcept
-{
-	//TODO
-	return 0;
-}
-
-// Return the current position in the file, assuming we are reading the file
-FilePosition FileStore::Position() const noexcept
-{
-	//TODO
-	return 0;
-}
 
 // Open a file
 bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept

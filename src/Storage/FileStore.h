@@ -105,10 +105,13 @@ private:
 #if HAS_LINUX_INTERFACE
 	FileHandle handle;
 	FilePosition length;
-	FilePosition offset;
 #endif
 
 #if HAS_EMBEDDED_FILES
+	int32_t fileIndex;
+#endif
+
+#if HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
 	FilePosition offset;
 #endif
 
