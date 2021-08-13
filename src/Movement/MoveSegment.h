@@ -134,7 +134,8 @@
 #include <RepRapFirmware.h>
 #include <Platform/Tasks.h>
 
-#define MS_USE_FPU			(__FPU_USED)
+//#define MS_USE_FPU		(__FPU_USED)
+#define MS_USE_FPU			(1)				// Try using floating point maths for processors without FPU too. We have implemented fastSqrtf on those processors.
 
 class MoveSegment
 {
