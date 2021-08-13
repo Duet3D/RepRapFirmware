@@ -15,6 +15,7 @@
 #include <ObjectModel/ObjectModel.h>
 #include "FileStore.h"
 
+// Members of MassStorage that are replaced
 bool MassStorage::FileExists(const char *filePath) noexcept
 {
 	//TODO
@@ -52,6 +53,35 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 }
 
 void MassStorage::AbandonFindNext() noexcept
+{
+	//TODO
+}
+
+// Members of FileStore that are replaced
+
+// Return the file size in bytes
+FilePosition FileStore::Length() const noexcept
+{
+	//TODO
+	return 0;
+}
+
+// Return the current position in the file, assuming we are reading the file
+FilePosition FileStore::Position() const noexcept
+{
+	//TODO
+	return 0;
+}
+
+// Open a file
+bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
+{
+	//TODO
+	return false;
+}
+
+// Create a second reference to this file
+void FileStore::Duplicate() noexcept
 {
 	//TODO
 }

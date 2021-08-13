@@ -4346,7 +4346,7 @@ float GCodes::GetUserCoordinate(size_t axis) const noexcept
 	return (axis < numTotalAxes) ? currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // M38 (SHA1 hash of a file) implementation:
 bool GCodes::StartHash(const char* filename) noexcept
