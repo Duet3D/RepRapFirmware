@@ -26,8 +26,8 @@ struct FileInfo
 namespace EmbeddedFiles
 {
 	bool DirectoryExists(const StringRef& path) noexcept;
-	bool FindFirst(const char *directory, FileInfo& file_info) noexcept;
-	bool FindNext(FileInfo& file_info) noexcept;
+	bool FindFirst(const char *directory, FileInfo& info) noexcept;
+	bool FindNext(FileInfo& info) noexcept;
 }
 
 #endif

@@ -42,8 +42,8 @@ struct EmbeddedFilesHeader
 
 extern const EmbeddedFilesHeader _firmware_end;
 
-static const char *fileSearchDirectory = nullptr;
-static const char *fileSearchNextNumber = 0;
+static const char *fileSearchDirectory;
+static uint32_t fileSearchNextNumber;
 
 // Members of MassStorage that are replaced
 bool MassStorage::FileExists(const char *filePath) noexcept
@@ -88,20 +88,80 @@ bool EmbeddedFiles::DirectoryExists(const StringRef& path) noexcept
 	return false;
 }
 
-bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &file_info) noexcept
+// Find the next file starting from fileSearchNextNumber that is in directory fileSearchDirectory
+static bool FindNextFile(FileInfo& info) noexcept
+{
+	while (fileSearchNextNumber < _firmware_end.numFiles)
+	{
+		const EmbeddedFileDescriptor& fd = _firmware_end.files[fileSearchNextNumber++];
+		const char *fname = fd.GetName();
+		if (StringStartsWithIgnoreCase(fname, fileSearchDirectory))
+		{
+			// The file path starts with the correct directory, but it could be in a subdirectory
+			const char *p = fname + strlen(fileSearchDirectory);
+			if (*p == '/')
+			{
+				++p;			// point to start of possible filename
+				const char *q = p;
+				while (*q != 0 && *q != '/')
+				{
+					++q;
+				}
+				if (*q == 0)
+				{
+					// Found a file in the right directory
+					info.fileName.copy(p);
+					info.isDirectory = false;
+					info.lastModified = 0;
+					info.size = fd.contentLength;
+					return true;
+				}
+			}
+		}
+	}
+	return true;
+}
+
+// Find the first file. Any trailing "/" in the directory has been removed.
+bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &info) noexcept
 {
 	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
 	{
-		//TODO
+		// Check that we have the directory, and store a pointer to it
+		if (directory[0] == 0)
+		{
+			fileSearchDirectory = "";					// root directory
+		}
+		else
+		{
+			const char *cd = _firmware_end.GetDirectories();
+			for (;;)
+			{
+				if (cd[0] == 0)
+				{
+					return false;
+				}
+				if (StringEqualsIgnoreCase(cd, directory))
+				{
+					fileSearchDirectory = cd;
+					break;
+				}
+				cd += strlen(cd) + 1;
+			}
+		}
+
+		// fileSearchDirectory now points to the directory string - we need to save it for the FindNext call
+		fileSearchNextNumber = 0;
+		return FindNextFile(info);
 	}
 	return false;
 }
 
-bool EmbeddedFiles::FindNext(FileInfo &file_info) noexcept
+bool EmbeddedFiles::FindNext(FileInfo &info) noexcept
 {
 	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
 	{
-		//TODO
+		return FindNextFile(info);
 	}
 	return false;
 }
