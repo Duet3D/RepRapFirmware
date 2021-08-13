@@ -119,8 +119,11 @@ static SdCardInfo info[NumSdCards];
 
 static Mutex dirMutex;
 
-static FileInfoParser infoParser;
 static DIR findDir;
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+static FileInfoParser infoParser;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
@@ -841,6 +844,54 @@ bool MassStorage::SetLastModifiedTime(const char *filePath, time_t time) noexcep
     return ok;
 }
 
+// Check if the drive referenced in the specified path is mounted. Return true if it is.
+// Ideally we would try to mount it if it is not, however mounting a drive can take a long time, and the functions that call this are expected to execute quickly.
+bool MassStorage::CheckDriveMounted(const char* path) noexcept
+{
+	const size_t card = (strlen(path) >= 2 && path[1] == ':' && isDigit(path[0]))
+						? path[0] - '0'
+						: 0;
+	return card < NumSdCards && info[card].isMounted;
+}
+
+// Return true if any files are open on the file system
+bool MassStorage::AnyFileOpen(const FATFS *fs) noexcept
+{
+	MutexLocker lock(fsMutex);
+	for (const FileStore & fil : files)
+	{
+		if (fil.IsOpenOn(fs))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+// Invalidate all open files on the specified file system, returning the number of files that were invalidated
+unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose) noexcept
+{
+	unsigned int invalidated = 0;
+	MutexLocker lock(fsMutex);
+	for (FileStore & fil : files)
+	{
+		if (fil.Invalidate(fs, doClose))
+		{
+			++invalidated;
+		}
+	}
+	return invalidated;
+}
+
+bool MassStorage::IsCardDetected(size_t card) noexcept
+{
+	return info[card].cardState == CardDetectState::present;
+}
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
 // Mount the specified SD card, returning true if done, false if needs to be called again.
 // If an error occurs, return true with the error message in 'reply'.
 // This may only be called to mount one card at a time.
@@ -852,6 +903,7 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 		return GCodeResult::error;
 	}
 
+# if HAS_MASS_STORAGE
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
 	MutexLocker lock2(inf.volMutex);
@@ -932,6 +984,8 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 	}
 
 	++inf.seq;
+# endif
+
 	return GCodeResult::ok;
 }
 
@@ -945,6 +999,7 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 		return GCodeResult::error;
 	}
 
+# if HAS_MASS_STORAGE
 	reply.printf("SD card %u may now be removed", card);
 	const unsigned int numFilesClosed = InternalUnmount(card, true);
 	if (numFilesClosed != 0)
@@ -952,56 +1007,10 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 		reply.catf(" (%u file(s) were closed)", numFilesClosed);
 	}
 	++info[card].seq;
+# endif
+
 	return GCodeResult::ok;
 }
-
-// Check if the drive referenced in the specified path is mounted. Return true if it is.
-// Ideally we would try to mount it if it is not, however mounting a drive can take a long time, and the functions that call this are expected to execute quickly.
-bool MassStorage::CheckDriveMounted(const char* path) noexcept
-{
-	const size_t card = (strlen(path) >= 2 && path[1] == ':' && isDigit(path[0]))
-						? path[0] - '0'
-						: 0;
-	return card < NumSdCards && info[card].isMounted;
-}
-
-// Return true if any files are open on the file system
-bool MassStorage::AnyFileOpen(const FATFS *fs) noexcept
-{
-	MutexLocker lock(fsMutex);
-	for (const FileStore & fil : files)
-	{
-		if (fil.IsOpenOn(fs))
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-// Invalidate all open files on the specified file system, returning the number of files that were invalidated
-unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose) noexcept
-{
-	unsigned int invalidated = 0;
-	MutexLocker lock(fsMutex);
-	for (FileStore & fil : files)
-	{
-		if (fil.Invalidate(fs, doClose))
-		{
-			++invalidated;
-		}
-	}
-	return invalidated;
-}
-
-bool MassStorage::IsCardDetected(size_t card) noexcept
-{
-	return info[card].cardState == CardDetectState::present;
-}
-
-#endif
-
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 unsigned int MassStorage::GetNumFreeFiles() noexcept
 {
@@ -1015,6 +1024,31 @@ unsigned int MassStorage::GetNumFreeFiles() noexcept
 		}
 	}
 	return numFreeFiles;
+}
+
+GCodeResult MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
+{
+	return infoParser.GetFileInfo(filePath, info, quitEarly);
+}
+
+void MassStorage::Diagnostics(MessageType mtype) noexcept
+{
+	Platform& platform = reprap.GetPlatform();
+
+	// Show the number of free entries in the file table
+	platform.MessageF(mtype, "=== Storage ===\nFree file entries: %u\n", MassStorage::GetNumFreeFiles());
+
+# if HAS_HIGH_SPEED_SD
+	// Show the HSMCI CD pin and speed
+	platform.MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n",
+								(IsCardDetected(0) ? "detected" : "not detected"), (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
+# elif HAS_MASS_STORAGE
+	platform.MessageF(mtype, "SD card 0 %s\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
+# endif
+
+	// Show the longest SD card write time
+	platform.MessageF(mtype, "SD card longest read time %.1fms, write time %.1fms, max retries %u\n",
+								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
 }
 
 #endif
@@ -1116,31 +1150,6 @@ bool MassStorage::IsDriveMounted(size_t drive) noexcept
 Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
 {
 	return info[vol].volMutex;
-}
-
-GCodeResult MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
-{
-	return infoParser.GetFileInfo(filePath, info, quitEarly);
-}
-
-void MassStorage::Diagnostics(MessageType mtype) noexcept
-{
-	Platform& platform = reprap.GetPlatform();
-
-	// Show the number of free entries in the file table
-	platform.MessageF(mtype, "=== Storage ===\nFree file entries: %u\n", MassStorage::GetNumFreeFiles());
-
-# if HAS_HIGH_SPEED_SD
-	// Show the HSMCI CD pin and speed
-	platform.MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n",
-								(IsCardDetected(0) ? "detected" : "not detected"), (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
-# else
-	platform.MessageF(mtype, "SD card 0 %s\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
-# endif
-
-	// Show the longest SD card write time
-	platform.MessageF(mtype, "SD card longest read time %.1fms, write time %.1fms, max retries %u\n",
-								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
 }
 
 # if SUPPORT_OBJECT_MODEL

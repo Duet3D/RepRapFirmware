@@ -12,7 +12,7 @@
 #include <PrintMonitor/PrintMonitor.h>
 #include <GCodes/GCodes.h>
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 FileInfoParser::FileInfoParser() noexcept
 	: parseState(notParsing), fileBeingParsed(nullptr), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0), fileOverlapLength(0)
@@ -68,7 +68,9 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 		// Set up the info struct
 		parsedFileInfo.Init();
 		parsedFileInfo.fileSize = fileBeingParsed->Length();
+#if HAS_MASS_STORAGE
 		parsedFileInfo.lastModifiedTime = MassStorage::GetLastModifiedTime(filePath);
+#endif
 		parsedFileInfo.isValid = true;
 
 		// Record some debug values here
@@ -198,6 +200,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 		case seeking:
 			// Seeking into a large file can take a long time using the FAT file system, so do it in stages
 			{
+#if HAS_MASS_STORAGE
 				FilePosition currentPos = fileBeingParsed->Position();
 				const uint32_t clsize = fileBeingParsed->ClusterSize();
 				if (currentPos/clsize > nextSeekPos/clsize)
@@ -205,12 +208,14 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 					// Seeking backwards over a cluster boundary, so in practice the seek will start from the start of the file
 					currentPos = 0;
 				}
-
 				// Seek at most 512 clusters at a time
 				const FilePosition maxSeekDistance = 512 * (FilePosition)clsize;
 				const bool doFullSeek = (nextSeekPos <= currentPos + maxSeekDistance);
 				const FilePosition thisSeekPos = (doFullSeek) ? nextSeekPos : currentPos + maxSeekDistance;
-
+#elif HAS_EMBEDDED_FILES
+				const bool doFullSeek = true;
+				const FilePosition thisSeekPos = nextSeekPos;
+#endif
 				const uint32_t startTime = millis();
 				if (!fileBeingParsed->Seek(thisSeekPos))
 				{

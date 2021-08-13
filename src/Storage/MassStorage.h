@@ -57,6 +57,7 @@ namespace MassStorage
 	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
 	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
 	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
+	void Diagnostics(MessageType mtype) noexcept;
 #endif
 
 #if HAS_MASS_STORAGE
@@ -72,7 +73,6 @@ namespace MassStorage
 	Mutex& GetVolumeMutex(size_t vol) noexcept;
 	void RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
 	uint16_t GetVolumeSeq(unsigned int volume) noexcept;
-	void Diagnostics(MessageType mtype) noexcept;
 
 	enum class InfoResult : uint8_t
 	{

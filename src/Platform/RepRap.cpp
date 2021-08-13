@@ -911,7 +911,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	// Now print diagnostics for other modules
 	Tasks::Diagnostics(mtype);
 	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	MassStorage::Diagnostics(mtype);
 #endif
 	move->Diagnostics(mtype);
