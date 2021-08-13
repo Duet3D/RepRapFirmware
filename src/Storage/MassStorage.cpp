@@ -2,20 +2,22 @@
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <ObjectModel/ObjectModel.h>
-#include <Libraries/Fatfs/diskio.h>
 
-#include <Libraries/sd_mmc/sd_mmc.h>
-
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
-#endif
+#if HAS_MASS_STORAGE
+# include <Libraries/Fatfs/diskio.h>
+# include <Libraries/sd_mmc/sd_mmc.h>
+# include <Libraries/sd_mmc/conf_sd_mmc.h>
 
 // Check that the LFN configuration in FatFS is sufficient
 static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
 // Check that the correct number of SD cards is configured in the library
-#include <Libraries/sd_mmc/conf_sd_mmc.h>
 static_assert(SD_MMC_MEM_CNT == NumSdCards);
+#endif
+
+#if HAS_LINUX_INTERFACE
+# include <Linux/LinuxInterface.h>
+#endif
 
 // A note on using mutexes:
 // Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.
@@ -116,13 +118,11 @@ DEFINE_GET_OBJECT_MODEL_TABLE(SdCardInfo)
 #endif
 
 static SdCardInfo info[NumSdCards];
-
-static Mutex dirMutex;
-
 static DIR findDir;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+static Mutex dirMutex;
 static FileInfoParser infoParser;
 #endif
 
@@ -281,6 +281,10 @@ void MassStorage::Init() noexcept
 {
 	fsMutex.Create("FileSystem");
 
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	dirMutex.Create("DirSearch");
+#endif
+
 # if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	freeWriteBuffers = nullptr;
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
@@ -297,9 +301,7 @@ void MassStorage::Init() noexcept
 	static const char * const VolMutexNames[] = { "SD0", "SD1" };
 	static_assert(ARRAY_SIZE(VolMutexNames) >= NumSdCards, "Incorrect VolMutexNames array");
 
-	// Create the mutexes
-	dirMutex.Create("DirSearch");
-
+	// Initialise the SD card structs
 	for (size_t card = 0; card < NumSdCards; ++card)
 	{
 		SdCardInfo& inf = info[card];
@@ -427,6 +429,43 @@ void MassStorage::CloseAllFiles() noexcept
 			f.Close();
 		}
 	}
+}
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
+// Check if the specified directory exists
+bool MassStorage::DirectoryExists(const char *path) noexcept
+{
+	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
+	String<MaxFilenameLength> loc;
+	loc.copy(path);
+	return DirectoryExists(loc.GetRef());
+}
+
+// Check if the specified directory exists
+// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
+bool MassStorage::DirectoryExists(const StringRef& path) noexcept
+{
+	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
+	const size_t len = path.strlen();
+	if (len != 0 && (path[len - 1] == '/' || path[len - 1] == '\\'))
+	{
+		path.Truncate(len - 1);
+	}
+
+#if HAS_MASS_STORAGE
+	DIR dir;
+	const bool ok = (f_opendir(&dir, path.c_str()) == FR_OK);
+	if (ok)
+	{
+		f_closedir(&dir);
+	}
+	return ok;
+#elif HAS_EMBEDDED_FILES
+	return EmbeddedFiles::DirectoryExists(path);
+#endif
 }
 
 #endif
@@ -564,7 +603,7 @@ bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 // If this returns true then the file system mutex is owned. The caller must subsequently release the mutex either
@@ -585,6 +624,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info) noexcept
 		return false;
 	}
 
+#if HAS_MASS_STORAGE
 	FRESULT res = f_opendir(&findDir, loc.c_str());
 	if (res == FR_OK)
 	{
@@ -605,6 +645,12 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info) noexcept
 		}
 		f_closedir(&findDir);
 	}
+#elif HAS_EMBEDDED_FILES
+	if (EmbeddedFiles::FindFirst(directory, file_info))
+	{
+		return true;
+	}
+#endif
 
 	dirMutex.Release();
 	return false;
@@ -619,20 +665,28 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 		return false;		// error, we don't hold the mutex
 	}
 
+#if HAS_MASS_STORAGE
 	FILINFO entry;
 
-	if (f_readdir(&findDir, &entry) != FR_OK || entry.fname[0] == 0)
+	if (f_readdir(&findDir, &entry) == FR_OK && entry.fname[0] != 0)
 	{
-		f_closedir(&findDir);
-		dirMutex.Release();
-		return false;
+		file_info.isDirectory = (entry.fattrib & AM_DIR);
+		file_info.size = entry.fsize;
+		file_info.fileName.copy(entry.fname);
+		file_info.lastModified = ConvertTimeStamp(entry.fdate, entry.ftime);
+		return true;
 	}
 
-	file_info.isDirectory = (entry.fattrib & AM_DIR);
-	file_info.size = entry.fsize;
-	file_info.fileName.copy(entry.fname);
-	file_info.lastModified = ConvertTimeStamp(entry.fdate, entry.ftime);
-	return true;
+	f_closedir(&findDir);
+#elif HAS_EMBEDDED_FILES
+	if (EmbeddedFiles::FindNext(file_info))
+	{
+		return true;
+	}
+#endif
+
+	dirMutex.Release();
+	return false;
 }
 
 // Quit searching for files. Needed to avoid hanging on to the mutex. Safe to call even if the caller doesn't hold the mutex.
@@ -643,6 +697,10 @@ void MassStorage::AbandonFindNext() noexcept
 		dirMutex.Release();
 	}
 }
+
+#endif
+
+#if HAS_MASS_STORAGE
 
 // Month names. The first entry is used for invalid month numbers.
 static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
@@ -788,35 +846,6 @@ bool MassStorage::FileExists(const char *filePath) noexcept
 #endif
 
 #if HAS_MASS_STORAGE
-
-// Check if the specified directory exists
-// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
-bool MassStorage::DirectoryExists(const StringRef& path) noexcept
-{
-	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
-	const size_t len = path.strlen();
-	if (len != 0 && (path[len - 1] == '/' || path[len - 1] == '\\'))
-	{
-		path.Truncate(len - 1);
-	}
-
-	DIR dir;
-	const bool ok = (f_opendir(&dir, path.c_str()) == FR_OK);
-	if (ok)
-	{
-		f_closedir(&dir);
-	}
-	return ok;
-}
-
-// Check if the specified directory exists
-bool MassStorage::DirectoryExists(const char *path) noexcept
-{
-	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
-	String<MaxFilenameLength> loc;
-	loc.copy(path);
-	return DirectoryExists(loc.GetRef());
-}
 
 // Return the last modified time of a file, or zero if failure
 time_t MassStorage::GetLastModifiedTime(const char *filePath) noexcept
@@ -1012,6 +1041,15 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 	return GCodeResult::ok;
 }
 
+bool MassStorage::IsDriveMounted(size_t drive) noexcept
+{
+	return drive < NumSdCards
+#if HAS_MASS_STORAGE
+		&& info[drive].isMounted
+#endif
+		;
+}
+
 unsigned int MassStorage::GetNumFreeFiles() noexcept
 {
 	unsigned int numFreeFiles = 0;
@@ -1038,17 +1076,19 @@ void MassStorage::Diagnostics(MessageType mtype) noexcept
 	// Show the number of free entries in the file table
 	platform.MessageF(mtype, "=== Storage ===\nFree file entries: %u\n", MassStorage::GetNumFreeFiles());
 
-# if HAS_HIGH_SPEED_SD
+# if HAS_MASS_STORAGE
+#  if HAS_HIGH_SPEED_SD
 	// Show the HSMCI CD pin and speed
 	platform.MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n",
 								(IsCardDetected(0) ? "detected" : "not detected"), (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
-# elif HAS_MASS_STORAGE
+#  else
 	platform.MessageF(mtype, "SD card 0 %s\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
-# endif
+#  endif
 
 	// Show the longest SD card write time
 	platform.MessageF(mtype, "SD card longest read time %.1fms, write time %.1fms, max retries %u\n",
 								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
+# endif
 }
 
 #endif
@@ -1140,11 +1180,6 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 		freeSpace = 0;
 	}
 	return InfoResult::ok;
-}
-
-bool MassStorage::IsDriveMounted(size_t drive) noexcept
-{
-	return drive < NumSdCards && info[drive].isMounted;
 }
 
 Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept

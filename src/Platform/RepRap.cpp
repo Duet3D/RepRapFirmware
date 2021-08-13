@@ -2241,13 +2241,14 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 #endif
 
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
-// Return GCodeResult::Wating if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
+// Return GCodeResult::Warning if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
 GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
 	if (specificFile)
 	{
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		// Poll file info for a specific file
 		String<MaxFilenameLength> filePath;
 		if (!MassStorage::CombineName(filePath.GetRef(), platform->GetGCodeDir(), filename))
@@ -2259,6 +2260,9 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 			// This may take a few runs...
 			return GCodeResult::notFinished;
 		}
+#else
+		return GCodeResult::warning;
+#endif
 	}
 	else if (!printMonitor->GetPrintingFileInfo(info))
 	{

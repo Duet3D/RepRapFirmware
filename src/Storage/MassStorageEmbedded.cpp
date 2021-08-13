@@ -8,6 +8,10 @@
 
 #include "MassStorage.h"
 
+#if SAM4S
+constexpr uint32_t FlashStart = IFLASH0_ADDR;
+#endif
+
 #if HAS_EMBEDDED_FILES
 
 #include <Platform/Platform.h>
@@ -15,49 +19,94 @@
 #include <ObjectModel/ObjectModel.h>
 #include "FileStore.h"
 
+struct EmbeddedFileDescriptor
+{
+	uint32_t nameOffset;
+	uint32_t contentOffset;
+	uint32_t contentLength;
+
+	const char* GetName() const noexcept { return reinterpret_cast<const char*>(FlashStart + nameOffset); }
+	const char* GetContent() const noexcept { return reinterpret_cast<const char*>(FlashStart + contentOffset); }
+};
+
+struct EmbeddedFilesHeader
+{
+	uint32_t magic;
+	uint32_t directoriesOffset;
+	uint32_t numFiles;
+	const EmbeddedFileDescriptor files[];				// gcc extension: array of unspecified length at end of a struct
+
+	static constexpr uint32_t MagicValue = 0;	//TODO what is it?
+	const char* GetDirectories() const noexcept { return reinterpret_cast<const char*>(FlashStart + directoriesOffset); }
+};
+
+extern const EmbeddedFilesHeader _firmware_end;
+
+static const char *fileSearchDirectory = nullptr;
+static const char *fileSearchNextNumber = 0;
+
 // Members of MassStorage that are replaced
 bool MassStorage::FileExists(const char *filePath) noexcept
 {
-	//TODO
+	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	{
+		uint32_t numFiles = _firmware_end.numFiles;
+		const EmbeddedFileDescriptor *filePtr = _firmware_end.files;
+		while (numFiles != 0)
+		{
+			if (StringEqualsIgnoreCase(filePath, filePtr->GetName()))
+			{
+				return true;
+			}
+			++filePtr;
+			--numFiles;
+		}
+	}
 	return false;
 }
 
-// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
-bool MassStorage::DirectoryExists(const StringRef& path) noexcept
+// Test whether a directory exists. Any trailing '/' has already been removed.
+bool EmbeddedFiles::DirectoryExists(const StringRef& path) noexcept
 {
-	//TODO
+	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	{
+		if (path[0] == 0)
+		{
+			return true;				// root directory
+		}
+
+		const char *cd = _firmware_end.GetDirectories();
+		while (cd[0] != 0)
+		{
+			if (StringEqualsIgnoreCase(cd, path.c_str()))
+			{
+				return true;
+			}
+			cd += strlen(cd) + 1;
+		}
+	}
 	return false;
 }
 
-bool MassStorage::DirectoryExists(const char *path) noexcept
+bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &file_info) noexcept
 {
-	//TODO
+	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	{
+		//TODO
+	}
 	return false;
 }
 
-bool MassStorage::IsDriveMounted(size_t drive) noexcept
+bool EmbeddedFiles::FindNext(FileInfo &file_info) noexcept
 {
-	return drive == 0;
-}
-
-bool MassStorage::FindFirst(const char *directory, FileInfo &file_info) noexcept
-{
-	//TODO
+	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	{
+		//TODO
+	}
 	return false;
 }
 
-bool MassStorage::FindNext(FileInfo &file_info) noexcept
-{
-	//TODO
-	return false;
-}
-
-void MassStorage::AbandonFindNext() noexcept
-{
-	//TODO
-}
-
-// Members of FileStore that are replaced
+// Members of FileStore that are replaced (probably to be moved back into FileStore)
 
 // Return the file size in bytes
 FilePosition FileStore::Length() const noexcept
@@ -78,12 +127,6 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 {
 	//TODO
 	return false;
-}
-
-// Create a second reference to this file
-void FileStore::Duplicate() noexcept
-{
-	//TODO
 }
 
 #endif

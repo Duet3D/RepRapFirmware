@@ -20,6 +20,18 @@ struct FileInfo
 	bool isDirectory;
 };
 
+#if HAS_EMBEDDED_FILES
+
+// Functions that we call out to when using an embedded filesystem
+namespace EmbeddedFiles
+{
+	bool DirectoryExists(const StringRef& path) noexcept;
+	bool FindFirst(const char *directory, FileInfo& file_info) noexcept;
+	bool FindNext(FileInfo& file_info) noexcept;
+}
+
+#endif
+
 class ObjectModel;
 
 namespace MassStorage

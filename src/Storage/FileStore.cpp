@@ -470,6 +470,33 @@ bool FileStore::ForceClose() noexcept
 
 #endif
 
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
+void FileStore::Duplicate() noexcept
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+		REPORT_INTERNAL_ERROR;
+		break;
+
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			const irqflags_t flags = IrqSave();
+			++openCount;
+			IrqRestore(flags);
+		}
+		break;
+
+	case FileUseMode::invalidated:
+	default:
+		break;
+	}
+}
+
+#endif
+
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 bool FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
@@ -661,29 +688,6 @@ bool FileStore::Invalidate(const FATFS *fs, bool doClose) noexcept
 bool FileStore::IsOpenOn(const FATFS *fs) const noexcept
 {
 	return openCount != 0 && file.obj.fs == fs;
-}
-
-void FileStore::Duplicate() noexcept
-{
-	switch (usageMode)
-	{
-	case FileUseMode::free:
-		REPORT_INTERNAL_ERROR;
-		break;
-
-	case FileUseMode::readOnly:
-	case FileUseMode::readWrite:
-		{
-			const irqflags_t flags = IrqSave();
-			++openCount;
-			IrqRestore(flags);
-		}
-		break;
-
-	case FileUseMode::invalidated:
-	default:
-		break;
-	}
 }
 
 // Return true if the passed file is the same as ours
