@@ -2216,9 +2216,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::TimeCalculations:	// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
+			constexpr uint32_t iterations = 100;				// use a value that divides into one million
 			bool ok1 = true;
 			uint32_t tim1 = 0;
-			for (uint32_t i = 0; i < 100; ++i)
+			for (uint32_t i = 0; i < iterations; ++i)
 			{
 				const uint32_t num1 = 0x7fffffff - (67 * i);
 				const uint64_t sq = (uint64_t)num1 * num1;
@@ -2231,7 +2232,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 			bool ok2 = true;
 			uint32_t tim2 = 0;
-			constexpr uint32_t iterations = 100;				// use a value that divides into one million
 			for (uint32_t i = 0; i < iterations; ++i)
 			{
 				const uint32_t num2 = 0x0000ffff - (67 * i);
@@ -2243,9 +2243,37 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				}
 			}
 
-			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
-					(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
-							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR");
+			// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
+			bool ok3 = true;
+			uint32_t tim3 = 0;
+			float val = 10000.0;
+			for (unsigned int i = 0; i < iterations; ++i)
+			{
+				IrqDisable();
+				asm volatile("":::"memory");
+				uint32_t now1 = SysTick->VAL;
+				const float nval = fastSqrtf(val);
+				uint32_t now2 = SysTick->VAL;
+				asm volatile("":::"memory");
+				IrqEnable();
+				now1 &= 0x00FFFFFF;
+				now2 &= 0x00FFFFFF;
+				tim3 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+				if (nval != sqrtf(val))
+				{
+					ok3 = false;
+					if (reprap.Debug(modulePlatform))
+					{
+						debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
+					}
+				}
+				val = nval;
+			}
+
+			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s, float %.2fus %s",
+						(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
+							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR",
+								(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 		}
 
 		// We now also time sine and cosine in the same test
@@ -2272,36 +2300,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			reply.lcatf("Float sine + cosine: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
 		}
 
-		// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
-		{
-			uint32_t tim1 = 0;
-			constexpr uint32_t iterations = 100;				// use a value that divides into one million
-			float val = 10000.0;
-			for (unsigned int i = 0; i < iterations; ++i)
-			{
-
-				IrqDisable();
-				asm volatile("":::"memory");
-				uint32_t now1 = SysTick->VAL;
-				const float nval = RepRap::FastSqrtf(val);
-				uint32_t now2 = SysTick->VAL;
-				asm volatile("":::"memory");
-				IrqEnable();
-				now1 &= 0x00FFFFFF;
-				now2 &= 0x00FFFFFF;
-				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
-#if 0	//debug
-				if (nval != sqrtf(val))
-				{
-					debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
-				}
-#endif
-				val = nval;
-			}
-
-			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			reply.lcatf("Float sqrt: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
-		}
 		break;
 
 	case (unsigned int)DiagnosticTestType::TimeSDWrite:
