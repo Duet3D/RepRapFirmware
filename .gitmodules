@@ -1,0 +1,12 @@
+[submodule "lib/libCoreN2G"]
+	path = lib/libCoreN2G
+	url = git@github.com:Duet3D/CoreN2G.git
+[submodule "lib/libCAN"]
+	path = lib/libCAN
+	url = git@github.com:Duet3D/CANlib.git
+[submodule "lib/FreeRTOS"]
+	path = lib/FreeRTOS
+	url = git@github.com:Duet3D/FreeRTOS.git
+[submodule "lib/librrf"]
+	path = lib/librrf
+	url = git@github.com:Duet3D/RRFLibraries.git
