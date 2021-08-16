@@ -14,6 +14,10 @@
 class Platform;
 class FileWriteBuffer;
 
+#if HAS_EMBEDDED_FILES
+typedef int32_t FileIndex;
+#endif
+
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 enum class OpenMode : uint8_t
@@ -38,7 +42,8 @@ public:
 	FileStore() noexcept;
 
     bool Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
-	bool Read(char& b) noexcept;								// Read 1 byte
+	bool Read(char& b) noexcept
+		{ return Read(&b, sizeof(char)); }						// Read 1 character
 	bool Read(uint8_t& b) noexcept
 		{ return Read((char&)b); }								// Read 1 byte
 	int Read(char* buf, size_t nBytes) noexcept;				// Read a block of nBytes length
@@ -108,7 +113,7 @@ private:
 #endif
 
 #if HAS_EMBEDDED_FILES
-	int32_t fileIndex;
+	FileIndex fileIndex;
 #endif
 
 #if HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE

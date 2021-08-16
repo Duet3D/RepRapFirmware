@@ -49,13 +49,37 @@ void FileStore::Init() noexcept
 #endif
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
 	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
+#if HAS_EMBEDDED_FILES
+# if HAS_LINUX_INTERFACE
+	if (!reprap.UsingLinuxInterface())
+# endif
+	{
+		if (!writing)
+		{
+			fileIndex = EmbeddedFiles::OpenFile(filePath);
+			if (fileIndex >= 0)
+			{
+				offset = 0;
+				return true;
+			}
+		}
+
+		// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
+		// It is up to the caller to report an error if necessary.
+		if (reprap.Debug(moduleStorage))
+		{
+			reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %sn", filePath, (writing) ? "write" : "read");
+		}
+		return false;
+	}
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	writeBuffer = nullptr;
 
 	// Try to allocate a write buffer
@@ -112,7 +136,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 		{
 			// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 			// It is up to the caller to report an error if necessary.
-			if (reprap.Debug(modulePlatform))
+			if (reprap.Debug(moduleStorage))
 			{
 				reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %s, error code %d\n", filePath, (writing) ? "write" : "read", (int)openReturn);
 			}
@@ -151,9 +175,8 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 # endif
 	reprap.VolumesUpdated();
 	return true;
-}
-
 #endif
+}
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
@@ -347,12 +370,6 @@ bool FileStore::Truncate() noexcept
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
-// Single character read
-bool FileStore::Read(char& b) noexcept
-{
-	return Read(&b, sizeof(char));
-}
-
 // Returns the number of bytes read or -1 if the read process failed
 int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 {
@@ -387,8 +404,7 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 			return (int)bytes_read;
 		}
 #elif HAS_EMBEDDED_FILES
-		//TODO
-		return -1;
+		return EmbeddedFiles::Read(fileIndex, extBuf, nBytes);
 #else
 		return -1;
 #endif

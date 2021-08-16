@@ -180,13 +180,16 @@ FilePosition EmbeddedFiles::Length(int32_t fileIndex) noexcept
 				: 0;
 }
 
-// Members of FileStore that are replaced (probably to be moved back into FileStore)
-
-// Open a file
-bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
+int EmbeddedFiles::Read(FileIndex fileIndex, char* extBuf, size_t nBytes) noexcept
 {
 	//TODO
-	return false;
+	return -1;
+}
+
+FileIndex EmbeddedFiles::OpenFile(const char *filePath) noexcept
+{
+	//TODO
+	return -1;
 }
 
 #endif
