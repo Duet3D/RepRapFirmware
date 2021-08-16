@@ -12,7 +12,7 @@
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState() noexcept
-	: feedRate(DefaultFeedRate * SecondsToMinutes),
+	: feedRate(ConvertSpeedFromMmPerMin(DefaultFeedRate)),
 #if HAS_LINUX_INTERFACE
 	  fileId(NoFileId),
 #endif
@@ -34,7 +34,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 // Copy constructor. This chains the new one to the previous one.
 GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept
 	: feedRate(prev.feedRate),
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	  fileState(prev.fileState),
 #endif
 #if HAS_LINUX_INTERFACE
@@ -68,7 +68,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 
 GCodeMachineState::~GCodeMachineState() noexcept
 {
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileState.Close();
 #endif
 }
@@ -78,7 +78,7 @@ GCodeMachineState::~GCodeMachineState() noexcept
 // Set the state to indicate a file is being processed
 void GCodeMachineState::SetFileExecuting() noexcept
 {
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (!fileState.IsLive())
 #endif
 	{
@@ -103,7 +103,7 @@ bool GCodeMachineState::DoingFile() const noexcept
 		return true;
 	}
 #endif
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	return fileState.IsLive();
 #else
 	return false;
@@ -132,7 +132,7 @@ void GCodeMachineState::CloseFile() noexcept
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		fileState.Close();
 #endif
 	}
@@ -141,7 +141,7 @@ void GCodeMachineState::CloseFile() noexcept
 void GCodeMachineState::WaitForAcknowledgement() noexcept
 {
 	waitingForAcknowledgement = true;
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (fileState.IsLive())
 	{
 		// Stop reading from the current file

@@ -48,7 +48,12 @@ constexpr float DefaultXYInstantDv = 15.0;				// mm/sec
 constexpr float DefaultZInstantDv = 0.2;
 constexpr float DefaultEInstantDv = 2.0;
 
-constexpr float DefaultMinFeedrate = 0.5;				// The minimum movement speed (extruding moves will go slower than this if the extrusion rate demands it)
+constexpr float DefaultMinFeedrate = 0.5;				// the default minimum movement speed in mm/sec (extruding moves will go slower than this if the extrusion rate demands it)
+constexpr float AbsoluteMinFeedrate = 0.01;				// the absolute minimum movement speed in mm/sec
+constexpr float MinimumJerk = 0.1;						// the minimum jerk in mm/sec
+constexpr float MinimumAcceleration = 0.1;				// the minimum acceleration in mm/sec^2
+constexpr float DefaultPrintingAcceleration = 20000.0;	// higher than the likely max acceleration defined by M201
+constexpr float DefaultTravelAcceleration = 20000.0;	// higher than the likely max acceleration defined by M201
 
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
@@ -119,9 +124,10 @@ constexpr float DefaultThermistorC = 7.06e-8;
 
 // Parameters used to detect heating errors
 constexpr float DefaultMaxHeatingFaultTime = 5.0;		// How many seconds we allow a heating fault to persist
-constexpr float AllowedTemperatureDerivativeNoise = 0.25;	// How much fluctuation in the averaged temperature derivative we allow
+constexpr float AllowedTemperatureDerivativeNoise = 0.12;	// How much fluctuation in the averaged temperature derivative we allow
 constexpr float MaxAmbientTemperature = 45.0;			// We expect heaters to cool to this temperature or lower when switched off
 constexpr float NormalAmbientTemperature = 25.0;		// The ambient temperature we assume - allow for the printer heating its surroundings a little
+constexpr float LowAmbientTemperature = 15.0;			// A lower ambient temperature that we assume when checking heater performance
 constexpr float DefaultMaxTempExcursion = 15.0;			// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
 constexpr float MinimumConnectedTemperature = -5.0;		// Temperatures below this we treat as a disconnected thermistor
 
@@ -288,7 +294,8 @@ constexpr size_t ObjectNamesStringSpace = 500;			// How much space we reserve fo
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
 constexpr float DefaultG0FeedRate = 18000;				// The initial feed rate for G0 commands after resetting the printer, in mm/min
-constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm
+constexpr float MinRetractSpeed = 60.0;					// The minimum firmware retraction/un-retraction speed in mm/min
+constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm/min
 constexpr float DefaultRetractLength = 2.0;
 
 constexpr float MaxArcDeviation = 0.005;				// maximum deviation from ideal arc due to segmentation

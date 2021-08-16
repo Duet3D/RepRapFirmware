@@ -73,7 +73,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	, sdTimingFile(nullptr)
 #endif
 {
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileBeingHashed = nullptr;
 	FileGCodeInput * const fileInput = new FileGCodeInput();
 #else
@@ -220,7 +220,7 @@ void GCodes::Reset() noexcept
 
 	nextGcodeSource = 0;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileToPrint.Close();
 #endif
 	speedFactor = 1.0;
@@ -287,7 +287,7 @@ void GCodes::Reset() noexcept
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	fileOffsetToPrint = 0;
 	restartMoveFractionDone = 0.0;
 #endif
@@ -355,7 +355,7 @@ FilePosition GCodes::GetFilePosition() const noexcept
 #endif
 	{
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 		if (!fileBeingPrinted.IsLive())
 		{
@@ -445,12 +445,13 @@ void GCodes::Spin() noexcept
 	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
 	if (!autoPauseGCode->IsCompletelyIdle()
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 		|| autoPauseGCode->LatestMachineState().DoingFile()
 #endif
 	   )	// if autoPause is active
 	{
 		(void)SpinGCodeBuffer(*autoPauseGCode);
+		(void)SpinGCodeBuffer(*queuedGCode);						// autopause sometimes to wait for queued GCodes to complete, so spin queuedGCodes too to avoid lockup
 	}
 	else
 	{
@@ -646,9 +647,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
-					&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
-				   )
+				if (LockMovementAndWaitForStandstill(gb))				// wait until movement has finished and deferred command queue has caught up
 				{
 					StopPrint(StopPrintReason::normalCompletion);
 				}
@@ -700,7 +699,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileData& fd = gb.LatestMachineState().fileState;
 
 		// Do we have more data to process?
@@ -784,9 +783,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
-					&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
-				   )
+				if (LockMovementAndWaitForStandstill(gb))					// wait until movement has finished and deferred command queue has caught up
 				{
 					StopPrint(StopPrintReason::normalCompletion);
 				}
@@ -1495,7 +1492,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				buf.catf("\nG0 F6000 Z%.3f\n", (double)pauseRestorePoint.moveCoords[Z_AXIS]);
 
 				// Set the feed rate
-				buf.catf("G1 F%.1f", (double)(pauseRestorePoint.feedRate * MinutesToSeconds));
+				buf.catf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
 #if SUPPORT_LASER
 				if (machineType == MachineType::laser)
 				{
@@ -1577,7 +1574,12 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 		return false;
 	}
 
-	gb.MotionStopped();								// must do this after we have finished waiting, so that we don't stop waiting when executing G4
+	if (&gb != queuedGCode && !IsCodeQueueIdle())		// wait for deferred command queue to catch up
+	{
+		return false;
+	}
+
+	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
 	if (RTOSIface::GetCurrentTask() == Tasks::GetMainTask())
 	{
@@ -1628,7 +1630,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 		moveBuffer.applyM220M221 = (moveBuffer.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro());
 		if (gb.Seen(feedrateLetter))
 		{
-			gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;	// update requested speed, not allowing for speed factor
+			gb.LatestMachineState().feedRate = gb.GetSpeed();				// update requested speed, not allowing for speed factor
 		}
 		moveBuffer.feedRate = (moveBuffer.applyM220M221)
 								? speedFactor * gb.LatestMachineState().feedRate
@@ -1638,7 +1640,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 	else
 	{
 		moveBuffer.applyM220M221 = false;
-		moveBuffer.feedRate = DefaultG0FeedRate;					// use maximum feed rate, the M203 parameters will limit it
+		moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultG0FeedRate);	// use maximum feed rate, the M203 parameters will limit it
 		moveBuffer.usingStandardFeedrate = false;
 	}
 
@@ -1648,11 +1650,11 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 		moveBuffer.coords[drive] = 0.0;
 	}
 	moveBuffer.hasPositiveExtrusion = false;
-	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
+	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;			// save this before we update it
 	ExtrudersBitmap extrudersMoving;
 
 	// Check if we are extruding
-	if (gb.Seen(extrudeLetter))							// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
+	if (gb.Seen(extrudeLetter))												// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
 	{
 		// Check that we have a tool to extrude with
 		Tool* const tool = reprap.GetCurrentTool();
@@ -2116,7 +2118,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 				moveLengthSquared += fsquare(currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
 			}
 			const float moveLength = fastSqrtf(moveLengthSquared);
-			const float moveTime = moveLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
+			const float moveTime = moveLength/(moveBuffer.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
 			moveBuffer.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else
@@ -2466,7 +2468,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	// We leave out the square term because it is very small
 	// In CNC applications even very small deviations can be visible, so we use a smaller segment length at low speeds
 	const float arcSegmentLength = constrain<float>
-									(	min<float>(fastSqrtf(8 * moveBuffer.arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
+									(	min<float>(fastSqrtf(8 * moveBuffer.arcRadius * MaxArcDeviation), moveBuffer.feedRate * StepClockRate * (1.0/MinArcSegmentsPerSec)),
 										MinArcSegmentLength,
 										MaxArcSegmentLength
 									);
@@ -2782,7 +2784,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_EMBEDDED_FILES
 		FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
 		if (f == nullptr)
 		{
@@ -2812,12 +2814,34 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 #endif
 	}
 
-#if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE
+#if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	gb.LatestMachineState().doingFileMacro = true;
-	gb.LatestMachineState().runningM501 = (codeRunning == 501);
-	gb.LatestMachineState().runningM502 = (codeRunning == 502);
-	gb.LatestMachineState().runningSystemMacro = (codeRunning == SystemHelperMacroCode || codeRunning == AsyncSystemMacroCode || codeRunning == 29 || codeRunning == 32);
-																		// running a system macro e.g. homing, so don't use workplace coordinates
+
+	// The following three flags need to be inherited in the case that a system macro calls another macro, e.g.homeall.g calls homez.g. The Push call copied them over already.
+	switch (codeRunning)
+	{
+	case 501:
+		gb.LatestMachineState().runningM501 = true;
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	case 502:
+		gb.LatestMachineState().runningM502 = true;
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	case SystemHelperMacroCode:
+	case AsyncSystemMacroCode:
+	case ToolChangeMacroCode:
+	case 29:
+	case 32:
+		gb.LatestMachineState().runningSystemMacro = true;			// running a system macro e.g. homing, so don't use workplace coordinates
+		break;
+
+	default:
+		break;
+	}
+
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 
@@ -2844,7 +2868,7 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 		else
 #endif
 		{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			FileData &file = gb.LatestMachineState().fileState;
 			gb.GetFileInput()->Reset(file);
 			file.Close();
@@ -3214,7 +3238,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const noexcept
 	s.catf(" Bed comp %.3f", (double)(machineCoordinates[Z_AXIS] - machineZ));
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 // Set up a file to print, but don't print it yet.
 // If successful return true, else write an error message to reply and return false
 bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept
@@ -3261,7 +3285,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 		fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
 #endif
@@ -3559,9 +3583,9 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	FansBitmap fanMap;
 	if (gb.Seen('F'))
 	{
-		uint32_t fanMapping[MaxFans];
+		int32_t fanMapping[MaxFans];				// use a signed array so that F-1 will result in no fans at all
 		size_t fanCount = MaxFans;
-		gb.GetUnsignedArray(fanMapping, fanCount, false);
+		gb.GetIntArray(fanMapping, fanCount, false);
 		fanMap = FansBitmap::MakeFromArray(fanMapping, fanCount) & FansBitmap::MakeLowestNBits(MaxFans);
 		seen = true;
 	}
@@ -4070,7 +4094,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 
 		fileGCode->GetFileInput()->Reset(fileBeingPrinted);
@@ -4346,7 +4370,7 @@ float GCodes::GetUserCoordinate(size_t axis) const noexcept
 	return (axis < numTotalAxes) ? currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // M38 (SHA1 hash of a file) implementation:
 bool GCodes::StartHash(const char* filename) noexcept

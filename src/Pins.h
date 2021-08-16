@@ -169,6 +169,10 @@
 # define HAS_MASS_STORAGE		1
 #endif
 
+#ifndef HAS_EMBEDDED_FILES
+# define HAS_EMBEDDED_FILES		0
+#endif
+
 #if !HAS_MASS_STORAGE && !HAS_LINUX_INTERFACE
 # if SUPPORT_12864_LCD
 #  error "12864 LCD support requires mass storage or SBC interface"
@@ -216,5 +220,6 @@
 // Define SUPPORT_REMOTE_COMMANDS according to whether this hardware accepts commands over CAN
 // For now we exclude Duet 3 MB6HC because CoreNG doesn't support analog callbacks
 #define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE))
+#define USE_REMOTE_INPUT_SHAPING	(0)		//TODO temporary!!!
 
 #endif // PINS_H__

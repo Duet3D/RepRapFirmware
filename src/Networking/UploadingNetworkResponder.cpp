@@ -116,7 +116,7 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 			else
 			{
 				String<MaxFilenameLength> origFilename;
-				origFilename.catn(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
+				origFilename.copy(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
 
 				// Rename the uploaded file to it's original name
 				MassStorage::Rename(uploadFilename, origFilename.c_str(), true, true);

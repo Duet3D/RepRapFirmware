@@ -69,11 +69,12 @@ enum class GCodeState : uint8_t
 	resuming2,
 	resuming3,
 
+	cancelling,
+
 	flashing1,
 	flashing2,
 
 	stoppingWithHeatersOff,
-	stoppingWithHeatersOn,
 
 	// These next 9 must be contiguous
 	gridProbing1,
@@ -196,7 +197,7 @@ public:
 
 	VariableSet variables;											// local variables and parameters
 	float feedRate;
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileState;
 #endif
 #if HAS_LINUX_INTERFACE

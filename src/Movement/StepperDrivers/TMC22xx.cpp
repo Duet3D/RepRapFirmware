@@ -884,7 +884,7 @@ inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 // Update the maximum step pulse interval at which we consider open load detection to be reliable
 void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 {
-	const uint32_t defaultMaxInterval = StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec;
+	const uint32_t defaultMaxInterval = StepClockRate/MinimumOpenLoadFullStepsPerSec;
 	if ((writeRegisters[WriteGConf] & GCONF_SPREAD_CYCLE) != 0)
 	{
 		maxOpenLoadStepInterval = defaultMaxInterval;
@@ -896,7 +896,7 @@ void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 		// tpwmthrs is the 20-bit interval between 1/256 microsteps threshold, in clock cycles @ 12MHz.
 		// We need to convert it to the interval between full steps, measured in our step clocks, less about 20% to allow some margin.
 		// So multiply by the step clock rate divided by 12MHz, also multiply by 256 less 20%.
-		constexpr uint32_t conversionFactor = ((256 - 51) * (StepTimer::StepClockRate/1000000))/12;
+		constexpr uint32_t conversionFactor = ((256 - 51) * (StepClockRate/1000000))/12;
 		const uint32_t fullStepClocks = tpwmthrs * conversionFactor;
 		maxOpenLoadStepInterval = min<uint32_t>(fullStepClocks, defaultMaxInterval);
 	}
@@ -2278,124 +2278,27 @@ DriversBitmap SmartDrivers::GetStalledDrivers(DriversBitmap driversOfInterest) n
 
 #endif
 
-#ifdef DUET3MINI_V02
+#if SUPPORT_REMOTE_COMMANDS
 
-// Stall detection for Duet 3 Mini prototype v0.2. This code isn't complete, and won't be completed because prototype v0.4 uses a different mechanism.
-
-// Initialise the stall detection logic that is external to the drivers. Only needs to be called once.
-static void InitStallDetectionLogic() noexcept
+StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
 {
-	pinMode(DiagMuxPins[0], OUTPUT_LOW);
-	pinMode(DiagMuxPins[1], OUTPUT_LOW);
-	pinMode(DiagMuxPins[2], OUTPUT_LOW);
-	pinMode(DiagMuxOutPin, INPUT);
-}
-
-constexpr uint32_t MuxDelayCycles = SystemCoreClockFreq/5000000;		// allow 200ns for mux output to settle
-
-#if 0	// the following is unused
-
-static uint32_t stallBits = 0;
-
-// Read all the Diag pins
-// We read the drivers in Gray code order for speed, it avoids having to change more than one multiplexer control pin between them
-static uint32_t ReadDiagOutputs() noexcept
-{
-	fastDigitalWriteLow(DiagMuxPins[0]);
-	fastDigitalWriteLow(DiagMuxPins[0]);
-	fastDigitalWriteLow(DiagMuxPins[0]);
-	uint32_t now = GetCurrentCycles();
-
-	PortGroup * const group = &(PORT->Group[GpioPortNumber(DiagMuxOutPin)]);
-	constexpr unsigned int MuxOutBitNumber = GpioPinNumber(DiagMuxOutPin);
-	static_assert(MuxOutBitNumber < 32 - 8);			// the following code assumes we can shift the port bit left by 7 bits without losing it
-	constexpr uint32_t MuxOutMask = 1ul << MuxOutBitNumber;
-
-	DelayCycles(now, MuxDelayCycles);
-	uint32_t val = group->IN.reg & MuxOutMask;			// read driver 0
-	fastDigitalWriteHigh(DiagMuxPins[0]);
-	now = GetCurrentCycles();
-
-	DelayCycles(now, MuxDelayCycles);
-	uint32_t reg = group->IN.reg;						// read driver 1
-	fastDigitalWriteHigh(DiagMuxPins[1]);
-	now = GetCurrentCycles();
-	val |= (reg & MuxOutMask) << 1;
-
-	DelayCycles(now, MuxDelayCycles);
-	reg = group->IN.reg;								// read driver 3
-	fastDigitalWriteLow(DiagMuxPins[0]);
-	now = GetCurrentCycles();
-	val |= (reg & MuxOutMask) << 3;
-
-	DelayCycles(now, MuxDelayCycles);
-	reg = group->IN.reg;								// read driver 2
-	fastDigitalWriteHigh(DiagMuxPins[2]);
-	now = GetCurrentCycles();
-	val |= (reg & MuxOutMask) << 2;
-
-	DelayCycles(now, MuxDelayCycles);
-	reg = group->IN.reg;								// read driver 6
-	fastDigitalWriteHigh(DiagMuxPins[0]);
-	now = GetCurrentCycles();
-	val |= (reg & MuxOutMask) << 6;
-
-	DelayCycles(now, MuxDelayCycles);
-	reg = group->IN.reg;								// read driver 7
-	fastDigitalWriteLow(DiagMuxPins[1]);
-	now = GetCurrentCycles();
-	val |= (reg & MuxOutMask) << 7;
-
-	DelayCycles(now, MuxDelayCycles);
-	reg = group->IN.reg;								// read driver 5
-	fastDigitalWriteLow(DiagMuxPins[0]);
-	now = GetCurrentCycles();
-	val |= (reg & MuxOutMask) << 5;
-
-	DelayCycles(now, MuxDelayCycles);
-	reg = group->IN.reg;								// read driver 4
-	val |= (reg & MuxOutMask) << 4;
-
-	stallBits = val >> MuxOutBitNumber;
-	return stallBits;
-}
-
-#endif
-
-// Read just one DIAG output
-static bool ReadOneDiagOutput(uint8_t driver) noexcept
-{
-	if (driver & 1)
+	StandardDriverStatus rslt;
+	if (driver < GetNumTmcDrivers())
 	{
-		fastDigitalWriteHigh(DiagMuxPins[0]);
+		const uint32_t status = driverStates[driver].ReadLiveStatus();
+		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
+		rslt.all = status & 0x000000FF;
+		rslt.all |= (status >> (31 - 10)) & (1u << 10);			// put the standstill bit in the right place
+		if (status & TMC_RR_SG)
+		{
+			rslt.stall = true;
+		}
 	}
 	else
 	{
-		fastDigitalWriteLow(DiagMuxPins[0]);
+		rslt.all = 0;
 	}
-
-	if (driver & 2)
-	{
-		fastDigitalWriteHigh(DiagMuxPins[1]);
-	}
-	else
-	{
-		fastDigitalWriteLow(DiagMuxPins[1]);
-	}
-
-	if (driver & 4)
-	{
-		fastDigitalWriteHigh(DiagMuxPins[2]);
-	}
-	else
-	{
-		fastDigitalWriteLow(DiagMuxPins[2]);
-	}
-
-	const uint32_t now = GetCurrentCycles();
-	DelayCycles(now, MuxDelayCycles);
-
-	return fastDigitalRead(DiagMuxOutPin);
+	return rslt;
 }
 
 #endif

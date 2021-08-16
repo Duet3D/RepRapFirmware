@@ -669,7 +669,7 @@ void TmcDriverState::SetStallDetectFilter(bool sgFilter) noexcept
 
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept
 {
-	maxStallStepInterval = StepTimer::StepClockRate/max<unsigned int>(stepsPerSecond, 1);
+	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1);
 }
 
 void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
@@ -680,7 +680,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	{
 		threshold -= 128;
 	}
-	const uint32_t fullstepsPerSecond = StepTimer::StepClockRate/maxStallStepInterval;
+	const uint32_t fullstepsPerSecond = StepClockRate/maxStallStepInterval;
 	const float speed = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, registers[SmartEnable] & 0xFFFF);
@@ -778,7 +778,7 @@ inline void TmcDriverState::TransferDone() noexcept
 
 		if (   (status & TMC_RR_STST) != 0
 			|| interval == 0
-			|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
+			|| interval > StepClockRate/MinimumOpenLoadFullStepsPerSec
 			|| (registers[StallGuardConfig] & TMC_SGCSCONF_CS_MASK) < MinimumOpenLoadCsBits
 		   )
 		{

@@ -36,7 +36,11 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 #define HAS_W5500_NETWORKING	0
 
 #define HAS_CPU_TEMP_SENSOR		1
-#define HAS_HIGH_SPEED_SD		1					// SD card socket is optional
+
+// File system options
+#define HAS_MASS_STORAGE		0					// SD card socket is optional
+#define HAS_HIGH_SPEED_SD		0
+#define HAS_EMBEDDED_FILES		1					// A read only file system is appended to the binary
 
 #if defined(PCCB_10) || defined(PCCB_08_X5)
 # define SUPPORT_TMC2660		1
@@ -221,7 +225,7 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr size_t MaxZProbes = 1;
 
-constexpr Pin DiagPin = NoPin;
+constexpr Pin DiagPin = PortAPin(7);
 constexpr bool DiagOnPolarity = true;
 
 // DotStar LED control (USART0 is SharedSPI so we use USART1)
@@ -257,7 +261,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		nullptr				},	// PA04 TWCK0 (expansion)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA05 RXD0 (daughter boards, external SD card)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA06 TXD0 (daughter boards, external SD card)
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA07 LCD ENC_SW
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA07 DIAG led
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA08 Y dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA09 Stepper drivers UART
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA10 Stepper drivers UART

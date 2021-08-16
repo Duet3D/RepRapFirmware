@@ -60,7 +60,7 @@ uint32_t PortControl::UpdatePorts() noexcept
 		{
 			SetBasePriority(0);
 			UpdatePorts(cdda->GetIoBits());
-			return (moveEndTime - now + StepTimer::StepClockRate/1000 - 1)/(StepTimer::StepClockRate/1000);
+			return (moveEndTime - now + StepClockRate/1000 - 1)/(StepClockRate/1000);
 		}
 		cdda = cdda->GetNext();
 		st = cdda->GetState();
@@ -96,7 +96,18 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 	{
 		seen = true;
 		advanceMillis = (unsigned int)constrain<int>(gb.GetIValue(), 0, 1000);
-		advanceClocks = (advanceMillis * (uint64_t)StepTimer::StepClockRate)/1000;
+		if constexpr (StepClockRate % 1000 == 0)
+		{
+			advanceClocks = advanceMillis * (StepClockRate/1000);
+		}
+		else if constexpr (StepClockRate % 500 == 0)
+		{
+			advanceClocks = (advanceMillis * (StepClockRate/500))/2;
+		}
+		else
+		{
+			advanceClocks = (advanceMillis * (uint64_t)StepClockRate)/1000;
+		}
 	}
 	if (!seen)
 	{

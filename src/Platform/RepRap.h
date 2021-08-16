@@ -145,7 +145,7 @@ public:
 	OutputBuffer *GetConfigResponse() noexcept;
 	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq) const noexcept;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	OutputBuffer *GetFilesResponse(const char* dir, unsigned int startAt, bool flagsDirs) noexcept;
 	OutputBuffer *GetFilelistResponse(const char* dir, unsigned int startAt) noexcept;
 #endif

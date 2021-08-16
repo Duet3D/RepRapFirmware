@@ -74,6 +74,19 @@ static bool axisInverted[3];
 static IoPort spiCsPort;
 static IoPort irqPort;
 
+static uint8_t TranslateAxes(uint8_t axes) noexcept
+{
+	uint8_t rslt = 0;
+	for (unsigned int i = 0; i < 3; ++i)
+	{
+		if (axes & (1u << i))
+		{
+			rslt |= 1u << axisLookup[i];
+		}
+	}
+	return rslt;
+}
+
 [[noreturn]] void AccelerometerTaskCode(void*) noexcept
 {
 	for (;;)
@@ -89,7 +102,7 @@ static IoPort irqPort;
 			const uint16_t mask = (1u << resolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(resolution);
 
-			if (accelerometer->StartCollecting(axesRequested))
+			if (accelerometer->StartCollecting(TranslateAxes(axesRequested)))
 			{
 				uint16_t dataRate = 0;
 				do

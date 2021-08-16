@@ -113,6 +113,9 @@ ReadWriteLock Heat::sensorsLock;
 
 Heat::Heat() noexcept
 	: sensorCount(0), sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+#if SUPPORT_REMOTE_COMMANDS
+	, newHeaterFaultState(0), newDriverFaultState(0)
+#endif
 {
 	for (int8_t& h : bedHeaters)
 	{
@@ -280,75 +283,197 @@ void Heat::Exit() noexcept
 	heaterTask.Suspend();
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
+{
+	CanMessageHeatersStatus * const msg = buf.SetupStatusMessage<CanMessageHeatersStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+	msg->whichHeaters = 0;
+	unsigned int heatersFound = 0;
+
+	{
+		ReadLocker lock(heatersLock);
+
+		for (size_t heater = 0; heater < MaxHeaters; ++heater)
+		{
+			Heater * const h = heaters[heater];
+			if (h != nullptr)
+			{
+				msg->whichHeaters |= (uint64_t)1u << heater;
+				msg->reports[heatersFound].mode = h->GetModeByte();
+				msg->reports[heatersFound].averagePwm = (uint8_t)(h->GetAveragePWM() * 255.0);
+				msg->reports[heatersFound].temperature = h->GetTemperature();
+				++heatersFound;
+			}
+		}
+	}
+
+	if (heatersFound != 0)
+	{
+		buf.dataLength = msg->GetActualDataLength(heatersFound);
+		CanInterface::SendMessageNoReplyNoFree(&buf);
+	}
+}
+
+#endif
+
 [[noreturn]] void Heat::HeaterTask() noexcept
 {
-	uint32_t lastWakeTime = xTaskGetTickCount();
+	uint32_t nextWakeTime = millis();
 	for (;;)
 	{
-		// Walk the sensor list and poll all sensors. The list is in increasing sensor number order.
+		// Wait until we are woken or it's time to send another regular broadcast. If we are really unlucky, we could end up waiting for one tick too long.
+		nextWakeTime += HeatSampleIntervalMillis;
+		int32_t delayTime = (int32_t)(nextWakeTime - millis());
+		if (delayTime > 0)
 		{
+			TaskBase::Take((uint32_t)delayTime);
+		}
+
 #if SUPPORT_CAN_EXPANSION
-			// Set up to broadcast our sensor temperatures
-			CanMessageBuffer buf(nullptr);
-			CanMessageSensorTemperatures * const msg = buf.SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
-			msg->whichSensors = 0;
-			unsigned int sensorsFound = 0;
+		CanMessageBuffer buf(nullptr);
 #endif
+
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			// Check whether we have any urgent messages to send
+			if (newDriverFaultState == 1)
 			{
-				ReadLocker lock(sensorsLock);
-				TemperatureSensor *currentSensor = sensorsRoot;
-				while (currentSensor != nullptr)
-				{
-					currentSensor->Poll();
+				newDriverFaultState = 2;
+				reprap.GetPlatform().SendDriversStatus(buf);
+			}
+
+			// Check whether we have new heater fault status messages to send
+			if (newHeaterFaultState == 1)
+			{
+				newHeaterFaultState = 2;
+				SendHeatersStatus(buf);
+			}
+		}
+#endif
+
+		// Check whether it is time to poll sensors and PIDs and send regular messages
+		if ((int32_t)(millis() - nextWakeTime) >= 0)
+		{
+			// Walk the sensor list and poll all sensors. The list is in increasing sensor number order.
+			{
 #if SUPPORT_CAN_EXPANSION
-					if (currentSensor->GetBoardAddress() == CanInterface::GetCanAddress())
+				// Set up to broadcast our sensor temperatures
+				CanMessageSensorTemperatures * const msg = buf.SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
+				msg->whichSensors = 0;
+				unsigned int sensorsFound = 0;
+#endif
+				{
+					ReadLocker lock(sensorsLock);
+					TemperatureSensor *currentSensor = sensorsRoot;
+					while (currentSensor != nullptr)
 					{
-						msg->whichSensors |= (uint64_t)1u << currentSensor->GetSensorNumber();
-						float temperature;
-						msg->temperatureReports[sensorsFound].errorCode = (uint8_t)currentSensor->GetLatestTemperature(temperature);
-						msg->temperatureReports[sensorsFound].SetTemperature(temperature);
-						++sensorsFound;
-					}
-#endif
-					currentSensor = currentSensor->GetNext();
-				}
-			}
+						currentSensor->Poll();
 #if SUPPORT_CAN_EXPANSION
-			if (sensorsFound != 0)							// don't send an empty report
-			{
-				buf.dataLength = msg->GetActualDataLength(sensorsFound);
-				CanInterface::SendBroadcastNoFree(&buf);
-			}
+						if (currentSensor->GetBoardAddress() == CanInterface::GetCanAddress())
+						{
+							msg->whichSensors |= (uint64_t)1u << currentSensor->GetSensorNumber();
+							float temperature;
+							msg->temperatureReports[sensorsFound].errorCode = (uint8_t)currentSensor->GetLatestTemperature(temperature);
+							msg->temperatureReports[sensorsFound].SetTemperature(temperature);
+							++sensorsFound;
+						}
 #endif
-		}
-
-		// Spin the heaters
-		{
-			ReadLocker lock(heatersLock);
-			for (Heater *h : heaters)
-			{
-				if (h != nullptr)
+						currentSensor = currentSensor->GetNext();
+					}
+				}
+#if SUPPORT_CAN_EXPANSION
+				if (sensorsFound != 0)							// don't send an empty report
 				{
-					h->Spin();
+					buf.dataLength = msg->GetActualDataLength(sensorsFound);
+					CanInterface::SendBroadcastNoFree(&buf);
+				}
+#endif
+			}
+
+			// Spin the heaters
+			{
+				ReadLocker lock(heatersLock);
+				for (Heater *h : heaters)
+				{
+					if (h != nullptr)
+					{
+						h->Spin();
+					}
 				}
 			}
-		}
 
-		// See if we have finished tuning a PID
-		if (heaterBeingTuned != -1)
-		{
-			const auto h = FindHeater(heaterBeingTuned);
-			if (h.IsNull() || h->GetStatus() != HeaterStatus::tuning)
+			// See if we have finished tuning a PID
+			if (heaterBeingTuned != -1)
 			{
-				lastHeaterTuned = heaterBeingTuned;
-				heaterBeingTuned = -1;
+				const auto h = FindHeater(heaterBeingTuned);
+				if (h.IsNull() || h->GetStatus() != HeaterStatus::tuning)
+				{
+					lastHeaterTuned = heaterBeingTuned;
+					heaterBeingTuned = -1;
+				}
 			}
+
+#if SUPPORT_REMOTE_COMMANDS
+			if (CanInterface::InExpansionMode())
+			{
+				if (newHeaterFaultState == 0)
+				{
+					SendHeatersStatus(buf);						// send the status of our heaters
+				}
+				else
+				{
+					newHeaterFaultState = 0;					// we recently sent it, so send it again next time
+				}
+
+				// Send our fan RPMs
+				{
+					CanMessageFansReport * const msg = buf.SetupStatusMessage<CanMessageFansReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					const unsigned int numReported = reprap.GetFansManager().PopulateFansReport(*msg);
+					if (numReported != 0)
+					{
+						buf.dataLength = msg->GetActualDataLength(numReported);
+						CanInterface::SendMessageNoReplyNoFree(&buf);
+					}
+				}
+
+				if (newDriverFaultState == 0)
+				{
+					reprap.GetPlatform().SendDriversStatus(buf);			// send the status of our drivers
+				}
+				else
+				{
+					newDriverFaultState = 0;					// we recently sent it, so send it again next time
+				}
+
+				// Send a board health message
+				{
+					CanMessageBoardStatus * const boardStatusMsg = buf.SetupStatusMessage<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					boardStatusMsg->Clear();
+
+					// We must add fields in the following order: VIN, V12, MCU temperature
+					size_t index = 0;
+#if HAS_VOLTAGE_MONITOR
+					boardStatusMsg->values[index++] = reprap.GetPlatform().GetPowerVoltages();
+					boardStatusMsg->hasVin = true;
+#endif
+#if HAS_12V_MONITOR
+					boardStatusMsg->values[index++] = reprap.GetPlatform().GetV12Voltages();
+					boardStatusMsg->hasV12 = true;
+#endif
+#if HAS_CPU_TEMP_SENSOR
+					boardStatusMsg->values[index++] = reprap.GetPlatform().GetMcuTemperatures();
+					boardStatusMsg->hasMcuTemp = true;
+#endif
+					buf.dataLength = boardStatusMsg->GetActualDataLength();
+					CanInterface::SendMessageNoReplyNoFree(&buf);
+				}
+			}
+#endif
+
+			reprap.KickHeatTaskWatchdog();
 		}
-
-		reprap.KickHeatTaskWatchdog();
-
-		// Delay until it is time again
-		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
 	}
 }
 

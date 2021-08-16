@@ -154,46 +154,49 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 // Set workspace coordinates
 GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute)
 {
-	const uint32_t cs = (gb.Seen('P')) ? gb.GetIValue() : currentCoordinateSystem + 1;
-	if (cs > 0 && cs <= NumCoordinateSystems)
+	// No P parameter or P0 (LinuxCNC extension) means use current coordinate system
+	uint32_t cs = 0;
+	bool dummySeen;
+	gb.TryGetLimitedUIValue('P', cs, dummySeen, NumCoordinateSystems + 1);		// allow 0..NumCoordinateSystems inclusive
+	if (cs == 0)
 	{
-		bool seen = false;
-		for (size_t axis = 0; axis < numVisibleAxes; axis++)
-		{
-			if (gb.Seen(axisLetters[axis]))
-			{
-				const float coord = gb.GetDistance();
-				if (!seen)
-				{
-					if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
-					{
-						return GCodeResult::notFinished;
-					}
-					seen = true;
-				}
-				workplaceCoordinates[cs - 1][axis] = (compute) ? currentUserPosition[axis] - coord : coord;
-			}
-		}
-
-		if (seen)
-		{
-			reprap.MoveUpdated();
-			String<StringLengthLoggedCommand> scratch;
-			gb.AppendFullCommand(scratch.GetRef());
-			platform.Message(MessageType::LogInfo, scratch.c_str());
-		}
-		else
-		{
-			reply.printf("Origin of workplace %" PRIu32 ":", cs);
-			for (size_t axis = 0; axis < numVisibleAxes; axis++)
-			{
-				reply.catf(" %c%.2f", axisLetters[axis], (double)gb.InverseConvertDistance(workplaceCoordinates[cs - 1][axis]));
-			}
-		}
-		return GCodeResult::ok;
+		cs = currentCoordinateSystem + 1;
 	}
 
-	return GCodeResult::badOrMissingParameter;
+	bool seen = false;
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			const float coord = gb.GetDistance();
+			if (!seen)
+			{
+				if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
+				{
+					return GCodeResult::notFinished;
+				}
+				seen = true;
+			}
+			workplaceCoordinates[cs - 1][axis] = (compute) ? currentUserPosition[axis] - coord : coord;
+		}
+	}
+
+	if (seen)
+	{
+		reprap.MoveUpdated();
+		String<StringLengthLoggedCommand> scratch;
+		gb.AppendFullCommand(scratch.GetRef());
+		platform.Message(MessageType::LogInfo, scratch.c_str());
+	}
+	else
+	{
+		reply.printf("Origin of workplace %" PRIu32 ":", cs);
+		for (size_t axis = 0; axis < numVisibleAxes; axis++)
+		{
+			reply.catf(" %c%.2f", axisLetters[axis], (double)gb.InverseConvertDistance(workplaceCoordinates[cs - 1][axis]));
+		}
+	}
+	return GCodeResult::ok;
 }
 
 # if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
@@ -397,7 +400,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 }
 
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // Handle M37 to simulate a whole file
 GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile)
@@ -408,7 +411,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		return GCodeResult::error;
 	}
 
-# if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (
 #  if HAS_LINUX_INTERFACE
 		reprap.UsingLinuxInterface() ||
@@ -909,7 +912,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	// Get the feed rate and axis
 	gb.MustSee(feedrateLetter);
-	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor to homing and other special moves
 	m585Settings.axisNumber = FindAxisLetter(gb);
 	m585Settings.offset = gb.GetDistance();
 
@@ -1000,7 +1003,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) 
 
 	// Get the feed rate, backoff distance, and axis
 	gb.MustSee(feedrateLetter);
-	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor to homing and other special moves
 	m675Settings.backoffDistance = gb.Seen('R') ? gb.GetDistance() : 5.0;
 	m675Settings.axisNumber = FindAxisLetter(gb);
 

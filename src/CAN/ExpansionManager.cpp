@@ -16,7 +16,7 @@
 
 ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(BoardState::unknown), numDrivers(0)
 {
-	mcuTemp.min = mcuTemp.max = mcuTemp.current = vin.max = vin.min = vin.current = v12.max = v12.min = v12.current = 0.0;
+	mcuTemp.minimum = mcuTemp.maximum = mcuTemp.current = vin.maximum = vin.minimum = vin.current = v12.maximum = v12.minimum = v12.current = 0.0;
 }
 
 #if SUPPORT_OBJECT_MODEL
@@ -43,18 +43,18 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.current, 1),							ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.max, 1),								ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.min, 1),								ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.maximum, 1),							ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.minimum, 1),							ObjectModelEntryFlags::none },
 
 	// 2. vIn members
 	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.current, 1),								ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.max, 1),									ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.min, 1),									ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.maximum, 1),								ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.minimum, 1),								ObjectModelEntryFlags::none },
 
 	// 3. v12 members
 	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.current, 1),								ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.max, 1),									ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.min, 1),									ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.maximum, 1),								ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.minimum, 1),								ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
@@ -143,6 +143,34 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 	}
 	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanInterface::GetCanAddress(), src);
 	CanInterface::SendResponseNoFree(buf);
+}
+
+// Process a board status report
+void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept
+{
+	const CanAddress address = buf->id.Src();
+	ExpansionBoardData& board = boards[address];
+	if (board.state != BoardState::running)
+	{
+		UpdateBoardState(address, BoardState::running);
+	}
+
+	const CanMessageBoardStatus msg = buf->msg.boardStatus;
+
+	// We must process the data in the correct order, to ensure that we pick up the right values
+	size_t index = 0;
+	if (msg.hasVin)
+	{
+		board.vin = msg.values[index++];
+	}
+	if (msg.hasV12)
+	{
+		board.v12 = msg.values[index++];
+	}
+	if (msg.hasMcuTemp)
+	{
+		board.mcuTemp = msg.values[index++];
+	}
 }
 
 // Return a pointer to the expansion board, if it is present
