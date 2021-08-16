@@ -225,7 +225,7 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr size_t MaxZProbes = 1;
 
-constexpr Pin DiagPin = NoPin;
+constexpr Pin DiagPin = PortAPin(7);
 constexpr bool DiagOnPolarity = true;
 
 // DotStar LED control (USART0 is SharedSPI so we use USART1)
@@ -261,7 +261,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		nullptr				},	// PA04 TWCK0 (expansion)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA05 RXD0 (daughter boards, external SD card)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA06 TXD0 (daughter boards, external SD card)
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA07 LCD ENC_SW
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA07 DIAG led
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA08 Y dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA09 Stepper drivers UART
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA10 Stepper drivers UART
