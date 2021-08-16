@@ -8,10 +8,6 @@
 
 #include "MassStorage.h"
 
-#if SAM4S
-constexpr uint32_t FlashStart = IFLASH0_ADDR;
-#endif
-
 #if HAS_EMBEDDED_FILES
 
 #include <Platform/Platform.h>
@@ -19,14 +15,16 @@ constexpr uint32_t FlashStart = IFLASH0_ADDR;
 #include <ObjectModel/ObjectModel.h>
 #include "FileStore.h"
 
+extern const uint32_t _firmware_end;
+
 struct EmbeddedFileDescriptor
 {
 	uint32_t nameOffset;
 	uint32_t contentOffset;
 	uint32_t contentLength;
 
-	const char* GetName() const noexcept { return reinterpret_cast<const char*>(FlashStart + nameOffset); }
-	const char* GetContent() const noexcept { return reinterpret_cast<const char*>(FlashStart + contentOffset); }
+	const char* GetName() const noexcept { return reinterpret_cast<const char*>(&_firmware_end) + nameOffset; }
+	const char* GetContent() const noexcept { return reinterpret_cast<const char*>(&_firmware_end) + contentOffset; }
 };
 
 struct EmbeddedFilesHeader
@@ -34,13 +32,13 @@ struct EmbeddedFilesHeader
 	uint32_t magic;
 	uint32_t directoriesOffset;
 	uint32_t numFiles;
-	const EmbeddedFileDescriptor files[];				// gcc extension: array of unspecified length at end of a struct
+	const EmbeddedFileDescriptor files[999];				// the array length is actually 'numFiles'
 
-	static constexpr uint32_t MagicValue = 0;	//TODO what is it?
-	const char* GetDirectories() const noexcept { return reinterpret_cast<const char*>(FlashStart + directoriesOffset); }
+	static constexpr uint32_t MagicValue = 0x543C2BEF;
+	const char* GetDirectories() const noexcept { return reinterpret_cast<const char*>(&_firmware_end) + directoriesOffset; }
 };
 
-extern const EmbeddedFilesHeader _firmware_end;
+static const EmbeddedFilesHeader& fileSystem = *reinterpret_cast<const EmbeddedFilesHeader*>(&_firmware_end);
 
 static const char *fileSearchDirectory;
 static uint32_t fileSearchNextNumber;
@@ -48,10 +46,10 @@ static uint32_t fileSearchNextNumber;
 // Members of MassStorage that are replaced
 bool MassStorage::FileExists(const char *filePath) noexcept
 {
-	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
-		uint32_t numFiles = _firmware_end.numFiles;
-		const EmbeddedFileDescriptor *filePtr = _firmware_end.files;
+		uint32_t numFiles = fileSystem.numFiles;
+		const EmbeddedFileDescriptor *filePtr = fileSystem.files;
 		while (numFiles != 0)
 		{
 			if (StringEqualsIgnoreCase(filePath, filePtr->GetName()))
@@ -68,14 +66,14 @@ bool MassStorage::FileExists(const char *filePath) noexcept
 // Test whether a directory exists. Any trailing '/' has already been removed.
 bool EmbeddedFiles::DirectoryExists(const StringRef& path) noexcept
 {
-	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
 		if (path[0] == 0)
 		{
 			return true;				// root directory
 		}
 
-		const char *cd = _firmware_end.GetDirectories();
+		const char *cd = fileSystem.GetDirectories();
 		while (cd[0] != 0)
 		{
 			if (StringEqualsIgnoreCase(cd, path.c_str()))
@@ -91,9 +89,9 @@ bool EmbeddedFiles::DirectoryExists(const StringRef& path) noexcept
 // Find the next file starting from fileSearchNextNumber that is in directory fileSearchDirectory
 static bool FindNextFile(FileInfo& info) noexcept
 {
-	while (fileSearchNextNumber < _firmware_end.numFiles)
+	while (fileSearchNextNumber < fileSystem.numFiles)
 	{
-		const EmbeddedFileDescriptor& fd = _firmware_end.files[fileSearchNextNumber++];
+		const EmbeddedFileDescriptor& fd = fileSystem.files[fileSearchNextNumber++];
 		const char *fname = fd.GetName();
 		if (StringStartsWithIgnoreCase(fname, fileSearchDirectory))
 		{
@@ -125,7 +123,7 @@ static bool FindNextFile(FileInfo& info) noexcept
 // Find the first file. Any trailing "/" in the directory has been removed.
 bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &info) noexcept
 {
-	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
 		// Check that we have the directory, and store a pointer to it
 		if (directory[0] == 0)
@@ -134,7 +132,7 @@ bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &info) noexcept
 		}
 		else
 		{
-			const char *cd = _firmware_end.GetDirectories();
+			const char *cd = fileSystem.GetDirectories();
 			for (;;)
 			{
 				if (cd[0] == 0)
@@ -159,35 +157,30 @@ bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &info) noexcept
 
 bool EmbeddedFiles::FindNext(FileInfo &info) noexcept
 {
-	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
 		return FindNextFile(info);
 	}
 	return false;
 }
 
-// Seek to a position
-FilePosition EmbeddedFiles::Seek(int32_t fileIndex, FilePosition pos) noexcept
-{
-	return min<FilePosition>(pos, Length(fileIndex));
-}
 
 // Return the file size in bytes, or 0 if the file index is invalid
 FilePosition EmbeddedFiles::Length(int32_t fileIndex) noexcept
 {
-	return (_firmware_end.magic == EmbeddedFilesHeader::MagicValue && fileIndex >= 0 && fileIndex < (int32_t)_firmware_end.numFiles)
-			? _firmware_end.files[fileIndex].contentLength
+	return (fileSystem.magic == EmbeddedFilesHeader::MagicValue && fileIndex >= 0 && fileIndex < (int32_t)fileSystem.numFiles)
+			? fileSystem.files[fileIndex].contentLength
 				: 0;
 }
 
 // Open a file
 FileIndex EmbeddedFiles::OpenFile(const char *filePath) noexcept
 {
-	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
-		for (FileIndex fi = 0; fi < (FileIndex)_firmware_end.numFiles; ++fi)
+		for (FileIndex fi = 0; fi < (FileIndex)fileSystem.numFiles; ++fi)
 		{
-			if (StringEqualsIgnoreCase(filePath, _firmware_end.files[fi].GetName()))
+			if (StringEqualsIgnoreCase(filePath, fileSystem.files[fi].GetName()))
 			{
 				return fi;
 			}
@@ -199,16 +192,16 @@ FileIndex EmbeddedFiles::OpenFile(const char *filePath) noexcept
 // Read from a file
 int EmbeddedFiles::Read(FileIndex fileIndex, FilePosition pos, char* extBuf, size_t nBytes) noexcept
 {
-	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue && fileIndex >= 0 && fileIndex < (int32_t)_firmware_end.numFiles)
+	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue && fileIndex >= 0 && fileIndex < (int32_t)fileSystem.numFiles)
 	{
-		const size_t fileLength = _firmware_end.files[fileIndex].contentLength;
+		const size_t fileLength = fileSystem.files[fileIndex].contentLength;
 		if (pos < fileLength)
 		{
 			if (nBytes > fileLength - pos)
 			{
 				nBytes = fileLength - pos;
 			}
-			memcpy(extBuf, _firmware_end.files[fileIndex].GetContent(), nBytes);
+			memcpy(extBuf, fileSystem.files[fileIndex].GetContent(), nBytes);
 			return nBytes;
 		}
 		return 0;

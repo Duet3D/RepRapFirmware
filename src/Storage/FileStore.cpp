@@ -257,7 +257,7 @@ bool FileStore::Seek(FilePosition pos) noexcept
 #if HAS_MASS_STORAGE
 		return f_lseek(&file, pos) == FR_OK;
 #elif HAS_EMBEDDED_FILES
-		offset = EmbeddedFiles::Seek(fileIndex, pos);
+		offset = min<FilePosition>(pos, EmbeddedFiles::Length(fileIndex));
 		return true;
 #else
 		return false;
@@ -395,7 +395,7 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 #if HAS_MASS_STORAGE
 		{
 			UINT bytes_read;
-			FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
+			const FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
 			if (readStatus != FR_OK)
 			{
 				reprap.GetPlatform().MessageF(ErrorMessage, "Cannot read file, error code %d\n", (int)readStatus);
@@ -405,7 +405,7 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 		}
 #elif HAS_EMBEDDED_FILES
 		{
-			int ret = EmbeddedFiles::Read(fileIndex, offset, extBuf, nBytes);
+			const int ret = EmbeddedFiles::Read(fileIndex, offset, extBuf, nBytes);
 			if (ret > 0)
 			{
 				offset += ret;
