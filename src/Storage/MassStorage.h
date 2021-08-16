@@ -30,7 +30,7 @@ namespace EmbeddedFiles
 	bool FindNext(FileInfo& info) noexcept;
 	FilePosition Seek(FileIndex fileIndex, FilePosition pos) noexcept;
 	FilePosition Length(FileIndex fileIndex) noexcept;
-	int Read(FileIndex fileIndex, char* extBuf, size_t nBytes) noexcept;
+	int Read(FileIndex fileIndex, FilePosition pos, char* extBuf, size_t nBytes) noexcept;
 	FileIndex OpenFile(const char *filePath) noexcept;
 }
 

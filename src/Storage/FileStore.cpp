@@ -404,7 +404,14 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 			return (int)bytes_read;
 		}
 #elif HAS_EMBEDDED_FILES
-		return EmbeddedFiles::Read(fileIndex, extBuf, nBytes);
+		{
+			int ret = EmbeddedFiles::Read(fileIndex, offset, extBuf, nBytes);
+			if (ret > 0)
+			{
+				offset += ret;
+			}
+			return ret;
+		}
 #else
 		return -1;
 #endif

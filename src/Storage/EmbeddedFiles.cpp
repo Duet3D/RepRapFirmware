@@ -180,15 +180,39 @@ FilePosition EmbeddedFiles::Length(int32_t fileIndex) noexcept
 				: 0;
 }
 
-int EmbeddedFiles::Read(FileIndex fileIndex, char* extBuf, size_t nBytes) noexcept
-{
-	//TODO
-	return -1;
-}
-
+// Open a file
 FileIndex EmbeddedFiles::OpenFile(const char *filePath) noexcept
 {
-	//TODO
+	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue)
+	{
+		for (FileIndex fi = 0; fi < (FileIndex)_firmware_end.numFiles; ++fi)
+		{
+			if (StringEqualsIgnoreCase(filePath, _firmware_end.files[fi].GetName()))
+			{
+				return fi;
+			}
+		}
+	}
+	return (FileIndex)-1;
+}
+
+// Read from a file
+int EmbeddedFiles::Read(FileIndex fileIndex, FilePosition pos, char* extBuf, size_t nBytes) noexcept
+{
+	if (_firmware_end.magic == EmbeddedFilesHeader::MagicValue && fileIndex >= 0 && fileIndex < (int32_t)_firmware_end.numFiles)
+	{
+		const size_t fileLength = _firmware_end.files[fileIndex].contentLength;
+		if (pos < fileLength)
+		{
+			if (nBytes > fileLength - pos)
+			{
+				nBytes = fileLength - pos;
+			}
+			memcpy(extBuf, _firmware_end.files[fileIndex].GetContent(), nBytes);
+			return nBytes;
+		}
+		return 0;
+	}
 	return -1;
 }
 
