@@ -157,8 +157,8 @@ private:
 
 	// Firmware retraction settings
 	float retractLength, retractExtra;			// retraction length and extra length to un-retract
-	float retractSpeed;							// retract speed in mm/min
-	float unRetractSpeed;						// un=retract speed in mm/min
+	float retractSpeed;							// retract speed in mm per step clock
+	float unRetractSpeed;						// un-retract speed in mm per step clock
 	float retractHop;							// Z hop when retracting
 
 	FansBitmap fanMapping;

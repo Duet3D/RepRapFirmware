@@ -156,7 +156,7 @@ constexpr uint16_t driverV12OffAdcReading = V12VoltageToAdcReading(9.5);				// v
 
 #endif
 
-const float MinStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
+constexpr float MinStepPulseTiming = 0.2;												// we assume that we always generate step high and low times at least this wide without special action
 
 // Global variable for debugging in tricky situations e.g. within ISRs
 int debugLine = 0;
@@ -253,67 +253,67 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_CPU_TEMP_SENSOR
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().max, 1),												ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min, 1),												ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().maximum, 1),											ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().minimum, 1),											ObjectModelEntryFlags::none },
 #endif
 
 	// 2. vIn members
 #if HAS_VOLTAGE_MONITOR
 	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage(), 1),												ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().max, 1),													ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().min, 1),													ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().maximum, 1),												ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().minimum, 1),												ObjectModelEntryFlags::none },
 #endif
 
 	// 3. move.axes[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(context.GetLastIndex()), 1),									ObjectModelEntryFlags::none },
-	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),		ObjectModelEntryFlags::none },
-	{ "current",			OBJECT_MODEL_FUNC((int32_t)lrintf(self->GetMotorCurrent(context.GetLastIndex(), 906))),				ObjectModelEntryFlags::none },
-	{ "drivers",			OBJECT_MODEL_FUNC_NOSELF(&axisDriversArrayDescriptor),												ObjectModelEntryFlags::none },
-	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),					ObjectModelEntryFlags::none },
-	{ "jerk",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->GetInstantDv(context.GetLastIndex()), 1),				ObjectModelEntryFlags::none },
-	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),				ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)lrintf(self->GetMotorCurrent(context.GetLastIndex(), 906))),							ObjectModelEntryFlags::none },
+	{ "drivers",			OBJECT_MODEL_FUNC_NOSELF(&axisDriversArrayDescriptor),															ObjectModelEntryFlags::none },
+	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
+	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
+	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),							ObjectModelEntryFlags::none },
 	{ "machinePosition",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().LiveCoordinate(context.GetLastIndex(), reprap.GetCurrentTool()), 3),	ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 2),									ObjectModelEntryFlags::none },
-	{ "maxProbed",			OBJECT_MODEL_FUNC(self->axisMaximaProbed.IsBitSet(context.GetLastIndex())),							ObjectModelEntryFlags::none },
-	{ "microstepping",		OBJECT_MODEL_FUNC(self, 7),																			ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->AxisMinimum(context.GetLastIndex()), 2),									ObjectModelEntryFlags::none },
-	{ "minProbed",			OBJECT_MODEL_FUNC(self->axisMinimaProbed.IsBitSet(context.GetLastIndex())),							ObjectModelEntryFlags::none },
-	{ "speed",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->MaxFeedrate(context.GetLastIndex()), 1),					ObjectModelEntryFlags::none },
-	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[context.GetLastIndex()], 2),								ObjectModelEntryFlags::none },
-	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3),			ObjectModelEntryFlags::live },
-	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),	ObjectModelEntryFlags::none },
-	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_NOSELF(&workplaceOffsetsArrayDescriptor),											ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
+	{ "maxProbed",			OBJECT_MODEL_FUNC(self->axisMaximaProbed.IsBitSet(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "microstepping",		OBJECT_MODEL_FUNC(self, 7),																						ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->AxisMinimum(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
+	{ "minProbed",			OBJECT_MODEL_FUNC(self->axisMinimaProbed.IsBitSet(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[context.GetLastIndex()], 2),											ObjectModelEntryFlags::none },
+	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3),						ObjectModelEntryFlags::live },
+	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),				ObjectModelEntryFlags::none },
+	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_NOSELF(&workplaceOffsetsArrayDescriptor),														ObjectModelEntryFlags::none },
 
 	// 4. move.extruders[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex())), 1),			ObjectModelEntryFlags::none },
-	{ "current",			OBJECT_MODEL_FUNC((int32_t)lrintf(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),	ObjectModelEntryFlags::none },
-	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),									ObjectModelEntryFlags::none },
-	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 2),			ObjectModelEntryFlags::none },
-	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),									ObjectModelEntryFlags::none },
-	{ "jerk",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex())), 1),	ObjectModelEntryFlags::none },
-	{ "microstepping",		OBJECT_MODEL_FUNC(self, 8),																			ObjectModelEntryFlags::none },
-	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																			ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)lrintf(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),							ObjectModelEntryFlags::none },
+	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
+	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
+	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),																		ObjectModelEntryFlags::none },
+	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
+	{ "microstepping",		OBJECT_MODEL_FUNC(self, 8),																												ObjectModelEntryFlags::none },
+	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																												ObjectModelEntryFlags::none },
 	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(context.GetLastIndex()), reprap.GetCurrentTool()), 1)),	ObjectModelEntryFlags::live },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvance(context.GetLastIndex()), 2),								ObjectModelEntryFlags::none },
-	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), ObjectModelEntryFlags::live },
-	{ "speed",				OBJECT_MODEL_FUNC(MinutesToSeconds * self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex())), 1),	ObjectModelEntryFlags::none },
-	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[ExtruderToLogicalDrive(context.GetLastIndex())], 2),		ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvanceClocks(context.GetLastIndex()) * StepClockRate, 2),							ObjectModelEntryFlags::none },
+	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), 					ObjectModelEntryFlags::live },
+	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[ExtruderToLogicalDrive(context.GetLastIndex())], 2),											ObjectModelEntryFlags::none },
 
 	// 5. move.extruders[].nonlinear members
-	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionA[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
-	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionB[context.GetLastIndex()], 3),							ObjectModelEntryFlags::none },
-	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusionLimit[context.GetLastIndex()], 2),						ObjectModelEntryFlags::none },
+	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionA[context.GetLastIndex()], 3),									ObjectModelEntryFlags::none },
+	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionB[context.GetLastIndex()], 3),									ObjectModelEntryFlags::none },
+	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusionLimit[context.GetLastIndex()], 2),								ObjectModelEntryFlags::none },
 
 #if HAS_12V_MONITOR
 	// 6. v12 members
-	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),												ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max, 1),													ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min, 1),													ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),														ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().maximum, 1),														ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().minimum, 1),														ObjectModelEntryFlags::none },
 #endif
 
 	// 7. move.axes[].microstepping members
-	{ "interpolated",		OBJECT_MODEL_FUNC((self->microstepping[context.GetLastIndex()] & 0x8000) != 0),						ObjectModelEntryFlags::none },
-	{ "value",				OBJECT_MODEL_FUNC((int32_t)(self->microstepping[context.GetLastIndex()] & 0x7FFF)),					ObjectModelEntryFlags::none },
+	{ "interpolated",		OBJECT_MODEL_FUNC((self->microstepping[context.GetLastIndex()] & 0x8000) != 0),								ObjectModelEntryFlags::none },
+	{ "value",				OBJECT_MODEL_FUNC((int32_t)(self->microstepping[context.GetLastIndex()] & 0x7FFF)),							ObjectModelEntryFlags::none },
 
 	// 8. move.extruders[].microstepping members
 	{ "interpolated",		OBJECT_MODEL_FUNC((self->microstepping[ExtruderToLogicalDrive(context.GetLastIndex())] & 0x8000) != 0),		ObjectModelEntryFlags::none },
@@ -389,6 +389,10 @@ Platform::Platform() noexcept :
 #endif
 	tickState(0), debugCode(0),
 	lastWarningMillis(0),
+#ifdef DUET3MINI
+	whenLastCanMessageProcessed(0),
+#endif
+
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
@@ -590,7 +594,7 @@ void Platform::Init() noexcept
 		instantDvs[drive] = DefaultEInstantDv;
 	}
 
-	minimumMovementSpeed = DefaultMinFeedrate;
+	minimumMovementSpeed = ConvertSpeedFromMmPerSec(DefaultMinFeedrate);
 	axisMaximaProbed.Clear();
 	axisMinimaProbed.Clear();
 	idleCurrentFactor = DefaultIdleCurrentFactor;
@@ -615,9 +619,6 @@ void Platform::Init() noexcept
 		directions[driver] = true;								// drive moves forwards by default
 		enableValues[driver] = 0;								// assume active low enable signal
 
-#if SUPPORT_REMOTE_COMMANDS
-		remotePressureAdvance[driver] = 0.0;
-#endif
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
@@ -661,7 +662,6 @@ void Platform::Init() noexcept
 	{
 		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
 		driveDriverBits[ExtruderToLogicalDrive(extr)] = StepPins::CalcDriverBitmap(extr + MinAxes);
-		pressureAdvance[extr] = 0.0;
 #if SUPPORT_NONLINEAR_EXTRUSION
 		nonlinearExtrusionA[extr] = nonlinearExtrusionB[extr] = 0.0;
 		nonlinearExtrusionLimit[extr] = DefaultNonlinearExtrusionLimit;
@@ -1089,6 +1089,15 @@ void Platform::Spin() noexcept
 		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
 		digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
 	}
+#endif
+
+#if defined(DUET3MINI)
+	// Turn off the ACT LED if it is time to do so
+	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
+	{
+		digitalWrite(ActLedPin, !ActOnPolarity);
+	}
+
 #endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
@@ -2207,9 +2216,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::TimeCalculations:	// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
+			constexpr uint32_t iterations = 100;				// use a value that divides into one million
 			bool ok1 = true;
 			uint32_t tim1 = 0;
-			for (uint32_t i = 0; i < 100; ++i)
+			for (uint32_t i = 0; i < iterations; ++i)
 			{
 				const uint32_t num1 = 0x7fffffff - (67 * i);
 				const uint64_t sq = (uint64_t)num1 * num1;
@@ -2222,7 +2232,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 			bool ok2 = true;
 			uint32_t tim2 = 0;
-			constexpr uint32_t iterations = 100;				// use a value that divides into one million
 			for (uint32_t i = 0; i < iterations; ++i)
 			{
 				const uint32_t num2 = 0x0000ffff - (67 * i);
@@ -2234,9 +2243,37 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				}
 			}
 
-			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
-					(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
-							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR");
+			// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
+			bool ok3 = true;
+			uint32_t tim3 = 0;
+			float val = 10000.0;
+			for (unsigned int i = 0; i < iterations; ++i)
+			{
+				IrqDisable();
+				asm volatile("":::"memory");
+				uint32_t now1 = SysTick->VAL;
+				const float nval = fastSqrtf(val);
+				uint32_t now2 = SysTick->VAL;
+				asm volatile("":::"memory");
+				IrqEnable();
+				now1 &= 0x00FFFFFF;
+				now2 &= 0x00FFFFFF;
+				tim3 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+				if (nval != sqrtf(val))
+				{
+					ok3 = false;
+					if (reprap.Debug(modulePlatform))
+					{
+						debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
+					}
+				}
+				val = nval;
+			}
+
+			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s, float %.2fus %s",
+						(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
+							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR",
+								(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 		}
 
 		// We now also time sine and cosine in the same test
@@ -2263,29 +2300,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			reply.lcatf("Float sine + cosine: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
 		}
 
-		// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
-		{
-			uint32_t tim1 = 0;
-			constexpr uint32_t iterations = 100;				// use a value that divides into one million
-			float val = 10000.0;
-			for (unsigned int i = 0; i < iterations; ++i)
-			{
-
-				IrqDisable();
-				asm volatile("":::"memory");
-				uint32_t now1 = SysTick->VAL;
-				val = RepRap::FastSqrtf(val);
-				uint32_t now2 = SysTick->VAL;
-				asm volatile("":::"memory");
-				IrqEnable();
-				now1 &= 0x00FFFFFF;
-				now2 &= 0x00FFFFFF;
-				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
-			}
-
-			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			reply.lcatf("Float sqrt: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
-		}
 		break;
 
 	case (unsigned int)DiagnosticTestType::TimeSDWrite:
@@ -2298,11 +2312,11 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
-				"DDA %u, DM %u, Tool %u, GCodeBuffer %u, heater %u"
+				"DDA %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u"
 #if HAS_NETWORKING
 				", HTTP resp %u, FTP resp %u, Telnet resp %u"
 #endif
-				, sizeof(DDA), sizeof(DriveMovement), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater)
+				, sizeof(DDA), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater)
 #if HAS_NETWORKING
 				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
 #endif
@@ -3195,7 +3209,7 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4]) n
 		if (microseconds[i] > MinStepPulseTiming)
 		{
 			slowDriversBitmap |= StepPins::CalcDriverBitmap(driver);		// this drive does need extended timing
-			const uint32_t clocks = (uint32_t)(((float)StepTimer::StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
+			const uint32_t clocks = (uint32_t)(((float)StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
 			if (clocks > slowDriverStepTimingClocks[i])
 			{
 				slowDriverStepTimingClocks[i] = clocks;
@@ -3211,7 +3225,7 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 	for (size_t i = 0; i < 4; ++i)
 	{
 		microseconds[i] = (isSlowDriver)
-							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepTimer::StepClockRate
+							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepClockRate
 								: 0.0;
 	}
 	return isSlowDriver;
@@ -3735,74 +3749,6 @@ void Platform::AtxPowerOff(bool defer) noexcept
 	}
 }
 
-GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply)
-{
-	GCodeResult rslt = GCodeResult::ok;
-
-#if SUPPORT_CAN_EXPANSION
-	CanDriversData<float> canDriversToUpdate;
-#endif
-
-	if (gb.Seen('D'))
-	{
-		uint32_t eDrive[MaxExtruders];
-		size_t eCount = MaxExtruders;
-		gb.GetUnsignedArray(eDrive, eCount, false);
-		for (size_t i = 0; i < eCount; i++)
-		{
-			const uint32_t extruder = eDrive[i];
-			if (extruder >= reprap.GetGCodes().GetNumExtruders())
-			{
-				reply.printf("Invalid extruder number '%" PRIu32 "'", extruder);
-				rslt = GCodeResult::error;
-				break;
-			}
-			pressureAdvance[extruder] = advance;
-#if SUPPORT_CAN_EXPANSION
-			if (extruderDrivers[extruder].IsRemote())
-			{
-				canDriversToUpdate.AddEntry(extruderDrivers[extruder], advance);
-			}
-#endif
-		}
-	}
-	else
-	{
-		const Tool * const ct = reprap.GetCurrentTool();
-		if (ct == nullptr)
-		{
-			reply.copy("No tool selected");
-			rslt = GCodeResult::error;
-		}
-		else
-		{
-#if SUPPORT_CAN_EXPANSION
-			ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
-									{
-										pressureAdvance[extruder] = advance;
-										if (extruderDrivers[extruder].IsRemote())
-										{
-											canDriversToUpdate.AddEntry(extruderDrivers[extruder], advance);
-										}
-									}
-								);
-#else
-			ct->IterateExtruders([this, advance](unsigned int extruder)
-									{
-										pressureAdvance[extruder] = advance;
-									}
-								);
-#endif
-		}
-	}
-
-#if SUPPORT_CAN_EXPANSION
-	return max(rslt, CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply));
-#else
-	return rslt;
-#endif
-}
-
 #if SUPPORT_NONLINEAR_EXTRUSION
 
 bool Platform::GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const noexcept
@@ -4306,12 +4252,12 @@ bool Platform::Inkjet(int bitPattern) noexcept
 #if HAS_CPU_TEMP_SENSOR
 
 // CPU temperature
-MinMaxCurrent Platform::GetMcuTemperatures() const noexcept
+MinCurMax Platform::GetMcuTemperatures() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = lowestMcuTemperature;
+	MinCurMax result;
+	result.minimum = lowestMcuTemperature;
 	result.current = GetCpuTemperature();
-	result.max = highestMcuTemperature;
+	result.maximum = highestMcuTemperature;
 	return result;
 }
 
@@ -4320,12 +4266,12 @@ MinMaxCurrent Platform::GetMcuTemperatures() const noexcept
 #if HAS_VOLTAGE_MONITOR
 
 // Power in voltage
-MinMaxCurrent Platform::GetPowerVoltages() const noexcept
+MinCurMax Platform::GetPowerVoltages() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = AdcReadingToPowerVoltage(lowestVin);
+	MinCurMax result;
+	result.minimum = AdcReadingToPowerVoltage(lowestVin);
 	result.current = AdcReadingToPowerVoltage(currentVin);
-	result.max = AdcReadingToPowerVoltage(highestVin);
+	result.maximum = AdcReadingToPowerVoltage(highestVin);
 	return result;
 }
 
@@ -4338,12 +4284,12 @@ float Platform::GetCurrentPowerVoltage() const noexcept
 
 #if HAS_12V_MONITOR
 
-MinMaxCurrent Platform::GetV12Voltages() const noexcept
+MinCurMax Platform::GetV12Voltages() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = AdcReadingToPowerVoltage(lowestV12);
+	MinCurMax result;
+	result.minimum = AdcReadingToPowerVoltage(lowestV12);
 	result.current = AdcReadingToPowerVoltage(currentV12);
-	result.max = AdcReadingToPowerVoltage(highestV12);
+	result.maximum = AdcReadingToPowerVoltage(highestV12);
 	return result;
 }
 
@@ -4589,7 +4535,7 @@ bool Platform::SetDateTime(time_t time) noexcept
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Exactly one of FHJPS is allowed
+	// Exactly one of FHJPSR is allowed
 	unsigned int charsPresent = 0;
 	for (char c : (const char[]){'R', 'J', 'F', 'H', 'P', 'S'})
 	{
@@ -4602,30 +4548,30 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 
 	switch (charsPresent)
 	{
-	case 1:
+	case 1:		// S
 		{
 			const uint32_t gpioNumber = gb.GetLimitedUIValue('S', MaxGpOutPorts);
 			return gpoutPorts[gpioNumber].Configure(gpioNumber, true, gb, reply);
 		}
 
-	case 2:
+	case 2:		// P
 		{
 			const uint32_t gpioNumber = gb.GetLimitedUIValue('P', MaxGpOutPorts);
 			return gpoutPorts[gpioNumber].Configure(gpioNumber, false, gb, reply);
 		}
 
-	case 4:
+	case 4:		// H
 		return reprap.GetHeat().ConfigureHeater(gb, reply);
 
-	case 8:
+	case 8:		// F
 		return reprap.GetFansManager().ConfigureFanPort(gb, reply);
 
-	case 16:
+	case 16:	// J
 		{
 			const uint32_t gpinNumber = gb.GetLimitedUIValue('J', MaxGpInPorts);
 			return gpinPorts[gpinNumber].Configure(gpinNumber, gb, reply);
 		}
-	case 32:
+	case 32:	// R
 		{
 			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
 			return spindles[slot].Configure(gb, reply);
@@ -4662,6 +4608,14 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 								}
 							);
 	return CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(data, reply);
+}
+
+void Platform::OnProcessingCanMessage()
+{
+#ifdef DUET3MINI			// MB6HC doesn't yet have a ACT LED
+	whenLastCanMessageProcessed = millis();
+	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
+#endif
 }
 
 #endif
@@ -4888,37 +4842,6 @@ GCodeResult Platform::EutHandleSetDriverStates(const CanMessageMultipleDrivesReq
 	return GCodeResult::ok;
 }
 
-float Platform::EutGetRemotePressureAdvance(size_t driver) const noexcept
-{
-	return (driver < ARRAY_SIZE(remotePressureAdvance)) ? remotePressureAdvance[driver] : 0.0;
-}
-
-GCodeResult Platform::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
-{
-	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
-	{
-		reply.copy("bad data length");
-		return GCodeResult::error;
-	}
-
-	GCodeResult rslt = GCodeResult::ok;
-	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
-						{
-							if (driver >= NumDirectDrivers)
-							{
-								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
-								rslt = GCodeResult::error;
-							}
-							else
-							{
-								remotePressureAdvance[driver] = msg.values[count];
-							}
-						}
-				   );
-	return rslt;
-}
-
 GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept
 {
 	CanMessageGenericParser parser(msg, M569Params);
@@ -5134,7 +5057,27 @@ GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringR
 	return GCodeResult::ok;
 }
 
-#endif
+void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
+{
+	CanMessageDriversStatus * const msg = buf.SetupStatusMessage<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+# if HAS_SMART_DRIVERS
+	msg->SetStandardFields(MaxSmartDrivers);
+	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
+	{
+		msg->data[driver] = SmartDrivers::GetStandardDriverStatus(driver);
+	}
+# else
+	msg->SetStandardFields(NumDrivers);
+	for (size_t driver = 0; driver < NumDrivers; ++driver)
+	{
+		msg->data[driver] = Platform::GetStandardDriverStatus(driver);
+	}
+# endif
+	buf.dataLength = msg->GetActualDataLength();
+	CanInterface::SendMessageNoReplyNoFree(&buf);
+}
+
+#endif	// SUPPORT_REMOTE_COMMANDS
 
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.

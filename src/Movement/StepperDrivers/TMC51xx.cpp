@@ -829,7 +829,7 @@ void TmcDriverState::SetStallDetectFilter(bool sgFilter) noexcept
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept
 {
 	//TODO use hardware facility instead
-	maxStallStepInterval = StepTimer::StepClockRate/max<unsigned int>(stepsPerSecond, 1);
+	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1);
 }
 
 void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
@@ -840,7 +840,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	{
 		threshold -= 128;
 	}
-	const uint32_t fullstepsPerSecond = StepTimer::StepClockRate/maxStallStepInterval;
+	const uint32_t fullstepsPerSecond = StepClockRate/maxStallStepInterval;
 	const float speed1 = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
 	const uint32_t tcoolthrs = writeRegisters[WriteTcoolthrs] & ((1ul << 20) - 1u);
 	bool bdummy;
@@ -929,7 +929,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 			{
 				if (   (regVal & TMC_RR_STST) != 0
 					|| interval == 0
-					|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
+					|| interval > StepClockRate/MinimumOpenLoadFullStepsPerSec
 					|| motorCurrent < MinimumOpenLoadMotorCurrent
 				   )
 				{
@@ -1595,6 +1595,30 @@ GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, 
 	reply.copy("Invalid smart driver number");
 	return GCodeResult::error;
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
+{
+	StandardDriverStatus rslt;
+	if (driver < numTmc51xxDrivers)
+	{
+		const uint32_t status = driverStates[driver].ReadLiveStatus();
+		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC51xx uses different bit assignments
+		rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the it, otpw, s2ga and s2gb bits in the right place
+		rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
+		rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
+		rslt.all |= (status >> (24 - 9)) & (1u << 9);			// put the stall bit in the right place
+		rslt.all |= (status >> (31 - 10)) & (1u << 10);			// put the standstill bit in the right place
+	}
+	else
+	{
+		rslt.all = 0;
+	}
+	return rslt;
+}
+
+#endif
 
 #endif
 

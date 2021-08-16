@@ -70,7 +70,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 			{
 				if (fileOffset >= fileLength)
 				{
-					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 					msgp->dataLength = 0;
 					msgp->err = CanMessageFirmwareUpdateResponse::ErrBadOffset;
 					msgp->fileLength = fileLength;
@@ -92,7 +92,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 					size_t bytesSent = 0;
 					for (;;)
 					{
-						CanMessageFirmwareUpdateResponse * msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+						CanMessageFirmwareUpdateResponse * msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 						const size_t lengthToSend = min<size_t>(bytesRead - bytesSent, sizeof(msgp->data));
 						memcpy(msgp->data, sbcFirmwareChunk + bytesSent, lengthToSend);
 						msgp->dataLength = lengthToSend;
@@ -115,7 +115,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 							bytesRead = min<uint32_t>(lreq, MaxFileChunkSize);
 							if (!reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
 							{
-								msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+								msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 								msgp->dataLength = 0;
 								msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
 								msgp->fileLength = fileLength;
@@ -134,7 +134,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 			}
 			else
 			{
-				CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+				CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 				msgp->dataLength = 0;
 				msgp->err = CanMessageFirmwareUpdateResponse::ErrNoFile;
 				msgp->fileLength = fileLength;
@@ -157,7 +157,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 				fileLength = f->Length();
 				if (fileOffset >= fileLength)
 				{
-					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 					msgp->dataLength = 0;
 					msgp->err = CanMessageFirmwareUpdateResponse::ErrBadOffset;
 					msgp->fileLength = fileLength;
@@ -179,7 +179,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 
 					for (;;)
 					{
-						CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+						CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 						const size_t lengthToSend = min<size_t>(lreq, sizeof(msgp->data));
 						if (f->Read(msgp->data, lengthToSend) != (int)lengthToSend)
 						{
@@ -216,7 +216,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 
 		if (lreq != 0)			// if we didn't complete the request
 		{
-			CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+			CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 			msgp->dataLength = 0;
 			msgp->err = CanMessageFirmwareUpdateResponse::ErrNoFile;
 			msgp->fileLength = 0;
@@ -236,7 +236,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 	{
 		const unsigned int bootloaderVersion = msg.bootloaderVersion;
 		const unsigned int fileWanted = msg.fileWanted;
-		CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+		CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 		msgp->dataLength = 0;
 		msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
 		msgp->fileLength = 0;
@@ -309,16 +309,16 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		reply.printf("{\"firmwareElectronics\":\"Duet 3 %.0s\"", BOARD_NAME);
 #if HAS_VOLTAGE_MONITOR
 		{
-			const MinMaxCurrent voltages = reprap.GetPlatform().GetPowerVoltages();
+			const MinCurMax voltages = reprap.GetPlatform().GetPowerVoltages();
 			reply.catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-					(double)voltages.min, (double)voltages.current, (double)voltages.max);
+					(double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
 		}
 #endif
 #if HAS_12V_MONITOR
 		{
-			const MinMaxCurrent voltages = reprap.GetPlatform().GetV12Voltages();
+			const MinCurMax voltages = reprap.GetPlatform().GetV12Voltages();
 			reply.catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-					(double)voltages.min, (double)voltages.current, (double)voltages.max);
+					(double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
 		}
 #endif
 		reply.cat('}');
@@ -366,8 +366,8 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 			reply.catf("V12: %.1fn", (double)reprap.GetPlatform().GetCurrentV12Voltage());
 #endif
 #if HAS_CPU_TEMP_SENSOR
-			const MinMaxCurrent temps = reprap.GetPlatform().GetMcuTemperatures();
-			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.min, (double)temps.current, (double)temps.max);
+			const MinCurMax temps = reprap.GetPlatform().GetMcuTemperatures();
+			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
 #endif
 		}
 		break;
@@ -391,6 +391,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
+			if (id != CanMessageType::timeSync)
+			{
+				reprap.GetPlatform().OnProcessingCanMessage();
+			}
+
 			String<StringLength500> reply;
 			const StringRef& replyRef = reply.GetRef();
 			GCodeResult rslt;
@@ -406,6 +411,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::movementLinear:
 				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
 				return;							// no reply needed
+
+#if USE_REMOTE_INPUT_SHAPING
+			case CanMessageType::movementLinearShaped:
+				reprap.GetMove().AddShapedMoveFromRemote(buf->msg.moveLinearShaped);
+				return;							// no reply needed
+#endif
 
 			case CanMessageType::returnInfo:
 				requestId = buf->msg.getInfo.requestId;
@@ -444,7 +455,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			case CanMessageType::setPressureAdvance:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetPlatform().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				rslt = reprap.GetMove().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::m569:
@@ -469,6 +480,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;
 
 			default:
+				// We received a message type that we don't recognise. If it's a broadcast, ignore it. If it's addressed to us, send a reply.
+				if (buf->id.Src() != CanInterface::GetCanAddress())
+				{
+					return;
+				}
 				requestId = CanRequestIdAcceptAlways;
 				reply.printf("Board %u received unknown msg type %u", CanInterface::GetCanAddress(), (unsigned int)buf->id.MsgType());
 				rslt = GCodeResult::error;
@@ -523,6 +539,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
 				break;
 
+			case CanMessageType::driversStatusReport:
+				//TODO
+				break;
+
+			case CanMessageType::boardStatusReport:
+				reprap.GetExpansion().ProcessBoardStatusReport(buf);
+				break;
+
 			case CanMessageType::heaterTuningReport:
 				reprap.GetHeat().ProcessRemoteHeaterTuningReport(buf->id.Src(), buf->msg.heaterTuningReport);
 				break;
@@ -569,7 +593,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				}
 				break;
 #endif
-			case CanMessageType::driversStatusReport:	// not handled yet
+
 			default:
 				if (reprap.Debug(moduleCan))
 				{

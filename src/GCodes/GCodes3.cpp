@@ -912,7 +912,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	// Get the feed rate and axis
 	gb.MustSee(feedrateLetter);
-	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor to homing and other special moves
 	m585Settings.axisNumber = FindAxisLetter(gb);
 	m585Settings.offset = gb.GetDistance();
 
@@ -1003,7 +1003,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) 
 
 	// Get the feed rate, backoff distance, and axis
 	gb.MustSee(feedrateLetter);
-	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetDistance() * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor to homing and other special moves
 	m675Settings.backoffDistance = gb.Seen('R') ? gb.GetDistance() : 5.0;
 	m675Settings.axisNumber = FindAxisLetter(gb);
 

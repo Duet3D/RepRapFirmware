@@ -131,22 +131,18 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 // Application entry point
 [[noreturn]] void AppMain() noexcept
 {
-	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up diag LED for debugging and turn it off
+	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up status LED for debugging and turn it off
+#ifdef DUET3MINI
+	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
+#endif
 
 #if !defined(DEBUG) && !defined(__LPC17xx__)	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
 		const char *firmwareStart = reinterpret_cast<const char*>(SCB->VTOR & 0xFFFFFF80);
-		// _firmware_crc is now where the embedded files start, not necessarily where the CRC is
-		const char *firmwareEnd = reinterpret_cast<const char *>(*reinterpret_cast<const uint32_t*>(firmwareStart + 0x1C));
-		bool ok = firmwareEnd >= reinterpret_cast<const char *>(&_firmware_crc) && firmwareEnd <= firmwareStart + IFLASH_SIZE - 4;
-		if (ok)
-		{
-			CRC32 crc;
-			crc.Update(firmwareStart, firmwareEnd - firmwareStart);
-			ok = crc.Get() == *reinterpret_cast<const uint32_t*>(firmwareEnd);
-		}
-		if (!ok)
+		CRC32 crc;
+		crc.Update(firmwareStart, (const char*)&_firmware_crc - firmwareStart);
+		if (crc.Get() != _firmware_crc)
 		{
 			// CRC failed so flash the diagnostic LED 3 times, pause and repeat. This is the same error code used by the Duet 3 expansion boards bootloader.
 			for (unsigned int i = 0; ; ++i)

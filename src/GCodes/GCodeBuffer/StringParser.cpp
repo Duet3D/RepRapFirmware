@@ -973,7 +973,7 @@ void StringParser::SetFinished() noexcept
 // Get the file position at the start of the current command
 FilePosition StringParser::GetFilePosition() const noexcept
 {
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE
 	if (gb.LatestMachineState().DoingFile()
 # if HAS_LINUX_INTERFACE
 		&& !reprap.UsingLinuxInterface()
@@ -1617,12 +1617,9 @@ void StringParser::FinishWritingBinary() noexcept
 	}
 }
 
-#endif
-
 // This is called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.
 bool StringParser::FileEnded() noexcept
 {
-#if HAS_MASS_STORAGE
 	if (IsWritingBinary())
 	{
 		// We are in the middle of writing a binary file but the input stream has ended
@@ -1630,7 +1627,6 @@ bool StringParser::FileEnded() noexcept
 		Init();
 		return false;
 	}
-#endif
 
 	bool commandCompleted = false;
 	if (gcodeLineEnd != 0)				// if there is something in the buffer
@@ -1639,7 +1635,6 @@ bool StringParser::FileEnded() noexcept
 		commandCompleted = true;
 	}
 
-#if HAS_MASS_STORAGE
 	if (IsWritingFile())
 	{
 		if (commandCompleted)
@@ -1664,7 +1659,6 @@ bool StringParser::FileEnded() noexcept
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 		return false;
 	}
-#endif
 
 	if (!commandCompleted && gb.CurrentFileMachineState().GetIterations() >= 0)
 	{
@@ -1675,6 +1669,8 @@ bool StringParser::FileEnded() noexcept
 	}
 	return commandCompleted;
 }
+
+#endif
 
 // Check that a number was found. If it was, advance readPointer past it. Otherwise throw an exception.
 void StringParser::CheckNumberFound(const char *endptr) THROWS(GCodeException)

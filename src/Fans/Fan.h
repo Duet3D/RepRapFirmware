@@ -34,6 +34,9 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	virtual void UpdateFromRemote(CanAddress src, const FanReport& report) noexcept = 0;
 #endif
+#if SUPPORT_REMOTE_COMMANDS
+	virtual bool IsLocal() const noexcept = 0;
+#endif
 
 	// Set or report the parameters for this fan
 	// If 'mCode' is an M-code used to set parameters (which should only ever be 106 or 107)
@@ -46,6 +49,7 @@ public:
 
 	GCodeResult SetPwm(float speed, const StringRef& reply) noexcept;
 	bool HasMonitoredSensors() const noexcept { return sensorsMonitored.IsNonEmpty(); }
+	unsigned int GetNumber() const { return fanNumber; }
 	const char *GetName() const noexcept { return name.c_str(); }
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE

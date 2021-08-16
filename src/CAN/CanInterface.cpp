@@ -408,6 +408,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 
 				// Send the message
 				SendCanMessage(TxBufferIndexMotion, MaxMotionSendWait, buf);
+				reprap.GetPlatform().OnProcessingCanMessage();
 
 #ifdef CAN_DEBUG
 				// Display a debug message too
@@ -699,6 +700,8 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 		MutexLocker lock(transactionMutex);
 
 		SendCanMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
+		reprap.GetPlatform().OnProcessingCanMessage();
+
 		const uint32_t whenStartedWaiting = millis();
 		unsigned int fragmentsReceived = 0;
 		for (;;)

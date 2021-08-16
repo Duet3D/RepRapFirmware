@@ -17,7 +17,7 @@ CpuTemperatureSensor::CpuTemperatureSensor(unsigned int sensorNum) noexcept : Te
 
 void CpuTemperatureSensor::Poll() noexcept
 {
-	const MinMaxCurrent temperatures = reprap.GetPlatform().GetMcuTemperatures();
+	const MinCurMax temperatures = reprap.GetPlatform().GetMcuTemperatures();
 	SetResult(temperatures.current, TemperatureError::success);
 }
 

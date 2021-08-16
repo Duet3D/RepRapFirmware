@@ -260,7 +260,7 @@ void LocalHeater::Spin() noexcept
 					else if (gotDerivative)
 					{
 						const float expectedRate = GetExpectedHeatingRate();
-						if (derivative + AllowedTemperatureDerivativeNoise < expectedRate
+						if (derivative + AllowedTemperatureDerivativeNoise < expectedRate * 0.75
 							&& (float)(millis() - timeSetHeating) > GetModel().GetDeadTime() * SecondsToMillis * 2)
 						{
 							++heatingFaultCount;
@@ -463,12 +463,10 @@ float LocalHeater::GetAveragePWM() const noexcept
 // Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
 float LocalHeater::GetExpectedHeatingRate() const noexcept
 {
-	// In the following we allow for the gain being only 60% of what we think it should be, to avoid false alarms
-	const float maxTemperatureRise = 0.60 * GetModel().GetGainFanOff() * GetAveragePWM();	// this is the highest temperature above ambient we expect the heater can reach at this PWM
-	const float initialHeatingRate = maxTemperatureRise/GetModel().GetTimeConstantFanOn();	// this is the expected heating rate at ambient temperature
-	return (maxTemperatureRise >= 20.0)
-			? (maxTemperatureRise + NormalAmbientTemperature - temperature) * initialHeatingRate/maxTemperatureRise
-			: 0.0;
+	const float initialHeatingRate = GetModel().GetHeatingRate() * GetAveragePWM();
+	return (temperature > LowAmbientTemperature)
+				? initialHeatingRate - (temperature - LowAmbientTemperature) * GetModel().GetCoolingRateFanOn()
+					: initialHeatingRate;
 }
 
 // Auto tune this heater. The caller has already checked that no other heater is being tuned and has set up tuningTargetTemp, tuningPwm, tuningFans, tuningHysteresis and tuningFanPwm.

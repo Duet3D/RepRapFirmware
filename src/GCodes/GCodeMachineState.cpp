@@ -12,7 +12,7 @@
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState() noexcept
-	: feedRate(DefaultFeedRate * SecondsToMinutes),
+	: feedRate(ConvertSpeedFromMmPerMin(DefaultFeedRate)),
 #if HAS_LINUX_INTERFACE
 	  fileId(NoFileId),
 #endif

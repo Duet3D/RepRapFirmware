@@ -26,6 +26,9 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	void UpdateFromRemote(CanAddress src, const FanReport& report) noexcept override { }
 #endif
+#if SUPPORT_REMOTE_COMMANDS
+	bool IsLocal() const noexcept override { return true; }
+#endif
 
 	bool AssignPorts(const char *pinNames, const StringRef& reply) noexcept;
 

@@ -25,6 +25,9 @@ public:
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 	GCodeResult ReportPortDetails(const StringRef& str) const noexcept override;
 	void UpdateFromRemote(CanAddress src, const FanReport& report) noexcept override;
+#if SUPPORT_REMOTE_COMMANDS
+	bool IsLocal() const noexcept override { return false; }
+#endif
 
 	GCodeResult ConfigurePort(const char *pinNames, PwmFrequency freq, const StringRef& reply) noexcept;
 

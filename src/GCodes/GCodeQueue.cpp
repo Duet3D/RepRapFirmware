@@ -11,6 +11,7 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 #include <Movement/Move.h>
+#include <Fans/LedStripDriver.h>
 
 // GCodeQueue class
 
@@ -62,7 +63,6 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 				case 140:	// set bed temperature and return immediately
 				case 141:	// set chamber temperature and return immediately
 				case 144:	// bed standby
-				case 150:	// set LED colours
 				case 280:	// set servo
 				case 300:	// beep
 				case 568:	// spindle or temperature control
@@ -76,6 +76,11 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 						gb.GetUnprecedentedString(dummy.GetRef());
 					}
 					return true;
+
+#if SUPPORT_LED_STRIPS
+				case 150:	// set LED colours
+					return !LedStripDriver::MustStopMovement(gb);		// if it is going to call LockMovementAndWaitForStandstill then we mustn't queue it
+#endif
 
 				case 291:
 					{
@@ -220,14 +225,15 @@ void GCodeQueue::Clear() noexcept
 
 void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "Code queue is %s\n", (queuedItems == nullptr) ? "empty." : "not empty:");
-	if (queuedItems != nullptr)
+	if (queuedItems == nullptr)
+	{
+		reprap.GetPlatform().Message(mtype, "Code queue is empty\n");
+	}
+	else
 	{
 		const QueuedCode *item = queuedItems;
-		size_t queueLength = 0;
 		do
 		{
-			queueLength++;
 #if HAS_LINUX_INTERFACE
 			// The following may output binary gibberish if this code is stored in binary.
 			// We could restore this message by using GCodeBuffer::AppendFullCommand but there is probably no need to
@@ -237,7 +243,6 @@ void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 				reprap.GetPlatform().MessageF(mtype, "Queued '%.*s' for move %" PRIu32 "\n", item->dataLength, item->data, item->executeAtMove);
 			}
 		} while ((item = item->Next()) != nullptr);
-		reprap.GetPlatform().MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
 	}
 }
 

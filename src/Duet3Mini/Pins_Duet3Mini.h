@@ -22,7 +22,7 @@
 # define BOARD_SHORT_NAME		"Mini5plus"
 # define BOARD_NAME				"Duet 3 Mini 5+"
 # ifdef DUET3_ATE
-#  define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+ ATE"
+#  define FIRMWARE_NAME			"RepRapFirmware for ATE based on Duet 3 Mini 5+"
 # else
 #  define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+"
 # endif
@@ -267,7 +267,7 @@ constexpr Pin DiagPin = NoPin;												// Diag/status LED pin is shared with 
 constexpr Pin ActLedPin = NoPin;											// Activity LED pin is shared with SWCLK
 #else
 constexpr Pin DiagPin = PortAPin(31);										// Diag/status LED pin
-constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin (Etherne Yellow LED on v0.2 board)
+constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin (Ethernet Yellow LED on v0.2 board)
 #endif
 
 constexpr bool DiagOnPolarity = false;

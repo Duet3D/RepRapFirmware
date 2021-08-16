@@ -363,7 +363,7 @@ void RemoteHeater::Suspend(bool sus) noexcept
 	}
 }
 
-Heater::HeaterMode RemoteHeater::GetMode() const noexcept
+HeaterMode RemoteHeater::GetMode() const noexcept
 {
 	return (tuningState != TuningState::notTuning) ? HeaterMode::tuning0
 		: (millis() - whenLastStatusReceived < RemoteStatusTimeout) ? lastMode

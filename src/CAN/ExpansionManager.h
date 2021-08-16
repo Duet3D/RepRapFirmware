@@ -24,7 +24,7 @@ struct ExpansionBoardData
 	ExpansionBoardData() noexcept;
 
 	const char *typeName;
-	MinMaxCurrent mcuTemp, vin, v12;
+	MinCurMax mcuTemp, vin, v12;
 	BoardState state;
 	uint8_t numDrivers;
 };
@@ -35,8 +35,10 @@ public:
 	ExpansionManager() noexcept;
 
 	unsigned int GetNumExpansionBoards() const noexcept { return numExpansionBoards; }
-	void ProcessAnnouncement(CanMessageBuffer *buf) noexcept;
 	const ExpansionBoardData *GetBoardDetails(uint8_t address) const noexcept;
+
+	void ProcessAnnouncement(CanMessageBuffer *buf) noexcept;
+	void ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept;
 
 	// Firmware update and related functions
 	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
