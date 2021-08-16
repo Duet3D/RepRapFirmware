@@ -2784,7 +2784,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
 		if (f == nullptr)
 		{
