@@ -43,11 +43,18 @@ static const EmbeddedFilesHeader& fileSystem = *reinterpret_cast<const EmbeddedF
 static const char *fileSearchDirectory;
 static uint32_t fileSearchNextNumber;
 
+// Skip any leading "0:" in a path. We don't worry about "1:", "2:" etc. because ":" is not a valid filename character, so the path won't match anything.
+static const char *SkipDriveNumber(const char *path) noexcept
+{
+	return (path[0] == '0' && path[1] == ':') ? path + 2 : path;
+}
+
 // Members of MassStorage that are replaced
 bool MassStorage::FileExists(const char *filePath) noexcept
 {
 	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
+		filePath = SkipDriveNumber(filePath);
 		uint32_t numFiles = fileSystem.numFiles;
 		const EmbeddedFileDescriptor *filePtr = fileSystem.files;
 		while (numFiles != 0)
@@ -64,10 +71,11 @@ bool MassStorage::FileExists(const char *filePath) noexcept
 }
 
 // Test whether a directory exists. Any trailing '/' has already been removed.
-bool EmbeddedFiles::DirectoryExists(const StringRef& path) noexcept
+bool EmbeddedFiles::DirectoryExists(const StringRef& dirPath) noexcept
 {
 	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
+		const char * const path = SkipDriveNumber(dirPath.c_str());
 		if (path[0] == 0)
 		{
 			return true;				// root directory
@@ -76,7 +84,7 @@ bool EmbeddedFiles::DirectoryExists(const StringRef& path) noexcept
 		const char *cd = fileSystem.GetDirectories();
 		while (cd[0] != 0)
 		{
-			if (StringEqualsIgnoreCase(cd, path.c_str()))
+			if (StringEqualsIgnoreCase(cd, path))
 			{
 				return true;
 			}
@@ -91,7 +99,8 @@ static bool FindNextFile(FileInfo& info) noexcept
 {
 	while (fileSearchNextNumber < fileSystem.numFiles)
 	{
-		const EmbeddedFileDescriptor& fd = fileSystem.files[fileSearchNextNumber++];
+		const EmbeddedFileDescriptor& fd = fileSystem.files[fileSearchNextNumber];
+		++fileSearchNextNumber;								// don't look at the same file again, whether we find a match or not
 		const char *fname = fd.GetName();
 		if (StringStartsWithIgnoreCase(fname, fileSearchDirectory))
 		{
@@ -117,7 +126,7 @@ static bool FindNextFile(FileInfo& info) noexcept
 			}
 		}
 	}
-	return true;
+	return false;
 }
 
 // Find the first file. Any trailing "/" in the directory has been removed.
@@ -125,6 +134,8 @@ bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &info) noexcept
 {
 	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
+		directory = SkipDriveNumber(directory);
+
 		// Check that we have the directory, and store a pointer to it
 		if (directory[0] == 0)
 		{
@@ -178,6 +189,7 @@ FileIndex EmbeddedFiles::OpenFile(const char *filePath) noexcept
 {
 	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue)
 	{
+		filePath = SkipDriveNumber(filePath);
 		for (FileIndex fi = 0; fi < (FileIndex)fileSystem.numFiles; ++fi)
 		{
 			if (StringEqualsIgnoreCase(filePath, fileSystem.files[fi].GetName()))
@@ -194,14 +206,14 @@ int EmbeddedFiles::Read(FileIndex fileIndex, FilePosition pos, char* extBuf, siz
 {
 	if (fileSystem.magic == EmbeddedFilesHeader::MagicValue && fileIndex >= 0 && fileIndex < (int32_t)fileSystem.numFiles)
 	{
-		const size_t fileLength = fileSystem.files[fileIndex].contentLength;
+		const FilePosition fileLength = fileSystem.files[fileIndex].contentLength;
 		if (pos < fileLength)
 		{
 			if (nBytes > fileLength - pos)
 			{
 				nBytes = fileLength - pos;
 			}
-			memcpy(extBuf, fileSystem.files[fileIndex].GetContent(), nBytes);
+			memcpy(extBuf, fileSystem.files[fileIndex].GetContent() + pos, nBytes);
 			return nBytes;
 		}
 		return 0;

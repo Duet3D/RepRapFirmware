@@ -65,6 +65,8 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 			if (fileIndex >= 0)
 			{
 				offset = 0;
+				usageMode = FileUseMode::readOnly;
+				openCount = 1;
 				return true;
 			}
 		}
