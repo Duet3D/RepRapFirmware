@@ -895,10 +895,6 @@ void GCodeBuffer::SetPrintFinished() noexcept
 		}
 		reprap.GetLinuxInterface().EventOccurred();
 	}
-	else
-	{
-		reprap.GetPlatform().MessageF(WarningMessage, "Cannot set print file finished because there is no file ID (channel %s)\n", GetChannel().ToString());
-	}
 }
 
 // This is only called when using the Linux interface and returns if the macro file could be opened

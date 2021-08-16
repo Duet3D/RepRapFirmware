@@ -69,11 +69,12 @@ enum class GCodeState : uint8_t
 	resuming2,
 	resuming3,
 
+	cancelling,
+
 	flashing1,
 	flashing2,
 
 	stoppingWithHeatersOff,
-	stoppingWithHeatersOn,
 
 	// These next 9 must be contiguous
 	gridProbing1,

@@ -531,14 +531,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 					{
 						// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-						if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))
+						if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed())
 						{
-							pauseState = PauseState::cancelling;
-							break;
+							gb.SetState(GCodeState::cancelling);
+							if (DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))
+							{
+								pauseState = PauseState::cancelling;
+								break;
+							}
+							// The state will be changed a few lines down, so no need to reset it to normal here
 						}
 
-						const bool leaveHeatersOn = (gb.Seen('H') && gb.GetIValue() > 0);
-						gb.SetState((leaveHeatersOn) ? GCodeState::stoppingWithHeatersOn : GCodeState::stoppingWithHeatersOff);
+						gb.SetState(GCodeState::stoppingWithHeatersOff);
 						(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemHelperMacroCode);
 					}
 				}
