@@ -4140,6 +4140,13 @@ GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcep
 		return GCodeResult::error;
 	}
 
+	if (!MassStorage::DirectoryExists(newSysDir.GetRef()))
+	{
+		reply.copy("Path not found");
+		return GCodeResult::error;
+	}
+
+	newSysDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
 	const size_t len = newSysDir.strlen() + 1;
 	char* const nsd = new char[len];
 	memcpy(nsd, newSysDir.c_str(), len);
