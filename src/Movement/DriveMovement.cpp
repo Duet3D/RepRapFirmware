@@ -581,7 +581,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 {
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
 	const float effStepsPerMm = stepsPerMm * fabsf(dda.directionVector[drive]);
-	const float effMmPerStep = 1.0/stepsPerMm;
+	const float effMmPerStep = 1.0/effStepsPerMm;
 
 	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
 	float forwardDistance =	mp.cart.extrusionBroughtForwards = shaper.GetExtrusionPending()/dda.directionVector[drive];
