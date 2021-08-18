@@ -3378,11 +3378,30 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 567: // Set/report tool mix ratios
-				if (gb.Seen('P'))
 				{
-					const int8_t tNumber = gb.GetIValue();
+					int tNumber;
+					if (gb.Seen('P'))
+					{
+						tNumber = (int)gb.GetUIValue();
+					}
+					else
+					{
+						tNumber = reprap.GetCurrentToolNumber();
+						if (tNumber < 0)
+						{
+							reply.copy("No tool number given and no current tool");
+							result = GCodeResult::error;
+							break;
+						}
+					}
+
 					ReadLockedPointer<Tool> const tool = reprap.GetTool(tNumber);
-					if (tool.IsNotNull())
+					if (tool.IsNull())
+					{
+						reply.copy("Invalid tool number");
+						result = GCodeResult::error;
+					}
+					else
 					{
 						if (gb.Seen(extrudeLetter))
 						{
