@@ -21,11 +21,11 @@ static constexpr uint8_t WhoAmIValue_3DH = 0x33;
 static constexpr uint8_t WhoAmIValue_3DSH = 0x3F;
 
 LIS3DH::LIS3DH(SharedSpiDevice& dev, uint32_t freq, Pin p_csPin, Pin p_int1Pin) noexcept
-	: SharedSpiClient(dev, freq, lisMode, p_csPin, false), taskWaiting(nullptr), int1Pin(p_int1Pin)
+	: SharedSpiClient(dev, freq, lisMode, p_csPin, false), taskWaiting(nullptr), is3DSH(false), int1Pin(p_int1Pin)
 {
 }
 
-// Do a quick test to check whether the accelerometer is present, returning true if it is
+// Do a quick test to check whether the accelerometer is present. If it is, return true and set the type.
 bool LIS3DH::CheckPresent() noexcept
 {
 	uint8_t val;
