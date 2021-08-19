@@ -42,6 +42,7 @@
 #include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Storage/CRC32.h>
+#include <Accelerometers/Accelerometers.h>
 
 #if SAM4E || SAM4S || SAME70
 # include <Flash.h>		// for flash_read_unique_id()
@@ -189,6 +190,7 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Platform, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(Platform, __VA_ARGS__)
 
 constexpr ObjectModelArrayDescriptor Platform::axisDriversArrayDescriptor =
 {
@@ -215,6 +217,9 @@ static inline const char* GetFilamentName(size_t extruder) noexcept
 constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[0] members
+#if SUPPORT_ACCELEROMETERS
+	{ "accelerometer",		OBJECT_MODEL_FUNC_IF(Accelerometers::HasLocalAccelerometer(), self, 9),							ObjectModelEntryFlags::none },
+#endif
 #if SUPPORT_CAN_EXPANSION
 	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)CanInterface::GetCanAddress()),									ObjectModelEntryFlags::none },
 #endif
@@ -233,14 +238,16 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),														ObjectModelEntryFlags::verbose },
 	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),												ObjectModelEntryFlags::verbose },
+#if HAS_CPU_TEMP_SENSOR
 	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																			ObjectModelEntryFlags::live },
-# ifdef DUET_NG
+#endif
+#ifdef DUET_NG
 	{ "name",				OBJECT_MODEL_FUNC(self->GetBoardName()),															ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC(self->GetBoardShortName()),														ObjectModelEntryFlags::none },
-# else
+#else
 	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),																ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
-# endif
+#endif
 	{ "supportsDirectDisplay", OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),										ObjectModelEntryFlags::verbose },
 #if MCU_HAS_UNIQUE_ID
 	{ "uniqueId",			OBJECT_MODEL_FUNC(self->GetUniqueIdString()),														ObjectModelEntryFlags::none },
@@ -248,8 +255,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_12V_MONITOR
 	{ "v12",				OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::live },
 #endif
+#if HAS_VOLTAGE_MONITOR
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
-
+#endif
 #if HAS_CPU_TEMP_SENSOR
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::live },
@@ -318,12 +326,18 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 8. move.extruders[].microstepping members
 	{ "interpolated",		OBJECT_MODEL_FUNC((self->microstepping[ExtruderToLogicalDrive(context.GetLastIndex())] & 0x8000) != 0),		ObjectModelEntryFlags::none },
 	{ "value",				OBJECT_MODEL_FUNC((int32_t)(self->microstepping[ExtruderToLogicalDrive(context.GetLastIndex())] & 0x7FFF)),	ObjectModelEntryFlags::none },
+
+#if SUPPORT_ACCELEROMETERS
+	// 9. boards[0].accelerometer members
+	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),						ObjectModelEntryFlags::none },
+	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),								ObjectModelEntryFlags::none },
+#endif
 };
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	9,																		// number of sections
-	11 + HAS_LINUX_INTERFACE + HAS_MASS_STORAGE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
+	10,																		// number of sections
+	9 + SUPPORT_ACCELEROMETERS + HAS_LINUX_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
 #else
@@ -344,6 +358,11 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 #endif
 	2,																		// section 7: move.axes[].microstepping
 	2,																		// section 8: move.extruders[].microstepping
+#if SUPPORT_ACCELEROMETERS
+	2,																		// section 9: boards[0].accelerometer
+#else
+	0,
+#endif
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Platform)
