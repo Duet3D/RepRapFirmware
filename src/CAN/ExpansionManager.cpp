@@ -14,11 +14,6 @@
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
-ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(BoardState::unknown), numDrivers(0)
-{
-	mcuTemp.minimum = mcuTemp.maximum = mcuTemp.current = vin.maximum = vin.minimum = vin.current = v12.maximum = v12.minimum = v12.current = 0.0;
-}
-
 #if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
@@ -27,6 +22,7 @@ ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(Boa
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ExpansionManager, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(ExpansionManager, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 {
@@ -35,11 +31,11 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareFileName),	ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::verbose },
-	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																						ObjectModelEntryFlags::live },
+	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).haveMcuTemp, self, 1),						ObjectModelEntryFlags::live },
 	{ "shortName",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::shortName),			ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).state.ToString()),								ObjectModelEntryFlags::none },
-	{ "v12",				OBJECT_MODEL_FUNC(self, 3),																						ObjectModelEntryFlags::live },
-	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																						ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).haveV12, self, 3),							ObjectModelEntryFlags::live },
+	{ "vIn",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).haveVin, self, 2),							ObjectModelEntryFlags::live },
 
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.current, 1),							ObjectModelEntryFlags::live },
@@ -70,10 +66,14 @@ DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
 
 #endif
 
+ExpansionBoardData::ExpansionBoardData() noexcept
+	: typeName(nullptr), haveMcuTemp(false), haveVin(false), haveV12(false), spare(0), state(BoardState::unknown), numDrivers(0)
+{
+}
+
 ExpansionManager::ExpansionManager() noexcept : numExpansionBoards(0), numBoardsFlashing(0), lastIndexSearched(0), lastAddressFound(0)
 {
-	// the boards table array is initialised by its constructor
-	boards[0].numDrivers = NumDirectDrivers;
+	// The boards table array is initialised by its constructor. Note, boards[0] is not used.
 }
 
 // Update the state of a board
@@ -116,6 +116,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 	if (src <= CanId::MaxCanAddress)
 	{
 		ExpansionBoardData& board = boards[src];
+		board.haveVin = board.haveV12 = board.haveMcuTemp = false;
 		String<StringLength100> boardTypeAndFirmwareVersion;
 		boardTypeAndFirmwareVersion.copy(buf->msg.announce.boardTypeAndFirmwareVersion, CanMessageAnnounce::GetMaxTextLength(buf->dataLength));
 		UpdateBoardState(src, BoardState::unknown);
@@ -162,14 +163,17 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	if (msg.hasVin)
 	{
 		board.vin = msg.values[index++];
+		board.haveVin = true;
 	}
 	if (msg.hasV12)
 	{
 		board.v12 = msg.values[index++];
+		board.haveV12 = true;
 	}
 	if (msg.hasMcuTemp)
 	{
 		board.mcuTemp = msg.values[index++];
+		board.haveMcuTemp = true;
 	}
 }
 

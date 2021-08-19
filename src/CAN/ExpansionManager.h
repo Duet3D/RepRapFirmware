@@ -25,6 +25,10 @@ struct ExpansionBoardData
 
 	const char *typeName;
 	MinCurMax mcuTemp, vin, v12;
+	uint16_t haveMcuTemp : 1,
+			 haveVin : 1,
+			 haveV12 : 1,
+			 spare : 13;
 	BoardState state;
 	uint8_t numDrivers;
 };
@@ -50,11 +54,11 @@ public:
 
 	void EmergencyStop() noexcept;
 
-	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 	void UpdateBoardState(CanAddress address, BoardState newState) noexcept;
 
 	unsigned int numExpansionBoards;
