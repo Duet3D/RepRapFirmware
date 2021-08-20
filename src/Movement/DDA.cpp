@@ -1042,6 +1042,7 @@ LA_DEBUG;
 }
 
 // Try to push babystepping earlier in the move queue, returning the amount we pushed
+// Caution! Thus is called with scheduling locked, therefore it must make no FreeRTOS calls, or call anything that makes them
 //TODO this won't work for CoreXZ, rotary delta, Kappa, or SCARA with Z crosstalk
 float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept
 {

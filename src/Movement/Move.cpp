@@ -301,21 +301,31 @@ void Move::Exit() noexcept
 		}
 
 		// Let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		uint32_t nextPrepareDelay = mainDDARing.Spin(simulationMode, !canAddMove || millis() - idleStartTime >= mainDDARing.GetGracePeriod());
+		uint32_t nextPrepareDelay = mainDDARing.Spin(simulationMode, !canAddMove, millis() - idleStartTime >= mainDDARing.GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
-		if (auxMoveAvailable && auxDDARing.CanAddMove())
 		{
-			if (auxDDARing.AddAsyncMove(auxMove))
+			bool waitingForAuxSpace = false;
+			if (auxMoveAvailable)
 			{
-				moveState = MoveState::collecting;
+				if (auxDDARing.CanAddMove())
+				{
+					if (auxDDARing.AddAsyncMove(auxMove))
+					{
+						moveState = MoveState::collecting;
+					}
+					auxMoveAvailable = false;
+				}
+				else
+				{
+					waitingForAuxSpace = true;
+				}
 			}
-			auxMoveAvailable = false;
-		}
-		const uint32_t auxPrepareDelay = auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
-		if (auxPrepareDelay < nextPrepareDelay)
-		{
-			nextPrepareDelay = auxPrepareDelay;
+			const uint32_t auxPrepareDelay = auxDDARing.Spin(simulationMode, waitingForAuxSpace, true);		// let the DDA ring process moves
+			if (auxPrepareDelay < nextPrepareDelay)
+			{
+				nextPrepareDelay = auxPrepareDelay;
+			}
 		}
 #endif
 
@@ -344,6 +354,10 @@ void Move::Exit() noexcept
 			moveState = MoveState::executing;
 		}
 
+		// We need to be woken when one of the following is true:
+		// 1. If noMoveAvailable is true, when a new move becomes available.
+		// 2. If moves are being executed and there are unprepared moves in the queue, when it is time to prepare more moves.
+		// 3. If the queue was full and all moves in it were prepared and noMoveAvailable is false, when we have completed one or more moves.
 		if (!moveRead && nextPrepareDelay != 0)
 		{
 			TaskBase::Take(nextPrepareDelay);
@@ -1259,6 +1273,7 @@ void Move::ReleaseAuxMove(bool hasNewMove) noexcept
 {
 	auxMoveAvailable = hasNewMove;
 	auxMoveLocked = false;
+	MoveAvailable();
 }
 
 // Configure height following
