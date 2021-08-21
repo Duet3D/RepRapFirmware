@@ -23,6 +23,8 @@ public:
 
 	FileData() noexcept : f(nullptr) {}
 
+	~FileData() { (void)Close(); }
+
 	FileData(const FileData& other) noexcept
 	{
 		f = other.f;
@@ -31,6 +33,15 @@ public:
 			f->Duplicate();
 		}
 	}
+
+	FileData(FileData&& other) noexcept
+	{
+		f = other.f;
+		other.f = nullptr;
+	}
+
+	// Make sure we don't assign these objects
+	FileData& operator=(const FileData&) = delete;
 
 	// Set this to refer to a newly-opened file
 	void Set(FileStore* pfile) noexcept
@@ -125,9 +136,6 @@ private:
 	{
 		f = nullptr;
 	}
-
-	// Private assignment operator to prevent us assigning these objects
-	FileData& operator=(const FileData&) noexcept;
 };
 
 #endif

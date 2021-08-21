@@ -128,7 +128,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 	{
 		const FRESULT openReturn = f_open(&file, filePath,
 											(mode == OpenMode::write || mode == OpenMode::writeWithCrc) ? FA_CREATE_ALWAYS | FA_WRITE
-												: (mode == OpenMode::append) ? FA_READ | FA_WRITE | FA_OPEN_ALWAYS
+												: (mode == OpenMode::append) ? FA_READ | FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND
 													: FA_OPEN_EXISTING | FA_READ);
 		if (openReturn == FR_OK)
 		{
