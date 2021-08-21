@@ -9,7 +9,8 @@
 
 #if SUPPORT_CAN_EXPANSION
 
-#include "CanMessageBuffer.h"
+#include <CanMessageBuffer.h>
+#include <CanMessageGenericTables.h>
 #include "CAN/CanInterface.h"
 #include "CAN/CanMessageGenericConstructor.h"
 

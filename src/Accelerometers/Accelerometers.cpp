@@ -22,6 +22,7 @@
 # include <CAN/CanInterface.h>
 # include <CAN/ExpansionManager.h>
 # include <CAN/CanMessageGenericConstructor.h>
+# include <CanMessageGenericTables.h>
 #endif
 
 #ifdef DUET3_ATE

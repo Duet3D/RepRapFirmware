@@ -104,6 +104,7 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMessageGenericConstructor.h"
 # include "CAN/CanInterface.h"
+# include <CanMessageGenericTables.h>
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

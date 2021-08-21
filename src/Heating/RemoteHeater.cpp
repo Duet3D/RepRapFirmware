@@ -16,6 +16,7 @@
 #include <CAN/CanInterface.h>
 #include <CanMessageFormats.h>
 #include <CanMessageBuffer.h>
+#include <CanMessageGenericTables.h>
 
 // Static variables used only during tuning
 uint32_t RemoteHeater::timeSetHeating;

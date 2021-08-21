@@ -43,6 +43,7 @@ Licence: GPL
 
 #if SUPPORT_REMOTE_COMMANDS
 # include <CanMessageGenericParser.h>
+# include <CanMessageGenericTables.h>
 #endif
 
 #ifdef DUET3_ATE

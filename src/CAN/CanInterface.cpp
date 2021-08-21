@@ -13,6 +13,7 @@
 #include "CommandProcessor.h"
 #include "CanMessageGenericConstructor.h"
 #include <CanMessageBuffer.h>
+#include <CanMessageGenericTables.h>
 #include <Movement/DDA.h>
 #include <Movement/DriveMovement.h>
 #include <Movement/StepTimer.h>
