@@ -442,6 +442,8 @@ public:
 	void DisableOneLocalDriver(size_t driver) noexcept;
 	void EmergencyDisableDrivers() noexcept;
 	void SetDriversIdle() noexcept;
+	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
+		pre(drive < GetNumActualDirectDrivers());
 	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
 	float GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
@@ -709,6 +711,7 @@ private:
 
 	bool directions[NumDirectDrivers];
 	int8_t enableValues[NumDirectDrivers];
+	IoPort brakePorts[NumDirectDrivers];
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to

@@ -930,6 +930,13 @@ pre(driver.IsRemote())
 			return cons.SendAndGetResponse(CanMessageType::m569p2, driver.boardAddress, reply);
 		}
 
+	case 7:
+		{
+			CanMessageGenericConstructor cons(M569Point7Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m569p7, driver.boardAddress, reply);
+		}
+
 	default:
 		return GCodeResult::errorNotSupported;
 	}

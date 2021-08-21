@@ -2700,35 +2700,39 @@ void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept
 {
+	if (driver < GetNumActualDirectDrivers())
+	{
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
-	if (driver < numSmartDrivers && !driversPowered)
-	{
-		warnDriversNotPowered = true;
-	}
-	else
-	{
-#endif
-		UpdateMotorCurrent(driver, requiredCurrent);
-
-#if defined(DUET3) && HAS_SMART_DRIVERS
-		SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
-#elif HAS_SMART_DRIVERS
-		if (driver < numSmartDrivers)
+		if (driver < numSmartDrivers && !driversPowered)
 		{
-			SmartDrivers::EnableDrive(driver, true);
+			warnDriversNotPowered = true;
 		}
-# if !defined(DUET3MINI)		// no enable pins on 5LC
 		else
 		{
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
-		}
+#endif
+			UpdateMotorCurrent(driver, requiredCurrent);
+
+#if defined(DUET3) && HAS_SMART_DRIVERS
+			SmartDrivers::EnableDrive(driver, true);	// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
+			if (driver < numSmartDrivers)
+			{
+				SmartDrivers::EnableDrive(driver, true);
+			}
+# if !defined(DUET3MINI)		// no enable pins on 5LC
+			else
+			{
+				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			}
 # endif
 #else
-		digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
 #endif
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
-	}
+		}
 #endif
+		brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+	}
 }
 
 // Disable a driver
@@ -2736,6 +2740,7 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
+		brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
 #if defined(DUET3) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
@@ -2850,6 +2855,18 @@ void Platform::SetDriversIdle() noexcept
 		CanInterface::SetRemoteDriversIdle(canDriversToSetIdle, idleCurrentFactor);
 #endif
 	}
+}
+
+// Configure the brake port for a driver
+GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
+{
+	if (gb.Seen('C'))
+	{
+		return GetGCodeResultFromSuccess(brakePorts[driver].AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0));
+	}
+	reply.printf("Driver %u uses brake port ", driver);
+	brakePorts[driver].AppendPinName(reply);
+	return GCodeResult::ok;
 }
 
 // Set the current for all drivers on an axis or extruder. Current is in mA.
