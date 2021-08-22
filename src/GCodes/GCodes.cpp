@@ -4208,8 +4208,9 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	}
 
 	updateFileWhenSimulationComplete = false;
-	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details not before, because it clears the filename and pause time
+	reprap.GetPrintMonitor().StoppedPrint();			// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
+	fileGCode->LatestMachineState().variables.Clear();	// delete any local variables that the file created
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures
