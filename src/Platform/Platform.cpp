@@ -5094,6 +5094,34 @@ GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringR
 	return GCodeResult::ok;
 }
 
+GCodeResult Platform::EutProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M569Point7Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("Missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+
+	if (drive >= NumDirectDrivers)
+	{
+		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
+		return GCodeResult::error;
+	}
+
+	if (parser.HasParameter('C'))
+	{
+		String<StringLength20> portName;
+		parser.GetStringParam('C', portName.GetRef());
+		return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0));
+	}
+
+	reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
+	brakePorts[drive].AppendPinName(reply);
+	return GCodeResult::ok;
+}
+
 void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 {
 	CanMessageDriversStatus * const msg = buf.SetupStatusMessage<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
