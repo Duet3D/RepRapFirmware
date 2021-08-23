@@ -481,7 +481,7 @@ bool LedStripDriver::MustStopMovement(GCodeBuffer& gb) noexcept
 	try
 	{
 		const LedType lt = (gb.Seen('X')) ? (LedType)gb.GetLimitedUIValue('X', 0, ARRAY_SIZE(LedTypeNames)) : ledType;
-		return (lt == LedType::neopixelRGBBitBang || lt == LedType::neopixelRGBWBitBang) & gb.SeenAny("RUBWPYSF");
+		return (lt == LedType::neopixelRGBBitBang || lt == LedType::neopixelRGBWBitBang) && gb.SeenAny("RUBWPYSF");
 	}
 	catch (const GCodeException&)
 	{
@@ -504,7 +504,7 @@ bool LedStripDriver::MustStopMovement(GCodeBuffer& gb) noexcept
 GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 #if SUPPORT_BITBANG_NEOPIXEL
-	// Interrupts are disabled while bit-banging data, so make sure movement has stopped if we are going to use bit-banging
+	// Interrupts are disabled while bit-banging data, which will mess up the step timing. So make sure movement has stopped if we are going to use bit-banging
 	if (MustStopMovement(gb))
 	{
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
