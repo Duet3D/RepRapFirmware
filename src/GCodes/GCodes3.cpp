@@ -1375,7 +1375,8 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 
 #if SUPPORT_CAN_EXPANSION
 	case 5:
-		// TODO: Move this into `if (id.boardAddress != CanInterface::GetCanAddress())` at the top?
+		// In all valid cases, this will be handled by CanInterface::ConfigureRemoteDriver at the top of this function
+		// However, this is required here to reject the erroneous case of the requested driver not being remote.
 		return ClosedLoop::StartDataCollection(id, gb, reply);
 #endif
 

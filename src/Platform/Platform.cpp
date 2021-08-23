@@ -3679,37 +3679,6 @@ const char *Platform::GetLogFileName() const noexcept
 	return (logger == nullptr) ? nullptr : logger->GetFileName();
 }
 
-// Log a message from a remote board
-String<StringLength500> remoteMessageBuffer;
-// TODO: Does it make sense to extend this to receive any message types from a remote board?
-void Platform::LogRemoteMessage(CanAddress src, const CanMessageLogMessage& msg, size_t msgLen) noexcept
-{
-	// TODO: There will be a better way of doing this
-	MessageType type;
-	if (msg.type == LogLevel::warn) {
-		type = MessageType::LogWarn;
-	} else if (msg.type == LogLevel::info) {
-		type = MessageType::LogInfo;
-	} else if (msg.type == LogLevel::debug) {
-		type = (MessageType)(~(LogMessageLowBit | LogMessageHighBit));
-	} else {
-		type = MessageType::LogOff;
-	}
-
-	// TODO: What do we do for a message > 500 chars?
-
-	// Cat to the buffer
-	// TODO: There needs to be some check that all these packets are all part of the same message
-	// They could even be from different boards atm!
-	remoteMessageBuffer.cat(msg.message);
-
-	// If this is the last packet, log out to the file
-	if (msg.lastPacket) {
-		Message(type, remoteMessageBuffer.c_str());
-		remoteMessageBuffer.Clear();
-	}
-}
-
 #endif
 
 const char *Platform::GetLogLevel() const noexcept

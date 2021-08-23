@@ -547,11 +547,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::closedLoopData:
-				ClosedLoop::ProcessReceivedData(buf->id.Src(), buf->msg.closedLoopData, buf->dataLength, buf->msg.raw);
-				break;
-
-			case CanMessageType::logMessage:
-				reprap.GetPlatform().LogRemoteMessage(buf->id.Src(), buf->msg.canMessageLogMessage, buf->dataLength);
+				ClosedLoop::ProcessReceivedData(buf->id.Src(), buf->msg.closedLoopData, buf->dataLength);
 				break;
 
 #if SUPPORT_ACCELEROMETERS

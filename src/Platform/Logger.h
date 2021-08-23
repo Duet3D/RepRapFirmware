@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
 
-#include <Duet3Common.h>
+NamedEnum(LogLevel, uint8_t, off, warn, info, debug);
 
 #if HAS_MASS_STORAGE
 
