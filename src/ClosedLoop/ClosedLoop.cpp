@@ -31,7 +31,7 @@ static FileStore* volatile closedLoopFile = nullptr;	// This is non-null when th
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
 
-bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned int size)
+static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned int size) noexcept
 {
 	// Create default filename if one is not provided
 	if (filename.IsEmpty())
@@ -75,7 +75,7 @@ bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned int siz
 	return true;
 }
 
-void CloseDataCollectionFile()
+static void CloseDataCollectionFile() noexcept
 {
 	closedLoopFile->Truncate();				// truncate the file in case we didn't write all the preallocated space
 	closedLoopFile->Close();
@@ -141,7 +141,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	}
 	if (parsedS > MaxSamples)
 	{
-		reply.copy("Maximum number of samples that can be collected is %d", MaxSamples);
+		reply.printf("Maximum number of samples that can be collected is %d", MaxSamples);
 		return GCodeResult::error;
 	}
 	if (parsedA > 1)
