@@ -389,7 +389,7 @@ bool GCodes::IsTriggerBusy() const noexcept
 // Copy the feed rate etc. from the channel that was running config.g to the input channels
 void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 {
-	if (runningConfigFile)
+	if (runningConfigFile && gb.GetChannel() == GCodeChannel::Trigger)
 	{
 		gb.LatestMachineState().GetPrevious()->CopyStateFrom(gb.LatestMachineState());	// so that M83 etc. in  nested file don't get forgotten
 		if (gb.LatestMachineState().GetPrevious()->GetPrevious() == nullptr)
@@ -480,9 +480,9 @@ void GCodes::Spin() noexcept
 
 #if HAS_LINUX_INTERFACE
 	// Need to check if the print has been stopped by the SBC
-	if (reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().HasPrintStopped())
+	if (reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().IsPrintAborted())
 	{
-		StopPrint(reprap.GetLinuxInterface().GetPrintStopReason());
+		StopPrint(StopPrintReason::abort);
 	}
 #endif
 

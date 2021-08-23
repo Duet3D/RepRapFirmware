@@ -238,7 +238,11 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		encoder->Init(gb.GetIValue());			// configure encoder pulses per click and direction
 	}
 
-	if (!seen)
+	if (seen)
+	{
+		reprap.BoardsUpdated();
+	}
+	else
 	{
 		if (lcd != nullptr)
 		{

@@ -263,7 +263,7 @@ enum class LinuxRequest : uint16_t
 	EvaluateExpression = 16,					// Evaluate an arbitrary expression
 	Message = 17,								// Send an arbitrary message
 	MacroStarted = 18,							// Macro file has been started
-	FilesAborted = 19,							// All files on the given channel have been aborted by DSF
+	InvalidateChannel = 19,						// Invalidate all files and codes on a given channel
 	SetVariable = 20,							// Assign a variable (global, set, var)
 	DeleteLocalVariable = 21,					// Delete an existing local variable at the end of a code block
 	CheckFileExistsResult = 22,					// Result of a request to check if a given file exists

@@ -356,13 +356,16 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		}
 	}
 
+	if (!seen)
+	{
 # if SUPPORT_CAN_EXPANSION
-	reply.printf("Accelerometer %u:%u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-					CanInterface::GetCanAddress(), 0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
+		reply.printf("Accelerometer %u:%u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
+						CanInterface::GetCanAddress(), 0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
 # else
-	reply.printf("Accelerometer %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-					0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
+		reply.printf("Accelerometer %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
+						0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
 # endif
+	}
 	return GCodeResult::ok;
 }
 
