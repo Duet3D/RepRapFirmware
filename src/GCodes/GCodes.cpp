@@ -3463,41 +3463,55 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 	if (!settingOffset && !settingTemps && !settingOther)
 	{
 		// Print offsets and temperatures
-		reply.printf("Tool %d offsets:", tool->Number());
-		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		reply.printf("Tool %d", tool->Number());
+		char c;
+
+		// Print the tool offsets if we are executing G10
+		if (code == 10)
 		{
-			reply.catf(" %c%.3f", axisLetters[axis], (double)tool->GetOffset(axis));
+			reply.cat(": offsets");
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			{
+				reply.catf(" %c%.3f", axisLetters[axis], (double)tool->GetOffset(axis));
+			}
+			c = ',';
 		}
+		else
+		{
+			c = ':';
+		}
+
+		// Print the heater active/standby temperatures whichever code we are executing
 		if (hCount != 0)
 		{
-			reply.cat(", active/standby temperature(s):");
+			reply.catf("%c active/standby temperature(s)", c);
+			c = ',';
 			for (size_t heater = 0; heater < hCount; heater++)
 			{
 				reply.catf(" %.1f/%.1f", (double)tool->GetToolHeaterActiveTemperature(heater), (double)tool->GetToolHeaterStandbyTemperature(heater));
 			}
 		}
+
+		// Print the spindle number if we are executing M568
 		if (code == 568 && tool->GetSpindleNumber() > -1)
 		{
-			reply.catf(", spindle: %d@%" PRIu32 "RPM", tool->GetSpindleNumber(), tool->GetSpindleRpm());
+			reply.catf("%c spindle %d@%" PRIu32 "rpm", c, tool->GetSpindleNumber(), tool->GetSpindleRpm());
 		}
 	}
 	else
 	{
+#if 0 // Do not warn about deprecation for now
+		if (code == 10 && settingTemps)
+		{
+			reply.lcat("This use of G10 is deprecated. Please use M568 to set tool temperatures.");
+			return GCodeResult::warning;
+		}
+#endif
 		String<StringLengthLoggedCommand> scratch;
 		gb.AppendFullCommand(scratch.GetRef());
 		platform.Message(MessageType::LogInfo, scratch.c_str());
 	}
-#if 0 // Do not warn about deprecation for now
-	if (code == 10)
-	{
-		if (reply.strlen() > 0)
-		{
-			reply.cat('\n');
-		}
-		reply.cat("Tool settings (offsets, heater temps, spindle RPM) have been moved to M568");
-		return GCodeResult::warning;
-	}
-#endif
+
 	return GCodeResult::ok;
 }
 
