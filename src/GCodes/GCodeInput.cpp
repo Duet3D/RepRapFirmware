@@ -246,7 +246,7 @@ bool NetworkGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept /*override*/
 	return lock && RegularGCodeInput::FillBuffer(gb);
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // File-based G-code input source
 

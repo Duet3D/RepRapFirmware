@@ -13,6 +13,7 @@
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>
 # include <CAN/CanMessageGenericConstructor.h>
+# include <CanMessageGenericTables.h>
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

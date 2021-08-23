@@ -11,6 +11,7 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 #include <Movement/Move.h>
+#include <Fans/LedStripDriver.h>
 
 // GCodeQueue class
 
@@ -62,7 +63,6 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 				case 140:	// set bed temperature and return immediately
 				case 141:	// set chamber temperature and return immediately
 				case 144:	// bed standby
-				case 150:	// set LED colours
 				case 280:	// set servo
 				case 300:	// beep
 				case 568:	// spindle or temperature control
@@ -76,6 +76,11 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 						gb.GetUnprecedentedString(dummy.GetRef());
 					}
 					return true;
+
+#if SUPPORT_LED_STRIPS
+				case 150:	// set LED colours
+					return !LedStripDriver::MustStopMovement(gb);		// if it is going to call LockMovementAndWaitForStandstill then we mustn't queue it
+#endif
 
 				case 291:
 					{

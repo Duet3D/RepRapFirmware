@@ -73,7 +73,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	, sdTimingFile(nullptr)
 #endif
 {
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileBeingHashed = nullptr;
 	FileGCodeInput * const fileInput = new FileGCodeInput();
 #else
@@ -220,7 +220,7 @@ void GCodes::Reset() noexcept
 
 	nextGcodeSource = 0;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileToPrint.Close();
 #endif
 	speedFactor = 1.0;
@@ -287,7 +287,7 @@ void GCodes::Reset() noexcept
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	fileOffsetToPrint = 0;
 	restartMoveFractionDone = 0.0;
 #endif
@@ -355,7 +355,7 @@ FilePosition GCodes::GetFilePosition() const noexcept
 #endif
 	{
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 		if (!fileBeingPrinted.IsLive())
 		{
@@ -445,7 +445,7 @@ void GCodes::Spin() noexcept
 	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
 	if (!autoPauseGCode->IsCompletelyIdle()
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 		|| autoPauseGCode->LatestMachineState().DoingFile()
 #endif
 	   )	// if autoPause is active
@@ -699,7 +699,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileData& fd = gb.LatestMachineState().fileState;
 
 		// Do we have more data to process?
@@ -2784,7 +2784,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
 		if (f == nullptr)
 		{
@@ -2814,7 +2814,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 #endif
 	}
 
-#if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE
+#if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	gb.LatestMachineState().doingFileMacro = true;
 
 	// The following three flags need to be inherited in the case that a system macro calls another macro, e.g.homeall.g calls homez.g. The Push call copied them over already.
@@ -2868,7 +2868,7 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 		else
 #endif
 		{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			FileData &file = gb.LatestMachineState().fileState;
 			gb.GetFileInput()->Reset(file);
 			file.Close();
@@ -3238,7 +3238,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const noexcept
 	s.catf(" Bed comp %.3f", (double)(machineCoordinates[Z_AXIS] - machineZ));
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 // Set up a file to print, but don't print it yet.
 // If successful return true, else write an error message to reply and return false
 bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept
@@ -3285,7 +3285,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 		fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
 #endif
@@ -3463,41 +3463,55 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 	if (!settingOffset && !settingTemps && !settingOther)
 	{
 		// Print offsets and temperatures
-		reply.printf("Tool %d offsets:", tool->Number());
-		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		reply.printf("Tool %d", tool->Number());
+		char c;
+
+		// Print the tool offsets if we are executing G10
+		if (code == 10)
 		{
-			reply.catf(" %c%.3f", axisLetters[axis], (double)tool->GetOffset(axis));
+			reply.cat(": offsets");
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			{
+				reply.catf(" %c%.3f", axisLetters[axis], (double)tool->GetOffset(axis));
+			}
+			c = ',';
 		}
+		else
+		{
+			c = ':';
+		}
+
+		// Print the heater active/standby temperatures whichever code we are executing
 		if (hCount != 0)
 		{
-			reply.cat(", active/standby temperature(s):");
+			reply.catf("%c active/standby temperature(s)", c);
+			c = ',';
 			for (size_t heater = 0; heater < hCount; heater++)
 			{
 				reply.catf(" %.1f/%.1f", (double)tool->GetToolHeaterActiveTemperature(heater), (double)tool->GetToolHeaterStandbyTemperature(heater));
 			}
 		}
+
+		// Print the spindle number if we are executing M568
 		if (code == 568 && tool->GetSpindleNumber() > -1)
 		{
-			reply.catf(", spindle: %d@%" PRIu32 "RPM", tool->GetSpindleNumber(), tool->GetSpindleRpm());
+			reply.catf("%c spindle %d@%" PRIu32 "rpm", c, tool->GetSpindleNumber(), tool->GetSpindleRpm());
 		}
 	}
 	else
 	{
+#if 0 // Do not warn about deprecation for now
+		if (code == 10 && settingTemps)
+		{
+			reply.lcat("This use of G10 is deprecated. Please use M568 to set tool temperatures.");
+			return GCodeResult::warning;
+		}
+#endif
 		String<StringLengthLoggedCommand> scratch;
 		gb.AppendFullCommand(scratch.GetRef());
 		platform.Message(MessageType::LogInfo, scratch.c_str());
 	}
-#if 0 // Do not warn about deprecation for now
-	if (code == 10)
-	{
-		if (reply.strlen() > 0)
-		{
-			reply.cat('\n');
-		}
-		reply.cat("Tool settings (offsets, heater temps, spindle RPM) have been moved to M568");
-		return GCodeResult::warning;
-	}
-#endif
+
 	return GCodeResult::ok;
 }
 
@@ -4094,7 +4108,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 
 		fileGCode->GetFileInput()->Reset(fileBeingPrinted);
@@ -4208,8 +4222,9 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	}
 
 	updateFileWhenSimulationComplete = false;
-	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details not before, because it clears the filename and pause time
+	reprap.GetPrintMonitor().StoppedPrint();			// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
+	fileGCode->LatestMachineState().variables.Clear();	// delete any local variables that the file created
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures
@@ -4370,7 +4385,7 @@ float GCodes::GetUserCoordinate(size_t axis) const noexcept
 	return (axis < numTotalAxes) ? currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // M38 (SHA1 hash of a file) implementation:
 bool GCodes::StartHash(const char* filename) noexcept

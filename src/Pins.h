@@ -169,6 +169,10 @@
 # define HAS_MASS_STORAGE		1
 #endif
 
+#ifndef HAS_EMBEDDED_FILES
+# define HAS_EMBEDDED_FILES		0
+#endif
+
 #if !HAS_MASS_STORAGE && !HAS_LINUX_INTERFACE
 # if SUPPORT_12864_LCD
 #  error "12864 LCD support requires mass storage or SBC interface"

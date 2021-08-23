@@ -290,12 +290,7 @@ private:
 	Kinematics *kinematics;								// What kinematics we are using
 
 	AxisShaper axisShaper;
-
-#if SUPPORT_REMOTE_COMMANDS
-	ExtruderShaper extruderShapers[max<size_t>(MaxExtruders, NumDirectDrivers)];
-#else
 	ExtruderShaper extruderShapers[MaxExtruders];
-#endif
 
 	float latestLiveCoordinates[MaxAxesPlusExtruders];
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)

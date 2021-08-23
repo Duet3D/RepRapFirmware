@@ -42,6 +42,7 @@
 #include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Storage/CRC32.h>
+#include <Accelerometers/Accelerometers.h>
 
 #if SAM4E || SAM4S || SAME70
 # include <Flash.h>		// for flash_read_unique_id()
@@ -103,6 +104,7 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMessageGenericConstructor.h"
 # include "CAN/CanInterface.h"
+# include <CanMessageGenericTables.h>
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -113,7 +115,7 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_12V_MONITOR) || !defined(HAS_VREF_MONITOR) \
- || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES) || !defined(HAS_MASS_STORAGE)
+ || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES) || !defined(HAS_MASS_STORAGE) || !defined(HAS_EMBEDDED_FILES)
 # error Missing feature definition
 #endif
 
@@ -156,7 +158,7 @@ constexpr uint16_t driverV12OffAdcReading = V12VoltageToAdcReading(9.5);				// v
 
 #endif
 
-const float MinStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
+constexpr float MinStepPulseTiming = 0.2;												// we assume that we always generate step high and low times at least this wide without special action
 
 // Global variable for debugging in tricky situations e.g. within ISRs
 int debugLine = 0;
@@ -189,6 +191,7 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Platform, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(Platform, __VA_ARGS__)
 
 constexpr ObjectModelArrayDescriptor Platform::axisDriversArrayDescriptor =
 {
@@ -215,6 +218,9 @@ static inline const char* GetFilamentName(size_t extruder) noexcept
 constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[0] members
+#if SUPPORT_ACCELEROMETERS
+	{ "accelerometer",		OBJECT_MODEL_FUNC_IF(Accelerometers::HasLocalAccelerometer(), self, 9),							ObjectModelEntryFlags::none },
+#endif
 #if SUPPORT_CAN_EXPANSION
 	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)CanInterface::GetCanAddress()),									ObjectModelEntryFlags::none },
 #endif
@@ -233,14 +239,16 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),														ObjectModelEntryFlags::verbose },
 	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),												ObjectModelEntryFlags::verbose },
+#if HAS_CPU_TEMP_SENSOR
 	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																			ObjectModelEntryFlags::live },
-# ifdef DUET_NG
+#endif
+#ifdef DUET_NG
 	{ "name",				OBJECT_MODEL_FUNC(self->GetBoardName()),															ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC(self->GetBoardShortName()),														ObjectModelEntryFlags::none },
-# else
+#else
 	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),																ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
-# endif
+#endif
 	{ "supportsDirectDisplay", OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),										ObjectModelEntryFlags::verbose },
 #if MCU_HAS_UNIQUE_ID
 	{ "uniqueId",			OBJECT_MODEL_FUNC(self->GetUniqueIdString()),														ObjectModelEntryFlags::none },
@@ -248,20 +256,21 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_12V_MONITOR
 	{ "v12",				OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::live },
 #endif
+#if HAS_VOLTAGE_MONITOR
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
-
+#endif
 #if HAS_CPU_TEMP_SENSOR
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().max, 1),												ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min, 1),												ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().maximum, 1),											ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().minimum, 1),											ObjectModelEntryFlags::none },
 #endif
 
 	// 2. vIn members
 #if HAS_VOLTAGE_MONITOR
 	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage(), 1),												ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().max, 1),													ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().min, 1),													ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().maximum, 1),												ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().minimum, 1),												ObjectModelEntryFlags::none },
 #endif
 
 	// 3. move.axes[] members
@@ -294,7 +303,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 8),																												ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																												ObjectModelEntryFlags::none },
 	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(context.GetLastIndex()), reprap.GetCurrentTool()), 1)),	ObjectModelEntryFlags::live },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvanceClocks(context.GetLastIndex()) * StepClockRate, 2),							ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvanceClocks(context.GetLastIndex())/StepClockRate, 2),							ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), 					ObjectModelEntryFlags::live },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[ExtruderToLogicalDrive(context.GetLastIndex())], 2),											ObjectModelEntryFlags::none },
@@ -307,8 +316,8 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_12V_MONITOR
 	// 6. v12 members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),														ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max, 1),															ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min, 1),															ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().maximum, 1),														ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().minimum, 1),														ObjectModelEntryFlags::none },
 #endif
 
 	// 7. move.axes[].microstepping members
@@ -318,12 +327,18 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 8. move.extruders[].microstepping members
 	{ "interpolated",		OBJECT_MODEL_FUNC((self->microstepping[ExtruderToLogicalDrive(context.GetLastIndex())] & 0x8000) != 0),		ObjectModelEntryFlags::none },
 	{ "value",				OBJECT_MODEL_FUNC((int32_t)(self->microstepping[ExtruderToLogicalDrive(context.GetLastIndex())] & 0x7FFF)),	ObjectModelEntryFlags::none },
+
+#if SUPPORT_ACCELEROMETERS
+	// 9. boards[0].accelerometer members
+	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),						ObjectModelEntryFlags::none },
+	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),								ObjectModelEntryFlags::none },
+#endif
 };
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	9,																		// number of sections
-	11 + HAS_LINUX_INTERFACE + HAS_MASS_STORAGE + HAS_12V_MONITOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
+	10,																		// number of sections
+	9 + SUPPORT_ACCELEROMETERS + HAS_LINUX_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
 #else
@@ -344,6 +359,11 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 #endif
 	2,																		// section 7: move.axes[].microstepping
 	2,																		// section 8: move.extruders[].microstepping
+#if SUPPORT_ACCELEROMETERS
+	2,																		// section 9: boards[0].accelerometer
+#else
+	0,
+#endif
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Platform)
@@ -384,11 +404,15 @@ Platform::Platform() noexcept :
 #if HAS_AUX_DEVICES
 	panelDueUpdater(nullptr),
 #endif
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	sysDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
 	lastWarningMillis(0),
+#ifdef DUET3MINI
+	whenLastCanMessageProcessed(0),
+#endif
+
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
@@ -465,7 +489,7 @@ void Platform::Init() noexcept
 		pinMode(SdCardDetectPins[i], INPUT_PULLUP);
 	}
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Init();
 #endif
 
@@ -965,7 +989,7 @@ void Platform::SendPanelDueMessage(size_t auxNumber, const char* msg) noexcept
 void Platform::Exit() noexcept
 {
 	StopLogging();
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	MassStorage::CloseAllFiles();
 #endif
 #if HAS_SMART_DRIVERS
@@ -1087,7 +1111,16 @@ void Platform::Spin() noexcept
 	}
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if defined(DUET3MINI)
+	// Turn off the ACT LED if it is time to do so
+	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
+	{
+		digitalWrite(ActLedPin, !ActOnPolarity);
+	}
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Spin();
 #endif
 
@@ -2203,9 +2236,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::TimeCalculations:	// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
+			constexpr uint32_t iterations = 100;				// use a value that divides into one million
 			bool ok1 = true;
 			uint32_t tim1 = 0;
-			for (uint32_t i = 0; i < 100; ++i)
+			for (uint32_t i = 0; i < iterations; ++i)
 			{
 				const uint32_t num1 = 0x7fffffff - (67 * i);
 				const uint64_t sq = (uint64_t)num1 * num1;
@@ -2218,7 +2252,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 			bool ok2 = true;
 			uint32_t tim2 = 0;
-			constexpr uint32_t iterations = 100;				// use a value that divides into one million
 			for (uint32_t i = 0; i < iterations; ++i)
 			{
 				const uint32_t num2 = 0x0000ffff - (67 * i);
@@ -2230,9 +2263,37 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				}
 			}
 
-			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
-					(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
-							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR");
+			// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
+			bool ok3 = true;
+			uint32_t tim3 = 0;
+			float val = 10000.0;
+			for (unsigned int i = 0; i < iterations; ++i)
+			{
+				IrqDisable();
+				asm volatile("":::"memory");
+				uint32_t now1 = SysTick->VAL;
+				const float nval = fastSqrtf(val);
+				uint32_t now2 = SysTick->VAL;
+				asm volatile("":::"memory");
+				IrqEnable();
+				now1 &= 0x00FFFFFF;
+				now2 &= 0x00FFFFFF;
+				tim3 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+				if (nval != sqrtf(val))
+				{
+					ok3 = false;
+					if (reprap.Debug(modulePlatform))
+					{
+						debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
+					}
+				}
+				val = nval;
+			}
+
+			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s, float %.2fus %s",
+						(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
+							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR",
+								(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 		}
 
 		// We now also time sine and cosine in the same test
@@ -2259,29 +2320,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			reply.lcatf("Float sine + cosine: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
 		}
 
-		// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
-		{
-			uint32_t tim1 = 0;
-			constexpr uint32_t iterations = 100;				// use a value that divides into one million
-			float val = 10000.0;
-			for (unsigned int i = 0; i < iterations; ++i)
-			{
-
-				IrqDisable();
-				asm volatile("":::"memory");
-				uint32_t now1 = SysTick->VAL;
-				val = RepRap::FastSqrtf(val);
-				uint32_t now2 = SysTick->VAL;
-				asm volatile("":::"memory");
-				IrqEnable();
-				now1 &= 0x00FFFFFF;
-				now2 &= 0x00FFFFFF;
-				tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
-			}
-
-			// We no longer calculate sin and cos for doubles because it pulls in those library functions, which we don't otherwise need
-			reply.lcatf("Float sqrt: %.2fus", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock));
-		}
 		break;
 
 	case (unsigned int)DiagnosticTestType::TimeSDWrite:
@@ -2662,35 +2700,39 @@ void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept
 {
+	if (driver < GetNumActualDirectDrivers())
+	{
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
-	if (driver < numSmartDrivers && !driversPowered)
-	{
-		warnDriversNotPowered = true;
-	}
-	else
-	{
-#endif
-		UpdateMotorCurrent(driver, requiredCurrent);
-
-#if defined(DUET3) && HAS_SMART_DRIVERS
-		SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
-#elif HAS_SMART_DRIVERS
-		if (driver < numSmartDrivers)
+		if (driver < numSmartDrivers && !driversPowered)
 		{
-			SmartDrivers::EnableDrive(driver, true);
+			warnDriversNotPowered = true;
 		}
-# if !defined(DUET3MINI)		// no enable pins on 5LC
 		else
 		{
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
-		}
+#endif
+			UpdateMotorCurrent(driver, requiredCurrent);
+
+#if defined(DUET3) && HAS_SMART_DRIVERS
+			SmartDrivers::EnableDrive(driver, true);	// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
+			if (driver < numSmartDrivers)
+			{
+				SmartDrivers::EnableDrive(driver, true);
+			}
+# if !defined(DUET3MINI)		// no enable pins on 5LC
+			else
+			{
+				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			}
 # endif
 #else
-		digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
 #endif
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
-	}
+		}
 #endif
+		brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+	}
 }
 
 // Disable a driver
@@ -2698,6 +2740,7 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
+		brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
 #if defined(DUET3) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
@@ -2812,6 +2855,18 @@ void Platform::SetDriversIdle() noexcept
 		CanInterface::SetRemoteDriversIdle(canDriversToSetIdle, idleCurrentFactor);
 #endif
 	}
+}
+
+// Configure the brake port for a driver
+GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
+{
+	if (gb.Seen('C'))
+	{
+		return GetGCodeResultFromSuccess(brakePorts[driver].AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0));
+	}
+	reply.printf("Driver %u uses brake port ", driver);
+	brakePorts[driver].AppendPinName(reply);
+	return GCodeResult::ok;
 }
 
 // Set the current for all drivers on an axis or extruder. Current is in mA.
@@ -4009,7 +4064,7 @@ const char *Platform::GetBoardShortName() const noexcept
 
 #ifdef DUET3MINI
 
-// Return true if this is a Duet WiFi, false if it is a Duet Ethernet
+// Return true if this is a WiFi board, false if it has Ethernet
 bool Platform::IsDuetWiFi() const noexcept
 {
 	return board == BoardType::Duet3Mini_WiFi || board == BoardType::Duet3Mini_Unknown;
@@ -4018,6 +4073,22 @@ bool Platform::IsDuetWiFi() const noexcept
 #endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+
+bool Platform::Delete(const char* folder, const char *filename) const noexcept
+{
+	String<MaxFilenameLength> location;
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
+}
+
+bool Platform::DeleteSysFile(const char *filename) const noexcept
+{
+	String<MaxFilenameLength> location;
+	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
+}
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // Open a file
 FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
@@ -4040,12 +4111,6 @@ const char* Platform::InternalGetSysDir() const noexcept
 	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
 }
 
-bool Platform::Delete(const char* folder, const char *filename) const noexcept
-{
-	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
-}
-
 // Set the system files path
 GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcept
 {
@@ -4058,6 +4123,13 @@ GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcep
 		return GCodeResult::error;
 	}
 
+	if (!MassStorage::DirectoryExists(newSysDir.GetRef()))
+	{
+		reply.copy("Path not found");
+		return GCodeResult::error;
+	}
+
+	newSysDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
 	const size_t len = newSysDir.strlen() + 1;
 	char* const nsd = new char[len];
 	memcpy(nsd, newSysDir.c_str(), len);
@@ -4078,12 +4150,6 @@ FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const noex
 	return (MakeSysFileName(location.GetRef(), filename))
 			? MassStorage::OpenFile(location.c_str(), mode, 0)
 				: nullptr;
-}
-
-bool Platform::DeleteSysFile(const char *filename) const noexcept
-{
-	String<MaxFilenameLength> location;
-	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
 }
 
 bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const noexcept
@@ -4223,12 +4289,12 @@ bool Platform::Inkjet(int bitPattern) noexcept
 #if HAS_CPU_TEMP_SENSOR
 
 // CPU temperature
-MinMaxCurrent Platform::GetMcuTemperatures() const noexcept
+MinCurMax Platform::GetMcuTemperatures() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = lowestMcuTemperature;
+	MinCurMax result;
+	result.minimum = lowestMcuTemperature;
 	result.current = GetCpuTemperature();
-	result.max = highestMcuTemperature;
+	result.maximum = highestMcuTemperature;
 	return result;
 }
 
@@ -4237,12 +4303,12 @@ MinMaxCurrent Platform::GetMcuTemperatures() const noexcept
 #if HAS_VOLTAGE_MONITOR
 
 // Power in voltage
-MinMaxCurrent Platform::GetPowerVoltages() const noexcept
+MinCurMax Platform::GetPowerVoltages() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = AdcReadingToPowerVoltage(lowestVin);
+	MinCurMax result;
+	result.minimum = AdcReadingToPowerVoltage(lowestVin);
 	result.current = AdcReadingToPowerVoltage(currentVin);
-	result.max = AdcReadingToPowerVoltage(highestVin);
+	result.maximum = AdcReadingToPowerVoltage(highestVin);
 	return result;
 }
 
@@ -4255,12 +4321,12 @@ float Platform::GetCurrentPowerVoltage() const noexcept
 
 #if HAS_12V_MONITOR
 
-MinMaxCurrent Platform::GetV12Voltages() const noexcept
+MinCurMax Platform::GetV12Voltages() const noexcept
 {
-	MinMaxCurrent result;
-	result.min = AdcReadingToPowerVoltage(lowestV12);
+	MinCurMax result;
+	result.minimum = AdcReadingToPowerVoltage(lowestV12);
 	result.current = AdcReadingToPowerVoltage(currentV12);
-	result.max = AdcReadingToPowerVoltage(highestV12);
+	result.maximum = AdcReadingToPowerVoltage(highestV12);
 	return result;
 }
 
@@ -4506,7 +4572,7 @@ bool Platform::SetDateTime(time_t time) noexcept
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Exactly one of FHJPS is allowed
+	// Exactly one of FHJPSR is allowed
 	unsigned int charsPresent = 0;
 	for (char c : (const char[]){'R', 'J', 'F', 'H', 'P', 'S'})
 	{
@@ -4519,30 +4585,30 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 
 	switch (charsPresent)
 	{
-	case 1:
+	case 1:		// S
 		{
 			const uint32_t gpioNumber = gb.GetLimitedUIValue('S', MaxGpOutPorts);
 			return gpoutPorts[gpioNumber].Configure(gpioNumber, true, gb, reply);
 		}
 
-	case 2:
+	case 2:		// P
 		{
 			const uint32_t gpioNumber = gb.GetLimitedUIValue('P', MaxGpOutPorts);
 			return gpoutPorts[gpioNumber].Configure(gpioNumber, false, gb, reply);
 		}
 
-	case 4:
+	case 4:		// H
 		return reprap.GetHeat().ConfigureHeater(gb, reply);
 
-	case 8:
+	case 8:		// F
 		return reprap.GetFansManager().ConfigureFanPort(gb, reply);
 
-	case 16:
+	case 16:	// J
 		{
 			const uint32_t gpinNumber = gb.GetLimitedUIValue('J', MaxGpInPorts);
 			return gpinPorts[gpinNumber].Configure(gpinNumber, gb, reply);
 		}
-	case 32:
+	case 32:	// R
 		{
 			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
 			return spindles[slot].Configure(gb, reply);
@@ -4579,6 +4645,14 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 								}
 							);
 	return CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(data, reply);
+}
+
+void Platform::OnProcessingCanMessage()
+{
+#ifdef DUET3MINI			// MB6HC doesn't yet have a ACT LED
+	whenLastCanMessageProcessed = millis();
+	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
+#endif
 }
 
 #endif
@@ -5020,7 +5094,55 @@ GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringR
 	return GCodeResult::ok;
 }
 
-#endif
+GCodeResult Platform::EutProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M569Point7Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("Missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+
+	if (drive >= NumDirectDrivers)
+	{
+		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
+		return GCodeResult::error;
+	}
+
+	if (parser.HasParameter('C'))
+	{
+		String<StringLength20> portName;
+		parser.GetStringParam('C', portName.GetRef());
+		return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0));
+	}
+
+	reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
+	brakePorts[drive].AppendPinName(reply);
+	return GCodeResult::ok;
+}
+
+void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
+{
+	CanMessageDriversStatus * const msg = buf.SetupStatusMessage<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+# if HAS_SMART_DRIVERS
+	msg->SetStandardFields(MaxSmartDrivers);
+	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
+	{
+		msg->data[driver] = SmartDrivers::GetStandardDriverStatus(driver);
+	}
+# else
+	msg->SetStandardFields(NumDrivers);
+	for (size_t driver = 0; driver < NumDrivers; ++driver)
+	{
+		msg->data[driver] = Platform::GetStandardDriverStatus(driver);
+	}
+# endif
+	buf.dataLength = msg->GetActualDataLength();
+	CanInterface::SendMessageNoReplyNoFree(&buf);
+}
+
+#endif	// SUPPORT_REMOTE_COMMANDS
 
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.

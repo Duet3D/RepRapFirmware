@@ -22,6 +22,7 @@
 # include <CAN/CanInterface.h>
 # include <CAN/ExpansionManager.h>
 # include <CAN/CanMessageGenericConstructor.h>
+# include <CanMessageGenericTables.h>
 #endif
 
 #ifdef DUET3_ATE
@@ -68,11 +69,33 @@ static uint8_t resolution = DefaultResolution;
 static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
 static volatile uint8_t axesRequested;
 static FileStore* volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
+static unsigned int numLocalRunsCompleted = 0;
+static unsigned int lastRunNumSamplesReceived = 0;
 static uint8_t axisLookup[3];
 static bool axisInverted[3];
 
 static IoPort spiCsPort;
 static IoPort irqPort;
+
+// Add a local accelerometer run
+static void AddLocalAccelerometerRun(unsigned int numDataPoints) noexcept
+{
+	lastRunNumSamplesReceived = numDataPoints;
+	++numLocalRunsCompleted;
+}
+
+static uint8_t TranslateAxes(uint8_t axes) noexcept
+{
+	uint8_t rslt = 0;
+	for (unsigned int i = 0; i < 3; ++i)
+	{
+		if (axes & (1u << i))
+		{
+			rslt |= 1u << axisLookup[i];
+		}
+	}
+	return rslt;
+}
 
 [[noreturn]] void AccelerometerTaskCode(void*) noexcept
 {
@@ -89,7 +112,7 @@ static IoPort irqPort;
 			const uint16_t mask = (1u << resolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(resolution);
 
-			if (accelerometer->StartCollecting(axesRequested))
+			if (accelerometer->StartCollecting(TranslateAxes(axesRequested)))
 			{
 				uint16_t dataRate = 0;
 				do
@@ -105,6 +128,7 @@ static IoPort irqPort;
 						f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 						f->Close();
 						f = nullptr;
+						AddLocalAccelerometerRun(0);
 					}
 					else
 					{
@@ -182,6 +206,7 @@ static IoPort irqPort;
 			{
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
+				AddLocalAccelerometerRun(samplesWritten);
 			}
 
 			accelerometer->StopCollecting();
@@ -406,13 +431,23 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 										(unsigned int)device.boardAddress,
 # else
 										0,
-#endif
+# endif
 										timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 	}
 	FileStore * const f = MassStorage::OpenFile(accelerometerFileName.c_str(), OpenMode::write, preallocSize);
 	if (f == nullptr)
 	{
 		reply.copy("Failed to create accelerometer data file");
+# if SUPPORT_CAN_EXPANSION
+		if (device.IsRemote())
+		{
+			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
+		}
+		else
+# endif
+		{
+			AddLocalAccelerometerRun(0);
+		}
 		return GCodeResult::error;
 	}
 
@@ -441,6 +476,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		{
 			accelerometerFile->Close();
 			MassStorage::Delete(accelerometerFileName.c_str(), false);
+			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
 		}
 		return rslt;
 	}
@@ -448,6 +484,21 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 
 	accelerometerTask->Give();
 	return GCodeResult::ok;
+}
+
+bool Accelerometers::HasLocalAccelerometer() noexcept
+{
+	return accelerometer != nullptr;
+}
+
+unsigned int Accelerometers::GetLocalAccelerometerDataPoints() noexcept
+{
+	return lastRunNumSamplesReceived;
+}
+
+unsigned int Accelerometers::GetLocalAccelerometerRuns() noexcept
+{
+	return numLocalRunsCompleted;
 }
 
 #if SUPPORT_CAN_EXPANSION
@@ -471,6 +522,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
+			reprap.GetExpansion().AddAccelerometerRun(src, 0);
 		}
 		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
 		{
@@ -478,6 +530,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
+			reprap.GetExpansion().AddAccelerometerRun(src, 0);
 		}
 		else
 		{
@@ -544,6 +597,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
 				accelerometerFile = nullptr;
+				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber);
 			}
 		}
 	}

@@ -190,7 +190,7 @@ void PrintMonitor::Spin() noexcept
 	else
 #endif
 	{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		// File information about the file being printed must be available before layer estimations can be made
 		if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 		{
@@ -289,7 +289,7 @@ float PrintMonitor::GetPauseDuration() const noexcept
 // Notifies this class that a file has been set for printing
 void PrintMonitor::StartingPrint(const char* filename) noexcept
 {
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	WriteLocker locker(printMonitorLock);
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
 # if HAS_LINUX_INTERFACE

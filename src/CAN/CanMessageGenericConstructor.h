@@ -14,6 +14,7 @@
 
 #include <CanMessageFormats.h>
 #include <GCodes/GCodeException.h>
+#include <CanMessageGenericTableFormat.h>
 
 class GCodeBuffer;
 

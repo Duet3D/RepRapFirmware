@@ -24,7 +24,14 @@ struct ExpansionBoardData
 	ExpansionBoardData() noexcept;
 
 	const char *typeName;
-	MinMaxCurrent mcuTemp, vin, v12;
+	MinCurMax mcuTemp, vin, v12;
+	uint16_t hasMcuTemp : 1,
+			 hasVin : 1,
+			 hasV12 : 1,
+			 hasAccelerometer : 1,
+			 spare : 12;
+	uint16_t accelerometerRuns;
+	uint16_t accelerometerLastRunDataPoints;
 	BoardState state;
 	uint8_t numDrivers;
 };
@@ -35,8 +42,10 @@ public:
 	ExpansionManager() noexcept;
 
 	unsigned int GetNumExpansionBoards() const noexcept { return numExpansionBoards; }
-	void ProcessAnnouncement(CanMessageBuffer *buf) noexcept;
 	const ExpansionBoardData *GetBoardDetails(uint8_t address) const noexcept;
+
+	void ProcessAnnouncement(CanMessageBuffer *buf) noexcept;
+	void ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept;
 
 	// Firmware update and related functions
 	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
@@ -44,15 +53,16 @@ public:
 
 	void UpdateFinished(CanAddress address) noexcept;
 	void UpdateFailed(CanAddress address) noexcept;
+	void AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept;
 	bool IsFlashing() const noexcept { return numBoardsFlashing != 0; }
 
 	void EmergencyStop() noexcept;
 
-	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 	void UpdateBoardState(CanAddress address, BoardState newState) noexcept;
 
 	unsigned int numExpansionBoards;

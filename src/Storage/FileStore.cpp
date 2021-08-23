@@ -2,15 +2,18 @@
 
 #include "RepRapFirmware.h"
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 
 #include "FileStore.h"
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include "MassStorage.h"
+#endif
+
+#if HAS_MASS_STORAGE
 # include <Libraries/Fatfs/diskio.h>
 # include <Movement/StepTimer.h>
 #endif
@@ -19,7 +22,10 @@
 # include <Linux/LinuxInterface.h>
 #endif
 
-FileStore::FileStore() noexcept : writeBuffer(nullptr)
+FileStore::FileStore() noexcept
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+	: writeBuffer(nullptr)
+#endif
 {
 	Init();
 }
@@ -27,13 +33,19 @@ FileStore::FileStore() noexcept : writeBuffer(nullptr)
 void FileStore::Init() noexcept
 {
 	usageMode = FileUseMode::free;
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	openCount = 0;
 	closeRequested = false;
 #endif
+#if HAS_EMBEDDED_FILES
+	fileIndex = -1;
+#endif
 #if HAS_LINUX_INTERFACE
 	handle = noFileHandle;
-	length = offset = 0;
+	length = 0;
+#endif
+#if HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+	offset = 0;
 #endif
 }
 
@@ -41,22 +53,46 @@ void FileStore::Init() noexcept
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
-#if !HAS_MASS_STORAGE && !HAS_LINUX_INTERFACE
-	return false;
+	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
+#if HAS_EMBEDDED_FILES
+# if HAS_LINUX_INTERFACE
+	if (!reprap.UsingLinuxInterface())
+# endif
+	{
+		if (!writing)
+		{
+			fileIndex = EmbeddedFiles::OpenFile(filePath);
+			if (fileIndex >= 0)
+			{
+				offset = 0;
+				usageMode = FileUseMode::readOnly;
+				openCount = 1;
+				return true;
+			}
+		}
+
+		// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
+		// It is up to the caller to report an error if necessary.
+		if (reprap.Debug(moduleStorage))
+		{
+			reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %sn", filePath, (writing) ? "write" : "read");
+		}
+		return false;
+	}
 #endif
 
-	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	writeBuffer = nullptr;
 
 	// Try to allocate a write buffer
 	if (writing)
 	{
-#if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE
 		if (!MassStorage::EnsurePath(filePath, true))
 		{
 			return false;
 		}
-#endif
+# endif
 
 		// Also try to allocate a write buffer so we can perform faster writes
 		// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
@@ -70,7 +106,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 
 	// Attempt to open the file
 	bool fileOpened = false;
-#if HAS_LINUX_INTERFACE
+# if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{
 		handle = reprap.GetLinuxInterface().OpenFile(filePath, mode, length, preAllocSize);
@@ -84,15 +120,15 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 			length = offset = 0;
 		}
 	}
-# if HAS_MASS_STORAGE
+#  if HAS_MASS_STORAGE
 	else
+#  endif
 # endif
-#endif
-#if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE
 	{
 		const FRESULT openReturn = f_open(&file, filePath,
 											(mode == OpenMode::write || mode == OpenMode::writeWithCrc) ? FA_CREATE_ALWAYS | FA_WRITE
-												: (mode == OpenMode::append) ? FA_READ | FA_WRITE | FA_OPEN_ALWAYS
+												: (mode == OpenMode::append) ? FA_READ | FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND
 													: FA_OPEN_EXISTING | FA_READ);
 		if (openReturn == FR_OK)
 		{
@@ -102,13 +138,13 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 		{
 			// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 			// It is up to the caller to report an error if necessary.
-			if (reprap.Debug(modulePlatform))
+			if (reprap.Debug(moduleStorage))
 			{
 				reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %s, error code %d\n", filePath, (writing) ? "write" : "read", (int)openReturn);
 			}
 		}
 	}
-#endif
+# endif
 
 	// Discard the write buffer if that failed
 	if (!fileOpened)
@@ -141,7 +177,10 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 # endif
 	reprap.VolumesUpdated();
 	return true;
+#endif
 }
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // This may be called from an ISR, in which case we need to defer the close
 bool FileStore::Close() noexcept
@@ -219,6 +258,9 @@ bool FileStore::Seek(FilePosition pos) noexcept
 #endif
 #if HAS_MASS_STORAGE
 		return f_lseek(&file, pos) == FR_OK;
+#elif HAS_EMBEDDED_FILES
+		offset = min<FilePosition>(pos, EmbeddedFiles::Length(fileIndex));
+		return true;
 #else
 		return false;
 #endif
@@ -228,6 +270,69 @@ bool FileStore::Seek(FilePosition pos) noexcept
 		return false;
 	}
 }
+
+FilePosition FileStore::Position() const noexcept
+{
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		return offset;
+	}
+#endif
+#if HAS_MASS_STORAGE
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fptr : 0;
+#elif HAS_EMBEDDED_FILES
+	return offset;
+#else
+	return 0;
+#endif
+}
+
+FilePosition FileStore::Length() const noexcept
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+		REPORT_INTERNAL_ERROR;
+		return 0;
+
+	case FileUseMode::readOnly:
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
+		{
+			return length;
+		}
+#endif
+#if HAS_MASS_STORAGE
+		return f_size(&file);
+#elif HAS_EMBEDDED_FILES
+		return EmbeddedFiles::Length(fileIndex);
+#else
+		return 0;
+#endif
+
+	case FileUseMode::readWrite:
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
+		{
+			return (writeBuffer != nullptr) ? length + writeBuffer->BytesStored() : length;
+		}
+#endif
+#if HAS_MASS_STORAGE
+		return (writeBuffer != nullptr) ? f_size(&file) + writeBuffer->BytesStored() : f_size(&file);
+#else
+		return 0;
+#endif
+
+	case FileUseMode::invalidated:
+	default:
+		return 0;
+	}
+}
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Truncate file at current file pointer
 bool FileStore::Truncate() noexcept
@@ -263,67 +368,9 @@ bool FileStore::Truncate() noexcept
 	}
 }
 
-
-FilePosition FileStore::Position() const noexcept
-{
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		return offset;
-	}
-#endif
-#if HAS_MASS_STORAGE
-	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fptr : 0;
-#else
-	return 0;
-#endif
-}
-
-FilePosition FileStore::Length() const noexcept
-{
-	switch (usageMode)
-	{
-	case FileUseMode::free:
-		REPORT_INTERNAL_ERROR;
-		return 0;
-
-	case FileUseMode::readOnly:
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
-		{
-			return length;
-		}
-#endif
-#if HAS_MASS_STORAGE
-		return f_size(&file);
-#else
-		return 0;
 #endif
 
-	case FileUseMode::readWrite:
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
-		{
-			return (writeBuffer != nullptr) ? length + writeBuffer->BytesStored() : length;
-		}
-#endif
-#if HAS_MASS_STORAGE
-		return (writeBuffer != nullptr) ? f_size(&file) + writeBuffer->BytesStored() : f_size(&file);
-#else
-		return 0;
-#endif
-
-	case FileUseMode::invalidated:
-	default:
-		return 0;
-	}
-}
-
-// Single character read
-bool FileStore::Read(char& b) noexcept
-{
-	return Read(&b, sizeof(char));
-}
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // Returns the number of bytes read or -1 if the read process failed
 int FileStore::Read(char* extBuf, size_t nBytes) noexcept
@@ -350,13 +397,22 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 #if HAS_MASS_STORAGE
 		{
 			UINT bytes_read;
-			FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
+			const FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
 			if (readStatus != FR_OK)
 			{
 				reprap.GetPlatform().MessageF(ErrorMessage, "Cannot read file, error code %d\n", (int)readStatus);
 				return -1;
 			}
 			return (int)bytes_read;
+		}
+#elif HAS_EMBEDDED_FILES
+		{
+			const int ret = EmbeddedFiles::Read(fileIndex, offset, extBuf, nBytes);
+			if (ret > 0)
+			{
+				offset += ret;
+			}
+			return ret;
 		}
 #else
 		return -1;
@@ -438,8 +494,47 @@ bool FileStore::ForceClose() noexcept
 	reprap.VolumesUpdated();
 	return ok && fr == FR_OK;
 #endif
+
+#if HAS_EMBEDDED_FILES
+	usageMode = FileUseMode::free;
+	closeRequested = false;
+	openCount = 0;
+	return true;
+#endif
+
 	return false;
 }
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
+void FileStore::Duplicate() noexcept
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+		REPORT_INTERNAL_ERROR;
+		break;
+
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			const irqflags_t flags = IrqSave();
+			++openCount;
+			IrqRestore(flags);
+		}
+		break;
+
+	case FileUseMode::invalidated:
+	default:
+		break;
+	}
+}
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 bool FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
 {
@@ -632,29 +727,6 @@ bool FileStore::IsOpenOn(const FATFS *fs) const noexcept
 	return openCount != 0 && file.obj.fs == fs;
 }
 
-void FileStore::Duplicate() noexcept
-{
-	switch (usageMode)
-	{
-	case FileUseMode::free:
-		REPORT_INTERNAL_ERROR;
-		break;
-
-	case FileUseMode::readOnly:
-	case FileUseMode::readWrite:
-		{
-			const irqflags_t flags = IrqSave();
-			++openCount;
-			IrqRestore(flags);
-		}
-		break;
-
-	case FileUseMode::invalidated:
-	default:
-		break;
-	}
-}
-
 // Return true if the passed file is the same as ours
 bool FileStore::IsSameFile(const FIL& otherFile) const noexcept
 {
@@ -701,6 +773,8 @@ bool FileStore::SetClusterMap(uint32_t tbl[]) noexcept
 }
 
 #endif
+
+#endif	// HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 #endif
 

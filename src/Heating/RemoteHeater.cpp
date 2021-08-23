@@ -16,6 +16,7 @@
 #include <CAN/CanInterface.h>
 #include <CanMessageFormats.h>
 #include <CanMessageBuffer.h>
+#include <CanMessageGenericTables.h>
 
 // Static variables used only during tuning
 uint32_t RemoteHeater::timeSetHeating;
@@ -363,7 +364,7 @@ void RemoteHeater::Suspend(bool sus) noexcept
 	}
 }
 
-Heater::HeaterMode RemoteHeater::GetMode() const noexcept
+HeaterMode RemoteHeater::GetMode() const noexcept
 {
 	return (tuningState != TuningState::notTuning) ? HeaterMode::tuning0
 		: (millis() - whenLastStatusReceived < RemoteStatusTimeout) ? lastMode

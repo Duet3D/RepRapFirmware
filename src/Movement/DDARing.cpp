@@ -261,7 +261,7 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 
 // Try to process moves in the ring. Called by the Move task.
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
-uint32_t DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
+uint32_t DDARing::Spin(uint8_t simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept
 {
 	DDA *cdda = currentDda;											// capture volatile variable
 
@@ -286,6 +286,8 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 	// If we are already moving, see whether we need to prepare any more moves
 	if (cdda != nullptr)
 	{
+		const DDA* const currentMove = cdda;						// save for later
+
 		// Count how many prepared or executing moves we have and how long they will take
 		int32_t preparedTime = 0;
 		unsigned int preparedCount = 0;
@@ -303,21 +305,36 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 			}
 		}
 
-		const uint32_t ret = PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
-		return (simulationMode == 0) ? ret : 0;
+		uint32_t ret = PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
+		if (simulationMode != 0)
+		{
+			return 0;
+		}
+
+		if (waitingForSpace)
+		{
+			// The Move task told us it is waiting for space in the ring, so we need to wake it up soon after we expect the move to finish
+			const uint32_t moveTime = currentMove->GetClocksNeeded()/StepClockRate + 1;		// the move time plus 1ms
+			if (moveTime < ret)
+			{
+				ret = moveTime;
+			}
+		}
+
+		return ret;
 	}
 
 	// No DDA is executing, so start executing a new one if possible
 	DDA * dda = getPointer;											// capture volatile variable
-	if (   shouldStartMove											// if the Move code told us that we should start a move...
+	if (   shouldStartMove											// if the Move code told us that we should start a move in any case...
+		|| waitingForSpace											// ...or the Move code told us it was waiting for space in the ring...
 		|| waitingForRingToEmpty									// ...or GCodes is waiting for all moves to finish...
-		|| !CanAddMove()											// ...or the ring is full...
 #if SUPPORT_REMOTE_COMMANDS
 		|| dda->GetState() == DDA::frozen							// ...or the move has already been frozen (it's probably a remote move)
 #endif
 	   )
 	{
-		const uint32_t ret = PrepareMoves(dda, 0, 0, simulationMode);
+		uint32_t ret = PrepareMoves(dda, 0, 0, simulationMode);
 
 		if (dda->GetState() == DDA::completed)
 		{
@@ -335,6 +352,15 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 
 			Platform& p = reprap.GetPlatform();
 			SetBasePriority(NvicPriorityStep);						// shut out step interrupt
+			if (waitingForSpace)
+			{
+				// The Move task told us it is waiting for space in the ring, so wake it up soon after we expect the move to finish
+				const uint32_t moveTime = getPointer->GetClocksNeeded()/StepClockRate + 1;	// the move time plus 1ms
+				if (moveTime < ret)
+				{
+					ret = moveTime;
+				}
+			}
 			const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
 			if (ScheduleNextStepInterrupt())
 			{
@@ -408,6 +434,7 @@ bool DDARing::IsIdle() const noexcept
 }
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
+// Caution! Thus is called with scheduling locked, therefore it must make no FreeRTOS calls, or call anything that makes them
 float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 {
 	return addPointer->AdvanceBabyStepping(*this, axis, amount);

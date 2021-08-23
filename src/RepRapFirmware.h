@@ -150,13 +150,17 @@ namespace CanInterface
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
-// Struct to hold min, max and current values
-struct MinMaxCurrent
+#if !SUPPORT_CAN_EXPANSION
+
+// Struct to hold min, max and current values. For Duet 3 systems this is defined in file Duet3Common.h instead of here.
+struct MinCurMax
 {
-	float min;
-	float max;
+	float minimum;
 	float current;
+	float maximum;
 };
+
+#endif
 
 // Type of a driver identifier
 struct DriverId

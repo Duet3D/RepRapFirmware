@@ -14,11 +14,6 @@
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
-ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(BoardState::unknown), numDrivers(0)
-{
-	mcuTemp.min = mcuTemp.max = mcuTemp.current = vin.max = vin.min = vin.current = v12.max = v12.min = v12.current = 0.0;
-}
-
 #if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
@@ -27,53 +22,66 @@ ExpansionBoardData::ExpansionBoardData() noexcept : typeName(nullptr), state(Boa
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ExpansionManager, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(ExpansionManager, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 {
 	// 0. boards[] members
+	{ "accelerometer",		OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasAccelerometer, self, 4),					ObjectModelEntryFlags::none },
 	{ "canAddress",			OBJECT_MODEL_FUNC((int32_t)(&(self->FindIndexedBoard(context.GetLastIndex())) - self->boards)),					ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareFileName),	ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::verbose },
-	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																						ObjectModelEntryFlags::live },
+	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::live },
 	{ "shortName",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::shortName),			ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).state.ToString()),								ObjectModelEntryFlags::none },
-	{ "v12",				OBJECT_MODEL_FUNC(self, 3),																						ObjectModelEntryFlags::live },
-	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																						ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasV12, self, 3),							ObjectModelEntryFlags::live },
+	{ "vIn",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasVin, self, 2),							ObjectModelEntryFlags::live },
 
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.current, 1),							ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.max, 1),								ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.min, 1),								ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.maximum, 1),							ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.minimum, 1),							ObjectModelEntryFlags::none },
 
 	// 2. vIn members
 	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.current, 1),								ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.max, 1),									ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.min, 1),									ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.maximum, 1),								ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.minimum, 1),								ObjectModelEntryFlags::none },
 
 	// 3. v12 members
 	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.current, 1),								ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.max, 1),									ObjectModelEntryFlags::none },
-	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.min, 1),									ObjectModelEntryFlags::none },
+	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.maximum, 1),								ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.minimum, 1),								ObjectModelEntryFlags::none },
+
+	// 4. accelerometer members
+	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerLastRunDataPoints),		ObjectModelEntryFlags::none },
+	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerRuns),					ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
-	4,				// number of sections
-	9,				// section 0: boards[]
+	5,				// number of sections
+	10,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
-	3				// section 3: v12
+	3,				// section 3: v12
+	2				// section 4: accelerometer
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
 
 #endif
 
+ExpansionBoardData::ExpansionBoardData() noexcept
+	: typeName(nullptr), hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
+	  accelerometerRuns(0), accelerometerLastRunDataPoints(0),
+	  state(BoardState::unknown), numDrivers(0)
+{
+}
+
 ExpansionManager::ExpansionManager() noexcept : numExpansionBoards(0), numBoardsFlashing(0), lastIndexSearched(0), lastAddressFound(0)
 {
-	// the boards table array is initialised by its constructor
-	boards[0].numDrivers = NumDirectDrivers;
+	// The boards table array is initialised by its constructor. Note, boards[0] is not used.
 }
 
 // Update the state of a board
@@ -116,6 +124,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 	if (src <= CanId::MaxCanAddress)
 	{
 		ExpansionBoardData& board = boards[src];
+		board.hasVin = board.hasV12 = board.hasMcuTemp = false;
 		String<StringLength100> boardTypeAndFirmwareVersion;
 		boardTypeAndFirmwareVersion.copy(buf->msg.announce.boardTypeAndFirmwareVersion, CanMessageAnnounce::GetMaxTextLength(buf->dataLength));
 		UpdateBoardState(src, BoardState::unknown);
@@ -143,6 +152,39 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 	}
 	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanInterface::GetCanAddress(), src);
 	CanInterface::SendResponseNoFree(buf);
+}
+
+// Process a board status report
+void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept
+{
+	const CanAddress address = buf->id.Src();
+	ExpansionBoardData& board = boards[address];
+	if (board.state != BoardState::running)
+	{
+		UpdateBoardState(address, BoardState::running);
+	}
+
+	const CanMessageBoardStatus msg = buf->msg.boardStatus;
+
+	// We must process the data in the correct order, to ensure that we pick up the right values
+	size_t index = 0;
+	board.hasVin = msg.hasVin;
+	if (msg.hasVin)
+	{
+		board.vin = msg.values[index++];
+		board.hasVin = true;
+	}
+	board.hasV12 = msg.hasV12;
+	if (msg.hasV12)
+	{
+		board.v12 = msg.values[index++];
+	}
+	board.hasMcuTemp = msg.hasMcuTemp;
+	if (msg.hasMcuTemp)
+	{
+		board.mcuTemp = msg.values[index++];
+	}
+	board.hasAccelerometer = msg.hasAccelerometer;
 }
 
 // Return a pointer to the expansion board, if it is present
@@ -221,6 +263,12 @@ void ExpansionManager::UpdateFinished(CanAddress address) noexcept
 void ExpansionManager::UpdateFailed(CanAddress address) noexcept
 {
 	UpdateBoardState(address, BoardState::flashFailed);
+}
+
+void ExpansionManager::AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept
+{
+	boards[address].accelerometerLastRunDataPoints = numDataPoints;
+	++boards[address].accelerometerRuns;
 }
 
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

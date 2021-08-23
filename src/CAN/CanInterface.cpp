@@ -13,6 +13,7 @@
 #include "CommandProcessor.h"
 #include "CanMessageGenericConstructor.h"
 #include <CanMessageBuffer.h>
+#include <CanMessageGenericTables.h>
 #include <Movement/DDA.h>
 #include <Movement/DriveMovement.h>
 #include <Movement/StepTimer.h>
@@ -409,6 +410,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 
 				// Send the message
 				SendCanMessage(TxBufferIndexMotion, MaxMotionSendWait, buf);
+				reprap.GetPlatform().OnProcessingCanMessage();
 
 #ifdef CAN_DEBUG
 				// Display a debug message too
@@ -700,6 +702,8 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 		MutexLocker lock(transactionMutex);
 
 		SendCanMessage(TxBufferIndexRequest, MaxRequestSendWait, buf);
+		reprap.GetPlatform().OnProcessingCanMessage();
+
 		const uint32_t whenStartedWaiting = millis();
 		unsigned int fragmentsReceived = 0;
 		for (;;)
@@ -935,6 +939,24 @@ pre(driver.IsRemote())
 			CanMessageGenericConstructor cons(M569Point6Params);
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
+		}
+		
+	case 7:
+		if (gb.Seen('C'))
+		{
+			// If a port name if provided, it must match the board ID
+			String<StringLength20> portName;
+			gb.GetQuotedString(portName.GetRef(), false);
+			if (isdigit(portName[0]) && IoPort::RemoveBoardAddress(portName.GetRef()) != driver.boardAddress)
+			{
+				reply.copy("Brake port must be on same board as driver");
+				return GCodeResult::error;
+			}
+		}
+		{
+			CanMessageGenericConstructor cons(M569Point7Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m569p7, driver.boardAddress, reply);
 		}
 
 	default:

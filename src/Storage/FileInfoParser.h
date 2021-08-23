@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeFileInfo.h>
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 #include <RTOSIface/RTOSIface.h>
 

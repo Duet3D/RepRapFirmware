@@ -8,7 +8,7 @@
 //*************************************************************************************
 
 #include "GCodeBuffer.h"
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include <GCodes/GCodeInput.h>
 #endif
 #if HAS_LINUX_INTERFACE
@@ -88,7 +88,7 @@ const char *GCodeBuffer::GetStateText() const noexcept
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
 	: codeChannel(channel), normalInput(normalIn),
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	  fileInput(fileIn),
 #endif
 	  responseMessageType(mt), lastResult(GCodeResult::ok),
@@ -856,7 +856,7 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 		{
 			if (machineState->DoingFile())
 			{
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # if HAS_LINUX_INTERFACE
 				if (!reprap.UsingLinuxInterface())
 # endif
@@ -1071,7 +1071,7 @@ void GCodeBuffer::FinishWritingBinary() noexcept
 
 void GCodeBuffer::RestartFrom(FilePosition pos) noexcept
 {
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileInput->Reset(machineState->fileState);		// clear the buffered data
 	machineState->fileState.Seek(pos);				// replay the abandoned instructions when we resume
 #endif

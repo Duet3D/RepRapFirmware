@@ -29,7 +29,7 @@ public:
 	bool AddAsyncMove(const AsyncMove& nextMove) noexcept;
 #endif
 
-	uint32_t Spin(uint8_t simulationMode, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
+	uint32_t Spin(uint8_t simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 

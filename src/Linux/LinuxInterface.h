@@ -50,7 +50,8 @@ public:
 	StopPrintReason GetPrintStopReason() const { return printStopReason; }
 	bool FillBuffer(GCodeBuffer &gb) noexcept;									// Try to fill up the G-code buffer with the next available G-code
 
-	void SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept;	// Notify Linux that the print has been paused
+	void SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept;	// Set parameters for the next pause request
+	void ReportPause() noexcept;												// Report that the print has been paused
 
 	void HandleGCodeReply(MessageType type, const char *reply) noexcept;		// accessed by Platform
 	void HandleGCodeReply(MessageType type, OutputBuffer *buffer) noexcept;		// accessed by Platform
@@ -124,7 +125,7 @@ private:
 	uint32_t filePreAllocSize;
 	char *fileReadBuffer;
 	const char *fileWriteBuffer;
-	size_t fileBufferLength, numFileWriteRequests;
+	size_t fileBufferLength;
 	FilePosition fileOffset;
 
 	static volatile OutputStack gcodeReply;
@@ -143,6 +144,10 @@ inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedRea
 	pauseFilePosition = position;
 	pauseReason = reason;
 	reportPauseWritten = false;
+}
+
+inline void LinuxInterface::ReportPause() noexcept
+{
 	reportPause = true;
 }
 

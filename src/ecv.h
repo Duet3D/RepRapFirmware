@@ -111,6 +111,8 @@ struct threadmbcinfostruct { int _x; };	/* this is defined only in the CRT sourc
 
 #define __inline__		inline
 #define __restrict__	_ecv_restrict
+#define __restrict		_ecv_restrict
+#define __asm			asm
 
 /* Hide gcc __attribute__ keyword from eCv.
  * WARNING: some header files (e.g. _mingw.h) may "#undef __attribute__", which undoes this. */

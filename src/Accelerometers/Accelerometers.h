@@ -22,6 +22,9 @@ class CanMessageAccelerometerData;
 
 namespace Accelerometers
 {
+	bool HasLocalAccelerometer() noexcept;
+	unsigned int GetLocalAccelerometerRuns() noexcept;
+	unsigned int GetLocalAccelerometerDataPoints() noexcept;
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 #if SUPPORT_CAN_EXPANSION

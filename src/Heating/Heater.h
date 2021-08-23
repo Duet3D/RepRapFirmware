@@ -89,10 +89,15 @@ public:
 	void SetAsToolHeater() noexcept;
 	void SetAsBedOrChamberHeater() noexcept;
 
+#if SUPPORT_REMOTE_COMMANDS
+	uint8_t GetModeByte() const { return (uint8_t)GetMode(); }
+#endif
+
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(monitors)
 
+#if !SUPPORT_CAN_EXPANSION				// for Duet 3 boards this is defined in Duet3Common.h
 	enum class HeaterMode : uint8_t
 	{
 		// The order of these is important because we test "mode > HeatingMode::suspended" to determine whether the heater is active
@@ -109,8 +114,10 @@ protected:
 		tuning1,
 		tuning2,
 		tuning3,
+		firstTuningMode = tuning0,
 		lastTuningMode = tuning3
 	};
+#endif
 
 	struct HeaterParameters
 	{

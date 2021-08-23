@@ -41,6 +41,9 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	void ProcessRemoteFanRpms(CanAddress src, const CanMessageFansReport& msg) noexcept;
 #endif
+#if SUPPORT_REMOTE_COMMANDS
+	unsigned int PopulateFansReport(CanMessageFansReport& msg) noexcept;
+#endif
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteFanSettings(FileStore *f) const noexcept;
 #endif

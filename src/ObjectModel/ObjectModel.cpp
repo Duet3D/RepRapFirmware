@@ -103,7 +103,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 #endif
 
 	case TypeCode::Special:
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		switch ((SpecialType)param)
 		{
 		case SpecialType::sysDir:
@@ -722,7 +722,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		break;
 
 	case TypeCode::Special:
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		switch ((ExpressionValue::SpecialType)val.param)
 		{
 		case ExpressionValue::SpecialType::sysDir:

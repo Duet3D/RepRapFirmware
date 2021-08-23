@@ -66,6 +66,7 @@ namespace CanInterface
 	// Low level functions
 	void Init() noexcept;
 	void Shutdown() noexcept;
+	inline CanAddress GetCurrentMasterAddress() noexcept { return CanId::MasterAddress; }		// currently fixed, but might change in future
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InExpansionMode() noexcept;
