@@ -383,6 +383,9 @@ private:
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);					// Deal with M955
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M956
 #endif
+#if SUPPORT_CAN_EXPANSION
+	GCodeResult StartClosedLoopDataCollection(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Deal with M569.5
+#endif
 
 	bool SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept;
 	void SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept;

@@ -22,6 +22,7 @@
 #include <Platform/TaskPriorities.h>
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <ClosedLoop/ClosedLoop.h>
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"
@@ -930,6 +931,16 @@ pre(driver.IsRemote())
 			return cons.SendAndGetResponse(CanMessageType::m569p2, driver.boardAddress, reply);
 		}
 
+	case 5:
+		return ClosedLoop::StartDataCollection(driver, gb, reply);
+
+	case 6:
+		{
+			CanMessageGenericConstructor cons(M569Point6Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
+		}
+		
 	case 7:
 		if (gb.Seen('C'))
 		{
@@ -1385,6 +1396,20 @@ GCodeResult CanInterface::StartAccelerometer(DriverId device, uint8_t axes, uint
 }
 
 # endif
+
+GCodeResult CanInterface::StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t rateRequested, uint8_t movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	CanMessageBuffer* const buf = AllocateBuffer(&gb);
+	const CanRequestId rid = CanInterface::AllocateRequestId(device.boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageStartClosedLoopDataCollection>(rid, GetCanAddress(), device.boardAddress);
+	msg->mode = mode;
+	msg->filter = filter;
+	msg->rate = rateRequested;
+	msg->numSamples = numSamples;
+	msg->movement = movementRequested;
+	msg->deviceNumber = device.localDriver;
+	return SendRequestAndGetStandardReply(buf, rid, reply);
+}
 
 #endif
 
