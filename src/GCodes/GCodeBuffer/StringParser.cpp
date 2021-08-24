@@ -745,10 +745,14 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeException)
 {
 	SkipWhiteSpace();
+
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileData outputFile;
+#endif
 
 	if (gb.buffer[readPointer] == '>')
 	{
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 		// Redirect the line to file
 		++readPointer;
 		OpenMode openMode;
@@ -769,6 +773,9 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 			throw GCodeException(gb.GetLineNumber(), readPointer + commandIndent, "Failed to create or open file");
 		}
 		outputFile.Set(f);
+#else
+		throw GCodeException(gb.GetLineNumber(), readPointer + commandIndent, "Can't write to this file system");
+#endif
 	}
 
 	while (true)
@@ -797,6 +804,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		}
 	}
 
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	if (outputFile.IsLive())
 	{
 		reply.cat('\n');
@@ -808,6 +816,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 			throw GCodeException(gb.GetLineNumber(), -1, "Failed to write to redirect file");
 		}
 	}
+#endif
 }
 
 // Evaluate the condition that should follow 'if' or 'while'
@@ -1656,9 +1665,12 @@ void StringParser::FinishWritingBinary() noexcept
 	}
 }
 
+#endif
+
 // This is called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.
 bool StringParser::FileEnded() noexcept
 {
+#if HAS_MASS_STORAGE
 	if (IsWritingBinary())
 	{
 		// We are in the middle of writing a binary file but the input stream has ended
@@ -1666,6 +1678,7 @@ bool StringParser::FileEnded() noexcept
 		Init();
 		return false;
 	}
+#endif
 
 	bool commandCompleted = false;
 	if (gcodeLineEnd != 0)				// if there is something in the buffer
@@ -1674,6 +1687,7 @@ bool StringParser::FileEnded() noexcept
 		commandCompleted = true;
 	}
 
+#if HAS_MASS_STORAGE
 	if (IsWritingFile())
 	{
 		if (commandCompleted)
@@ -1698,6 +1712,7 @@ bool StringParser::FileEnded() noexcept
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 		return false;
 	}
+#endif
 
 	if (!commandCompleted && gb.CurrentFileMachineState().GetIterations() >= 0)
 	{
@@ -1708,8 +1723,6 @@ bool StringParser::FileEnded() noexcept
 	}
 	return commandCompleted;
 }
-
-#endif
 
 // Check that a number was found. If it was, advance readPointer past it. Otherwise throw an exception.
 void StringParser::CheckNumberFound(const char *endptr) THROWS(GCodeException)
