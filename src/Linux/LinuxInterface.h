@@ -46,8 +46,7 @@ public:
 	void EventOccurred(bool timeCritical = false) noexcept;						// Called when a new event has happened. It can optionally start off a new transfer immediately
 	GCodeResult HandleM576(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Set the SPI communication parameters
 
-	bool HasPrintStopped();
-	StopPrintReason GetPrintStopReason() const { return printStopReason; }
+	bool IsPrintAborted() noexcept;												// Check if the current print has been aborted
 	bool FillBuffer(GCodeBuffer &gb) noexcept;									// Try to fill up the G-code buffer with the next available G-code
 
 	void SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept;	// Set parameters for the next pause request
@@ -80,8 +79,7 @@ private:
 	GCodeFileInfo fileInfo;
 	FilePosition pauseFilePosition;
 	PrintPausedReason pauseReason;
-	bool reportPause, reportPauseWritten, printStopped;
-	StopPrintReason printStopReason;
+	bool reportPause, reportPauseWritten, printAborted;
 
 	char *codeBuffer;
 	volatile uint16_t rxPointer, txPointer, txEnd;
@@ -135,7 +133,7 @@ private:
 	volatile size_t fileCodesRead, fileCodesHandled, fileMacrosRunning, fileMacrosClosing;
 #endif
 
-	void InvalidateBufferChannel(GCodeChannel channel) noexcept;            // Invalidate every buffered G-code of the corresponding channel from the buffer ring
+	void InvalidateBufferedCodes(GCodeChannel channel) noexcept;            // Invalidate every buffered G-code of the corresponding channel from the buffer ring
 };
 
 inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept
@@ -151,12 +149,12 @@ inline void LinuxInterface::ReportPause() noexcept
 	reportPause = true;
 }
 
-inline bool LinuxInterface::HasPrintStopped()
+inline bool LinuxInterface::IsPrintAborted() noexcept
 {
 	TaskCriticalSectionLocker locker;
-	if (printStopped)
+	if (printAborted)
 	{
-		printStopped = false;
+		printAborted = false;
 		return true;
 	}
 	return false;

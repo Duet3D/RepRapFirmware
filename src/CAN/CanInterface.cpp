@@ -936,11 +936,21 @@ pre(driver.IsRemote())
 
 	case 6:
 		{
-			CanMessageGenericConstructor cons(M569Point6Params);
-			cons.PopulateFromCommand(gb);
-			return cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
+			GCodeResult rslt;
+			{
+				CanMessageGenericConstructor cons(M569Point6Params);
+				cons.PopulateFromCommand(gb);
+				rslt = cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
+			}
+			while (rslt == GCodeResult::notFinished)
+			{
+				delay(100);							// give it some time to do the tuning move
+				CanMessageGenericConstructor cons(M569Point6Params_StatusOnly);
+				rslt = cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
+			}
+			return rslt;
 		}
-		
+
 	case 7:
 		if (gb.Seen('C'))
 		{

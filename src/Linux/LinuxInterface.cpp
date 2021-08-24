@@ -50,7 +50,7 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 
 LinuxInterface::LinuxInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0),
 	maxDelayBetweenTransfers(SpiTransferDelay), numMaxEvents(SpiEventsRequired), delaying(false), numEvents(0),
-	reportPause(false), reportPauseWritten(false), printStopped(false),
+	reportPause(false), reportPauseWritten(false), printAborted(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), iapWritePointer(IAP_IMAGE_START),
 	waitingForFileChunk(false), fileMutex(), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false)
 #ifdef TRACK_FILE_CODES
@@ -292,7 +292,13 @@ void LinuxInterface::Spin() noexcept
 				case LinuxRequest::PrintStopped:
 				{
 					const PrintStoppedReason reason = transfer.ReadPrintStoppedInfo();
-					if (reason == PrintStoppedReason::normalCompletion)
+					if (reason == PrintStoppedReason::abort)
+					{
+						// Stop the print with the given reason
+						printAborted = true;
+						InvalidateBufferedCodes(GCodeChannel::File);
+					}
+					else
 					{
 						// Just mark the print file as finished
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
@@ -305,13 +311,6 @@ void LinuxInterface::Spin() noexcept
 						{
 							packetAcknowledged = false;
 						}
-					}
-					else
-					{
-						// Stop the print with the given reason
-						printStopReason = (StopPrintReason)reason;
-						printStopped = true;
-						InvalidateBufferChannel(GCodeChannel::File);
 					}
 					break;
 				}
@@ -612,8 +611,8 @@ void LinuxInterface::Spin() noexcept
 					break;
 				}
 
-				// All the files have been aborted on the given channel
-				case LinuxRequest::FilesAborted:
+				// Invalidate all files and codes on a given channel
+				case LinuxRequest::InvalidateChannel:
 				{
 					const GCodeChannel channel = transfer.ReadCodeChannel();
 					if (channel.IsValid())
@@ -629,6 +628,7 @@ void LinuxInterface::Spin() noexcept
 						{
 							// Note that we do not call StopPrint here or set any other variables; DSF already does that
 							gb->AbortFile(true, false);
+							InvalidateBufferedCodes(channel);
 						}
 						else
 						{
@@ -989,7 +989,7 @@ void LinuxInterface::Spin() noexcept
 					// Invalidate buffered codes if required
 					if (gb->IsInvalidated())
 					{
-						InvalidateBufferChannel(gb->GetChannel());
+						InvalidateBufferedCodes(gb->GetChannel());
 						gb->Invalidate(false);
 					}
 
@@ -1146,9 +1146,8 @@ void LinuxInterface::Spin() noexcept
 				gb->MessageAcknowledged(true);
 			}
 
-			// Stop the print (if applicable)
-			printStopReason = StopPrintReason::abort;
-			printStopped = true;
+			// Abort the print (if applicable)
+			printAborted = true;
 
 			// Turn off all the heaters
 			reprap.GetHeat().SwitchOffAll(true);
@@ -1675,7 +1674,7 @@ void LinuxInterface::EventOccurred(bool timeCritical) noexcept
 	}
 }
 
-void LinuxInterface::InvalidateBufferChannel(GCodeChannel channel) noexcept
+void LinuxInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 {
 	TaskCriticalSectionLocker locker;
 	if (rxPointer != txPointer || txEnd != 0)

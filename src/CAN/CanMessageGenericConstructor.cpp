@@ -329,7 +329,7 @@ void CanMessageGenericConstructor::AddDriverIdParam(char c, DriverId did) THROWS
 	InsertValue(&did.localDriver, sz, pos);
 }
 
-GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) noexcept
+GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) const noexcept
 {
 	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
