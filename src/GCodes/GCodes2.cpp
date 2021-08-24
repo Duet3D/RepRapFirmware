@@ -4305,7 +4305,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						platform.SetIdleCurrentFactor(gb.GetFValue()/100.0);
 					}
 
-					if (!seen)
+					if (seen)
+					{
+						reprap.MoveUpdated();
+					}
+					else
 					{
 						reply.copy(	(code == 913) ? "Motor current % of normal - "
 #if HAS_SMART_DRIVERS
