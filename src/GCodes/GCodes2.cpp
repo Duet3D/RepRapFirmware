@@ -4313,12 +4313,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								);
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c:%d, ", axisLetters[axis], (int)platform.GetMotorCurrent(axis, code));
+							reply.catf("%c:%d, ", axisLetters[axis], platform.GetMotorCurrent(axis, code));
 						}
 						reply.cat("E");
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf(":%d", (int)platform.GetMotorCurrent(ExtruderToLogicalDrive(extruder), code));
+							reply.catf(":%d", platform.GetMotorCurrent(ExtruderToLogicalDrive(extruder), code));
 						}
 						if (code == 906)
 						{

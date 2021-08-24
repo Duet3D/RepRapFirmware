@@ -276,7 +276,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 3. move.axes[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
-	{ "current",			OBJECT_MODEL_FUNC((int32_t)lrintf(self->GetMotorCurrent(context.GetLastIndex(), 906))),							ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_NOSELF(&axisDriversArrayDescriptor),															ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
 	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
@@ -287,6 +287,8 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 7),																						ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->AxisMinimum(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
 	{ "minProbed",			OBJECT_MODEL_FUNC(self->axisMinimaProbed.IsBitSet(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "percentCurrent",		OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 913))),								ObjectModelEntryFlags::none },
+	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),								ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[context.GetLastIndex()], 2),											ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3),						ObjectModelEntryFlags::live },
@@ -295,13 +297,15 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 	// 4. move.extruders[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
-	{ "current",			OBJECT_MODEL_FUNC((int32_t)lrintf(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),							ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),								ObjectModelEntryFlags::none },
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),																		ObjectModelEntryFlags::none },
 	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 8),																												ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																												ObjectModelEntryFlags::none },
+	{ "percentCurrent",		OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 913))),														ObjectModelEntryFlags::none },
+	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),														ObjectModelEntryFlags::none },
 	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(context.GetLastIndex()), reprap.GetCurrentTool()), 1)),	ObjectModelEntryFlags::live },
 	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvanceClocks(context.GetLastIndex())/StepClockRate, 2),							ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), 					ObjectModelEntryFlags::live },
@@ -349,8 +353,8 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 #else
 	0,																		// section 2: vIn
 #endif
-	18,																		// section 3: move.axes[]
-	13,																		// section 4: move.extruders[]
+	20,																		// section 3: move.axes[]
+	15,																		// section 4: move.extruders[]
 	3,																		// section 5: move.extruders[].nonlinear
 #if HAS_12V_MONITOR
 	3,																		// section 6: v12
@@ -3022,23 +3026,30 @@ void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 }
 
 // Get the configured motor current for an axis or extruder
-float Platform::GetMotorCurrent(size_t drive, int code) const noexcept
+int Platform::GetMotorCurrent(size_t drive, int code) const noexcept
 {
+	float rslt;
 	switch (code)
 	{
 	case 906:
-		return motorCurrents[drive];
+		rslt = motorCurrents[drive];
+		break;
 
 	case 913:
-		return motorCurrentFraction[drive] * 100.0;
+		rslt = motorCurrentFraction[drive] * 100.0;
+		break;
 
 #if HAS_SMART_DRIVERS
 	case 917:
-		return standstillCurrentPercent[drive];
+		rslt = standstillCurrentPercent[drive];
+		break;
 #endif
 	default:
-		return 0.0;
+		rslt = 0.0;
+		break;
 	}
+
+	return lrintf(rslt);
 }
 
 // Set the motor idle current factor

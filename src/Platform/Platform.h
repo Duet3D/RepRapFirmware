@@ -445,7 +445,7 @@ public:
 	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
 		pre(drive < GetNumActualDirectDrivers());
 	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
-	float GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
+	int GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
 	float GetIdleCurrentFactor() const noexcept { return idleCurrentFactor; }
 	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode) noexcept;
