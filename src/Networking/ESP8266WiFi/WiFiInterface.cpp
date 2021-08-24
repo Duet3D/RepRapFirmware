@@ -90,7 +90,8 @@ constexpr SSPChannel ESP_SPI = SSP0;
 # include "matrix/matrix.h"
 #endif
 
-const uint32_t WifiResponseTimeoutMillis = 200;
+const uint32_t WiFiResponseTimeoutMillis = 200;					// SPI timeout when when the ESP does not have to write to flash memory
+const uint32_t WiFiTransferTimeoutMillis = 60;					// Christian measured this at 29 to 31ms when the ESP has to write to flag memory
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 300;
 const uint32_t WiFiStableMillis = 100;
@@ -1812,7 +1813,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 	// Set up the DMA controller
 	spi_slave_dma_setup(dataOutLength, dataInLength);
-	spi_enable(ESP_SPI);
+	EnableSpi();
 
 	// Enable the end-of transfer interrupt
 	(void)ESP_SPI->SPI_SR;						// clear any pending interrupt
@@ -1825,7 +1826,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// Wait until the DMA transfer is complete, with timeout
 	do
 	{
-		if (!TaskBase::Take(WifiResponseTimeoutMillis))
+		if (!TaskBase::Take(WiFiResponseTimeoutMillis))
 		{
 			if (reprap.Debug(moduleNetwork))
 			{
@@ -1843,12 +1844,18 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #if SAME5x
 	{
 		// We don't get and end-of-transfer interrupt, just a start-of-transfer one. So wait until SS is high, then disable the SPI.
-		//TODO can we use ESP_DATA_RDY to indicate end of transfer instead? or perhaps the end-of-transmit-DMA interrupt?
 		// The max block time is about 2K * 8/spi_clock_speed plus any pauses that the ESP takes, which at 26.7MHz clock rate is 620us plus pause time
+		// However, when we send a command that involves writing to flash memory, then the flash write occurs between sending the header and the body
 		const uint32_t startedWaitingAt = millis();
+		const bool writingFlash = (   cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkConfigureAccessPoint
+								   || cmd == NetworkCommand::networkDeleteSsid || cmd == NetworkCommand::networkFactoryReset);
 		while (!digitalRead(EspSSPin))
 		{
-			if (millis() - startedWaitingAt >= 4)
+			if (writingFlash)
+			{
+				delay(2);						// we sent a command that writes to flash memory. It may take a while and we're not trying to minimise latency, so give up the CPU
+			}
+			if (millis() - startedWaitingAt >= WiFiTransferTimeoutMillis)
 			{
 				return ResponseTimeout;
 			}
