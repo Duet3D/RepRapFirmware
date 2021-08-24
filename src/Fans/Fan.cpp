@@ -160,8 +160,11 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			{
 				reply.catf(" (%s)", name.c_str());
 			}
-			reply.catf(", speed: %d%%, min: %d%%, max: %d%%, blip: %.2f",
-						(int)(val * 100.0),
+			if (sensorsMonitored.IsEmpty())
+			{
+				reply.catf(", speed %d%%", (int)(val * 100.0));
+			}
+			reply.catf(", min: %d%%, max: %d%%, blip: %.2f",
 						(int)(minVal * 100.0),
 						(int)(maxVal * 100.0),
 						(double)(blipTime * MillisToSeconds)
