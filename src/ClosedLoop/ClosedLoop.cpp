@@ -51,7 +51,7 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 	// Write the header line
 	{
 		String<StringLength500> temp;
-		temp.printf("Sample");
+		temp.copy("Sample,Timestamp");
 		if (filterRequested & CL_RECORD_RAW_ENCODER_READING)	{temp.cat(",Raw Encoder Reading");}
 		if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS)  	{temp.cat(",Current Motor Steps");}
 		if (filterRequested & CL_RECORD_TARGET_MOTOR_STEPS)  	{temp.cat(",Target Motor Steps");}
@@ -198,7 +198,7 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 	if (f != nullptr)
 	{
 		unsigned int numSamples = msg.numSamples;
-		const size_t variableCount = msg.GetFilterSetBits();
+		const size_t variableCount = msg.GetVariableCount();
 
 		while (numSamples != 0)
 		{
