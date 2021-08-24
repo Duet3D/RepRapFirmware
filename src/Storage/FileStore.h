@@ -57,10 +57,7 @@ public:
 	bool IsCloseRequested() const noexcept { return closeRequested; }
 	bool IsFree() const noexcept { return usageMode == FileUseMode::free; }
 	FilePosition Position() const noexcept;						// Return the current position in the file, assuming we are reading the file
-
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	void Duplicate() noexcept;									// Create a second reference to this file
-#endif
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	FileWriteBuffer *GetWriteBuffer() const noexcept;			// Return a pointer to the remaining space for writing

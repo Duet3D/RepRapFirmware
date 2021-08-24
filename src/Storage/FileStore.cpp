@@ -505,10 +505,6 @@ bool FileStore::ForceClose() noexcept
 	return false;
 }
 
-#endif
-
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-
 void FileStore::Duplicate() noexcept
 {
 	switch (usageMode)
