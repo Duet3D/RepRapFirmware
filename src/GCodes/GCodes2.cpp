@@ -2981,7 +2981,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					DoFileMacro(gb, CONFIG_FILE, true, code);
 				}
 				break;
+#endif
 
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			case 503: // List variable settings
 				{
 					if (!LockFileSystem(gb))

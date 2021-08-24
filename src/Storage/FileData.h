@@ -10,8 +10,6 @@
 
 #include "FileStore.h"
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-
 class FileGCodeInput;
 
 // Small class to hold an open file and data relating to it.
@@ -73,7 +71,7 @@ public:
 		return f->Read(buf, nBytes);
 	}
 
-# if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool Write(char b) noexcept
 	{
 		return f->Write(b);
@@ -137,7 +135,5 @@ private:
 		f = nullptr;
 	}
 };
-
-#endif
 
 #endif

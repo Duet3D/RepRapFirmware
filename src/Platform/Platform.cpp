@@ -4131,33 +4131,6 @@ const char* Platform::InternalGetSysDir() const noexcept
 	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
 }
 
-// Set the system files path
-GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcept
-{
-	String<MaxFilenameLength> newSysDir;
-	WriteLocker lock(sysDirLock);
-
-	if (!MassStorage::CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir) || (!newSysDir.EndsWith('/') && newSysDir.cat('/')))
-	{
-		reply.copy("Path name too long");
-		return GCodeResult::error;
-	}
-
-	if (!MassStorage::DirectoryExists(newSysDir.GetRef()))
-	{
-		reply.copy("Path not found");
-		return GCodeResult::error;
-	}
-
-	newSysDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
-	const size_t len = newSysDir.strlen() + 1;
-	char* const nsd = new char[len];
-	memcpy(nsd, newSysDir.c_str(), len);
-	ReplaceObject(sysDir, nsd);
-	reprap.DirectoriesUpdated();
-	return GCodeResult::ok;
-}
-
 bool Platform::SysFileExists(const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
@@ -4186,6 +4159,37 @@ ReadLockedPointer<const char> Platform::GetSysDir() const noexcept
 {
 	ReadLocker lock(sysDirLock);
 	return ReadLockedPointer<const char>(lock, InternalGetSysDir());
+}
+
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
+// Set the system files path
+GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcept
+{
+	String<MaxFilenameLength> newSysDir;
+	WriteLocker lock(sysDirLock);
+
+	if (!MassStorage::CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir) || (!newSysDir.EndsWith('/') && newSysDir.cat('/')))
+	{
+		reply.copy("Path name too long");
+		return GCodeResult::error;
+	}
+
+	if (!MassStorage::DirectoryExists(newSysDir.GetRef()))
+	{
+		reply.copy("Path not found");
+		return GCodeResult::error;
+	}
+
+	newSysDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
+	const size_t len = newSysDir.strlen() + 1;
+	char* const nsd = new char[len];
+	memcpy(nsd, newSysDir.c_str(), len);
+	ReplaceObject(sysDir, nsd);
+	reprap.DirectoriesUpdated();
+	return GCodeResult::ok;
 }
 
 #endif
