@@ -122,7 +122,7 @@ namespace FirmwareUpdater
 				if (uploader != nullptr)
 				{
 					const char* binaryFilename = filenameRef.IsEmpty() ? WIFI_FIRMWARE_FILE : filenameRef.c_str();
-					uploader->SendUpdateFile(binaryFilename, FIRMWARE_DIRECTORY, WifiFirmwareUploader::FirmwareAddress);
+					uploader->SendUpdateFile(binaryFilename, WifiFirmwareUploader::FirmwareAddress);
 				}
 			}
 			break;
