@@ -17,7 +17,7 @@ class WifiFirmwareUploader
 public:
 	WifiFirmwareUploader(UARTClass& port, WiFiInterface &iface) noexcept;
 	bool IsReady() const noexcept;
-	void SendUpdateFile(const char *file, const char *dir, uint32_t address) noexcept;
+	void SendUpdateFile(const char *file, uint32_t address) noexcept;
 	void Spin() noexcept;
 
 	static const uint32_t FirmwareAddress = 0x00000000;

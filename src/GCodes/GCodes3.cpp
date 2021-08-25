@@ -1177,7 +1177,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		{
 			if (firmwareUpdateModuleMap.CountSetBits() > 1)
 			{
-				reply.copy("Filename can only be provided when updating excactly one module\n");
+				reply.copy("Filename can only be provided when updating exactly one module\n");
 				firmwareUpdateModuleMap.Clear();
 				return GCodeResult::error;
 			}
