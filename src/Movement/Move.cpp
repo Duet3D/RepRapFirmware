@@ -198,8 +198,7 @@ void Move::Init() noexcept
 
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
-	lastStateChangeTime = millis();
-	idleStartTime = lastStateChangeTime;
+	whenLastMoveAdded = whenIdleTimerStarted = millis();
 
 	simulationMode = 0;
 	longestGcodeWaitInterval = 0;
@@ -234,12 +233,7 @@ void Move::Exit() noexcept
 
 		// See if we can add another move to the ring
 		bool moveRead = false;
-		const bool canAddMove = (
-#if SUPPORT_ROLAND
-								 !reprap.GetRoland()->Active() &&
-#endif
-								 	mainDDARing.CanAddMove()
-								);
+		const bool canAddMove = mainDDARing.CanAddMove();
 		if (canAddMove)
 		{
 			// OK to add another move. First check if a special move is available.
@@ -250,18 +244,14 @@ void Move::Exit() noexcept
 				{
 					if (mainDDARing.AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
 					{
-						if (moveState == MoveState::idle || moveState == MoveState::timing)
+						const uint32_t now = millis();
+						const uint32_t timeWaiting = now - whenLastMoveAdded;
+						if (timeWaiting > longestGcodeWaitInterval)
 						{
-							// We were previously idle, so we have a state change
-							moveState = MoveState::collecting;
-							const uint32_t now = millis();
-							const uint32_t timeWaiting = now - lastStateChangeTime;
-							if (timeWaiting > longestGcodeWaitInterval)
-							{
-								longestGcodeWaitInterval = timeWaiting;
-							}
-							lastStateChangeTime = now;
+							longestGcodeWaitInterval = timeWaiting;
 						}
+						whenLastMoveAdded = now;
+						moveState = MoveState::collecting;
 					}
 				}
 				bedLevellingMoveAvailable = false;
@@ -283,17 +273,13 @@ void Move::Exit() noexcept
 						if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 						{
 							const uint32_t now = millis();
-							idleStartTime = now;
-							if (moveState == MoveState::idle || moveState == MoveState::timing)
+							const uint32_t timeWaiting = now - whenLastMoveAdded;
+							if (timeWaiting > longestGcodeWaitInterval)
 							{
-								moveState = MoveState::collecting;
-								const uint32_t timeWaiting = now - lastStateChangeTime;
-								if (timeWaiting > longestGcodeWaitInterval)
-								{
-									longestGcodeWaitInterval = timeWaiting;
-								}
-								lastStateChangeTime = now;
+								longestGcodeWaitInterval = timeWaiting;
 							}
+							whenLastMoveAdded = now;
+							moveState = MoveState::collecting;
 						}
 					}
 				}
@@ -301,7 +287,7 @@ void Move::Exit() noexcept
 		}
 
 		// Let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		uint32_t nextPrepareDelay = mainDDARing.Spin(simulationMode, !canAddMove, millis() - idleStartTime >= mainDDARing.GetGracePeriod());
+		uint32_t nextPrepareDelay = mainDDARing.Spin(simulationMode, !canAddMove, millis() - whenLastMoveAdded >= mainDDARing.GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 		{
@@ -340,12 +326,12 @@ void Move::Exit() noexcept
 				&& reprap.GetGCodes().GetPauseState() == PauseState::notPaused	// for now we don't go into idle hold when we are paused (is this sensible?)
 			   )
 			{
-				lastStateChangeTime = millis();				// record when we first noticed that the machine was idle
+				whenIdleTimerStarted = millis();				// record when we first noticed that the machine was idle
 				moveState = MoveState::timing;
 			}
-			else if (moveState == MoveState::timing && millis() - lastStateChangeTime >= idleTimeout)
+			else if (moveState == MoveState::timing && millis() - whenIdleTimerStarted >= idleTimeout)
 			{
-				reprap.GetPlatform().SetDriversIdle();		// put all drives in idle hold
+				reprap.GetPlatform().SetDriversIdle();			// put all drives in idle hold
 				moveState = MoveState::idle;
 			}
 		}
@@ -358,9 +344,10 @@ void Move::Exit() noexcept
 		// 1. If noMoveAvailable is true, when a new move becomes available.
 		// 2. If moves are being executed and there are unprepared moves in the queue, when it is time to prepare more moves.
 		// 3. If the queue was full and all moves in it were prepared and noMoveAvailable is false, when we have completed one or more moves.
+		// 4. In order to implement idle timeout, we must wake up regularly anyway, say every half second
 		if (!moveRead && nextPrepareDelay != 0)
 		{
-			TaskBase::Take(nextPrepareDelay);
+			TaskBase::Take(min<uint32_t>(nextPrepareDelay, 500));
 		}
 	}
 }

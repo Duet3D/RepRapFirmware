@@ -265,7 +265,11 @@ private:
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
-	uint32_t idleStartTime;								// the time when we started to idle
+
+	uint32_t whenLastMoveAdded;							// The time when we last added a move to the main DDA ring
+	uint32_t whenIdleTimerStarted;						// The approximate time at which the state last changed, except we don't record timing->idle
+
+	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
@@ -284,8 +288,6 @@ private:
 	Deviation initialCalibrationDeviation;
 	Deviation latestMeshDeviation;
 
-	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
-	uint32_t lastStateChangeTime;						// The approximate time at which the state last changed, except we don't record timing->idle
 
 	Kinematics *kinematics;								// What kinematics we are using
 
