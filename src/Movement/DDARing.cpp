@@ -935,7 +935,7 @@ void DDARing::Diagnostics(MessageType mtype, const char *prefix) noexcept
 {
 	const DDA * const cdda = currentDda;
 	reprap.GetPlatform().MessageF(mtype,
-									"=== %sDDARing ===\nScheduled moves %" PRIu32 ", completed moves %" PRIu32 ", hiccups %" PRIu32 ", stepErrors %u, LaErrors %u, Underruns [%u, %u, %u], CDDA state %d\n",
+									"=== %sDDARing ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", hiccups %" PRIu32 ", stepErrors %u, LaErrors %u, Underruns [%u, %u, %u], CDDA state %d\n",
 									prefix, scheduledMoves, completedMoves, numHiccups, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns, numNoMoveUnderruns,
 									(cdda == nullptr) ? -1 : (int)cdda->GetState());
 	numHiccups = stepErrors = numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;

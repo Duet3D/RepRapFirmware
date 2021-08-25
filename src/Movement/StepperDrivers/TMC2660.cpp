@@ -724,7 +724,7 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	}
 	else
 	{
-		reply.cat("SG min/max not available");
+		reply.cat("SG min/max n/a");
 	}
 	ResetLoadRegisters();
 }

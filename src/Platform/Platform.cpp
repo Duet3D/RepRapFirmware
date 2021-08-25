@@ -1907,7 +1907,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 	{
 		String<StringLength256> driverStatus;
-		driverStatus.printf("Driver %u: position %" PRIi32, drive, reprap.GetMove().GetEndPoint(drive));
+		driverStatus.printf("Driver %u: pos %" PRIi32, drive, reprap.GetMove().GetEndPoint(drive));
 #if HAS_SMART_DRIVERS
 		if (drive < numSmartDrivers)
 		{
