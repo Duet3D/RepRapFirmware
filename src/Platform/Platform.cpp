@@ -2606,7 +2606,7 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const no
 		ok = true;
 	}
 
-	if (ok && includingG31)
+	if (ok)
 	{
 		ok = endstops.WriteZProbeParameters(f, includingG31);
 	}

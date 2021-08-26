@@ -567,16 +567,24 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 	bool written = false;
 	for (size_t i = 0; i < MaxZProbes; ++i)
 	{
-		if (zProbes[i] != nullptr && (includingG31 || zProbes[i]->GetSaveToConfigOverride()))
+		ZProbe * const zp = zProbes[i];
+		if (zp != nullptr)
 		{
-			if (!written)
+			if (includingG31)
 			{
-				ok = f->Write("; Z probe parameters\n");
-				written = true;
+				zp->SetSaveToConfigOverride();
 			}
-			if (ok)
+			if (zp->GetSaveToConfigOverride())
 			{
-				ok = zProbes[i]->WriteParameters(f, i);
+				if (!written)
+				{
+					ok = f->Write("; Z probe parameters\n");
+					written = true;
+				}
+				if (ok)
+				{
+					ok = zp->WriteParameters(f, i);
+				}
 			}
 		}
 	}
