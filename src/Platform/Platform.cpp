@@ -3781,16 +3781,33 @@ void Platform::StopLogging() noexcept
 bool Platform::GetAtxPowerState() const noexcept
 {
 	const bool val = PsOnPort.ReadDigital();
-	return (PsOnPort.GetInvert()) ? !val : val;
+	return (PsOnPort.IsHardwareInverted()) ? !val : val;
 }
 
 GCodeResult Platform::HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	deferredPowerDown = false;
-	PsOnPort.WriteDigital(true);
-	atxPowerControlled = true;
+	deferredPowerDown = false;				// cancel any pending power down
+
+	GCodeResult rslt;
+	if (gb.Seen('C'))
+	{
+		rslt = GetGCodeResultFromSuccess(PsOnPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write1));
+		atxPowerControlled = PsOnPort.IsValid();
+	}
+	else if (PsOnPort.IsValid())
+	{
+		PsOnPort.WriteDigital(true);
+		atxPowerControlled = true;
+		rslt = GCodeResult::ok;
+	}
+	else
+	{
+		reply.copy("No PS_ON port defined");
+		rslt = GCodeResult::error;
+	}
+
 	reprap.StateUpdated();
-	return GCodeResult::ok;
+	return rslt;
 }
 
 GCodeResult Platform::HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

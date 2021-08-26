@@ -330,6 +330,7 @@ public:
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return atxPowerControlled; }
+	const IoPort& GetAtxPowerPort() const noexcept { return PsOnPort; }
 
 	BoardType GetBoardType() const noexcept { return board; }
 	void SetBoardType(BoardType bt) noexcept;

@@ -690,6 +690,16 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 		ConvertToFloat(val2, evaluate);
 	}
 
+	// Convert any port values to string
+	if (val1.GetType() == TypeCode::Port)
+	{
+		ConvertToString(val1, evaluate);
+	}
+	if (val2.GetType() == TypeCode::Port)
+	{
+		ConvertToString(val2, evaluate);
+	}
+
 	if ((val1.GetType() == val2.GetType()) || (val1.IsStringType() && val2.IsStringType()))			// handle the common case first
 	{
 		// nothing to do

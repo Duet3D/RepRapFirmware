@@ -16,6 +16,7 @@
 #include <General/SafeStrtod.h>
 #include <General/IP4String.h>
 #include <Hardware/ExceptionHandlers.h>
+#include <Hardware/IoPorts.h>
 
 namespace StackUsage
 {
@@ -130,6 +131,10 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 
 	case TypeCode::Enum32:
 		str.cat("(enumeration)");
+		break;
+
+	case TypeCode::Port:
+		iopVal->AppendPinName(str);
 		break;
 	}
 }
@@ -736,9 +741,23 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		buf->cat("null");
 		break;
 
+	case TypeCode::Port:
+		ReportPinNameAsJson(buf, val);
+		break;
+
 	case TypeCode::ObjectModel:
-		break;							// we already handled this case in the inline part
+		break;											// we already handled this case in the inline part
 	}
+}
+
+// This is a separate function to avoid having a string buffer on the stack of a recursive function
+void ObjectModel::ReportPinNameAsJson(OutputBuffer *buf, const ExpressionValue& val) noexcept
+{
+	buf->cat('"');
+	String<StringLength50> portName;
+	val.iopVal->AppendPinName(portName.GetRef());
+	buf->catf("%.0s", portName.c_str());				// the %.0s format specifier forces JSON escaping
+	buf->cat('"');
 }
 
 // Report an entire array as JSON

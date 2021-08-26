@@ -43,6 +43,7 @@ enum class TypeCode : uint8_t
 	DriverId,
 	MacAddress,
 	Special,
+	Port,
 #if SUPPORT_CAN_EXPANSION
 	CanExpansionBoardDetails
 #endif
@@ -53,6 +54,7 @@ class Bitmap32;
 class Bitmap64;
 class Enum32;
 class SpecialString;
+class IoPort;
 
 #if SUPPORT_CAN_EXPANSION
 
@@ -97,6 +99,7 @@ struct ExpressionValue
 		const ObjectModel *omVal;					// object of some class derived form ObjectModel
 		const ObjectModelArrayDescriptor *omadVal;
 		StringHandle shVal;
+		const IoPort *iopVal;
 		uint32_t whole;								// a member we can use to copy the whole thing safely, at least as big as all the others. Assumes all other members are trivially copyable.
 	};
 
@@ -141,6 +144,7 @@ struct ExpressionValue
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
 	explicit ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
 	explicit ExpressionValue(StringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h) { }
+	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
 #if SUPPORT_CAN_EXPANSION
 	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif
@@ -334,6 +338,7 @@ private:
 	__attribute__ ((noinline)) static void ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportBitmap1632Long(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportBitmap64Long(OutputBuffer *buf, const ExpressionValue& val) noexcept;
+	__attribute__ ((noinline)) static void ReportPinNameAsJson(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 
 #if SUPPORT_CAN_EXPANSION
 	__attribute__ ((noinline)) static void ReportExpansionBoardDetail(OutputBuffer *buf, const ExpressionValue& val) noexcept;
