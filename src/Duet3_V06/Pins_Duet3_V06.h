@@ -32,6 +32,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_12V_MONITOR			1
 #define ENFORCE_MIN_V12			1
 #define HAS_VREF_MONITOR		1
+#define HAS_DEFAULT_PSON_PIN	1
 
 #define SUPPORT_CAN_EXPANSION	1
 #define DUAL_CAN				1					// support the second CAN interface as simple CAN (not FD)
@@ -143,9 +144,6 @@ constexpr float VrefSeriesR = 15.0;
 
 // Digital pins the SPI temperature sensors have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] = { PortAPin(5), PortAPin(6), PortDPin(20), PortCPin(22) };
-
-// Pin that controls the ATX power on/off
-constexpr Pin ATX_POWER_PIN = PortAPin(10);
 
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortAPin(20);

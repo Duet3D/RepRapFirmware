@@ -215,9 +215,6 @@ constexpr size_t MaxSpiTempSensors = 1;		//TODO which SPI channels does PCCB rou
 // Digital pins the 31855s have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortCPin(27) };	// SPI0_CS6 if a DueX5 is connected
 
-// Pin that controls the ATX power on/off
-constexpr Pin ATX_POWER_PIN = NoPin;
-
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortCPin(12);						// Vin monitor
 constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider

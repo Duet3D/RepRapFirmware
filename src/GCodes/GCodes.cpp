@@ -68,7 +68,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #if HAS_VOLTAGE_MONITOR
 	, powerFailScript(nullptr)
 #endif
-	, isFlashing(false), isFlashingPanelDue(false), lastFilamentError(FilamentSensorStatus::ok), lastWarningMillis(0), atxPowerControlled(false)
+	, isFlashing(false), isFlashingPanelDue(false), lastFilamentError(FilamentSensorStatus::ok), lastWarningMillis(0)
 #if HAS_MASS_STORAGE
 	, sdTimingFile(nullptr)
 #endif
@@ -4900,7 +4900,7 @@ void GCodes::CheckHeaterFault() noexcept
 	case HeaterFaultState::stopping:
 		if (millis() - heaterFaultTime >= 1000)			// wait 1 second for the message to be picked up by DWC and PanelDue
 		{
-			platform.AtxPowerOff(false);
+			platform.AtxPowerOff();
 			heaterFaultState = HeaterFaultState::stopped;
 		}
 		break;

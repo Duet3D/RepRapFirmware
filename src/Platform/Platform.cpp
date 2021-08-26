@@ -429,6 +429,7 @@ Platform::Platform() noexcept :
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
+	atxPowerControlled(false),
 	deferredPowerDown(false)
 {
 }
@@ -438,11 +439,6 @@ void Platform::Init() noexcept
 {
 #if defined(DUET3) || defined(DUET3MINI)
 	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// hold the Ethernet Phy chip in reset, hopefully this will prevent it being too noisy if Ethernet is not enabled
-#endif
-
-#ifndef __LPC17xx__
-	// Deal with power first (we assume this doesn't depend on identifying the board type)
-	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
 #endif
 
 	// Make sure the on-board drivers are disabled
@@ -509,7 +505,12 @@ void Platform::Init() noexcept
 #ifdef __LPC17xx__
 	// Load HW pin assignments from sdcard
 	BoardConfig::Init();
-	pinMode(ATX_POWER_PIN, (ATX_POWER_INVERTED) ? OUTPUT_HIGH : OUTPUT_LOW);
+#endif
+
+#if HAS_DEFAULT_PSON_PIN
+	// Set up the default PS_ON port. Initialise it to off in case it is being used for something else or is inverted.
+	String<1> dummy;
+	PsOnPort.AssignPort("pson", dummy.GetRef(), PinUsedBy::gpout, PinAccess::write0);
 #endif
 
     // Ethernet networking defaults
@@ -1375,7 +1376,7 @@ void Platform::Spin() noexcept
 
 		if (deferredPowerDown && !thermostaticFanRunning)
 		{
-			AtxPowerOff(false);
+			AtxPowerOff();
 		}
 
 		// Check whether it is time to report any faults (do this after checking fans in case driver cooling fans are turned on)
@@ -3777,32 +3778,49 @@ void Platform::StopLogging() noexcept
 #endif
 }
 
-bool Platform::AtxPower() const noexcept
+bool Platform::GetAtxPowerState() const noexcept
 {
-	const bool val = IoPort::ReadPin(ATX_POWER_PIN);
-	return (ATX_POWER_INVERTED) ? !val : val;
+	const bool val = PsOnPort.ReadDigital();
+	return (PsOnPort.GetInvert()) ? !val : val;
 }
 
-void Platform::AtxPowerOn() noexcept
+GCodeResult Platform::HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	deferredPowerDown = false;
-	IoPort::WriteDigital(ATX_POWER_PIN, !ATX_POWER_INVERTED);
+	PsOnPort.WriteDigital(true);
+	atxPowerControlled = true;
+	reprap.StateUpdated();
+	return GCodeResult::ok;
 }
 
-void Platform::AtxPowerOff(bool defer) noexcept
+GCodeResult Platform::HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	deferredPowerDown = defer;
-	if (!defer)
+	deferredPowerDown = gb.Seen('S') && gb.GetUIValue() != 0;
+	atxPowerControlled = true;				// set this before calling AtxPowerOff
+	if (!deferredPowerDown)
 	{
+		AtxPowerOff();
+	}
+	reprap.StateUpdated();
+	return GCodeResult::ok;
+}
+
+void Platform::AtxPowerOff() noexcept
+{
 #if HAS_MASS_STORAGE
-		if (logger != nullptr)
-		{
-			logger->LogMessage(realTime, "Power off commanded", LogWarn);
-			logger->Flush(true);
-			// We don't call logger->Stop() here because we don't know whether turning off the power will work
-		}
+	if (logger != nullptr)
+	{
+		logger->LogMessage(realTime, "Power off commanded", LogWarn);
+		logger->Flush(true);
+		// We don't call logger->Stop() here because we don't know whether turning off the power will work
+	}
 #endif
-		IoPort::WriteDigital(ATX_POWER_PIN, ATX_POWER_INVERTED);
+
+	// The PS_ON pin on Duet 3 is shared with another pin, so only try to turn off ATX power if we know that power is being controlled
+	if (atxPowerControlled)
+	{
+		PsOnPort.WriteDigital(false);
+		reprap.StateUpdated();
 	}
 }
 
@@ -3886,15 +3904,7 @@ void Platform::SetBoardType(BoardType bt) noexcept
 {
 	if (bt == BoardType::Auto)
 	{
-#if defined(DUET3MINI_V02)
-		// Test whether this is a WiFi or an Ethernet board. Currently we do this based on the processor type.
-		const uint16_t deviceId = DSU->DID.reg >> 16;
-		board = (deviceId == 0x6184)							// if SAME54P20A
-				? BoardType::Duet3Mini_Ethernet
-				: (deviceId == 0x6006)							// SAMD51P20A rev D
-				  ? BoardType::Duet3Mini_WiFi
-					: BoardType::Duet3Mini_Unknown;
-#elif defined(DUET3MINI_V04)
+#if defined(DUET3MINI_V04)
 		// Test whether this is a WiFi or an Ethernet board by testing for a pulldown resistor on Dir1
 		pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
 		delayMicroseconds(20);									// give the pullup resistor time to work

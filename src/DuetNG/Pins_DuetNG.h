@@ -61,6 +61,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			1
 #define HAS_VREF_MONITOR		0
+#define HAS_DEFAULT_PSON_PIN	1
 #define ACTIVE_LOW_HEAT_ON		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
@@ -207,9 +208,6 @@ constexpr float DefaultThermistorSeriesR = 4700.0;
 // Digital pins the 31855s have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] =
 	{ PortBPin(2), PortCPin(18), PortCPin(19), PortCPin(20), PortAPin(24), PortEPin(1), PortEPin(2), PortEPin(3) };	// SPI0_CS1, SPI0_CS2, CS3, CS4, CS5, CS6, CS7, CS8
-
-// Pin that controls the ATX power on/off
-constexpr Pin ATX_POWER_PIN = PortDPin(15);
 
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortCPin(4);						// AFE1_AD7/PC4 Vin monitor

@@ -325,9 +325,11 @@ public:
 	static bool WasDeliberateError() noexcept { return deliberateError; }
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
 
-	bool AtxPower() const noexcept;
-	void AtxPowerOn() noexcept;
-	void AtxPowerOff(bool defer) noexcept;
+	bool GetAtxPowerState() const noexcept;
+	GCodeResult HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	void AtxPowerOff() noexcept;
+	bool IsAtxPowerControlled() const noexcept { return atxPowerControlled; }
 
 	BoardType GetBoardType() const noexcept { return board; }
 	void SetBoardType(BoardType bt) noexcept;
@@ -884,6 +886,8 @@ private:
 #endif
 
 	// Power on/off
+	IoPort PsOnPort;
+	bool atxPowerControlled;
 	bool deferredPowerDown;
 
 	// Misc

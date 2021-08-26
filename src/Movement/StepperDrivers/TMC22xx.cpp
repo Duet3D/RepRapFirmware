@@ -58,10 +58,6 @@
 static void InitStallDetectionLogic() noexcept;				// forward declaration
 #endif
 
-#ifdef DUET3MINI_V02
-static bool ReadOneDiagOutput(uint8_t driver) noexcept;		// forward declaration
-#endif
-
 // Important note:
 // The TMC22xx does handle a write request immediately followed by a read request to the same driver.
 // The TMC2209 does _not_ handle back-to-back read requests to different drivers on the same multiplexer channel, it needs a short delay between them to allow the first driver to release the bus.
@@ -440,7 +436,7 @@ public:
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
-#if HAS_STALL_DETECT && !defined(DUET3MINI_V02)
+#if HAS_STALL_DETECT
 							, Pin p_diagPin
 #endif
 			 ) noexcept;
@@ -932,7 +928,7 @@ void TmcDriverState::Init(uint32_t p_driverNumber
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
-#if HAS_STALL_DETECT && !defined(DUET3MINI_V02)
+#if HAS_STALL_DETECT
 							, Pin p_diagPin
 #endif
 ) noexcept
@@ -945,9 +941,9 @@ pre(!driversPowered)
 	IoPort::SetPinMode(p_enablePin, OUTPUT_HIGH);
 #endif
 
-#if HAS_STALL_DETECT && !defined(DUET3MINI_V02)
+#if HAS_STALL_DETECT
 	diagPin = p_diagPin;
-# if !defined(DUET3MINI_V04)											// on 3 Mini v0.4 we have already done this and switched the pin to be a CCL input
+# if !defined(DUET3MINI_V04)											// on Duet 3 Mini we have already done this and switched the pin to be a CCL input
 	IoPort::SetPinMode(p_diagPin, INPUT_PULLDOWN);						// pull down not up so that missing drivers don't signal stalls
 # endif
 #endif
@@ -1267,17 +1263,10 @@ uint32_t TmcDriverState::ReadLiveStatus() const noexcept
 		ret &= ~(TMC_RR_OLA | TMC_RR_OLB);
 	}
 #if HAS_STALL_DETECT
-# ifdef DUET3MINI_V02
-	if (ReadOneDiagOutput(driverNumber))
-	{
-		ret |= TMC_RR_SG;
-	}
-# else
 	if (IoPort::ReadPin(diagPin))
 	{
 		ret |= TMC_RR_SG;
 	}
-# endif
 #endif
 	return ret;
 }
@@ -1955,7 +1944,7 @@ void SmartDrivers::Init() noexcept
 #if TMC22xx_HAS_ENABLE_PINS
 								, ENABLE_PINS[drive]
 #endif
-#if HAS_STALL_DETECT && !defined(DUET3MINI_V02)
+#if HAS_STALL_DETECT
 								, DriverDiagPins[drive]
 #endif
 								);
@@ -2258,7 +2247,6 @@ static void InitStallDetectionLogic() noexcept
 }
 
 #endif
-
 
 #if HAS_STALL_DETECT
 

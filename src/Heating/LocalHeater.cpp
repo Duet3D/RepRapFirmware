@@ -400,7 +400,7 @@ void LocalHeater::Spin() noexcept
 						{
 						case HeaterMonitorAction::ShutDown:
 							reprap.GetHeat().SwitchOffAll(true);
-							reprap.GetPlatform().AtxPowerOff(false);
+							reprap.GetPlatform().AtxPowerOff();
 							break;
 
 						case HeaterMonitorAction::GenerateFault:

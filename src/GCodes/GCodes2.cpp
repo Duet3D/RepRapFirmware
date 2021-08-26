@@ -1271,17 +1271,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 80:	// ATX power on
-				atxPowerControlled = true;
-				platform.AtxPowerOn();
+				result = platform.HandleM80(gb, reply);
 				break;
 
 			case 81:	// ATX power off
-				atxPowerControlled = true;
 				if (!LockMovementAndWaitForStandstill(gb))
 				{
 					return false;
 				}
-				platform.AtxPowerOff(gb.Seen('S') && gb.GetUIValue() != 0);
+				result = platform.HandleM81(gb, reply);
 				break;
 
 			case 82:	// Use absolute extruder positioning
