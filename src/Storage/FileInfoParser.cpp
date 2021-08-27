@@ -25,7 +25,7 @@ FileInfoParser::FileInfoParser() noexcept
 GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
-	if (!lock)
+	if (!lock.IsAcquired())
 	{
 		return GCodeResult::notFinished;
 	}

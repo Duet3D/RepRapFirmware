@@ -303,7 +303,7 @@ void LinuxInterface::Spin() noexcept
 						// Just mark the print file as finished
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
 						MutexLocker locker(gb->mutex, LinuxYieldTimeout);
-						if (locker)
+						if (locker.IsAcquired())
 						{
 							gb->SetPrintFinished();
 						}
@@ -334,7 +334,7 @@ void LinuxInterface::Spin() noexcept
 						else
 						{
 							MutexLocker locker(gb->mutex, LinuxYieldTimeout);
-							if (locker)
+							if (locker.IsAcquired())
 							{
 								if (error)
 								{
@@ -412,7 +412,7 @@ void LinuxInterface::Spin() noexcept
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 						MutexLocker locker(gb->mutex, LinuxYieldTimeout);
-						if (locker && reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
+						if (locker.IsAcquired() && reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
 						{
 							transfer.WriteLocked(channel);
 						}
@@ -436,7 +436,7 @@ void LinuxInterface::Spin() noexcept
 					{
 						GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 						MutexLocker locker(gb->mutex, LinuxYieldTimeout);
-						if (locker)
+						if (locker.IsAcquired())
 						{
 							reprap.GetGCodes().UnlockAll(*gb);
 						}
@@ -527,7 +527,7 @@ void LinuxInterface::Spin() noexcept
 						{
 							// Evaluate the expression and send the result to DSF
 							MutexLocker lock(gb->mutex, LinuxYieldTimeout);
-							if (lock)
+							if (lock.IsAcquired())
 							{
 								ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
 								const ExpressionValue val = parser.Parse();
@@ -624,7 +624,7 @@ void LinuxInterface::Spin() noexcept
 						}
 
 						MutexLocker locker(gb->mutex, LinuxYieldTimeout);
-						if (locker)
+						if (locker.IsAcquired())
 						{
 							// Note that we do not call StopPrint here or set any other variables; DSF already does that
 							gb->AbortFile(true, false);
@@ -659,7 +659,7 @@ void LinuxInterface::Spin() noexcept
 
 					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 					MutexLocker lock(gb->mutex, LinuxYieldTimeout);
-					if (!lock)
+					if (!lock.IsAcquired())
 					{
 						packetAcknowledged = false;
 						break;
@@ -739,7 +739,7 @@ void LinuxInterface::Spin() noexcept
 
 					GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 					MutexLocker lock(gb->mutex, LinuxYieldTimeout);
-					if (!lock)
+					if (!lock.IsAcquired())
 					{
 						packetAcknowledged = false;
 						break;
@@ -1020,7 +1020,7 @@ void LinuxInterface::Spin() noexcept
 					if (!gb->IsWaitingForMacro())
 					{
 						MutexLocker gbLock(gb->mutex, LinuxYieldTimeout);
-						if (gbLock)
+						if (gbLock.IsAcquired())
 						{
 							if (gb->GetChannel() != GCodeChannel::Daemon)
 							{

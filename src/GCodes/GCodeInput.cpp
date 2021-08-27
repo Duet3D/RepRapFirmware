@@ -221,7 +221,7 @@ void NetworkGCodeInput::Put(MessageType mtype, const char *buf) noexcept
 {
 	const size_t len = strlen(buf) + 1;
 	MutexLocker lock(bufMutex, 200);
-	if (lock)
+	if (lock.IsAcquired())
 	{
 		// Only cache this if we have enough space left
 		if (len <= BufferSpaceLeft())
@@ -243,7 +243,7 @@ NetworkGCodeInput::NetworkGCodeInput() noexcept : RegularGCodeInput()
 bool NetworkGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept /*override*/
 {
 	MutexLocker lock(bufMutex, 10);
-	return lock && RegularGCodeInput::FillBuffer(gb);
+	return lock.IsAcquired() && RegularGCodeInput::FillBuffer(gb);
 }
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
