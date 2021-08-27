@@ -2404,13 +2404,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 290:	// Baby stepping
 				{
 					const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
-					bool seen = false;
 					float differences[MaxAxes];
+					AxesBitmap axesMentioned;
 					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 					{
 						if (gb.Seen(axisLetters[axis]) || (axis == 2 && gb.Seen('S')))			// S is a synonym for Z
 						{
-							seen = true;
+							if (!LockMovement(gb))
+							{
+								return false;
+							}
+
+							axesMentioned.SetBit(axis);
 							const float fval = gb.GetFValue();
 							if (absolute)
 							{
@@ -2427,11 +2432,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					if (seen)
+					if (axesMentioned.IsNonEmpty())
 					{
-						if (!LockMovement(gb))
+						if (CheckEnoughAxesHomed(axesMentioned))
 						{
-							return false;
+							reply.copy("insufficient axes homed");
+							result = GCodeResult::error;
+							break;
 						}
 
 						// Perform babystepping synchronously with moves
