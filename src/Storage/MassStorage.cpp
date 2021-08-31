@@ -498,6 +498,20 @@ void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept
 
 # if HAS_LINUX_INTERFACE
 
+// Return true if any files are open on the file system
+bool MassStorage::AnyFileOpen() noexcept
+{
+	MutexLocker lock(fsMutex);
+	for (const FileStore & fil : files)
+	{
+		if (!fil.IsFree())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 // Invalidate all files
 void MassStorage::InvalidateAllFiles() noexcept
 {

@@ -58,6 +58,7 @@ namespace MassStorage
 #endif
 
 #if HAS_LINUX_INTERFACE
+	bool AnyFileOpen() noexcept;															// Return true if any files are open on the file system
 	void InvalidateAllFiles() noexcept;
 #endif
 

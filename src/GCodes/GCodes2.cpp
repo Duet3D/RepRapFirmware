@@ -2950,11 +2950,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = (MassStorage::Rename(oldVal.c_str(), newVal.c_str(), deleteExisting, true)) ? GCodeResult::ok : GCodeResult::error;
 				}
 				break;
+#endif
 
 			case 486: // number object or cancel object
 				result = buildObjects.HandleM486(gb, reply, outBuf);
 				break;
 
+#if HAS_MASS_STORAGE
 			case 500: // Store parameters in config-override.g
 				result = WriteConfigOverrideFile(gb, reply);
 				break;
@@ -3100,11 +3102,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 551: // Set password (no option to report it)
 				{
-					String<RepRapPasswordLength> password;
-					bool seen = false;
-					gb.TryGetPossiblyQuotedString('P', password.GetRef(), seen);
-					if (seen)
+					if (gb.Seen('P'))
 					{
+						String<RepRapPasswordLength> password;
+						gb.GetPossiblyQuotedString(password.GetRef(), true);
 						reprap.SetPassword(password.c_str());
 					}
 				}
