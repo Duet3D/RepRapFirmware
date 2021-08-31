@@ -72,7 +72,7 @@ private:
 	bool isConnected;
 	uint32_t numDisconnects, numTimeouts;
 
-	uint32_t maxDelayBetweenTransfers, numMaxEvents;
+	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
 	volatile bool delaying;
 	volatile uint32_t numEvents;
 

@@ -49,8 +49,8 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 }
 
 LinuxInterface::LinuxInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0),
-	maxDelayBetweenTransfers(SpiTransferDelay), numMaxEvents(SpiEventsRequired), delaying(false), numEvents(0),
-	reportPause(false), reportPauseWritten(false), printAborted(false),
+	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
+	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), iapWritePointer(IAP_IMAGE_START),
 	waitingForFileChunk(false), fileMutex(), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false)
 #ifdef TRACK_FILE_CODES
@@ -877,7 +877,7 @@ void LinuxInterface::Spin() noexcept
 				!waitingForFileChunk && !fileOperationPending && fileOperation == FileOperation::none)
 			{
 				delaying = true;
-				if (!TaskBase::Take(maxDelayBetweenTransfers))
+				if (!TaskBase::Take(MassStorage::AnyFileOpen() ? maxFileOpenDelay : maxDelayBetweenTransfers))
 				{
 					delaying = false;
 				}
@@ -1206,6 +1206,18 @@ GCodeResult LinuxInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) 
 			return GCodeResult::error;
 		}
 		maxDelayBetweenTransfers = sParam;
+		seen = true;
+	}
+
+	if (gb.Seen('F'))
+	{
+		uint32_t fParam = gb.GetUIValue();
+		if (fParam > SpiConnectionTimeout)
+		{
+			reply.printf("SPI transfer delay must not exceed %" PRIu32 "ms", SpiConnectionTimeout);
+			return GCodeResult::error;
+		}
+		maxFileOpenDelay = fParam;
 		seen = true;
 	}
 
