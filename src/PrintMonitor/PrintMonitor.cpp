@@ -56,7 +56,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 #endif
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintOrSimulatedDuration()), 										ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
-	{ "filePosition",		OBJECT_MODEL_FUNC((uint64_t)self->gCodes.GetFilePosition()),														ObjectModelEntryFlags::live },
+	{ "filePosition",		OBJECT_MODEL_FUNC((uint64_t)self->gCodes.GetPrintingFilePosition()),												ObjectModelEntryFlags::live },
 	{ "firstLayerDuration", OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)self->gCodes.GetLastDuration()), 								ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty() && !self->IsPrinting(), self->filenameBeingPrinted.c_str()), ObjectModelEntryFlags::none },
@@ -360,7 +360,7 @@ float PrintMonitor::FractionOfFilePrinted() const noexcept
 	{
 		return -1.0;
 	}
-	return (float)gCodes.GetFilePosition() / (float)printingFileInfo.fileSize;
+	return (float)gCodes.GetPrintingFilePosition() / (float)printingFileInfo.fileSize;
 }
 
 // Estimate the print time left in seconds on a preset estimation method

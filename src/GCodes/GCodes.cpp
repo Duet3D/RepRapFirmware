@@ -294,6 +294,7 @@ void GCodes::Reset() noexcept
 #if HAS_LINUX_INTERFACE
 	lastFilePosition = noFilePosition;
 #endif
+	printFilePositionAtMacroStart = 0;
 	deferredPauseCommandPending = nullptr;
 	moveBuffer.filePos = noFilePosition;
 	firmwareUpdateModuleMap.Clear();
@@ -341,7 +342,7 @@ bool GCodes::WaitingForAcknowledgement() const noexcept
 
 // Return the current position of the file being printed in bytes.
 // Unlike other methods returning file positions it never returns noFilePosition
-FilePosition GCodes::GetFilePosition() const noexcept
+FilePosition GCodes::GetPrintingFilePosition() const noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -363,7 +364,7 @@ FilePosition GCodes::GetFilePosition() const noexcept
 		}
 
 		const FilePosition pos = (fileGCode->IsDoingFileMacro())
-				? fileBeingPrinted.GetPosition()					// the position before we started executing the macro
+				? printFilePositionAtMacroStart						// the position before we started executing the macro
 					: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
 
 		return (pos == noFilePosition) ? 0 : pos;
@@ -943,7 +944,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-			pauseRestorePoint.filePos = fileGCode->GetFilePosition();
+			pauseRestorePoint.filePos = GetPrintingFilePosition();
 #if SUPPORT_LASER || SUPPORT_IOBITS
 			pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
@@ -1162,7 +1163,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;
 		pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
 
-		pauseRestorePoint.filePos = fileGCode->GetFilePosition();
+		pauseRestorePoint.filePos = GetPrintingFilePosition();
 		pauseRestorePoint.proportionDone = 0.0;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -2752,6 +2753,12 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 // otherwise it is either the G- or M-code being executed, or ToolChangeMacroCode for a tool change file, or SystemMacroCode for another system file
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept
 {
+	if (codeRunning != AsyncSystemMacroCode && &gb == fileGCode && gb.LatestMachineState().GetPrevious() == nullptr)
+	{
+		// This macro was invoked directly from the print file by M98, G28, G29, G32 etc. so record the file location of that command so that we can restart it
+		printFilePositionAtMacroStart = gb.GetFilePosition();
+	}
+
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{

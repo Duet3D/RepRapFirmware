@@ -124,7 +124,7 @@ public:
 	bool DoingFileMacro() const noexcept;										// Is a macro file being processed?
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
 
-	FilePosition GetFilePosition() const noexcept;								// Return the current position of the file being printed in bytes
+	FilePosition GetPrintingFilePosition() const noexcept;						// Return the current position of the file being printed in bytes
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
 	bool RunConfigFile(const char* fileName) noexcept;							// Start running the config file
@@ -553,6 +553,7 @@ private:
 #if HAS_LINUX_INTERFACE
 	FilePosition lastFilePosition;				// Last known file position
 #endif
+	FilePosition printFilePositionAtMacroStart;
 	const char *deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
 	bool runningConfigFile;						// We are running config.g during the startup process

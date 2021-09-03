@@ -195,6 +195,9 @@ public:
 	GCodeMachineState *Pop() const noexcept;
 	uint8_t GetBlockNesting() const noexcept { return blockNesting; }
 
+	void SetMacroRestartable(bool b) noexcept { macroRestartable = b; }
+	bool CanRestartMacro() const noexcept;
+
 	VariableSet variables;											// local variables and parameters
 	float feedRate;
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -222,7 +225,8 @@ public:
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
 		messageCancelled : 1,
-		localPush : 1							// true if this stack frame was created by M120, so we use the parent variables
+		localPush : 1,							// true if this stack frame was created by M120, so we use the parent variables
+		macroRestartable : 1
 #if HAS_LINUX_INTERFACE
 		, lastCodeFromSbc : 1,
 		macroStartedByCode : 1,

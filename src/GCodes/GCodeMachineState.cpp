@@ -20,7 +20,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 	  selectedPlane(0), drivesRelative(false), axesRelative(false),
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(false),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(false), macroRestartable(false),
 #if HAS_LINUX_INTERFACE
 	  lastCodeFromSbc(false), macroStartedByCode(false), fileFinished(false),
 #endif
@@ -59,10 +59,12 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 		{
 			blockStates[i] = prev.blockStates[i];
 		}
+		macroRestartable = prev.macroRestartable;
 	}
 	else
 	{
 		blockStates[0].SetPlainBlock(0);
+		macroRestartable = false;
 	}
 }
 
@@ -71,6 +73,21 @@ GCodeMachineState::~GCodeMachineState() noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileState.Close();
 #endif
+}
+
+// Return true if all nested macros we are running are restartable
+bool GCodeMachineState::CanRestartMacro() const noexcept
+{
+	const GCodeMachineState *p = this;
+	do
+	{
+		if (p->doingFileMacro && !p->macroRestartable)
+		{
+			return false;
+		}
+		p = p->previous;
+	} while (p != nullptr);
+	return true;
 }
 
 #if HAS_LINUX_INTERFACE

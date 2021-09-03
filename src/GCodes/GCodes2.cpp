@@ -973,7 +973,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 601:
 				if (pauseState == PauseState::notPaused)
 				{
-					if (gb.IsDoingFileMacro())
+					if (gb.IsDoingFileMacro() && !gb.LatestMachineState().CanRestartMacro())
 					{
 						if (deferredPauseCommandPending == nullptr)	// filament change pause takes priority
 						{
@@ -1024,7 +1024,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.copy("Cannot pause print, because no file is being printed!");
 					result = GCodeResult::error;
 				}
-				else if (fileGCode->IsDoingFileMacro())
+				else if (fileGCode->IsDoingFileMacro() && !gb.LatestMachineState().CanRestartMacro())
 				{
 					if (deferredPauseCommandPending == nullptr)		// filament change pause takes priority
 					{
@@ -1070,7 +1070,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// In case there are short periods of time when PrintMonitor says a file is printing but the file is not open, or DSF passes M27 to us, check that we have a file
 					if (fileBeingPrinted.IsLive())
 					{
-						reply.printf("SD printing byte %lu/%lu", GetFilePosition(), fileBeingPrinted.Length());
+						reply.printf("SD printing byte %lu/%lu", GetPrintingFilePosition(), fileBeingPrinted.Length());
 						break;
 					}
 				}
@@ -1372,11 +1372,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 98: // Call Macro/Subprogram
+				if (gb.Seen('P'))
 				{
-					gb.MustSee('P');
 					String<MaxFilenameLength> filename;
 					gb.GetPossiblyQuotedString(filename.GetRef());
 					DoFileMacro(gb, filename.c_str(), true, code);
+				}
+				else if (gb.Seen('R'))
+				{
+					gb.LatestMachineState().SetMacroRestartable(gb.GetUIValue() == 1);
 				}
 				break;
 
