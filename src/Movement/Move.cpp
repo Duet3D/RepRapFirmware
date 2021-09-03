@@ -935,6 +935,7 @@ void Move::AdjustLeadscrews(const floatc_t corrections[]) noexcept
 		specialMoveCoords[i] = (i < numZdrivers) ? (float)corrections[i] : 0.0;
 	}
 	bedLevellingMoveAvailable = true;
+	MoveAvailable();
 }
 
 // Return the idle timeout in seconds
