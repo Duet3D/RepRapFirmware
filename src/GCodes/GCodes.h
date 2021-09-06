@@ -121,7 +121,8 @@ public:
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
 	void GetCurrentCoordinates(const StringRef& s) const noexcept;				// Write where we are into a string
-	bool DoingFileMacro() const noexcept;										// Is a macro file being processed?
+	bool DoingFileMacro() const noexcept;										// Is a macro file being processed by any input channel?
+	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
 
 	FilePosition GetPrintingFilePosition() const noexcept;						// Return the current position of the file being printed in bytes

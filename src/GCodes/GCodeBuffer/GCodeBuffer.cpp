@@ -55,15 +55,17 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),										ObjectModelEntryFlags::none },
 	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),						ObjectModelEntryFlags::none },
 	{ "feedRate",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->machineState->feedRate), 1),	ObjectModelEntryFlags::live },
-	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::none },
+	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::live },
 	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
+//	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
+	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->CanRestartMacro()),						ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
 	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),									ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),											ObjectModelEntryFlags::live },
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 11 };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 12 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 
@@ -742,6 +744,7 @@ void GCodeBuffer::SetFinished(bool f) noexcept
 #if HAS_LINUX_INTERFACE
 		sendToSbc = false;
 #endif
+		LatestMachineState().firstMoveAfterRestart = false;
 		PARSER_OPERATION(SetFinished());
 	}
 	else
@@ -826,6 +829,7 @@ bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 	}
 
 	machineState = new GCodeMachineState(*machineState, withinSameFile);
+	reprap.InputsUpdated();
 	return true;
 }
 
@@ -843,6 +847,7 @@ bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 	machineState = ms->Pop();						// get the previous state and copy down any error message
 	delete ms;
 
+	reprap.InputsUpdated();
 	return true;
 }
 

@@ -664,6 +664,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// Pop the stack and notify the SBC that we have closed the file
 				Pop(gb, false);
 				gb.Init();
+				gb.LatestMachineState().firstMoveAfterRestart = false;
 
 				// Send a final code response
 				if (gb.GetState() == GCodeState::normal)
@@ -2863,6 +2864,13 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 #endif
 }
 
+// Return true if the macro being executed by fileGCode was restarted
+bool GCodes::GetMacroRestarted() const noexcept
+{
+	const GCodeMachineState& ms = fileGCode->LatestMachineState();
+	return ms.doingFileMacro && ms.GetPrevious() != nullptr && ms.GetPrevious()->firstMoveAfterRestart;
+}
+
 void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 {
 	if (gb.IsDoingFileMacro())
@@ -3309,6 +3317,10 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 		fileGCode->LatestMachineState().selectedPlane = 0;					// default G2 and G3 moves to XY plane
 		DoFileMacro(*fileGCode, START_G, false, AsyncSystemMacroCode);		// get fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
 	}
+	else
+	{
+		fileGCode->LatestMachineState().firstMoveAfterRestart = true;
+	}
 }
 
 // Function to handle dwell delays. Returns true for dwell finished, false otherwise.
@@ -3324,10 +3336,11 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 		}
 	}
 
+	UnlockAll(gb);																	// don't hang on to the movement lock while we delay
+
 	const int32_t dwell = (gb.Seen('S')) ? (int32_t)(gb.GetFValue() * 1000.0)		// S values are in seconds
 							: (gb.Seen('P')) ? gb.GetIValue()						// P value are in milliseconds
-								: 0.0;
-
+								: 0;
 	if (dwell <= 0)
 	{
 		return GCodeResult::ok;

@@ -1024,7 +1024,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.copy("Cannot pause print, because no file is being printed!");
 					result = GCodeResult::error;
 				}
-				else if (fileGCode->IsDoingFileMacro() && !gb.LatestMachineState().CanRestartMacro())
+				else if (fileGCode->IsDoingFileMacro() && !fileGCode->LatestMachineState().CanRestartMacro())
 				{
 					if (deferredPauseCommandPending == nullptr)		// filament change pause takes priority
 					{
@@ -1380,7 +1380,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else if (gb.Seen('R'))
 				{
-					gb.LatestMachineState().SetMacroRestartable(gb.GetUIValue() == 1);
+					const bool restartable = (gb.GetUIValue() == 1);
+					gb.LatestMachineState().SetMacroRestartable(restartable);
+					reprap.InputsUpdated();
+					if (restartable)
+					{
+						CheckForDeferredPause(gb);
+					}
+				}
+				else
+				{
+					reply.copy("No P or R parameter");
+					result = GCodeResult::error;
 				}
 				break;
 
