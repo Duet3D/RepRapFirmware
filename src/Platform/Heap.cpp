@@ -391,7 +391,7 @@ void StringHandle::InternalAssign(const char *s, size_t len) noexcept
 {
 	IndexSlot * const slot = AllocateHandle();
 	StorageSpace * const space = AllocateSpace(len + 1);
-	SafeStrncpy(space->data, s, space->length);
+	SafeStrncpy(space->data, s, len + 1);
 	slot->storage = space;
 	slot->refCount = 1;
 	slotPtr = slot;
