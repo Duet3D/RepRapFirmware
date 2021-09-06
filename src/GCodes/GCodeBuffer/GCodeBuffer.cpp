@@ -57,8 +57,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "feedRate",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->machineState->feedRate), 1),	ObjectModelEntryFlags::live },
 	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::live },
 	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
-//	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
-	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->CanRestartMacro()),						ObjectModelEntryFlags::none },
+	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
 	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),									ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),											ObjectModelEntryFlags::live },
@@ -744,7 +743,7 @@ void GCodeBuffer::SetFinished(bool f) noexcept
 #if HAS_LINUX_INTERFACE
 		sendToSbc = false;
 #endif
-		LatestMachineState().firstMoveAfterRestart = false;
+		LatestMachineState().firstCommandAfterRestart = false;
 		PARSER_OPERATION(SetFinished());
 	}
 	else

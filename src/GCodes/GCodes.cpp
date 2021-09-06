@@ -664,7 +664,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// Pop the stack and notify the SBC that we have closed the file
 				Pop(gb, false);
 				gb.Init();
-				gb.LatestMachineState().firstMoveAfterRestart = false;
+				gb.LatestMachineState().firstCommandAfterRestart = false;
 
 				// Send a final code response
 				if (gb.GetState() == GCodeState::normal)
@@ -2868,7 +2868,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 bool GCodes::GetMacroRestarted() const noexcept
 {
 	const GCodeMachineState& ms = fileGCode->LatestMachineState();
-	return ms.doingFileMacro && ms.GetPrevious() != nullptr && ms.GetPrevious()->firstMoveAfterRestart;
+	return ms.doingFileMacro && ms.GetPrevious() != nullptr && ms.GetPrevious()->firstCommandAfterRestart;
 }
 
 void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
@@ -3319,7 +3319,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	}
 	else
 	{
-		fileGCode->LatestMachineState().firstMoveAfterRestart = true;
+		fileGCode->LatestMachineState().firstCommandAfterRestart = true;
 	}
 }
 

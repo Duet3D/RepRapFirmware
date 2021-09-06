@@ -935,20 +935,23 @@ pre(driver.IsRemote())
 		return ClosedLoop::StartDataCollection(driver, gb, reply);
 
 	case 6:
+		if (gb.LatestMachineState().commandRepeated)
 		{
-			GCodeResult rslt;
+			// We already sent the tuning command so we just need to get the status. Delay 100ms to avoid overloading the CAN bus.
+			if (!gb.DoDwellTime(100))
 			{
-				CanMessageGenericConstructor cons(M569Point6Params);
-				cons.PopulateFromCommand(gb);
-				rslt = cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
+				return GCodeResult::notFinished;
 			}
-			while (rslt == GCodeResult::notFinished)
-			{
-				delay(100);							// give it some time to do the tuning move
-				CanMessageGenericConstructor cons(M569Point6Params_StatusOnly);
-				rslt = cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
-			}
-			return rslt;
+			CanMessageGenericConstructor cons(M569Point6Params_StatusOnly);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
+		}
+		else
+		{
+			// First call, so send the tuning command
+			CanMessageGenericConstructor cons(M569Point6Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
 		}
 
 	case 7:

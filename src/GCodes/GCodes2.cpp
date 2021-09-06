@@ -4758,6 +4758,8 @@ bool GCodes::HandleQcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 // This is called to deal with the result of processing a G- or M-code
 bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf) noexcept
 {
+	gb.LatestMachineState().commandRepeated = (rslt == GCodeResult::notFinished);
+
 	if (outBuf != nullptr)
 	{
 		// We only ever have an OutputBuffer when rslt == GCodeResult::ok
