@@ -1300,7 +1300,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	{
 	// FIXME Add support for arrays
 	case TypeCode::Bool:
-	case TypeCode::DriverId:
+	case TypeCode::DriverId_tc:
 	case TypeCode::Uint32:
 	case TypeCode::Float:
 	case TypeCode::Int32:
@@ -1309,9 +1309,9 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::CString:
 		payloadLength = expressionLength + strlen(value.sVal);
 		break;
-	case TypeCode::IPAddress:
-	case TypeCode::MacAddress:
-	case TypeCode::DateTime:
+	case TypeCode::IPAddress_tc:
+	case TypeCode::MacAddress_tc:
+	case TypeCode::DateTime_tc:
 		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();
@@ -1354,8 +1354,8 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		header->intValue = strlen(value.sVal);
 		WriteData(value.sVal, header->intValue);
 		break;
-	case TypeCode::DriverId:
-		header->dataType = DataType::DriverId;
+	case TypeCode::DriverId_tc:
+		header->dataType = DataType::DriverId_dt;
 		header->uintValue = value.uVal;
 		break;
 	case TypeCode::Uint32:
@@ -1375,9 +1375,9 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		header->intValue = value.shVal.GetLength();
 		WriteData(value.shVal.Get().Ptr(), header->intValue);
 		break;
-	case TypeCode::DateTime:
-	case TypeCode::MacAddress:
-	case TypeCode::IPAddress:
+	case TypeCode::DateTime_tc:
+	case TypeCode::MacAddress_tc:
+	case TypeCode::IPAddress_tc:
 	default:
 		// We have already converted the value to a string in 'rslt'
 		header->dataType = DataType::String;
@@ -1478,7 +1478,7 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 	{
 	// FIXME Add support for arrays
 	case TypeCode::Bool:
-	case TypeCode::DriverId:
+	case TypeCode::DriverId_tc:
 	case TypeCode::Uint32:
 	case TypeCode::Float:
 	case TypeCode::Int32:
@@ -1487,9 +1487,9 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 	case TypeCode::CString:
 		payloadLength = varNameLength + strlen(value.sVal);
 		break;
-	case TypeCode::IPAddress:
-	case TypeCode::MacAddress:
-	case TypeCode::DateTime:
+	case TypeCode::IPAddress_tc:
+	case TypeCode::MacAddress_tc:
+	case TypeCode::DateTime_tc:
 		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = varNameLength + rslt.strlen();
@@ -1532,8 +1532,8 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 		header->intValue = strlen(value.sVal);
 		WriteData(value.sVal, header->intValue);
 		break;
-	case TypeCode::DriverId:
-		header->dataType = DataType::DriverId;
+	case TypeCode::DriverId_tc:
+		header->dataType = DataType::DriverId_dt;
 		header->uintValue = value.uVal;
 		break;
 	case TypeCode::Uint32:
@@ -1553,9 +1553,9 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 		header->intValue = value.shVal.GetLength();
 		WriteData(value.shVal.Get().Ptr(), header->intValue);
 		break;
-	case TypeCode::DateTime:
-	case TypeCode::MacAddress:
-	case TypeCode::IPAddress:
+	case TypeCode::DateTime_tc:
+	case TypeCode::MacAddress_tc:
+	case TypeCode::IPAddress_tc:
 	default:
 		// We have already converted the value to a string in 'rslt'
 		header->dataType = DataType::String;

@@ -39,7 +39,7 @@ class ObjectModel;
 
 namespace MassStorage
 {
-	bool CombineName(const StringRef& out, const char* directory, const char* fileName) noexcept;	// returns false if error i.e. filename too long
+	bool CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept;	// returns false if error i.e. filename too long
 	const char* GetMonthName(const uint8_t month) noexcept;
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
@@ -106,6 +106,6 @@ namespace MassStorage
 
 #endif
 
-};
+}
 
 #endif

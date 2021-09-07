@@ -28,33 +28,26 @@ enum class TypeCode : uint8_t
 	Char,
 	Uint32,
 	Int32,
-	Uint64,			// only 56 bits actually available
+	Uint64,				// only 56 bits actually available
 	Float,
 	Bitmap16,
 	Bitmap32,
-	Bitmap64,		// only 56 bits actually available
+	Bitmap64,			// only 56 bits actually available
 	Enum32,
-	ObjectModel,
+	ObjectModel_tc,		// renamed for eCv to avoid clash with class ObjectModel
 	CString,
 	HeapString,
-	IPAddress,
+	IPAddress_tc,		// renamed for eCv to avoid clash with class IPAddress in RRFLibraries
 	Array,
-	DateTime,
-	DriverId,
-	MacAddress,
+	DateTime_tc,		// renamed for eCv to avoid clash with class DateTime
+	DriverId_tc,		// renamed for eCv to avoid clash with class DriverId
+	MacAddress_tc,		// renamed for eCv to avoid clash with class MacAddress
 	Special,
 	Port,
 #if SUPPORT_CAN_EXPANSION
 	CanExpansionBoardDetails
 #endif
 };
-
-// Dummy types, used to define type codes
-class Bitmap32;
-class Bitmap64;
-class Enum32;
-class SpecialString;
-class IoPort;
 
 #if SUPPORT_CAN_EXPANSION
 
@@ -81,6 +74,7 @@ struct DateTime
 // Forward declarations
 class ObjectModelTableEntry;
 class ObjectModel;
+class IoPort;
 
 // Struct used to hold the expressions with polymorphic types
 struct ExpressionValue
@@ -119,16 +113,16 @@ struct ExpressionValue
 	constexpr ExpressionValue(float f, uint8_t numDecimalPlaces) noexcept : type((uint32_t)TypeCode::Float), param(numDecimalPlaces), fVal(f) { }
 	explicit constexpr ExpressionValue(int32_t i) noexcept : type((uint32_t)TypeCode::Int32), param(0), iVal(i) { }
 	explicit ExpressionValue(uint64_t u) noexcept : type((uint32_t)TypeCode::Uint64) { Set56BitValue(u); }
-	explicit constexpr ExpressionValue(const ObjectModel *om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel), param(0), omVal(om) { }
-	constexpr ExpressionValue(const ObjectModel *om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel), param(tableNumber), omVal(om) { }
+	explicit constexpr ExpressionValue(const ObjectModel *om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
+	constexpr ExpressionValue(const ObjectModel *om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }
 	explicit constexpr ExpressionValue(const char *s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
 	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type((uint32_t)TypeCode::Array), param(0), omadVal(omad) { }
-	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress), param(0), uVal(ip.GetV4LittleEndian()) { }
+	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress_tc), param(0), uVal(ip.GetV4LittleEndian()) { }
 	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
-	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::DateTime) { Set56BitValue(t.tim); }
+	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::DateTime_tc) { Set56BitValue(t.tim); }
 
 	explicit ExpressionValue(DriverId id) noexcept
-		: type((uint32_t)TypeCode::DriverId),
+		: type((uint32_t)TypeCode::DriverId_tc),
 #if SUPPORT_CAN_EXPANSION
 		  param(id.boardAddress),
 #else
@@ -168,7 +162,7 @@ struct ExpressionValue
 	void Set(DriverId did) noexcept
 	{
 		Release();
-		type = (uint32_t)TypeCode::DriverId;
+		type = (uint32_t)TypeCode::DriverId_tc;
 #if SUPPORT_CAN_EXPANSION
 		param = did.boardAddress;
 #else
@@ -191,7 +185,7 @@ struct ExpressionValue
 #if SUPPORT_CAN_EXPANSION
 	{ return DriverId(param, uVal); }
 #else
-	{ return DriverId(uVal); }
+	{ return DriverId_tc(uVal); }
 #endif
 
 	// Get the format string to use assuming this is a floating point number

@@ -24,7 +24,7 @@ namespace StackUsage
 	constexpr uint32_t GetObjectValue_withTable = 48;
 }
 
-ExpressionValue::ExpressionValue(const MacAddress& mac) noexcept : type((uint32_t)TypeCode::MacAddress), param(mac.HighWord()), uVal(mac.LowWord())
+ExpressionValue::ExpressionValue(const MacAddress& mac) noexcept : type((uint32_t)TypeCode::MacAddress_tc), param(mac.HighWord()), uVal(mac.LowWord())
 {
 }
 
@@ -65,7 +65,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.cat((bVal) ? "true" : "false");	// convert bool to string
 		break;
 
-	case TypeCode::IPAddress:
+	case TypeCode::IPAddress_tc:
 		str.cat(IP4String(uVal).c_str());
 		break;
 
@@ -73,7 +73,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.cat("null");
 		break;
 
-	case TypeCode::DateTime:
+	case TypeCode::DateTime_tc:
 		{
 			const time_t time = Get56BitValue();
 			tm timeInfo;
@@ -83,7 +83,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		}
 		break;
 
-	case TypeCode::DriverId:
+	case TypeCode::DriverId_tc:
 #if SUPPORT_CAN_EXPANSION
 		str.catf("%u.%u", (unsigned int)param, (unsigned int)uVal);
 #else
@@ -91,7 +91,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 #endif
 		break;
 
-	case TypeCode::MacAddress:
+	case TypeCode::MacAddress_tc:
 		str.catf("%02x:%02x:%02x:%02x:%02x:%02x",
 					(unsigned int)(uVal & 0xFF), (unsigned int)((uVal >> 8) & 0xFF), (unsigned int)((uVal >> 16) & 0xFF), (unsigned int)((uVal >> 24) & 0xFF),
 					(unsigned int)(param & 0xFF), (unsigned int)((param >> 8) & 0xFF));
@@ -115,7 +115,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		break;
 
 	// We don't fully handle the remaining types
-	case TypeCode::ObjectModel:
+	case TypeCode::ObjectModel_tc:
 		str.cat("{object}");
 		break;
 
@@ -472,7 +472,7 @@ inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationCo
 	{
 		ReportArrayLengthAsJson(buf, context, val);
 	}
-	else if (val.GetType() == TypeCode::ObjectModel)
+	else if (val.GetType() == TypeCode::ObjectModel_tc)
 	{
 		if (  (*filter != '.' && *filter != 0)		// we should have reached the end of the filter or a '.', error if not
 			|| val.omVal == nullptr					// OM arrays may contain null entries, so we need to handle them here
@@ -695,7 +695,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		buf->cat('"');
 		break;
 
-	case TypeCode::IPAddress:
+	case TypeCode::IPAddress_tc:
 		{
 			const IPAddress ipVal(val.uVal);
 			char sep = '"';
@@ -708,11 +708,11 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		}
 		break;
 
-	case TypeCode::DateTime:
+	case TypeCode::DateTime_tc:
 		ReportDateTime(buf, val);
 		break;
 
-	case TypeCode::DriverId:
+	case TypeCode::DriverId_tc:
 #if SUPPORT_CAN_EXPANSION
 		buf->catf("\"%u.%u\"", (unsigned int)val.param, (unsigned int)val.uVal);
 #else
@@ -720,7 +720,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 #endif
 		break;
 
-	case TypeCode::MacAddress:
+	case TypeCode::MacAddress_tc:
 		buf->catf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
 					(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
 					(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
@@ -745,7 +745,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		ReportPinNameAsJson(buf, val);
 		break;
 
-	case TypeCode::ObjectModel:
+	case TypeCode::ObjectModel_tc:
 		break;											// we already handled this case in the inline part
 	}
 }
@@ -969,7 +969,7 @@ decrease(strlen(idString))	// recursion variant
 			return GetObjectValue(context, classDescriptor, arrayElement, idString + 1);
 		}
 
-	case TypeCode::ObjectModel:
+	case TypeCode::ObjectModel_tc:
 		switch (*idString)
 		{
 		case 0:
@@ -1064,7 +1064,7 @@ decrease(strlen(idString))	// recursion variant
 		}
 		return ExpressionValue((int32_t)val.uVal);
 
-	case TypeCode::MacAddress:
+	case TypeCode::MacAddress_tc:
 		if (*idString == 0)
 		{
 			return (context.WantArrayLength()) ? ExpressionValue((int32_t)17) : val;

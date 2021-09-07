@@ -48,7 +48,7 @@ enum class DataType : uint8_t
     FloatArray = 5,			// float[]
     String = 6,				// char[]
     Expression = 7,			// char[] but containing '{'...'}'
-	DriverId = 8,			// two sequential uint16_t representing board and port of a driver
+	DriverId_dt = 8,		// two sequential uint16_t representing board and port of a driver
 	DriverIdArray = 9,		// array of driver ids
 	Bool = 10,				// bool (int32_t)
 	BoolArray = 11			// bool[] (uint8_t[])

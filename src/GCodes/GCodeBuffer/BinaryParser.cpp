@@ -296,7 +296,7 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 	{
 	case DataType::Int:
 	case DataType::UInt:
-	case DataType::DriverId:
+	case DataType::DriverId_dt:
 		SetDriverIdFromBinary(value, seenParameter->uintValue);
 		break;
 
@@ -540,7 +540,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 	{
 	case DataType::Int:
 	case DataType::UInt:
-	case DataType::DriverId:
+	case DataType::DriverId_dt:
 		SetDriverIdFromBinary(arr[0], seenParameter->uintValue);
 		length = 1;
 		break;
@@ -639,7 +639,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length) THROWS
 		break;
 
 	case DataType::UInt:
-	case DataType::DriverId:
+	case DataType::DriverId_dt:
 		arr[0] = (T)seenParameter->uintValue;
 		lastIndex = 0;
 		break;
@@ -774,7 +774,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				}
 				break;
 			}
-			case DataType::DriverId:
+			case DataType::DriverId_dt:
 				s.catf("%c%d.%d", param->letter, (int)(param->uintValue >> 16), (int)(param->uintValue & 0xFFFF));
 				break;
 			case DataType::DriverIdArray:
