@@ -253,14 +253,14 @@ bool NetworkGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept /*override*/
 // Reset this input. Should be called when the associated file is being closed
 void FileGCodeInput::Reset() noexcept
 {
-	lastFile = nullptr;
+	lastFileRead.Close();
 	RegularGCodeInput::Reset();
 }
 
 // Reset this input. Should be called when a specific G-code or macro file is closed outside of the reading context
 void FileGCodeInput::Reset(const FileData &file) noexcept
 {
-	if (file.f == lastFile)
+	if (lastFileRead == file)
 	{
 		Reset();
 	}
@@ -272,18 +272,18 @@ GCodeInputReadResult FileGCodeInput::ReadFromFile(FileData &file) noexcept
 	const size_t bytesCached = BytesCached();
 
 	// Keep track of the last file we read from
-	if (lastFile != nullptr && lastFile != file.f)
+	if (lastFileRead.IsLive() && lastFileRead != file)
 	{
 		if (bytesCached > 0)
 		{
 			// Rewind back to the right position so we can resume at the right position later.
 			// This may be necessary when nested macros are executed.
-			lastFile->Seek(lastFile->Position() - bytesCached);
+			lastFileRead.Seek(lastFileRead.GetPosition() - bytesCached);
 		}
 
 		RegularGCodeInput::Reset();
 	}
-	lastFile = file.f;
+	lastFileRead.CopyFrom(file);
 
 	// Read more from the file
 	if (bytesCached < GCodeInputFileReadThreshold)

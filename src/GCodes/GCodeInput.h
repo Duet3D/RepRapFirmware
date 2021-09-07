@@ -109,7 +109,7 @@ class FileGCodeInput : public RegularGCodeInput
 {
 public:
 
-	FileGCodeInput() noexcept : RegularGCodeInput(), lastFile(nullptr) { }
+	FileGCodeInput() noexcept : RegularGCodeInput() { }
 
 	void Reset() noexcept override;								// Clears the buffer. Should be called when the associated file is being closed
 	void Reset(const FileData &file) noexcept;					// Clears the buffer of a specific file. Should be called when it is closed or re-opened outside the reading context
@@ -117,7 +117,7 @@ public:
 	GCodeInputReadResult ReadFromFile(FileData &file) noexcept;	// Read another chunk of G-codes from the file and return true if more data is available
 
 private:
-	FileStore *lastFile;
+	FileData lastFileRead;
 };
 
 #endif

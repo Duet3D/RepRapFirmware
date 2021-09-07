@@ -17,8 +17,6 @@ class FileGCodeInput;
 class FileData
 {
 public:
-	friend class FileGCodeInput;
-
 	FileData() noexcept : f(nullptr) {}
 
 	~FileData() { (void)Close(); }
@@ -49,6 +47,16 @@ public:
 	}
 
 	bool IsLive() const noexcept { return f != nullptr; }
+
+	bool operator==(const FileData& other) const noexcept
+	{
+		return f == other.f;
+	}
+
+	bool operator!=(const FileData& other) const noexcept
+	{
+		return f != other.f;
+	}
 
 	bool Close() noexcept
 	{
@@ -125,6 +133,17 @@ public:
 		Close();
 		f = other.f;
 		other.Init();
+	}
+
+	// Copy operator
+	void CopyFrom(const FileData& other) noexcept
+	{
+		Close();
+		f = other.f;
+		if (f != nullptr)
+		{
+			f->Duplicate();
+		}
 	}
 
 private:
