@@ -44,7 +44,7 @@ public:
 	// Configure the endstops in response to M574
 	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) THROWS(GCodeException);
 
-	EndStopPosition GetEndStopPosition(size_t axis) const pre(axis < MaxAxes) noexcept;
+	EndStopPosition GetEndStopPosition(size_t axis) const noexcept pre(axis < MaxAxes);
 	bool HomingZWithProbe() const noexcept;
 
 	bool Stopped(size_t axis) const noexcept;
