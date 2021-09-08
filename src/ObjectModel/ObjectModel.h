@@ -185,7 +185,7 @@ struct ExpressionValue
 #if SUPPORT_CAN_EXPANSION
 	{ return DriverId(param, uVal); }
 #else
-	{ return DriverId_tc(uVal); }
+	{ return DriverId(uVal); }
 #endif
 
 	// Get the format string to use assuming this is a floating point number

@@ -806,7 +806,7 @@ void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) co
 #if SUPPORT_CAN_EXPANSION
 		val.Set(DriverId(0, val.uVal));
 #else
-		val.Set(DriverId_tc(val.uVal));
+		val.Set(DriverId(val.uVal));
 #endif
 		break;
 
@@ -822,7 +822,7 @@ void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) co
 #else
 			if (ival >= 0 && ival < 10 && fabsf(f10val - (float)ival) <= 0.002)
 			{
-				val.Set(DriverId_tc(ival % 10));
+				val.Set(DriverId(ival % 10));
 			}
 #endif
 			else
