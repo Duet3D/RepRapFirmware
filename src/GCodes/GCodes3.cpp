@@ -73,7 +73,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 				}
 			}
 			axesIncluded.SetBit(axis);
-			currentUserPosition[axis] = gb.ConvertDistance(axisValue);
+			moveState.currentUserPosition[axis] = gb.ConvertDistance(axisValue);
 		}
 	}
 
@@ -85,12 +85,12 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 
 	if (axesIncluded.IsNonEmpty())
 	{
-		ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
+		ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
+		if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
 		{
-			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
+			ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
 		}
-		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+		reprap.GetMove().SetNewPosition(moveState.coords, true);
 		if (simulationMode == 0)
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -107,7 +107,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 		{
 			for(size_t axis = 0; axis < AXES; axis++)
 			{
-				if (!reprap.GetRoland()->ProcessG92(moveBuffer[axis], axis))
+				if (!reprap.GetRoland()->ProcessG92(moveState[axis], axis))
 				{
 					return GCodeResult::notFinished;
 				}
@@ -129,7 +129,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-			workplaceCoordinates[currentCoordinateSystem][axis] = -gb.GetDistance();
+			workplaceCoordinates[moveState.currentCoordinateSystem][axis] = -gb.GetDistance();
 			seen = true;
 		}
 	}
@@ -161,7 +161,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 	gb.TryGetLimitedUIValue('P', cs, dummySeen, NumCoordinateSystems + 1);		// allow 0..NumCoordinateSystems inclusive
 	if (cs == 0)
 	{
-		cs = currentCoordinateSystem + 1;
+		cs = moveState.currentCoordinateSystem + 1;
 	}
 
 	bool seen = false;
@@ -178,7 +178,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 				}
 				seen = true;
 			}
-			workplaceCoordinates[cs - 1][axis] = (compute) ? currentUserPosition[axis] - coord : coord;
+			workplaceCoordinates[cs - 1][axis] = (compute) ? moveState.currentUserPosition[axis] - coord : coord;
 		}
 	}
 
@@ -644,8 +644,8 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 					numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
 					float initialCoords[MaxAxes];
 					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
-					moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
-					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+					moveState.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
+					ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
 					reprap.MoveUpdated();
 				}
 				platform.SetAxisDriversConfig(drive, numValues, drivers);
@@ -699,8 +699,8 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		{
 			// In the DDA ring, the axis positions for invisible non-moving axes are not always copied over from previous moves.
 			// So if we have more visible axes than before, then we need to update their positions to get them in sync.
-			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);	// ensure that the position of any new axes are updated in moveBuffer
-			reprap.GetMove().SetNewPosition(moveBuffer.coords, true);		// tell the Move system where the axes are
+			ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);	// ensure that the position of any new axes are updated in moveBuffer
+			reprap.GetMove().SetNewPosition(moveState.coords, true);		// tell the Move system where the axes are
 		}
 #if SUPPORT_CAN_EXPANSION
 		rslt = max(rslt, platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
@@ -814,7 +814,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	// Get the target coordinates (as user position) and check if we would move at all
 	float userPositionTarget[MaxAxes];
-	memcpyf(userPositionTarget, currentUserPosition, numVisibleAxes);
+	memcpyf(userPositionTarget, moveState.currentUserPosition, numVisibleAxes);
 
 	bool seen = false;
 	bool doesMove = false;
@@ -934,8 +934,8 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	}
 
 	// Decide which way and how far to go
-	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-	m585Settings.probingLimit = (gb.Seen('R')) ? moveBuffer.coords[m585Settings.axisNumber] + gb.GetDistance()
+	ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
+	m585Settings.probingLimit = (gb.Seen('R')) ? moveState.coords[m585Settings.axisNumber] + gb.GetDistance()
 								: (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(m585Settings.axisNumber)
 									: platform.AxisMaximum(m585Settings.axisNumber);
 	if (m585Settings.useProbe)
@@ -979,11 +979,11 @@ bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 	}
 
 	SetMoveBufferDefaults();
-	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-	moveBuffer.feedRate = m585Settings.feedRate;
-	moveBuffer.coords[m585Settings.axisNumber] = m585Settings.probingLimit;
-	moveBuffer.checkEndstops = true;
-	moveBuffer.canPauseAfter = false;
+	ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
+	moveState.feedRate = m585Settings.feedRate;
+	moveState.coords[m585Settings.axisNumber] = m585Settings.probingLimit;
+	moveState.checkEndstops = true;
+	moveState.canPauseAfter = false;
 	zProbeTriggered = false;
 	NewMoveAvailable(1);
 	return true;
@@ -1034,11 +1034,11 @@ bool GCodes::SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept
 	}
 
 	SetMoveBufferDefaults();
-	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-	moveBuffer.coords[m675Settings.axisNumber] = towardsMin ? platform.AxisMinimum(m675Settings.axisNumber) : platform.AxisMaximum(m675Settings.axisNumber);
-	moveBuffer.feedRate = m675Settings.feedRate;
-	moveBuffer.checkEndstops = true;
-	moveBuffer.canPauseAfter = false;
+	ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
+	moveState.coords[m675Settings.axisNumber] = towardsMin ? platform.AxisMinimum(m675Settings.axisNumber) : platform.AxisMaximum(m675Settings.axisNumber);
+	moveState.feedRate = m675Settings.feedRate;
+	moveState.checkEndstops = true;
+	moveState.canPauseAfter = false;
 	zProbeTriggered = false;
 	NewMoveAvailable(1);						// kick off the move
 	return true;
@@ -1047,10 +1047,10 @@ bool GCodes::SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept
 void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 {
 	SetMoveBufferDefaults();
-	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-	moveBuffer.coords[m675Settings.axisNumber] = position;
-	moveBuffer.feedRate = m675Settings.feedRate;
-	moveBuffer.canPauseAfter = false;
+	ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
+	moveState.coords[m675Settings.axisNumber] = position;
+	moveState.feedRate = m675Settings.feedRate;
+	moveState.canPauseAfter = false;
 	NewMoveAvailable(1);
 }
 
@@ -1608,9 +1608,9 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 // Change a live extrusion factor
 void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 {
-	if (moveBuffer.segmentsLeft != 0 && moveBuffer.applyM220M221)
+	if (moveState.segmentsLeft != 0 && moveState.applyM220M221)
 	{
-		moveBuffer.coords[ExtruderToLogicalDrive(extruder)] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
+		moveState.coords[ExtruderToLogicalDrive(extruder)] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}
 	extrusionFactors[extruder] = factor;
 	reprap.MoveUpdated();

@@ -27,7 +27,7 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	}
 }
 
-float ExtendedRawMove::GetProportionDone() const noexcept
+float MovementState::GetProportionDone() const noexcept
 {
 	return (float)(totalSegments - segmentsLeft)/(float)totalSegments;
 }

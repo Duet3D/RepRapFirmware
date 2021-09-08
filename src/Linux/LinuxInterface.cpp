@@ -339,7 +339,7 @@ void LinuxInterface::Spin() noexcept
 								if (error)
 								{
 									gb->CurrentFileMachineState().CloseFile();
-									gb->PopState(false);
+									gb->PopState();
 									gb->Init();
 								}
 								else

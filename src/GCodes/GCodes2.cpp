@@ -74,12 +74,12 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
 			// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-			if (moveBuffer.segmentsLeft != 0)
+			if (moveState.segmentsLeft != 0)
 			{
 				return false;
 			}
 
-			if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + moveBuffer.segmentsLeft))
+			if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + moveState.segmentsLeft))
 			{
 				HandleReply(gb, GCodeResult::ok, "");
 				return true;
@@ -150,7 +150,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		{
 		case 0: // Rapid move
 		case 1: // Ordinary move
-			if (moveBuffer.segmentsLeft != 0)								// do this check first to avoid locking movement unnecessarily
+			if (moveState.segmentsLeft != 0)								// do this check first to avoid locking movement unnecessarily
 			{
 				return false;
 			}
@@ -175,7 +175,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 2: // Clockwise arc
 		case 3: // Anti clockwise arc
 			// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
-			if (moveBuffer.segmentsLeft != 0)								// do this check first to avoid locking movement unnecessarily
+			if (moveState.segmentsLeft != 0)								// do this check first to avoid locking movement unnecessarily
 			{
 				return false;
 			}
@@ -410,7 +410,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				if (cs < NumCoordinateSystems)
 				{
-					currentCoordinateSystem = cs;											// this is the zero-base coordinate system number
+					moveState.currentCoordinateSystem = cs;										// this is the zero-base coordinate system number
 					reprap.MoveUpdated();
 					gb.LatestMachineState().g53Active = false;									// cancel any active G53
 				}
@@ -586,11 +586,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_LASER
 				else if (machineType == MachineType::laser && code == 3 && gb.Seen('S'))
 				{
-						if (moveBuffer.segmentsLeft != 0)
+						if (moveState.segmentsLeft != 0)
 						{
 							return false;						// don't modify moves that haven't gone yet
 						}
-						moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+						moveState.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 				}
 #endif
 				else
@@ -631,11 +631,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_LASER
 				case MachineType::laser:
-					if (moveBuffer.segmentsLeft != 0)
+					if (moveState.segmentsLeft != 0)
 					{
 						return false;						// don't modify moves that haven't gone yet
 					}
-					moveBuffer.laserPwmOrIoBits.Clear();
+					moveState.laserPwmOrIoBits.Clear();
 					break;
 #endif
 
@@ -1348,7 +1348,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
-						reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+						reprap.GetMove().SetNewPosition(moveState.coords, true);
 #if SUPPORT_CAN_EXPANSION
 						result = platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
 #endif
@@ -1886,7 +1886,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 121:
-				Pop(gb, true);
+				Pop(gb);
 				break;
 
 			case 122:
@@ -2320,9 +2320,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (newSpeedFactor >= 0.01)
 					{
 						// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
-						if (moveBuffer.segmentsLeft != 0 && moveBuffer.applyM220M221)
+						if (moveState.segmentsLeft != 0 && moveState.applyM220M221)
 						{
-							moveBuffer.feedRate *= newSpeedFactor / speedFactor;
+							moveState.feedRate *= newSpeedFactor / speedFactor;
 						}
 						speedFactor = newSpeedFactor;
 						reprap.MoveUpdated();
@@ -2463,23 +2463,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							currentBabyStepOffsets[axis] += differences[axis];
 							reprap.MoveUpdated();
 							const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
-							moveBuffer.initialCoords[axis] += amountPushed;
+							moveState.initialCoords[axis] += amountPushed;
 
 							// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
 							// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-							moveBuffer.coords[axis] += differences[axis];
+							moveState.coords[axis] += differences[axis];
 							if (amountPushed != differences[axis])
 							{
 								haveResidual = true;
 							}
 						}
 
-						if (haveResidual && moveBuffer.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
+						if (haveResidual && moveState.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
 						{
 							// The pipeline is empty, so execute the babystepping move immediately
 							SetMoveBufferDefaults();
-							moveBuffer.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
-							moveBuffer.tool = reprap.GetCurrentTool();
+							moveState.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
+							moveState.tool = reprap.GetCurrentTool();
 							NewMoveAvailable(1);
 						}
 					}
@@ -3785,16 +3785,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const bool changed = move.GetKinematics().Configure(code, gb, reply, error);
 					if (changedMode)
 					{
-						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
-						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveState.coords);
+						ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
 					}
 					if (changed || changedMode)
 					{
-						if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
+						if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
 						{
-							ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
+							ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
 						}
-						reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+						reprap.GetMove().SetNewPosition(moveState.coords, true);
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
 					}
@@ -3868,14 +3868,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// We changed something, so reset the positions and set all axes not homed
 							if (move.GetKinematics().GetKinematicsType() != oldK)
 							{
-								move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
-								ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+								move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveState.coords);
+								ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
 							}
-							if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
+							if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
 							{
-								ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
+								ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
 							}
-							reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+							reprap.GetMove().SetNewPosition(moveState.coords, true);
 							SetAllAxesNotHomed();
 							reprap.MoveUpdated();
 						}
@@ -3916,14 +3916,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// We changed something significant, so reset the positions and set all axes not homed
 						if (move.GetKinematics().GetKinematicsType() != oldK)
 						{
-							move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
-							ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+							move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveState.coords);
+							ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
 						}
-						if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
+						if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
 						{
-							ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
+							ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
 						}
-						reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+						reprap.GetMove().SetNewPosition(moveState.coords, true);
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
 					}
@@ -3998,7 +3998,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// An axis letter is given, so try to level the given axis
 							const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / M_PI;
 							const float correctionFactor = gb.Seen('S') ? gb.GetFValue() : 1.0;
-							moveBuffer.coords[axisToUse] += correctionAngle * correctionFactor;
+							moveState.coords[axisToUse] += correctionAngle * correctionFactor;
 
 							reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
@@ -4016,8 +4016,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
 							const float zS = ((z1 - z2) * (a4 * z3 - a3 * z4) - (z3 - z4) * (a2 * z1 - a1 * z2)) /
 									((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
-							moveBuffer.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
-							moveBuffer.coords[Z_AXIS] += zS;
+							moveState.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
+							moveState.coords[Z_AXIS] += zS;
 
 							reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
@@ -4034,9 +4034,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor
 						}
-						moveBuffer.feedRate = gb.LatestMachineState().feedRate;
-						moveBuffer.usingStandardFeedrate = true;
-						moveBuffer.tool = reprap.GetCurrentTool();
+						moveState.feedRate = gb.LatestMachineState().feedRate;
+						moveState.usingStandardFeedrate = true;
+						moveState.tool = reprap.GetCurrentTool();
 						NewMoveAvailable(1);
 
 						gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
@@ -4071,12 +4071,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float offset = gb.Seen('P') ? gb.GetFValue() : 0.0;
 						currentUserPosition[Z_AXIS] -= (z1 + z2) / 2.0 + offset;
 
-						ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-						if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
+						ToolOffsetTransform(currentUserPosition, moveState.coords);
+						if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
 						{
-							ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
+							ToolOffsetInverseTransform(moveState.coords, currentUserPosition);		// make sure the limits are reflected in the user position
 						}
-						reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+						reprap.GetMove().SetNewPosition(moveState.coords, true);
 						axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(MakeBitmap<AxesBitmap>(Z_AXIS));
 
 						reply.printf("Probe points at %.2f %.2f, setting new Z to %.2f", (double)z1, (double)z2, (double)currentUserPosition[Z_AXIS]);

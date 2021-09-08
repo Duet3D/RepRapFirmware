@@ -121,7 +121,7 @@ void GCodeBuffer::Reset() noexcept
 	}
 #endif
 
-	while (PopState(false)) { }
+	while (PopState()) { }
 
 #if HAS_LINUX_INTERFACE
 	isBinaryBuffer = false;
@@ -833,7 +833,7 @@ bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 }
 
 // Pop state returning true if successful (i.e. no stack underrun)
-bool GCodeBuffer::PopState(bool withinSameFile) noexcept
+bool GCodeBuffer::PopState() noexcept
 {
 	GCodeMachineState * const ms = machineState;
 	if (ms->GetPrevious() == nullptr)
@@ -870,7 +870,7 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 #endif
 				machineState->CloseFile();
 			}
-		} while (PopState(false) && (abortAll || !machineState->DoingFile()));
+		} while (PopState() && (abortAll || !machineState->DoingFile()));
 
 #if HAS_LINUX_INTERFACE
 		abortFile = requestAbort;

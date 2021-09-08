@@ -231,12 +231,12 @@ public:
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;		// Save position etc. to a restore point
 	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
 
-	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return currentCoordinateSystem + 1; }
+	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return moveState.currentCoordinateSystem + 1; }
 
 	// This function is called by other functions to account correctly for workplace coordinates
 	float GetWorkplaceOffset(size_t axis) const noexcept
 	{
-		return workplaceCoordinates[currentCoordinateSystem][axis];
+		return workplaceCoordinates[moveState.currentCoordinateSystem][axis];
 	}
 
 #if SUPPORT_OBJECT_MODEL
@@ -260,7 +260,7 @@ public:
 	// Return laser PWM in 0..1
 	float GetLaserPwm() const noexcept
 	{
-		return (float)moveBuffer.laserPwmOrIoBits.laserPwm * (1.0/65535);
+		return (float)moveState.laserPwmOrIoBits.laserPwm * (1.0/65535);
 	}
 # endif
 #endif
@@ -397,7 +397,7 @@ private:
 	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);			// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile);								// Push feedrate etc on the stack
-	void Pop(GCodeBuffer& gb, bool withinSameFile);									// Pop feedrate etc
+	void Pop(GCodeBuffer& gb);														// Pop feedrate etc
 	void DisableDrives() noexcept;													// Turn the motors off
 	bool SendConfigToLine();														// Deal with M503
 
@@ -557,6 +557,7 @@ private:
 	FilePosition printFilePositionAtMacroStart;
 	const char *deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
+	bool pausedInMacro;							// if we are paused then this is true if we paused while fileGCode was executing a macro
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
 
@@ -565,15 +566,9 @@ private:
 	char *powerFailScript;						// the commands run when there is a power failure
 #endif
 
-	// The current user position now holds the requested user position after applying workplace coordinate offsets.
-	// So we must subtract the workplace coordinate offsets when we want to display them.
-	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
-	float currentUserPosition[MaxAxes];			// The current position of the axes as commanded by the input gcode, after accounting for workplace offset, before accounting for tool offset and Z hop
-	float currentZHop;							// The amount of Z hop that is currently applied
-
 	// The following contain the details of moves that the Move module fetches
 	// CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
-	ExtendedRawMove moveBuffer;					// Move details
+	MovementState moveState;					// Move details
 	bool updateUserPosition;
 
 	unsigned int segmentsLeftToStartAt;
@@ -598,7 +593,6 @@ private:
 	float rawExtruderTotalByDrive[MaxExtruders]; // Extrusion amount in the last G1 command with an E parameter when in absolute extrusion mode
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 
-	unsigned int currentCoordinateSystem;		// This is zero-based, where as the P parameter in the G10 command is 1-based
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES

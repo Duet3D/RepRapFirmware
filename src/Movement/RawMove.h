@@ -56,11 +56,18 @@ enum class SegmentedMoveState : uint8_t
 };
 
 // Details of a move that are needed only by GCodes
-struct ExtendedRawMove : public RawMove
+struct MovementState : public RawMove
 {
+	// The current user position now holds the requested user position after applying workplace coordinate offsets.
+	// So we must subtract the workplace coordinate offsets when we want to display them.
+	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
+	float currentUserPosition[MaxAxes];								// The current position of the axes as commanded by the input gcode, after accounting for workplace offset,
+																	// before accounting for tool offset and Z hop
+	float currentZHop;												// The amount of Z hop that is currently applied
 	float initialCoords[MaxAxes];									// the initial positions of the axes
 	float previousX, previousY;										// the initial X and Y coordinates in user space of the previous move
 	float previousXYDistance;										// the XY length of that previous move
+	unsigned int currentCoordinateSystem;							// This is zero-based, where as the P parameter in the G10 command is 1-based
 	unsigned int segmentsLeft;										// the number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;										// the total number of segments left in the complete move
 	unsigned int arcAxis0, arcAxis1;								// the axis numbers of the arc before we apply axis mapping
