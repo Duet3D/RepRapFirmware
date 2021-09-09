@@ -88,11 +88,11 @@ extern const char* VolumeStr[FF_VOLUMES];	/* User defied volume ID */
 #ifndef _INC_TCHAR
 #define _INC_TCHAR
 
-#if FF_USE_LFN && FF_LFN_UNICODE == 1 	/* Unicode in UTF-16 encoding */
+#if FF_USE_LFN != 0 && FF_LFN_UNICODE == 1 	/* Unicode in UTF-16 encoding */
 typedef WCHAR TCHAR;
 #define _T(x) L ## x
 #define _TEXT(x) L ## x
-#elif FF_USE_LFN && FF_LFN_UNICODE == 2	/* Unicode in UTF-8 encoding */
+#elif FF_USE_LFN != 0 && FF_LFN_UNICODE == 2	/* Unicode in UTF-8 encoding */
 typedef char TCHAR;
 #define _T(x) u8 ## x
 #define _TEXT(x) u8 ## x
