@@ -17,14 +17,10 @@ const size_t OUTPUT_STACK_DEPTH = 64;	// Number of OutputBuffer chains that can 
 const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can be pushed onto one stack instance
 #endif
 
-class OutputStack;
-
 // This class is used to hold data for sending (either for Serial or Network destinations)
 class OutputBuffer
 {
 public:
-	friend class OutputStack;
-
 	OutputBuffer(OutputBuffer *n) noexcept : next(n) { }
 	OutputBuffer(const OutputBuffer&) = delete;
 
@@ -44,6 +40,9 @@ public:
 	const char *Read(size_t len) noexcept;
 	void Taken(size_t len) noexcept { bytesRead += len; }
 	size_t BytesLeft() const noexcept { return dataLength - bytesRead; }	// How many bytes have not been sent yet?
+
+	uint32_t WhenQueued() const noexcept { return whenQueued; }
+	void UpdateWhenQueued() noexcept;
 
 	size_t vprintf(const char *fmt, va_list vargs) noexcept;
 	size_t printf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
@@ -100,7 +99,7 @@ private:
 	OutputBuffer *next;
 	OutputBuffer *last;
 
-	uint32_t whenQueued;
+	uint32_t whenQueued;									// milliseconds timer when this buffer was filled in
 
 	char data[OUTPUT_BUFFER_SIZE];
 	size_t dataLength, bytesRead;

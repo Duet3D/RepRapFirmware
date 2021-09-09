@@ -105,6 +105,11 @@ void OutputBuffer::Clear() noexcept
 	dataLength = 0;
 }
 
+void OutputBuffer::UpdateWhenQueued() noexcept
+{
+	whenQueued = millis();
+}
+
 size_t OutputBuffer::vprintf(const char *fmt, va_list vargs) noexcept
 {
 	Clear();
@@ -378,7 +383,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 			buf->references = 1;					// assume it's only used once by default
 			buf->isReferenced = false;
 			buf->hadOverflow = false;
-			buf->whenQueued = millis();				// use the time of allocation as the default when-used time
+			buf->UpdateWhenQueued();				// use the time of allocation as the default when-used time
 
 			return true;
 		}
@@ -489,7 +494,7 @@ bool OutputStack::Push(OutputBuffer *buffer, MessageType type) volatile noexcept
 		{
 			if (buffer != nullptr)
 			{
-				buffer->whenQueued = millis();
+				buffer->UpdateWhenQueued();
 			}
 			items[count] = buffer;
 			types[count] = type;
@@ -549,7 +554,7 @@ void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile noexcept
 		else
 		{
 			items[0] = buffer;
-			buffer->whenQueued = millis();
+			buffer->UpdateWhenQueued();
 		}
 	}
 }
@@ -580,7 +585,7 @@ bool OutputStack::ApplyTimeout(uint32_t ticks) volatile noexcept
 	if (count != 0)
 	{
 		OutputBuffer * buf = items[0];							// capture volatile variable
-		while (buf != nullptr && millis() - buf->whenQueued >= ticks)
+		while (buf != nullptr && millis() - buf->WhenQueued() >= ticks)
 		{
 			items[0] = buf = OutputBuffer::Release(buf);
 			ret = true;
