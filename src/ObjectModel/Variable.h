@@ -53,7 +53,7 @@ public:
 
 	Variable *Lookup(const char *str) noexcept;
 	const Variable *Lookup(const char *str) const noexcept;
-	void Insert(Variable *toInsert) noexcept;
+	void InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) noexcept;
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Delete(const char *str) noexcept;
 	void Clear() noexcept;

@@ -46,8 +46,9 @@ const Variable* VariableSet::Lookup(const char *str) const noexcept
 	return v;
 }
 
-void VariableSet::Insert(Variable *toInsert) noexcept
+void VariableSet::InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) noexcept
 {
+	Variable * const toInsert = new Variable(str, pVal, pScope);
 	toInsert->next = root;
 	root = toInsert;
 }

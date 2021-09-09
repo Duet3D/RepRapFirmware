@@ -657,7 +657,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 	SkipWhiteSpace();
 	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
-	vset->Insert(new Variable(varName.c_str(), ev, (isGlobal) ? 0 : gb.CurrentFileMachineState().GetBlockNesting()));
+	vset->InsertNew(varName.c_str(), ev, (isGlobal) ? 0 : gb.CurrentFileMachineState().GetBlockNesting());
 	if (isGlobal)
 	{
 		reprap.GlobalUpdated();
@@ -1875,7 +1875,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 											ev.Set(nullptr);
 										}
 										char paramName[2] = { letter, 0 };
-										vs.Insert(new Variable(paramName, ev, -1));
+										vs.InsertNew(paramName, ev, -1);
 									}
 								}
 							  );

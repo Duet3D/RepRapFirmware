@@ -1323,7 +1323,7 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 			if (cfg.driverNumbers[i].IsLocal() && stalledDrivers.IsBitSet(cfg.driverNumbers[i].localDriver))
 			{
 				char str[2] = { axisLetters[axis], 0 };
-				vars.Insert(new Variable(str, ExpressionValue((int32_t)1), -1));		// create a parameter with value 1 for the axis
+				vars.InsertNew(str, ExpressionValue((int32_t)1), -1);		// create a parameter with value 1 for the axis
 				break;
 			}
 		}
