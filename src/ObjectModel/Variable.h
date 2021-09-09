@@ -18,11 +18,6 @@
 class Variable
 {
 public:
-	friend class VariableSet;
-
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<Variable>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<Variable>(p); }
-
 	Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept;
 	~Variable();
 
@@ -30,10 +25,8 @@ public:
 	ExpressionValue GetValue() const noexcept { return val; }
 	int8_t GetScope() const noexcept { return scope; }
 	void Assign(ExpressionValue ev) noexcept { val = ev; }
-	const Variable *GetNext() const noexcept { return next; }
 
 private:
-	Variable *next;
 	StringHandle name;
 	ExpressionValue val;
 	int8_t scope;								// -1 for a parameter, else the block nesting level when it was created
@@ -61,7 +54,18 @@ public:
 	void IterateWhile(function_ref<bool(unsigned int index, const Variable& v) /*noexcept*/ > func) const noexcept;
 
 private:
-	Variable *root;
+	struct LinkedVariable
+	{
+		void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<LinkedVariable>(); }
+		void operator delete(void* p) noexcept { FreelistManager::Release<LinkedVariable>(p); }
+
+		LinkedVariable(const char *str, ExpressionValue pVal, int8_t pScope, LinkedVariable *p_next) : next(p_next), v(str, pVal, pScope) {}
+
+		LinkedVariable *next;
+		Variable v;
+	};
+
+	LinkedVariable *root;
 };
 
 #endif /* SRC_GCODES_VARIABLE_H_ */

@@ -20,87 +20,86 @@ Variable::~Variable()
 
 Variable* VariableSet::Lookup(const char *str) noexcept
 {
-	Variable *v;
-	for (v = root; v != nullptr; v = v->next)
+	LinkedVariable *lv;
+	for (lv = root; lv != nullptr; lv = lv->next)
 	{
-		auto vname = v->name.Get();
+		auto vname = lv->v.GetName();
 		if (strcmp(vname.Ptr(), str) == 0)
 		{
-			break;
+			return &(lv->v);
 		}
 	}
-	return v;
+	return nullptr;
 }
 
 const Variable* VariableSet::Lookup(const char *str) const noexcept
 {
-	const Variable *v;
-	for (v = root; v != nullptr; v = v->next)
+	const LinkedVariable *lv;
+	for (lv = root; lv != nullptr; lv = lv->next)
 	{
-		auto vname = v->name.Get();
+		auto vname = lv->v.GetName();
 		if (strcmp(vname.Ptr(), str) == 0)
 		{
-			break;
+			return &(lv->v);
 		}
 	}
-	return v;
+	return nullptr;
 }
 
 void VariableSet::InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) noexcept
 {
-	Variable * const toInsert = new Variable(str, pVal, pScope);
-	toInsert->next = root;
+	LinkedVariable * const toInsert = new LinkedVariable(str, pVal, pScope, root);
 	root = toInsert;
 }
 
 // Remove all variables with a scope greater than the parameter
 void VariableSet::EndScope(uint8_t blockNesting) noexcept
 {
-	Variable *prev = nullptr;
-	for (Variable *v = root; v != nullptr; )
+	LinkedVariable *prev = nullptr;
+	for (LinkedVariable *lv = root; lv != nullptr; )
 	{
-		if (v->scope > blockNesting)
+		if (lv->v.GetScope() > blockNesting)
 		{
-			Variable *temp = v;
-			v = v->next;
+			LinkedVariable *temp = lv;
+			lv = lv->next;
 			if (prev == nullptr)
 			{
-				root = v;
+				root = lv;
 			}
 			else
 			{
-				prev->next = v;
+				prev->next = lv;
 			}
 			delete temp;
 		}
 		else
 		{
-			prev = v;
-			v = v->next;
+			prev = lv;
+			lv = lv->next;
 		}
 	}
 }
 
 void VariableSet::Delete(const char *str) noexcept
 {
-	Variable *prev = nullptr;
-	for (Variable *v = root; v != nullptr; v = v->next)
+	LinkedVariable *prev = nullptr;
+	for (LinkedVariable *lv = root; lv != nullptr; lv = lv->next)
 	{
-		auto vname = v->name.Get();
+		auto vname = lv->v.GetName();
 		if (strcmp(vname.Ptr(), str) == 0)
 		{
 			if (prev == nullptr)
 			{
-				root = v->next;
+				root = lv->next;
 			}
 			else
 			{
-				prev->next = v->next;
+				prev->next = lv->next;
 			}
-			delete v;
+			delete lv;
 			break;
 		}
-		prev = v;
+		prev = lv;
 	}
 }
 
@@ -108,9 +107,9 @@ void VariableSet::Clear() noexcept
 {
 	while (root != nullptr)
 	{
-		Variable *v = root;
-		root = v->next;
-		delete v;
+		LinkedVariable *lv = root;
+		root = lv->next;
+		delete lv;
 	}
 }
 
@@ -130,9 +129,9 @@ void VariableSet::AssignFrom(VariableSet& other) noexcept
 void VariableSet::IterateWhile(function_ref<bool(unsigned int, const Variable&) /*noexcept*/ > func) const noexcept
 {
 	unsigned int num = 0;
-	for (const Variable *v = root; v != nullptr; v = v->GetNext())
+	for (const LinkedVariable *lv = root; lv != nullptr; lv = lv->next)
 	{
-		if (!func(num, *v))
+		if (!func(num, lv->v))
 		{
 			break;
 		}
