@@ -4536,9 +4536,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 		case 997:	// Perform firmware update
-#ifdef DUET3_ATE
-			Duet3Ate::PowerOffEUT();
-#endif
 			result = UpdateFirmware(gb, reply);
 			break;
 

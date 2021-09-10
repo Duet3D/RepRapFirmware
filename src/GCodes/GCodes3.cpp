@@ -41,6 +41,10 @@
 # include <Wire.h>
 #endif
 
+#ifdef DUET3_ATE
+# include <Duet3Ate.h>
+#endif
+
 #include <cctype>
 
 // Deal with G60
@@ -1131,11 +1135,16 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		}
 	}
 #endif
+
 #if HAS_AUX_DEVICES && ALLOW_ARBITRARY_PANELDUE_PORT	// Disabled until we allow PanelDue on another port
 	if (gb.Seen('A'))
 	{
 		serialChannelForPanelDueFlashing = gb.GetLimitedUIValue('A', NumSerialChannels, 1);
 	}
+#endif
+
+#ifdef DUET3_ATE
+	Duet3Ate::PowerOffEUT();
 #endif
 
 	reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off because the main loop may get suspended

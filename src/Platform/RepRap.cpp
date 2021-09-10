@@ -935,6 +935,10 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
 void RepRap::EmergencyStop() noexcept
 {
+#ifdef DUET3_ATE
+	Duet3Ate::PowerOffEUT();
+#endif
+
 	stopped = true;				// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
 
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
