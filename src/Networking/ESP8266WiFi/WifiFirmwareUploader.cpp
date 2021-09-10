@@ -733,14 +733,19 @@ void WifiFirmwareUploader::Spin() noexcept
 }
 
 // Try to upload the given file at the given address
-void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uint32_t address) noexcept
+void WifiFirmwareUploader::SendUpdateFile(const char *file, uint32_t address) noexcept
 {
 	Platform& platform = reprap.GetPlatform();
-	uploadFile = platform.OpenFile(dir, file, OpenMode::read);
+	uploadFile = platform.OpenFile(FIRMWARE_DIRECTORY, file, OpenMode::read);
 	if (uploadFile == nullptr)
 	{
-		MessageF("Failed to open file %s\n", file);
-		return;
+		// Fall back to /sys if the wifi file wasn't found in /firmware
+		uploadFile = platform.OpenFile(DEFAULT_SYS_DIR, file, OpenMode::read);
+		if (uploadFile == nullptr)
+		{
+			MessageF("Failed to open file %s%s\n", FIRMWARE_DIRECTORY, file);
+			return;
+		}
 	}
 
 	fileSize = uploadFile->Length();

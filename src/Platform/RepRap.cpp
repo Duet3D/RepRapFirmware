@@ -2744,7 +2744,7 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 		return false;
 	}
 
-	if (!platform->FileExists(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE))
+	if (!platform->FileExists(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE) && !platform->FileExists(DEFAULT_SYS_DIR, IAP_UPDATE_FILE))
 	{
 		reply.printf("In-application programming binary \"%s\" not found", FIRMWARE_DIRECTORY IAP_UPDATE_FILE);
 		return false;
@@ -2758,13 +2758,17 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 {
 #if HAS_MASS_STORAGE
-	FileStore * const iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE, OpenMode::read);
+	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		platform->Message(FirmwareUpdateMessage, "IAP file '" FIRMWARE_DIRECTORY IAP_UPDATE_FILE "' not found\n");
-		return;
+		iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
+		if (iapFile == nullptr)
+		{
+			// This should not happen because we already checked that the file exists, so use a simplified error message
+			platform->Message(FirmwareUpdateMessage, "Missing IAP");
+			return;
+		}
 	}
-
 
 	PrepareToLoadIap();
 
