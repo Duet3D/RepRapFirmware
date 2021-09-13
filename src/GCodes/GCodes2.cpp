@@ -2656,6 +2656,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = reprap.GetHeat().ConfigureSensor(gb, reply);
 				break;
 
+			case 309:
+				{
+					ReadLockedPointer<Tool> const tool = GetSpecifiedOrCurrentTool(gb);
+					result = tool->GetSetFeedForward(gb, reply);
+				}
+				break;
+
 			case 350: // Set/report microstepping
 				{
 #if SUPPORT_CAN_EXPANSION
@@ -2800,26 +2807,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-			case 404: // Filament width and nozzle diameter
+			case 404: // Filament width. See also M200.
+				// TODO support per-extruder values
+				if (gb.Seen('N'))
 				{
-					bool seen = false;
-
-					if (gb.Seen('N'))
-					{
-						platform.SetFilamentWidth(gb.GetFValue());
-						seen = true;
-					}
-					if (gb.Seen('D'))
-					{
-						platform.SetNozzleDiameter(gb.GetFValue());
-						seen = true;
-					}
-
-					if (!seen)
-					{
-						reply.printf("Filament width: %.2fmm, nozzle diameter: %.2fmm", (double)platform.GetFilamentWidth(), (double)platform.GetNozzleDiameter());
-					}
+					platform.SetFilamentWidth(gb.GetFValue());
+					break;
 				}
+				// no break
+			case 407:
+				reply.printf("Filament width %.2fmm", (double)platform.GetFilamentWidth());
 				break;
 
 			case 408: // Get status in JSON format
@@ -3402,64 +3399,37 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 567: // Set/report tool mix ratios
 				{
-					int tNumber;
-					if (gb.Seen('P'))
+					ReadLockedPointer<Tool> const tool = GetSpecifiedOrCurrentTool(gb);
+					if (gb.Seen(extrudeLetter))
 					{
-						tNumber = (int)gb.GetUIValue();
-					}
-					else
-					{
-						tNumber = reprap.GetCurrentToolNumber();
-						if (tNumber < 0)
+						float eVals[MaxExtruders];
+						size_t eCount = tool->DriveCount();
+						gb.GetFloatArray(eVals, eCount, false);
+						if (eCount != tool->DriveCount())
 						{
-							reply.copy("No tool number given and no current tool");
-							result = GCodeResult::error;
-							break;
-						}
-					}
-
-					ReadLockedPointer<Tool> const tool = reprap.GetTool(tNumber);
-					if (tool.IsNull())
-					{
-						reply.copy("Invalid tool number");
-						result = GCodeResult::error;
-					}
-					else
-					{
-						if (gb.Seen(extrudeLetter))
-						{
-							float eVals[MaxExtruders];
-							size_t eCount = tool->DriveCount();
-							gb.GetFloatArray(eVals, eCount, false);
-							if (eCount != tool->DriveCount())
-							{
-								reply.copy("Setting mix ratios - wrong number of E drives: ");
-								gb.AppendFullCommand(reply);
-							}
-							else
-							{
-								tool->DefineMix(eVals);
-							}
+							reply.copy("Setting mix ratios - wrong number of E drives: ");
+							gb.AppendFullCommand(reply);
 						}
 						else
 						{
-							reply.printf("Tool %d mix ratios:", tNumber);
-							char sep = ' ';
-							for (size_t drive = 0; drive < tool->DriveCount(); drive++)
-							{
-								reply.catf("%c%.3f", sep, (double)tool->GetMix()[drive]);
-								sep = ':';
-							}
+							tool->DefineMix(eVals);
+						}
+					}
+					else
+					{
+						reply.printf("Tool %d mix ratios:", tool->Number());
+						char sep = ' ';
+						for (size_t drive = 0; drive < tool->DriveCount(); drive++)
+						{
+							reply.catf("%c%.3f", sep, (double)tool->GetMix()[drive]);
+							sep = ':';
 						}
 					}
 				}
 				break;
 
 			case 568: // Tool Settings
-				if (simulationMode == 0)
-				{
-					result = SetOrReportOffsets(gb, reply, 568);
-				}
+				result = SetOrReportOffsets(gb, reply, 568);
 				break;
 
 			case 569: // Set/report axis direction

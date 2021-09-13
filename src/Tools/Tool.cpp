@@ -62,6 +62,13 @@ constexpr ObjectModelArrayDescriptor Tool::heatersArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->heaters[context.GetLastIndex()]); }
 };
 
+constexpr ObjectModelArrayDescriptor Tool::feedForwardArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForward[context.GetLastIndex()], 3); }
+};
+
 constexpr ObjectModelArrayDescriptor Tool::extrudersArrayDescriptor =
 {
 	nullptr,					// no lock needed
@@ -98,6 +105,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "axes",				OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 							ObjectModelEntryFlags::none },
 	{ "extruders",			OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 						ObjectModelEntryFlags::none },
 	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 										ObjectModelEntryFlags::none },
+	{ "feedForward",		OBJECT_MODEL_FUNC_NOSELF(&feedForwardArrayDescriptor), 						ObjectModelEntryFlags::none },
 	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),							ObjectModelEntryFlags::none },
 	{ "heaters",			OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 							ObjectModelEntryFlags::none },
 	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 									ObjectModelEntryFlags::live },
@@ -120,7 +128,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "zHop",				OBJECT_MODEL_FUNC(self->retractHop, 2),										ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 17, 5 };
+constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 18, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
@@ -240,6 +248,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 		t->heaters[heater] = heaterNumber;
 		t->activeTemperatures[heater] = ABS_ZERO;
 		t->standbyTemperatures[heater] = ABS_ZERO;
+		t->heaterFeedForward[heater] = 0.0;
 	}
 
 	if (t->filament != nullptr)
@@ -805,6 +814,26 @@ GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply,
 		outBuf->lcatf("Tool %u retract/reprime: length %.2f/%.2fmm, speed %.1f/%.1fmm/sec, Z hop %.2fmm",
 			myNumber, (double)retractLength, (double)(retractLength + retractExtra), (double)InverseConvertSpeedToMmPerSec(retractSpeed), (double)InverseConvertSpeedToMmPerSec(unRetractSpeed), (double)retractHop);
 	}
+	return GCodeResult::ok;
+}
+
+GCodeResult Tool::GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (gb.Seen('S'))
+	{
+		size_t numValues = heaterCount;
+		gb.GetFloatArray(heaterFeedForward, numValues, false);
+		ToolUpdated();
+	}
+	else
+	{
+		reply.printf("Tool %u heater feedforward:", myNumber);
+		for (size_t i = 0; i < heaterCount; ++i)
+		{
+			reply.catf(" %.3f", (double)heaterFeedForward[i]);
+		}
+	}
+
 	return GCodeResult::ok;
 }
 

@@ -3374,27 +3374,35 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	return (gb.DoDwellTime((uint32_t)dwell)) ? GCodeResult::ok : GCodeResult::notFinished;
 }
 
+// Get the tool specified by the P parameter, or the current tool if no P parameter
+ReadLockedPointer<Tool> GCodes::GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException)
+{
+	unsigned int tNumber;
+	if (gb.Seen('P'))
+	{
+		tNumber = gb.GetUIValue();
+	}
+	else
+	{
+		tNumber = reprap.GetCurrentToolNumber();
+		if (tNumber < 0)
+		{
+			throw GCodeException(gb.GetLineNumber(), -1, "No tool number given and no current tool");
+		}
+	}
+
+	ReadLockedPointer<Tool> tool = reprap.GetTool(tNumber);
+	if (tool.IsNull())
+	{
+		throw GCodeException(gb.GetLineNumber(), -1, "Invalid tool number");
+	}
+	return tool;
+}
+
 // Set offset, working and standby temperatures for a tool. i.e. handle a G10 or M568.
 GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, int code) THROWS(GCodeException)
 {
-	uint32_t toolNumber = 0;
-	bool seenP = false;
-	gb.TryGetUIValue('P', toolNumber, seenP);
-
-	ReadLockedPointer<Tool> const tool = (seenP) ? reprap.GetTool(toolNumber) : reprap.GetLockedCurrentTool();
-	if (tool.IsNull())
-	{
-		if (seenP)
-		{
-			reply.printf("Tool %" PRIu32 " not found", toolNumber);
-		}
-		else
-		{
-			reply.printf("No tool selected");
-		}
-		return GCodeResult::error;
-	}
-
+	ReadLockedPointer<Tool> const tool = GetSpecifiedOrCurrentTool(gb);
 	bool settingOffset = false;
 	if (code == 10)			// Only G10 can set tool offsets
 	{

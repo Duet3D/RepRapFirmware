@@ -542,8 +542,6 @@ public:
 	// Hotend configuration
 	float GetFilamentWidth() const noexcept;
 	void SetFilamentWidth(float width) noexcept;
-	float GetNozzleDiameter() const noexcept;
-	void SetNozzleDiameter(float diameter) noexcept;
 
 	// Fire the inkjet (if any) in the given pattern
 	// If there is no inkjet false is returned; if there is one this returns true
@@ -838,7 +836,6 @@ private:
 
 	// Hotend configuration
 	float filamentWidth;
-	float nozzleDiameter;
 
 	// Power monitoring
 #if HAS_VOLTAGE_MONITOR
@@ -1088,16 +1085,6 @@ inline float Platform::GetFilamentWidth() const noexcept
 inline void Platform::SetFilamentWidth(float width) noexcept
 {
 	filamentWidth = width;
-}
-
-inline float Platform::GetNozzleDiameter() const noexcept
-{
-	return nozzleDiameter;
-}
-
-inline void Platform::SetNozzleDiameter(float diameter) noexcept
-{
-	nozzleDiameter = diameter;
 }
 
 #endif
