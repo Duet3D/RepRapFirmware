@@ -269,6 +269,7 @@ void ExpansionManager::AddAccelerometerRun(CanAddress address, unsigned int numD
 {
 	boards[address].accelerometerLastRunDataPoints = numDataPoints;
 	++boards[address].accelerometerRuns;
+	reprap.BoardsUpdated();
 }
 
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
