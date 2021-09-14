@@ -48,7 +48,7 @@ static const uint16_t crc16_table[] =
 
 CRC16::CRC16() noexcept
 {
-	Reset();
+	Reset(0);
 }
 
 void CRC16::Update(char c) noexcept

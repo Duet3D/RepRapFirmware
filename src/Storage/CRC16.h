@@ -22,7 +22,7 @@ public:
 
 	void Update(char c) noexcept;
 	void Update(const char *c, size_t len) noexcept;
-	void Reset(uint16_t initialValue = 0) noexcept;
+	void Reset(uint16_t initialValue) noexcept;
 	uint16_t Get() const noexcept;
 };
 

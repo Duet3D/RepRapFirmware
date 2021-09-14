@@ -313,9 +313,8 @@ constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 // Bytes 3-6 32-bit data, MSB first
 // Byte 7 8-bit CRC
 
-#if USE_FAST_CRC
-
 // Fast table-driven CRC-8. The result after we have taken the CRC of all bytes needs to be reflected.
+// The CRC polynomial used by the TMC drivers is: X^8 + X^2 + X + 1 which is CRC-8-CCITT
 static constexpr uint8_t crc_table[256] =
 {
 	0x00, 0x91, 0xE3, 0x72, 0x07, 0x96, 0xE4, 0x75, 0x0E, 0x9F, 0xED, 0x7C, 0x09, 0x98, 0xEA, 0x7B,
@@ -369,41 +368,6 @@ static inline constexpr uint8_t CRCAddFinalByte(uint8_t crc, uint8_t finalByte) 
 }
 
 static_assert(CRCAddFinalByte(CRCAddByte(CRCAddByte(0, 1), 2), 3) == 0x1E);
-
-#else
-
-// Slow CRC code
-
-// Add 1 bit to a CRC
-static inline constexpr uint8_t CRCAddBit(uint8_t crc, uint8_t currentByte, uint8_t bit) noexcept
-{
-	return (((crc ^ (currentByte << (7 - bit))) & 0x80) != 0)
-			? (crc << 1) ^ 0x07
-				: (crc << 1);
-}
-
-// Add a byte to a CRC
-static inline constexpr uint8_t CRCAddByte(uint8_t crc, uint8_t currentByte) noexcept
-{
-	crc = CRCAddBit(crc, currentByte, 0);
-	crc = CRCAddBit(crc, currentByte, 1);
-	crc = CRCAddBit(crc, currentByte, 2);
-	crc = CRCAddBit(crc, currentByte, 3);
-	crc = CRCAddBit(crc, currentByte, 4);
-	crc = CRCAddBit(crc, currentByte, 5);
-	crc = CRCAddBit(crc, currentByte, 6);
-	crc = CRCAddBit(crc, currentByte, 7);
-	return crc;
-}
-
-static inline constexpr uint8_t CRCAddFinalByte(uint8_t crc, uint8_t finalByte) noexcept
-{
-	return CRCAddByte(crc, finalByte);
-}
-
-static_assert(CRCAddFinalByte(CRCAddByte(CRCAddByte(0, 1), 2), 3) == 0x1E);
-
-#endif
 
 // CRC of the first byte we send in any request
 static constexpr uint8_t InitialByteCRC = CRCAddByte(0, 0x05);
