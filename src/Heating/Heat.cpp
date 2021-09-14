@@ -819,6 +819,19 @@ void Heat::FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float 
 	}
 }
 
+// This one is called from an ISR so we must not get a lock
+void Heat::SetExtrusionFeedForward(unsigned int heater, float pwm) const noexcept
+{
+	if (heater < MaxHeaters)
+	{
+		Heater * const h = heaters[heater];
+		if (h != nullptr)
+		{
+			h->SetExtrusionFeedForward(pwm);
+		}
+	}
+}
+
 GCodeResult Heat::ResetFault(int heater, const StringRef& reply) noexcept
 {
 	// This gets called for all heater numbers when clearing all temperature faults, so don't report an error if the heater was not found

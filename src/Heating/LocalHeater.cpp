@@ -58,7 +58,7 @@ void LocalHeater::ResetHeater() noexcept
 	mode = HeaterMode::off;
 	previousTemperaturesGood = 0;
 	previousTemperatureIndex = 0;
-	iAccumulator = 0.0;
+	iAccumulator = extrusionBoost = 0.0;
 	badTemperatureCount = 0;
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
@@ -359,7 +359,7 @@ void LocalHeater::Spin() noexcept
 							iAccumulator = constrain<float>
 											(iAccumulator + (errorToUse * params.kP * params.recipTi * (HeatSampleIntervalMillis * MillisToSeconds)),
 												0.0, GetModel().GetMaxPwm());
-							lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
+							lastPwm = constrain<float>(pPlusD + iAccumulator + extrusionBoost, 0.0, GetModel().GetMaxPwm());
 						}
 #if HAS_VOLTAGE_MONITOR
 						// Scale the PID based on the current voltage vs. the calibration voltage
@@ -516,9 +516,15 @@ void LocalHeater::FeedForwardAdjustment(float fanPwmChange, float extrusionChang
 			debugPrintf("iacc=%.3f, applying boost %.3f\n", (double)iAccumulator, (double)boost);
 		}
 #endif
-		TaskCriticalSectionLocker lock;
+		InterruptCriticalSectionLocker lock;
 		iAccumulator += boost;
 	}
+}
+
+// Set extrusion feedforward. This is called from an ISR.
+void LocalHeater::SetExtrusionFeedForward(float pwm) noexcept
+{
+	extrusionBoost = pwm;
 }
 
 /* Notes on the auto tune algorithm

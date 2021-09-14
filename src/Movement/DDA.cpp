@@ -1918,6 +1918,7 @@ pre(state == frozen)
 		}
 		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 		unsigned int extrusions = 0, retractions = 0;				// bitmaps of extruding and retracting drives
+		float extrusionFraction = 0.0;
 		for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
 		{
 			const size_t drive = pdm->drive;
@@ -1928,6 +1929,7 @@ pre(state == frozen)
 				if (pdm->direction == FORWARDS)
 				{
 					extrusions |= (1u << extruder);
+					extrusionFraction += directionVector[drive];
 				}
 				else
 				{
@@ -1969,10 +1971,19 @@ pre(state == frozen)
 		if (extruding)
 		{
 			p.ExtrudeOn();
+			if (tool != nullptr)
+			{
+				// Pass the extrusion speed averaged over the whole move in mm/sec
+				tool->ApplyFeedForward((extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded);
+			}
 		}
 		else
 		{
 			p.ExtrudeOff();
+			if (tool != nullptr)
+			{
+				tool->StopFeedForward();
+			}
 		}
 	}
 }

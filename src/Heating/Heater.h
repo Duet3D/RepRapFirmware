@@ -48,6 +48,7 @@ public:
 	virtual void Suspend(bool sus) noexcept = 0;						// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const noexcept = 0;					// Get the inertial term accumulator
 	virtual void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept = 0;
+	virtual void SetExtrusionFeedForward(float pwm) noexcept = 0;
 
 #if SUPPORT_CAN_EXPANSION
 	virtual bool IsLocal() const noexcept = 0;

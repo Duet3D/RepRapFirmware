@@ -10,6 +10,7 @@
 #include "Move.h"
 #include <Platform/Tasks.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Tools/Tool.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMotion.h"
@@ -539,6 +540,10 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 			++numNoMoveUnderruns;
 		}
 		p.ExtrudeOff();								// turn off ancillary PWM
+		if (cdda->GetTool() != nullptr)
+		{
+			cdda->GetTool()->StopFeedForward();
+		}
 #if SUPPORT_LASER
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
 		{

@@ -837,4 +837,24 @@ GCodeResult Tool::GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THR
 	return GCodeResult::ok;
 }
 
+// Apply feedforward to the current tool. Called from an ISR context or with BASEPRI set high.
+void Tool::ApplyFeedForward(float extrusionSpeed) const noexcept
+{
+	Heat& heat = reprap.GetHeat();
+	for (size_t i = 0; i < heaterCount; ++i)
+	{
+		heat.SetExtrusionFeedForward(heaters[i], extrusionSpeed * heaterFeedForward[i]);
+	}
+}
+
+// Stop applying feedforward to the current tool. Called from an ISR context or with BASEPRI set high.
+void Tool::StopFeedForward() const noexcept
+{
+	Heat& heat = reprap.GetHeat();
+	for (size_t i = 0; i < heaterCount; ++i)
+	{
+		heat.SetExtrusionFeedForward(heaters[i], 0.0);
+	}
+}
+
 // End

@@ -121,6 +121,9 @@ public:
 	void HeatersToActive() const noexcept;
 	void HeatersToStandby() const noexcept;
 
+	void ApplyFeedForward(float extrusionSpeed) const noexcept;
+	void StopFeedForward() const noexcept;
+
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(activeTemps)
