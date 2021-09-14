@@ -294,6 +294,11 @@ bool StringParser::LineFinished() noexcept
 		{
 			debugPrintf("%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
 		}
+		if (badChecksum || missingChecksum)
+		{
+			Init();
+			return false;
+		}
 	}
 
 	commandStart = 0;
