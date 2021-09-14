@@ -82,6 +82,7 @@ static void AddLocalAccelerometerRun(unsigned int numDataPoints) noexcept
 {
 	lastRunNumSamplesReceived = numDataPoints;
 	++numLocalRunsCompleted;
+	reprap.BoardsUpdated();
 }
 
 static uint8_t TranslateAxes(uint8_t axes) noexcept
