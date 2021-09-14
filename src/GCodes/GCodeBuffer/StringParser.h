@@ -14,6 +14,7 @@
 #include <ObjectModel/ObjectModel.h>
 #include <GCodes/GCodeException.h>
 #include <Networking/NetworkDefs.h>
+#include <Storage/CRC16.h>
 
 class GCodeBuffer;
 class IPAddress;
@@ -141,12 +142,15 @@ private:
 	uint32_t crc32;										// crc32 of the binary file
 	uint32_t whenTimerStarted;							// when we started waiting
 
-	uint8_t eofStringCounter;							// Check the EOF
-
 	uint16_t indentToSkipTo;
 	static constexpr uint16_t NoIndentSkip = 0xFFFF;	// must be greater than any real indent
 
-	uint8_t computedChecksum;
+	CRC16 crc16;										// CRC of the characters received
+
+	uint8_t computedChecksum;							// this is the computed checksum or CRC
+	uint8_t checksumCharsReceived;						// the number of checksum characters received
+	uint8_t eofStringCounter;							// Check the EOF
+
 	bool hadLineNumber;
 	bool hadChecksum;
 	bool hasCommandNumber;

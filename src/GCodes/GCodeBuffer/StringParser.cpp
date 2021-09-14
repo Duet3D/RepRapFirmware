@@ -25,7 +25,7 @@ static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML
 #endif
 
 StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
-	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0), indentToSkipTo(NoIndentSkip),
+	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), indentToSkipTo(NoIndentSkip), eofStringCounter(0),
 	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), binaryWriting(false)
 {
 	StartNewFile();
@@ -49,12 +49,17 @@ void StringParser::Init() noexcept
 
 inline void StringParser::AddToChecksum(char c) noexcept
 {
-	computedChecksum ^= (uint8_t)c;
+	// As computing the CRC takes several cycles, we only do it if we had a line number
+	if (hadLineNumber)
+	{
+		computedChecksum ^= (uint8_t)c;
+		crc16.Update(c);
+	}
 }
 
 inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 {
-	computedChecksum ^= (uint8_t)c;
+	AddToChecksum(c);
 	if (gcodeLineEnd + 1 < ARRAY_SIZE(gb.buffer))					// if there is space for this character and a trailing null
 	{
 		gb.buffer[gcodeLineEnd++] = c;
@@ -101,6 +106,7 @@ bool StringParser::Put(char c) noexcept
 			case 'N':
 			case 'n':
 				hadLineNumber = true;
+				crc16.Reset(0);
 				AddToChecksum(c);
 				gb.bufferState = GCodeBufferState::parsingLineNumber;
 				receivedLineNumber = 0;
@@ -163,6 +169,7 @@ bool StringParser::Put(char c) noexcept
 				if (hadLineNumber && braceCount == 0)
 				{
 					declaredChecksum = 0;
+					checksumCharsReceived = 0;
 					hadChecksum = true;
 					gb.bufferState = GCodeBufferState::parsingChecksum;
 				}
@@ -246,6 +253,7 @@ bool StringParser::Put(char c) noexcept
 			if (isDigit(c))
 			{
 				declaredChecksum = (10 * declaredChecksum) + (c - '0');
+				++checksumCharsReceived;
 			}
 			else
 			{
@@ -288,11 +296,44 @@ bool StringParser::LineFinished() noexcept
 
 	if (gb.bufferState != GCodeBufferState::parsingComment)			// we don't checksum comment lines
 	{
-		const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
-		const bool missingChecksum = (checksumRequired && !hadChecksum && gb.LatestMachineState().GetPrevious() == nullptr);
-		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
+		if (hadChecksum)
 		{
-			debugPrintf("%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
+			bool checksumOk;
+			switch (checksumCharsReceived)
+			{
+			case 1:
+			case 2:
+			case 3:
+				checksumOk = (computedChecksum == declaredChecksum);
+				break;
+
+			case 5:
+				checksumOk = (crc16.Get() == declaredChecksum);
+				break;
+
+			default:
+				checksumOk = false;
+				break;
+			}
+
+			if (!checksumOk)
+			{
+				if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
+				{
+					debugPrintf("%s bad-csum: %s\n", gb.GetChannel().ToString(), gb.buffer);
+				}
+				Init();
+				return false;
+			}
+		}
+		else if (checksumRequired && gb.LatestMachineState().GetPrevious() == nullptr)
+		{
+			if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
+			{
+				debugPrintf("%s no-csum: %s\n", gb.GetChannel().ToString(), gb.buffer);
+			}
+			Init();
+			return false;
 		}
 	}
 
