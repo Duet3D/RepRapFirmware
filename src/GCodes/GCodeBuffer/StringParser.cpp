@@ -294,44 +294,42 @@ bool StringParser::LineFinished() noexcept
 
 	gb.buffer[gcodeLineEnd] = 0;
 
-	if (gb.bufferState != GCodeBufferState::parsingComment)			// we don't checksum comment lines
+	if (gb.bufferState != GCodeBufferState::parsingComment)			// we don't checksum or echo comment lines, but we still need to process them
 	{
+		bool badChecksum, missingChecksum;
 		if (hadChecksum)
 		{
-			bool checksumOk;
+			missingChecksum = false;
 			switch (checksumCharsReceived)
 			{
 			case 1:
 			case 2:
 			case 3:
-				checksumOk = (computedChecksum == declaredChecksum);
+				badChecksum = (computedChecksum != declaredChecksum);
 				break;
 
 			case 5:
-				checksumOk = (crc16.Get() == declaredChecksum);
+				badChecksum = (crc16.Get() != declaredChecksum);
 				break;
 
 			default:
-				checksumOk = false;
+				badChecksum = true;
 				break;
 			}
-
-			if (!checksumOk)
-			{
-				if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
-				{
-					debugPrintf("%s bad-csum: %s\n", gb.GetChannel().ToString(), gb.buffer);
-				}
-				Init();
-				return false;
-			}
 		}
-		else if (checksumRequired && gb.LatestMachineState().GetPrevious() == nullptr)
+		else
 		{
-			if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
-			{
-				debugPrintf("%s no-csum: %s\n", gb.GetChannel().ToString(), gb.buffer);
-			}
+			badChecksum = false;
+			missingChecksum = (checksumRequired && gb.LatestMachineState().GetPrevious() == nullptr);
+		}
+
+		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
+		{
+			debugPrintf("%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
+		}
+
+		if (badChecksum || missingChecksum)
+		{
 			Init();
 			return false;
 		}
