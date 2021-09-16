@@ -419,7 +419,7 @@ public:
 	SimpleRangeIterator(T value_) noexcept : val(value_) {}
     bool operator != (SimpleRangeIterator<T> const& other) const noexcept { return val != other.val;     }
     T const& operator*() const noexcept { return val; }
-    SimpleRangeIterator& operator++() noexcept { ++val; return *this; }
+    SimpleRangeIterator<T>& operator++() noexcept { ++val; return *this; }
 
 private:
     T val;
