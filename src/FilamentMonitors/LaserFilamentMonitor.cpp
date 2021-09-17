@@ -30,9 +30,16 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. LaserFilamentMonitor members
+#ifdef DUET3_ATE
+	{ "brightness",			OBJECT_MODEL_FUNC((int32_t)self->brightness),															ObjectModelEntryFlags::live },
+#endif
 	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::none },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 														ObjectModelEntryFlags::none },
+#ifdef DUET3_ATE
+	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->sensorValue),															ObjectModelEntryFlags::live },
+	{ "shutter",			OBJECT_MODEL_FUNC((int32_t)self->shutter),																ObjectModelEntryFlags::live },
+#endif
 	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),																ObjectModelEntryFlags::live },
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("laser"), 																		ObjectModelEntryFlags::none },
 
@@ -49,7 +56,17 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 	{ "sampleDistance",	 	OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 												ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] = { 3, 5, 4, 4 };
+constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] =
+{
+	3,
+#ifdef DUET3_ATE
+	8,
+#else
+	5,
+#endif
+	4,
+	4
+};
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LaserFilamentMonitor)
 

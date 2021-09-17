@@ -30,9 +30,16 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. RotatingMagnetFilamentMonitor members
+#ifdef DUET3_ATE
+	{ "agc",				OBJECT_MODEL_FUNC((int32_t)self->agc),																	ObjectModelEntryFlags::live },
+#endif
 	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::none },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 														ObjectModelEntryFlags::none },
+#ifdef DUET3_ATE
+	{ "mag",				OBJECT_MODEL_FUNC((int32_t)self->magnitude),															ObjectModelEntryFlags::live },
+	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->sensorValue),															ObjectModelEntryFlags::live },
+#endif
 	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),																ObjectModelEntryFlags::live },
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("rotatingMagnet"), 															ObjectModelEntryFlags::none },
 
@@ -49,7 +56,17 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 	{ "sampleDistance", 	OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 												ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] = { 3, 5, 4, 4 };
+constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] =
+{
+	3,
+#ifdef DUET3_ATE
+	8,
+#else
+	5,
+#endif
+	4,
+	4
+};
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RotatingMagnetFilamentMonitor)
 
