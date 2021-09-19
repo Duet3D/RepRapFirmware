@@ -9,7 +9,9 @@
 #define SRC_PLATFORM_HEAP_H_
 
 #include <RepRapFirmware.h>
-#include <RTOSIface/RTOSIface.h>
+#include <RTOSIface/RTOSIface.h>			// for class ReadLockedPointer
+
+#include <atomic>
 
 class IndexSlot;
 class StorageSpace;

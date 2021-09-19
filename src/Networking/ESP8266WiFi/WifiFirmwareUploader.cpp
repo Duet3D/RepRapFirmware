@@ -66,7 +66,7 @@ const char * const resultMessages[] =
 // 230400b always manages to connect.
 static const uint32_t uploadBaudRates[] = { 230400, 115200, 74880, 9600 };
 
-WifiFirmwareUploader::WifiFirmwareUploader(UARTClass& port, WiFiInterface& iface) noexcept
+WifiFirmwareUploader::WifiFirmwareUploader(AsyncSerial& port, WiFiInterface& iface) noexcept
 	: uploadPort(port), interface(iface), uploadFile(nullptr), state(UploadState::idle)
 {
 }

@@ -10,7 +10,6 @@
 #define SRC_HARDWARE_SAME5X_DEVICES_H_
 
 #include <AsyncSerial.h>
-typedef AsyncSerial UARTClass;
 
 extern AsyncSerial serialUart0, serialUart1;
 

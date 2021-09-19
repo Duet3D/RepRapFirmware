@@ -15,7 +15,7 @@ class WiFiInterface;
 class WifiFirmwareUploader
 {
 public:
-	WifiFirmwareUploader(UARTClass& port, WiFiInterface &iface) noexcept;
+	WifiFirmwareUploader(AsyncSerial& port, WiFiInterface &iface) noexcept;
 	bool IsReady() const noexcept;
 	void SendUpdateFile(const char *file, uint32_t address) noexcept;
 	void Spin() noexcept;
@@ -84,7 +84,7 @@ private:
 	EspUploadResult flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept;
 	EspUploadResult DoErase(uint32_t address, uint32_t size) noexcept;
 
-	UARTClass& uploadPort;
+	AsyncSerial& uploadPort;
 	WiFiInterface& interface;
 	FileStore *uploadFile;
 	FilePosition fileSize;

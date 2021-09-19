@@ -15,7 +15,7 @@
 class AuxSerialPort : public SerialPort
 {
 public:
-	AuxSerialPort(UARTClass& uartClass) noexcept : uart(uartClass), _timeout(0) {}
+	AuxSerialPort(AsyncSerial& uartClass) noexcept : uart(uartClass), _timeout(0) {}
 	~AuxSerialPort() {}
 
 	bool open(int baud = 115200,
@@ -37,7 +37,7 @@ public:
 	void setRTS(bool rts) noexcept override {}
 
 private:
-	UARTClass& uart;
+	AsyncSerial& uart;
 	int _timeout;
 };
 
@@ -320,7 +320,7 @@ void PanelDueUpdater::Spin() noexcept
 	}
 }
 
-UARTClass* PanelDueUpdater::GetAuxPort() noexcept
+AsyncSerial* PanelDueUpdater::GetAuxPort() noexcept
 {
 	return
 			serialChannel == 0 || serialChannel > NumSerialChannels ? nullptr :

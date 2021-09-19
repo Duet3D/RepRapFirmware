@@ -58,13 +58,13 @@ private:
 	Device* device;
 	FlasherObserver* flasherObserver;
 	Flasher* flasher;
-	UARTClass::InterruptCallbackFn currentInterruptCallbackFn;
+	AsyncSerial::InterruptCallbackFn currentInterruptCallbackFn;
 	uint32_t offset;
 	uint32_t erasedAndResetAt;
 	FlashState state;
 	FileStore *firmwareFile;
 
-	UARTClass* GetAuxPort() noexcept;
+	AsyncSerial* GetAuxPort() noexcept;
 };
 
 #endif	// HAS_AUX_DEVICES

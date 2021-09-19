@@ -9,8 +9,6 @@
 #define SRC_HARDWARE_SAM4E_DEVICES_H_
 
 #include <AsyncSerial.h>
-typedef AsyncSerial UARTClass;
-#include <USARTClass.h>
 
 extern AsyncSerial Serial;
 extern AsyncSerial Serial1;

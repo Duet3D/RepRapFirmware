@@ -18,7 +18,7 @@ class AuxDevice
 public:
 	AuxDevice() noexcept;
 
-	void Init(UARTClass *p_uart) noexcept;
+	void Init(AsyncSerial *p_uart) noexcept;
 	bool IsEnabled() const noexcept { return enabled; }
 	void Enable(uint32_t baudRate) noexcept;
 	void Disable() noexcept;
@@ -34,7 +34,7 @@ public:
 	void Diagnostics(MessageType mt, unsigned int index) noexcept;
 
 private:
-	UARTClass *uart;
+	AsyncSerial *uart;
 	volatile OutputStack outStack;
 	Mutex mutex;
 	uint32_t seq;							// sequence number for output

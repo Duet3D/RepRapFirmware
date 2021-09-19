@@ -513,7 +513,7 @@ private:
 #endif
 	;
 	static bool emergencyStopCommanded;
-	static void CommandEmergencyStop(UARTClass *p) noexcept;
+	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
 #endif
 
 	Platform& platform;													// The RepRap machine

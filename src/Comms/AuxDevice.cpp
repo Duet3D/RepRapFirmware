@@ -15,7 +15,7 @@ AuxDevice::AuxDevice() noexcept : uart(nullptr), seq(0), enabled(false), raw(tru
 {
 }
 
-void AuxDevice::Init(UARTClass *p_uart) noexcept
+void AuxDevice::Init(AsyncSerial *p_uart) noexcept
 {
 	uart = p_uart;
 #if SAME5x
@@ -153,7 +153,7 @@ void AuxDevice::Diagnostics(MessageType mt, unsigned int index) noexcept
 {
 	if (enabled)
 	{
-		const UARTClass::Errors errs = uart->GetAndClearErrors();
+		const AsyncSerial::Errors errs = uart->GetAndClearErrors();
 		reprap.GetPlatform().MessageF(mt, "Aux%u errors %u,%u,%u\n", index, (unsigned int)errs.uartOverrun, (unsigned int)errs.bufferOverrun, (unsigned int)errs.framing);
 	}
 }

@@ -54,7 +54,7 @@
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
 
-void GCodes::CommandEmergencyStop(UARTClass *p) noexcept
+void GCodes::CommandEmergencyStop(AsyncSerial *p) noexcept
 {
 	emergencyStopCommanded = true;
 }
