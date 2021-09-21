@@ -6,7 +6,6 @@
  *
  *  This file contains the code to see what G, M or T command we have and start processing it.
  */
-
 #include "GCodes.h"
 
 #include "GCodeBuffer/GCodeBuffer.h"

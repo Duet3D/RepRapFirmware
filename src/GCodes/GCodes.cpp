@@ -292,9 +292,6 @@ void GCodes::Reset() noexcept
 	fileOffsetToPrint = 0;
 	restartMoveFractionDone = 0.0;
 #endif
-#if HAS_LINUX_INTERFACE
-	lastFilePosition = noFilePosition;
-#endif
 	printFilePositionAtMacroStart = 0;
 	deferredPauseCommandPending = nullptr;
 	moveState.filePos = noFilePosition;
@@ -346,33 +343,27 @@ bool GCodes::WaitingForAcknowledgement() const noexcept
 FilePosition GCodes::GetPrintingFilePosition() const noexcept
 {
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		const FilePosition pos = (fileGCode->GetFilePosition() == noFilePosition)
-				? lastFilePosition
-					: fileGCode->GetFilePosition();
-		return (pos == noFilePosition) ? 0 : pos;
-	}
-	else
+	if (!reprap.UsingLinuxInterface())
 #endif
 	{
-
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 		if (!fileBeingPrinted.IsLive())
 		{
 			return 0;
 		}
-
-		const FilePosition pos = (fileGCode->IsDoingFileMacro())
-				? printFilePositionAtMacroStart						// the position before we started executing the macro
-					: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
-
-		return (pos == noFilePosition) ? 0 : pos;
-#else
-		return 0;
 #endif
 	}
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+	const FilePosition pos = (fileGCode->IsDoingFileMacro())
+			? printFilePositionAtMacroStart						// the position before we started executing the macro
+				: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
+
+	return (pos == noFilePosition) ? 0 : pos;
+#else
+	return 0;
+#endif
 }
 
 // Start running the config file
@@ -636,11 +627,6 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{
-		if (!gb.IsDoingFileMacro() && gb.GetFilePosition() != noFilePosition)
-		{
-			lastFilePosition = gb.GetFilePosition();
-		}
-
 		if (gb.IsFileFinished())
 		{
 			if (gb.LatestMachineState().GetPrevious() == nullptr)
@@ -683,20 +669,15 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		else
 		{
-			bool gotCommand = false;
 			if (gb.LatestMachineState().waitingForAcknowledgement && gb.GetNormalInput() != nullptr)
 			{
-				gotCommand = gb.GetNormalInput()->FillBuffer(&gb);
-				if (gotCommand)
+				if (gb.GetNormalInput()->FillBuffer(&gb))
 				{
 					gb.DecodeCommand();
+					return true;
 				}
 			}
-			if (!gotCommand)
-			{
-				return reprap.GetLinuxInterface().FillBuffer(gb);
-			}
-			return false;
+			return reprap.GetLinuxInterface().FillBuffer(gb);
 		}
 	}
 	else
@@ -1076,8 +1057,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 		}
 
 		// Prepare notification for the Linux side
-		lastFilePosition = pauseRestorePoint.filePos;
-		reprap.GetLinuxInterface().SetPauseReason(pauseRestorePoint.filePos, pauseReason);
+		FilePosition reportedFilePosition = pausedInMacro ? printFilePositionAtMacroStart : gb.GetFilePosition();
+		reprap.GetLinuxInterface().SetPauseReason(reportedFilePosition, pauseReason);
 	}
 #endif
 
@@ -1180,10 +1161,10 @@ bool GCodes::DoEmergencyPause() noexcept
 	}
 
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface() && pauseRestorePoint.filePos == noFilePosition)
+	if (reprap.UsingLinuxInterface())
 	{
-		// Use the last known print file position if the current one is unknown (e.g. because a macro file is being executed)
-		pauseRestorePoint.filePos = lastFilePosition;
+		PrintPausedReason reason = platform.IsPowerOk() ? PrintPausedReason::stall : PrintPausedReason::lowVoltage;
+		reprap.GetLinuxInterface().SetEmergencyPauseReason(pauseRestorePoint.filePos, reason);
 	}
 #endif
 
@@ -3300,11 +3281,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	reprap.GetMove().ResetExtruderPositions();
 
 #if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		lastFilePosition = noFilePosition;
-	}
-	else
+	if (!reprap.UsingLinuxInterface())
 #endif
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -4136,7 +4113,6 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{
-		lastFilePosition = noFilePosition;
 		fileGCode->LatestMachineState().CloseFile();
 		fileGCode->Init();
 	}

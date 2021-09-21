@@ -552,9 +552,6 @@ private:
 
 	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?
-#if HAS_LINUX_INTERFACE
-	FilePosition lastFilePosition;				// Last known file position
-#endif
 	FilePosition printFilePositionAtMacroStart;
 	const char *deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
