@@ -910,11 +910,7 @@ void GCodeBuffer::SetFileFinished() noexcept
 		}
 	}
 
-	if (macroFileId == NoFileId)
-	{
-		reprap.GetPlatform().MessageF(WarningMessage, "Cannot set macro file finished because there is no file ID (channel %s)\n", GetChannel().ToString());
-	}
-	else
+	if (macroFileId != NoFileId)
 	{
 		reprap.GetLinuxInterface().EventOccurred();
 	}

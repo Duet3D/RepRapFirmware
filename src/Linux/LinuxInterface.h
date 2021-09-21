@@ -50,6 +50,7 @@ public:
 	bool FillBuffer(GCodeBuffer &gb) noexcept;									// Try to fill up the G-code buffer with the next available G-code
 
 	void SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept;	// Set parameters for the next pause request
+	void SetEmergencyPauseReason(FilePosition position, PrintPausedReason reason) noexcept;	// Set parameters for the next emergency pause request
 	void ReportPause() noexcept;												// Report that the print has been paused
 
 	void HandleGCodeReply(MessageType type, const char *reply) noexcept;		// accessed by Platform
@@ -142,6 +143,14 @@ inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedRea
 	pauseFilePosition = position;
 	pauseReason = reason;
 	reportPauseWritten = false;
+}
+
+inline void LinuxInterface::SetEmergencyPauseReason(FilePosition position, PrintPausedReason reason) noexcept
+{
+	pauseFilePosition = position;
+	pauseReason = reason;
+	reportPauseWritten = false;
+	reportPause = true;
 }
 
 inline void LinuxInterface::ReportPause() noexcept
