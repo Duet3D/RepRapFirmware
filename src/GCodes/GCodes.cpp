@@ -4006,12 +4006,6 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS
 			return GCodeResult::error;
 		}
 
-		if (Filament::IsInUse(filamentName.c_str()))
-		{
-			reply.copy("One filament type can be only assigned to a single tool");
-			return GCodeResult::error;
-		}
-
 		SafeStrncpy(filamentToLoad, filamentName.c_str(), ARRAY_SIZE(filamentToLoad));
 		gb.SetState(GCodeState::loadingFilament);
 
