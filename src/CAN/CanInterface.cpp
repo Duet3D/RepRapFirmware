@@ -38,17 +38,17 @@
 
 const unsigned int NumCanBuffers = 2 * MaxCanBoards + 10;
 
-constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
-constexpr uint32_t MaxUrgentSendWait = 20;		// milliseconds
-constexpr uint32_t MaxTimeSyncSendWait = 2;		// milliseconds
-constexpr uint32_t MaxResponseSendWait = 200;	// milliseconds
-constexpr uint32_t MaxRequestSendWait = 200;	// milliseconds
-constexpr uint16_t MaxTimeSyncDelay = 300;		// the maximum normal delay before a can time sync message is sent
+constexpr uint32_t MaxMotionSendWait = 20;									// milliseconds
+constexpr uint32_t MaxUrgentSendWait = 20;									// milliseconds
+constexpr uint32_t MaxTimeSyncSendWait = 2;									// milliseconds
+constexpr uint32_t MaxResponseSendWait = CanInterface::UsualSendTimeout;	// milliseconds
+constexpr uint32_t MaxRequestSendWait = CanInterface::UsualSendTimeout;		// milliseconds
+constexpr uint16_t MaxTimeSyncDelay = 300;									// the maximum normal delay before a CAN time sync message is sent
 
 #define USE_BIT_RATE_SWITCH		0
 #define USE_TX_FIFO				1
 
-constexpr uint32_t MinBitRate = 15;				// MCP2542 has a minimum bite rate of 14.4kbps
+constexpr uint32_t MinBitRate = 15;											// MCP2542 has a minimum bite rate of 14.4kbps
 constexpr uint32_t MaxBitRate = 5000;
 
 constexpr float MinSamplePoint = 0.5;
@@ -709,7 +709,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 		for (;;)
 		{
 			const uint32_t timeWaiting = millis() - whenStartedWaiting;
-			if (!can0dev->ReceiveMessage(RxBufferIndexResponse, CanResponseTimeout - timeWaiting, buf))
+			if (!can0dev->ReceiveMessage(RxBufferIndexResponse, UsualResponseTimeout - timeWaiting, buf))
 			{
 				break;
 			}

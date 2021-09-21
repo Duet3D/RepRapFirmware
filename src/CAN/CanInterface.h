@@ -61,7 +61,8 @@ private:
 namespace CanInterface
 {
 	// Note: GetCanAddress() in this namespace is now declared in RepRapFirmware.h to overcome ordering issues
-	constexpr uint32_t CanResponseTimeout = 1000;
+	constexpr uint32_t UsualResponseTimeout = 1000;				// how long we normally wait for a response, in milliseconds
+	constexpr uint32_t UsualSendTimeout = 200;					// how long we normally wait to send a message, in milliseconds
 
 	// Low level functions
 	void Init() noexcept;
@@ -86,8 +87,8 @@ namespace CanInterface
 	uint16_t GetTimeStampCounter() noexcept;
 
 #if DUAL_CAN
-	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept;
-	bool ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout) noexcept;
+	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout = UsualSendTimeout) noexcept;
+	bool ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout = UsualResponseTimeout) noexcept;
 #endif
 
 #if !SAME70
