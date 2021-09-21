@@ -657,9 +657,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				axes.SetBit(axis0Num);
 				axes.SetBit(axis1Num);
 				float axesCoords[MaxAxes];
+				memcpy(axesCoords, moveState.coords, sizeof(axesCoords));				// copy current coordinates of all other axes in case they are relevant to IsReachable
 				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 				axesCoords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
 				axesCoords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
+				axesCoords[Z_AXIS] = zp->GetStartingHeight();
 				if (move.IsAccessibleProbePoint(axesCoords, axes))
 				{
 					SetMoveBufferDefaults();
