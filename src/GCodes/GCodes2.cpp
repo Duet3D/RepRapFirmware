@@ -2879,6 +2879,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					return false;
 				}
+#if SUPPORT_LASER
+				platform.ReleaseLaserPin();
+#endif
 				machineType = MachineType::fff;
 				reprap.StateUpdated();
 				break;
@@ -2928,6 +2931,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				// M453 may be repeated to set up multiple spindles, so only print the message on the initial switch
 				if (machineType != MachineType::cnc)
 				{
+#if SUPPORT_LASER
+					platform.ReleaseLaserPin();
+#endif
 					machineType = MachineType::cnc;						// switch to CNC mode even if the spindle parameter is bad
 					reprap.StateUpdated();
 				}

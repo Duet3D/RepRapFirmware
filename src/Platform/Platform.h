@@ -608,6 +608,7 @@ public:
 	void SetLaserPwm(Pwm_t pwm) noexcept;
 	float GetLaserPwm() const noexcept;							// return laser PWM in 0..1
 	bool AssignLaserPin(GCodeBuffer& gb, const StringRef& reply);
+	void ReleaseLaserPin() noexcept;
 	void SetLaserPwmFrequency(PwmFrequency freq) noexcept;
 #endif
 
@@ -636,6 +637,7 @@ public:
 	GCodeResult EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult EutProcessM569Point2(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	void SendDriversStatus(CanMessageBuffer& buf) noexcept;
 #endif

@@ -42,9 +42,9 @@
 #include <Movement/StepTimer.h>
 #include <Cache.h>
 #include <General/Portability.h>
+#include <Hardware/IoPorts.h>
 
 #if SAME5x || SAMC21
-# include <Hardware/IoPorts.h>
 # include <DmacManager.h>
 # include <Serial.h>
 # include <component/sercom.h>
@@ -1199,7 +1199,9 @@ void TmcDriverState::UpdateCurrent() noexcept
 	const float idealIHoldCs = idealIRunCs * standstillCurrentFraction * (1.0/256.0);
 	const uint32_t iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;
 	UpdateRegister(WriteIholdIrun,
-					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
+					  (writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK))
+					| (iRunCsBits << IHOLDIRUN_IRUN_SHIFT)
+					| (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
 }
 
 // Enable or disable the driver
@@ -1259,59 +1261,59 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
 	if (!DriverAssumedPresent())
 	{
-		reply.cat("assumed not present");
+		reply.cat(" assumed not present");
 		return;
 	}
 
 	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
 	if (lastReadStatus & TMC_RR_OT)
 	{
-		reply.cat("temperature-shutdown! ");
+		reply.cat(" temperature-shutdown!");
 	}
 	else if (lastReadStatus & TMC_RR_OTPW)
 	{
-		reply.cat("temperature-warning, ");
+		reply.cat(" temperature-warning");
 	}
 	if (lastReadStatus & TMC_RR_S2G)
 	{
-		reply.cat("short-to-ground, ");
+		reply.cat(" short-to-ground");
 	}
 	if (lastReadStatus & TMC_RR_OLA)
 	{
-		reply.cat("open-load-A, ");
+		reply.cat(" open-load-A");
 	}
 	if (lastReadStatus & TMC_RR_OLB)
 	{
-		reply.cat("open-load-B, ");
+		reply.cat(" open-load-B");
 	}
 	if (lastReadStatus & TMC_RR_STST)
 	{
-		reply.cat("standstill, ");
+		reply.cat(" standstill");
 	}
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
 	if (hadStepFailure)
 	{
-		reply.cat("stepFail, ");
+		reply.cat(" stepFail");
 	}
 #endif
 	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST)) == 0)
 	{
-		reply.cat("ok, ");
+		reply.cat( "ok");
 	}
 
 #if HAS_STALL_DETECT
 	if (minSgLoadRegister <= maxSgLoadRegister)
 	{
-		reply.catf("SG min/max %" PRIu32 "/%" PRIu32 ", ", minSgLoadRegister, maxSgLoadRegister);
+		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
 	}
 	else
 	{
-		reply.cat("SG min/max n/a, ");
+		reply.cat(", SG min/max n/a");
 	}
 	ResetLoadRegisters();
 #endif
 
-	reply.catf("read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
+	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
 					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors);
 	if (failedOp != 0xFF)
 	{

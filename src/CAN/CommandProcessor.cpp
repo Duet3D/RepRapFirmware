@@ -347,7 +347,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 			const size_t driver = msg.type - (CanMessageReturnInfo::typeDiagnosticsPart0 + 1);
 			reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
 #if HAS_SMART_DRIVERS
-				", "
+				","
 #endif
 				, driver, reprap.GetMove().GetEndPoint(driver), (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
 #if HAS_SMART_DRIVERS
@@ -462,6 +462,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::m569:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetPlatform().EutProcessM569(buf->msg.generic, replyRef);
+				break;
+
+			case CanMessageType::m569p2:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetPlatform().EutProcessM569Point2(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::m569p7:
