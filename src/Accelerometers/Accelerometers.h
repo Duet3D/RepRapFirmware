@@ -27,6 +27,7 @@ namespace Accelerometers
 	unsigned int GetLocalAccelerometerDataPoints() noexcept;
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	void Exit() noexcept;
 #if SUPPORT_CAN_EXPANSION
 	void ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept;
 #endif

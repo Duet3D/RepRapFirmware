@@ -21,6 +21,7 @@
 #include "Fans/FansManager.h"
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
+#include <Accelerometers/Accelerometers.h>
 #include "Version.h"
 
 #ifdef DUET_NG
@@ -714,6 +715,9 @@ void RepRap::Exit() noexcept
 #endif
 	network->Exit();
 	platform->Exit();
+#if SUPPORT_ACCELEROMETERS
+	Accelerometers::Exit();
+#endif
 }
 
 void RepRap::Spin() noexcept
@@ -2818,6 +2822,9 @@ void RepRap::PrepareToLoadIap() noexcept
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
 	FilamentMonitor::Exit();				// stop the filament monitors generating interrupts, we may be about to overwrite them
 	fansManager->Exit();					// stop the fan tachos generating interrupts, we may be about to overwrite them
+#if SUPPORT_ACCELEROMETERS
+	Accelerometers::Exit();					// terminate the accelerometer task, if any
+#endif
 	if (RTOSIface::GetCurrentTask() != Tasks::GetMainTask())
 	{
 		Tasks::TerminateMainTask();			// stop the main task if IAP is being written from another task

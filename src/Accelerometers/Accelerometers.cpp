@@ -505,6 +505,15 @@ unsigned int Accelerometers::GetLocalAccelerometerRuns() noexcept
 	return numLocalRunsCompleted;
 }
 
+void Accelerometers::Exit() noexcept
+{
+	if (accelerometerTask != nullptr)
+	{
+		accelerometerTask->TerminateAndUnlink();
+		accelerometerTask = nullptr;
+	}
+}
+
 #if SUPPORT_CAN_EXPANSION
 
 // Process accelerometer data received over CAN
