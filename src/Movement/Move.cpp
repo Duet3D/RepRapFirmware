@@ -200,7 +200,7 @@ void Move::Init() noexcept
 	moveState = MoveState::idle;
 	whenLastMoveAdded = whenIdleTimerStarted = millis();
 
-	simulationMode = 0;
+	simulationMode = SimulationMode::off;
 	longestGcodeWaitInterval = 0;
 	bedLevellingMoveAvailable = false;
 
@@ -240,7 +240,7 @@ void Move::Exit() noexcept
 			if (bedLevellingMoveAvailable)
 			{
 				moveRead = true;
-				if (simulationMode < 2)
+				if (simulationMode < SimulationMode::partial)
 				{
 					if (mainDDARing.AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
 					{
@@ -263,7 +263,7 @@ void Move::Exit() noexcept
 				if (reprap.GetGCodes().ReadMove(nextMove))				// if we have a new move
 				{
 					moveRead = true;
-					if (simulationMode < 2)								// in simulation mode 2 and higher, we don't process incoming moves beyond this point
+					if (simulationMode < SimulationMode::partial)		// in simulation mode partial, we don't process incoming moves beyond this point
 					{
 						if (nextMove.moveType == 0)
 						{
@@ -916,10 +916,10 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 }
 
 // Enter or leave simulation mode
-void Move::Simulate(uint8_t simMode) noexcept
+void Move::Simulate(SimulationMode simMode) noexcept
 {
 	simulationMode = simMode;
-	if (simMode != 0)
+	if (simMode != SimulationMode::off)
 	{
 		mainDDARing.ResetSimulationTime();
 	}

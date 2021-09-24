@@ -197,40 +197,60 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 			pB = currentSegment->CalcNonlinearB(timeSoFar);
 		}
 
-		const float startDistance = distanceSoFar;
 		distanceSoFar += currentSegment->GetSegmentLength();
 		timeSoFar += currentSegment->GetSegmentTime();
 
-		// Work out whether we reverse in this segment and the movement limit in steps
-		const float sDx = distanceSoFar * dda.directionVector[0];
-		const float sDy = distanceSoFar * dda.directionVector[1];
-		const int32_t netStepsAtEnd = (int32_t)(fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
-								 	 	 	 	 + (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm);
-
-		if (mp.delta.reverseStartDistance <= startDistance)
+		// Work out whether we reverse in this segment and the movement limit in steps.
+		// First check whether the first step in this segment is the previously-calculated reverse start step, and if so then do the reversal.
+		if (nextStep == reverseStartStep)
 		{
-			// This segment is purely downwards motion and we want the greater of the two quadratic solutions. There may have been upwards motion earlier in the move.
-			if (direction)
-			{
-				direction = false;
-				directionChanged = true;
-			}
-			state = DMState::deltaReverse;
-			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1
-								: (reverseStartStep <= totalSteps) ? (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd)
-									: 1 - netStepsAtEnd;
+			direction = false;					// we must have been going up, so now we are going down
+			directionChanged = true;
 		}
-		else if (distanceSoFar <= mp.delta.reverseStartDistance)
+
+		if (currentSegment->GetNext() == nullptr)
 		{
-			// This segment is purely upwards motion of the tower and we want the lower quadratic solution
-			state = DMState::deltaForwardsNoReverse;
-			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(netStepsAtEnd + 1);
+			// This is the last segment, so the phase step limit is the number of total steps, and we can avoid some calculation
+			phaseStepLimit = totalSteps + 1;
+			state = (reverseStartStep <= totalSteps && nextStep < reverseStartStep) ? DMState::deltaForwardsReversing : DMState::deltaNormal;
 		}
 		else
 		{
-			// This segment ends with reverse motion. We want the lower quadratic solution initially.
-			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
-			state = DMState::deltaForwardsReversing;
+			// Work out how many whole steps we have moved up or down at the end of this segment
+			const float sDx = distanceSoFar * dda.directionVector[0];
+			const float sDy = distanceSoFar * dda.directionVector[1];
+			int32_t netStepsAtEnd = (int32_t)floor(fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
+												+ (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm);
+
+			if (nextStep >= reverseStartStep)
+			{
+				// We have already reversed, so this segment is purely downwards motion
+				state = DMState::deltaNormal;
+				phaseStepLimit = (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+			}
+			else
+			{
+				// If there is a reversal then we only ever move up by (reverseStartStep - 1) steps, so netStepsAtEnd should be less than reverseStartStep.
+				// However, because of rounding error, it might possibly be equal.
+				// If there is no reversal then reverseStartStep is set to totalSteps + 1, so netStepsAtEnd must again be less than reverseStartStep.
+				if (netStepsAtEnd >= (int32_t)reverseStartStep)
+				{
+					netStepsAtEnd = (int32_t)(reverseStartStep - 1);			// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
+				}
+
+				if (distanceSoFar <= mp.delta.reverseStartDistance)
+				{
+					// This segment is purely upwards motion of the tower
+					state = DMState::deltaNormal;
+					phaseStepLimit = (uint32_t)(netStepsAtEnd + 1);
+				}
+				else
+				{
+					// This segment ends with reverse motion
+					phaseStepLimit = (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+					state = DMState::deltaForwardsReversing;
+				}
+			}
 		}
 #else
 		iC = currentSegment->GetC()/stepsPerMm;		//TODO store the reciprocal to avoid the division? Use a scaling factor for C
@@ -306,7 +326,6 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		const float startDistance = distanceSoFar;
 		const float startTime = timeSoFar;
 
-		// Work out the movement limit in steps
 		distanceSoFar += currentSegment->GetSegmentLength();
 		timeSoFar += currentSegment->GetSegmentTime();
 
@@ -331,10 +350,11 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			else
 			{
 				// This is the single decelerating segment. If it includes pressure advance then it may include reversal.
-				state = DMState::cartDecelForwardsReversing;			// assume that it may reverse
+				state = (reverseStartStep <= totalSteps) ? DMState::cartDecelForwardsReversing : DMState::cartDecelNoReverse;
 			}
 		}
 
+		// Work out the movement limit in steps
 		phaseStepLimit = ((currentSegment->GetNext() == nullptr) ? totalSteps : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm)) + 1;
 #else
 		const uint32_t startDistance = iDistanceSoFar;
@@ -464,6 +484,15 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 				reverseStartStep = totalSteps + 1;
 				direction = false;
 			}
+			else if (direction && (uint32_t)numStepsUp <= totalSteps)
+			{
+				// If numStepsUp == totalSteps then the reverse segment is too small to do.
+				// If numStepsUp < totalDteps then there has been a rounding error, because we are supposed to move up more than the calculated number of steps we move up.
+				// This can happen if the calculated reversal is very close to the end of the move, because we round the final step positions to the nearest step, which may be up.
+				// Either way, don't do a reverse segment.
+				reverseStartStep = totalSteps + 1;
+				mp.delta.reverseStartDistance = dda.totalDistance + 1.0;
+			}
 			else
 			{
 				reverseStartStep = (uint32_t)numStepsUp + 1;
@@ -472,13 +501,13 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 				if (direction)
 				{
 					// Net movement is up, so we will go up first and then down by a lesser amount
-					totalSteps = (2 * numStepsUp) - totalSteps;
+					totalSteps = (2 * (uint32_t)numStepsUp) - totalSteps;
 				}
 				else
 				{
 					// Net movement is down, so we will go up first and then down by a greater amount
 					direction = true;
-					totalSteps = (2 * numStepsUp) + totalSteps;
+					totalSteps = (2 * (uint32_t)numStepsUp) + totalSteps;
 				}
 			}
 		}
@@ -601,6 +630,47 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * (dda.topSpeed - dda.startSpeed);
 		forwardDistance += mp.cart.extraExtrusionDistance;
 
+# if 0 //SHAPE_EXTRUSION
+		forwardDistance += params.shaped.decelStartDistance;
+		reverseDistance = 0.0;
+
+		// Find the deceleration segments
+		const MoveSegment *decelSeg = dda.unshapedSegments;
+		while (decelSeg != nullptr && (decelSeg->IsLinear() || decelSeg->IsAccelerating()))
+		{
+			decelSeg = decelSeg->GetNext();
+		}
+
+		float lastUncorrectedSpeed = dda.topSpeed;
+		float lastDistance = forwardDistance;
+		while (decelSeg != nullptr)
+		{
+			const float initialDecelSpeed = lastUncorrectedSpeed - mp.cart.pressureAdvanceK * decelSeg->deceleration;
+			if (initialDecelSpeed <= 0.0)
+			{
+				// This entire deceleration segment is in reverse
+				reverseDistance += ((0.5 * params.unshaped.deceleration * params.unshaped.decelClocks) - initialDecelSpeed) * params.unshaped.decelClocks;
+			}
+			else
+			{
+				const float timeToReverse = initialDecelSpeed * ((-0.5) * decelSeg->GetC());	// 'c' is -2/deceleration, so -0.5*c is 1/deceleration
+				if (timeToReverse < params.unshaped.decelClocks)
+				{
+					// There is a reversal, although it could be tiny
+					const float distanceToReverse = fsquare(initialDecelSpeed) * decelSeg->GetC() * (-0.25);	// because (v^2-u^2) = 2as, so if v=0 then s=-u^2/2a = u^2/2d = -0.25*u^2*c
+					forwardDistance += params.unshaped.decelStartDistance + distanceToReverse;
+					reverseDistance = 0.5 * params.unshaped.deceleration * fsquare(params.unshaped.decelClocks - timeToReverse);	// because s = 0.5*a*t^2
+				}
+				else
+				{
+					// No reversal
+					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * params.unshaped.deceleration * params.unshaped.decelClocks);
+					reverseDistance = 0.0;
+				}
+			}
+
+		}
+# else
 		// Check if there is a reversal in the deceleration segment
 		// There is at most one deceleration segment in the unshaped segments
 		const MoveSegment *decelSeg = dda.unshapedSegments;
@@ -641,6 +711,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 				}
 			}
 		}
+# endif
 	}
 	else
 	{
@@ -914,11 +985,10 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		{
 			direction = false;
 			directionChanged = true;
-			state = DMState::deltaReverse;
+			state = DMState::deltaNormal;
 		}
 		// no break
-	case DMState::deltaForwardsNoReverse:
-	case DMState::deltaReverse:									// reversing on this and subsequent steps
+	case DMState::deltaNormal:
 		// Calculate d*s where d = distance the head has travelled, s = steps/mm for this drive
 		{
 #if MS_USE_FPU

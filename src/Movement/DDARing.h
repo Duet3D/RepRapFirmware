@@ -29,7 +29,7 @@ public:
 	bool AddAsyncMove(const AsyncMove& nextMove) noexcept;
 #endif
 
-	uint32_t Spin(uint8_t simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
+	uint32_t Spin(SimulationMode simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
@@ -99,7 +99,7 @@ protected:
 
 private:
 	bool StartNextMove(Platform& p, uint32_t startTime) noexcept SPEED_CRITICAL;		// Start the next move, returning true if laser or IObits need to be controlled
-	uint32_t PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept;
+	uint32_t PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
 
 	static void TimerCallback(CallbackParameter p) noexcept;
 

@@ -276,7 +276,7 @@ void GCodes::Reset() noexcept
 	}
 	triggersPending.Clear();
 
-	simulationMode = 0;
+	simulationMode = SimulationMode::off;
 	exitSimulationWhenFileComplete = updateFileWhenSimulationComplete = false;
 	simulationTime = 0.0;
 	lastDuration = 0;
@@ -990,7 +990,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-	if (simulationMode == 0)
+	if (!IsSimulating())
 	{
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
 	}
@@ -1190,7 +1190,7 @@ bool GCodes::DoEmergencyPause() noexcept
 // Try to pause the current SD card print, returning true if successful, false if needs to be called again
 bool GCodes::LowVoltagePause() noexcept
 {
-	if (simulationMode != 0)
+	if (IsSimulating())
 	{
 		return true;								// ignore the low voltage indication
 	}
@@ -2099,7 +2099,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
 		const SegmentationType st = kin.GetSegmentationType();
-		if (st.useSegmentation && simulationMode != 1 && (moveState.hasPositiveExtrusion || moveState.isCoordinated || st.useG0Segmentation))
+		if (st.useSegmentation && simulationMode != SimulationMode::normal && (moveState.hasPositiveExtrusion || moveState.isCoordinated || st.useG0Segmentation))
 		{
 			// This kinematics approximates linear motion by means of segmentation
 			float moveLengthSquared = fsquare(moveState.currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(moveState.currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
@@ -3294,7 +3294,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	lastFilamentError = FilamentSensorStatus::ok;
 	reprap.GetPrintMonitor().StartedPrint();
 	platform.MessageF(LogWarn,
-						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
+						(IsSimulating()) ? "Started simulating printing file %s\n" : "Started printing file %s\n",
 							reprap.GetPrintMonitor().GetPrintingFilename());
 	if (fromStart)
 	{
@@ -3338,7 +3338,7 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	}
 #endif
 
-	if (   simulationMode != 0														// if we are simulating then simulate the G4...
+	if (   IsSimulating()														// if we are simulating then simulate the G4...
 		&& &gb != daemonGCode														// ...unless it comes from the daemon...
 		&& &gb != triggerGCode														// ...or a trigger...
 		&& (&gb == fileGCode || !exitSimulationWhenFileComplete)					// ...or we are simulating a file and this command doesn't come from the file
@@ -3410,7 +3410,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 		if (gb.Seen('R'))
 		{
 			settingTemps = true;
-			if (simulationMode == 0)
+			if (!IsSimulating())
 			{
 				float standby[MaxHeaters];
 				gb.GetFloatArray(standby, hCount, true);
@@ -3423,7 +3423,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 		if (gb.Seen('S'))
 		{
 			settingTemps = true;
-			if (simulationMode == 0)
+			if (!IsSimulating())
 			{
 				float activeTemps[MaxHeaters];
 				gb.GetFloatArray(activeTemps, hCount, true);
@@ -3444,7 +3444,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 			if (gb.Seen('F'))
 			{
 				settingOther = true;
-				if (simulationMode == 0)
+				if (!IsSimulating())
 				{
 					tool->SetSpindleRpm(gb.GetUIValue());
 				}
@@ -4163,7 +4163,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 #endif
 
 		exitSimulationWhenFileComplete = false;
-		simulationMode = 0;							// do this after we append the simulation info to the file so that DWC doesn't try to reload the file info too soon
+		simulationMode = SimulationMode::off;				// do this after we append the simulation info to the file so that DWC doesn't try to reload the file info too soon
 		reprap.GetMove().Simulate(simulationMode);
 		EndSimulation(nullptr);
 
@@ -4225,7 +4225,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
-		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
+		if (reason == StopPrintReason::normalCompletion && !IsSimulating())
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 		}
@@ -4458,7 +4458,7 @@ bool GCodes::AllAxesAreHomed() const noexcept
 // Tell us that the axis is now homed
 void GCodes::SetAxisIsHomed(unsigned int axis) noexcept
 {
-	if (simulationMode == 0)
+	if (!IsSimulating())
 	{
 		axesHomed.SetBit(axis);
 		axesVirtuallyHomed = axesHomed;
@@ -4469,7 +4469,7 @@ void GCodes::SetAxisIsHomed(unsigned int axis) noexcept
 // Tell us that the axis is not homed
 void GCodes::SetAxisNotHomed(unsigned int axis) noexcept
 {
-	if (simulationMode == 0)
+	if (!IsSimulating())
 	{
 		axesHomed.ClearBit(axis);
 		axesVirtuallyHomed = axesHomed;
@@ -4484,7 +4484,7 @@ void GCodes::SetAxisNotHomed(unsigned int axis) noexcept
 // Flag all axes as not homed
 void GCodes::SetAllAxesNotHomed() noexcept
 {
-	if (simulationMode == 0)
+	if (!IsSimulating())
 	{
 		axesHomed.Clear();
 		axesVirtuallyHomed = axesHomed;
@@ -4724,7 +4724,7 @@ OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSour
 void GCodes::StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept
 {
 	newToolNumber = toolNum;
-	toolChangeParam = (simulationMode != 0) ? 0 : param;
+	toolChangeParam = (IsSimulating()) ? 0 : param;
 	gb.SetState(GCodeState::toolChange0);
 }
 
