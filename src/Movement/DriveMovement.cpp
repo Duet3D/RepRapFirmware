@@ -219,37 +219,36 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 			// Work out how many whole steps we have moved up or down at the end of this segment
 			const float sDx = distanceSoFar * dda.directionVector[0];
 			const float sDy = distanceSoFar * dda.directionVector[1];
-			int32_t netStepsAtEnd = (int32_t)floor(fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
+			int32_t netStepsAtEnd = (int32_t)floorf(fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
 												+ (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm);
 
-			if (nextStep >= reverseStartStep)
+			// If there is a reversal then we only ever move up by (reverseStartStep - 1) steps, so netStepsAtEnd should be less than reverseStartStep.
+			// However, because of rounding error, it might possibly be equal.
+			// If there is no reversal then reverseStartStep is set to totalSteps + 1, so netStepsAtEnd must again be less than reverseStartStep.
+			if (netStepsAtEnd >= (int32_t)reverseStartStep)
 			{
-				// We have already reversed, so this segment is purely downwards motion
+				netStepsAtEnd = (int32_t)(reverseStartStep - 1);			// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
+			}
+
+			if (!direction)
+			{
+				// We are going down so any reversal has already happened
 				state = DMState::deltaNormal;
-				phaseStepLimit = (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+				phaseStepLimit = (nextStep >= reverseStartStep)
+									? (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd)		// we went up (reverseStartStep-1) steps, now we are going down to netStepsAtEnd
+										: (uint32_t)(-netStepsAtEnd);									// we are just going down to netStepsAtEnd
+			}
+			else if (distanceSoFar <= mp.delta.reverseStartDistance)
+			{
+				// This segment is purely upwards motion of the tower
+				state = DMState::deltaNormal;
+				phaseStepLimit = (uint32_t)(netStepsAtEnd + 1);
 			}
 			else
 			{
-				// If there is a reversal then we only ever move up by (reverseStartStep - 1) steps, so netStepsAtEnd should be less than reverseStartStep.
-				// However, because of rounding error, it might possibly be equal.
-				// If there is no reversal then reverseStartStep is set to totalSteps + 1, so netStepsAtEnd must again be less than reverseStartStep.
-				if (netStepsAtEnd >= (int32_t)reverseStartStep)
-				{
-					netStepsAtEnd = (int32_t)(reverseStartStep - 1);			// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
-				}
-
-				if (distanceSoFar <= mp.delta.reverseStartDistance)
-				{
-					// This segment is purely upwards motion of the tower
-					state = DMState::deltaNormal;
-					phaseStepLimit = (uint32_t)(netStepsAtEnd + 1);
-				}
-				else
-				{
-					// This segment ends with reverse motion
-					phaseStepLimit = (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
-					state = DMState::deltaForwardsReversing;
-				}
+				// This segment ends with reverse motion
+				phaseStepLimit = (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+				state = DMState::deltaForwardsReversing;
 			}
 		}
 #else
@@ -459,7 +458,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	// Calculate the distance at which we need to reverse direction.
 	if (params.a2plusb2 <= 0.0)
 	{
-		// Pure Z movement. We can't use the main calculation because it divides by a2plusb2.
+		// Pure Z movement. We can't use the main calculation because it divides by params.a2plusb2.
 		direction = (dda.directionVector[Z_AXIS] >= 0.0);
 		mp.delta.reverseStartDistance = (direction) ? dda.totalDistance + 1.0 : -1.0;	// so that we never reverse and NewDeltaSegment knows which way we are going
 		reverseStartStep = totalSteps + 1;
@@ -487,7 +486,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 			else if (direction && (uint32_t)numStepsUp <= totalSteps)
 			{
 				// If numStepsUp == totalSteps then the reverse segment is too small to do.
-				// If numStepsUp < totalDteps then there has been a rounding error, because we are supposed to move up more than the calculated number of steps we move up.
+				// If numStepsUp < totalSteps then there has been a rounding error, because we are supposed to move up more than the calculated number of steps we move up.
 				// This can happen if the calculated reversal is very close to the end of the move, because we round the final step positions to the nearest step, which may be up.
 				// Either way, don't do a reverse segment.
 				reverseStartStep = totalSteps + 1;
@@ -857,7 +856,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 
 #if MS_USE_FPU
 
-// Version of fastSqrtf that allows for slightly negative operands cause dby rounding error
+// Version of fastSqrtf that allows for slightly negative operands caused by rounding error
 static inline float fastLimSqrtf(float f) noexcept
 {
 	return (f > 0.0) ? fastSqrtf(f) : 0.0;
