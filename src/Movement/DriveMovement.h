@@ -31,9 +31,8 @@ enum class DMState : uint8_t
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
 
-	deltaForwardsNoReverse,							// moving forwards, no reversal in this segment
-	deltaForwardsReversing,							// moving forwards but reversing in this segment
-	deltaReverse,									// moving in reverse
+	deltaNormal,									// moving forwards without reversing in this segment, or in reverse
+	deltaForwardsReversing,							// moving forwards to start with, reversing before the end of this segment
 };
 
 // This class describes a single movement of one drive

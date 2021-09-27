@@ -131,7 +131,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 {
 	GCodeResult result = GCodeResult::ok;
 	const int code = gb.GetCommandNumber();
-	if (simulationMode != 0 && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && (code < 53 || code > 59) && (code < 90 || code > 92))
+	if (IsSimulating() && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && (code < 53 || code > 59) && (code < 90 || code > 92))
 	{
 		HandleReply(gb, result, "");
 		return true;														// we only simulate some gcodes
@@ -236,7 +236,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (modifyingTool)
 					{
-						if (simulationMode != 0)
+						if (IsSimulating())
 						{
 							break;
 						}
@@ -452,7 +452,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 {
 	const int code = gb.GetCommandNumber();
 
-	if (   simulationMode != 0
+	if (   IsSimulating()
 		&& (code < 20 || code > 37)
 		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
 		&& code != 200 && code != 204 && code != 207 && code != 408 && code != 409 && code != 486 && code != 999)
@@ -1155,15 +1155,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else
 					{
 						uint32_t newSimulationMode;
-						gb.TryGetUIValue('S', newSimulationMode, seen);
+						gb.TryGetLimitedUIValue('S', newSimulationMode, seen, (uint32_t)SimulationMode::highest + 1);
 						if (seen)
 						{
-							result = ChangeSimulationMode(gb, reply, newSimulationMode);
+							result = ChangeSimulationMode(gb, reply, (SimulationMode)newSimulationMode);
 						}
 						else
 						{
 							reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
-									(simulationMode != 0) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
+									(IsSimulating()) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
 						}
 					}
 				}
@@ -1541,7 +1541,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					// Set the heater temperatures for that tool. We set the standby temperatures as well as the active ones,
 					// because any slicer that uses M109 doesn't understand that there are separate active and standby temperatures.
-					if (simulationMode == 0)
+					if (!IsSimulating())
 					{
 						SetToolHeaters(applicableTool.Ptr(), temperature, true);	// this may throw
 					}
@@ -1556,7 +1556,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 
 						newToolNumber = applicableTool->Number();
-						toolChangeParam = (simulationMode != 0) ? 0 : DefaultToolChangeParam;
+						toolChangeParam = (IsSimulating()) ? 0 : DefaultToolChangeParam;
 						gb.SetState(GCodeState::m109ToolChange0);
 						result = GCodeResult::ok;
 					}
@@ -1566,15 +1566,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared.
 							// So make sure the tool heaters are on.
-							reprap.SelectTool(applicableTool->Number(), simulationMode != 0);
+							reprap.SelectTool(applicableTool->Number(), IsSimulating());
 						}
 						else
 						{
 							// If we already have an active tool and we are setting temperatures for a different tool, set that tool's heaters to standby in case it is off
-							reprap.StandbyTool(applicableTool->Number(), simulationMode != 0);
+							reprap.StandbyTool(applicableTool->Number(), IsSimulating());
 						}
 
-						if (code == 109 && simulationMode == 0)
+						if (code == 109 && !IsSimulating())
 						{
 							gb.SetState(GCodeState::m109WaitForTemperature);
 							result = GCodeResult::ok;
@@ -4689,7 +4689,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared.
 				// So make sure the tool heaters are on.
-				reprap.SelectTool(toolNum, simulationMode != 0);
+				reprap.SelectTool(toolNum, IsSimulating());
 			}
 		}
 	}

@@ -262,16 +262,26 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 
 // Try to process moves in the ring. Called by the Move task.
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
-uint32_t DDARing::Spin(uint8_t simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept
+uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept
 {
 	DDA *cdda = currentDda;											// capture volatile variable
 
 	// If we are simulating, simulate completion of the current move.
 	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
-	if (simulationMode != 0 && cdda != nullptr)
+	if (simulationMode != SimulationMode::off && cdda != nullptr)
 	{
 		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-		cdda->Complete();
+		if (simulationMode == SimulationMode::debug && reprap.Debug(moduleDda))
+		{
+			do
+			{
+				cdda->SimulateSteppingDrivers(reprap.GetPlatform());
+			} while (cdda->GetState() != DDA::completed);
+		}
+		else
+		{
+			cdda->Complete();
+		}
 		CurrentMoveCompleted();										// this sets currentDda to nullptr and advances getPointer
 		DDA * const gp  = getPointer;								// capture volatile variable
 		if (gp->GetState() == DDA::frozen)
@@ -300,14 +310,14 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool waitingForSpace, bool should
 			cdda = cdda->GetNext();
 			if (cdda == addPointer)
 			{
-				return (simulationMode == 0)
+				return (simulationMode == SimulationMode::off)
 						? TaskBase::TimeoutUnlimited				// all the moves we have are already prepared, so nothing to do until new moves arrive
 							: 0;
 			}
 		}
 
 		uint32_t ret = PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
-		if (simulationMode != 0)
+		if (simulationMode >= SimulationMode::normal)
 		{
 			return 0;
 		}
@@ -345,7 +355,7 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool waitingForSpace, bool should
 		}
 		else if (dda->GetState() == DDA::frozen)
 		{
-			if (simulationMode != 0)
+			if (simulationMode != SimulationMode::off)
 			{
 				currentDda = dda;									// pretend we are executing this move
 				return 0;											// we don't want any delay because we want Spin() to be called again soon to complete this move
@@ -392,7 +402,7 @@ uint32_t DDARing::Spin(uint8_t simulationMode, bool waitingForSpace, bool should
 
 // Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
-uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept
+uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
 {
 	// If the number of prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
@@ -415,7 +425,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, u
 	if (firstUnpreparedMove->GetState() == DDA::provisional)
 	{
 		// There are more moves waiting to be prepared, so ask to be woken up early
-		if (simulationMode != 0)
+		if (simulationMode != SimulationMode::off)
 		{
 			return 1;
 		}

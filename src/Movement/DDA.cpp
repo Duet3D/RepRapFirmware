@@ -1279,7 +1279,7 @@ void DDA::EnsureUnshapedSegments(const PrepParams& params) noexcept
 
 // Prepare this DDA for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
-void DDA::Prepare(uint8_t simMode) noexcept
+void DDA::Prepare(SimulationMode simMode) noexcept
 {
 	flags.wasAccelOnlyMove = IsAccelerationMove();			// save this for the next move to look at
 
@@ -1311,7 +1311,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 	acceleration = params.unshaped.acceleration;
 	deceleration = params.unshaped.deceleration;
 
-	if (simMode == 0)
+	if (simMode < SimulationMode::normal)
 	{
 		if (flags.isDeltaMovement)
 		{
@@ -1611,7 +1611,7 @@ void DDA::Prepare(uint8_t simMode) noexcept
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		const uint32_t canClocksNeeded = CanMotion::FinishMovement(afterPrepare.moveStartTime);
+		const uint32_t canClocksNeeded = CanMotion::FinishMovement(afterPrepare.moveStartTime, simMode != SimulationMode::off);
 		if (canClocksNeeded > clocksNeeded)
 		{
 			// Due to rounding error in the calculations, we quite often calculate the CAN move as being longer than our previously-calculated value, normally by just one clock.
@@ -2113,6 +2113,64 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 		{
 			state = completed;
 		}
+	}
+}
+
+// Simulate stepping the drivers, for debugging.
+// This is basically a copy of DDA::SetDrivers except that instead of being called from the timer ISR and generating steps,
+// it is called from the Move task and outputs info on the step timings. It ignores endstops.
+void DDA::SimulateSteppingDrivers(Platform& p) noexcept
+{
+	static uint32_t lastStepTime;
+	static bool checkTiming = false;
+
+	DriveMovement* dm = activeDMs;
+	if (dm != nullptr)
+	{
+		const uint32_t dueTime = dm->nextStepTime;
+		while (dm != nullptr && dueTime >= dm->nextStepTime)			// if the next step is due
+		{
+			const uint32_t timeDiff = dm->nextStepTime - lastStepTime;
+			const bool badTiming = checkTiming && (timeDiff < 10 || timeDiff > 100000000);
+			debugPrintf("%10" PRIu32 " D%u %c%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', (badTiming) ? " *\n" : "\n");
+			dm = dm->nextDM;
+		}
+		lastStepTime = dueTime;
+		checkTiming = true;
+
+		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+		{
+			(void)dm2->CalcNextStepTime(*this);							// calculate next step times
+		}
+
+		// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
+		DriveMovement *dmToInsert = activeDMs;							// head of the chain we need to re-insert
+		activeDMs = dm;													// remove the chain from the list
+		while (dmToInsert != dm)										// note that both of these may be nullptr
+		{
+			DriveMovement * const nextToInsert = dmToInsert->nextDM;
+			if (dmToInsert->state >= DMState::firstMotionState)
+			{
+				InsertDM(dmToInsert);
+				if (dmToInsert->directionChanged)
+				{
+					dmToInsert->directionChanged = false;
+				}
+			}
+			else
+			{
+				dmToInsert->nextDM = completedDMs;
+				completedDMs = dmToInsert;
+			}
+			dmToInsert = nextToInsert;
+		}
+	}
+
+	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
+	if (activeDMs == nullptr)
+	{
+		checkTiming = false;		// don't check the timing of the first step in the next move
+		state = completed;
 	}
 }
 

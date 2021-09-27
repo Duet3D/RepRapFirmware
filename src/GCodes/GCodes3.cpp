@@ -95,7 +95,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 			ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
 		}
 		reprap.GetMove().SetNewPosition(moveState.coords, true);
-		if (simulationMode == 0)
+		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
 			axesVirtuallyHomed = axesHomed;
@@ -424,7 +424,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		QueueFileToPrint(file.c_str(), reply))
 # endif
 	{
-		if (simulationMode == 0)
+		if (!IsSimulating())
 		{
 			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 			SavePosition(simulationRestorePoint, gb);
@@ -437,7 +437,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 # else
 		updateFileWhenSimulationComplete = updateFile;
 # endif
-		simulationMode = 1;
+		simulationMode = SimulationMode::normal;
 		reprap.GetMove().Simulate(simulationMode);
 		reprap.GetPrintMonitor().StartingPrint(file.c_str());
 		StartPrinting(true);
@@ -449,22 +449,22 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 }
 
 // Handle M37 to change the simulation mode
-GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode)
+GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, SimulationMode newSimMode) THROWS(GCodeException)
 {
-	if (newSimulationMode != simulationMode)
+	if (newSimMode != simulationMode)
 	{
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}
 
-		if (newSimulationMode == 0)
+		if (newSimMode == SimulationMode::off)
 		{
 			EndSimulation(&gb);
 		}
 		else
 		{
-			if (simulationMode == 0)
+			if (!IsSimulating())
 			{
 				// Starting a new simulation, so save the current position
 				axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
@@ -473,8 +473,8 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 			simulationTime = 0.0;
 		}
 		exitSimulationWhenFileComplete = updateFileWhenSimulationComplete = false;
-		simulationMode = (uint8_t)newSimulationMode;
-		reprap.GetMove().Simulate(simulationMode);
+		simulationMode = newSimMode;
+		reprap.GetMove().Simulate(newSimMode);
 	}
 	return GCodeResult::ok;
 }

@@ -129,7 +129,7 @@ public:
 	float IdleTimeout() const noexcept;														// Returns the idle timeout in seconds
 	void SetIdleTimeout(float timeout) noexcept;											// Set the idle timeout in seconds
 
-	void Simulate(uint8_t simMode) noexcept;												// Enter or leave simulation mode
+	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
 	float GetSimulationTime() const noexcept { return mainDDARing.GetSimulationTime(); }	// Get the accumulated simulation time
 
 	bool PausePrint(RestorePoint& rp) noexcept;												// Pause the print as soon as we can, returning true if we were able to
@@ -257,7 +257,7 @@ private:
 
 	DDARing& mainDDARing = rings[0];					// The DDA ring used for regular moves
 
-	uint8_t simulationMode;								// Are we simulating, or really printing?
+	SimulationMode simulationMode;						// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
 
 	float maxPrintingAcceleration;
@@ -345,7 +345,7 @@ inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
 // This is called from the stepper drivers SPI interface ISR
 inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
 {
-	return (simulationMode == 0) ? mainDDARing.GetStepInterval(axis, microstepShift) : 0;
+	return (simulationMode == SimulationMode::off) ? mainDDARing.GetStepInterval(axis, microstepShift) : 0;
 }
 
 #endif

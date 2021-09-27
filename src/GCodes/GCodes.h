@@ -102,6 +102,14 @@ struct M675Settings
 	float minDistance;			// the position we reached when probing towards minimum
 };
 
+enum class SimulationMode : uint8_t
+{	off = 0,				// not simulating
+	debug,					// simulating step generation
+	normal,					// not generating steps, just timing
+	partial,				// generating DDAs but doing nothing with them
+	highest = partial
+};
+
 class LinuxInterface;
 
 // The GCode interpreter
@@ -162,7 +170,7 @@ public:
 
 	bool IsReallyPrinting() const noexcept;										// Return true if we are printing from SD card and not pausing, paused or resuming
 	bool IsReallyPrintingOrResuming() const noexcept;
-	bool IsSimulating() const noexcept { return simulationMode != 0; }
+	bool IsSimulating() const noexcept { return simulationMode != SimulationMode::off; }
 	bool IsDoingToolChange() const noexcept { return doingToolChange; }
 	bool IsHeatingUp() const noexcept;											// Return true if the SD card print is waiting for a heater to reach temperature
 	bool IsRunningConfigFile() const noexcept { return runningConfigFile; }
@@ -466,7 +474,7 @@ private:
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile) THROWS(GCodeException);	// Handle M37 to simulate a whole file
-	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode) THROWS(GCodeException);		// Handle M37 to change the simulation mode
+	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, SimulationMode newSimMode) THROWS(GCodeException);		// Handle M37 to change the simulation mode
 #endif
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 
@@ -639,7 +647,7 @@ private:
 	// Simulation and print time
 	float simulationTime;						// Accumulated simulation time
 	uint32_t lastDuration;						// Time or simulated time of the last successful print or simulation, in seconds
-	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
+	SimulationMode simulationMode;				// see description of enum SimulationMode
 	bool exitSimulationWhenFileComplete;		// true if simulating a file
 	bool updateFileWhenSimulationComplete;		// true if simulated time should be appended to the file
 

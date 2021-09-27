@@ -178,7 +178,7 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 #endif
 
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed. Return the calculated move time in steps, or 0 if there are no CAN moves
-uint32_t CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
+uint32_t CanMotion::FinishMovement(uint32_t moveStartTime, bool simulating) noexcept
 {
 	boardsActiveInLastMove.ClearAll();
 	CanMessageBuffer *buf = movementBufferList;
@@ -207,7 +207,14 @@ uint32_t CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 		buf->dataLength = buf->msg.moveLinear.GetActualDataLength();
 #endif
 		CanMessageBuffer * const nextBuffer = buf->next;				// must get this before sending the buffer, because sending the buffer releases it
-		CanInterface::SendMotion(buf);									// queues the buffer for sending and frees it when done
+		if (simulating)
+		{
+			CanMessageBuffer::Free(buf);
+		}
+		else
+		{
+			CanInterface::SendMotion(buf);								// queues the buffer for sending and frees it when done
+		}
 #if 0
 		++numMotionMessagesSentLast;
 #endif

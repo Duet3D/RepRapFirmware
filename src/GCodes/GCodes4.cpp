@@ -345,7 +345,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			const Tool * const oldTool = reprap.GetCurrentTool();
 			if (oldTool != nullptr)
 			{
-				reprap.StandbyTool(oldTool->Number(), simulationMode != 0);
+				reprap.StandbyTool(oldTool->Number(), IsSimulating());
 				UpdateCurrentUserPosition();			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();
@@ -362,7 +362,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChange2:					// select the new tool if it exists and run tpost
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
-			reprap.SelectTool(newToolNumber, simulationMode != 0);
+			reprap.SelectTool(newToolNumber, IsSimulating());
 			UpdateCurrentUserPosition();				// get the actual position of the new tool
 
 			gb.AdvanceState();
@@ -432,7 +432,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::m109WaitForTemperature:
-		if (cancelWait || simulationMode != 0 || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.LatestMachineState().waitWhileCooling, TEMPERATURE_CLOSE_ENOUGH))
+		if (cancelWait || IsSimulating() || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.LatestMachineState().waitWhileCooling, TEMPERATURE_CLOSE_ENOUGH))
 		{
 			cancelWait = isWaiting = false;
 			gb.SetState(GCodeState::normal);
