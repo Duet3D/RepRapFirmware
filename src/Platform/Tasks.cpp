@@ -84,7 +84,6 @@ extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuf
 // Mutexes
 static Mutex i2cMutex;
 static Mutex mallocMutex;
-static Mutex filamentsMutex;
 
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
 extern "C" void GetMallocMutex() noexcept
@@ -225,7 +224,6 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 	// Create the mutexes and the startup task
 	mallocMutex.Create("Malloc");
 	i2cMutex.Create("I2C");
-	filamentsMutex.Create("Filaments");
 	mainTask.Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
 
 	StepTimer::Init();				// initialise the step pulse timer now because we use it for measuring task CPU usage
@@ -397,11 +395,6 @@ void Tasks::TerminateMainTask() noexcept
 Mutex *Tasks::GetI2CMutex() noexcept
 {
 	return &i2cMutex;
-}
-
-Mutex *Tasks::GetFilamentsMutex() noexcept
-{
-	return &filamentsMutex;
 }
 
 // This intercepts the 1ms system tick

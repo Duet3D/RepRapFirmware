@@ -474,27 +474,10 @@ void LinuxInterface::Spin() noexcept
 					reprap.StartIap(nullptr);
 					break;
 
-				// Assign filament
-				case LinuxRequest::AssignFilament:
-				{
-					int extruder;
-					String<FilamentNameLength> filamentName;
-					transfer.ReadAssignFilament(extruder, filamentName.GetRef());
-
-					Filament *filament = Filament::GetFilamentByExtruder(extruder);
-					if (filament != nullptr)
-					{
-						if (filamentName.IsEmpty())
-						{
-							filament->Unload();
-						}
-						else
-						{
-							filament->Load(filamentName.c_str());
-						}
-					}
+				// Assign filament (deprecated)
+				case LinuxRequest::AssignFilament_deprecated:
+					(void)transfer.ReadData(packet->length);		// skip the packet content
 					break;
-				}
 
 				// Return a file chunk
 				case LinuxRequest::FileChunk:

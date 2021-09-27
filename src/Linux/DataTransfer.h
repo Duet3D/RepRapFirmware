@@ -49,7 +49,6 @@ public:
 	GCodeChannel ReadMacroCompleteInfo(bool &error) noexcept;								// Read info about a completed macro file
 	bool ReadHeightMap() noexcept;															// Read heightmap parameters
 	GCodeChannel ReadCodeChannel() noexcept;												// Read a code channel
-	void ReadAssignFilament(int& extruder, const StringRef& filamentName) noexcept;			// Read a request to assign the given filament to an extruder drive
 	void ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept;	// Read another chunk of a file
 	GCodeChannel ReadEvaluateExpression(size_t packetLength, const StringRef& expression) noexcept;	// Read an expression request
 	bool ReadMessage(MessageType& type, OutputBuffer *buf) noexcept;						// Read a request to output a message

@@ -642,17 +642,6 @@ GCodeChannel DataTransfer::ReadCodeChannel() noexcept
 	return GCodeChannel(header->channel);
 }
 
-void DataTransfer::ReadAssignFilament(int& extruder, const StringRef& filamentName) noexcept
-{
-	// Read header
-	const AssignFilamentHeader *header = ReadDataHeader<AssignFilamentHeader>();
-	extruder = header->extruder;
-
-	// Read filament name
-	const char *name = ReadData(header->filamentLength);
-	filamentName.copy(name, header->filamentLength);
-}
-
 void DataTransfer::ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept
 {
 	// Read header
