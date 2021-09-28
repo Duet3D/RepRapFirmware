@@ -894,7 +894,7 @@ private:
 	static bool deliberateError;						// true if we deliberately caused an exception for testing purposes. Must be static in case of exception during startup.
 };
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // Where the htm etc files are
 inline const char* Platform::GetWebDir() const noexcept

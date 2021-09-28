@@ -249,7 +249,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
 	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
 #endif
 	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
@@ -272,7 +272,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF(&volumesArrayDescriptor),						ObjectModelEntryFlags::none },
 
 	// 1. MachineModel.directories
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
 	{ "filaments",				OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),							ObjectModelEntryFlags::verbose },
 	{ "firmware",				OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_DIRECTORY),							ObjectModelEntryFlags::verbose },
 	{ "gCodes",					OBJECT_MODEL_FUNC(self->platform->GetGCodeDir()),						ObjectModelEntryFlags::verbose },
@@ -313,7 +313,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "tools",					OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTools),							ObjectModelEntryFlags::verbose },
 	{ "trackedObjects",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTrackedObjects),					ObjectModelEntryFlags::verbose },
 	{ "triggers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTriggers),							ObjectModelEntryFlags::verbose },
-	// TODO userVariables
 #if HAS_MASS_STORAGE
 	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumSdCards),							ObjectModelEntryFlags::verbose },
 #else
@@ -368,7 +367,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 
 	// 6. MachineModel.seqs
 	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
 #endif
 	{ "fans",					OBJECT_MODEL_FUNC((int32_t)self->fansSeq),								ObjectModelEntryFlags::live },
@@ -398,18 +397,19 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
-	7,																		// number of sub-tables
-	15 + SUPPORT_SCANNER + HAS_MASS_STORAGE,								// root
-#if HAS_MASS_STORAGE
-	8, 																		// directories
+	7,																						// number of sub-tables
+	15 + SUPPORT_SCANNER + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_LINUX_INTERFACE),	// root
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+	8, 																						// directories
 #else
-	0,																		// directories
+	0,																						// directories
 #endif
-	25,																		// limits
-	18 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,								// state
-	2,																		// state.beep
-	6,																		// state.messageBox
-	12 + HAS_NETWORKING + SUPPORT_SCANNER + 3 * HAS_MASS_STORAGE			// seqs
+	25,																						// limits
+	18 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
+	2,																						// state.beep
+	6,																						// state.messageBox
+	12 + HAS_NETWORKING + SUPPORT_SCANNER +
+	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_LINUX_INTERFACE)	// seqs
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
