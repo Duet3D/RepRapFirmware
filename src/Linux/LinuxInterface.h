@@ -41,6 +41,7 @@ public:
 	void Spin() noexcept;														// Only called in standalone mode by the main loop
 	[[noreturn]] void TaskLoop() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
+	bool IsWritingIap() const noexcept { return writingIap; }
 	bool IsConnected() const noexcept { return isConnected; }
 
 	void EventOccurred(bool timeCritical = false) noexcept;						// Called when a new event has happened. It can optionally start off a new transfer immediately
@@ -86,8 +87,9 @@ private:
 	volatile uint16_t rxPointer, txPointer, txEnd;
 	volatile bool sendBufferUpdate;
 
+	bool writingIap;
 	uint32_t iapWritePointer;
-	uint32_t iapRamAvailable;											// must be at least 64Kb otherwise the SPI IAP can't work
+	uint32_t iapRamAvailable;											// must be at least 32Kb otherwise the SPI IAP can't work
 
 	// Data needed when a CAN expansion board requests a firmware file chunk
 	volatile bool waitingForFileChunk;

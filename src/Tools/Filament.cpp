@@ -121,18 +121,6 @@ void Filament::LoadAssignment() noexcept
 #endif
 }
 
-/*static*/ bool Filament::IsInUse(const char *filamentName) noexcept
-{
-	for (Filament *f = filamentList; f != nullptr; f = f->next)
-	{
-		if (StringEqualsIgnoreCase(f->name, filamentName))
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 /*static*/ Filament *Filament::GetFilamentByExtruder(const int extr) noexcept
 {
 	for (Filament *f = filamentList; f != nullptr; f = f->next)
