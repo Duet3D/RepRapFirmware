@@ -2418,6 +2418,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 290:	// Baby stepping
 				{
 					const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
+					bool resetting = absolute;
 					float differences[MaxAxes];
 					AxesBitmap axesMentioned;
 					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -2433,6 +2434,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							const float fval = gb.GetFValue();
 							if (absolute)
 							{
+								resetting &= (fval == 0.0);
 								differences[axis] = fval - GetTotalBabyStepOffset(axis);
 							}
 							else
@@ -2448,7 +2450,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (axesMentioned.IsNonEmpty())
 					{
-						if (CheckEnoughAxesHomed(axesMentioned))
+						const bool canMove = !CheckEnoughAxesHomed(axesMentioned);
+						if (!canMove && !resetting)
 						{
 							reply.copy("insufficient axes homed");
 							result = GCodeResult::error;
@@ -2473,9 +2476,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 						}
 
-						if (haveResidual && moveState.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
+						if (canMove && haveResidual && moveState.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
 						{
-							// The pipeline is empty, so execute the babystepping move immediately
+							// The pipeline is empty, so execute the babystepping move immediately if it is safe to do
 							SetMoveBufferDefaults();
 							moveState.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
 							moveState.tool = reprap.GetCurrentTool();
