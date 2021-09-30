@@ -140,6 +140,14 @@ namespace CanInterface
 	GCodeResult StartAccelerometer(DriverId device, uint8_t axes, uint16_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 #endif
 	GCodeResult StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t rateRequested, uint8_t movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+
+#if DUAL_CAN
+namespace ODrive {
+	CanId ArbitrationId(DriverId driver, uint8_t cmd) noexcept;
+	CanMessageBuffer * PrepareSimpleMessage(DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept;
+	bool GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept;
+}
+#endif
 }
 
 // Members of template class CanDriversData
