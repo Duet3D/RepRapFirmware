@@ -600,7 +600,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 # if HAS_AUX_DEVICES
 		else
 		{
-			PanelDueUpdater* panelDueUpdater = platform.GetPanelDueUpdater();
+			PanelDueUpdater* const panelDueUpdater = platform.GetPanelDueUpdater();
 			if (panelDueUpdater != nullptr)
 			{
 				panelDueUpdater->Spin();
