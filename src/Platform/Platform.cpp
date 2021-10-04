@@ -45,10 +45,6 @@
 #include <Accelerometers/Accelerometers.h>
 
 #if SAM4E || SAM4S || SAME70
-# include <Flash.h>		// for flash_read_unique_id()
-#endif
-
-#if SAM4E || SAM4S || SAME70
 # include <AnalogIn.h>
 # include <DmacManager.h>
 using LegacyAnalogIn::AdcBits;
@@ -251,7 +247,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 	{ "supportsDirectDisplay", OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),										ObjectModelEntryFlags::verbose },
 #if MCU_HAS_UNIQUE_ID
-	{ "uniqueId",			OBJECT_MODEL_FUNC(self->GetUniqueIdString()),														ObjectModelEntryFlags::none },
+	{ "uniqueId",			OBJECT_MODEL_FUNC(self->uniqueId),																	ObjectModelEntryFlags::none },
 #endif
 #if HAS_12V_MONITOR
 	{ "v12",				OBJECT_MODEL_FUNC(self, 6),																			ObjectModelEntryFlags::live },
@@ -456,7 +452,17 @@ void Platform::Init() noexcept
 #endif
 
 #if MCU_HAS_UNIQUE_ID
-	ReadUniqueId();
+	uniqueId.SetFromCurrentBoard();
+	if (uniqueId.IsValid())
+	{
+		uniqueId.GenerateMacAddress(defaultMacAddress);
+	}
+	else
+	{
+		defaultMacAddress.SetDefault();
+	}
+#else
+	defaultMacAddress.SetDefault();
 #endif
 
 	// Real-time clock
@@ -877,109 +883,6 @@ void Platform::ResetVoltageMonitors() noexcept
 
 	reprap.BoardsUpdated();
 }
-
-#if MCU_HAS_UNIQUE_ID
-
-// Read the unique ID of the MCU, if it has one
-void Platform::ReadUniqueId()
-{
-# if SAME5x
-	for (size_t i = 0; i < 4; ++i)
-	{
-		uniqueId[i] = *reinterpret_cast<const uint32_t*>(SerialNumberAddresses[i]);
-	}
-# else
-	memset(uniqueId, 0, sizeof(uniqueId));
-
-	const bool cacheWasEnabled = Cache::Disable();
-#if SAM4E || SAM4S || SAME70
-	const bool success = Flash::ReadUniqueId(uniqueId);
-#else
-	const bool success = flash_read_unique_id(uniqueId) == 0;
-#endif
-	if (cacheWasEnabled)
-	{
-		Cache::Enable();
-	}
-
-	if (success)
-	{
-# endif
-		// Put the checksum at the end
-		// We only print 30 5-bit characters = 128 data bits + 22 checksum bits. So compress the 32 checksum bits into 22.
-		uniqueId[4] = uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
-		uniqueId[4] ^= (uniqueId[4] >> 10);
-
-		// On the Duet Ethernet and SAM E70, use the unique chip ID as most of the MAC address.
-		// The unique ID is 128 bits long whereas the whole MAC address is only 48 bits,
-		// so we can't guarantee that each Duet will get a unique MAC address this way.
-		memset(defaultMacAddress.bytes, 0, sizeof(defaultMacAddress.bytes));
-		defaultMacAddress.bytes[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
-		const uint8_t * const idBytes = reinterpret_cast<const uint8_t *>(uniqueId);
-		for (size_t i = 0; i < 15; ++i)
-		{
-			defaultMacAddress.bytes[(i % 5) + 1] ^= idBytes[i];
-		}
-
-		// Convert the unique ID and checksum to a string as 30 base5 alphanumeric digits
-		char *digitPtr = uniqueIdChars;
-		for (size_t i = 0; i < 30; ++i)
-		{
-			if ((i % 5) == 0 && i != 0)
-			{
-				*digitPtr++ = '-';
-			}
-			const size_t index = (i * 5) / 32;
-			const size_t shift = (i * 5) % 32;
-			uint32_t val = uniqueId[index] >> shift;
-			if (shift > 32 - 5)
-			{
-				// We need some bits from the next dword too
-				val |= uniqueId[index + 1] << (32 - shift);
-			}
-			val &= 31;
-			char c;
-			if (val < 10)
-			{
-				c = val + '0';
-			}
-			else
-			{
-				c = val + ('A' - 10);
-				// We have 26 letters in the usual A-Z alphabet and we only need 22 of them plus 0-9.
-				// So avoid using letters C, E, I and O which are easily mistaken for G, F, 1 and 0.
-				if (c >= 'C')
-				{
-					++c;
-				}
-				if (c >= 'E')
-				{
-					++c;
-				}
-				if (c >= 'I')
-				{
-					++c;
-				}
-				if (c >= 'O')
-				{
-					++c;
-				}
-			}
-			*digitPtr++ = c;
-		}
-		*digitPtr = 0;
-
-# if !SAME5x
-	}
-	else
-	{
-		defaultMacAddress.SetDefault();
-		strcpy(uniqueIdChars, "unknown");
-	}
-# endif
-}
-
-#endif
 
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::PanelDueBeep(int freq, int ms) noexcept
@@ -2114,7 +2017,8 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #if MCU_HAS_UNIQUE_ID
 			if (!testFailed)
 			{
-				buf->lcatf("Board ID: %s", GetUniqueIdString());
+				buf->lcat("Board ID: ");
+				uniqueId.AppendCharsToBuffer(buf);
 			}
 #endif
 		}
@@ -4703,7 +4607,7 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 	return CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(data, reply);
 }
 
-void Platform::OnProcessingCanMessage()
+void Platform::OnProcessingCanMessage() noexcept
 {
 #ifdef DUET3MINI			// MB6HC doesn't yet have a ACT LED
 	whenLastCanMessageProcessed = millis();
@@ -4746,8 +4650,7 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 // Get a pseudo-random number (not a true random number)
 uint32_t Platform::Random() noexcept
 {
-	const uint32_t clocks = StepTimer::GetTimerTicks();
-	return clocks ^ uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
+	return StepTimer::GetTimerTicks() ^ uniqueId.GetHash();
 }
 
 #endif

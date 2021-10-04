@@ -677,6 +677,8 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 	}
 }
 
+// Return true if the specified type has no literals and should therefore be converted to string when comparing with another value that is not of the same type.
+// We don't need to handle Port and UniqueId types here because we convent them to string before calling this.
 /*static*/ bool ExpressionParser::TypeHasNoLiterals(TypeCode t) noexcept
 {
 	return t == TypeCode::Char || t == TypeCode::DateTime_tc || t == TypeCode::IPAddress_tc || t == TypeCode::MacAddress_tc || t == TypeCode::DriverId_tc;
@@ -695,12 +697,12 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 		ConvertToFloat(val2, evaluate);
 	}
 
-	// Convert any port values to string
-	if (val1.GetType() == TypeCode::Port)
+	// Convert any port or unique ID values to string
+	if (val1.GetType() == TypeCode::Port || val1.GetType() == TypeCode::UniqueId)
 	{
 		ConvertToString(val1, evaluate);
 	}
-	if (val2.GetType() == TypeCode::Port)
+	if (val2.GetType() == TypeCode::Port || val2.GetType() == TypeCode::UniqueId)
 	{
 		ConvertToString(val2, evaluate);
 	}

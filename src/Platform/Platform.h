@@ -30,6 +30,7 @@ Licence: GPL
 #include <Fans/FansManager.h>
 #include <Heating/TemperatureError.h>
 #include "OutputMemory.h"
+#include "UniqueId.h"
 #include <Storage/FileStore.h>
 #include <Storage/FileData.h>
 #include <Storage/MassStorage.h>	// must be after Pins.h because it needs NumSdCards defined
@@ -621,8 +622,8 @@ public:
 		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
 
 #if MCU_HAS_UNIQUE_ID
+	const UniqueId& GetUniqueId() const noexcept { return uniqueId; }
 	uint32_t Random() noexcept;
-	const char *GetUniqueIdString() const noexcept { return uniqueIdChars; }
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -647,7 +648,7 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void OnProcessingCanMessage();										// called when we start processing any CAN message except for regular messages e.g. time sync
+	void OnProcessingCanMessage() noexcept;								// called when we start processing any CAN message except for regular messages e.g. time sync
 #endif
 
 protected:
@@ -688,9 +689,7 @@ private:
 
 	// Board and processor
 #if MCU_HAS_UNIQUE_ID
-	void ReadUniqueId();
-	uint32_t uniqueId[5];
-	char uniqueIdChars[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
+	UniqueId uniqueId;
 #endif
 
 	BoardType board;

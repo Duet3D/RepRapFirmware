@@ -326,7 +326,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		break;
 
 	case CanMessageReturnInfo::typeBoardUniqueId:
-		reply.copy(reprap.GetPlatform().GetUniqueIdString());
+		reprap.GetPlatform().GetUniqueId().AppendCharsToString(reply);
 		break;
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0:
@@ -566,8 +566,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fansReport);
 				break;
 
-			case CanMessageType::announce:
-				reprap.GetExpansion().ProcessAnnouncement(buf);
+			case CanMessageType::announceOld:
+				reprap.GetExpansion().ProcessAnnouncement(buf, false);
+				break;
+
+			case CanMessageType::announceNew:
+				reprap.GetExpansion().ProcessAnnouncement(buf, true);
 				break;
 
 			case CanMessageType::filamentMonitorsStatusReport:

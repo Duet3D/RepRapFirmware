@@ -136,6 +136,10 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 	case TypeCode::Port:
 		iopVal->AppendPinName(str);
 		break;
+
+	case TypeCode::UniqueId:
+		uniqueIdVal->AppendCharsToString(str);
+		break;
 	}
 }
 
@@ -743,6 +747,12 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 
 	case TypeCode::Port:
 		ReportPinNameAsJson(buf, val);
+		break;
+
+	case TypeCode::UniqueId:
+		buf->cat('"');
+		val.uniqueIdVal->AppendCharsToBuffer(buf);
+		buf->cat('"');
 		break;
 
 	case TypeCode::ObjectModel_tc:

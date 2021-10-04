@@ -35,6 +35,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::live },
 	{ "shortName",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::shortName),			ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).state.ToString()),								ObjectModelEntryFlags::none },
+	{ "uniqueId",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).uniqueId),										ObjectModelEntryFlags::none },
 	{ "v12",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasV12, self, 3),							ObjectModelEntryFlags::live },
 	{ "vIn",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasVin, self, 2),							ObjectModelEntryFlags::live },
 
@@ -61,7 +62,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
 	5,				// number of sections
-	10,				// section 0: boards[]
+	11,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
@@ -118,7 +119,7 @@ void ExpansionManager::UpdateBoardState(CanAddress address, BoardState newState)
 }
 
 // Process an announcement from an expansion board. Don't free the message buffer that it arrived in
-void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
+void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewFormat) noexcept
 {
 	const CanAddress src = buf->id.Src();
 	if (src <= CanId::MaxCanAddress)
@@ -126,7 +127,14 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 		ExpansionBoardData& board = boards[src];
 		board.hasVin = board.hasV12 = board.hasMcuTemp = false;
 		String<StringLength100> boardTypeAndFirmwareVersion;
-		boardTypeAndFirmwareVersion.copy(buf->msg.announce.boardTypeAndFirmwareVersion, CanMessageAnnounce::GetMaxTextLength(buf->dataLength));
+		if (isNewFormat)
+		{
+			boardTypeAndFirmwareVersion.copy(buf->msg.announceNew.boardTypeAndFirmwareVersion, CanMessageAnnounceNew::GetMaxTextLength(buf->dataLength));
+		}
+		else
+		{
+			boardTypeAndFirmwareVersion.copy(buf->msg.announceOld.boardTypeAndFirmwareVersion, CanMessageAnnounceOld::GetMaxTextLength(buf->dataLength));
+		}
 		UpdateBoardState(src, BoardState::unknown);
 		if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
 		{
@@ -146,7 +154,16 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf) noexcept
 				newTypeName = temp;
 			}
 			board.typeName = newTypeName;
-			board.numDrivers = buf->msg.announce.numDrivers;
+			if (isNewFormat)
+			{
+				board.numDrivers = buf->msg.announceNew.numDrivers;
+				board.uniqueId.SetFromRemote(buf->msg.announceNew.uniqueId);
+			}
+			else
+			{
+				board.numDrivers = buf->msg.announceOld.numDrivers;
+				board.uniqueId.Clear();
+			}
 		}
 		UpdateBoardState(src, BoardState::running);
 	}

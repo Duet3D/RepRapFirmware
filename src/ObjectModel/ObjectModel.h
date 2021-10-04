@@ -44,6 +44,7 @@ enum class TypeCode : uint8_t
 	MacAddress_tc,		// renamed for eCv to avoid clash with class MacAddress
 	Special,
 	Port,
+	UniqueId,
 #if SUPPORT_CAN_EXPANSION
 	CanExpansionBoardDetails
 #endif
@@ -75,6 +76,7 @@ struct DateTime
 class ObjectModelTableEntry;
 class ObjectModel;
 class IoPort;
+class UniqueId;
 
 // Struct used to hold the expressions with polymorphic types
 struct ExpressionValue
@@ -94,6 +96,7 @@ struct ExpressionValue
 		const ObjectModelArrayDescriptor *omadVal;
 		StringHandle shVal;
 		const IoPort *iopVal;
+		const UniqueId *uniqueIdVal;
 		uint32_t whole;								// a member we can use to copy the whole thing safely, at least as big as all the others. Assumes all other members are trivially copyable.
 	};
 
@@ -139,6 +142,7 @@ struct ExpressionValue
 	explicit ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
 	explicit ExpressionValue(StringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h) { }
 	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
+	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId), param(0), uniqueIdVal(&id) { }
 #if SUPPORT_CAN_EXPANSION
 	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif

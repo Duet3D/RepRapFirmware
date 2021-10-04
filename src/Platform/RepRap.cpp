@@ -909,7 +909,11 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	//						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
 
 #if MCU_HAS_UNIQUE_ID
-	platform->MessageF(mtype, "Board ID: %s\n", platform->GetUniqueIdString());
+	{
+		String<StringLength50> idChars;
+		platform->GetUniqueId().AppendCharsToString(idChars.GetRef());
+		platform->MessageF(mtype, "Board ID: %s\n", idChars.c_str());
+	}
 #endif
 
 	// Show the used and free buffer counts. Do this early in case we are running out of them and the diagnostics get truncated.

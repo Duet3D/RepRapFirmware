@@ -16,6 +16,7 @@
 #include <CanId.h>
 #include <CanMessageBuffer.h>
 #include <General/NamedEnum.h>
+#include <Platform/UniqueId.h>
 
 NamedEnum(BoardState, uint8_t, unknown, flashing, flashFailed, resetting, running);
 
@@ -24,6 +25,7 @@ struct ExpansionBoardData
 	ExpansionBoardData() noexcept;
 
 	const char *typeName;
+	UniqueId uniqueId;
 	MinCurMax mcuTemp, vin, v12;
 	uint16_t hasMcuTemp : 1,
 			 hasVin : 1,
@@ -44,7 +46,7 @@ public:
 	unsigned int GetNumExpansionBoards() const noexcept { return numExpansionBoards; }
 	const ExpansionBoardData *GetBoardDetails(uint8_t address) const noexcept;
 
-	void ProcessAnnouncement(CanMessageBuffer *buf) noexcept;
+	void ProcessAnnouncement(CanMessageBuffer *buf, bool isNewFormat) noexcept;
 	void ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept;
 
 	// Firmware update and related functions
