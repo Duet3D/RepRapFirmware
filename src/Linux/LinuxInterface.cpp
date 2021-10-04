@@ -35,10 +35,11 @@ Mutex LinuxInterface::gcodeReplyMutex;
 #ifdef __LPC17xx__
 constexpr size_t SBCTaskStackWords = 375;
 #elif defined(DEBUG)
-constexpr size_t SBCTaskStackWords = 1000;			// debug builds use more stack
+constexpr size_t SBCTaskStackWords = 1200;			// debug builds use more stack
 #else
-constexpr size_t SBCTaskStackWords = 820;
+constexpr size_t SBCTaskStackWords = 1000;			// increased from 820 so that we can evaluate "abs(move.calibration.initial.deviation - move.calibration.final.deviation) < 0.000"
 #endif
+
 constexpr uint32_t LinuxYieldTimeout = 10;
 
 static Task<SBCTaskStackWords> *sbcTask;

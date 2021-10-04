@@ -899,7 +899,7 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 }
 
 // Get the value of an object
-ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException)
+ExpressionValue ObjectModel::GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException)
 decrease(strlen(idString))	// recursion variant
 {
 	if (classDescriptor == nullptr)
@@ -986,7 +986,7 @@ decrease(strlen(idString))	// recursion variant
 			return val;
 		case '.':
 			context.CheckStack(StackUsage::GetObjectValue_withTable);
-			return val.omVal->GetObjectValue(context, (val.omVal == this) ? classDescriptor : nullptr, idString + 1, val.param);
+			return val.omVal->GetObjectValueUsingTableNumber(context, (val.omVal == this) ? classDescriptor : nullptr, idString + 1, val.param);
 		case '^':
 			throw context.ConstructParseException("object is not an array");
 		default:
