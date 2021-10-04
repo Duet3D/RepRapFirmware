@@ -74,7 +74,7 @@ void LinuxInterface::Init() noexcept
 #endif
 
 		transfer.Init();
-		sbcTask = new Task<SBCTaskStackWords>;
+		sbcTask = new Task<SBCTaskStackWords>();
 		sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
 		iapRamAvailable = &_estack - Tasks::GetHeapTop();
 	}

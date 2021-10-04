@@ -470,7 +470,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			|| code == 112
 			|| code == 374 || code == 375
 			|| code == 470 || code == 471
-			|| code == 500 || code == 503 || code == 505
+			|| code == 503 || code == 505
 			|| code == 540 || code == 550 || code == 552 || code == 586 || (code >= 587 && code <= 589)
 			|| code == 703
 			|| code == 905 || code == 929 || code == 997 || code == 999
@@ -2977,7 +2977,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = buildObjects.HandleM486(gb, reply, outBuf);
 				break;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 500: // Store parameters in config-override.g
 				result = WriteConfigOverrideFile(gb, reply);
 				break;
