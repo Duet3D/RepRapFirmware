@@ -124,13 +124,26 @@ PanelDueUpdater::~PanelDueUpdater() noexcept
 
 void PanelDueUpdater::Start(const StringRef& filenameRef, const uint32_t serialChan) noexcept
 {
-	if (state != FlashState::idle)
+	if (state == FlashState::idle)
 	{
-		return;
+		serialChannel = serialChan;
+		const char * const filename = filenameRef.IsEmpty() ? PANEL_DUE_FIRMWARE_FILE : filenameRef.c_str();
+		firmwareFile = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, filename, OpenMode::read);
+		if (firmwareFile == nullptr)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open file %s\n", filename);
+			state = FlashState::done;
+		}
+		else if (firmwareFile->Length() > 256 * 1024)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Firmware file %s is too large\n", filename);
+			state = FlashState::done;
+		}
+		else
+		{
+			state = FlashState::eraseAndReset;
+		}
 	}
-	serialChannel = serialChan;
-	firmwareFile = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? PANEL_DUE_FIRMWARE_FILE : filenameRef.c_str(), OpenMode::read);
-	state = FlashState::eraseAndReset;
 }
 
 void PanelDueUpdater::Spin() noexcept

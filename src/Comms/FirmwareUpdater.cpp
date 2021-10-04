@@ -85,13 +85,15 @@ namespace FirmwareUpdater
 	{
 #if HAS_WIFI_NETWORKING
 		WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
-		if(!(uploader == nullptr || uploader->IsReady())) {
+		if (uploader != nullptr && !uploader->IsReady())
+		{
 			return false;
 		}
 #endif
 #if HAS_AUX_DEVICES
-		PanelDueUpdater *panelDueUpdater = reprap.GetPlatform().GetPanelDueUpdater();
-		if (panelDueUpdater != nullptr && !panelDueUpdater->Idle()) {
+		PanelDueUpdater * const panelDueUpdater = reprap.GetPlatform().GetPanelDueUpdater();
+		if (panelDueUpdater != nullptr && !panelDueUpdater->Idle())
+		{
 			return false;
 		}
 #endif
@@ -101,12 +103,13 @@ namespace FirmwareUpdater
 	void UpdateModule(unsigned int module, const size_t serialChannel, const StringRef& filenameRef) noexcept
 	{
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+		Platform& platform = reprap.GetPlatform();
 		switch(module)
 		{
 # if HAS_WIFI_NETWORKING
 		case WifiExternalFirmwareModule:
 # ifdef DUET_NG
-			if (reprap.GetPlatform().IsDuetWiFi())
+			if (platform.IsDuetWiFi())
 # endif
 			{
 				reprap.GetNetwork().ResetWiFiForUpload(true);
@@ -115,7 +118,7 @@ namespace FirmwareUpdater
 
 		case WifiFirmwareModule:
 # ifdef DUET_NG
-			if (reprap.GetPlatform().IsDuetWiFi())
+			if (platform.IsDuetWiFi())
 # endif
 			{
 				WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
@@ -130,7 +133,6 @@ namespace FirmwareUpdater
 # if HAS_AUX_DEVICES
 		case PanelDueFirmwareModule:
 			{
-				Platform& platform = reprap.GetPlatform();
 				if (platform.GetPanelDueUpdater() == nullptr)
 				{
 					platform.InitPanelDueUpdater();
