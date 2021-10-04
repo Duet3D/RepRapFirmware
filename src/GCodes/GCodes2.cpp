@@ -2418,7 +2418,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 290:	// Baby stepping
 				{
 					const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
-					bool resetting = absolute;
 					float differences[MaxAxes];
 					AxesBitmap axesMentioned;
 					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -2434,7 +2433,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							const float fval = gb.GetFValue();
 							if (absolute)
 							{
-								resetting &= (fval == 0.0);
 								differences[axis] = fval - GetTotalBabyStepOffset(axis);
 							}
 							else
@@ -2451,28 +2449,31 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (axesMentioned.IsNonEmpty())
 					{
 						const bool canMove = !CheckEnoughAxesHomed(axesMentioned);
-						if (!canMove && !resetting)
+						if (!canMove && !absolute)
 						{
 							reply.copy("insufficient axes homed");
 							result = GCodeResult::error;
 							break;
 						}
 
-						// Perform babystepping synchronously with moves
+						// Perform babystepping synchronously with moves. Only move axes that have been flagged as homed.
 						bool haveResidual = false;
 						for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 						{
 							currentBabyStepOffsets[axis] += differences[axis];
 							reprap.MoveUpdated();
-							const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
-							moveState.initialCoords[axis] += amountPushed;
-
-							// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
-							// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-							moveState.coords[axis] += differences[axis];
-							if (amountPushed != differences[axis])
+							if (IsAxisHomed(axis))
 							{
-								haveResidual = true;
+								const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
+								moveState.initialCoords[axis] += amountPushed;
+
+								// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
+								// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
+								moveState.coords[axis] += differences[axis];
+								if (amountPushed != differences[axis])
+								{
+									haveResidual = true;
+								}
 							}
 						}
 
