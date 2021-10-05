@@ -177,7 +177,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 {
 	const CanAddress address = buf->id.Src();
 	ExpansionBoardData& board = boards[address];
-	if (board.state != BoardState::running)
+	if (board.state != BoardState::running && board.state != BoardState::flashing)
 	{
 		UpdateBoardState(address, BoardState::running);
 	}

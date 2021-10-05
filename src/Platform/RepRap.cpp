@@ -2530,7 +2530,7 @@ size_t RepRap::GetStatusIndex() const noexcept
 			  	  ? ((gCodes->IsSimulating())							? 8		// Simulating
 			: 														  	  9		// Printing
 			  	  	)
-			: (gCodes->IsDoingToolChange())								? 10		// Changing tool
+			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
 			   gCodes->WaitingForAcknowledgement()) 					? 11	// Busy
 			:															  12;	// Idle
