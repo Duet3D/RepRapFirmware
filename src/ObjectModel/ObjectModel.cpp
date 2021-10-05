@@ -202,23 +202,39 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 	// While updating firmware on expansion/tool boards we sometimes get a null board type string here, so allow for that
 	if (sVal != nullptr)
 	{
-		const char *const p = strchr(sVal, '|');
-		const size_t indexOfDivider = (p == nullptr) ? strlen(sVal) : p - sVal;
+		// Split the string into three field separate by vertical bar. These are board short name, firmware version, and firmware date.
+		const char * p = strchr(sVal, '|');
+		const size_t indexOfDivider1 = (p == nullptr) ? strlen(sVal) : p - sVal;
+		if (p != nullptr)
+		{
+			p = strchr(p + 1, '|');
+		}
+		const size_t indexOfDivider2 = (p == nullptr) ? strlen(sVal) : p - sVal;
 
 		switch((ExpansionDetail)param)
 		{
 		case ExpansionDetail::shortName:
-			rslt.catn(sVal, indexOfDivider);
+			rslt.catn(sVal, indexOfDivider1);
 			break;
 
 		case ExpansionDetail::firmwareVersion:
-			rslt.cat((p == nullptr) ? "unknown" : sVal + indexOfDivider + 1);
+			if (indexOfDivider2 > indexOfDivider1)
+			{
+				rslt.catn(sVal + indexOfDivider1 + 1, indexOfDivider2 - indexOfDivider1 - 1);
+			}
 			break;
 
 		case ExpansionDetail::firmwareFileName:
 			rslt.cat("Duet3Firmware_");
-			rslt.catn(sVal, indexOfDivider);
+			rslt.catn(sVal, indexOfDivider1);
 			rslt.cat(".bin");
+			break;
+
+		case ExpansionDetail::firmwareDate:
+			if (strlen(sVal) > indexOfDivider2)
+			{
+				rslt.cat(sVal + indexOfDivider2 + 1);
+			}
 			break;
 
 		default:
