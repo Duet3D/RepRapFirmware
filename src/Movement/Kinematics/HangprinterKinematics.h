@@ -23,7 +23,6 @@ public:
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
 	bool SupportsAutoCalibration() const noexcept override { return true; }
 	bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept override;
-	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
 	void SetCalibrationDefaults() noexcept override { Init(); }
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
@@ -62,11 +61,9 @@ private:
 	void Init() noexcept;
 	void Recalc() noexcept;
 	float LineLengthSquared(const float machinePos[3], const float anchor[3]) const noexcept;		// Calculate the square of the line length from a spool from a Cartesian coordinate
-	void InverseTransform(float La, float Lb, float Lc, float machinePos[3]) const noexcept;
+	void ForwardTransform(float a, float b, float c, float d, float machinePos[3]) const noexcept;
 	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept;
 
-	floatc_t ComputeDerivative(unsigned int deriv, float La, float Lb, float Lc) const noexcept;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
-	void Adjust(size_t numFactors, const floatc_t v[]) noexcept;									// Perform 3-, 6- or 9-factor adjustment
 	void PrintParameters(const StringRef& reply) const noexcept;									// Print all the parameters for debugging
 
 	float anchors[HANGPRINTER_AXES][3];				// XYZ coordinates of the anchors
@@ -80,13 +77,6 @@ private:
 	// Derived parameters
 	float k0[HANGPRINTER_AXES], spoolRadiiSq[HANGPRINTER_AXES], k2[HANGPRINTER_AXES], lineLengthsOrigin[HANGPRINTER_AXES];
 	float printRadiusSquared;
-	float Da2, Db2, Dc2;
-	float Xab, Xbc, Xca;
-	float Yab, Ybc, Yca;
-	float Zab, Zbc, Zca;
-	float P, Q, R, P2, U, A;
-
-	bool doneAutoCalibration;							// True if we have done auto calibration
 
 #if DUAL_CAN
 	// Some CAN helpers
