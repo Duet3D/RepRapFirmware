@@ -350,7 +350,7 @@ void LwipEthernetInterface::Start() noexcept
 		const char *hostname = reprap.GetNetwork().GetHostname();
 
 		// Allow the MAC address to be set only before LwIP is started...
-		ethernet_configure_interface(platform.GetDefaultMacAddress().bytes, hostname);
+		ethernet_configure_interface(macAddress.bytes, hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
 		// Initialise mDNS subsystem
