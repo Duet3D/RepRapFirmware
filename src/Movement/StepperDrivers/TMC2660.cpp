@@ -1095,28 +1095,32 @@ namespace SmartDrivers
 					bool moreNeeded = false;
 					for (size_t i = 0; i < numTmc2660Drivers; ++i)
 					{
-						uint32_t count = driverStates[i].ReadMicrostepPosition();
-						if (count != 0)
+						// The following line assumes that driver numbers in RRF map directly to smart driver numbers in this module. They do on Duets.
+						if (reprap.GetPlatform().GetEnableValue(i) >= 0)							// if the driver has not been disabled
 						{
-							moreNeeded = true;
-							if (count < 1024)
+							uint32_t count = driverStates[i].ReadMicrostepPosition();
+							if (count != 0)
 							{
-								const bool backwards = (count > 512);
-								reprap.GetPlatform().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
-								if (backwards)
+								moreNeeded = true;
+								if (count < 1024)
 								{
-									count = 1024 - count;
+									const bool backwards = (count > 512);
+									reprap.GetPlatform().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
+									if (backwards)
+									{
+										count = 1024 - count;
+									}
+									do
+									{
+										delayMicroseconds(1);
+										const uint32_t driverBitmap = StepPins::CalcDriverBitmap(i);
+										StepPins::StepDriversHigh(driverBitmap);
+										delayMicroseconds(1);
+										StepPins::StepDriversLow(driverBitmap);
+										--count;
+									} while (count != 0);
+									driverStates[i].ClearMicrostepPosition();
 								}
-								do
-								{
-									delayMicroseconds(1);
-									const uint32_t driverBitmap = StepPins::CalcDriverBitmap(i);
-									StepPins::StepDriversHigh(driverBitmap);
-									delayMicroseconds(1);
-									StepPins::StepDriversLow(driverBitmap);
-									--count;
-								} while (count != 0);
-								driverStates[i].ClearMicrostepPosition();
 							}
 						}
 					}
