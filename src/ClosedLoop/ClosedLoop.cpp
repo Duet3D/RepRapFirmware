@@ -85,13 +85,6 @@ static void CloseDataCollectionFile() noexcept
 // Handle M569.5 - Collect closed loop data
 GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Check the chosen drive is a closed loop drive - the expansion board does this also, so we just need to check that the driver is remote
-	if (!driverId.IsRemote())
-	{
-		reply.copy("Driver is not in closed loop mode");
-		return GCodeResult::error;
-	}
-
 	// Check what the user wants - record or report
 	// Record - A number of samples (Snn) is given to record
 	// Report - Samples (Snn) is not given

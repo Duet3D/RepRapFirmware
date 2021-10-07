@@ -1343,35 +1343,44 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 	DriverId driverIds[drivesCount];
 	gb.GetDriverIdArray(driverIds, drivesCount);
 
-#if SUPPORT_CAN_EXPANSION
 	bool const isEncoderReading = (gb.GetCommandFraction() == 3);
+	if (isEncoderReading)
+	{
+		reply.copy("[");
+	}
+
+	// Hangprinter needs M569 to support multiple P parameters in M569.3. This poses a problem for other uses of M569 because the output may be too long
+	// to fit in the reply buffer, and we can only use an OutputBuffer instead if the overall result is success.
+	// Therefore we only support multiple P parameters for subfunction 3.
+	GCodeResult res;
 	for (size_t i = 0; i < drivesCount; ++i)
 	{
 		DriverId const id = driverIds[i];
-		if (id.IsRemote())
+		res =
+#if SUPPORT_CAN_EXPANSION
+			(id.IsRemote())
+				? CanInterface::ConfigureRemoteDriver(id, gb, reply)
+					:
+#endif
+					ConfigureLocalDriver(gb, reply, id.localDriver);
+		if (res != GCodeResult::ok || !isEncoderReading)
 		{
-			if (i == 0 && isEncoderReading)
-			{
-				reply.copy("[");
-			}
-			GCodeResult const res = CanInterface::ConfigureRemoteDriver(id, gb, reply);
-			if (i == drivesCount - 1 || res != GCodeResult::ok)
-			{
-				if (isEncoderReading && res == GCodeResult::ok)
-				{
-					reply.cat(" ],\n");
-				}
-				return res;
-			}
+			break;
 		}
 	}
-#endif
 
-	const DriverId id = gb.GetDriverId();
-	const uint8_t drive = id.localDriver;
+	if (isEncoderReading && res == GCodeResult::ok)
+	{
+		reply.cat(" ],\n");
+	}
+	return res;
+}
+
+GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
+{
 	if (drive >= platform.GetNumActualDirectDrivers())
 	{
-		reply.copy("driver number out of range");
+		reply.printf("Driver number %u out of range", drive);
 		return GCodeResult::error;
 	}
 
@@ -1379,21 +1388,16 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 	{
 	case 0:
 	case -1:
-		return ConfigureLocalDriver(gb, reply, drive);
+		return ConfigureLocalDriverBasicParameters(gb, reply, drive);
 
 	case 1:
-		// Main board drivers do not support closed loop modes
-		if (gb.Seen('S'))
-		{
-			if (gb.GetUIValue() == 0)
-			{
-				return GCodeResult::ok;
-			}
-			reply.printf("Driver %u does not support closed loop modes", drive);
-			return GCodeResult::error;
-		}
-		reply.copy("Driver %u mode is open loop", drive);
-		return GCodeResult::ok;
+	case 3:
+	case 5:
+	case 6:
+		// Main board drivers do not support closed loop modes, or reading encoders
+		reply.copy("Command is not supported on local drivers");
+		return GCodeResult::error;
+
 
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 	case 2:			// read/write smart driver register
@@ -1409,22 +1413,15 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 		}
 #endif
 
-#if SUPPORT_CAN_EXPANSION
-	case 5:
-		// In all valid cases, this will be handled by CanInterface::ConfigureRemoteDriver at the top of this function
-		// However, this is required here to reject the erroneous case of the requested driver not being remote.
-		return ClosedLoop::StartDataCollection(id, gb, reply);
-#endif
-
 	case 7:			// configure brake
-		return platform.ConfigureDriverBrakePort(gb, reply, id.localDriver);
+		return platform.ConfigureDriverBrakePort(gb, reply, drive);
 
 	default:
 		return GCodeResult::warningNotSupported;
 	}
 }
 
-GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
+GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
 {
 	if (gb.SeenAny("RS"))
 	{
