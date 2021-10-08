@@ -94,7 +94,6 @@ void HangprinterKinematics::Init() noexcept
 	ARRAY_INIT(motorGearTeeth, DefaultMotorGearTeeth);
 	ARRAY_INIT(spoolGearTeeth, DefaultSpoolGearTeeth);
 	ARRAY_INIT(fullStepsPerMotorRev, DefaultFullStepsPerMotorRev);
-	doneAutoCalibration = false;
 	Recalc();
 }
 
@@ -102,36 +101,6 @@ void HangprinterKinematics::Init() noexcept
 void HangprinterKinematics::Recalc() noexcept
 {
 	printRadiusSquared = fsquare(printRadius);
-	Da2 = fsquare(anchors[A_AXIS][0]) + fsquare(anchors[A_AXIS][1]) + fsquare(anchors[A_AXIS][2]);
-	Db2 = fsquare(anchors[B_AXIS][0]) + fsquare(anchors[B_AXIS][1]) + fsquare(anchors[B_AXIS][2]);
-	Dc2 = fsquare(anchors[C_AXIS][0]) + fsquare(anchors[C_AXIS][1]) + fsquare(anchors[C_AXIS][2]);
-	Xab = anchors[A_AXIS][0] - anchors[B_AXIS][0]; // maybe zero
-	Xbc = anchors[B_AXIS][0] - anchors[C_AXIS][0];
-	Xca = anchors[C_AXIS][0] - anchors[A_AXIS][0];
-	Yab = anchors[A_AXIS][1] - anchors[B_AXIS][1];
-	Ybc = anchors[B_AXIS][1] - anchors[C_AXIS][1];
-	Yca = anchors[C_AXIS][1] - anchors[A_AXIS][1];
-	Zab = anchors[A_AXIS][2] - anchors[B_AXIS][2];
-	Zbc = anchors[B_AXIS][2] - anchors[C_AXIS][2];
-	Zca = anchors[C_AXIS][2] - anchors[A_AXIS][2];
-	P = (  anchors[B_AXIS][0] * Yca
-		 - anchors[A_AXIS][0] * anchors[C_AXIS][1]
-		 + anchors[A_AXIS][1] * anchors[C_AXIS][0]
-		 - anchors[B_AXIS][1] * Xca
-		) * 2;
-	P2 = fsquare(P);
-	Q = (  anchors[B_AXIS][Y_AXIS] * Zca
-		 - anchors[A_AXIS][Y_AXIS] * anchors[C_AXIS][Z_AXIS]
-		 + anchors[A_AXIS][Z_AXIS] * anchors[C_AXIS][Y_AXIS]
-		 - anchors[B_AXIS][Z_AXIS] * Yca
-		) * 2;
-	R = - (  anchors[B_AXIS][0] * Zca
-		 + anchors[A_AXIS][0] * anchors[C_AXIS][2]
-		 + anchors[A_AXIS][2] * anchors[C_AXIS][0]
-		 - anchors[B_AXIS][2] * Xca
-		) * 2;
-	U = (anchors[A_AXIS][2] * P2) + (anchors[A_AXIS][0] * Q * P) + (anchors[A_AXIS][1] * R * P);
-	A = (P2 + fsquare(Q) + fsquare(R)) * 2;
 
 	// This is the difference between a "line length" and a "line position"
 	// "line length" == ("line position" + "line length in origin")
@@ -164,8 +133,6 @@ void HangprinterKinematics::Recalc() noexcept
 		// Calculate the steps per unit that is correct at the origin
 		platform.SetDriveStepsPerUnit(i, stepsPerUnitTimesRTmp[i] / spoolRadii[i], 0);
 	}
-
-	//debugPrintf("Recalced params\nDa2: %.2f, Db2: %.2f, Dc2: %.2f, Xab: %.2f, Xbc: %.2f, Xca: %.2f, Yab: %.2f, Ybc: %.2f, Yca: %.2f, Zab: %.2f, Zbc: %.2f, Zca: %.2f, P: %.2f, P2: %.2f, Q: %.2f, R: %.2f, U: %.2f, A: %.2f\n", (double)Da2, (double)Db2, (double)Dc2, (double)Xab, (double)Xbc, (double)Xca, (double)Yab, (double)Ybc, (double)Yca, (double)Zab, (double)Zbc, (double)Zca, (double)P, (double)P2, (double)Q, (double)R, (double)U, (double)A);
 }
 
 // Return the name of the current kinematics
@@ -332,16 +299,17 @@ inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, si
 	return (fsquare(motorPos / k0[axis] + spoolRadii[axis]) - spoolRadiiSq[axis]) / k2[axis];
 }
 
-// Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
+// Convert motor coordinates to machine coordinates.
+// Assumes lines are tight and anchor location norms are followed
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	InverseTransform(
+	ForwardTransform(
 		MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + lineLengthsOrigin[A_AXIS],
 		MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + lineLengthsOrigin[B_AXIS],
 		MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + lineLengthsOrigin[C_AXIS],
+		MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + lineLengthsOrigin[D_AXIS],
 		machinePos);
 }
-
 
 static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], float const v3[3], float const p[3]){
 	float const h0[3] = {v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]};
@@ -471,7 +439,7 @@ AxesBitmap HangprinterKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
-// Write the parameters that are set by auto calibration to a file, returning true if success
+// Write the parameters to a file, returning true if success
 bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexcept
 {
 	bool ok = f->Write("; Hangprinter parameters\n");
@@ -514,343 +482,66 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
 bool HangprinterKinematics::WriteResumeSettings(FileStore *f) const noexcept
 {
-	return !doneAutoCalibration || WriteCalibrationParameters(f);
+	return WriteCalibrationParameters(f);
 }
 
 #endif
 
-// Calculate the Cartesian coordinates from the motor coordinates
-void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float machinePos[3]) const noexcept
+/**
+ * Hangprinter forward kinematics
+ * Basic idea is to subtract squared line lengths to get linear equations,
+ * and then to solve with variable substitution.
+ *
+ * If we assume anchor location norms are followed, then
+ * we get a fairly clean derivation by
+ * subtracting d*d from a*a, b*b, and c*c:
+ *
+ *  a*a - d*d = k1        +  k2*y +  k3*z     <---- a line  (I)
+ *  b*b - d*d = k4 + k5*x +  k6*y +  k7*z     <---- a plane (II)
+ *  c*c - d*d = k8 + k9*x + k10*y + k11*z     <---- a plane (III)
+ *
+ * Use (I) to reduce (II) and (III) into lines. Eliminate y, keep z.
+ *
+ *  (II):  b*b - d*d = k12 + k13*x + k14*z
+ *  <=>            x = k0b + k1b*z,           <---- a line  (IV)
+ *
+ *  (III): c*c - d*d = k15 + k16*x + k17*z
+ *  <=>            x = k0c + k1c*z,           <---- a line  (V)
+ *
+ * where k1, k2, ..., k17, k0b, k0c, k1b, and k1c are known constants.
+ *
+ * These two straight lines are not parallel, so they will cross in exactly one point.
+ * Find z by setting (IV) = (V)
+ * Find x by inserting z into (V)
+ * Find y by inserting z into (I)
+ *
+ * Warning: truncation errors will typically be in the order of a few tens of microns.
+ */
+void HangprinterKinematics::ForwardTransform(float const a, float const b, float const c, float const d, float machinePos[3]) const noexcept
 {
-	// Calculate PQRST such that x = (Qz + S)/P, y = (Rz + T)/P
-	const float S = - Yab * (fsquare(Lc) - Dc2)
-					- Yca * (fsquare(Lb) - Db2)
-					- Ybc * (fsquare(La) - Da2);
-	const float T = - Xab * (fsquare(Lc) - Dc2)
-					+ Xca * (fsquare(Lb) - Db2)
-					+ Xbc * (fsquare(La) - Da2);
-
-	// Calculate quadratic equation coefficients
-	const float halfB = (S * Q) - (R * T) - U;
-	const float C = fsquare(S) + fsquare(T) + (anchors[A_AXIS][Y_AXIS] * T - anchors[A_AXIS][X_AXIS] * S) * P * 2 + (Da2 - fsquare(La)) * P2;
-	//debugPrintf("S: %.2f, T: %.2f, halfB: %.2f, C: %.2f, P: %.2f, A: %.2f\n", (double)S, (double)T, (double)halfB, (double)C, (double)P, (double) A);
-
-	// Solve the quadratic equation for z
-	machinePos[2] = (- halfB - fastSqrtf(fabsf(fsquare(halfB) - A * C)))/A;
-
-	// Substitute back for X and Y
-	machinePos[0] = (Q * machinePos[2] + S)/P;
-	machinePos[1] = (R * machinePos[2] + T)/P;
-
-	//debugPrintf("Motor %.2f,%.2f,%.2f to Cartesian %.2f,%.2f,%.2f\n", (double)La, (double)Lb, (double)Lc, (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
-}
-
-// Auto calibrate from a set of probe points returning true if it failed
-// We can't calibrate all the XY parameters because translations and rotations of the anchors don't alter the height. Therefore we calibrate the following:
-// 0, 1, 2 Spool zero length motor positions (this is like endstop calibration on a delta)
-// 3       Y coordinate of the B anchor
-// 4, 5    X and Y coordinates of the C anchor
-// 6, 7, 8 Heights of the A, B, C anchors
-// We don't touch the XY coordinates of the A anchor or the X coordinate of the B anchor.
-bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
-{
-	const size_t NumHangprinterFactors = 9;		// maximum number of machine factors we can adjust
-
-	if (numFactors != 3 && numFactors != 6 && numFactors != NumHangprinterFactors)
-	{
-		reply.printf("Hangprinter calibration with %d factors requested but only 3, 6, and 9 supported", numFactors);
-		return true;
+	// Anchor location norms
+	if (fabsf(anchors[D_AXIS][X_AXIS]) > 0.1F ||
+		fabsf(anchors[D_AXIS][Y_AXIS]) > 0.1F ||
+		fabsf(anchors[A_AXIS][X_AXIS]) > 0.1F ||
+		fabsf(anchors[B_AXIS][X_AXIS]) < 0.1F ||
+		fabsf(anchors[C_AXIS][X_AXIS]) < 0.1F ||
+		fabsf(anchors[A_AXIS][Y_AXIS]) < 0.1F) {
+		return;
 	}
+	const float Asq = fsquare(lineLengthsOrigin[A_AXIS]);
+	const float Bsq = fsquare(lineLengthsOrigin[B_AXIS]);
+	const float Csq = fsquare(lineLengthsOrigin[C_AXIS]);
+	const float Dsq = fsquare(lineLengthsOrigin[D_AXIS]);
+	const float aa = fsquare(a);
+	const float dd = fsquare(d);
+	const float k0b = (-fsquare(b) + Bsq - Dsq + dd) / (2.0 * anchors[B_AXIS][X_AXIS]) + (anchors[B_AXIS][Y_AXIS] / (2.0 * anchors[A_AXIS][Y_AXIS] * anchors[B_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
+	const float k0c = (-fsquare(c) + Csq - Dsq + dd) / (2.0 * anchors[C_AXIS][X_AXIS]) + (anchors[C_AXIS][Y_AXIS] / (2.0 * anchors[A_AXIS][Y_AXIS] * anchors[C_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
+	const float k1b = (anchors[B_AXIS][Y_AXIS] * (anchors[A_AXIS][Z_AXIS] - anchors[D_AXIS][Z_AXIS])) / (anchors[A_AXIS][Y_AXIS] * anchors[B_AXIS][X_AXIS]) + (anchors[D_AXIS][Z_AXIS] - anchors[B_AXIS][Z_AXIS]) / anchors[B_AXIS][X_AXIS];
+	const float k1c = (anchors[C_AXIS][Y_AXIS] * (anchors[A_AXIS][Z_AXIS] - anchors[D_AXIS][Z_AXIS])) / (anchors[A_AXIS][Y_AXIS] * anchors[C_AXIS][X_AXIS]) + (anchors[D_AXIS][Z_AXIS] - anchors[C_AXIS][Z_AXIS]) / anchors[C_AXIS][X_AXIS];
 
-	if (reprap.Debug(moduleMove))
-	{
-		String<StringLength256> scratchString;
-		PrintParameters(scratchString.GetRef());
-		//debugPrintf("%s\n", scratchString.c_str());
-	}
-
-	// The following is for printing out the calculation time, see later
-	//uint32_t startTime = reprap.GetPlatform()->GetInterruptClocks();
-
-	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
-	FixedMatrix<floatc_t, MaxCalibrationPoints, 3> probeMotorPositions;
-	floatc_t corrections[MaxCalibrationPoints];
-	Deviation initialDeviation;
-	const size_t numPoints = probePoints.NumberOfProbePoints();
-
-	{
-		floatc_t initialSum = 0.0, initialSumOfSquares = 0.0;
-		for (size_t i = 0; i < numPoints; ++i)
-		{
-			corrections[i] = 0.0;
-			float machinePos[3];
-			const floatc_t zp = reprap.GetMove().GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], probePoints.PointWasCorrected(i));
-			machinePos[Z_AXIS] = 0.0;
-
-			probeMotorPositions(i, A_AXIS) = fastSqrtf(LineLengthSquared(machinePos, anchors[A_AXIS]));
-			probeMotorPositions(i, B_AXIS) = fastSqrtf(LineLengthSquared(machinePos, anchors[B_AXIS]));
-			probeMotorPositions(i, C_AXIS) = fastSqrtf(LineLengthSquared(machinePos, anchors[C_AXIS]));
-			initialSumOfSquares += fcsquare(zp);
-		}
-		initialDeviation.Set(initialSumOfSquares, initialSum, numPoints);
-	}
-
-	// Do 1 or more Newton-Raphson iterations
-	Deviation finalDeviation;
-	unsigned int iteration = 0;
-	for (;;)
-	{
-		// Build a Nx9 matrix of derivatives with respect to xa, xb, yc, za, zb, zc, diagonal.
-		FixedMatrix<floatc_t, MaxCalibrationPoints, NumHangprinterFactors> derivativeMatrix;
-		for (size_t i = 0; i < numPoints; ++i)
-		{
-			for (size_t j = 0; j < numFactors; ++j)
-			{
-				const size_t adjustedJ = (numFactors == 8 && j >= 6) ? j + 1 : j;		// skip diagonal rod length if doing 8-factor calibration
-				derivativeMatrix(i, j) =
-					ComputeDerivative(adjustedJ, probeMotorPositions(i, A_AXIS), probeMotorPositions(i, B_AXIS), probeMotorPositions(i, C_AXIS));
-			}
-		}
-
-		if (reprap.Debug(moduleMove))
-		{
-			PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
-		}
-
-		// Now build the normal equations for least squares fitting
-		FixedMatrix<floatc_t, NumHangprinterFactors, NumHangprinterFactors + 1> normalMatrix;
-		for (size_t i = 0; i < numFactors; ++i)
-		{
-			for (size_t j = 0; j < numFactors; ++j)
-			{
-				floatc_t temp = derivativeMatrix(0, i) * derivativeMatrix(0, j);
-				for (size_t k = 1; k < numPoints; ++k)
-				{
-					temp += derivativeMatrix(k, i) * derivativeMatrix(k, j);
-				}
-				normalMatrix(i, j) = temp;
-			}
-			floatc_t temp = derivativeMatrix(0, i) * -((floatc_t)probePoints.GetZHeight(0) + corrections[0]);
-			for (size_t k = 1; k < numPoints; ++k)
-			{
-				temp += derivativeMatrix(k, i) * -((floatc_t)probePoints.GetZHeight(k) + corrections[k]);
-			}
-			normalMatrix(i, numFactors) = temp;
-		}
-
-		if (reprap.Debug(moduleMove))
-		{
-			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
-		}
-
-		if (!normalMatrix.GaussJordan(numFactors, numFactors + 1))
-		{
-			reply.copy("Unable to calculate calibration parameters. Please choose different probe points.");
-			return true;
-		}
-
-		floatc_t solution[NumHangprinterFactors];
-		for (size_t i = 0; i < numFactors; ++i)
-		{
-			solution[i] = normalMatrix(i, numFactors);
-		}
-
-		if (reprap.Debug(moduleMove))
-		{
-			PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
-			PrintVector("Solution", solution, numFactors);
-
-			// Calculate and display the residuals
-			// Save a little stack by not allocating a residuals vector, because stack for it doesn't only get reserved when debug is enabled.
-			//debugPrintf("Residuals:");
-			for (size_t i = 0; i < numPoints; ++i)
-			{
-				floatc_t residual = probePoints.GetZHeight(i);
-				for (size_t j = 0; j < numFactors; ++j)
-				{
-					residual += solution[j] * derivativeMatrix(i, j);
-				}
-				//debugPrintf(" %7.4f", (double)residual);
-			}
-
-			//debugPrintf("\n");
-		}
-
-		Adjust(numFactors, solution);								// adjust the delta parameters
-
-		float heightAdjust[3];
-		for (size_t drive = 0; drive < 3; ++drive)
-		{
-			heightAdjust[drive] = (float)solution[drive];			// convert double to float
-		}
-		reprap.GetMove().AdjustMotorPositions(heightAdjust, 3);		// adjust the motor positions
-
-		// Calculate the expected probe heights using the new parameters
-		{
-			floatc_t expectedResiduals[MaxCalibrationPoints];
-			floatc_t finalSum = 0.0, finalSumOfSquares = 0.0;
-			for (size_t i = 0; i < numPoints; ++i)
-			{
-				for (size_t axis = 0; axis < 3; ++axis)
-				{
-					probeMotorPositions(i, axis) += solution[axis];
-				}
-				float newPosition[3];
-				InverseTransform(probeMotorPositions(i, A_AXIS), probeMotorPositions(i, B_AXIS), probeMotorPositions(i, C_AXIS), newPosition);
-				corrections[i] = newPosition[Z_AXIS];
-				expectedResiduals[i] = probePoints.GetZHeight(i) + newPosition[Z_AXIS];
-				finalSum += expectedResiduals[i];
-				finalSumOfSquares += fcsquare(expectedResiduals[i]);
-			}
-
-			finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
-
-			if (reprap.Debug(moduleMove))
-			{
-				PrintVector("Expected probe error", expectedResiduals, numPoints);
-			}
-		}
-
-		// Decide whether to do another iteration. Two is slightly better than one, but three doesn't improve things.
-		// Alternatively, we could stop when the expected RMS error is only slightly worse than the RMS of the residuals.
-		++iteration;
-		if (iteration == 2)
-		{
-			break;
-		}
-	}
-
-	if (reprap.Debug(moduleMove))
-	{
-		String<StringLength256> scratchString;
-		PrintParameters(scratchString.GetRef());
-		//debugPrintf("%s\n", scratchString.c_str());
-	}
-
-	reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
-	reprap.GetMove().SetLatestCalibrationDeviation(finalDeviation, numFactors);
-
-	reply.printf("Calibrated %d factors using %d points, (mean, deviation) before (%.3f, %.3f) after (%.3f, %.3f)",
-			numFactors, numPoints,
-			(double)initialDeviation.GetMean(), (double)initialDeviation.GetDeviationFromMean(),
-			(double)finalDeviation.GetMean(), (double)finalDeviation.GetDeviationFromMean());
-
-	// We don't want to call MessageF(LogMessage, "%s\n", reply.c_str()) here because that will allocate a buffer within MessageF, which adds to our stack usage.
-	// Better to allocate the buffer here so that it uses the same stack space as the arrays that we have finished with
-	{
-		String<StringLength256> scratchString;
-		scratchString.printf("%s\n", reply.c_str());
-		reprap.GetPlatform().Message(LogWarn, scratchString.c_str());
-	}
-
-	doneAutoCalibration = true;
-	return false;
-}
-
-// Compute the derivative of height with respect to a parameter at the specified motor endpoints.
-// 'deriv' indicates the parameter as follows:
-// 0, 1, 2 = A, B, C line length adjustments
-// 3 = B anchor Y coordinate
-// 4, 5 = C anchor X and Y coordinates
-// 6, 7, 8 = A, B and C anchor Z coordinates
-floatc_t HangprinterKinematics::ComputeDerivative(unsigned int deriv, float La, float Lb, float Lc) const noexcept
-{
-	const float perturb = 0.2;			// perturbation amount in mm
-	HangprinterKinematics hiParams(*this), loParams(*this);
-	switch(deriv)
-	{
-	case 0:
-	case 1:
-	case 2:
-		// Line length corrections
-		break;
-
-	case 3:
-		hiParams.anchors[B_AXIS][Y_AXIS] += perturb;
-		loParams.anchors[B_AXIS][Y_AXIS] -= perturb;
-		hiParams.Recalc();
-		loParams.Recalc();
-		break;
-
-	case 4:
-		hiParams.anchors[C_AXIS][X_AXIS] += perturb;
-		loParams.anchors[C_AXIS][X_AXIS] -= perturb;
-		hiParams.Recalc();
-		loParams.Recalc();
-		break;
-
-	case 5:
-		hiParams.anchors[C_AXIS][Y_AXIS] += perturb;
-		loParams.anchors[C_AXIS][Y_AXIS] -= perturb;
-		hiParams.Recalc();
-		loParams.Recalc();
-		break;
-
-	case 6:
-		hiParams.anchors[A_AXIS][Z_AXIS] += perturb;
-		loParams.anchors[A_AXIS][Z_AXIS] -= perturb;
-		hiParams.Recalc();
-		loParams.Recalc();
-		break;
-
-	case 7:
-		hiParams.anchors[B_AXIS][Z_AXIS] += perturb;
-		loParams.anchors[B_AXIS][Z_AXIS] -= perturb;
-		hiParams.Recalc();
-		loParams.Recalc();
-		break;
-
-	case 8:
-		hiParams.anchors[B_AXIS][Z_AXIS] += perturb;
-		loParams.anchors[B_AXIS][Z_AXIS] -= perturb;
-		hiParams.Recalc();
-		loParams.Recalc();
-		break;
-	}
-
-	float newPos[3];
-	hiParams.InverseTransform((deriv == 0) ? La + perturb : La, (deriv == 1) ? Lb + perturb : Lb, (deriv == 2) ? Lc + perturb : Lc, newPos);
-
-	const float zHi = newPos[Z_AXIS];
-	loParams.InverseTransform((deriv == 0) ? La - perturb : La, (deriv == 1) ? Lb - perturb : Lb, (deriv == 2) ? Lc - perturb : Lc, newPos);
-	const float zLo = newPos[Z_AXIS];
-	return ((floatc_t)zHi - (floatc_t)zLo)/(floatc_t)(2 * perturb);
-}
-
-// Perform 3, 6 or 9-factor adjustment.
-// The input vector contains the following parameters in this order:
-// 0, 1, 2 = A, B, C line length adjustments
-// 3 = B anchor Y coordinate
-// 4, 5 = C anchor X and Y coordinates
-// 6, 7, 8 = A, B and C anchor Z coordinates
-void HangprinterKinematics::Adjust(size_t numFactors, const floatc_t v[]) noexcept
-{
-	if (numFactors >= 4)
-	{
-		anchors[B_AXIS][Y_AXIS] += (float)v[3];
-	}
-	if (numFactors >= 5)
-	{
-		anchors[C_AXIS][X_AXIS] += (float)v[4];
-	}
-	if (numFactors >= 6)
-	{
-		anchors[C_AXIS][Y_AXIS] += (float)v[5];
-	}
-	if (numFactors >= 7)
-	{
-		anchors[A_AXIS][Z_AXIS] += (float)v[6];
-	}
-	if (numFactors >= 8)
-	{
-		anchors[B_AXIS][Z_AXIS] += (float)v[7];
-	}
-	if (numFactors >= 9)
-	{
-		anchors[C_AXIS][Z_AXIS] += (float)v[8];
-	}
-
-	Recalc();
+	machinePos[Z_AXIS] = (k0b - k0c) / (k1c - k1b);
+	machinePos[X_AXIS] = k0c + k1c * machinePos[Z_AXIS];
+	machinePos[Y_AXIS] = (Asq - Dsq - aa + dd) / (2.0 * anchors[A_AXIS][Y_AXIS]) + ((anchors[D_AXIS][Z_AXIS] - anchors[A_AXIS][Z_AXIS]) / anchors[A_AXIS][Y_AXIS]) * machinePos[Z_AXIS];
 }
 
 // Print all the parameters for debugging
