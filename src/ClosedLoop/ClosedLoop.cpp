@@ -132,7 +132,8 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	numSamplesRequested = parsedS;
 
 	// Estimate how large the file will be
-	const uint32_t preallocSize = 1000;	//TODO! numSamplesRequested * ((numAxes * (3 + GetDecimalPlaces(resolution))) + 4);
+	const unsigned int numVariables = Bitmap<uint32_t>(filterRequested).CountSetBits();
+	const uint32_t preallocSize = numSamplesRequested * ((numVariables * 9) + 4);
 
 	// Create the file
 	String<MaxFilenameLength> closedLoopFileName;
@@ -171,36 +172,45 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 	FileStore * const f = closedLoopFile;
 	if (f != nullptr)
 	{
-		unsigned int numSamples = msg.numSamples;
-		const size_t variableCount = msg.GetVariableCount();
-
-		while (numSamples != 0)
+		if (msg.firstSampleNumber != expectedRemoteSampleNumber)
 		{
-			// Compile the data
-			String<StringLength500> currentLine;
-			size_t sampleIndex = msg.numSamples - numSamples;
-			currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);
-			for (size_t i = 0; i < variableCount; i++)
-			{
-				currentLine.catf(",%f", (double)msg.data[sampleIndex*variableCount + i]);
-			}
-			currentLine.cat("\n");
-
-			// Write the data
-			f->Write(currentLine.c_str());
-
-			// Increment the working variables
-			expectedRemoteSampleNumber++;
-			numSamples--;
-		}
-
-		if (msg.lastPacket)
-		{
-			if (msg.overflowed)
-			{
-				f->Write("Buffer overflowed\n");
-			}
+			f->Write("Data lost\n");
 			CloseDataCollectionFile();
+		}
+		else
+		{
+			unsigned int numSamples = msg.numSamples;
+			const size_t variableCount = msg.GetVariableCount();
+
+			while (numSamples != 0)
+			{
+				// Compile the data
+				String<StringLength256> currentLine;
+				size_t sampleIndex = msg.numSamples - numSamples;
+				//TODO use more intelligent formatting depending on the data type, to reduce the amount of data written
+				currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);
+				for (size_t i = 0; i < variableCount; i++)
+				{
+					currentLine.catf(",%.5f", (double)msg.data[sampleIndex*variableCount + i]);
+				}
+				currentLine.cat("\n");
+
+				// Write the data
+				f->Write(currentLine.c_str());
+
+				// Increment the working variables
+				expectedRemoteSampleNumber++;
+				numSamples--;
+			}
+
+			if (msg.lastPacket)
+			{
+				if (msg.overflowed)
+				{
+					f->Write("Buffer overflowed\n");
+				}
+				CloseDataCollectionFile();
+			}
 		}
 	}
 }

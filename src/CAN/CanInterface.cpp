@@ -111,7 +111,7 @@ constexpr CanDevice::Config Can0Config =
 	.txFifoSize = 2,
 #endif
 	.numRxBuffers =  0,
-	.rxFifo0Size = 16,
+	.rxFifo0Size = 32,				// increased from 16 to help with accelerometer and closed loop data collection
 	.rxFifo1Size = 16,
 	.numShortFilterElements = 0,
 # ifdef DUET3_ATE
