@@ -481,7 +481,7 @@ private:
 #endif
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept; // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;				// Write the config-override header
 #endif

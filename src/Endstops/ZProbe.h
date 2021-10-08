@@ -60,7 +60,7 @@ public:
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
 	void SetLastStoppedHeight(float h) noexcept;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;
 #endif
 

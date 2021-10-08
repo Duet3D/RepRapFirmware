@@ -2486,7 +2486,7 @@ void Platform::UpdateConfiguredHeaters() noexcept
 	}
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Write the platform parameters to file
 bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const noexcept

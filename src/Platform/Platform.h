@@ -521,7 +521,7 @@ public:
 	const volatile ZProbeAveragingFilter& GetZProbeOnFilter() const noexcept { return zProbeOnFilter; }
 	const volatile ZProbeAveragingFilter& GetZProbeOffFilter() const noexcept{ return zProbeOffFilter; }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const noexcept;
 #endif
 
@@ -800,7 +800,7 @@ private:
 	float axisMinima[MaxAxes];
 	AxesBitmap axisMinimaProbed, axisMaximaProbed;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept;
 #endif
 
