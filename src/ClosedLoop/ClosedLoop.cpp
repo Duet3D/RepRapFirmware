@@ -33,17 +33,6 @@ static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
 
 static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned int size) noexcept
 {
-	// Create default filename if one is not provided
-	if (filename.IsEmpty())
-	{
-		const time_t time = reprap.GetPlatform().GetDateTime();
-		tm timeInfo;
-		gmtime_r(&time, &timeInfo);
-		filename.printf("0:/sys/closed-loop/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
-						(unsigned int) deviceRequested.boardAddress,
-						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-	}
-
 	// Create the file
 	FileStore * const f = MassStorage::OpenFile(filename.c_str(), OpenMode::write, size);
 	if (f == nullptr) { return false; }
@@ -132,18 +121,28 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	numSamplesRequested = parsedS;
 
 	// Estimate how large the file will be
-	const unsigned int numVariables = Bitmap<uint32_t>(filterRequested).CountSetBits();
+	const unsigned int numVariables = Bitmap<uint32_t>(filterRequested).CountSetBits() + 1;		// 1 extra for time stamp
 	const uint32_t preallocSize = numSamplesRequested * ((numVariables * 9) + 4);
 
 	// Create the file
-	String<MaxFilenameLength> closedLoopFileName;
+	String<StringLength50> tempFilename;
 	if (gb.Seen('F'))
 	{
-		String<StringLength50> tempFilename;
 		gb.GetQuotedString(tempFilename.GetRef(), false);
-		MassStorage::CombineName(closedLoopFileName.GetRef(), "0:/sys/closed-loop/", tempFilename.c_str());
+	}
+	else
+	{
+		// Create default filename as none was provided
+		const time_t time = reprap.GetPlatform().GetDateTime();
+		tm timeInfo;
+		gmtime_r(&time, &timeInfo);
+		tempFilename.printf("0:/sys/closed-loop/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
+						(unsigned int) deviceRequested.boardAddress,
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 	}
 
+	String<MaxFilenameLength> closedLoopFileName;
+	MassStorage::CombineName(closedLoopFileName.GetRef(), "0:/sys/closed-loop/", tempFilename.c_str());
 	OpenDataCollectionFile(closedLoopFileName, preallocSize);
 
 	// If no samples have been requested, return with an info message
