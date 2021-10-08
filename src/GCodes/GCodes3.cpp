@@ -1363,7 +1363,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 					:
 #endif
 					ConfigureLocalDriver(gb, reply, id.localDriver);
-		if (res != GCodeResult::ok || !isEncoderReading)
+		if (res != GCodeResult::ok || (!isEncoderReading && gb.GetCommandFraction() != 4))
 		{
 			break;
 		}
