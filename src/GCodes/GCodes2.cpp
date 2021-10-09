@@ -660,7 +660,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							if (code == 17)
 							{
-								platform.EnableDrivers(axis);
+								platform.EnableDrivers(axis, true);
 							}
 							else
 							{
@@ -687,7 +687,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 							if (code == 17)
 							{
-								platform.EnableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+								platform.EnableDrivers(ExtruderToLogicalDrive(eDrive[i]), true);
 							}
 							else
 							{
@@ -718,11 +718,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							for (size_t axis = 0; axis < numTotalAxes; ++axis)
 							{
-								reprap.GetPlatform().EnableDrivers(axis);
+								reprap.GetPlatform().EnableDrivers(axis, true);
 							}
 							for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 							{
-								reprap.GetPlatform().EnableDrivers(ExtruderToLogicalDrive(extruder));
+								reprap.GetPlatform().EnableDrivers(ExtruderToLogicalDrive(extruder), true);
 							}
 						}
 						else

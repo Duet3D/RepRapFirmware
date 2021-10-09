@@ -2678,9 +2678,9 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 }
 
 // Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
-void Platform::EnableDrivers(size_t axisOrExtruder) noexcept
+void Platform::EnableDrivers(size_t axisOrExtruder, bool unconditional) noexcept
 {
-	if (driverState[axisOrExtruder] != DriverStatus::enabled)
+	if (unconditional || driverState[axisOrExtruder] != DriverStatus::enabled)
 	{
 		driverState[axisOrExtruder] = DriverStatus::enabled;
 		const float requiredCurrent = motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder];

@@ -820,7 +820,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 
-			reprap.GetPlatform().EnableDrivers(drive);
+			reprap.GetPlatform().EnableDrivers(drive, false);
 			const bool stepsToDo = ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
 						? pdm->PrepareExtruder(*this, params)
 							: pdm->PrepareCartesianAxis(*this, params);
@@ -1344,7 +1344,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 		Platform& platform = reprap.GetPlatform();
 		if (flags.isLeadscrewAdjustmentMove)
 		{
-			platform.EnableDrivers(Z_AXIS);			// ensure all Z motors are enabled
+			platform.EnableDrivers(Z_AXIS, false);			// ensure all Z motors are enabled
 		}
 
 		AxesBitmap additionalAxisMotorsToEnable, axisMotorsEnabled;
@@ -1401,7 +1401,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 			else if (flags.isDeltaMovement && reprap.GetMove().GetKinematics().GetMotionType(drive) == MotionType::segmentFreeDelta)
 			{
 				// On a delta we need to move all towers even if some of them have no net movement
-				platform.EnableDrivers(drive);
+				platform.EnableDrivers(drive, false);
 				if (shapedSegments == nullptr)
 				{
 					EnsureUnshapedSegments(params);
@@ -1451,7 +1451,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 				int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (delta != 0)
 				{
-					platform.EnableDrivers(drive);
+					platform.EnableDrivers(drive, false);
 					if (shapedSegments == nullptr)
 					{
 						EnsureUnshapedSegments(params);
@@ -1519,7 +1519,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 				if (directionVector[drive] != 0.0)
 				{
 					// Currently, we don't apply input shaping to extruders
-					platform.EnableDrivers(drive);
+					platform.EnableDrivers(drive, false);
 					const size_t extruder = LogicalDriveToExtruder(drive);
 #if SUPPORT_NONLINEAR_EXTRUSION
 					// Add the nonlinear extrusion correction to totalExtrusion
@@ -1593,7 +1593,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 		{
 			const size_t drive = additionalAxisMotorsToEnable.LowestSetBit();
 			additionalAxisMotorsToEnable.ClearBit(drive);
-			platform.EnableDrivers(drive);
+			platform.EnableDrivers(drive, false);
 		}
 
 		const DDAState st = prev->state;
