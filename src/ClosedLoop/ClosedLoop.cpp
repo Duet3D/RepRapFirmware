@@ -122,7 +122,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 
 	// Estimate how large the file will be
 	const unsigned int numVariables = Bitmap<uint32_t>(filterRequested).CountSetBits() + 1;		// 1 extra for time stamp
-	const uint32_t preallocSize = numSamplesRequested * ((numVariables * 9) + 4);
+	const uint32_t preallocSize = numSamplesRequested * ((numVariables * 8) + 4);				// assume format "xxx.xxx," for most samples
 
 	// Create the file
 	String<StringLength50> tempFilename;
@@ -190,7 +190,7 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 				currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);
 				for (size_t i = 0; i < variableCount; i++)
 				{
-					currentLine.catf(",%.5f", (double)msg.data[sampleIndex*variableCount + i]);
+					currentLine.catf(",%.2f", (double)msg.data[sampleIndex*variableCount + i]);
 				}
 				currentLine.cat("\n");
 
