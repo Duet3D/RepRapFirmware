@@ -104,7 +104,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 
 			case ParamDescriptor::string:
 				{
-					String<StringLength20> str;
+					String<StringLength50> str;
 					gb.GetQuotedString(str.GetRef());
 					StoreValue(str.c_str(), str.strlen() + 1);
 				}
@@ -112,7 +112,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 
 			case ParamDescriptor::reducedString:
 				{
-					String<StringLength20> str;
+					String<StringLength50> str;
 					gb.GetReducedString(str.GetRef());
 					// We don't want port names sent to expansion boards to include the board number, so remove the board number.
 					// We also use the reducedString type for sensor names, but they should't start with digits followed by '.'.
