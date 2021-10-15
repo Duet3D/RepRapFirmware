@@ -155,6 +155,22 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			break;
 #endif
 
+		case InputShaperType::mzv:		// I can't find any references in the literature to this input shaper type, so the values are taken from Klipper source code
+			{
+				// Klipper gives amplitude steps of [a3 = k^2 * (1 - 1/sqrt(2)), a2 = k * (sqrt(2) - 1), a1 = 1 - 1/sqrt(2)] all divided by (a1 + a2 + a3)
+				// Rearrange to: a3 = k^2 * (1 - sqrt(2)/2), a2 = k * (sqrt(2) - 1), a1 = (1 - sqrt(2)/2)
+				const float kMzv = expf(-zeta * 0.75 * Pi/sqrtOneMinusZetaSquared);
+				const float a1 = 1.0 - 0.5 * sqrtf(2.0);
+				const float a2 = (sqrtf(2.0) - 1.0) * kMzv;
+				const float a3 = a1 * fsquare(kMzv);
+			    const float sum = (a1 + a2 + a3);
+			    coefficients[0] = a3/sum;
+			    coefficients[1] = (a2 + a3)/sum;
+			}
+			durations[0] = durations[1] = 0.375 * dampedPeriod;
+			numExtraImpulses = 2;
+			break;
+
 		case InputShaperType::zvd:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
 			{
 				const float j = fsquare(1.0 + k);
@@ -455,6 +471,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 
 	// The other input shapers all have multiple impulses with varying coefficients
 	case InputShaperType::zvd:
+	case InputShaperType::mzv:
 	case InputShaperType::zvdd:
 	case InputShaperType::ei2:
 	case InputShaperType::ei3:

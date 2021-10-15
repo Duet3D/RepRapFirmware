@@ -23,6 +23,7 @@ NamedEnum(InputShaperType, uint8_t,
 #endif
 	ei2,
 	ei3,
+	mzv,
 	none,
 	zvd,
 	zvdd,
