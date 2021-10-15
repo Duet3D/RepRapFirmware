@@ -25,7 +25,7 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 	// 0. Fan members
 	{ "actualValue",		OBJECT_MODEL_FUNC(self->GetPwm(), 2), 															ObjectModelEntryFlags::live },
 	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime, 2), 											ObjectModelEntryFlags::none },
-	// TODO add frequency here
+	{ "frequency",			OBJECT_MODEL_FUNC((int32_t)self->GetPwmFrequency()), 											ObjectModelEntryFlags::none },
 	{ "max",				OBJECT_MODEL_FUNC(self->maxVal, 2), 															ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->minVal, 2), 															ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->name.c_str()), 															ObjectModelEntryFlags::none },
@@ -39,7 +39,7 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 	{ "lowTemperature",		OBJECT_MODEL_FUNC_IF(self->sensorsMonitored.IsNonEmpty(), self->triggerTemperatures[0], 1), 	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 8, 3 };
+constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 9, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Fan)
 

@@ -105,6 +105,7 @@ public:
 	void AppendDetails(const StringRef& str) const noexcept;		// hides the one in IoPort
 	void AppendFrequency(const StringRef& str) const noexcept;		// append the frequency if the port is valid
 	void SetFrequency(PwmFrequency freq) noexcept { frequency = freq; }
+	PwmFrequency GetFrequency() const noexcept { return frequency; }
 	void WriteAnalog(float pwm) const noexcept;
 
 private:

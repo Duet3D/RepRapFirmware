@@ -20,6 +20,7 @@ public:
 	bool IsEnabled() const noexcept override { return port.IsValid(); }
 	int32_t GetRPM() const noexcept override;
 	float GetPwm() const noexcept override { return lastVal; }
+	PwmFrequency GetPwmFrequency() const noexcept override { return port.GetFrequency(); }
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 	GCodeResult ReportPortDetails(const StringRef& str) const noexcept override;
 

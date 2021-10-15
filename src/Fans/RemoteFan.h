@@ -22,6 +22,7 @@ public:
 	bool IsEnabled() const noexcept override;
 	int32_t GetRPM() const noexcept override { return lastRpm; }
 	float GetPwm() const noexcept override { return lastPwm; }
+	PwmFrequency GetPwmFrequency() const noexcept override { return frequency; }
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 	GCodeResult ReportPortDetails(const StringRef& str) const noexcept override;
 	void UpdateFromRemote(CanAddress src, const FanReport& report) noexcept override;
@@ -39,6 +40,7 @@ private:
 	int32_t lastRpm;
 	float lastPwm;
 	uint32_t whenLastReportReceived;
+	PwmFrequency frequency;					// saved copy of the PWM frequency so that we can report it in the OM
 	CanAddress boardNumber;
 };
 
