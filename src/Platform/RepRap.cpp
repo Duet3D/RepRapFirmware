@@ -2909,7 +2909,9 @@ void RepRap::StartIap(const char *filename) noexcept
 	}
 #endif
 
-#if defined(DUET_NG) || defined(DUET_M)
+#if defined(DUET_M)
+	// Leave the Diag LED (aka Z_PROBE_MOD) low, otherwise an attached BLTouch gets confused during its startup sequence
+#elif defined(DUET_NG)
 	IoPort::WriteDigital(DiagPin, !DiagOnPolarity);	// turn the DIAG LED off
 #endif
 

@@ -130,6 +130,8 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 // Application entry point
 [[noreturn]] void AppMain() noexcept
 {
+	// Note: on the Duet Maestro the Z_PROB_MOD pin is shared with the Diag pin and often use to control a BLTouch.
+	// Setting it low here and keeping it low avoids confusing the BLTouch during its startup sequence.
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up status LED for debugging and turn it off
 #ifdef DUET3MINI
 	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
