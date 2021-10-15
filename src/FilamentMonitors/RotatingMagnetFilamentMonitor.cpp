@@ -186,10 +186,22 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 				}
 				if (sensorError)
 				{
-					reply.cat("error");
-					if (lastErrorCode != 0)
+					reply.cat("error: ");
+					// Translate the common error codes to text
+					switch (lastErrorCode)
 					{
-						reply.catf(" %u", lastErrorCode);
+					case 6:
+						reply.cat("no magnet detected");
+						break;
+					case 7:
+						reply.cat("magnet too weak");
+						break;
+					case 8:
+						reply.cat("magnet too strong");
+						break;
+					default:
+						reply.catf("%u", lastErrorCode);
+						break;
 					}
 				}
 				else if (HaveCalibrationData())
@@ -238,7 +250,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 			//  Data word:			0S00 00pp pppppppp		S = switch open, pppppppppp = 10-bit filament position
 			//  Error word:			1000 0000 00000000
 			//
-			// Version 2 sensor (this firmware):
+			// Version 2 sensor
 			//  Data word:			P00S 10pp pppppppp		S = switch open, ppppppppppp = 10-bit filament position
 			//  Error word:			P010 0000 0000eeee		eeee = error code
 			//	Version word:		P110 0000 vvvvvvvv		vvvvvvvv = sensor/firmware version, at least 2
@@ -268,8 +280,8 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 				else if ((val & 0xBC00) == 0)
 				{
 					receivedPositionReport = true;
-					dataReceived = true;
 					sensorError = false;
+					dataReceived = true;
 				}
 			}
 			else if ((data8 & 1) != 0)
@@ -282,13 +294,14 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 				{
 				case TypeMagnetV2MessageTypePosition:
 					receivedPositionReport = true;
-					dataReceived = true;
 					sensorError = false;
+					dataReceived = true;
 					break;
 
 				case TypeMagnetV2MessageTypeError:
 					lastErrorCode = val & 0x00FF;
 					sensorError = (lastErrorCode != 0);
+					dataReceived = true;
 					break;
 
 				case TypeMagnetV2MessageTypeInfo:
@@ -296,6 +309,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 					{
 					case TypeMagnetV2InfoTypeVersion:
 						version = val & 0x00FF;
+						dataReceived = true;
 						break;
 
 					case TypeMagnetV3InfoTypeMagnitude:
