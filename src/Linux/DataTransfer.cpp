@@ -1302,6 +1302,8 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::IPAddress_tc:
 	case TypeCode::MacAddress_tc:
 	case TypeCode::DateTime_tc:
+	case TypeCode::Port:
+	case TypeCode::UniqueId:
 		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();
@@ -1368,6 +1370,8 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::DateTime_tc:
 	case TypeCode::MacAddress_tc:
 	case TypeCode::IPAddress_tc:
+	case TypeCode::Port:
+	case TypeCode::UniqueId:
 	default:
 		// We have already converted the value to a string in 'rslt'
 		header->dataType = DataType::String;
