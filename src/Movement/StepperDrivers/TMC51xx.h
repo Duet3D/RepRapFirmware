@@ -16,14 +16,17 @@
 #include "DriverMode.h"
 
 // TMC51xx DRV_STATUS register bit assignments
-const uint32_t TMC_RR_SG = 1 << 24;					// stall detected
-const uint32_t TMC_RR_OT = 1 << 25;					// over temperature shutdown
-const uint32_t TMC_RR_OTPW = 1 << 26;				// over temperature warning
-const uint32_t TMC_RR_S2G = (3 << 27) | (3 << 12);	// short to ground indicator (1 bit for each phase) + short to VS indicator
-const uint32_t TMC_RR_OLA = 1 << 29;				// open load A
-const uint32_t TMC_RR_OLB = 1 << 30;				// open load B
-const uint32_t TMC_RR_STST = 1 << 31;				// standstill detected
-const uint32_t TMC_RR_SGRESULT = 0x3FF;				// 10-bit stallGuard2 result
+constexpr uint32_t TMC_RR_SG = 1 << 24;					// stall detected
+constexpr uint32_t TMC_RR_OT = 1 << 25;					// over temperature shutdown
+constexpr uint32_t TMC_RR_OTPW = 1 << 26;				// over temperature warning
+constexpr uint32_t TMC_RR_S2G = (3 << 27) | (3 << 12);	// short to ground indicator (1 bit for each phase) + short to VS indicator
+constexpr uint32_t TMC_RR_OLA = 1 << 29;				// open load A
+constexpr uint32_t TMC_RR_OLB = 1 << 30;				// open load B
+constexpr uint32_t TMC_RR_STST = 1 << 31;				// standstill detected
+constexpr uint32_t TMC_RR_SGRESULT = 0x3FF;				// 10-bit stallGuard2 result
+
+constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
+constexpr unsigned int TMC_RR_SG_BIT_POS = 24;
 
 namespace SmartDrivers
 {

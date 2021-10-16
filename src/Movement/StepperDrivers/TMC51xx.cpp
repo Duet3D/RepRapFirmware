@@ -1612,8 +1612,8 @@ StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexce
 		rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the it, otpw, s2ga and s2gb bits in the right place
 		rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
 		rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
-		rslt.all |= (status >> (24 - 9)) & (1u << 9);			// put the stall bit in the right place
-		rslt.all |= (status >> (31 - 10)) & (1u << 10);			// put the standstill bit in the right place
+		rslt.all |= ((status >> TMC_RR_STST_BIT_POS) & 1u) << StandardDriverStatus::StandstillBitPos;	// put the standstill bit in the right place
+		rslt.all |= ((status >> TMC_RR_SG_BIT_POS) & 1u) << StandardDriverStatus::StallBitPos;			// put the stall bit in the right place
 	}
 	else
 	{
