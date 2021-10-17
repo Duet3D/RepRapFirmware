@@ -137,11 +137,12 @@ namespace CanInterface
 
 #endif
 
-#include "General/String.h"
-#include "General/StringFunctions.h"
-#include "General/Bitmap.h"
-#include "General/SafeStrtod.h"
-#include "General/SafeVsnprintf.h"
+#include <General/String.h>
+#include <General/StringFunctions.h>
+#include <General/Bitmap.h>
+#include <General/SafeStrtod.h>
+#include <General/SafeVsnprintf.h>
+#include <RRF3Common.h>
 
 #define THROWS(...)				// expands to nothing, for providing exception specifications
 #define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
@@ -149,18 +150,6 @@ namespace CanInterface
 // Assertion mechanism
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
-
-#if !SUPPORT_CAN_EXPANSION
-
-// Struct to hold min, max and current values. For Duet 3 systems this is defined in file Duet3Common.h instead of here.
-struct MinCurMax
-{
-	float minimum;
-	float current;
-	float maximum;
-};
-
-#endif
 
 // Type of a driver identifier
 struct DriverId

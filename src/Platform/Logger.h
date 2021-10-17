@@ -10,18 +10,12 @@
 
 #include <RepRapFirmware.h>
 
-#if !SUPPORT_CAN_EXPANSION
-# include <General/NamedEnum.h>
-NamedEnum(LogLevel, uint8_t, off, warn, info, debug);
-#endif
-
 #if HAS_MASS_STORAGE
 
 #include <ctime>
 #include <Storage/FileData.h>
 
 class OutputBuffer;
-
 
 class Logger
 {

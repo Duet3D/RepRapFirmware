@@ -12,21 +12,7 @@
 #include <Hardware/IoPorts.h>
 #include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
-
-#if defined(DUET3) || defined(DUET3MINI)
-# include <Duet3Common.h>
-#else
-# include <General/NamedEnum.h>
-NamedEnum(FilamentSensorStatus, uint8_t,
-	noMonitor,
-	ok,
-	noDataReceived,
-	noFilament,
-	tooLittleMovement,
-	tooMuchMovement,
-	sensorError
-);
-#endif
+#include <RRF3Common.h>
 
 #if SUPPORT_CAN_EXPANSION
 class CanMessageFilamentMonitorsStatus;

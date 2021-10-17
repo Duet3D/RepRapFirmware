@@ -2242,8 +2242,8 @@ StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexce
 		const uint32_t status = driverStates[driver].ReadLiveStatus();
 		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
 		rslt.all = status & 0x000000FF;
-		rslt.all |= ((status >> TMC_RR_STST_BIT_POS) & 1u) << StandardDriverStatus::StandstillBitPos;	// put the standstill bit in the right place
-		rslt.all |= ((status >> TMC_RR_SG_BIT_POS) & 1u) << StandardDriverStatus::StallBitPos;			// put the stall bit in the right place
+		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+		rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
 	}
 	else
 	{

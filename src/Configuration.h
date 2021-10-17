@@ -115,13 +115,6 @@ constexpr float DefaultBedHeaterCoolingRate = 1.0/700.0;
 constexpr float DefaultBedHeaterHeatingRate = 90.0 * DefaultBedHeaterCoolingRate;
 constexpr float DefaultBedHeaterDeadTime = 10.0;
 
-// Default thermistor parameters
-#if !defined(DUET3) && !defined(DUET3MINI)				// for Duet 3 these are defined in Duet3Common.h in project CANLib
-constexpr float DefaultThermistorR25 = 100000.0;
-constexpr float DefaultThermistorBeta = 4725.0;
-constexpr float DefaultThermistorC = 7.06e-8;
-#endif
-
 // Parameters used to detect heating errors
 constexpr float DefaultMaxHeatingFaultTime = 5.0;		// How many seconds we allow a heating fault to persist
 constexpr float AllowedTemperatureDerivativeNoise = 0.12;	// How much fluctuation in the averaged temperature derivative we allow
@@ -140,12 +133,6 @@ constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater
 constexpr PwmFrequency DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
 constexpr PwmFrequency DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes and extrusion ancillary PWM
 constexpr PwmFrequency ServoRefreshFrequency = 50;
-
-// Fan defaults
-#if !defined(DUET3) && !defined(DUET3MINI)				// for Duet 3 these are defined in Duet3Common.h in project CANLib
-constexpr float DefaultMinFanPwm = 0.1;					// minimum fan PWM
-constexpr uint32_t DefaultFanBlipTime = 100;			// fan blip time in milliseconds
-#endif
 
 // Conditional GCode support
 constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduced a new block.

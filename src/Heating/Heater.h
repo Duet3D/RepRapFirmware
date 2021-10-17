@@ -14,6 +14,7 @@
 #include "HeaterMonitor.h"
 #include <ObjectModel/ObjectModel.h>
 #include <Math/DeviationAccumulator.h>
+#include <RRF3Common.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CanId.h"
@@ -97,28 +98,6 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(monitors)
-
-#if !SUPPORT_CAN_EXPANSION				// for Duet 3 boards this is defined in Duet3Common.h
-	enum class HeaterMode : uint8_t
-	{
-		// The order of these is important because we test "mode > HeatingMode::suspended" to determine whether the heater is active
-		// and "mode >= HeatingMode::off" to determine whether the heater is either active or suspended
-		fault,
-		offline,
-		off,
-		suspended,
-		heating,
-		cooling,
-		stable,
-		// All states from here onwards must be PID tuning states because function IsTuning assumes that
-		tuning0,
-		tuning1,
-		tuning2,
-		tuning3,
-		firstTuningMode = tuning0,
-		lastTuningMode = tuning3
-	};
-#endif
 
 	struct HeaterParameters
 	{
