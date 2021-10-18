@@ -242,6 +242,10 @@ public:
 
 	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return moveState.currentCoordinateSystem + 1; }
 
+#if SUPPORT_COORDINATE_ROTATION
+	void RotateCoordinates(float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
+#endif
+
 	// This function is called by other functions to account correctly for workplace coordinates
 	float GetWorkplaceOffset(size_t axis) const noexcept
 	{
@@ -253,6 +257,11 @@ public:
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
+
+# if SUPPORT_COORDINATE_ROTATION
+	float GetRotationAngle() const noexcept { return g68Angle; }
+	float GetRotationCentre(size_t index) const noexcept pre(index < 2) { return g68Centre[index]; }
+# endif
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
@@ -509,6 +518,10 @@ private:
 	void SetMoveBufferDefaults() noexcept;										// Set up default values in the move buffer
 	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
 
+#if SUPPORT_COORDINATE_ROTATION
+	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
+#endif
+
 #if SUPPORT_12864_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const noexcept;
 #endif
@@ -603,6 +616,11 @@ private:
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
+
+#if SUPPORT_COORDINATE_ROTATION
+	float g68Angle;								// the G68 rotation angle in radians
+	float g68Centre[2];							// the XY coordinates of the centre to rotate about
+#endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print

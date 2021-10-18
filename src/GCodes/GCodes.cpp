@@ -239,6 +239,10 @@ void GCodes::Reset() noexcept
 		}
 	}
 
+#if SUPPORT_COORDINATE_ROTATION
+	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;			// no coordinate rotation
+#endif
+
 	moveState.currentCoordinateSystem = 0;
 
 	for (float& f : moveState.coords)
@@ -1970,6 +1974,13 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 	}
 
+#if SUPPORT_COORDINATE_ROTATION
+	if (moveState.moveType == 0 && rp == nullptr && !gb.LatestMachineState().g53Active && !gb.LatestMachineState().runningSystemMacro)
+	{
+		RotateCoordinates(g68Angle, moveState.currentUserPosition);
+	}
+#endif
+
 	// Check enough axes have been homed
 	switch (moveState.moveType)
 	{
@@ -2180,47 +2191,47 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	}
 
 	// Get the axis parameters
-	float newAxis0Pos, newAxis1Pos;
+	float newAxisPos[2];
 	if (gb.Seen(axisLetters[axis0]))
 	{
-		newAxis0Pos = gb.GetDistance();
+		newAxisPos[0] = gb.GetDistance();
 		if (gb.LatestMachineState().axesRelative)
 		{
-			newAxis0Pos += moveState.initialUserC0;
+			newAxisPos[0] += moveState.initialUserC0;
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxis0Pos += GetCurrentToolOffset(axis0);
+			newAxisPos[0] += GetCurrentToolOffset(axis0);
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
-			newAxis0Pos += GetWorkplaceOffset(axis0);
+			newAxisPos[0] += GetWorkplaceOffset(axis0);
 		}
 	}
 	else
 	{
-		newAxis0Pos = moveState.initialUserC0;
+		newAxisPos[0] = moveState.initialUserC0;
 	}
 
 	if (gb.Seen(axisLetters[axis1]))
 	{
-		newAxis1Pos = gb.GetDistance();
+		newAxisPos[1] = gb.GetDistance();
 		if (gb.LatestMachineState().axesRelative)
 		{
-			newAxis1Pos += moveState.initialUserC1;
+			newAxisPos[1] += moveState.initialUserC1;
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxis1Pos += GetCurrentToolOffset(axis1);
+			newAxisPos[1] += GetCurrentToolOffset(axis1);
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
-			newAxis1Pos += GetWorkplaceOffset(axis1);
+			newAxisPos[1] += GetWorkplaceOffset(axis1);
 		}
 	}
 	else
 	{
-		newAxis1Pos = moveState.initialUserC1;
+		newAxisPos[1] = moveState.initialUserC1;
 	}
 
 	float iParam, jParam;
@@ -2230,8 +2241,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		const float rParam = gb.GetDistance();
 
 		// Get the XY coordinates of the midpoints between the start and end points X and Y distances between start and end points
-		const float deltaAxis0 = newAxis0Pos - moveState.initialUserC0;
-		const float deltaAxis1 = newAxis1Pos - moveState.initialUserC1;
+		const float deltaAxis0 = newAxisPos[0] - moveState.initialUserC0;
+		const float deltaAxis1 = newAxisPos[1] - moveState.initialUserC1;
 
 		const float dSquared = fsquare(deltaAxis0) + fsquare(deltaAxis1);	// square of the distance between start and end points
 
@@ -2301,12 +2312,20 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	memcpyf(moveState.initialCoords, moveState.coords, numVisibleAxes);
 
 	// Save the arc centre user coordinates for later
-	const float userArcCentreAxis0 = moveState.initialUserC0 + iParam;
-	const float userArcCentreAxis1 = moveState.initialUserC1 + jParam;
+	float userArcCentre[2] = { moveState.initialUserC0 + iParam, moveState.initialUserC1 + jParam };
 
-	// Work out the new user position
-	moveState.currentUserPosition[axis0] = newAxis0Pos;
-	moveState.currentUserPosition[axis1] = newAxis1Pos;
+#if SUPPORT_COORDINATE_ROTATION
+	// Apply coordinate rotation to the final and the centre coordinates
+	if (!gb.LatestMachineState().g53Active && !gb.LatestMachineState().runningSystemMacro && gb.LatestMachineState().selectedPlane == 0)
+	{
+		RotateCoordinates(g68Angle, newAxisPos);
+		RotateCoordinates(g68Angle, userArcCentre);
+	}
+#endif
+
+	// Set the new user position
+	moveState.currentUserPosition[axis0] = newAxisPos[0];
+	moveState.currentUserPosition[axis1] = newAxisPos[1];
 
 	// CNC machines usually do a full circle if the initial and final XY coordinates are the same.
 	// Usually this is because X and Y were not given, but repeating the coordinates is permitted.
@@ -2357,7 +2376,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	}
 
 	// Compute the angle at which we stop
-	const float finalTheta = atan2(moveState.currentUserPosition[axis1] - userArcCentreAxis1, moveState.currentUserPosition[axis0] - userArcCentreAxis0);
+	const float finalTheta = atan2(moveState.currentUserPosition[axis1] - userArcCentre[1], moveState.currentUserPosition[axis0] - userArcCentre[0]);
 
 	// Set up default move parameters
 	moveState.checkEndstops = false;
@@ -2375,11 +2394,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	{
 		if (axis0Mapping.IsBitSet(axis))
 		{
-			moveState.arcCentre[axis] = (userArcCentreAxis0 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
+			moveState.arcCentre[axis] = (userArcCentre[0] * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
 		}
 		else if (axis1Mapping.IsBitSet(axis))
 		{
-			moveState.arcCentre[axis] = (userArcCentreAxis1 * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
+			moveState.arcCentre[axis] = (userArcCentre[1] * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
 		}
 	}
 
@@ -4399,9 +4418,17 @@ float GCodes::GetCurrentToolOffset(size_t axis) const noexcept
 	return (tool == nullptr) ? 0.0 : tool->GetOffset(axis);
 }
 
-// Get the current user coordinate and remove the workplace offset
+// Get the current user coordinate and remove the coordinate rotation and workplace offset
 float GCodes::GetUserCoordinate(size_t axis) const noexcept
 {
+#if SUPPORT_COORDINATE_ROTATION
+	if (g68Angle != 0.0 && axis < 2)
+	{
+		float temp[2] = { moveState.currentUserPosition[0], moveState.currentUserPosition[1] };
+		RotateCoordinates(-g68Angle, temp);
+		return temp[axis] - GetWorkplaceOffset(axis);
+	}
+#endif
 	return (axis < numTotalAxes) ? moveState.currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
 }
 

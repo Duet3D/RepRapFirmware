@@ -1632,6 +1632,57 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 	return GCodeResult::ok;
 }
 
+#if SUPPORT_COORDINATE_ROTATION
+
+// Handle G68
+GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (!LockMovementAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
+	if (gb.CurrentFileMachineState().selectedPlane != 0)
+	{
+		reply.copy("this command may only be used when the selected plane is XY");
+		return GCodeResult::error;
+	}
+
+	float angle, centreX, centreY;
+	gb.MustSee('R');
+	angle = gb.GetFValue();
+	gb.MustSee('A');
+	centreX = gb.GetFValue();
+	gb.MustSee('B');
+	centreY= gb.GetFValue();
+
+	g68Centre[0] = centreX + GetWorkplaceOffset(0);
+	g68Centre[1] = centreY + GetWorkplaceOffset(1);
+	if (gb.Seen('I'))
+	{
+		g68Angle += angle;
+	}
+	else
+	{
+		g68Angle = angle;
+	}
+	return GCodeResult::ok;
+}
+
+// Account for coordinate rotation
+void GCodes::RotateCoordinates(float angleDegrees, float coords[2]) const noexcept
+{
+	if (angleDegrees != 0.0)
+	{
+		const float angle = angleDegrees * DegreesToRadians;
+		const float newX = (coords[0] - g68Centre[0]) * cosf(angle)    + (coords[1] - g68Centre[1]) * sinf(angle) + g68Centre[0];
+		const float newY = (coords[0] - g68Centre[0]) * (-sinf(angle)) + (coords[1] - g68Centre[1]) * cosf(angle) + g68Centre[1];
+		coords[0] = newX;
+		coords[1] = newY;
+	}
+}
+
+#endif
+
 // Change a live extrusion factor
 void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 {

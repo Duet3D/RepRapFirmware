@@ -425,6 +425,16 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			result = SavePosition(gb, reply);
 			break;
 
+#if SUPPORT_COORDINATE_ROTATION
+		case 68:
+			result = HandleG68(gb, reply);
+			break;
+
+		case 69:
+			g68Angle = 0.0;
+			break;
+#endif
+
 		case 90: // Absolute coordinates
 			gb.LatestMachineState().axesRelative = false;
 			reprap.InputsUpdated();
