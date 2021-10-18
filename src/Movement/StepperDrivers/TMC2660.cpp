@@ -227,6 +227,7 @@ public:
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 	void AppendDriverStatus(const StringRef& reply) noexcept;
+	StandardDriverStatus GetStandardDriverStatus() const noexcept;
 
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
@@ -245,8 +246,7 @@ private:
 
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 1023;
-		maxSgLoadRegister = 0;
+		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
 	}
 
 	static void SetupDMA(uint32_t outVal) noexcept SPEED_CRITICAL;	// set up the PDC to send a register and receive the status
@@ -270,12 +270,12 @@ private:
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
-	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
-	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
 	uint32_t mstepPosition;									// the current microstep position, or 0xFFFFFFFF if unknown
 
 	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
 	volatile uint32_t accumulatedStatus;
+
+	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	bool enabled;
 	volatile uint8_t rdselState;							// 0-3 = actual RDSEL value, 0xFF = unknown
 };
@@ -718,13 +718,13 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 		reply.cat("ok, ");
 	}
 
-	if (minSgLoadRegister <= maxSgLoadRegister)
+	if (minSgLoadRegister <= 1023)
 	{
-		reply.catf("SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		reply.catf("SG min %u", minSgLoadRegister);
 	}
 	else
 	{
-		reply.cat("SG min/max n/a");
+		reply.cat("SG min n/a");
 	}
 	ResetLoadRegisters();
 }
@@ -735,6 +735,23 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 	interpolation = (registers[DriveControl] & TMC_DRVCTRL_INTPOL) != 0;
 	return 1u << microstepShiftFactor;
 }
+
+// Get the status of the driver
+StandardDriverStatus TmcDriverState::GetStandardDriverStatus() const noexcept
+{
+	const uint32_t status = ReadLiveStatus();
+	StandardDriverStatus rslt;
+	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC2660 uses different bit assignments
+	rslt.all = ExtractBit(status, TMC_RR_OT_BIT_POS, StandardDriverStatus::OtBitPos);
+	rslt.all |= ExtractBit(status, TMC_RR_OTPW_BIT_POS, StandardDriverStatus::OtpwBitPos);
+	rslt.all |= (status & TMC_RR_S2G) >> 1;															// put the S2G bits in the right place
+	rslt.all |= (status & (TMC_RR_OLA | TMC_RR_OLB)) << 1;											// put the open load bits in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+	rslt.sgresultMin = minSgLoadRegister;
+	return rslt;
+}
+
 
 // This is called by the ISR when the SPI transfer has completed
 inline void TmcDriverState::TransferDone() noexcept
@@ -752,14 +769,10 @@ inline void TmcDriverState::TransferDone() noexcept
 		}
 		else if (rdselState == 1)
 		{
-			const uint32_t sgLoad = (status >> TMC_RR_SG_LOAD_SHIFT) & 1023;	// get the StallGuard load register
+			const uint16_t sgLoad = (status >> TMC_RR_SG_LOAD_SHIFT) & 1023;	// get the StallGuard load register
 			if (sgLoad < minSgLoadRegister)
 			{
 				minSgLoadRegister = sgLoad;
-			}
-			if (sgLoad > maxSgLoadRegister)
-			{
-				maxSgLoadRegister = sgLoad;
 			}
 			if ((status & TMC_RR_SG) != 0)
 			{
@@ -1243,24 +1256,15 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 
 StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
 {
-	StandardDriverStatus rslt;
 	if (driver < numTmc2660Drivers)
 	{
-		const uint32_t status = driverStates[driver].ReadLiveStatus();
-		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC2660 uses different bit assignments
-		rslt.all = ExtractBit(status, TMC_RR_OT_BIT_POS, StandardDriverStatus::OtBitPos);
-		rslt.all |= ExtractBit(status, TMC_RR_OTPW_BIT_POS, StandardDriverStatus::OtpwBitPos);
-		rslt.all |= (status & TMC_RR_S2G) >> 1;															// put the S2G bits in the right place
-		rslt.all |= (status & (TMC_RR_OLA | TMC_RR_OLB)) << 1;											// put the open load bits in the right place
-		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
-		rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+		return driverStates[driver].GetStandardDriverStatus();
 	}
-	else
-	{
-		rslt.all = 0;
-	}
+	StandardDriverStatus rslt;
+	rslt.all = 0;
 	return rslt;
 }
+
 #endif
 
 // End

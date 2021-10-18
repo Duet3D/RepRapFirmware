@@ -288,6 +288,7 @@ public:
 	void SetStallDetectFilter(bool sgFilter) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
+	StandardDriverStatus GetStandardDriverStatus() const noexcept;
 
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
@@ -314,8 +315,7 @@ private:
 
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 1023;
-		maxSgLoadRegister = 0;
+		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
 	}
 
 	// Write register numbers are in priority order, most urgent first, in same order as WriteRegNumbers
@@ -359,8 +359,6 @@ private:
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
-	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
-	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
 
 	volatile uint32_t newRegistersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
 	uint32_t registersToUpdate;								// bitmap of register indices whose values need to be sent to the driver chip
@@ -369,6 +367,7 @@ private:
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t motorCurrent;									// the configured motor current in mA
 
+	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	uint16_t numReads, numWrites;							// how many successful reads and writes we had
 	static uint16_t numTimeouts;							// how many times a transfer timed out
 
@@ -794,13 +793,13 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 		reply.cat(" ok");
 	}
 
-	if (minSgLoadRegister <= maxSgLoadRegister)
+	if (minSgLoadRegister <= 1023)
 	{
-		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		reply.catf(", SG min %u", minSgLoadRegister);
 	}
 	else
 	{
-		reply.cat(", SG min/max n/a");
+		reply.cat(", SG min n/a");
 	}
 	ResetLoadRegisters();
 
@@ -811,6 +810,20 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 		numTimeouts = 0;
 	}
 
+}
+
+StandardDriverStatus TmcDriverState::GetStandardDriverStatus() const noexcept
+{
+	StandardDriverStatus rslt;
+	const uint32_t status = ReadLiveStatus();
+	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC51xx uses different bit assignments
+	rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the ot, otpw, s2ga and s2gb bits in the right place
+	rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
+	rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+	rslt.sgresultMin = minSgLoadRegister;
+	return rslt;
 }
 
 void TmcDriverState::SetStallDetectFilter(bool sgFilter) noexcept
@@ -914,14 +927,10 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 			// We treat the DRV_STATUS register separately
 			if ((regVal & TMC_RR_STST) == 0)							// in standstill, SG_RESULT returns the chopper on-time instead
 			{
-				const uint32_t sgResult = regVal & TMC_RR_SGRESULT;
+				const uint16_t sgResult = regVal & TMC_RR_SGRESULT;
 				if (sgResult < minSgLoadRegister)
 				{
 					minSgLoadRegister = sgResult;
-				}
-				if (sgResult > maxSgLoadRegister)
-				{
-					maxSgLoadRegister = sgResult;
 				}
 			}
 
@@ -1602,21 +1611,12 @@ GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, 
 
 StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
 {
-	StandardDriverStatus rslt;
 	if (driver < numTmc51xxDrivers)
 	{
-		const uint32_t status = driverStates[driver].ReadLiveStatus();
-		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC51xx uses different bit assignments
-		rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the ot, otpw, s2ga and s2gb bits in the right place
-		rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
-		rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
-		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
-		rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+		return driverStates[driver].GetStandardDriverStatus();
 	}
-	else
-	{
-		rslt.all = 0;
-	}
+	StandardDriverStatus rslt;
+	rslt.all = 0;
 	return rslt;
 }
 

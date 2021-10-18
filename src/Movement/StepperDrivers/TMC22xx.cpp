@@ -419,6 +419,7 @@ public:
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 #endif
 	void AppendDriverStatus(const StringRef& reply) noexcept;
+	StandardDriverStatus GetStandardDriverStatus() const noexcept;
 	uint8_t GetDriverNumber() const noexcept { return driverNumber; }
 	bool UpdatePending() const noexcept;
 #if TMC22xx_HAS_ENABLE_PINS
@@ -483,8 +484,7 @@ private:
 #if HAS_STALL_DETECT
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 1023;
-		maxSgLoadRegister = 0;
+		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
 	}
 #endif
 
@@ -552,8 +552,7 @@ private:
 	uint32_t maxOpenLoadStepInterval;						// the maximum step pulse interval for which we consider open load detection to be reliable
 
 #if HAS_STALL_DETECT
-	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
-	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
+	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 #endif
 
 #if TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER
@@ -1300,13 +1299,13 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	}
 
 #if HAS_STALL_DETECT
-	if (minSgLoadRegister <= maxSgLoadRegister)
+	if (minSgLoadRegister <= 1023)
 	{
-		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		reply.catf(", SG min %u", minSgLoadRegister);
 	}
 	else
 	{
-		reply.cat(", SG min/max n/a");
+		reply.cat(", SG min n/a");
 	}
 	ResetLoadRegisters();
 #endif
@@ -1319,6 +1318,20 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 		failedOp = 0xFF;
 	}
 	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
+}
+
+StandardDriverStatus TmcDriverState::GetStandardDriverStatus() const noexcept
+{
+	StandardDriverStatus rslt;
+	const uint32_t status = ReadLiveStatus();
+	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
+	rslt.all = status & 0x000000FF;
+	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+#if HAS_STALL_DETECT
+	rslt.sgresultMin = minSgLoadRegister;
+#endif
+	return rslt;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -1377,14 +1390,10 @@ inline void TmcDriverState::TransferDone() noexcept
 #if HAS_STALL_DETECT
 			else if (registerToRead == ReadSgResult)
 			{
-				const uint32_t sgResult = regVal & SG_RESULT_MASK;
+				const uint16_t sgResult = regVal & SG_RESULT_MASK;
 				if (sgResult < minSgLoadRegister)
 				{
 					minSgLoadRegister = sgResult;
-				}
-				if (sgResult > maxSgLoadRegister)
-				{
-					maxSgLoadRegister = sgResult;
 				}
 			}
 #endif
@@ -2140,23 +2149,90 @@ GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, 
 
 StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
 {
-	StandardDriverStatus rslt;
 	if (driver < GetNumTmcDrivers())
 	{
-		const uint32_t status = driverStates[driver].ReadLiveStatus();
-		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
-		rslt.all = status & 0x000000FF;
-		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
-		rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+		return driverStates[driver].GetStandardDriverStatus();
 	}
-	else
-	{
-		rslt.all = 0;
-	}
+	StandardDriverStatus rslt;
+	rslt.all = 0;
 	return rslt;
 }
 
 #if HAS_STALL_DETECT
+
+# ifdef DUET3MINI
+
+// Stall detection for Duet 3 Mini v0.4 and later
+// Each TMC2209 DIAG output is routed to its own MCU pin, however we don't have enough EXINTs on the SAME54 to give each one its own interrupt.
+// So we route them all to CCL input pins instead, which lets us selectively OR them together in 3 groups and generate an interrupt from the resulting events
+
+// Set up to generate interrupts on the specified drivers stalling
+void EnableStallInterrupt(DriversBitmap drivers) noexcept
+{
+	// Disable all the Diag event interrupts
+	for (unsigned int i = 1; i < 3; ++i)
+	{
+		CCL->LUTCTRL[i].reg &= ~CCL_LUTCTRL_ENABLE;
+		EVSYS->Channel[CclLut0Event + i].CHINTENCLR.reg = EVSYS_CHINTENCLR_EVD | EVSYS_CHINTENCLR_OVR;
+		EVSYS->Channel[CclLut0Event + i].CHINTFLAG.reg = EVSYS_CHINTFLAG_EVD | EVSYS_CHINTENCLR_OVR;
+	}
+
+	if (!drivers.IsEmpty())
+	{
+		// Calculate the new LUT control values
+		constexpr uint32_t lutDefault = CCL_LUTCTRL_TRUTH(0xFE) | CCL_LUTCTRL_LUTEO;		// OR function, disabled, event output enabled
+		uint32_t lutInputControls[4] = { lutDefault, lutDefault, lutDefault, lutDefault };
+		drivers.IterateWhile([&lutInputControls](unsigned int driver, unsigned int count) -> bool
+			{ 	if (driver < GetNumTmcDrivers())
+				{
+					const uint32_t cclInput = CclDiagInputs[driver];
+					lutInputControls[cclInput & 3] |= cclInput & 0x000000FFFFFF0000;
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			} );
+
+		// Now set up the CCL with those inputs. We only use CCL 1-3 so leave 0 alone for possible other applications.
+		for (unsigned int i = 1; i < 4; ++i)
+		{
+			if (lutInputControls[i] & 0x000000FFFFFF0000)		// if any inputs are enabled
+			{
+				CCL->LUTCTRL[i].reg = lutInputControls[i];
+				CCL->LUTCTRL[i].reg = lutInputControls[i] | CCL_LUTCTRL_ENABLE;
+				EVSYS->Channel[CclLut0Event + i].CHINTENSET.reg = EVSYS_CHINTENCLR_EVD;
+			}
+		}
+	}
+}
+
+// Initialise the stall detection logic that is external to the drivers. Only needs to be called once.
+static void InitStallDetectionLogic() noexcept
+{
+	// Set up the DIAG inputs as CCL inputs
+	for (Pin p : DriverDiagPins)
+	{
+		pinMode(p, INPUT_PULLDOWN);								// enable pulldown in case of missing drivers
+		SetPinFunction(p, GpioPinFunction::N);
+	}
+
+	// Set up the event channels for CCL LUTs 1 to 3. We only use CCL 1-3 so leave 0 alone for possible other applications.
+	for (unsigned int i = 1; i < 4; ++i)
+	{
+		GCLK->PCHCTRL[EVSYS_GCLK_ID_0 + i].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;	// enable the GCLK, needed to use the resynchronised path
+		EVSYS->Channel[CclLut0Event + i].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0x74 + i) | EVSYS_CHANNEL_PATH_RESYNCHRONIZED;
+																// LUT output events on the SAME5x are event generator numbers 0x74 to 0x77. Resynchronised path allows interrupts.
+		EVSYS->Channel[CclLut0Event + i].CHINTENCLR.reg = EVSYS_CHINTENCLR_EVD | EVSYS_CHINTENCLR_OVR;	// disable interrupts for now
+		NVIC_SetPriority((IRQn)(EVSYS_0_IRQn + i), NvicPriorityDriverDiag);
+		NVIC_EnableIRQ((IRQn)(EVSYS_0_IRQn + i));				// enable the interrupt for this event channel in the NVIC
+	}
+
+	CCL->CTRL.reg = CCL_CTRL_ENABLE;							// enable the CCL
+}
+
+# endif
 
 DriversBitmap SmartDrivers::GetStalledDrivers(DriversBitmap driversOfInterest) noexcept
 {
