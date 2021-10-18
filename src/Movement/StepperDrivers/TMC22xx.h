@@ -67,11 +67,9 @@ namespace SmartDrivers
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
+	StandardDriverStatus GetStandardDriverStatus(size_t driver) noexcept;
 #if HAS_STALL_DETECT
 	DriversBitmap GetStalledDrivers(DriversBitmap driversOfInterest) noexcept;
-#endif
-#if SUPPORT_REMOTE_COMMANDS
-	StandardDriverStatus GetStandardDriverStatus(size_t driver) noexcept;
 #endif
 };
 

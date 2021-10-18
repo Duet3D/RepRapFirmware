@@ -898,353 +898,369 @@ void TMC2660_SPI_Handler(void) noexcept
 
 //--------------------------- Public interface ---------------------------------
 
-namespace SmartDrivers
+// Initialise the driver interface and the drivers, leaving each drive disabled.
+// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
+void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t numTmcDrivers) noexcept
 {
-	// Initialise the driver interface and the drivers, leaving each drive disabled.
-	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
-	void Init(const Pin driverSelectPins[NumDirectDrivers], size_t numTmcDrivers) noexcept
-	{
-		numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
+	numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
-		// Make sure the ENN pins are high
-		pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
+	// Make sure the ENN pins are high
+	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 
-		// The pins are already set up for SPI in the pins table
-		SetPinFunction(TMC2660MosiPin, TMC2660PeriphMode);
-		SetPinFunction(TMC2660MisoPin, TMC2660PeriphMode);
-		SetPinFunction(TMC2660SclkPin, TMC2660PeriphMode);
+	// The pins are already set up for SPI in the pins table
+	SetPinFunction(TMC2660MosiPin, TMC2660PeriphMode);
+	SetPinFunction(TMC2660MisoPin, TMC2660PeriphMode);
+	SetPinFunction(TMC2660SclkPin, TMC2660PeriphMode);
 
-		// Enable the clock to the USART or SPI
-		pmc_enable_periph_clk(ID_TMC2660_SPI);
+	// Enable the clock to the USART or SPI
+	pmc_enable_periph_clk(ID_TMC2660_SPI);
 
 #if TMC2660_USES_USART
-		// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
-		USART_TMC2660->US_IDR = ~0u;
-		USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
-		USART_TMC2660->US_MR = US_MR_USART_MODE_SPI_MASTER
-						| US_MR_USCLKS_MCK
-						| US_MR_CHRL_8_BIT
-						| US_MR_CHMODE_NORMAL
-						| US_MR_CPOL
-						| US_MR_CLKO;
-		USART_TMC2660->US_BRGR = SystemCoreClockFreq/DriversSpiClockFrequency;		// set SPI clock frequency
-		USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
+	// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
+	USART_TMC2660->US_IDR = ~0u;
+	USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
+	USART_TMC2660->US_MR = US_MR_USART_MODE_SPI_MASTER
+					| US_MR_USCLKS_MCK
+					| US_MR_CHRL_8_BIT
+					| US_MR_CHMODE_NORMAL
+					| US_MR_CPOL
+					| US_MR_CLKO;
+	USART_TMC2660->US_BRGR = SystemCoreClockFreq/DriversSpiClockFrequency;		// set SPI clock frequency
+	USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
-		// We need a few microseconds of delay here for the USART to sort itself out before we send any data,
-		// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
-		// 2016-07-07: removed this delay, because we no longer send commands to the TMC2660 drivers immediately.
-		//delay(10);
+	// We need a few microseconds of delay here for the USART to sort itself out before we send any data,
+	// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
+	// 2016-07-07: removed this delay, because we no longer send commands to the TMC2660 drivers immediately.
+	//delay(10);
 #else
-		// Set up the SPI interface with data changing on the falling edge of the clock and captured on the rising edge
-		spi_reset(SPI_TMC2660);										// this clears the transmit and receive registers and puts the SPI into slave mode
-		SPI_TMC2660->SPI_MR = SPI_MR_MSTR							// master mode
-						| SPI_MR_MODFDIS							// disable fault detection
-						| SPI_MR_PCS(0);							// fixed peripheral select
+	// Set up the SPI interface with data changing on the falling edge of the clock and captured on the rising edge
+	spi_reset(SPI_TMC2660);										// this clears the transmit and receive registers and puts the SPI into slave mode
+	SPI_TMC2660->SPI_MR = SPI_MR_MSTR							// master mode
+					| SPI_MR_MODFDIS							// disable fault detection
+					| SPI_MR_PCS(0);							// fixed peripheral select
 
-		// Set SPI mode, clock frequency, CS active after transfer, delay between transfers
-		const uint16_t baud_div = (uint16_t)spi_calc_baudrate_div(DriversSpiClockFrequency, SystemCoreClock);
-		const uint32_t csr = SPI_CSR_SCBR(baud_div)					// Baud rate
-						| SPI_CSR_BITS_8_BIT						// Transfer bit width
-						| SPI_CSR_DLYBCT(0)      					// Transfer delay
-						| SPI_CSR_CSAAT								// Keep CS low after transfer in case we are slow in writing the next byte
-						| SPI_CSR_CPOL;								// clock high between transfers
-		SPI_TMC2660->SPI_CSR[0] = csr;
+	// Set SPI mode, clock frequency, CS active after transfer, delay between transfers
+	const uint16_t baud_div = (uint16_t)spi_calc_baudrate_div(DriversSpiClockFrequency, SystemCoreClock);
+	const uint32_t csr = SPI_CSR_SCBR(baud_div)					// Baud rate
+					| SPI_CSR_BITS_8_BIT						// Transfer bit width
+					| SPI_CSR_DLYBCT(0)      					// Transfer delay
+					| SPI_CSR_CSAAT								// Keep CS low after transfer in case we are slow in writing the next byte
+					| SPI_CSR_CPOL;								// clock high between transfers
+	SPI_TMC2660->SPI_CSR[0] = csr;
 #endif
 
-		driversState = DriversState::noPower;
-		EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
-		for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
-		{
-			driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
-		}
+	driversState = DriversState::noPower;
+	EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
+	for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
+	{
+		driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
+	}
 
 #if SAME70
-		pmc_enable_periph_clk(ID_XDMAC);
-		xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcTx, 0xFFFFFFFF);
-		xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);
-		xdmac_enable_interrupt(XDMAC, DmacChanTmcRx);
+	pmc_enable_periph_clk(ID_XDMAC);
+	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcTx, 0xFFFFFFFF);
+	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);
+	xdmac_enable_interrupt(XDMAC, DmacChanTmcRx);
 #endif
-	}
+}
 
-	// Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
-	void Exit() noexcept
-	{
-		digitalWrite(GlobalTmc2660EnablePin, HIGH);
-		NVIC_DisableIRQ(TMC2660_SPI_IRQn);
-		driversState = DriversState::noPower;
-	}
+// Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
+void SmartDrivers::Exit() noexcept
+{
+	digitalWrite(GlobalTmc2660EnablePin, HIGH);
+	NVIC_DisableIRQ(TMC2660_SPI_IRQn);
+	driversState = DriversState::noPower;
+}
 
-	void SetAxisNumber(size_t driver, uint32_t axisNumber) noexcept
+void SmartDrivers::SetAxisNumber(size_t driver, uint32_t axisNumber) noexcept
+{
+	if (driver < numTmc2660Drivers)
 	{
-		if (driver < numTmc2660Drivers)
+		driverStates[driver].SetAxisNumber(axisNumber);
+	}
+}
+
+void SmartDrivers::SetCurrent(size_t driver, float current) noexcept
+{
+	if (driver < numTmc2660Drivers)
+	{
+		driverStates[driver].SetCurrent(current);
+	}
+}
+
+void SmartDrivers::EnableDrive(size_t driver, bool en) noexcept
+{
+	if (driver < numTmc2660Drivers)
+	{
+		driverStates[driver].Enable(en);
+	}
+}
+
+uint32_t SmartDrivers::GetLiveStatus(size_t driver) noexcept
+{
+	return (driver < numTmc2660Drivers) ? driverStates[driver].ReadLiveStatus() : 0;
+}
+
+uint32_t SmartDrivers::GetAccumulatedStatus(size_t driver, uint32_t bitsToKeep) noexcept
+{
+	return (driver < numTmc2660Drivers) ? driverStates[driver].ReadAccumulatedStatus(bitsToKeep) : 0;
+}
+
+// Set microstepping and microstep interpolation
+bool SmartDrivers::SetMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept
+{
+	if (driver < numTmc2660Drivers && microsteps > 0)
+	{
+		// Set the microstepping. We need to determine how many bits right to shift the desired microstepping to reach 1.
+		unsigned int shift = 0;
+		unsigned int uSteps = (unsigned int)microsteps;
+		while ((uSteps & 1) == 0)
 		{
-			driverStates[driver].SetAxisNumber(axisNumber);
+			uSteps >>= 1;
+			++shift;
+		}
+		if (uSteps == 1 && shift <= 8)
+		{
+			driverStates[driver].SetMicrostepping(shift, interpolate);
+			return true;
 		}
 	}
+	return false;
+}
 
-	void SetCurrent(size_t driver, float current) noexcept
+// Get microstepping and interpolation
+unsigned int SmartDrivers::GetMicrostepping(size_t driver, bool& interpolation) noexcept
+{
+	if (driver < numTmc2660Drivers)
 	{
-		if (driver < numTmc2660Drivers)
+		return driverStates[driver].GetMicrostepping(interpolation);
+	}
+	interpolation = false;
+	return 1;
+}
+
+bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept
+{
+	return driver < numTmc2660Drivers && driverStates[driver].SetDriverMode(mode);
+}
+
+DriverMode SmartDrivers::GetDriverMode(size_t driver) noexcept
+{
+	return (driver < numTmc2660Drivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
+}
+
+// Flag the the drivers have been powered up.
+// Before the first call to this function with powered true, you must call Init().
+void SmartDrivers::Spin(bool powered) noexcept
+{
+	if (powered)
+	{
+		switch (driversState)
 		{
-			driverStates[driver].SetCurrent(current);
-		}
-	}
-
-	void EnableDrive(size_t driver, bool en) noexcept
-	{
-		if (driver < numTmc2660Drivers)
-		{
-			driverStates[driver].Enable(en);
-		}
-	}
-
-	uint32_t GetLiveStatus(size_t driver) noexcept
-	{
-		return (driver < numTmc2660Drivers) ? driverStates[driver].ReadLiveStatus() : 0;
-	}
-
-	uint32_t GetAccumulatedStatus(size_t driver, uint32_t bitsToKeep) noexcept
-	{
-		return (driver < numTmc2660Drivers) ? driverStates[driver].ReadAccumulatedStatus(bitsToKeep) : 0;
-	}
-
-	// Set microstepping and microstep interpolation
-	bool SetMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept
-	{
-		if (driver < numTmc2660Drivers && microsteps > 0)
-		{
-			// Set the microstepping. We need to determine how many bits right to shift the desired microstepping to reach 1.
-			unsigned int shift = 0;
-			unsigned int uSteps = (unsigned int)microsteps;
-			while ((uSteps & 1) == 0)
+		case DriversState::noPower:
+			// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
+			EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
+			for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 			{
-				uSteps >>= 1;
-				++shift;
+				driverStates[driver].WriteAll();
 			}
-			if (uSteps == 1 && shift <= 8)
+			driversState = DriversState::initialising;
+			break;
+
+		case DriversState::initialising:
+			// If all drivers have been initialised, move to checking the microstep counters
 			{
-				driverStates[driver].SetMicrostepping(shift, interpolate);
-				return true;
+				bool allInitialised = true;
+				for (size_t i = 0; i < numTmc2660Drivers; ++i)
+				{
+					if (driverStates[i].UpdatePending())
+					{
+						allInitialised = false;
+						break;
+					}
+					driverStates[i].ClearMicrostepPosition();
+				}
+
+				if (allInitialised)
+				{
+					driversState = DriversState::stepping;
+				}
 			}
-		}
-		return false;
-	}
+			break;
 
-	// Get microstepping and interpolation
-	unsigned int GetMicrostepping(size_t driver, bool& interpolation) noexcept
-	{
-		if (driver < numTmc2660Drivers)
-		{
-			return driverStates[driver].GetMicrostepping(interpolation);
-		}
-		interpolation = false;
-		return 1;
-	}
-
-	bool SetDriverMode(size_t driver, unsigned int mode) noexcept
-	{
-		return driver < numTmc2660Drivers && driverStates[driver].SetDriverMode(mode);
-	}
-
-	DriverMode GetDriverMode(size_t driver) noexcept
-	{
-		return (driver < numTmc2660Drivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
-	}
-
-	// Flag the the drivers have been powered up.
-	// Before the first call to this function with powered true, you must call Init().
-	void Spin(bool powered) noexcept
-	{
-		if (powered)
-		{
-			switch (driversState)
+		case DriversState::stepping:
 			{
-			case DriversState::noPower:
-				// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
-				EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
-				for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
+				bool moreNeeded = false;
+				for (size_t i = 0; i < numTmc2660Drivers; ++i)
 				{
-					driverStates[driver].WriteAll();
-				}
-				driversState = DriversState::initialising;
-				break;
-
-			case DriversState::initialising:
-				// If all drivers have been initialised, move to checking the microstep counters
-				{
-					bool allInitialised = true;
-					for (size_t i = 0; i < numTmc2660Drivers; ++i)
+					// The following line assumes that driver numbers in RRF map directly to smart driver numbers in this module. They do on Duets.
+					if (reprap.GetPlatform().GetEnableValue(i) >= 0)							// if the driver has not been disabled
 					{
-						if (driverStates[i].UpdatePending())
+						uint32_t count = driverStates[i].ReadMicrostepPosition();
+						if (count != 0)
 						{
-							allInitialised = false;
-							break;
-						}
-						driverStates[i].ClearMicrostepPosition();
-					}
-
-					if (allInitialised)
-					{
-						driversState = DriversState::stepping;
-					}
-				}
-				break;
-
-			case DriversState::stepping:
-				{
-					bool moreNeeded = false;
-					for (size_t i = 0; i < numTmc2660Drivers; ++i)
-					{
-						// The following line assumes that driver numbers in RRF map directly to smart driver numbers in this module. They do on Duets.
-						if (reprap.GetPlatform().GetEnableValue(i) >= 0)							// if the driver has not been disabled
-						{
-							uint32_t count = driverStates[i].ReadMicrostepPosition();
-							if (count != 0)
+							moreNeeded = true;
+							if (count < 1024)
 							{
-								moreNeeded = true;
-								if (count < 1024)
+								const bool backwards = (count > 512);
+								reprap.GetPlatform().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
+								if (backwards)
 								{
-									const bool backwards = (count > 512);
-									reprap.GetPlatform().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
-									if (backwards)
-									{
-										count = 1024 - count;
-									}
-									do
-									{
-										delayMicroseconds(1);
-										const uint32_t driverBitmap = StepPins::CalcDriverBitmap(i);
-										StepPins::StepDriversHigh(driverBitmap);
-										delayMicroseconds(1);
-										StepPins::StepDriversLow(driverBitmap);
-										--count;
-									} while (count != 0);
-									driverStates[i].ClearMicrostepPosition();
+									count = 1024 - count;
 								}
+								do
+								{
+									delayMicroseconds(1);
+									const uint32_t driverBitmap = StepPins::CalcDriverBitmap(i);
+									StepPins::StepDriversHigh(driverBitmap);
+									delayMicroseconds(1);
+									StepPins::StepDriversLow(driverBitmap);
+									--count;
+								} while (count != 0);
+								driverStates[i].ClearMicrostepPosition();
 							}
 						}
 					}
-					if (!moreNeeded)
-					{
-						driversState = DriversState::reinitialising;
-						for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
-						{
-							driverStates[driver].WriteAll();
-						}
-					}
 				}
-				break;
-
-			case DriversState::reinitialising:
-				// If all drivers have been initialised, set the global enable
+				if (!moreNeeded)
 				{
-					bool allInitialised = true;
-					for (size_t i = 0; i < numTmc2660Drivers; ++i)
+					driversState = DriversState::reinitialising;
+					for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 					{
-						if (driverStates[i].UpdatePending())
-						{
-							allInitialised = false;
-							break;
-						}
-					}
-
-					if (allInitialised)
-					{
-						digitalWrite(GlobalTmc2660EnablePin, LOW);
-						driversState = DriversState::ready;
+						driverStates[driver].WriteAll();
 					}
 				}
-				break;
-
-			case DriversState::ready:
-				break;
 			}
+			break;
 
-			if (currentDriver == nullptr && numTmc2660Drivers != 0)
+		case DriversState::reinitialising:
+			// If all drivers have been initialised, set the global enable
 			{
-				// Kick off the first transfer
-				NVIC_EnableIRQ(TMC2660_SPI_IRQn);
-				driverStates[0].StartTransfer();
+				bool allInitialised = true;
+				for (size_t i = 0; i < numTmc2660Drivers; ++i)
+				{
+					if (driverStates[i].UpdatePending())
+					{
+						allInitialised = false;
+						break;
+					}
+				}
+
+				if (allInitialised)
+				{
+					digitalWrite(GlobalTmc2660EnablePin, LOW);
+					driversState = DriversState::ready;
+				}
 			}
+			break;
+
+		case DriversState::ready:
+			break;
 		}
-		else if (driversState != DriversState::noPower)
+
+		if (currentDriver == nullptr && numTmc2660Drivers != 0)
 		{
-			digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
-			driversState = DriversState::noPower;
-			EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
+			// Kick off the first transfer
+			NVIC_EnableIRQ(TMC2660_SPI_IRQn);
+			driverStates[0].StartTransfer();
 		}
 	}
-
-	// This is called from the tick ISR, possibly while Spin (with powered either true or false) is being executed
-	void TurnDriversOff() noexcept
+	else if (driversState != DriversState::noPower)
 	{
-		digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
+		digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
 		driversState = DriversState::noPower;
 		EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 	}
+}
 
-	void SetStallThreshold(size_t driver, int sgThreshold) noexcept
+// This is called from the tick ISR, possibly while Spin (with powered either true or false) is being executed
+void SmartDrivers::TurnDriversOff() noexcept
+{
+	digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
+	driversState = DriversState::noPower;
+	EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
+}
+
+void SmartDrivers::SetStallThreshold(size_t driver, int sgThreshold) noexcept
+{
+	if (driver < numTmc2660Drivers)
 	{
-		if (driver < numTmc2660Drivers)
-		{
-			driverStates[driver].SetStallDetectThreshold(sgThreshold);
-		}
+		driverStates[driver].SetStallDetectThreshold(sgThreshold);
 	}
+}
 
-	void SetStallFilter(size_t driver, bool sgFilter) noexcept
+void SmartDrivers::SetStallFilter(size_t driver, bool sgFilter) noexcept
+{
+	if (driver < numTmc2660Drivers)
 	{
-		if (driver < numTmc2660Drivers)
-		{
-			driverStates[driver].SetStallDetectFilter(sgFilter);
-		}
+		driverStates[driver].SetStallDetectFilter(sgFilter);
 	}
+}
 
-	void SetStallMinimumStepsPerSecond(size_t driver, unsigned int stepsPerSecond) noexcept
+void SmartDrivers::SetStallMinimumStepsPerSecond(size_t driver, unsigned int stepsPerSecond) noexcept
+{
+	if (driver < numTmc2660Drivers)
 	{
-		if (driver < numTmc2660Drivers)
-		{
-			driverStates[driver].SetStallMinimumStepsPerSecond(stepsPerSecond);
-		}
+		driverStates[driver].SetStallMinimumStepsPerSecond(stepsPerSecond);
 	}
+}
 
-	void AppendStallConfig(size_t driver, const StringRef& reply) noexcept
+void SmartDrivers::AppendStallConfig(size_t driver, const StringRef& reply) noexcept
+{
+	if (driver < numTmc2660Drivers)
 	{
-		if (driver < numTmc2660Drivers)
-		{
-			driverStates[driver].AppendStallConfig(reply);
-		}
+		driverStates[driver].AppendStallConfig(reply);
 	}
+}
 
-	void AppendDriverStatus(size_t driver, const StringRef& reply) noexcept
+void SmartDrivers::AppendDriverStatus(size_t driver, const StringRef& reply) noexcept
+{
+	if (driver < numTmc2660Drivers)
 	{
-		if (driver < numTmc2660Drivers)
-		{
-			driverStates[driver].AppendDriverStatus(reply);
-		}
+		driverStates[driver].AppendDriverStatus(reply);
 	}
+}
 
-	float GetStandstillCurrentPercent(size_t driver) noexcept
+float SmartDrivers::GetStandstillCurrentPercent(size_t driver) noexcept
+{
+	return 100.0;			// not supported
+}
+
+void SmartDrivers::SetStandstillCurrentPercent(size_t driver, float percent) noexcept
+{
+	// not supported so nothing to see here
+}
+
+bool SmartDrivers::SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept
+{
+	return (driver < numTmc2660Drivers) && driverStates[driver].SetRegister(reg, regVal);
+}
+
+uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexcept
+{
+	return (driver < numTmc2660Drivers) ? driverStates[driver].GetRegister(reg) : 0;
+}
+
+StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
+{
+	StandardDriverStatus rslt;
+	if (driver < numTmc2660Drivers)
 	{
-		return 100.0;			// not supported
+		const uint32_t status = driverStates[driver].ReadLiveStatus();
+		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC2660 uses different bit assignments
+		rslt.all = ExtractBit(status, TMC_RR_OT_BIT_POS, StandardDriverStatus::OtBitPos);
+		rslt.all |= ExtractBit(status, TMC_RR_OTPW_BIT_POS, StandardDriverStatus::OtpwBitPos);
+		rslt.all |= (status & TMC_RR_S2G) >> 1;															// put the S2G bits in the right place
+		rslt.all |= (status & (TMC_RR_OLA | TMC_RR_OLB)) << 1;											// put the open load bits in the right place
+		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+		rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
 	}
-
-	void SetStandstillCurrentPercent(size_t driver, float percent) noexcept
+	else
 	{
-		// not supported so nothing to see here
+		rslt.all = 0;
 	}
-
-	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept
-	{
-		return (driver < numTmc2660Drivers) && driverStates[driver].SetRegister(reg, regVal);
-	}
-
-	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept
-	{
-		return (driver < numTmc2660Drivers) ? driverStates[driver].GetRegister(reg) : 0;
-	}
-
-};	// end namespace
-
+	return rslt;
+}
 #endif
 
 // End

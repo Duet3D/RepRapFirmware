@@ -907,9 +907,7 @@ pre(!driversPowered)
 
 #if HAS_STALL_DETECT
 	diagPin = p_diagPin;
-# if !defined(DUET3MINI_V04)											// on Duet 3 Mini we have already done this and switched the pin to be a CCL input
 	IoPort::SetPinMode(p_diagPin, INPUT_PULLDOWN);						// pull down not up so that missing drivers don't signal stalls
-# endif
 #endif
 
 #if !(TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER)
@@ -2140,100 +2138,6 @@ GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, 
 	return GCodeResult::error;
 }
 
-#ifdef DUET3MINI_V04
-
-// Stall detection for Duet 3 Mini v0.4 and later
-// Each TMC2209 DIAG output is routed to its own MCU pin, however we don't have enough EXINTs on the SAME54 to give each one its own interrupt.
-// So we route them all to CCL input pins instead, which lets us selectively OR them together in 3 groups and generate an interrupt from the resulting events
-
-// Set up to generate interrupts on the specified drivers stalling
-void EnableStallInterrupt(DriversBitmap drivers) noexcept
-{
-	// Disable all the Diag event interrupts
-	for (unsigned int i = 1; i < 3; ++i)
-	{
-		CCL->LUTCTRL[i].reg &= ~CCL_LUTCTRL_ENABLE;
-		EVSYS->Channel[CclLut0Event + i].CHINTENCLR.reg = EVSYS_CHINTENCLR_EVD | EVSYS_CHINTENCLR_OVR;
-		EVSYS->Channel[CclLut0Event + i].CHINTFLAG.reg = EVSYS_CHINTFLAG_EVD | EVSYS_CHINTENCLR_OVR;
-	}
-
-	if (!drivers.IsEmpty())
-	{
-		// Calculate the new LUT control values
-		constexpr uint32_t lutDefault = CCL_LUTCTRL_TRUTH(0xFE) | CCL_LUTCTRL_LUTEO;		// OR function, disabled, event output enabled
-		uint32_t lutInputControls[4] = { lutDefault, lutDefault, lutDefault, lutDefault };
-		drivers.IterateWhile([&lutInputControls](unsigned int driver, unsigned int count) -> bool
-			{ 	if (driver < GetNumTmcDrivers())
-				{
-					const uint32_t cclInput = CclDiagInputs[driver];
-					lutInputControls[cclInput & 3] |= cclInput & 0x000000FFFFFF0000;
-					return true;
-				}
-				else
-				{
-					return false;
-				}
-			} );
-
-		// Now set up the CCL with those inputs. We only use CCL 1-3 so leave 0 alone for possible other applications.
-		for (unsigned int i = 1; i < 4; ++i)
-		{
-			if (lutInputControls[i] & 0x000000FFFFFF0000)				// if any inputs are enabled
-			{
-				CCL->LUTCTRL[i].reg = lutInputControls[i];
-				CCL->LUTCTRL[i].reg = lutInputControls[i] | CCL_LUTCTRL_ENABLE;
-				EVSYS->Channel[CclLut0Event + i].CHINTENSET.reg = EVSYS_CHINTENCLR_EVD;
-			}
-		}
-	}
-}
-
-// Initialise the stall detection logic that is external to the drivers. Only needs to be called once.
-static void InitStallDetectionLogic() noexcept
-{
-	// Set up the DIAG inputs as CCL inputs
-	for (Pin p : DriverDiagPins)
-	{
-		pinMode(p, INPUT_PULLDOWN);								// enable pulldown in case of missing drivers
-		SetPinFunction(p, GpioPinFunction::N);
-	}
-
-	// Set up the event channels for CCL LUTs 1 to 3. We only use CCL 1-3 so leave 0 alone for possible other applications.
-	for (unsigned int i = 1; i < 4; ++i)
-	{
-		GCLK->PCHCTRL[EVSYS_GCLK_ID_0 + i].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;	// enable the GCLK, needed to use the resynchronised path
-		EVSYS->Channel[CclLut0Event + i].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0x74 + i) | EVSYS_CHANNEL_PATH_RESYNCHRONIZED;
-																// LUT output events on the SAME5x are event generator numbers 0x74 to 0x77. Resynchronised path allows interrupts.
-		EVSYS->Channel[CclLut0Event + i].CHINTENCLR.reg = EVSYS_CHINTENCLR_EVD | EVSYS_CHINTENCLR_OVR;	// disable interrupts for now
-		NVIC_SetPriority((IRQn)(EVSYS_0_IRQn + i), NvicPriorityDriverDiag);
-		NVIC_EnableIRQ((IRQn)(EVSYS_0_IRQn + i));				// enable the interrupt for this event channel in the NVIC
-	}
-
-	CCL->CTRL.reg = CCL_CTRL_ENABLE;							// enable the CCL
-}
-
-#endif
-
-#if HAS_STALL_DETECT
-
-DriversBitmap SmartDrivers::GetStalledDrivers(DriversBitmap driversOfInterest) noexcept
-{
-	DriversBitmap rslt;
-	driversOfInterest.Iterate([&rslt](unsigned int driverNumber, unsigned int count)
-								{
-									if (driverNumber < ARRAY_SIZE(DriverDiagPins) && digitalRead(DriverDiagPins[driverNumber]))
-									{
-										rslt.SetBit(driverNumber);
-									}
-								}
-							 );
-	return rslt;
-}
-
-#endif
-
-#if SUPPORT_REMOTE_COMMANDS
-
 StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
 {
 	StandardDriverStatus rslt;
@@ -2249,6 +2153,22 @@ StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexce
 	{
 		rslt.all = 0;
 	}
+	return rslt;
+}
+
+#if HAS_STALL_DETECT
+
+DriversBitmap SmartDrivers::GetStalledDrivers(DriversBitmap driversOfInterest) noexcept
+{
+	DriversBitmap rslt;
+	driversOfInterest.Iterate([&rslt](unsigned int driverNumber, unsigned int count)
+								{
+									if (driverNumber < ARRAY_SIZE(DriverDiagPins) && digitalRead(DriverDiagPins[driverNumber]))
+									{
+										rslt.SetBit(driverNumber);
+									}
+								}
+							 );
 	return rslt;
 }
 

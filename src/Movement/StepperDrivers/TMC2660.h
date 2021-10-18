@@ -15,13 +15,18 @@
 #include <Pins.h>
 
 // TMC2660 read response bits that are returned by the status calls
-const uint32_t TMC_RR_SG = 1 << 0;			// stall detected
-const uint32_t TMC_RR_OT = 1 << 1;			// over temperature shutdown
-const uint32_t TMC_RR_OTPW = 1 << 2;		// over temperature warning
-const uint32_t TMC_RR_S2G = 3 << 3;			// short to ground counter (2 bits)
-const uint32_t TMC_RR_OLA = 1 << 5;			// open load A
-const uint32_t TMC_RR_OLB = 1 << 6;			// open load B
-const uint32_t TMC_RR_STST = 1 << 7;		// standstill detected
+constexpr uint32_t TMC_RR_SG = 1 << 0;			// stall detected
+constexpr uint32_t TMC_RR_OT = 1 << 1;			// over temperature shutdown
+constexpr uint32_t TMC_RR_OTPW = 1 << 2;		// over temperature warning
+constexpr uint32_t TMC_RR_S2G = 3 << 3;			// short to ground counter (2 bits)
+constexpr uint32_t TMC_RR_OLA = 1 << 5;			// open load A
+constexpr uint32_t TMC_RR_OLB = 1 << 6;			// open load B
+constexpr uint32_t TMC_RR_STST = 1 << 7;		// standstill detected
+
+constexpr unsigned int TMC_RR_OT_BIT_POS = 1;
+constexpr unsigned int TMC_RR_OTPW_BIT_POS = 2;
+constexpr unsigned int TMC_RR_STST_BIT_POS = 7;
+constexpr unsigned int TMC_RR_SG_BIT_POS = 0;
 
 namespace SmartDrivers
 {
@@ -49,6 +54,7 @@ namespace SmartDrivers
 	void SetStandstillCurrentPercent(size_t driver, float percent) noexcept;
 	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
+	StandardDriverStatus GetStandardDriverStatus(size_t driver) noexcept;
 };
 
 #endif
