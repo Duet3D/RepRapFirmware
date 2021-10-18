@@ -1256,6 +1256,13 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 // Append any additional driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
+#if RESET_MICROSTEP_COUNTERS_AT_INIT
+	if (hadStepFailure)
+	{
+		reply.cat(", stepFail");
+	}
+#endif
+
 #if HAS_STALL_DETECT
 	if (minSgLoadRegister <= 1023)
 	{
