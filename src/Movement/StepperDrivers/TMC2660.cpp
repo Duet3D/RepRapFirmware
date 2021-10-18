@@ -686,45 +686,16 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, registers[SmartEnable] & 0xFFFF);
 }
 
-// Append the driver status to a string, and reset the min/max load values
+// Append any additional driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
-	if (lastReadStatus & TMC_RR_OT)
-	{
-		reply.cat("temperature-shutdown! ");
-	}
-	else if (lastReadStatus & TMC_RR_OTPW)
-	{
-		reply.cat("temperature-warning, ");
-	}
-	if (lastReadStatus & TMC_RR_S2G)
-	{
-		reply.cat("short-to-ground, ");
-	}
-	if (lastReadStatus & TMC_RR_OLA)
-	{
-		reply.cat("open-load-A, ");
-	}
-	if (lastReadStatus & TMC_RR_OLB)
-	{
-		reply.cat("open-load-B, ");
-	}
-	if (lastReadStatus & TMC_RR_STST)
-	{
-		reply.cat("standstill, ");
-	}
-	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
-	{
-		reply.cat("ok, ");
-	}
-
 	if (minSgLoadRegister <= 1023)
 	{
-		reply.catf("SG min %u", minSgLoadRegister);
+		reply.catf(", SG min %u", minSgLoadRegister);
 	}
 	else
 	{
-		reply.cat("SG min n/a");
+		reply.cat(", SG min n/a");
 	}
 	ResetLoadRegisters();
 }
@@ -1007,11 +978,6 @@ void SmartDrivers::EnableDrive(size_t driver, bool en) noexcept
 	{
 		driverStates[driver].Enable(en);
 	}
-}
-
-uint32_t SmartDrivers::GetLiveStatus(size_t driver) noexcept
-{
-	return (driver < numTmc2660Drivers) ? driverStates[driver].ReadLiveStatus() : 0;
 }
 
 uint32_t SmartDrivers::GetAccumulatedStatus(size_t driver, uint32_t bitsToKeep) noexcept

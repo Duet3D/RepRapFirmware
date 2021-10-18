@@ -1253,51 +1253,9 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 	return status;
 }
 
-// Append the driver status to a string, and reset the min/max load values
+// Append any additional driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
-	if (!DriverAssumedPresent())
-	{
-		reply.cat(" assumed not present");
-		return;
-	}
-
-	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
-	if (lastReadStatus & TMC_RR_OT)
-	{
-		reply.cat(" temperature-shutdown!");
-	}
-	else if (lastReadStatus & TMC_RR_OTPW)
-	{
-		reply.cat(" temperature-warning");
-	}
-	if (lastReadStatus & TMC_RR_S2G)
-	{
-		reply.cat(" short-to-ground");
-	}
-	if (lastReadStatus & TMC_RR_OLA)
-	{
-		reply.cat(" open-load-A");
-	}
-	if (lastReadStatus & TMC_RR_OLB)
-	{
-		reply.cat(" open-load-B");
-	}
-	if (lastReadStatus & TMC_RR_STST)
-	{
-		reply.cat(" standstill");
-	}
-#if RESET_MICROSTEP_COUNTERS_AT_INIT
-	if (hadStepFailure)
-	{
-		reply.cat(" stepFail");
-	}
-#endif
-	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST)) == 0)
-	{
-		reply.cat( "ok");
-	}
-
 #if HAS_STALL_DETECT
 	if (minSgLoadRegister <= 1023)
 	{
@@ -1323,14 +1281,22 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 StandardDriverStatus TmcDriverState::GetStandardDriverStatus() const noexcept
 {
 	StandardDriverStatus rslt;
-	const uint32_t status = ReadLiveStatus();
-	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
-	rslt.all = status & 0x000000FF;
-	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
-	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+	if (DriverAssumedPresent())
+	{
+		const uint32_t status = ReadLiveStatus();
+		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
+		rslt.all = status & 0x000000FF;
+		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+		rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
 #if HAS_STALL_DETECT
-	rslt.sgresultMin = minSgLoadRegister;
+		rslt.sgresultMin = minSgLoadRegister;
 #endif
+	}
+	else
+	{
+		rslt.all = 0;
+		rslt.notPresent = true;
+	}
 	return rslt;
 }
 
@@ -1978,11 +1944,6 @@ void SmartDrivers::EnableDrive(size_t drive, bool en) noexcept
 	{
 		driverStates[drive].Enable(en);
 	}
-}
-
-uint32_t SmartDrivers::GetLiveStatus(size_t drive) noexcept
-{
-	return (drive < GetNumTmcDrivers()) ? driverStates[drive].ReadLiveStatus() : 0;
 }
 
 uint32_t SmartDrivers::GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep) noexcept

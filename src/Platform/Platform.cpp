@@ -1814,8 +1814,13 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #if HAS_SMART_DRIVERS
 		if (drive < numSmartDrivers)
 		{
-			driverStatus.cat(',');
-			SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
+			driverStatus.cat(", ");
+			const StandardDriverStatus status = SmartDrivers::GetStandardDriverStatus(drive);
+			status.AppendText(driverStatus.GetRef(), 0);
+			if (!status.notPresent)
+			{
+				SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
+			}
 		}
 #endif
 		driverStatus.cat('\n');

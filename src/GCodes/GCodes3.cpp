@@ -1650,9 +1650,9 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	float angle, centreX, centreY;
 	gb.MustSee('R');
 	angle = gb.GetFValue();
-	gb.MustSee('A');
+	gb.MustSee('A', 'X');
 	centreX = gb.GetFValue();
-	gb.MustSee('B');
+	gb.MustSee('B', 'Y');
 	centreY= gb.GetFValue();
 
 	g68Centre[0] = centreX + GetWorkplaceOffset(0);

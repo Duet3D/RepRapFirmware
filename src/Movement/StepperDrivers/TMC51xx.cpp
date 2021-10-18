@@ -760,39 +760,9 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
-// Append the driver status to a string, and reset the min/max load values
+// Append any additional driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept
 {
-	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
-	if (lastReadStatus & TMC_RR_OT)
-	{
-		reply.cat(" temperature-shutdown!");
-	}
-	else if (lastReadStatus & TMC_RR_OTPW)
-	{
-		reply.cat(" temperature-warning");
-	}
-	if (lastReadStatus & TMC_RR_S2G)
-	{
-		reply.cat(" short-to-ground");
-	}
-	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
-	{
-		reply.cat(" open-load-A");
-	}
-	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
-	{
-		reply.cat(" open-load-B");
-	}
-	if (lastReadStatus & TMC_RR_STST)
-	{
-		reply.cat(" standstill");
-	}
-	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
-	{
-		reply.cat(" ok");
-	}
-
 	if (minSgLoadRegister <= 1023)
 	{
 		reply.catf(", SG min %u", minSgLoadRegister);
@@ -802,14 +772,12 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 		reply.cat(", SG min n/a");
 	}
 	ResetLoadRegisters();
-
 	reply.catf(", reads %u, writes %u timeouts %u", numReads, numWrites, numTimeouts);
 	numReads = numWrites = 0;
 	if (clearGlobalStats)
 	{
 		numTimeouts = 0;
 	}
-
 }
 
 StandardDriverStatus TmcDriverState::GetStandardDriverStatus() const noexcept
@@ -1441,11 +1409,6 @@ void SmartDrivers::EnableDrive(size_t driver, bool en) noexcept
 	{
 		driverStates[driver].Enable(en);
 	}
-}
-
-uint32_t SmartDrivers::GetLiveStatus(size_t driver) noexcept
-{
-	return (driver < numTmc51xxDrivers) ? driverStates[driver].ReadLiveStatus() : 0;
 }
 
 uint32_t SmartDrivers::GetAccumulatedStatus(size_t driver, uint32_t bitsToKeep) noexcept
