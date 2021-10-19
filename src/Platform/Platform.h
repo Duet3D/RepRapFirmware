@@ -31,6 +31,7 @@ Licence: GPL
 #include <Heating/TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
+#include "Event.h"
 #include <Storage/FileStore.h>
 #include <Storage/FileData.h>
 #include <Storage/MassStorage.h>	// must be after Pins.h because it needs NumSdCards defined
@@ -859,6 +860,8 @@ private:
 	uint32_t numV12UnderVoltageEvents, previousV12UnderVoltageEvents;
 #endif
 
+	// Event handling
+	Event *eventsPending;								// linked list of unhandled events
 	uint32_t lastWarningMillis;							// When we last sent a warning message
 
 #ifdef DUET3MINI

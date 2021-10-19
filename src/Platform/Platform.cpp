@@ -417,7 +417,7 @@ Platform::Platform() noexcept :
 	sysDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
-	lastWarningMillis(0),
+	eventsPending(nullptr), lastWarningMillis(0),
 #ifdef DUET3MINI
 	whenLastCanMessageProcessed(0),
 #endif
@@ -446,10 +446,6 @@ void Platform::Init() noexcept
 
 	// Sort out which board we are running on (some firmware builds support more than one board variant)
 	SetBoardType(BoardType::Auto);
-
-#if SAME70
-	DmacManager::Init();
-#endif
 
 #if MCU_HAS_UNIQUE_ID
 	uniqueId.SetFromCurrentBoard();
