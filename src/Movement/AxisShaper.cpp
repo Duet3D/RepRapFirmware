@@ -21,17 +21,35 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(AxisShaper, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(AxisShaper, __VA_ARGS__)
 
+constexpr ObjectModelArrayDescriptor AxisShaper::amplitudesArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
+										-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetIndex(0)], 3); }
+};
+
+constexpr ObjectModelArrayDescriptor AxisShaper::durationsArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
+										-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->durations[context.GetIndex(0)] * (1.0/StepClockRate), 5); }
+};
+
 constexpr ObjectModelTableEntry AxisShaper::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. InputShaper members
+	{ "amplitudes",				OBJECT_MODEL_FUNC_NOSELF(&amplitudesArrayDescriptor), 		ObjectModelEntryFlags::none },
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
+	{ "durations",				OBJECT_MODEL_FUNC_NOSELF(&durationsArrayDescriptor), 		ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
 	{ "minAcceleration",		OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t AxisShaper::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t AxisShaper::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(AxisShaper)
 
