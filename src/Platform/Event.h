@@ -26,6 +26,9 @@ public:
 	// Append a description of the event to a string
 	void AppendText(const StringRef& str) const noexcept;
 
+	// Get the name of the macro that we run when this event occurs
+	void GetMacroFileName(const StringRef& fname) const noexcept;
+
 private:
 	Event *next;						// next event in a linked list
 	EventParameter param;				// details about the event

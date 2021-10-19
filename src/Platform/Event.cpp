@@ -8,14 +8,22 @@
 #include <Platform/Event.h>
 #include <RepRapFirmware.h>
 
-Event::Event(Event *p_next, EventType et, EventParameter p_param, CanAddress p_ba, uint8_t devNum) noexcept : next(p_next), param(p_param), type(et), boardAddress(p_ba), deviceNumber(devNum)
+Event::Event(Event *p_next, EventType et, EventParameter p_param, CanAddress p_ba, uint8_t devNum) noexcept
+	: next(p_next), param(p_param), type(et), boardAddress(p_ba), deviceNumber(devNum)
 {
-	//TODO fill in other fields
 }
 
 void Event::AppendText(const StringRef &str) const noexcept
 {
-	str.cat(type.ToString());
+	// First append the event type with underscores changed to spaces
+	const char *p = type.ToString();
+	while (*p != 0)
+	{
+		str.cat((*p == '_') ? ' ' : *p);
+		++p;
+	}
+
+	// Now append further details of the event
 	switch (type.ToBaseType())
 	{
 	case EventType::Heater_fault:
@@ -39,6 +47,10 @@ void Event::AppendText(const StringRef &str) const noexcept
 	case EventType::Main_board_power_failure:
 		break;
 
+	case EventType::Trigger:
+		str.catf(" %u", deviceNumber);
+		break;
+
 	case EventType::Mcu_temperature_warning:
 #if SUPPORT_CAN_EXPANSION
 		str.catf("on board %u: temperature %.1fC", boardAddress, (double)param.fVal);
@@ -47,6 +59,26 @@ void Event::AppendText(const StringRef &str) const noexcept
 #endif
 		break;
 	}
+}
+
+// Append the name of the macro that we run when this event occurs
+void Event::GetMacroFileName(const StringRef& fname) const noexcept
+{
+	const char *p = type.ToString();
+	fname.cat((char)tolower(*p++));
+	while (*p != 0)
+	{
+		if (*p == '_' && p[1] != 0)
+		{
+			fname.cat(toupper(p[1]));
+			p += 2;
+		}
+		else
+		{
+			fname.cat(*p++);
+		}
+	}
+	fname.cat(".g");
 }
 
 // End
