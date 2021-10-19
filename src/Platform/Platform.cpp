@@ -760,16 +760,6 @@ void Platform::Init() noexcept
 
 	extrusionAncilliaryPwmValue = 0.0;
 
-	// Initialise the configured heaters to just the default bed heater (there are no default chamber heaters)
-	configuredHeaters.Clear();
-
-#if !defined(DUET3) && !defined(DUET3MINI)
-	if (DefaultBedHeater >= 0)
-	{
-		configuredHeaters.SetBit(DefaultBedHeater);
-	}
-#endif
-
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
 	for (Pin p : SpiTempSensorCsPins)
@@ -2455,40 +2445,6 @@ int Platform::GetAveragingFilterIndex(const IoPort& port) const noexcept
 		}
 	}
 	return -1;
-}
-
-void Platform::UpdateConfiguredHeaters() noexcept
-{
-	configuredHeaters.Clear();
-
-	// Check bed heaters
-	for (size_t i = 0; i < MaxBedHeaters; i++)
-	{
-		const int8_t bedHeater = reprap.GetHeat().GetBedHeater(i);
-		if (bedHeater >= 0)
-		{
-			configuredHeaters.SetBit(bedHeater);
-		}
-	}
-
-	// Check chamber heaters
-	for (size_t i = 0; i < MaxChamberHeaters; i++)
-	{
-		const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater(i);
-		if (chamberHeater >= 0)
-		{
-			configuredHeaters.SetBit(chamberHeater);
-		}
-	}
-
-	// Check tool heaters
-	for (size_t heater = 0; heater < MaxHeaters; heater++)
-	{
-		if (reprap.IsHeaterAssignedToTool(heater))
-		{
-			configuredHeaters.SetBit(heater);
-		}
-	}
 }
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE

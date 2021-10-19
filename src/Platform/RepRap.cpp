@@ -1045,7 +1045,6 @@ void RepRap::AddTool(Tool* tool) noexcept
 	tool->next = *t;
 	*t = tool;
 	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
-	platform->UpdateConfiguredHeaters();
 	ToolsUpdated();
 }
 
@@ -1087,7 +1086,6 @@ void RepRap::DeleteTool(int toolNumber) noexcept
 	{
 		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
 	}
-	platform->UpdateConfiguredHeaters();
 	ToolsUpdated();
 }
 

@@ -534,8 +534,6 @@ public:
 
 	int GetAveragingFilterIndex(const IoPort&) const noexcept;
 
-	void UpdateConfiguredHeaters() noexcept;
-
 	// AUX device
 	void PanelDueBeep(int freq, int ms) noexcept;
 	void SendPanelDueMessage(size_t auxNumber, const char* msg) noexcept;
@@ -803,9 +801,6 @@ private:
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept;
 #endif
-
-	// Heaters
-	HeatersBitmap configuredHeaters;								// bitmap of all real heaters in use
 
 	// Fans
 	uint32_t lastFanCheckTime;

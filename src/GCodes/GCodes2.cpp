@@ -1956,7 +1956,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							heat.SetBedHeater(index, heater);
 						}
-						platform.UpdateConfiguredHeaters();
 					}
 
 					const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
