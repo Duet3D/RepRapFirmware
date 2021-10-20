@@ -241,8 +241,19 @@ constexpr uint32_t COOLCONF_SGT_MASK = 127 << COOLCONF_SGT_SHIFT;	// stallguard 
 
 constexpr uint32_t DefaultCoolConfReg = 0;
 
-// DRV_STATUS register. See the .h file for the bit definitions.
+// DRV_STATUS register
 constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
+constexpr uint32_t TMC_RR_SG = 1 << 24;					// stall detected
+constexpr uint32_t TMC_RR_OT = 1 << 25;					// over temperature shutdown
+constexpr uint32_t TMC_RR_OTPW = 1 << 26;				// over temperature warning
+constexpr uint32_t TMC_RR_S2G = (3 << 27) | (3 << 12);	// short to ground indicator (1 bit for each phase) + short to VS indicator
+constexpr uint32_t TMC_RR_OLA = 1 << 29;				// open load A
+constexpr uint32_t TMC_RR_OLB = 1 << 30;				// open load B
+constexpr uint32_t TMC_RR_STST = 1 << 31;				// standstill detected
+constexpr uint32_t TMC_RR_SGRESULT = 0x3FF;				// 10-bit stallGuard2 result
+
+constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
+constexpr unsigned int TMC_RR_SG_BIT_POS = 24;
 
 // PWMCONF register
 constexpr uint8_t REGNUM_PWMCONF = 0x70;
@@ -282,13 +293,13 @@ public:
 	DriverMode GetDriverMode() const noexcept;
 	void SetCurrent(float current) noexcept;
 	void Enable(bool en) noexcept;
-	void AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept;
 	bool UpdatePending() const noexcept { return (registersToUpdate | newRegistersToUpdate) != 0; }
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallDetectFilter(bool sgFilter) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
+	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
-	StandardDriverStatus GetStandardDriverStatus() const noexcept;
+	void AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept;
 
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
@@ -299,9 +310,6 @@ public:
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
 	static void TransferTimedOut() noexcept { ++numTimeouts; }
-
-	uint32_t ReadLiveStatus() const noexcept;
-	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
 
 	void GetSpiCommand(uint8_t *sendDataBlock) noexcept;
 	void TransferSucceeded(const uint8_t *rcvDataBlock) noexcept;
@@ -746,18 +754,33 @@ void TmcDriverState::Enable(bool en) noexcept
 }
 
 // Read the status
-uint32_t TmcDriverState::ReadLiveStatus() const noexcept
+StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccumulated) noexcept
 {
-	return readRegisters[ReadDrvStat] & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
-}
+	uint32_t status;
+	if (accumulated)
+	{
+		AtomicCriticalSectionLocker lock;
 
-// Read the status
-uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
-{
-	TaskCriticalSectionLocker lock;
-	const uint32_t status = accumulatedDriveStatus;
-	accumulatedDriveStatus = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
-	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+		status = accumulatedDriveStatus;
+		if (clearAccumulated)
+		{
+			accumulatedDriveStatus = readRegisters[ReadDrvStat];
+		}
+	}
+	else
+	{
+		status = readRegisters[ReadDrvStat];
+	}
+
+	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC51xx uses different bit assignments
+	StandardDriverStatus rslt;
+	rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the ot, otpw, s2ga and s2gb bits in the right place
+	rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
+	rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+	rslt.sgresultMin = minSgLoadRegister;
+	return rslt;
 }
 
 // Append any additional driver status to a string, and reset the min/max load values
@@ -778,20 +801,6 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	{
 		numTimeouts = 0;
 	}
-}
-
-StandardDriverStatus TmcDriverState::GetStandardDriverStatus() const noexcept
-{
-	StandardDriverStatus rslt;
-	const uint32_t status = ReadLiveStatus();
-	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC51xx uses different bit assignments
-	rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the ot, otpw, s2ga and s2gb bits in the right place
-	rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
-	rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
-	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
-	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
-	rslt.sgresultMin = minSgLoadRegister;
-	return rslt;
 }
 
 void TmcDriverState::SetStallDetectFilter(bool sgFilter) noexcept
@@ -1411,11 +1420,6 @@ void SmartDrivers::EnableDrive(size_t driver, bool en) noexcept
 	}
 }
 
-uint32_t SmartDrivers::GetAccumulatedStatus(size_t driver, uint32_t bitsToKeep) noexcept
-{
-	return (driver < numTmc51xxDrivers) ? driverStates[driver].ReadAccumulatedStatus(bitsToKeep) : 0;
-}
-
 // Set microstepping and microstep interpolation
 bool SmartDrivers::SetMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept
 {
@@ -1572,11 +1576,11 @@ GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, 
 	return GCodeResult::error;
 }
 
-StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
+StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept
 {
 	if (driver < numTmc51xxDrivers)
 	{
-		return driverStates[driver].GetStandardDriverStatus();
+		return driverStates[driver].GetStatus(accumulated, clearAccumulated);
 	}
 	StandardDriverStatus rslt;
 	rslt.all = 0;

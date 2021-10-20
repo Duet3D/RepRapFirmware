@@ -15,19 +15,6 @@
 #include <GCodes/GCodeResult.h>
 #include "DriverMode.h"
 
-// TMC51xx DRV_STATUS register bit assignments
-constexpr uint32_t TMC_RR_SG = 1 << 24;					// stall detected
-constexpr uint32_t TMC_RR_OT = 1 << 25;					// over temperature shutdown
-constexpr uint32_t TMC_RR_OTPW = 1 << 26;				// over temperature warning
-constexpr uint32_t TMC_RR_S2G = (3 << 27) | (3 << 12);	// short to ground indicator (1 bit for each phase) + short to VS indicator
-constexpr uint32_t TMC_RR_OLA = 1 << 29;				// open load A
-constexpr uint32_t TMC_RR_OLB = 1 << 30;				// open load B
-constexpr uint32_t TMC_RR_STST = 1 << 31;				// standstill detected
-constexpr uint32_t TMC_RR_SGRESULT = 0x3FF;				// 10-bit stallGuard2 result
-
-constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
-constexpr unsigned int TMC_RR_SG_BIT_POS = 24;
-
 namespace SmartDrivers
 {
 	void Init() noexcept;
@@ -39,7 +26,6 @@ namespace SmartDrivers
 	uint32_t GetAxisNumber(size_t drive) noexcept;
 	void SetCurrent(size_t driver, float current) noexcept;
 	void EnableDrive(size_t driver, bool en) noexcept;
-	uint32_t GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep) noexcept;
 	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolation) noexcept;
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept;
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
@@ -55,7 +41,7 @@ namespace SmartDrivers
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
-	StandardDriverStatus GetStandardDriverStatus(size_t driver) noexcept;
+	StandardDriverStatus GetStatus(size_t driver, bool accumulated = false, bool clearAccumulated = false) noexcept;
 };
 
 #endif

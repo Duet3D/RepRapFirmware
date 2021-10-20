@@ -417,7 +417,7 @@ Platform::Platform() noexcept :
 	sysDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
-	eventsPending(nullptr), lastWarningMillis(0),
+	lastDriverPollMillis(0),
 #ifdef DUET3MINI
 	whenLastCanMessageProcessed(0),
 #endif
@@ -1058,7 +1058,7 @@ void Platform::Spin() noexcept
 	}
 
 	// Check whether the TMC drivers need to be initialised.
-	// The tick ISR also looks for over-voltage events, but it just disables the driver without changing driversPowerd or numVinOverVoltageEvents
+	// The tick ISR also looks for over-voltage events, but it just disables the drivers without changing driversPowered or numVinOverVoltageEvents
 	if (driversPowered)
 	{
 #if HAS_VOLTAGE_MONITOR
@@ -1094,19 +1094,19 @@ void Platform::Spin() noexcept
 		{
 #if HAS_SMART_DRIVERS
 			// Check one TMC2660 or TMC2224 for temperature warning or temperature shutdown
-			if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
+			if (enableValues[nextDriveToPoll] >= 0)					// don't poll driver if it is flagged "no poll"
 			{
-				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(nextDriveToPoll, 0);
+				const StandardDriverStatus stat = SmartDrivers::GetStatus(nextDriveToPoll, true, true);
 				const DriversBitmap mask = DriversBitmap::MakeFromBits(nextDriveToPoll);
-				if (stat & TMC_RR_OT)
+				if (stat.ot)
 				{
 					temperatureShutdownDrivers |= mask;
 				}
-				else if (stat & TMC_RR_OTPW)
+				else if (stat.otpw)
 				{
 					temperatureWarningDrivers |= mask;
 				}
-				if (stat & TMC_RR_S2G)
+				if (stat.s2ga || stat.s2gb || stat.s2vsa || stat.s2vsb)
 				{
 					shortToGroundDrivers |= mask;
 				}
@@ -1117,7 +1117,7 @@ void Platform::Spin() noexcept
 
 				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
 				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
-				if ((stat & TMC_RR_OLA) != 0)
+				if (stat.ola)
 				{
 					if (!openLoadATimer.IsRunning())
 					{
@@ -1136,7 +1136,7 @@ void Platform::Spin() noexcept
 					}
 				}
 
-				if ((stat & TMC_RR_OLB) != 0)
+				if (stat.olb)
 				{
 					if (!openLoadBTimer.IsRunning())
 					{
@@ -1156,7 +1156,7 @@ void Platform::Spin() noexcept
 				}
 
 # if HAS_STALL_DETECT
-				if ((stat & TMC_RR_SG) != 0)
+				if (stat.stall)
 				{
 					if (stalledDrivers.Disjoint(mask))
 					{
@@ -1268,7 +1268,7 @@ void Platform::Spin() noexcept
 		}
 
 		// Check whether it is time to report any faults (do this after checking fans in case driver cooling fans are turned on)
-		if (now - lastWarningMillis > MinimumWarningInterval)
+		if (now - lastDriverPollMillis > MinimumWarningInterval)
 		{
 			bool reported = false;
 #if HAS_SMART_DRIVERS
@@ -1374,7 +1374,7 @@ void Platform::Spin() noexcept
 #endif
 			if (reported)
 			{
-				lastWarningMillis = now;
+				lastDriverPollMillis = now;
 			}
 		}
 	}
@@ -1420,7 +1420,7 @@ void Platform::Spin() noexcept
 #endif
 
 #if HAS_MASS_STORAGE
-	// Flush the log file it it is time. This may take some time, so do it last.
+	// Flush the log file if it is time. This may take some time, so do it last.
 	if (logger != nullptr)
 	{
 		logger->Flush(false);
@@ -1801,7 +1801,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		if (drive < numSmartDrivers)
 		{
 			driverStatus.cat(", ");
-			const StandardDriverStatus status = SmartDrivers::GetStandardDriverStatus(drive);
+			const StandardDriverStatus status = SmartDrivers::GetStatus(drive);
 			status.AppendText(driverStatus.GetRef(), 0);
 			if (!status.notPresent)
 			{
@@ -1982,13 +1982,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			bool driversOK = true;
 			for (size_t driver = 0; driver < numSmartDrivers; ++driver)
 			{
-				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(driver, 0xFFFFFFFF);
-				if ((stat & (TMC_RR_OT || TMC_RR_OTPW)) != 0)
+				const StandardDriverStatus stat = SmartDrivers::GetStatus(driver, true, false);
+				if (stat.ot || stat.otpw)
 				{
 					buf->lcatf("Driver %u reports over temperature", driver);
 					driversOK = false;
 				}
-				if ((stat & TMC_RR_S2G) != 0)
+				if (stat.s2ga || stat.s2gb || stat.s2vsa || stat.s2vsb)
 				{
 					buf->lcatf("Driver %u reports short-to-ground", driver);
 					driversOK = false;
@@ -5086,7 +5086,7 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 	msg->SetStandardFields(MaxSmartDrivers);
 	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
 	{
-		msg->data[driver] = SmartDrivers::GetStandardDriverStatus(driver);
+		msg->data[driver] = SmartDrivers::GetStatus(driver);
 	}
 # else
 	msg->SetStandardFields(NumDrivers);

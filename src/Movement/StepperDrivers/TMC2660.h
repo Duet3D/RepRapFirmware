@@ -14,20 +14,6 @@
 #include "DriverMode.h"
 #include <Pins.h>
 
-// TMC2660 read response bits that are returned by the status calls
-constexpr uint32_t TMC_RR_SG = 1 << 0;			// stall detected
-constexpr uint32_t TMC_RR_OT = 1 << 1;			// over temperature shutdown
-constexpr uint32_t TMC_RR_OTPW = 1 << 2;		// over temperature warning
-constexpr uint32_t TMC_RR_S2G = 3 << 3;			// short to ground counter (2 bits)
-constexpr uint32_t TMC_RR_OLA = 1 << 5;			// open load A
-constexpr uint32_t TMC_RR_OLB = 1 << 6;			// open load B
-constexpr uint32_t TMC_RR_STST = 1 << 7;		// standstill detected
-
-constexpr unsigned int TMC_RR_OT_BIT_POS = 1;
-constexpr unsigned int TMC_RR_OTPW_BIT_POS = 2;
-constexpr unsigned int TMC_RR_STST_BIT_POS = 7;
-constexpr unsigned int TMC_RR_SG_BIT_POS = 0;
-
 namespace SmartDrivers
 {
 	void Init(const Pin[NumDirectDrivers], size_t numTmcDrivers) noexcept
@@ -39,7 +25,6 @@ namespace SmartDrivers
 	void SetAxisNumber(size_t driver, uint32_t axisNumber) noexcept;
 	void SetCurrent(size_t driver, float current) noexcept;
 	void EnableDrive(size_t driver, bool en) noexcept;
-	uint32_t GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep) noexcept;
 	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolation) noexcept;
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept;
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
@@ -53,7 +38,7 @@ namespace SmartDrivers
 	void SetStandstillCurrentPercent(size_t driver, float percent) noexcept;
 	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
-	StandardDriverStatus GetStandardDriverStatus(size_t driver) noexcept;
+	StandardDriverStatus GetStatus(size_t driver, bool accumulated = false, bool clearAccumulated = false) noexcept;
 };
 
 #endif

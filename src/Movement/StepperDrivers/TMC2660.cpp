@@ -155,8 +155,22 @@ const uint32_t TMC_SMARTEN_SEIMIN_QTR = 1 << 15;
 
 const unsigned int NumWriteRegisters = 5;
 
-const uint32_t TMC_RR_SG_LOAD_SHIFT = 10;	// shift to get the stallguard load register
-const uint32_t TMC_RR_MSTEP_SHIFT = 10;		// shift to get the microestep position register
+// TMC2660 read response bits that are returned by the status calls
+constexpr uint32_t TMC_RR_SG = 1 << 0;			// stall detected
+constexpr uint32_t TMC_RR_OT = 1 << 1;			// over temperature shutdown
+constexpr uint32_t TMC_RR_OTPW = 1 << 2;		// over temperature warning
+constexpr uint32_t TMC_RR_S2G = 3 << 3;			// short to ground counter (2 bits)
+constexpr uint32_t TMC_RR_OLA = 1 << 5;			// open load A
+constexpr uint32_t TMC_RR_OLB = 1 << 6;			// open load B
+constexpr uint32_t TMC_RR_STST = 1 << 7;		// standstill detected
+
+constexpr unsigned int TMC_RR_SG_BIT_POS = 0;
+constexpr unsigned int TMC_RR_OT_BIT_POS = 1;
+constexpr unsigned int TMC_RR_OTPW_BIT_POS = 2;
+constexpr unsigned int TMC_RR_STST_BIT_POS = 7;
+
+constexpr unsigned int TMC_RR_SG_LOAD_SHIFT = 10;	// shift to get the stallguard load register
+constexpr unsigned int TMC_RR_MSTEP_SHIFT = 10;		// shift to get the microstep position register
 
 // Chopper control register defaults
 // 0x901B4 as per datasheet example
@@ -227,16 +241,13 @@ public:
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 	void AppendDriverStatus(const StringRef& reply) noexcept;
-	StandardDriverStatus GetStandardDriverStatus() const noexcept;
+	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
 
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
 
 	void TransferDone() noexcept SPEED_CRITICAL;		// called by the ISR when the SPI transfer has completed
 	void StartTransfer() noexcept SPEED_CRITICAL;		// called to start a transfer
-
-	uint32_t ReadLiveStatus() const noexcept;
-	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
 
 	uint32_t ReadMicrostepPosition() const noexcept { return mstepPosition; }
 	void ClearMicrostepPosition() noexcept { mstepPosition = 0xFFFFFFFF; }
@@ -628,23 +639,35 @@ void TmcDriverState::UpdateChopConfRegister() noexcept
 	registersToUpdate |= (1u << ChopperControl);
 }
 
-// Read the status
-inline uint32_t TmcDriverState::ReadLiveStatus() const noexcept
+// Get the status of the driver
+StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccumulated) noexcept
 {
-	const uint32_t ret = lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
-	return (enabled) ? ret : ret & ~(TMC_RR_SG | TMC_RR_OLA | TMC_RR_OLB);
-}
+	uint32_t status;
+	if (accumulated)
+	{
+		AtomicCriticalSectionLocker lock;
 
-// Read the status
-uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
-{
-	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~(TMC_RR_SG | TMC_RR_OLA | TMC_RR_OLB);
-	bitsToKeep &= mask;
-	const irqflags_t flags = IrqSave();
-	const uint32_t status = accumulatedStatus;
-	accumulatedStatus = (status & bitsToKeep) | lastReadStatus;		// so that the next call to ReadAccumulatedStatus isn't missing some bits
-	IrqRestore(flags);
-	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST) & mask;
+		status = accumulatedStatus;
+		if (clearAccumulated)
+		{
+			accumulatedStatus = lastReadStatus;
+		}
+	}
+	else
+	{
+		status = (enabled) ? lastReadStatus : lastReadStatus & ~(TMC_RR_SG | TMC_RR_OLA | TMC_RR_OLB);
+	}
+
+	StandardDriverStatus rslt;
+	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC2660 uses different bit assignments
+	rslt.all = ExtractBit(status, TMC_RR_OT_BIT_POS, StandardDriverStatus::OtBitPos);
+	rslt.all |= ExtractBit(status, TMC_RR_OTPW_BIT_POS, StandardDriverStatus::OtpwBitPos);
+	rslt.all |= (status & TMC_RR_S2G) >> 1;															// put the S2G bits in the right place
+	rslt.all |= (status & (TMC_RR_OLA | TMC_RR_OLB)) << 1;											// put the open load bits in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+	rslt.sgresultMin = minSgLoadRegister;
+	return rslt;
 }
 
 void TmcDriverState::SetStallDetectThreshold(int sgThreshold) noexcept
@@ -706,23 +729,6 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 	interpolation = (registers[DriveControl] & TMC_DRVCTRL_INTPOL) != 0;
 	return 1u << microstepShiftFactor;
 }
-
-// Get the status of the driver
-StandardDriverStatus TmcDriverState::GetStandardDriverStatus() const noexcept
-{
-	const uint32_t status = ReadLiveStatus();
-	StandardDriverStatus rslt;
-	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC2660 uses different bit assignments
-	rslt.all = ExtractBit(status, TMC_RR_OT_BIT_POS, StandardDriverStatus::OtBitPos);
-	rslt.all |= ExtractBit(status, TMC_RR_OTPW_BIT_POS, StandardDriverStatus::OtpwBitPos);
-	rslt.all |= (status & TMC_RR_S2G) >> 1;															// put the S2G bits in the right place
-	rslt.all |= (status & (TMC_RR_OLA | TMC_RR_OLB)) << 1;											// put the open load bits in the right place
-	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
-	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
-	rslt.sgresultMin = minSgLoadRegister;
-	return rslt;
-}
-
 
 // This is called by the ISR when the SPI transfer has completed
 inline void TmcDriverState::TransferDone() noexcept
@@ -980,11 +986,6 @@ void SmartDrivers::EnableDrive(size_t driver, bool en) noexcept
 	}
 }
 
-uint32_t SmartDrivers::GetAccumulatedStatus(size_t driver, uint32_t bitsToKeep) noexcept
-{
-	return (driver < numTmc2660Drivers) ? driverStates[driver].ReadAccumulatedStatus(bitsToKeep) : 0;
-}
-
 // Set microstepping and microstep interpolation
 bool SmartDrivers::SetMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept
 {
@@ -1220,11 +1221,11 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 	return (driver < numTmc2660Drivers) ? driverStates[driver].GetRegister(reg) : 0;
 }
 
-StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
+StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept
 {
 	if (driver < numTmc2660Drivers)
 	{
-		return driverStates[driver].GetStandardDriverStatus();
+		return driverStates[driver].GetStatus(accumulated, clearAccumulated);
 	}
 	StandardDriverStatus rslt;
 	rslt.all = 0;

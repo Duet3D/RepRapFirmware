@@ -48,7 +48,7 @@ void Event::AppendText(const StringRef &str) const noexcept
 		break;
 
 	case EventType::Trigger:
-		str.catf(" %u", deviceNumber);
+		str.catf(" %u activated", deviceNumber);
 		break;
 
 	case EventType::Mcu_temperature_warning:
