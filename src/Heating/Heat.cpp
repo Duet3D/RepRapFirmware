@@ -1320,7 +1320,127 @@ void Heat::ProcessRemoteHeaterTuningReport(CanAddress src, const CanMessageHeate
 
 #if SUPPORT_REMOTE_COMMANDS
 
-GCodeResult Heat::EutProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+static GCodeResult UnknownHeater(unsigned int heater, const StringRef& reply) noexcept
+{
+	reply.printf("Board %u does not have heater %u", CanInterface::GetCanAddress(), heater);
+	return GCodeResult::error;
+}
+
+GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M950HeaterParams);
+	uint16_t heater;
+	if (!parser.GetUintParam('H', heater))
+	{
+		return GCodeResult::remoteInternalError;
+	}
+
+	if (heater >= MaxHeaters)
+	{
+		reply.copy("Heater number out of range");
+		return GCodeResult::error;
+	}
+
+	PwmFrequency freq = DefaultFanPwmFreq;
+	const bool seenFreq = parser.GetUintParam('Q', freq);
+
+	String<StringLength50> pinName;
+	if (parser.GetStringParam('C', pinName.GetRef()))
+	{
+		uint16_t sensorNumber;
+		if (!parser.GetUintParam('T', sensorNumber))
+		{
+			reply.copy("Missing sensor number");
+			return GCodeResult::error;
+		}
+
+		WriteLocker lock(heatersLock);
+
+		Heater *oldHeater = nullptr;
+		std::swap(oldHeater, heaters[heater]);
+		delete oldHeater;
+
+		Heater *newHeater = new LocalHeater(heater);
+		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
+		if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+		{
+			heaters[heater] = newHeater;
+		}
+		else
+		{
+			delete newHeater;
+		}
+		return rslt;
+	}
+
+	const auto h = FindHeater(heater);
+	if (h.IsNull())
+	{
+		return UnknownHeater(heater, reply);
+	}
+
+	if (seenFreq)
+	{
+		return h->SetPwmFrequency(freq, reply);
+	}
+
+	return h->ReportDetails(reply);
+}
+
+GCodeResult Heat::ProcessM307New(const CanMessageUpdateHeaterModelNew& msg, const StringRef& reply) noexcept
+{
+	const auto h = FindHeater(msg.heater);
+	return (h.IsNotNull()) ? h->SetOrReportModelNew(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
+}
+
+GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept
+{
+	const auto h = FindHeater(msg.heaterNumber);
+	return (h.IsNotNull()) ? h->SetTemperature(msg, reply) : UnknownHeater(msg.heaterNumber, reply);
+}
+
+GCodeResult Heat::SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept
+{
+	const auto h = FindHeater(msg.heater);
+	return (h.IsNotNull())
+			? h->SetFaultDetectionParameters(msg.maxTempExcursion, msg.maxFaultTime, reply)
+				: UnknownHeater(msg.heater, reply);
+}
+
+GCodeResult Heat::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept
+{
+	const auto h = FindHeater(msg.heater);
+	return (h.IsNotNull()) ? h->SetHeaterMonitors(msg, reply) : UnknownHeater(msg.heater, reply);
+}
+
+GCodeResult Heat::TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept
+{
+	if (heaterBeingTuned != -1 && heaterBeingTuned != (int)msg.heaterNumber)
+	{
+		reply.printf("Heater %d is already being tuned", heaterBeingTuned);
+		return GCodeResult::error;
+	}
+	const auto h = FindHeater(msg.heaterNumber);
+	if (h.IsNull())
+	{
+		return UnknownHeater(msg.heaterNumber, reply);
+	}
+	heaterBeingTuned = (int)msg.heaterNumber;			// setting this is OK even if we are stopping or fail to start tuning, because we check it in the heater task loop
+	return h->TuningCommand(msg, reply);
+}
+
+GCodeResult Heat::FeedForward(const CanMessageHeaterFeedForward& msg, const StringRef& reply) noexcept
+{
+	const auto h = FindHeater(msg.heaterNumber);
+	if (h.IsNull())
+	{
+		return UnknownHeater(msg.heaterNumber, reply);
+	}
+	h->FeedForwardAdjustment(msg.fanPwmAdjustment, msg.extrusionAdjustment);
+	return GCodeResult::ok;
+}
+
+GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept
 {
 	CanMessageGenericParser parser(msg, M308NewParams);
 	uint16_t sensorNum;

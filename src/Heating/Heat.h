@@ -141,7 +141,14 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-	GCodeResult EutProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM307New(const CanMessageUpdateHeaterModelNew& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
+	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
+	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
+	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept;
+	GCodeResult FeedForward(const CanMessageHeaterFeedForward& msg, const StringRef& reply) noexcept;
 #endif
 
 	static ReadWriteLock sensorsLock;							// needs to be public so that the OMT in EndstopsManager can lock it

@@ -40,11 +40,16 @@ public:
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
 	void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept override;
 	void SetExtrusionFeedForward(float pwm) noexcept override;				// Set extrusion feedforward
-
 #if SUPPORT_CAN_EXPANSION
 	bool IsLocal() const noexcept override { return true; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override { }
 	void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept override { }
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept override;
+
+	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg) noexcept;	// get a heater tuning cycle report, if we have one
 #endif
 
 protected:

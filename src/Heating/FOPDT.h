@@ -66,6 +66,7 @@ public:
 	bool ArePidParametersOverridden() const noexcept { return pidParametersOverridden; }
 	M301PidParameters GetM301PidParameters(bool forLoadChange) const noexcept;
 	void SetM301PidParameters(const M301PidParameters& params) noexcept;
+	void SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept;
 
 	const PidParameters& GetPidParameters(bool forLoadChange) const noexcept
 	{

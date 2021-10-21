@@ -20,11 +20,19 @@
 # include "CanId.h"
 #endif
 
+
 #define TUNE_WITH_HALF_FAN	0
 
 class HeaterMonitor;
 struct CanMessageHeaterTuningReport;
 struct CanHeaterReport;
+
+#if SUPPORT_REMOTE_COMMANDS
+struct CanMessageUpdateHeaterModelNew;
+struct CanMessageSetHeaterTemperature;
+struct CanMessageSetHeaterMonitors;
+struct CanMessageHeaterTuningCommand;
+#endif
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
 NamedEnum(HeaterStatus, uint8_t, off, standby, active, fault, tuning, offline);
@@ -81,6 +89,13 @@ public:
 	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
 	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
+#if SUPPORT_REMOTE_COMMANDS
+	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
+	GCodeResult SetOrReportModelNew(unsigned int heater, const CanMessageUpdateHeaterModelNew& msg, const StringRef& reply) noexcept;
+	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
+	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
+#endif
+
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
 		{ return model.IsEnabled(); }
 
@@ -125,6 +140,10 @@ protected:
 	void ReportTuningUpdate() noexcept;						// tell the user what's happening
 	void CalculateModel(HeaterParameters& params) noexcept;	// calculate G, td and tc from the accumulated readings
 	void SetAndReportModel(bool usingFans) noexcept;
+
+#if SUPPORT_REMOTE_COMMANDS
+	void SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept { model.SetRawPidParameters(p_kP, p_recipTi, p_tD); }
+#endif
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];			// embedding them in the Heater uses less memory than dynamic allocation
 	bool tuned;												// true if tuning was successful

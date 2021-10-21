@@ -140,9 +140,14 @@ M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const noexcept
 // Override the PID parameters. We set both sets to the same parameters.
 void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
 {
-	loadChangeParams.kP = setpointChangeParams.kP = pp.kP * (1.0/255.0);
-	loadChangeParams.recipTi = setpointChangeParams.recipTi = pp.kI/pp.kP;
-	loadChangeParams.tD = setpointChangeParams.tD = pp.kD/pp.kP;
+	SetRawPidParameters(pp.kP * (1.0/255.0), pp.kI/pp.kP, pp.kD/pp.kP);
+}
+
+void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept
+{
+	loadChangeParams.kP = setpointChangeParams.kP = p_kP;
+	loadChangeParams.recipTi = setpointChangeParams.recipTi = p_recipTi;
+	loadChangeParams.tD = setpointChangeParams.tD = p_tD;
 	pidParametersOverridden = true;
 }
 

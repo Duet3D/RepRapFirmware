@@ -513,6 +513,17 @@ void RemoteHeater::StopTuning() noexcept
 	}
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// This should never be called
+GCodeResult RemoteHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept
+{
+	reply.copy("not supported on remote heaters");
+	return GCodeResult::error;
+}
+
+#endif
+
 #endif
 
 // End

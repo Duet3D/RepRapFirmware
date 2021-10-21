@@ -424,45 +424,45 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = EutGetInfo(buf->msg.getInfo, replyRef, extra);
 				break;
 
-#if 0	// heater commands not implemented yet
 			// Heater commands
 			case CanMessageType::m950Heater:
 				requestId = buf->msg.generic.requestId;
-				rslt = Heat::ConfigureHeater(buf->msg.generic, replyRef);
+				rslt = reprap.GetHeat().ConfigureHeater(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::heaterFeedForward:
 				requestId = buf->msg.heaterFeedForward.requestId;
-				rslt = Heat::FeedForward(buf->msg.heaterFeedForward, replyRef);
+				rslt = reprap.GetHeat().FeedForward(buf->msg.heaterFeedForward, replyRef);
 				break;
+
 			case CanMessageType::updateHeaterModelNew:
 				requestId = buf->msg.heaterModelNew.requestId;
-				rslt = Heat::ProcessM307New(buf->msg.heaterModelNew, replyRef);
+				rslt = reprap.GetHeat().ProcessM307New(buf->msg.heaterModelNew, replyRef);
 				break;
 
 			case CanMessageType::setHeaterTemperature:
 				requestId = buf->msg.setTemp.requestId;
-				rslt = Heat::SetTemperature(buf->msg.setTemp, replyRef);
+				rslt = reprap.GetHeat().SetTemperature(buf->msg.setTemp, replyRef);
 				break;
 
 			case CanMessageType::heaterTuningCommand:
 				requestId = buf->msg.heaterTuningCommand.requestId;
-				rslt = Heat::TuningCommand(buf->msg.heaterTuningCommand, replyRef);
+				rslt = reprap.GetHeat().TuningCommand(buf->msg.heaterTuningCommand, replyRef);
 				break;
 
 			case CanMessageType::setHeaterFaultDetection:
 				requestId = buf->msg.setHeaterFaultDetection.requestId;
-				rslt = Heat::SetFaultDetection(buf->msg.setHeaterFaultDetection, replyRef);
+				rslt = reprap.GetHeat().SetFaultDetection(buf->msg.setHeaterFaultDetection, replyRef);
 				break;
 
 			case CanMessageType::setHeaterMonitors:
 				requestId = buf->msg.setHeaterMonitors.requestId;
-				rslt = Heat::SetHeaterMonitors(buf->msg.setHeaterMonitors, replyRef);
+				rslt = reprap.GetHeat().SetHeaterMonitors(buf->msg.setHeaterMonitors, replyRef);
 				break;
-#endif
+
 			case CanMessageType::m308New:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetHeat().EutProcessM308(buf->msg.generic, replyRef);
+				rslt = reprap.GetHeat().ProcessM308(buf->msg.generic, replyRef);
 				break;
 
 			// Fan commands

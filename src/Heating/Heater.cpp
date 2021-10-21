@@ -636,4 +636,69 @@ void Heater::SetAsBedOrChamberHeater() noexcept
 	}
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult Heater::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept
+{
+	for (size_t i = 0; i < min<size_t>(msg.numMonitors, MaxMonitorsPerHeater); ++i)
+	{
+		monitors[i].Set(msg.monitors[i].sensor, msg.monitors[i].limit, (HeaterMonitorAction)msg.monitors[i].action, (HeaterMonitorTrigger)msg.monitors[i].trigger);
+	}
+	return GCodeResult::ok;
+}
+
+GCodeResult Heater::SetOrReportModelNew(unsigned int heater, const CanMessageUpdateHeaterModelNew& msg, const StringRef& reply) noexcept
+{
+	const GCodeResult rslt = SetModel(msg.heatingRate, msg.coolingRate, msg.coolingRateChangeFanOn, msg.deadTime, msg.maxPwm, msg.standardVoltage, msg.usePid, msg.inverted, reply);
+	if (msg.pidParametersOverridden && (rslt == GCodeResult::ok || rslt == GCodeResult::warning))
+	{
+		SetRawPidParameters(msg.kP, msg.recipTi, msg.tD);
+	}
+	return rslt;
+}
+
+GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept
+{
+	switch (msg.command)
+	{
+	case CanMessageSetHeaterTemperature::commandNone:
+		activeTemperature = standbyTemperature = msg.setPoint;
+		return GCodeResult::ok;
+
+	case CanMessageSetHeaterTemperature::commandOff:
+		activeTemperature = standbyTemperature = msg.setPoint;
+		SwitchOff();
+		return GCodeResult::ok;
+
+	case CanMessageSetHeaterTemperature::commandOn:
+		activeTemperature = standbyTemperature = msg.setPoint;
+		return SwitchOn(reply);
+
+	case CanMessageSetHeaterTemperature::commandResetFault:
+		activeTemperature = standbyTemperature = msg.setPoint;
+		return ResetFault(reply);
+
+	case CanMessageSetHeaterTemperature::commandSuspend:
+		Suspend(true);
+		return GCodeResult::ok;
+
+	case CanMessageSetHeaterTemperature::commandUnsuspend:
+		activeTemperature = standbyTemperature = msg.setPoint;
+		Suspend(false);
+		return GCodeResult::ok;
+
+	case CanMessageSetHeaterTemperature::commandReset:
+		ResetHeater();
+		return GCodeResult::ok;
+
+	default:
+		break;
+	}
+
+	reply.printf("Unknown command %u to heater %u", msg.command, heaterNumber);
+	return GCodeResult::ok;
+}
+
+#endif
+
 // End

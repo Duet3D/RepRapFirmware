@@ -14,6 +14,33 @@
 #include <Platform/RepRap.h>
 #include <Tools/Tool.h>
 
+#if SUPPORT_REMOTE_COMMANDS
+
+# include <CAN/CanInterface.h>
+
+namespace ExpansionMode
+{
+
+// Variables used during heater tuning
+static float tuningHighTemp;							// the target upper temperature
+static float tuningLowTemp;								// the target lower temperature
+static float tuningPeakTempDrop;						// must be well below TuningHysteresis
+
+static uint32_t dHigh;
+static uint32_t dLow;
+static uint32_t tOn;
+static uint32_t tOff;
+static float heatingRate;
+static float coolingRate;
+static float tuningVoltage;								// the VIN voltage with the heater on
+
+static uint16_t cyclesDone;
+static bool tuningCycleComplete;
+
+}
+
+#endif
+
 // Member functions and constructors
 
 LocalHeater::LocalHeater(unsigned int heaterNum) noexcept : Heater(heaterNum), mode(HeaterMode::off)
@@ -596,6 +623,25 @@ void LocalHeater::DoTuningStep() noexcept
 		break;
 
 	case HeaterMode::tuning1:		// Heating up
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			if (temperature >= ExpansionMode::tuningHighTemp)							// if reached target
+			{
+				// Move on to next phase
+				lastPwm = 0.0;
+				SetHeater(0.0);
+				peakTemp = afterPeakTemp = temperature;
+				lastOffTime = peakTime = afterPeakTime = now;
+				mode = HeaterMode::tuning2;
+			}
+			else
+			{
+				lastPwm = tuningPwm;
+			}
+			return;
+		}
+#endif
 		tuningPhase = 1;
 		{
 			const bool isBedOrChamberHeater = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
@@ -613,24 +659,55 @@ void LocalHeater::DoTuningStep() noexcept
 				reprap.GetPlatform().Message(GenericMessage, "Auto tune cancelled because target temperature was not reached\n");
 				break;
 			}
+		}
 
-			if (temperature >= tuningTargetTemp)							// if reached target
-			{
-				// Move on to next phase
-				lastPwm = 0.0;
-				SetHeater(0.0);
-				peakTemp = afterPeakTemp = temperature;
-				lastOffTime = peakTime = afterPeakTime = now;
-				tuningVoltage.Clear();
-				idleCyclesDone = 0;
-				mode = HeaterMode::tuning2;
-				tuningPhase = 2;
-				ReportTuningUpdate();
-			}
+		if (temperature >= tuningTargetTemp)							// if reached target
+		{
+			// Move on to next phase
+			lastPwm = 0.0;
+			SetHeater(0.0);
+			peakTemp = afterPeakTemp = temperature;
+			lastOffTime = peakTime = afterPeakTime = now;
+			tuningVoltage.Clear();
+			idleCyclesDone = 0;
+			mode = HeaterMode::tuning2;
+			tuningPhase = 2;
+			ReportTuningUpdate();
 		}
 		return;
 
 	case HeaterMode::tuning2:		// Heater is off, record the peak temperature and time
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			if (temperature >= peakTemp)
+			{
+				peakTemp = afterPeakTemp = temperature;
+				peakTime = afterPeakTime = now;
+			}
+			else if (temperature < ExpansionMode::tuningLowTemp)
+			{
+				// Temperature has dropped below the low limit.
+				// If we have been doing idle cycles, see whether we can switch to collecting data, and turn the heater on.
+				// If we have been collecting data, see if we have enough, and either turn the heater on to start another cycle or finish tuning.
+
+				// Save the data (don't know whether we need it yet)
+				ExpansionMode::dHigh = peakTime - lastOffTime;
+				ExpansionMode::tOff = now - lastOffTime;
+				ExpansionMode::coolingRate = (afterPeakTemp - temperature) * SecondsToMillis/(now - afterPeakTime);
+				lastOnTime = peakTime = afterPeakTime = now;
+				peakTemp = afterPeakTemp = temperature;
+				lastPwm = tuningPwm;						// turn on heater at specified power
+				mode = HeaterMode::tuning3;
+			}
+			else if (afterPeakTime == peakTime && ExpansionMode::tuningHighTemp - temperature >= ExpansionMode::tuningPeakTempDrop)
+			{
+				afterPeakTime = now;
+				afterPeakTemp = temperature;
+			}
+			return;
+		}
+#endif
 		if (temperature >= peakTemp)
 		{
 			peakTemp = afterPeakTemp = temperature;
@@ -729,6 +806,40 @@ void LocalHeater::DoTuningStep() noexcept
 		return;
 
 	case HeaterMode::tuning3:	// Heater is turned on, record the lowest temperature and time
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			if (temperature <= peakTemp)
+			{
+				peakTemp = afterPeakTemp = temperature;
+				peakTime = afterPeakTime = now;
+			}
+			else if (temperature >= ExpansionMode::tuningHighTemp)
+			{
+				// We have reached the target temperature, so record a data point and turn the heater off
+# if HAS_VOLTAGE_MONITOR
+				ExpansionMode::tuningVoltage = reprap.GetPlatform().GetCurrentPowerVoltage();	// save this while the heater is on
+# else
+				tuningVoltage = 0.0;
+# endif
+				ExpansionMode::dLow = peakTime - lastOnTime;
+				ExpansionMode::tOn = now - lastOnTime;
+				ExpansionMode::heatingRate = (temperature - afterPeakTemp) * SecondsToMillis/(now - afterPeakTime);
+				lastOffTime = peakTime = afterPeakTime = now;
+				peakTemp = afterPeakTemp = temperature;
+				lastPwm = 0.0;										// turn heater off
+				mode = HeaterMode::tuning2;
+				++ExpansionMode::cyclesDone;
+				ExpansionMode::tuningCycleComplete = true;
+			}
+			else if (afterPeakTime == peakTime && temperature - ExpansionMode::tuningLowTemp >= ExpansionMode::tuningPeakTempDrop)
+			{
+				afterPeakTime = now;
+				afterPeakTemp = temperature;
+			}
+			return;
+		}
+#endif
 #if HAS_VOLTAGE_MONITOR
 		tuningVoltage.Add(reprap.GetPlatform().GetCurrentPowerVoltage());
 #endif
@@ -799,5 +910,57 @@ void LocalHeater::RaiseHeaterFault(const char *format, ...) noexcept
 	reprap.GetGCodes().HandleHeaterFault();
 	reprap.FlagTemperatureFault(GetHeaterNumber());
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Start or stop running heater tuning cycles
+GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept
+{
+	if (msg.on)
+	{
+		if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
+		{
+			reply.printf("heater %u must be off and cold before auto tuning it", GetHeaterNumber());
+			return GCodeResult::error;
+		}
+
+		// We could do some more checks here but the main board should have done all the checks needed already
+		ExpansionMode::tuningHighTemp = msg.highTemp;
+		ExpansionMode::tuningLowTemp = msg.lowTemp;
+		tuningPwm = msg.pwm;
+		ExpansionMode::tuningPeakTempDrop = msg.peakTempDrop;
+		timeSetHeating = millis();
+		ExpansionMode::tuningCycleComplete = false;
+		ExpansionMode::cyclesDone = 0;
+		mode = HeaterMode::tuning1;
+	}
+	else
+	{
+		SwitchOff();
+	}
+	return GCodeResult::ok;
+}
+
+// Get a heater tuning cycle report, if we have one. Caller must fill in the heater number.
+/*static*/ bool LocalHeater::GetTuningCycleData(CanMessageHeaterTuningReport& msg) noexcept
+{
+	if (ExpansionMode::tuningCycleComplete)
+	{
+		msg.cyclesDone = ExpansionMode::cyclesDone;
+		msg.dhigh = ExpansionMode::dHigh;
+		msg.dlow = ExpansionMode::dLow;
+		msg.ton = ExpansionMode::tOn;
+		msg.toff = ExpansionMode::tOff;
+		msg.heatingRate = ExpansionMode::heatingRate;
+		msg.coolingRate = ExpansionMode::coolingRate;
+		msg.voltage = ExpansionMode::tuningVoltage;
+		ExpansionMode::tuningCycleComplete = false;
+		return true;
+	}
+
+	return false;
+}
+
+#endif
 
 // End
