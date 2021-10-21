@@ -405,7 +405,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 				}
 			}
 
-			// See if we have finished tuning a PID
+			// See if we have finished tuning a heater
 			if (heaterBeingTuned != -1)
 			{
 				const auto h = FindHeater(heaterBeingTuned);
@@ -414,6 +414,17 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 					lastHeaterTuned = heaterBeingTuned;
 					heaterBeingTuned = -1;
 				}
+#if SUPPORT_REMOTE_COMMANDS
+				else if (CanInterface::InExpansionMode())
+				{
+					auto msg = buf.SetupStatusMessage<CanMessageHeaterTuningReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					if (LocalHeater::GetTuningCycleData(*msg))
+					{
+						msg->SetStandardFields(heaterBeingTuned);
+						CanInterface::SendMessageNoReplyNoFree(&buf);
+					}
+				}
+#endif
 			}
 
 #if SUPPORT_REMOTE_COMMANDS
