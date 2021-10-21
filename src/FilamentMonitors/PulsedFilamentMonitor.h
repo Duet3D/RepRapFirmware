@@ -13,7 +13,7 @@
 class PulsedFilamentMonitor : public FilamentMonitor
 {
 public:
-	PulsedFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept;
+	PulsedFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
 #if SUPPORT_REMOTE_COMMANDS

@@ -896,15 +896,9 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool
 
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
 // Returns the number of motor steps moves since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
-int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting) noexcept
+int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
 {
-	if (extruder < reprap.GetGCodes().GetNumExtruders())
-	{
-		return mainDDARing.GetAccumulatedMovement(ExtruderToLogicalDrive(extruder), isPrinting);
-	}
-
-	isPrinting = false;
-	return 0;
+	return mainDDARing.GetAccumulatedMovement(drive, isPrinting);
 }
 
 void Move::SetXYBedProbePoint(size_t index, float x, float y) noexcept

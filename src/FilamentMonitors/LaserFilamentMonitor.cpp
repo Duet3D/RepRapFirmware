@@ -76,8 +76,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LaserFilamentMonitor)
 
 #endif
 
-LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept
-	: Duet3DFilamentMonitor(extruder, monitorType),
+LaserFilamentMonitor::LaserFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
+	: Duet3DFilamentMonitor(drv, monitorType, did),
 	  calibrationFactor(1.0),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)

@@ -13,7 +13,7 @@
 class LaserFilamentMonitor : public Duet3DFilamentMonitor
 {
 public:
-	LaserFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept;
+	LaserFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
 #if SUPPORT_REMOTE_COMMANDS

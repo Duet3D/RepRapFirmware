@@ -59,8 +59,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(PulsedFilamentMonitor)
 
 #endif
 
-PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept
-	: FilamentMonitor(extruder, monitorType),
+PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
+	: FilamentMonitor(drv, monitorType, did),
 	  mmPerPulse(DefaultMmPerPulse),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false)

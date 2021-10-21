@@ -61,7 +61,7 @@ public:
 	unsigned int GetType() const noexcept { return type; }
 
 	// Check that this monitor still refers to a valid extruder
-	bool IsValid() const noexcept;
+	bool IsValid(size_t extruderNumber) const noexcept;
 
 	// Get the status of the filament monitor as a string
 	const char *GetStatusText() const noexcept { return lastStatus.ToString(); }
@@ -106,13 +106,16 @@ public:
 
 	// Configure a filament monitor
 	static GCodeResult Configure(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+
+	// Delete all filament monitors
+	static void DeleteAll() noexcept;
 #endif
 
 	// This must be public so that the array descriptor in class RepRap can lock it
 	static ReadWriteLock filamentMonitorsLock;
 
 protected:
-	FilamentMonitor(unsigned int extruder, unsigned int t) noexcept;
+	FilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept;
 
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException);
 #if SUPPORT_REMOTE_COMMANDS
@@ -127,7 +130,7 @@ protected:
 		return lrintf(100 * f);
 	}
 
-	bool IsLocal() const noexcept { return driver.IsLocal(); }
+	bool IsLocal() const noexcept { return driverId.IsLocal(); }
 
 private:
 
@@ -152,10 +155,10 @@ private:
 
 	int32_t isrExtruderStepsCommanded;
 	uint32_t lastIsrMillis;
-	unsigned int extruderNumber;
+	unsigned int driveNumber;
 	unsigned int type;
 	IoPort port;
-	DriverId driver;
+	DriverId driverId;
 
 	bool isrWasPrinting;
 	bool haveIsrStepsCommanded;

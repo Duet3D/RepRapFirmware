@@ -13,7 +13,7 @@
 class SimpleFilamentMonitor : public FilamentMonitor
 {
 public:
-	SimpleFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept;
+	SimpleFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
 #if SUPPORT_REMOTE_COMMANDS

@@ -166,7 +166,7 @@ public:
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
-	int32_t GetAccumulatedExtrusion(size_t extruder, bool& isPrinting) noexcept;			// Return and reset the accumulated commanded extrusion amount
+	int32_t GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept;				// Return and reset the accumulated commanded extrusion amount
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print

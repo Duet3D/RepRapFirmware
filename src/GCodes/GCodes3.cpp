@@ -768,6 +768,7 @@ void GCodes::SwitchToExpansionMode() noexcept
 {
 	numExtruders = 0;
 	numVisibleAxes = numTotalAxes = NumDirectDrivers;
+	FilamentMonitor::DeleteAll();
 	memcpy(axisLetters, AllowedAxisLetters, sizeof(axisLetters));
 	for (size_t axis = 0; axis < NumDirectDrivers; ++axis)
 	{

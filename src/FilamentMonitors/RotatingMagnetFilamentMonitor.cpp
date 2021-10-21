@@ -76,8 +76,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RotatingMagnetFilamentMonitor)
 
 #endif
 
-RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept
-	: Duet3DFilamentMonitor(extruder, monitorType),
+RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
+	: Duet3DFilamentMonitor(drv, monitorType, did),
 	  mmPerRev(DefaultMmPerRev),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)

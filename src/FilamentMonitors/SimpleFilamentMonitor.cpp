@@ -37,8 +37,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(SimpleFilamentMonitor)
 
 #endif
 
-SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept
-	: FilamentMonitor(extruder, monitorType), highWhenNoFilament(monitorType == 2), filamentPresent(false), enabled(false)
+SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
+	: FilamentMonitor(drv, monitorType, did), highWhenNoFilament(monitorType == 2), filamentPresent(false), enabled(false)
 {
 }
 

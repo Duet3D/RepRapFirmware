@@ -27,8 +27,8 @@
 #include <Platform/RepRap.h>
 
 // Constructors
-Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, unsigned int p_type) noexcept
-	: FilamentMonitor(extruder, p_type), overrunErrorCount(0), polarityErrorCount(0)
+Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
+	: FilamentMonitor(drv, monitorType, did), overrunErrorCount(0), polarityErrorCount(0)
 {
 	InitReceiveBuffer();
 }
