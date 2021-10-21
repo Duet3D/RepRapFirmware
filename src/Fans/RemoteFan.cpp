@@ -83,14 +83,14 @@ GCodeResult RemoteFan::ReportPortDetails(const StringRef& str) const noexcept
 
 bool RemoteFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 {
-	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		reply.copy("No CAN buffer available");
 		return false;
 	}
 
-	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber);
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageFanParameters>(rid, CanInterface::GetCanAddress(), boardNumber);
 	msg->fanNumber = fanNumber;
 	msg->blipTime = blipTime;
@@ -107,14 +107,14 @@ bool RemoteFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 // Update the hardware PWM
 GCodeResult RemoteFan::Refresh(const StringRef& reply) noexcept
 {
-	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		reply.copy("No CAN buffer available");
 		return GCodeResult::error;
 	}
 
-	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber);
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageSetFanSpeed>(rid, CanInterface::GetCanAddress(), boardNumber);
 	msg->fanNumber = fanNumber;
 	msg->pwm = val;

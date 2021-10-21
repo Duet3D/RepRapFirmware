@@ -331,14 +331,14 @@ void CanMessageGenericConstructor::AddDriverIdParam(char c, DriverId did) THROWS
 
 GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) const noexcept
 {
-	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		reply.copy("no CAN buffer available");
 		return GCodeResult::error;
 	}
 
-	const CanRequestId rid = CanInterface::AllocateRequestId(dest);
+	const CanRequestId rid = CanInterface::AllocateRequestId(dest, buf);
 	const size_t actualMessageLength = CanMessageGeneric::GetActualDataLength(dataLen);
 	CanMessageGeneric *m2 = buf->SetupGenericRequestMessage(rid, CanInterface::GetCanAddress(), dest, msgType, actualMessageLength);
 	memcpy(m2, &msg, actualMessageLength);
