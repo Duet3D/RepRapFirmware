@@ -197,6 +197,24 @@ GCodeResult Fan::SetPwm(float speed, const StringRef& reply) noexcept
 	return Refresh(reply);
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// Set the parameters for this fan
+GCodeResult Fan::Configure(const CanMessageFanParameters& msg, const StringRef& reply) noexcept
+{
+	triggerTemperatures[0] = msg.triggerTemperatures[0];
+	triggerTemperatures[1] = msg.triggerTemperatures[1];
+	blipTime = msg.blipTime;
+	val = msg.val;
+	minVal = msg.minVal;
+	maxVal = msg.maxVal;
+	sensorsMonitored.SetFromRaw(msg.sensorsMonitored);
+	(void)UpdateFanConfiguration(reply);
+	return GCodeResult::ok;
+}
+
+#endif
+
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Save the settings of this fan if it isn't thermostatic

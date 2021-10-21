@@ -37,6 +37,11 @@ public:
 #endif
 #if SUPPORT_REMOTE_COMMANDS
 	virtual bool IsLocal() const noexcept = 0;
+
+	// Set or report the parameters for this fan
+	// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
+	// If no relevant parameters are found, print the existing ones to 'reply' and return false.
+	GCodeResult Configure(const CanMessageFanParameters& msg, const StringRef& reply) noexcept;
 #endif
 
 	// Set or report the parameters for this fan

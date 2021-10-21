@@ -42,6 +42,9 @@ public:
 	void ProcessRemoteFanRpms(CanAddress src, const CanMessageFansReport& msg) noexcept;
 #endif
 #if SUPPORT_REMOTE_COMMANDS
+	GCodeResult ConfigureFanPort(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult ConfigureFan(const CanMessageFanParameters& gb, const StringRef& reply) noexcept;
+	GCodeResult SetFanSpeed(const CanMessageSetFanSpeed& msg, const StringRef& reply) noexcept;
 	unsigned int PopulateFansReport(CanMessageFansReport& msg) noexcept;
 #endif
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE

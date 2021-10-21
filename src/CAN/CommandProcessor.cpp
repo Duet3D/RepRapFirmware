@@ -425,6 +425,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 #if 0	// heater commands not implemented yet
+			// Heater commands
 			case CanMessageType::m950Heater:
 				requestId = buf->msg.generic.requestId;
 				rslt = Heat::ConfigureHeater(buf->msg.generic, replyRef);
@@ -464,23 +465,23 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetHeat().EutProcessM308(buf->msg.generic, replyRef);
 				break;
 
-#if 0	// fan commands not implemented yet
+			// Fan commands
 			case CanMessageType::m950Fan:
 				requestId = buf->msg.generic.requestId;
-				rslt = FansManager::ConfigureFanPort(buf->msg.generic, replyRef);
+				rslt = reprap.GetFansManager().ConfigureFanPort(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::fanParameters:
 				requestId = buf->msg.fanParameters.requestId;
-				rslt = FansManager::ConfigureFan(buf->msg.fanParameters, replyRef);
+				rslt = reprap.GetFansManager().ConfigureFan(buf->msg.fanParameters, replyRef);
 				break;
 
 			case CanMessageType::setFanSpeed:
 				requestId = buf->msg.setFanSpeed.requestId;
-				rslt = FansManager::SetFanSpeed(buf->msg.setFanSpeed, replyRef);
+				rslt = reprap.GetFansManager().SetFanSpeed(buf->msg.setFanSpeed, replyRef);
 				break;
 
-#endif
+			// GPIO commands
 			case CanMessageType::m950Gpio:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetPlatform().EutHandleM950Gpio(buf->msg.generic, replyRef);
