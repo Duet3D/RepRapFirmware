@@ -3161,7 +3161,7 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 	reply.Clear();						// get rid of the error message
 	if (!zDatumSetByProbing && platform.GetZProbeOrDefault(0)->GetProbeType() != ZProbeType::none)	//TODO store Z probe number in height map
 	{
-		reply.copy("the height map was loaded when the current Z=0 datum was not determined probing. This may result in a height offset.");
+		reply.copy("the height map was loaded when the current Z=0 datum was not determined by probing. This may result in a height offset.");
 		return GCodeResult::warning;
 	}
 
