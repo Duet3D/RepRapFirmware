@@ -543,22 +543,22 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				CanInterface::SendResponseNoFree(buf);
 				return;
 
-#if 0	// filament monitor commands not implemented yet
-		case CanMessageType::createFilamentMonitor:
-			requestId = buf->msg.createFilamentMonitor.requestId;
-			rslt = FilamentMonitor::Create(buf->msg.createFilamentMonitor, replyRef);
-			break;
+			// Filament monitor commands
+			case CanMessageType::createFilamentMonitor:
+				requestId = buf->msg.createFilamentMonitor.requestId;
+				rslt = FilamentMonitor::Create(buf->msg.createFilamentMonitor, replyRef);
+				break;
 
-		case CanMessageType::deleteFilamentMonitor:
-			requestId = buf->msg.deleteFilamentMonitor.requestId;
-			rslt = FilamentMonitor::Delete(buf->msg.deleteFilamentMonitor, replyRef);
-			break;
+			case CanMessageType::deleteFilamentMonitor:
+				requestId = buf->msg.deleteFilamentMonitor.requestId;
+				rslt = FilamentMonitor::Delete(buf->msg.deleteFilamentMonitor, replyRef);
+				break;
 
-		case CanMessageType::configureFilamentMonitor:
-			requestId = buf->msg.generic.requestId;
-			rslt = FilamentMonitor::Configure(buf->msg.generic, replyRef);
-			break;
-#endif
+			case CanMessageType::configureFilamentMonitor:
+				requestId = buf->msg.generic.requestId;
+				rslt = FilamentMonitor::Configure(buf->msg.generic, replyRef);
+				break;
+
 			default:
 				// We received a message type that we don't recognise. If it's a broadcast, ignore it. If it's addressed to us, send a reply.
 				if (buf->id.Src() != CanInterface::GetCanAddress())

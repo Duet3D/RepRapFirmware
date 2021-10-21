@@ -895,12 +895,12 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool
 }
 
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
-// Returns the number of motor steps moves since the last call, and isPrinting is true unless we are currently executing an extruding but non-printing move
+// Returns the number of motor steps moves since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
 int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting) noexcept
 {
 	if (extruder < reprap.GetGCodes().GetNumExtruders())
 	{
-		return mainDDARing.GetAccumulatedExtrusion(extruder, ExtruderToLogicalDrive(extruder), isPrinting);
+		return mainDDARing.GetAccumulatedMovement(ExtruderToLogicalDrive(extruder), isPrinting);
 	}
 
 	isPrinting = false;
@@ -923,7 +923,7 @@ void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wa
 {
 	if (index >= MaxProbePoints)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Z probe point Z index out of range\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Z probe point index out of range\n");
 	}
 	else
 	{

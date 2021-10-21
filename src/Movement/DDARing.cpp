@@ -85,9 +85,9 @@ void DDARing::Init2() noexcept
 		SetPositions(pos);
 	}
 
-	for (size_t i = 0; i < MaxExtruders; ++i)
+	for (volatile int32_t& macc : movementAccumulators)
 	{
-		extrusionAccumulators[i] = 0;
+		macc = 0;
 	}
 	extrudersPrinting = false;
 	simulationTime = 0.0;
@@ -571,11 +571,18 @@ void DDARing::CurrentMoveCompleted() noexcept
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = cdda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 	liveCoordinatesChanged = true;
-	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
-	for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+
+	// In the following it doesn't currently matter whether we process all drives or just the extruders
+	// Instead of looping through extruders, we could loop through DMs.
 	{
-		extrusionAccumulators[extruder] += cdda->GetStepsTaken(LogicalDriveToExtruder(extruder));
+		const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
+		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+		{
+			const size_t drv = ExtruderToLogicalDrive(extruder);
+			movementAccumulators[drv] += cdda->GetStepsTaken(drv);
+		}
 	}
+
 	currentDda = nullptr;
 	if (cdda->IsCheckingEndstops())
 	{
@@ -598,13 +605,13 @@ bool DDARing::SetWaitingToEmpty() noexcept
 	return ret;
 }
 
-int32_t DDARing::GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting) noexcept
+int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
 {
 	const uint32_t basepri = ChangeBasePriority(NvicPriorityStep);
-	const int32_t ret = extrusionAccumulators[extruder];
+	const int32_t ret = movementAccumulators[drive];
 	const DDA * const cdda = currentDda;						// capture volatile variable
 	const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
-	extrusionAccumulators[extruder] = -adjustment;
+	movementAccumulators[drive] = -adjustment;
 	isPrinting = extrudersPrinting;
 	RestoreBasePriority(basepri);
 	return ret + adjustment;

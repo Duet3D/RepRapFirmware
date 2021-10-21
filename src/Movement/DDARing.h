@@ -41,7 +41,7 @@ public:
 	void CurrentMoveCompleted() noexcept SPEED_CRITICAL;								// Signal that the current move has just been completed
 
 	uint32_t ExtruderPrintingSince() const noexcept { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
-	int32_t GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting) noexcept;
+	int32_t GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept;
 
 	uint32_t GetScheduledMoves() const noexcept { return scheduledMoves; }				// How many moves have been scheduled?
 	uint32_t GetCompletedMoves() const noexcept { return completedMoves; }				// How many moves have been completed?
@@ -127,7 +127,7 @@ private:
 	unsigned int stepErrors;													// count of step errors, for diagnostics
 
 	float simulationTime;														// Print time since we started simulating
-	volatile int32_t extrusionAccumulators[MaxExtruders]; 						// Accumulated extruder motor steps
+	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 				// Accumulated motor steps, used by filament monitors
 	volatile uint32_t extrudersPrintingSince;									// The milliseconds clock time when extrudersPrinting was set to true
 
 	volatile bool extrudersPrinting;											// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move

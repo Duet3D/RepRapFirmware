@@ -10,6 +10,10 @@
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
@@ -104,5 +108,41 @@ void SimpleFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder
 	Poll();
 	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: %s\n", extruder, (filamentPresent) ? "ok" : "no filament");
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
+GCodeResult SimpleFilamentMonitor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	const GCodeResult rslt = CommonConfigure(parser, reply, InterruptMode::none, seen);
+	if (rslt <= GCodeResult::warning)
+	{
+		uint16_t temp;
+		if (parser.GetUintParam('S', temp))
+		{
+			seen = true;
+			enabled = (temp > 0);
+		}
+
+
+		if (seen)
+		{
+			Check(false, false, 0, 0.0);
+		}
+		else
+		{
+			reply.copy("Simple filament sensor on pin ");
+			GetPort().AppendPinName(reply);
+			reply.catf(", %s, output %s when no filament, filament present: %s",
+						(enabled) ? "enabled" : "disabled",
+						(highWhenNoFilament) ? "high" : "low",
+						(filamentPresent) ? "yes" : "no");
+		}
+	}
+	return rslt;
+}
+
+#endif
 
 // End
