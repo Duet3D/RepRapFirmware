@@ -256,135 +256,93 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 /*static*/ void FilamentMonitor::Spin() noexcept
 {
 #if SUPPORT_REMOTE_COMMANDS
-	// TODO these 2 loops are rather similar so combine at least some of the code
-	if (CanInterface::InExpansionMode())
+	CanMessageBuffer buf(nullptr);
+	auto msg = buf.SetupStatusMessage<CanMessageFilamentMonitorsStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+	bool statusChanged = false;
+	bool haveMonitor = false;
+#endif
+
+	ReadLocker lock(filamentMonitorsLock);
+
+	for (size_t drv = 0; drv < NumFilamentMonitors; ++drv)
 	{
-		CanMessageBuffer buf(nullptr);
-		auto msg = buf.SetupStatusMessage<CanMessageFilamentMonitorsStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
-		bool statusChanged = false;
-		bool haveMonitor = false;
-
+		FilamentSensorStatus fst(FilamentSensorStatus::noMonitor);
+		if (filamentSensors[drv] != nullptr)
 		{
-			ReadLocker lock(filamentMonitorsLock);
-
-			for (size_t drv = 0; drv < NumDirectDrivers; ++drv)
+#if SUPPORT_REMOTE_COMMANDS
+			haveMonitor = true;
+#endif
+			FilamentMonitor& fs = *filamentSensors[drv];
+			bool isPrinting;
+			bool fromIsr;
+			int32_t extruderStepsCommanded;
+			uint32_t locIsrMillis;
+			IrqDisable();
+			if (fs.haveIsrStepsCommanded)
 			{
-				FilamentSensorStatus fst(FilamentSensorStatus::noMonitor);
-				if (filamentSensors[drv] != nullptr)
-				{
-					haveMonitor = true;
-					FilamentMonitor& fs = *filamentSensors[drv];
-					bool isPrinting;
-					bool fromIsr;
-					int32_t extruderStepsCommanded;
-					uint32_t locIsrMillis;
-					IrqDisable();
-					if (fs.haveIsrStepsCommanded)
-					{
-						extruderStepsCommanded = fs.isrExtruderStepsCommanded;
-						isPrinting = fs.isrWasPrinting;
-						locIsrMillis = fs.lastIsrMillis;
-						fs.haveIsrStepsCommanded = false;
-						IrqEnable();
-						fromIsr = true;
-					}
-					else
-					{
-						IrqEnable();
-						extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fs.driveNumber, isPrinting);		// get and clear the net extrusion commanded
-						fromIsr = false;
-						locIsrMillis = 0;
-					}
-
-					GCodes& gCodes = reprap.GetGCodes();
-					if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
-					{
-						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
-						fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
-					}
-					else
-					{
-						fst = fs.Clear();
-					}
-					if (fst != fs.lastStatus)
-					{
-						statusChanged = true;
-						fs.lastStatus = fst;
-					}
-				}
-				msg->data[drv].Set(fst.ToBaseType());
+				extruderStepsCommanded = fs.isrExtruderStepsCommanded;
+				isPrinting = fs.isrWasPrinting;
+				locIsrMillis = fs.lastIsrMillis;
+				fs.haveIsrStepsCommanded = false;
+				IrqEnable();
+				fromIsr = true;
 			}
-		}
-
-		if (statusChanged || (haveMonitor && millis() - whenStatusLastSent >= StatusUpdateInterval))
-		{
-			buf.dataLength = msg->GetActualDataLength();
-			CanInterface::SendMessageNoReplyNoFree(&buf);
-			whenStatusLastSent = millis();
-		}
-	}
-	else
-#endif
-	{
-		ReadLocker lock(filamentMonitorsLock);
-
-		for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
-		{
-			if (filamentSensors[extruder] != nullptr)
+			else
 			{
-				FilamentMonitor& fs = *filamentSensors[extruder];
-#if SUPPORT_CAN_EXPANSION
-				if (fs.IsLocal())
-#endif
-				{
-					bool isPrinting;
-					bool fromIsr;
-					int32_t extruderStepsCommanded;
-					uint32_t locIsrMillis;
-					IrqDisable();
-					if (fs.haveIsrStepsCommanded)
-					{
-						extruderStepsCommanded = fs.isrExtruderStepsCommanded;
-						isPrinting = fs.isrWasPrinting;
-						locIsrMillis = fs.lastIsrMillis;
-						fs.haveIsrStepsCommanded = false;
-						IrqEnable();
-						fromIsr = true;
-					}
-					else
-					{
-						IrqEnable();
-						extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fs.driveNumber, isPrinting);		// get and clear the net extrusion commanded
-						fromIsr = false;
-						locIsrMillis = 0;
-					}
+				IrqEnable();
+				extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fs.driveNumber, isPrinting);		// get and clear the net extrusion commanded
+				fromIsr = false;
+				locIsrMillis = 0;
+			}
 
-					GCodes& gCodes = reprap.GetGCodes();
-					if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
+			GCodes& gCodes = reprap.GetGCodes();
+			if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
+			{
+				const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
+				fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
+			}
+			else
+			{
+				fst = fs.Clear();
+			}
+
+			if (fst != fs.lastStatus)
+			{
+#if SUPPORT_REMOTE_COMMANDS
+				statusChanged = true;
+#endif
+				fs.lastStatus = fst;
+				if (fst != FilamentSensorStatus::ok
+#if SUPPORT_REMOTE_COMMANDS
+					&& !CanInterface::InExpansionMode()
+#endif
+					)
+				{
+					const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
+					if (reprap.Debug(moduleFilamentSensors))
 					{
-						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
-						const FilamentSensorStatus fstat = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
-						fs.lastStatus = fstat;
-						if (fstat != FilamentSensorStatus::ok)
-						{
-							if (reprap.Debug(moduleFilamentSensors))
-							{
-								debugPrintf("Filament error: extruder %u reports %s\n", extruder, fstat.ToString());
-							}
-							else
-							{
-								gCodes.FilamentError(extruder, fstat);
-							}
-						}
+						debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
 					}
 					else
 					{
-						fs.lastStatus = fs.Clear();
+						gCodes.FilamentError(extruder, fst);
 					}
 				}
 			}
 		}
+#if SUPPORT_REMOTE_COMMANDS
+		msg->data[drv].Set(fst.ToBaseType());
+#endif
 	}
+
+#if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode() && (statusChanged || (haveMonitor && millis() - whenStatusLastSent >= StatusUpdateInterval)))
+	{
+		buf.dataLength = msg->GetActualDataLength();
+		CanInterface::SendMessageNoReplyNoFree(&buf);
+		whenStatusLastSent = millis();
+	}
+#endif
 }
 
 #if SUPPORT_CAN_EXPANSION
@@ -604,11 +562,11 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 {
 	WriteLocker lock(filamentMonitorsLock);
 
-	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
+	for (FilamentMonitor*& fm : filamentSensors)
 	{
-		if (filamentSensors[extruder] != nullptr)
+		if (fm != nullptr)
 		{
-			DeleteObject(filamentSensors[extruder]);
+			DeleteObject(fm);
 		}
 	}
 }
