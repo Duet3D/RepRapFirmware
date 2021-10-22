@@ -330,31 +330,31 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		accelerations[drive] = normalAccelerations[drive];
-		endCoordinates[drive] = nextMove.coords[drive];
 
 		if (drive < numVisibleAxes)
 		{
-			const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
-			if (positionDelta != 0.0)
-			{
-				if (reprap.GetPlatform().IsAxisRotational(drive))
-				{
-					rotationalAxesMoving = true;
-				}
-				else
-				{
-					linearAxesMoving = true;
-				}
-			}
 
 			int32_t delta;
 			if (doMotorMapping)
 			{
+				endCoordinates[drive] = nextMove.coords[drive];
 				delta = endPoint[drive] - positionNow[drive];
+				const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
 				directionVector[drive] = positionDelta;
-				if (positionDelta != 0.0 && (Tool::GetXAxes(nextMove.tool).IsBitSet(drive) || Tool::GetYAxes(nextMove.tool).IsBitSet(drive)))
+				if (positionDelta != 0.0)
 				{
-					flags.xyMoving = true;				// this move has XY movement in user space, before axis were mapped
+					if (reprap.GetPlatform().IsAxisRotational(drive))
+					{
+						rotationalAxesMoving = true;
+					}
+					else
+					{
+						linearAxesMoving = true;
+					}
+					if (Tool::GetXAxes(nextMove.tool).IsBitSet(drive) || Tool::GetYAxes(nextMove.tool).IsBitSet(drive))
+					{
+						flags.xyMoving = true;				// this move has XY movement in user space, before axis were mapped
+					}
 				}
 			}
 			else
@@ -363,6 +363,17 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				endPoint[drive] = Move::MotorMovementToSteps(drive, nextMove.coords[drive]);
 				delta = endPoint[drive] - positionNow[drive];
 				directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
+				if (delta != 0)
+				{
+					if (reprap.GetPlatform().IsAxisRotational(drive))
+					{
+						rotationalAxesMoving = true;
+					}
+					else
+					{
+						linearAxesMoving = true;
+					}
+				}
 			}
 
 #if 0	// debug only
@@ -511,7 +522,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				maxDistance = normalisedDirectionVector[axis];
 			}
 		}
-		if (maxDistance != 0.0)				// should always be true
+		if (maxDistance != 0.0)				// should be true if we are homing a delta
 		{
 			reqSpeed /= maxDistance;		// because normalisedDirectionVector is unit-normalised
 		}
