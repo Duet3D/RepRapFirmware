@@ -273,59 +273,64 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			haveMonitor = true;
 #endif
 			FilamentMonitor& fs = *filamentSensors[drv];
-			bool isPrinting;
-			bool fromIsr;
-			int32_t extruderStepsCommanded;
-			uint32_t locIsrMillis;
-			IrqDisable();
-			if (fs.haveIsrStepsCommanded)
-			{
-				extruderStepsCommanded = fs.isrExtruderStepsCommanded;
-				isPrinting = fs.isrWasPrinting;
-				locIsrMillis = fs.lastIsrMillis;
-				fs.haveIsrStepsCommanded = false;
-				IrqEnable();
-				fromIsr = true;
-			}
-			else
-			{
-				IrqEnable();
-				extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fs.driveNumber, isPrinting);		// get and clear the net extrusion commanded
-				fromIsr = false;
-				locIsrMillis = 0;
-			}
-
-			GCodes& gCodes = reprap.GetGCodes();
-			if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
-			{
-				const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
-				fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
-			}
-			else
-			{
-				fst = fs.Clear();
-			}
-
-			if (fst != fs.lastStatus)
-			{
-#if SUPPORT_REMOTE_COMMANDS
-				statusChanged = true;
+#if SUPPORT_CAN_EXPANSION
+			if (fs.IsLocal())
 #endif
-				fs.lastStatus = fst;
-				if (fst != FilamentSensorStatus::ok
-#if SUPPORT_REMOTE_COMMANDS
-					&& !CanInterface::InExpansionMode()
-#endif
-					)
+			{
+				bool isPrinting;
+				bool fromIsr;
+				int32_t extruderStepsCommanded;
+				uint32_t locIsrMillis;
+				IrqDisable();
+				if (fs.haveIsrStepsCommanded)
 				{
-					const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
-					if (reprap.Debug(moduleFilamentSensors))
+					extruderStepsCommanded = fs.isrExtruderStepsCommanded;
+					isPrinting = fs.isrWasPrinting;
+					locIsrMillis = fs.lastIsrMillis;
+					fs.haveIsrStepsCommanded = false;
+					IrqEnable();
+					fromIsr = true;
+				}
+				else
+				{
+					IrqEnable();
+					extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fs.driveNumber, isPrinting);		// get and clear the net extrusion commanded
+					fromIsr = false;
+					locIsrMillis = 0;
+				}
+
+				GCodes& gCodes = reprap.GetGCodes();
+				if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
+				{
+					const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
+					fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
+				}
+				else
+				{
+					fst = fs.Clear();
+				}
+
+				if (fst != fs.lastStatus)
+				{
+#if SUPPORT_REMOTE_COMMANDS
+					statusChanged = true;
+#endif
+					fs.lastStatus = fst;
+					if (fst != FilamentSensorStatus::ok
+#if SUPPORT_REMOTE_COMMANDS
+						&& !CanInterface::InExpansionMode()
+#endif
+						)
 					{
-						debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
-					}
-					else
-					{
-						gCodes.FilamentError(extruder, fst);
+						const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
+						if (reprap.Debug(moduleFilamentSensors))
+						{
+							debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
+						}
+						else
+						{
+							gCodes.FilamentError(extruder, fst);
+						}
 					}
 				}
 			}
