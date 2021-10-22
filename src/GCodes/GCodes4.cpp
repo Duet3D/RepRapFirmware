@@ -631,8 +631,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		gb.SetState(GCodeState::normal);
 		break;
 
-	case GCodeState::stoppingWithHeatersOff:	// MO or M1 after executing stop.g/sleep.g if present
-		reprap.GetHeat().SwitchOffAll(true);
+	case GCodeState::stopping:	// MO or M1 after executing stop.g/sleep.g if present
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			pauseState = PauseState::notPaused;

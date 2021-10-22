@@ -549,8 +549,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// The state will be changed a few lines down, so no need to reset it to normal here
 						}
 
-						gb.SetState(GCodeState::stoppingWithHeatersOff);
-						(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemHelperMacroCode);
+						gb.SetState(GCodeState::stopping);
+						if (!DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemHelperMacroCode))
+						{
+							reprap.GetHeat().SwitchOffAll(true);
+						}
 					}
 				}
 				break;

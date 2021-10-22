@@ -74,7 +74,7 @@ enum class GCodeState : uint8_t
 	flashing1,
 	flashing2,
 
-	stoppingWithHeatersOff,
+	stopping,
 
 	// These next 9 must be contiguous
 	gridProbing1,
