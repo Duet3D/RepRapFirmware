@@ -336,13 +336,17 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			}
 		}
 #if SUPPORT_REMOTE_COMMANDS
-		msg->data[drv].Set(fst.ToBaseType());
+		if (drv < NumDirectDrivers)
+		{
+			msg->data[drv].Set(fst.ToBaseType());
+		}
 #endif
 	}
 
 #if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode() && (statusChanged || (haveMonitor && millis() - whenStatusLastSent >= StatusUpdateInterval)))
 	{
+		msg->SetStandardFields(NumDirectDrivers);
 		buf.dataLength = msg->GetActualDataLength();
 		CanInterface::SendMessageNoReplyNoFree(&buf);
 		whenStatusLastSent = millis();
