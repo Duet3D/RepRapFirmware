@@ -179,18 +179,24 @@ void EndstopsManager::AddToActive(EndstopOrZProbe& e) noexcept
 }
 
 // Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command. Return true if successful.
-bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming) noexcept
+bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& reduceAcceleration) noexcept
 {
 	activeEndstops = nullptr;
+	reduceAcceleration = false;
 	isHomingMove = forHoming && axes.IsNonEmpty();
 	const Kinematics& kin = reprap.GetMove().GetKinematics();
 	while (axes.IsNonEmpty())
 	{
 		const unsigned int axis = axes.LowestSetBit();
 		axes.ClearBit(axis);
-		if (axisEndstops[axis] != nullptr && axisEndstops[axis]->Prime(kin, reprap.GetPlatform().GetAxisDriversConfig(axis)))
+		Endstop * const es = axisEndstops[axis];
+		if (es != nullptr && es->Prime(kin, reprap.GetPlatform().GetAxisDriversConfig(axis)))
 		{
-			AddToActive(*axisEndstops[axis]);
+			AddToActive(*es);
+			if (es->ShouldReduceAcceleration())
+			{
+				reduceAcceleration = true;
+			}
 		}
 		else
 		{

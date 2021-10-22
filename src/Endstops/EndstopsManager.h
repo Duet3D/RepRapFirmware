@@ -30,7 +30,7 @@ public:
 	void Init() noexcept;
 
 	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command returning true if successful
-	bool EnableAxisEndstops(AxesBitmap axes, bool forHoming) noexcept __attribute__ ((warn_unused_result));
+	bool EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& reduceAcceleration) noexcept __attribute__ ((warn_unused_result));
 
 	// Set up the active endstops for Z probing returning true if successful
 	bool EnableZProbe(size_t probeNumber, bool probingAway = false) noexcept __attribute__ ((warn_unused_result));

@@ -1604,7 +1604,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 }
 
 // Save (some of) the state of the machine for recovery in the future.
-bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile)
+bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile) noexcept
 {
 	const bool ok = gb.PushState(withinSameFile);
 	if (!ok)
@@ -1616,7 +1616,7 @@ bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile)
 }
 
 // Recover a saved state
-void GCodes::Pop(GCodeBuffer& gb)
+void GCodes::Pop(GCodeBuffer& gb) noexcept
 {
 	// FIXME If withinSameFile is false, we should pop all stack levels that have the same file (ID)
 	// and output a warning message is the stack is popped more than once
@@ -1631,7 +1631,7 @@ void GCodes::Pop(GCodeBuffer& gb)
 // 'moveBuffer.moveType' and 'moveBuffer.isCoordinated' must be set up before calling this
 // 'isPrintingMove' is true if there is any axis movement
 // Returns nullptr if this gcode is valid so far, or an error message if it should be discarded
-const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove)
+const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove) THROWS(GCodeException)
 {
 	// Deal with feed rate, also determine whether M220 and M221 speed and extrusion factors apply to this move
 	if (moveState.isCoordinated || machineType == MachineType::fff)
@@ -1804,7 +1804,7 @@ bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept
 // If we can't execute the move, return true with 'err' set to the error message
 // Else return true with 'err' left alone (it is set to nullptr on entry)
 // We have already acquired the movement lock and waited for the previous move to be taken.
-bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err)
+bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) THROWS(GCodeException)
 {
 	if (moveFractionToSkip > 0.0)
 	{
@@ -1997,10 +1997,14 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		// no break
 	case 1:
 	case 4:
-		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), moveState.moveType == 1))
 		{
-			err = "Failed to enable endstops";
-			return true;
+			bool reduceAcceleration;
+			if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), moveState.moveType == 1, reduceAcceleration))
+			{
+				err = "Failed to enable endstops";
+				return true;
+			}
+			moveState.reduceAcceleration = reduceAcceleration;
 		}
 		moveState.checkEndstops = true;
 		break;

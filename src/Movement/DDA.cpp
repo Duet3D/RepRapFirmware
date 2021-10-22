@@ -459,9 +459,20 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 #endif
 
 	// If it's a Z probing move, limit the Z acceleration to better handle nozzle-contact probes
-	if (nextMove.reduceAcceleration && accelerations[Z_AXIS] > ZProbeMaxAcceleration)
+	if (nextMove.reduceAcceleration)
 	{
-		accelerations[Z_AXIS] = ZProbeMaxAcceleration;
+		if (accelerations[X_AXIS] > XYStallEndstopMaxAcceleration)
+		{
+			accelerations[X_AXIS] = XYStallEndstopMaxAcceleration;
+		}
+		if (accelerations[Y_AXIS] > XYStallEndstopMaxAcceleration)
+		{
+			accelerations[Y_AXIS] = XYStallEndstopMaxAcceleration;
+		}
+		if (accelerations[Z_AXIS] > ZProbeMaxAcceleration)
+		{
+			accelerations[Z_AXIS] = ZProbeMaxAcceleration;
+		}
 	}
 
 	// 4. Normalise the direction vector and compute the amount of motion.

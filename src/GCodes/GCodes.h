@@ -377,8 +377,8 @@ private:
 
 	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;								// Try to find a macro file that implements a G or M command
 
-	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) SPEED_CRITICAL;	// Execute a straight move
-	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)				// Execute an arc move
+	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)				// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(GCodeBuffer& gb) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;						// Check that enough axes have been homed
@@ -414,12 +414,12 @@ private:
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);			// Set up the extrusion of a move
+	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
 
-	bool Push(GCodeBuffer& gb, bool withinSameFile);								// Push feedrate etc on the stack
-	void Pop(GCodeBuffer& gb);														// Pop feedrate etc
-	void DisableDrives() noexcept;													// Turn the motors off
-	bool SendConfigToLine();														// Deal with M503
+	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
+	void Pop(GCodeBuffer& gb) noexcept;																// Pop feedrate etc
+	void DisableDrives() noexcept;																	// Turn the motors off
+	bool SendConfigToLine();																		// Deal with M503
 
 	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Set/report offsets
 

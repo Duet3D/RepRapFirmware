@@ -960,6 +960,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 // Return true if successful, else SetError has been called to save the error message
 bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 {
+	bool reduceAcceleration;
 	if (m585Settings.useProbe)
 	{
 		const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
@@ -973,20 +974,19 @@ bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 			gb.LatestMachineState().SetError("Failed to enable probe");
 			return false;
 		}
+		reduceAcceleration = true;
 	}
-	else
+	else if (!platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(m585Settings.axisNumber), false, reduceAcceleration))
 	{
-		if (!platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(m585Settings.axisNumber), false))
-		{
-			gb.LatestMachineState().SetError("Failed to enable endstop");
-			return false;
-		}
+		gb.LatestMachineState().SetError("Failed to enable endstop");
+		return false;
 	}
 
 	SetMoveBufferDefaults();
 	ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
 	moveState.feedRate = m585Settings.feedRate;
 	moveState.coords[m585Settings.axisNumber] = m585Settings.probingLimit;
+	moveState.reduceAcceleration = reduceAcceleration;
 	moveState.checkEndstops = true;
 	moveState.canPauseAfter = false;
 	zProbeTriggered = false;
