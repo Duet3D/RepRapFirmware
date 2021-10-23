@@ -44,6 +44,7 @@ Licence: GPL
 #if SUPPORT_REMOTE_COMMANDS
 # include <CanMessageGenericParser.h>
 # include <CanMessageGenericTables.h>
+# include "Sensors/RemoteSensor.h"
 #endif
 
 #ifdef DUET3_ATE
@@ -113,7 +114,7 @@ ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
 
 Heat::Heat() noexcept
-	: sensorCount(0), sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: sensorCount(0), sensorsRoot(nullptr), sensorOrderingErrors(0), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 #if SUPPORT_REMOTE_COMMANDS
 	, newHeaterFaultState(0), newDriverFaultState(0)
 #endif
@@ -303,7 +304,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 				msg->whichHeaters |= (uint64_t)1u << heater;
 				msg->reports[heatersFound].mode = h->GetModeByte();
 				msg->reports[heatersFound].averagePwm = (uint8_t)(h->GetAveragePWM() * 255.0);
-				msg->reports[heatersFound].temperature = h->GetTemperature();
+				msg->reports[heatersFound].SetTemperature(h->GetTemperature());
 				++heatersFound;
 			}
 		}
@@ -366,19 +367,31 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 				unsigned int sensorsFound = 0;
 #endif
 				{
+					unsigned int nextUnreportedSensor = 0;
 					ReadLocker lock(sensorsLock);
 					TemperatureSensor *currentSensor = sensorsRoot;
 					while (currentSensor != nullptr)
 					{
 						currentSensor->Poll();
 #if SUPPORT_CAN_EXPANSION
-						if (currentSensor->GetBoardAddress() == CanInterface::GetCanAddress())
+						if (currentSensor->GetBoardAddress() == CanInterface::GetCanAddress() && sensorsFound < ARRAY_SIZE(msg->temperatureReports))
 						{
-							msg->whichSensors |= (uint64_t)1u << currentSensor->GetSensorNumber();
-							float temperature;
-							msg->temperatureReports[sensorsFound].errorCode = (uint8_t)currentSensor->GetLatestTemperature(temperature);
-							msg->temperatureReports[sensorsFound].SetTemperature(temperature);
-							++sensorsFound;
+							const unsigned int sn = currentSensor->GetSensorNumber();
+							if (sn >= nextUnreportedSensor && sn < 64)
+							{
+								msg->whichSensors |= (uint64_t)1u << currentSensor->GetSensorNumber();
+								float temperature;
+								msg->temperatureReports[sensorsFound].errorCode = (uint8_t)currentSensor->GetLatestTemperature(temperature);
+								msg->temperatureReports[sensorsFound].SetTemperature(temperature);
+								++sensorsFound;
+								nextUnreportedSensor = sn + 1;
+							}
+							else
+							{
+								// We have a duplicate sensor number, or the sensors list is not ordered by sensor number, or the sensor number is out of range
+								// Don't send its temperature because that will mess up the relationship between the bitmap and the sensor data in the message
+								++sensorOrderingErrors;
+							}
 						}
 #endif
 						currentSensor = currentSensor->GetNext();
@@ -492,32 +505,28 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 void Heat::Diagnostics(MessageType mtype) noexcept
 {
 	Platform& platform = reprap.GetPlatform();
-	platform.Message(mtype, "=== Heat ===\nBed heaters =");
+	platform.Message(mtype, "=== Heat ===\n");
+	String<StringLength100> str;
+	str.copy("Bed heaters");
 	for (int8_t bedHeater : bedHeaters)
 	{
-		platform.MessageF(mtype, " %d", bedHeater);
+		str.catf(" %d", bedHeater);
 	}
-	platform.Message(mtype, ", chamberHeaters =");
+	str.cat(", chamber heaters");
 	for (int8_t chamberHeater : chamberHeaters)
 	{
-		platform.MessageF(mtype, " %d", chamberHeater);
+		str.catf(" %d", chamberHeater);
 	}
-	platform.Message(mtype, "\n");
+	str.catf(", ordering errs %u\n", sensorOrderingErrors);
+	platform.Message(mtype, str.c_str());
 
 	for (size_t heater : ARRAY_INDICES(heaters))
 	{
-		bool found;
-		float acc;
+		auto h = FindHeater(heater);
+		if (h.IsNotNull() && h->GetStatus() == HeaterStatus::active)
 		{
-			const auto h = FindHeater(heater);
-			found = h.IsNotNull() && h->GetStatus() == HeaterStatus::active;
-			if (found)
-			{
-				acc = h->GetAccumulator();
-			}
-		}
-		if (found)
-		{
+			const float acc = h->GetAccumulator();
+			h.Release();
 			platform.MessageF(mtype, "Heater %u is on, I-accum = %.1f\n", heater, (double)acc);
 		}
 	}
@@ -1284,19 +1293,28 @@ void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemp
 								{
 									if (index < ARRAY_SIZE(msg.temperatureReports))
 									{
-										const auto ts = FindSensor(sensor);
+										const CanSensorReport& sr = msg.temperatureReports[index];
+										auto ts = FindSensor(sensor);
 										if (ts.IsNotNull())
 										{
-											ts->UpdateRemoteTemperature(src, msg.temperatureReports[index]);
+											ts->UpdateRemoteTemperature(src, sr);
 										}
 # ifdef DUET3_ATE
 										else
 										{
-											Duet3Ate::ProcessOrphanedSensorReport(src, sensor, msg.temperatureReports[index]);
+											Duet3Ate::ProcessOrphanedSensorReport(src, sensor, sr);
+										}
+# elif SUPPORT_REMOTE_COMMANDS
+										else if (CanInterface::InExpansionMode())
+										{
+											// Create a new RemoteSensor
+											ts.Release();
+											RemoteSensor * const rs = new RemoteSensor(sensor, src);
+											rs->UpdateRemoteTemperature(src, sr);
+											InsertSensor(rs);
 										}
 # endif
 									}
-
 								}
 							);
 }

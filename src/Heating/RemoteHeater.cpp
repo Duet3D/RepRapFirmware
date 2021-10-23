@@ -459,7 +459,7 @@ void RemoteHeater::UpdateRemoteStatus(CanAddress src, const CanHeaterReport& rep
 	{
 		lastMode = (HeaterMode)report.mode;
 		averagePwm = report.averagePwm;
-		lastTemperature = report.temperature;
+		lastTemperature = report.GetTemperature();
 		whenLastStatusReceived = millis();
 	}
 }
