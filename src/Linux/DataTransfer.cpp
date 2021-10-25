@@ -789,6 +789,7 @@ bool DataTransfer::IsReady() noexcept
 		{
 			if (millis() - startTime > SpiTransferTimeout)
 			{
+				disable_spi();					// disable the SPI subsystem first, else only zeros are transferred
 				StatefulTransferReset(true);
 				return false;
 			}
@@ -1288,6 +1289,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	String<StringLength50> rslt;
 	switch (value.GetType())
 	{
+	case TypeCode::None:
 	// FIXME Add support for arrays
 	case TypeCode::Bool:
 	case TypeCode::DriverId_tc:
@@ -1295,6 +1297,9 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::Float:
 	case TypeCode::Int32:
 		payloadLength = expressionLength;
+		break;
+	case TypeCode::Uint64:
+		payloadLength = AddPadding(expressionLength) + sizeof(uint64_t);
 		break;
 	case TypeCode::CString:
 		payloadLength = expressionLength + strlen(value.sVal);
@@ -1304,7 +1309,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::DateTime_tc:
 	case TypeCode::Port:
 	case TypeCode::UniqueId:
-		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
+		// All these types are represented as strings
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();
 		break;
@@ -1337,6 +1342,10 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	// Write data type and expression value
 	switch (value.GetType())
 	{
+	case TypeCode::None:
+		header->dataType = DataType::Null;
+		header->intValue = 0;
+		break;
 	case TypeCode::Bool:
 		header->dataType = DataType::Bool;
 		header->intValue = value.bVal ? 1 : 0;
@@ -1362,6 +1371,15 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		header->dataType = DataType::Int;
 		header->intValue = value.iVal;
 		break;
+	case TypeCode::Uint64:
+	{
+		header->dataType = DataType::ULong;
+		header->intValue = 0;
+		txPointer = AddPadding(txPointer);		// add padding to remain on a 4-byte boundary
+		uint64_t ulVal = value.Get56BitValue();
+		WriteData(reinterpret_cast<const char *>(&ulVal), sizeof(uint64_t));
+		break;
+	}
 	case TypeCode::HeapString:
 		header->dataType = DataType::String;
 		header->intValue = value.shVal.GetLength();
@@ -1374,7 +1392,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::UniqueId:
 	default:
 		// We have already converted the value to a string in 'rslt'
-		header->dataType = DataType::String;
+		header->dataType = (value.GetType() == TypeCode::DateTime_tc) ? DataType::DateTime : DataType::String;
 		header->intValue = rslt.strlen();
 		WriteData(rslt.c_str(), rslt.strlen());
 		break;

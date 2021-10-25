@@ -343,8 +343,8 @@ bool GCodes::WaitingForAcknowledgement() const noexcept
 }
 
 // Return the current position of the file being printed in bytes.
-// Unlike other methods returning file positions it never returns noFilePosition
-FilePosition GCodes::GetFilePosition() const noexcept
+// May return noFilePosition if allowNoFilePos is true
+FilePosition GCodes::GetFilePosition(bool allowNoFilePos) const noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (!reprap.UsingLinuxInterface())
@@ -354,25 +354,19 @@ FilePosition GCodes::GetFilePosition() const noexcept
 		const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 		if (!fileBeingPrinted.IsLive())
 		{
-			return noFilePosition;
+			return allowNoFilePos ? noFilePosition : 0;
 		}
 #endif
 	}
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
-	return (fileGCode->IsDoingFileMacro())
+	const FilePosition pos = (fileGCode->IsDoingFileMacro())
 			? printFilePositionAtMacroStart						// the position before we started executing the macro
 				: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
+	return (pos != noFilePosition || allowNoFilePos) ? pos : 0;
 #else
-	return noFilePosition;
+	return allowNoFilePos ? noFilePosition : 0;
 #endif
-}
-
-// Return the current position of the file being printed in bytes or noFilePosition if unknown
-FilePosition GCodes::GetPrintingFilePosition() const noexcept
-{
-	const FilePosition pos = GetFilePosition();
-	return (pos != noFilePosition) ? pos : 0;
 }
 
 // Start running the config file
@@ -937,7 +931,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-			pauseRestorePoint.filePos = GetFilePosition();
+			pauseRestorePoint.filePos = GetFilePosition(true);
 			while (fileGCode->IsDoingFileMacro())						// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				pausedInMacro = true;
@@ -1166,7 +1160,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;
 		pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
 
-		pauseRestorePoint.filePos = GetFilePosition();
+		pauseRestorePoint.filePos = GetFilePosition(true);
 		pauseRestorePoint.proportionDone = 0.0;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
