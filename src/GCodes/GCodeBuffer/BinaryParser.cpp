@@ -756,6 +756,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				break;
 			case DataType::String:
 			case DataType::Expression:
+			case DataType::DateTime:
 			{
 				char string[param->intValue + 1];
 				memcpy(string, val, param->intValue);
@@ -804,6 +805,16 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 					s.cat(((const uint8_t*)val != 0) ? '1' : '0');
 					val += sizeof(uint8_t);
 				}
+				break;
+			case DataType::ULong:
+			{
+				uint64_t ulVal;
+				memcpy(reinterpret_cast<char *>(&ulVal), val, sizeof(uint64_t));
+				s.catf("%" PRIu64, ulVal);
+				break;
+			}
+			case DataType::Null:
+				s.cat("null");
 				break;
 			}
 		}
