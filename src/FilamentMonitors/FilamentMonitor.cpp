@@ -76,9 +76,8 @@ void FilamentMonitor::Disable() noexcept
 	port.Release();
 }
 
-// Do the configuration that is
-// Try to get the pin number from the GCode command in the buffer, setting Seen if a pin number was provided and returning true if error.
-// Also attaches the ISR.
+// Do the configuration that is common to all types of filament monitor
+// Try to get the pin number from the GCode command in the buffer, setting Seen if a pin number was provided. Also attaches the ISR.
 // For a remote filament monitor, this does the full configuration or query of the remote object instead, and we always return seen true because we don't need to report local status.
 GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException)
 {
@@ -199,27 +198,28 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 // Factory function to create a filament monitor
 /*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) noexcept
 {
+	const size_t drv = ExtruderToLogicalDrive(extruder);
 	const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
 	FilamentMonitor *fm;
 	switch (monitorType)
 	{
 	case 1:		// active high switch
 	case 2:		// active low switch
-		fm = new SimpleFilamentMonitor(extruder, monitorType, did);
+		fm = new SimpleFilamentMonitor(drv, monitorType, did);
 		break;
 
 	case 3:		// duet3d rotating magnet, no switch
 	case 4:		// duet3d rotating magnet + switch
-		fm = new RotatingMagnetFilamentMonitor(extruder, monitorType, did);
+		fm = new RotatingMagnetFilamentMonitor(drv, monitorType, did);
 		break;
 
 	case 5:		// duet3d laser, no switch
 	case 6:		// duet3d laser + switch
-		fm = new LaserFilamentMonitor(extruder, monitorType, did);
+		fm = new LaserFilamentMonitor(drv, monitorType, did);
 		break;
 
 	case 7:		// simple pulse output sensor
-		fm = new PulsedFilamentMonitor(extruder, monitorType, did);
+		fm = new PulsedFilamentMonitor(drv, monitorType, did);
 		break;
 
 	default:	// no sensor, or unknown sensor
@@ -293,8 +293,8 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 				}
 				else
 				{
-					IrqEnable();
 					extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fs.driveNumber, isPrinting);		// get and clear the net extrusion commanded
+					IrqEnable();
 					fromIsr = false;
 					locIsrMillis = 0;
 				}

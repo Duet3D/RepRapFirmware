@@ -374,7 +374,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 
 // Call the following at intervals to check the status. This is only called when printing is in progress.
 // 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
-// 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
+// 'isPrinting' is true if the current movement is not a non-printing extruder move.
 // 'fromIsr' is true if this measurement was taken at the end of the ISR because a potential start bit was seen
 FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept
 {
