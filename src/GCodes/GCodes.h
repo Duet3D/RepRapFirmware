@@ -133,8 +133,7 @@ public:
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
 
-	FilePosition GetFilePosition() const noexcept;								// Return the current position of the file being printed in bytes
-	FilePosition GetPrintingFilePosition() const noexcept;						// Return a valid position of the file being printed in bytes
+	FilePosition GetFilePosition(bool allowNoFilePos = false) const noexcept;	// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
 	bool RunConfigFile(const char* fileName) noexcept;							// Start running the config file

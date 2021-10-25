@@ -1813,7 +1813,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		response->catf(",\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (printMonitor->FractionOfFilePrinted() * 100.0) : 0.0));
 
 		// Byte position of the file being printed
-		response->catf(",\"filePosition\":%lu", gCodes->GetPrintingFilePosition());
+		response->catf(",\"filePosition\":%lu", gCodes->GetFilePosition());
 
 		// First Layer Duration is no longer included
 

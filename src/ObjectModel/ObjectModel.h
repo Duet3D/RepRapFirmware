@@ -115,6 +115,7 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(float f) noexcept : type((uint32_t)TypeCode::Float), param(MaxFloatDigitsDisplayedAfterPoint), fVal(f) { }
 	constexpr ExpressionValue(float f, uint8_t numDecimalPlaces) noexcept : type((uint32_t)TypeCode::Float), param(numDecimalPlaces), fVal(f) { }
 	explicit constexpr ExpressionValue(int32_t i) noexcept : type((uint32_t)TypeCode::Int32), param(0), iVal(i) { }
+	explicit constexpr ExpressionValue(FilePosition p) noexcept : type((uint32_t)TypeCode::Uint32), param(0), uVal(p) { }
 	explicit ExpressionValue(uint64_t u) noexcept : type((uint32_t)TypeCode::Uint64) { Set56BitValue(u); }
 	explicit constexpr ExpressionValue(const ObjectModel *om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
 	constexpr ExpressionValue(const ObjectModel *om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }

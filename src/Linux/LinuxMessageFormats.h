@@ -51,7 +51,10 @@ enum class DataType : uint8_t
 	DriverId_dt = 8,		// two sequential uint16_t representing board and port of a driver
 	DriverIdArray = 9,		// array of driver ids
 	Bool = 10,				// bool (int32_t)
-	BoolArray = 11			// bool[] (uint8_t[])
+	BoolArray = 11,			// bool[] (uint8_t[])
+	ULong = 12,				// uint64_t
+	DateTime = 13,			// datetime string in ISO-conform formatting
+	Null = 14				// null value
 };
 
 struct CodeChannelHeader

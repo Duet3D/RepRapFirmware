@@ -1082,7 +1082,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// In case there are short periods of time when PrintMonitor says a file is printing but the file is not open, or DSF passes M27 to us, check that we have a file
 					if (fileBeingPrinted.IsLive())
 					{
-						reply.printf("SD printing byte %lu/%lu", GetPrintingFilePosition(), fileBeingPrinted.Length());
+						reply.printf("SD printing byte %lu/%lu", GetFilePosition(), fileBeingPrinted.Length());
 						break;
 					}
 				}
