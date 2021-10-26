@@ -572,18 +572,12 @@ void DDARing::CurrentMoveCompleted() noexcept
 	liveCoordinatesValid = cdda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 	liveCoordinatesChanged = true;
 
-	// In the following it doesn't currently matter whether we process all drives or just the extruders
-	// Instead of looping through extruders, we could loop through DMs.
+	// Disable interrupts before we touch any extrusion accumulators until after we set currentDda to null, in case the filament monitor interrupt has higher priority than ours
 	{
-		const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
-		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
-		{
-			const size_t drv = ExtruderToLogicalDrive(extruder);
-			movementAccumulators[drv] += cdda->GetStepsTaken(drv);
-		}
+		AtomicCriticalSectionLocker lock;
+		cdda->UpdateMovementAccumulators(movementAccumulators);
+		currentDda = nullptr;
 	}
-
-	currentDda = nullptr;
 	if (cdda->IsCheckingEndstops())
 	{
 		Move::WakeMoveTaskFromISR();				// wake the Move task if we were checking endstops
@@ -607,13 +601,12 @@ bool DDARing::SetWaitingToEmpty() noexcept
 
 int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
 {
-	const uint32_t basepri = ChangeBasePriority(NvicPriorityStep);
+	AtomicCriticalSectionLocker lock;
 	const int32_t ret = movementAccumulators[drive];
 	const DDA * const cdda = currentDda;						// capture volatile variable
 	const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
 	movementAccumulators[drive] = -adjustment;
 	isPrinting = extrudersPrinting;
-	RestoreBasePriority(basepri);
 	return ret + adjustment;
 }
 
