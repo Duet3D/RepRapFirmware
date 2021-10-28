@@ -37,7 +37,7 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 #ifdef DUET3_ATE
 	{ "agc",				OBJECT_MODEL_FUNC((int32_t)self->agc),																	ObjectModelEntryFlags::live },
 #endif
-	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::none },
+	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::live },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 														ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
@@ -48,10 +48,10 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("rotatingMagnet"), 															ObjectModelEntryFlags::none },
 
 	// 1. RotatingMagnetFilamentMonitor.calibrated members
-	{ "mmPerRev",			OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 2), 														ObjectModelEntryFlags::none },
-	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio * self->MeasuredSensitivity())), 				ObjectModelEntryFlags::none },
-	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio * self->MeasuredSensitivity())), 				ObjectModelEntryFlags::none },
-	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::none },
+	{ "mmPerRev",			OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 2), 														ObjectModelEntryFlags::live },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio * self->MeasuredSensitivity())), 				ObjectModelEntryFlags::live },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio * self->MeasuredSensitivity())), 				ObjectModelEntryFlags::live },
+	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::live },
 
 	// 2. RotatingMagnetFilamentMonitor.configured members
 	{ "mmPerRev",			OBJECT_MODEL_FUNC(self->mmPerRev, 2), 																	ObjectModelEntryFlags::none },

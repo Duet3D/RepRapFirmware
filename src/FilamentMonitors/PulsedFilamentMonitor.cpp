@@ -34,17 +34,17 @@ constexpr ObjectModelTableEntry PulsedFilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. PulsedFilamentMonitor members
-	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->DataReceived() && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::none },
+	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->DataReceived() && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::live },
 	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 	{ "enabled",		OBJECT_MODEL_FUNC(self->comparisonEnabled),		 														ObjectModelEntryFlags::none },
 	{ "status",			OBJECT_MODEL_FUNC(self->GetStatusText()),																ObjectModelEntryFlags::live },
 	{ "type",			OBJECT_MODEL_FUNC_NOSELF("pulsed"), 																	ObjectModelEntryFlags::none },
 
 	// 1. PulsedFilamentMonitor.calibrated members
-	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 3), 														ObjectModelEntryFlags::none },
-	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::none },
-	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::none },
-	{ "totalDistance",	OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::none },
+	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 3), 														ObjectModelEntryFlags::live },
+	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::live },
+	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::live },
+	{ "totalDistance",	OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::live },
 
 	// 2. PulsedFilamentMonitor.configured members
 	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->mmPerPulse, 3), 																ObjectModelEntryFlags::none },
