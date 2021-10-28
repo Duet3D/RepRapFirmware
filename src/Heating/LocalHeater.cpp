@@ -294,8 +294,8 @@ void LocalHeater::Spin() noexcept
 							++heatingFaultCount;
 							if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
 							{
-								RaiseHeaterFault("Heater %u fault: temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
-													GetHeaterNumber(), (double)expectedRate);
+								RaiseHeaterFault("Heater %u fault: at %.1f" DEGREE_SYMBOL "C temperature is rising at %.1f" DEGREE_SYMBOL "C/sec, well below the expected %.1f" DEGREE_SYMBOL "C/sec\n",
+													GetHeaterNumber(), (double)temperature, (double)derivative, (double)expectedRate);
 							}
 						}
 						else if (heatingFaultCount != 0)

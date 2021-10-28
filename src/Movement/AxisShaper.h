@@ -27,6 +27,7 @@ NamedEnum(InputShaperType, uint8_t,
 	none,
 	zvd,
 	zvdd,
+	zvddd,
 );
 
 class DDA;

@@ -37,7 +37,7 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 #ifdef DUET3_ATE
 	{ "brightness",			OBJECT_MODEL_FUNC((int32_t)self->brightness),															ObjectModelEntryFlags::live },
 #endif
-	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::none },
+	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::live },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 														ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
@@ -48,10 +48,10 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("laser"), 																		ObjectModelEntryFlags::none },
 
 	// 1. LaserFilamentMonitor.calibrated members
-	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::none },
-	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::none },
-	{ "sensitivity",		OBJECT_MODEL_FUNC(ConvertToPercent(self->MeasuredSensitivity())), 										ObjectModelEntryFlags::none },
-	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::none },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::live },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::live },
+	{ "sensitivity",		OBJECT_MODEL_FUNC(ConvertToPercent(self->MeasuredSensitivity())), 										ObjectModelEntryFlags::live },
+	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::live },
 
 	// 2. LaserFilamentMonitor.configured members
 	{ "calibrationFactor",	OBJECT_MODEL_FUNC(self->calibrationFactor, 3), 															ObjectModelEntryFlags::none },

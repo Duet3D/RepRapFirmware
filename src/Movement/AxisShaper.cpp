@@ -210,6 +210,18 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			numExtraImpulses = 3;
 			break;
 
+		case InputShaperType::zvddd:
+			{
+				const float j = fsquare(fsquare(1.0 + k));
+				coefficients[0] = 1.0/j;
+				coefficients[1] = coefficients[0] + 4.0 * k/j;
+				coefficients[2] = coefficients[1] + 6.0 * fsquare(k)/j;
+				coefficients[3] = coefficients[2] + 4.0 * fcube(k)/j;
+			}
+			durations[0] = durations[1] = durations[2] = durations[3] = 0.5 * dampedPeriod;
+			numExtraImpulses = 4;
+			break;
+
 		case InputShaperType::ei2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
 			{
 				const float zetaSquared = fsquare(zeta);
@@ -491,6 +503,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 	case InputShaperType::zvd:
 	case InputShaperType::mzv:
 	case InputShaperType::zvdd:
+	case InputShaperType::zvddd:
 	case InputShaperType::ei2:
 	case InputShaperType::ei3:
 		params.SetFromDDA(dda);															// set up the provisional parameters

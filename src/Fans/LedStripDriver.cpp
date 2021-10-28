@@ -641,9 +641,9 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 
 # if USE_16BIT_SPI
 			// Swap bytes for 16-bit SPI
-			const uint32_t data = ((brightness << 5) | (0xE0 << 8)) | ((blue & 255)) | ((green & 255) << 24) | ((red & 255) << 16);
+			const uint32_t data = ((brightness & 0xF8) << 5) | (0xE0 << 8) | ((blue & 255)) | ((green & 255) << 24) | ((red & 255) << 16);
 # else
-			const uint32_t data = ((brightness >> 3) | 0xE0) | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);
+			const uint32_t data = (brightness >> 3) | 0xE0 | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);
 # endif
 			return SendDotStarData(data, numLeds, following);
 		}

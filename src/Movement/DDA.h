@@ -160,6 +160,7 @@ public:
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
 	bool IsGoodToPrepare() const noexcept;
 	bool IsNonPrintingExtruderMove() const noexcept { return flags.isNonPrintingExtruderMove; }
+	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }

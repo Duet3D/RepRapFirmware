@@ -367,7 +367,9 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 				unsigned int sensorsFound = 0;
 #endif
 				{
+#if SUPPORT_CAN_EXPANSION
 					unsigned int nextUnreportedSensor = 0;
+#endif
 					ReadLocker lock(sensorsLock);
 					TemperatureSensor *currentSensor = sensorsRoot;
 					while (currentSensor != nullptr)

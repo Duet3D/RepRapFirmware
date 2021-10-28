@@ -388,7 +388,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 			// It's an extruder drive. We defer calculating the steps because they may be affected by nonlinear extrusion, which we can't calculate until we
 			// know the speed of the move, and because extruder movement is relative so we need to accumulate fractions of a whole step between moves.
 			const float movement = nextMove.coords[drive];
-			directionVector[drive] = movement;
+			endCoordinates[drive] = directionVector[drive] = movement;			// for an extruder, endCoordinates is the amount of movement
 			if (movement != 0.0)
 			{
 				extrudersMoving = true;
@@ -2324,6 +2324,50 @@ void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexc
 	{
 		deceleration = maxAcceleration;
 	}
+}
+
+// Update the movement accumulators to account for the move that has just finished.
+// Only drives that correspond to extruders need to be updated, but it doesn't matter if we update them all.
+// This is called with interrupts disabled.
+void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept
+{
+	// To identify all the extruder movement, we can either loop through extruder numbers and search both DM lists for a DM for that drive,
+	// or we can iterate through both DM lists, checking whether the drive it is for is an extruder.
+#if 1
+	// Loop through DMs, checking whether each associated drive is an extruder and updating the movement accumulator if so.
+	// We could omit the check that the drive is an accumulator so that we update all accumulators, but we would still need to check for leadscrew adjustment moves.
+	const unsigned int firstExtruderDrive = ExtruderToLogicalDrive(reprap.GetGCodes().GetNumExtruders() - 1);
+	for (const DriveMovement* dm = activeDMs; dm != nullptr; )
+	{
+		const uint8_t drv = dm->drive;
+		if (   drv >= firstExtruderDrive						// check that it's an extruder (to save the call to GetStepsTaken)
+			&& drv < MaxAxesPlusExtruders						// check that it's not a direct leadscrew move
+		   )
+		{
+			accumulators[drv] += dm->GetNetStepsTaken();
+		}
+		dm = dm->nextDM;
+	}
+	for (const DriveMovement* dm = completedDMs; dm != nullptr; )
+	{
+		const uint8_t drv = dm->drive;
+		if (   drv >= firstExtruderDrive						// check that it's an extruder (to save the call to GetStepsTaken)
+			&& drv < MaxAxesPlusExtruders						// check that it's not a direct leadscrew move
+		   )
+		{
+			accumulators[drv] += dm->GetNetStepsTaken();
+		}
+		dm = dm->nextDM;
+	}
+#else
+	// Loop through extruders
+	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
+	for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+	{
+		const size_t drv = ExtruderToLogicalDrive(extruder);
+		accumulators[drv] += GetStepsTaken(drv);
+	}
+#endif
 }
 
 #if SUPPORT_LASER

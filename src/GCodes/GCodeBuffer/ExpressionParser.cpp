@@ -384,7 +384,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 					ConvertToFloat(val, evaluate);
 					ConvertToFloat(val2, evaluate);
 					val.fVal /= val2.fVal;
-					val.param = 0;
+					val.param = MaxFloatDigitsDisplayedAfterPoint;
 					break;
 
 				case '>':
