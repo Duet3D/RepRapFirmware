@@ -2336,28 +2336,32 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 #if 1
 	// Loop through DMs, checking whether each associated drive is an extruder and updating the movement accumulator if so.
 	// We could omit the check that the drive is an accumulator so that we update all accumulators, but we would still need to check for leadscrew adjustment moves.
-	const unsigned int firstExtruderDrive = ExtruderToLogicalDrive(reprap.GetGCodes().GetNumExtruders() - 1);
-	for (const DriveMovement* dm = activeDMs; dm != nullptr; )
+	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
+	if (numExtruders != 0)
 	{
-		const uint8_t drv = dm->drive;
-		if (   drv >= firstExtruderDrive						// check that it's an extruder (to save the call to GetStepsTaken)
-			&& drv < MaxAxesPlusExtruders						// check that it's not a direct leadscrew move
-		   )
+		const unsigned int firstExtruderDrive = ExtruderToLogicalDrive(numExtruders - 1);
+		for (const DriveMovement* dm = activeDMs; dm != nullptr; )
 		{
-			accumulators[drv] += dm->GetNetStepsTaken();
+			const uint8_t drv = dm->drive;
+			if (   drv >= firstExtruderDrive						// check that it's an extruder (to save the call to GetStepsTaken)
+				&& drv < MaxAxesPlusExtruders						// check that it's not a direct leadscrew move
+			   )
+			{
+				accumulators[drv] += dm->GetNetStepsTaken();
+			}
+			dm = dm->nextDM;
 		}
-		dm = dm->nextDM;
-	}
-	for (const DriveMovement* dm = completedDMs; dm != nullptr; )
-	{
-		const uint8_t drv = dm->drive;
-		if (   drv >= firstExtruderDrive						// check that it's an extruder (to save the call to GetStepsTaken)
-			&& drv < MaxAxesPlusExtruders						// check that it's not a direct leadscrew move
-		   )
+		for (const DriveMovement* dm = completedDMs; dm != nullptr; )
 		{
-			accumulators[drv] += dm->GetNetStepsTaken();
+			const uint8_t drv = dm->drive;
+			if (   drv >= firstExtruderDrive						// check that it's an extruder (to save the call to GetStepsTaken)
+				&& drv < MaxAxesPlusExtruders						// check that it's not a direct leadscrew move
+			   )
+			{
+				accumulators[drv] += dm->GetNetStepsTaken();
+			}
+			dm = dm->nextDM;
 		}
-		dm = dm->nextDM;
 	}
 #else
 	// Loop through extruders

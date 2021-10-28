@@ -171,7 +171,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 void DDARing::RecycleDDAs() noexcept
 {
 	// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-	while (checkPointer->GetState() == DDA::completed)
+	while (checkPointer->GetState() == DDA::completed && checkPointer != currentDda)	// we haven't finished with a completed DDA until it is no longer the current DDA!
 	{
 		// Check for step errors and record/print them if we have any, before we lose the DMs
 		if (checkPointer->HasStepError())
@@ -576,11 +576,11 @@ void DDARing::CurrentMoveCompleted() noexcept
 	{
 		AtomicCriticalSectionLocker lock;
 		cdda->UpdateMovementAccumulators(movementAccumulators);
-		currentDda = nullptr;
-	}
-	if (cdda->IsCheckingEndstops())
-	{
-		Move::WakeMoveTaskFromISR();				// wake the Move task if we were checking endstops
+		if (cdda->IsCheckingEndstops())
+		{
+			Move::WakeMoveTaskFromISR();			// wake the Move task if we were checking endstops
+		}
+		currentDda = nullptr;						// once we have done this, the DDA can be recycled by the Move task
 	}
 
 	getPointer = getPointer->GetNext();
@@ -599,6 +599,7 @@ bool DDARing::SetWaitingToEmpty() noexcept
 	return ret;
 }
 
+// Get the number of steps taken by an extruder drive since the last time we called this function for that drive
 int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
 {
 	AtomicCriticalSectionLocker lock;

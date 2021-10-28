@@ -611,6 +611,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 }
 
 // Prepare this DM for an extruder move, returning true if there are steps to do
+// If there are no steps to do, set nextStep = 0 so that DDARing::CurrentMoveCompleted doesn't add any steps to the movement accumulator
 // We have already generated the extruder segments and we know that there are some
 bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) noexcept
 {
@@ -802,6 +803,8 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		if (netSteps == 0 && iFwdSteps == 0)
 		{
 			// No movement at all
+			nextStep = totalSteps = 0;
+			reverseStartStep = 1;
 			shaper.SetExtrusionPending(netDistance * dda.directionVector[drive]);
 			return false;
 		}
@@ -837,7 +840,8 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 		else
 		{
 			// No steps at all, or negative forward steps which I think should be impossible unless the steps/mm is changed
-			totalSteps = 0;
+			nextStep = totalSteps = 0;
+			reverseStartStep = 1;
 			shaper.SetExtrusionPending(forwardDistance * dda.directionVector[drive]);
 			return false;
 		}
