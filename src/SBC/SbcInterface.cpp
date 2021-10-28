@@ -148,9 +148,6 @@ void SbcInterface::Spin() noexcept
 			{
 				// Let the main task invalidate resources before processing new data
 				TaskBase::Take(SbcYieldTimeout);
-
-				// Reset the SPI connection again
-				transfer.ResetConnection(false);
 			}
 		}
 
@@ -167,10 +164,10 @@ void SbcInterface::Spin() noexcept
 			ExchangeData();
 			transfer.StartNextTransfer();
 		}
-		else if (hadTimeout)
+		else if (hadTimeout || hadReset)
 		{
 			// Reset the SPI connection if no data could be exchanged
-			transfer.ResetConnection(true);
+			transfer.ResetConnection(hadTimeout);
 		}
 	}
 }
